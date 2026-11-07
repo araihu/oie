@@ -6,3 +6,7 @@
 coverage.out
 playwright-report/
 test-results/
+/api/openapi.bundle.yaml
+/api/openapi.cli.yaml
+/tests/browser/node_modules/
+/tests/browser/artifacts/

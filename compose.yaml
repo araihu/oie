@@ -1,0 +1,27 @@
+name: oie-dev
+services:
+  xmpp:
+    build: ./dev/xmpp
+    hostname: localhost
+    entrypoint: ["/bin/sh", "/opt/oie/start.sh"]
+    ports:
+      - "127.0.0.1:${OIE_XMPP_PORT:-5222}:5222"
+      - "127.0.0.1:${OIE_XMPP_HTTPS_PORT:-5281}:5281"
+    volumes:
+      - xmpp-data:/var/lib/prosody
+    healthcheck:
+      test: ["CMD", "prosodyctl", "--config", "/etc/prosody/prosody.cfg.lua", "status"]
+      start_period: 10s
+      interval: 5s
+      timeout: 5s
+      retries: 12
+  xmpp-check:
+    profiles: [tools]
+    image: python:3.14-alpine@sha256:a18b20ad69e74df6cf6d2e1b1a260d7a1ecf5380fd83b310f83ba88c461cf894
+    network_mode: service:xmpp
+    entrypoint: ["python3", "-", "--ca-file", "/var/lib/prosody/certs/localhost.crt"]
+    volumes:
+      - xmpp-data:/var/lib/prosody:ro
+    stdin_open: true
+volumes:
+  xmpp-data:

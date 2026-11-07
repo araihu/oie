@@ -1,0 +1,11 @@
+/* Product layout only; components own their controls, surfaces, and typography. */
+.oie-header { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; padding: 1rem; }
+.oie-header h1 { font-size: 1.5rem; font-weight: 700; margin-right: auto; }
+.oie-header nav { display: flex; flex-wrap: wrap; gap: .75rem; }
+.oie-workspace { display: grid; grid-template-columns: minmax(16rem, 24rem) minmax(0, 1fr); gap: 1rem; }
+.oie-workspace > section { min-width: 0; }
+.oie-workspace h2 { font-size: 1.125rem; font-weight: 600; }
+.oie-accounts { list-style: none; margin: 0; padding: 0; overflow-wrap: anywhere; }
+.oie-accounts li { padding: .75rem 0; }
+.oie-accounts p { margin: .25rem 0; }
+@media (max-width: 48rem) { .oie-workspace { grid-template-columns: minmax(0, 1fr); } }

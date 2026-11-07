@@ -1,0 +1,99 @@
+package web
+
+import (
+	"github.com/araihu/goshtoso/components/appshell"
+	"github.com/araihu/goshtoso/components/badge"
+	"github.com/araihu/goshtoso/components/emptystate"
+	"github.com/araihu/goshtoso/components/head"
+	"github.com/araihu/goshtoso/components/link"
+	"github.com/araihu/goshtoso/components/panel"
+)
+
+templ page(v view) {
+	<!DOCTYPE html>
+	<html lang={ v.Locale } data-theme="goshtoso" data-mode={ v.Theme } class={ templ.KV("dark", v.Theme == "dark") }>
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>Oie</title>
+			<link rel="icon" href="data:,"/>
+			<script src="/ui/theme.js"></script>
+			@head.Dependencies(head.WithLocalRuntime())
+			<link rel="stylesheet" href="/ui/app.css"/>
+		</head>
+		<body>
+			@appshell.AppShell(appshell.Config{
+				Header: header(v),
+				Content: workspace(v),
+			})
+		</body>
+	</html>
+}
+
+templ header(v view) {
+	<div class="oie-header">
+		<h1>Oie</h1>
+		<nav aria-label={ v.Text.Languages }>
+			@link.Link("/?lang=en") { { v.Text.English } }
+			@link.Link("/?lang=pt-BR") { { v.Text.Portuguese } }
+		</nav>
+		<nav aria-label={ v.Text.Appearance }>
+			@link.Link("/?theme=system") { { v.Text.System } }
+			@link.Link("/?theme=light") { { v.Text.Light } }
+			@link.Link("/?theme=dark") { { v.Text.Dark } }
+		</nav>
+	</div>
+}
+
+templ workspace(v view) {
+	<div id="workspace" class="oie-workspace">
+		if v.Unavailable {
+			@panel.Panel(panel.Config{Body: unavailable(v)})
+		} else if v.NotFound {
+			@panel.Panel(panel.Config{}) {
+				@emptystate.EmptyState(emptystate.Config{Title: v.Text.NotFound, Description: v.Text.NotFoundBody})
+				@link.Link("/") { { v.Text.Retry } }
+			}
+		} else {
+			<section aria-label={ v.Text.Accounts }>
+				@panel.Panel(panel.Config{Header: accountHeader(v), Body: accountList(v)})
+			</section>
+			<section aria-label={ v.Text.Conversations }>
+				@panel.Panel(panel.Config{Body: conversationEmpty(v)})
+			</section>
+		}
+	</div>
+}
+
+templ accountHeader(v view) {
+	<h2>{ v.Text.Accounts }</h2>
+	@badge.Badge(badge.Config{Label: v.Role})
+}
+
+templ accountList(v view) {
+	if len(v.Accounts) == 0 {
+		@emptystate.EmptyState(emptystate.Config{Title: v.Text.EmptyTitle, Description: v.Text.EmptyBody})
+	} else {
+		<ul class="oie-accounts">
+			for _, a := range v.Accounts {
+				<li>
+					<strong>{ a.Label }</strong>
+					<p>{ a.Address }</p>
+					@badge.Badge(badge.Config{Label: v.Text.NotConnected})
+				</li>
+			}
+		</ul>
+	}
+	if v.Next != "" {
+		@link.Link(v.Next) { { v.Text.Next } }
+	}
+}
+
+templ conversationEmpty(v view) {
+	@emptystate.EmptyState(emptystate.Config{Title: v.Text.Conversations, Description: v.Text.ConversationBody})
+}
+
+templ unavailable(v view) {
+	@emptystate.EmptyState(emptystate.Config{Title: v.Text.Unavailable, Description: v.Text.UnavailableBody})
+	@link.Link("/") { { v.Text.Retry } }
+}

@@ -1,0 +1,62 @@
+name: Foundation checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  contracts-and-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            cli/go.sum
+            tools/vacuum/go.sum
+      - run: make check
+      - run: make test-race
+  development-xmpp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make dev-up
+      - run: make test-xmpp
+      - if: always()
+        run: docker compose logs --tail 100
+      - if: always()
+        run: make dev-down
+  browser-consumer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tests/browser/package-lock.json
+      - run: make build
+      - working-directory: tests/browser
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - run: |
+          bin/oie --data-dir "$RUNNER_TEMP/oie-browser" > "$RUNNER_TEMP/oie.log" 2>&1 &
+          oie_pid=$!
+          trap 'kill "$oie_pid"' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8080/api/v1/health; then break; fi
+            sleep 1
+          done
+          npm --prefix tests/browser test
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-consumer-evidence
+          path: tests/browser/artifacts

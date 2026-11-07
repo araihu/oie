@@ -1,0 +1,454 @@
+openapi: 3.0.3
+info:
+  title: Oie Engine API
+  version: 0.1.0
+  description: |
+    Protocol-neutral engine foundation. This milestone registers account metadata;
+    it does not connect protocol sessions or accept chat messages yet.
+    All timestamps are UTC. Application entities and operations use UUIDv7 IDs.
+    The BFF owns HTML; this API returns structured data and SSE.
+  contact:
+    name: Arai Hû
+    url: https://github.com/araihu/oie
+servers:
+  - url: http://127.0.0.1:8080
+    description: Local development engine
+security: []
+tags:
+  - name: System
+    description: Engine identity and readiness
+  - name: Accounts
+    description: Protocol account metadata
+  - name: Operations
+    description: Durable mutation receipts
+  - name: Events
+    description: Recoverable engine changes
+paths:
+  /api/v1/health:
+    get:
+      tags: [System]
+      operationId: getHealth
+      summary: Check engine readiness
+      description: Returns ready only when the database can be queried.
+      responses:
+        '200':
+          description: Engine ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+              example: {status: ready}
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/engine:
+    get:
+      tags: [System]
+      operationId: getEngine
+      summary: Read the persistent engine identity
+      description: Read eventCursor before fetching snapshots to replay changes during the snapshot.
+      responses:
+        '200':
+          description: Engine identity and current event boundary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Engine'
+              example: {id: 019a5df0-0000-7000-8000-000000000003, role: local, apiVersion: "0.1.0", eventCursor: "019a5df0-0000-7000-8000-000000000003:1"}
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/accounts:
+    get:
+      tags: [Accounts]
+      operationId: listAccounts
+      summary: List registered account metadata
+      description: Stable UUID-ordered keyset pagination; registration does not establish an XMPP session.
+      parameters:
+        - name: after
+          in: query
+          description: Continue after this account UUID.
+          schema:
+            $ref: '#/components/schemas/ID'
+        - name: limit
+          in: query
+          description: Maximum page size.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: A page of accounts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountPage'
+              example: {items: [{id: 019a5df0-0000-7000-8000-000000000001, revisionId: 019a5df0-0000-7000-8000-000000000002, protocol: xmpp, address: alice@localhost, label: Personal, connectionState: not_connected, createdAt: "2026-11-07T12:00:00Z"}]}
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags: [Accounts]
+      operationId: registerAccount
+      summary: Register protocol account metadata
+      description: |
+        Atomically stores an account, initial immutable revision, operation receipt,
+        and account.registered event. Repeating a key with the same normalized input
+        returns the original result. Reusing it with different input conflicts.
+        No credentials are accepted, and no protocol session is opened.
+        Address matching is exact after trimming; provider canonicalization is deferred.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Caller-generated UUIDv7, retained for the lifetime of the engine data.
+          schema:
+            $ref: '#/components/schemas/ID'
+      requestBody:
+        description: Metadata for an existing protocol identity.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterAccount'
+            example: {protocol: xmpp, address: alice@localhost, label: Personal}
+      responses:
+        '201':
+          description: Account registered
+          headers:
+            Location:
+              description: Account API resource.
+              schema:
+                type: string
+            Idempotency-Replayed:
+              description: False for the first successful execution.
+              schema:
+                type: boolean
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+              example: {id: 019a5df0-0000-7000-8000-000000000001, revisionId: 019a5df0-0000-7000-8000-000000000002, protocol: xmpp, address: alice@localhost, label: Personal, connectionState: not_connected, createdAt: "2026-11-07T12:00:00Z"}
+        '200':
+          description: Original account result replayed without another side effect
+          headers:
+            Idempotency-Replayed:
+              description: True for a repeated successful operation.
+              schema:
+                type: boolean
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+              example: {id: 019a5df0-0000-7000-8000-000000000001, revisionId: 019a5df0-0000-7000-8000-000000000002, protocol: xmpp, address: alice@localhost, label: Personal, connectionState: not_connected, createdAt: "2026-11-07T12:00:00Z"}
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/accounts/{accountId}:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    get:
+      tags: [Accounts]
+      operationId: getAccount
+      summary: Read an account
+      description: Returns registered metadata and its initial current revision.
+      responses:
+        '200':
+          description: Registered account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+              example: {id: 019a5df0-0000-7000-8000-000000000001, revisionId: 019a5df0-0000-7000-8000-000000000002, protocol: xmpp, address: alice@localhost, label: Personal, connectionState: not_connected, createdAt: "2026-11-07T12:00:00Z"}
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/accounts/{accountId}/capabilities:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    get:
+      tags: [Accounts]
+      operationId: getAccountCapabilities
+      summary: Read account capability evidence
+      description: Protocol capabilities remain unknown until an adapter connects and discovers them.
+      responses:
+        '200':
+          description: Current account capability evidence
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Capabilities'
+              example: {accountId: 019a5df0-0000-7000-8000-000000000001, state: unknown, reason: not_connected}
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/operations/{operationId}:
+    get:
+      tags: [Operations]
+      operationId: getOperation
+      summary: Reconcile a mutation after an ambiguous response
+      description: A known receipt proves the registration committed; unknown IDs return 404.
+      parameters:
+        - name: operationId
+          in: path
+          required: true
+          description: The original Idempotency-Key.
+          schema:
+            $ref: '#/components/schemas/ID'
+      responses:
+        '200':
+          description: Durable operation receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+              example: {id: 019a5df0-0000-7000-8000-000000000004, kind: register_account, status: succeeded, resourceId: 019a5df0-0000-7000-8000-000000000001, createdAt: "2026-11-07T12:00:00Z"}
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/events:
+    get:
+      tags: [Events]
+      operationId: streamEvents
+      x-sse-event-schema:
+        $ref: '#/components/schemas/Event'
+      summary: Replay durable changes and follow new events
+      description: |
+        SSE id is engineUUID:sequence; event is the event type; data is Event JSON.
+        Last-Event-ID resumes strictly after its sequence. Without a cursor replay
+        from zero. Cursors from another engine or ahead of current state return 409
+        before streaming. Heartbeat comments are not durable events.
+        Milestone one retains the complete change log. Clients deduplicate by event
+        ID and refresh snapshots if a future retention policy expires a cursor.
+      parameters:
+        - name: Last-Event-ID
+          in: header
+          description: Previously applied engine-scoped cursor.
+          schema:
+            type: string
+            maxLength: 64
+      responses:
+        '200':
+          description: SSE stream whose data fields follow the Event schema
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              example: ": heartbeat\n\n"
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+components:
+  parameters:
+    AccountID:
+      name: accountId
+      in: path
+      required: true
+      description: Stable account UUIDv7.
+      schema:
+        $ref: '#/components/schemas/ID'
+  responses:
+    Invalid:
+      description: Invalid request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example: {type: "urn:oie:problem:invalid_request", title: Bad Request, status: 400, code: invalid_request}
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example: {type: "urn:oie:problem:not_found", title: Not Found, status: 404, code: not_found}
+    Conflict:
+      description: Idempotency conflict, duplicate address, or invalid stream cursor
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example: {type: "urn:oie:problem:idempotency_conflict", title: Conflict, status: 409, code: idempotency_conflict}
+    Unavailable:
+      description: Persistence temporarily unavailable
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example: {type: "urn:oie:problem:unavailable", title: Service Unavailable, status: 503, code: unavailable}
+  schemas:
+    ID:
+      type: string
+      format: uuid
+      x-go-type: string
+      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      description: Canonical lowercase UUIDv7; IDs do not establish causal order.
+    Health:
+      type: object
+      description: Readiness of the engine store.
+      example: {status: ready}
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ready]
+          example: ready
+    Engine:
+      type: object
+      description: Persistent engine identity and event boundary.
+      example: {id: 019a5df0-0000-7000-8000-000000000003, role: local, apiVersion: "0.1.0", eventCursor: "019a5df0-0000-7000-8000-000000000003:1"}
+      additionalProperties: false
+      required: [id, role, apiVersion, eventCursor]
+      properties:
+        id:
+          $ref: '#/components/schemas/ID'
+        role:
+          type: string
+          enum: [local, hosted]
+        apiVersion:
+          type: string
+          enum: ['0.1.0']
+        eventCursor:
+          type: string
+          description: Application stream boundary, separate from provider history cursors.
+    RegisterAccount:
+      type: object
+      description: Account metadata registration, without protocol credentials.
+      example: {protocol: xmpp, address: alice@localhost, label: Personal}
+      additionalProperties: false
+      required: [protocol, address, label]
+      properties:
+        protocol:
+          type: string
+          enum: [xmpp]
+        address:
+          type: string
+          minLength: 1
+          maxLength: 1023
+        label:
+          type: string
+          minLength: 1
+          maxLength: 120
+    Account:
+      type: object
+      description: Stable account identity and its current initial revision.
+      example: {id: 019a5df0-0000-7000-8000-000000000001, revisionId: 019a5df0-0000-7000-8000-000000000002, protocol: xmpp, address: alice@localhost, label: Personal, connectionState: not_connected, createdAt: "2026-11-07T12:00:00Z"}
+      additionalProperties: false
+      required: [id, revisionId, protocol, address, label, connectionState, createdAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/ID'
+        revisionId:
+          $ref: '#/components/schemas/ID'
+        protocol:
+          type: string
+          enum: [xmpp]
+        address:
+          type: string
+        label:
+          type: string
+        connectionState:
+          type: string
+          enum: [not_connected]
+        createdAt:
+          type: string
+          format: date-time
+    AccountPage:
+      type: object
+      description: A keyset-paginated account collection.
+      example: {items: [{id: 019a5df0-0000-7000-8000-000000000001, revisionId: 019a5df0-0000-7000-8000-000000000002, protocol: xmpp, address: alice@localhost, label: Personal, connectionState: not_connected, createdAt: "2026-11-07T12:00:00Z"}]}
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Account'
+        nextCursor:
+          $ref: '#/components/schemas/ID'
+    Capabilities:
+      type: object
+      description: Protocol feature evidence scoped to one account.
+      example: {accountId: 019a5df0-0000-7000-8000-000000000001, state: unknown, reason: not_connected}
+      additionalProperties: false
+      required: [accountId, state, reason]
+      properties:
+        accountId:
+          $ref: '#/components/schemas/ID'
+        state:
+          type: string
+          enum: [unknown]
+        reason:
+          type: string
+          enum: [not_connected]
+    Operation:
+      type: object
+      description: Durable receipt used to reconcile repeated mutations.
+      example: {id: 019a5df0-0000-7000-8000-000000000004, kind: register_account, status: succeeded, resourceId: 019a5df0-0000-7000-8000-000000000001, createdAt: "2026-11-07T12:00:00Z"}
+      additionalProperties: false
+      required: [id, kind, status, resourceId, createdAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/ID'
+        kind:
+          type: string
+          enum: [register_account]
+        status:
+          type: string
+          enum: [succeeded]
+        resourceId:
+          $ref: '#/components/schemas/ID'
+        createdAt:
+          type: string
+          format: date-time
+    Event:
+      type: object
+      description: Durable event data encoded as JSON in an SSE data field.
+      example: {id: "019a5df0-0000-7000-8000-000000000003:1", type: account.registered, occurredAt: "2026-11-07T12:00:00Z", account: {id: 019a5df0-0000-7000-8000-000000000001, revisionId: 019a5df0-0000-7000-8000-000000000002, protocol: xmpp, address: alice@localhost, label: Personal, connectionState: not_connected, createdAt: "2026-11-07T12:00:00Z"}}
+      additionalProperties: false
+      required: [id, type, occurredAt, account]
+      properties:
+        id:
+          type: string
+          description: Engine-scoped durable event cursor.
+        type:
+          type: string
+          enum: [account.registered]
+        occurredAt:
+          type: string
+          format: date-time
+        account:
+          $ref: '#/components/schemas/Account'
+    Problem:
+      type: object
+      example: {type: "urn:oie:problem:unavailable", title: Service Unavailable, status: 503, code: unavailable}
+      additionalProperties: false
+      description: Stable codes for presentation-owned localization; no raw storage errors or credentials.
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          enum: [invalid_request, not_found, idempotency_conflict, account_exists, invalid_cursor, unavailable]

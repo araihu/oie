@@ -10,9 +10,11 @@ The user subsequently authorized the first specification. The consolidated draft
 
 The user wants to discuss **one question at a time**, going deeply into each decision before moving on. Maintain this record as decisions emerge. After context compaction, read this file and resume the current topic; do not restart the questionnaire or treat proposals as accepted decisions.
 
+Implementation is now authorized. The repository is https://github.com/araihu/oie; the specification and supporting notes were moved into its docs directory. See [milestone-one implementation](milestone-one.md) for concrete selections and progress. The active feature branch is codex/api-foundation in a managed worktree; avoid restarting the interview or treating later alpha features as already implemented.
+
 ## Confirmed direction
 
-- Project repository: `araihu/oie`. The user supplied this name; repository creation or an application scaffold has not been requested at this stage.
+- Project repository: `araihu/oie`. Repository creation and the first implementation milestone are now authorized.
 - Implement the application in Go with a Goshtoso web interface.
 - Start with a plain browser experience. Wails is a possible later desktop host, not a selected dependency or first-release requirement.
 - Use hexagonal architecture to connect chat protocols through shared application-facing contracts. XMPP is the initial protocol; future protocols should fit through adapters.
@@ -785,7 +787,7 @@ These are remaining design details, not a mandatory interview checklist. As of t
 
 ## Current topic and next conversational step
 
-The user requested and steered the first specification. Draft 1 is now in `docs/oie-spec.md`, consolidating agreed alpha behavior, explicit recommendations/open decisions/backlog, WhatsApp-aligned UI defaults, inspected Goshtoso reuse/gaps, and the generic upstream-PR/pseudo-version workflow. Finish/review this document and report its link. Do not resume the interview or silently implement proposed defaults. Future work should use the spec as the consolidated baseline and this record for decision history; no application scaffold or upstream feature implementation has been started.
+The user authorized creating araihu/oie, moving the spec, implementing the API-first first milestone, exploring oapi-cli-gen for testing, and adding a development XMPP server. The repository exists and docs were moved. The codex/api-foundation worktree implements the OpenAPI-first metadata/identity/operation/SSE foundation, SQLite migration, Goshtoso HTTP-client consumer, generated standalone CLI, and pinned Prosody Compose environment. See milestone-one.md for actual scope, tests, chosen dependencies, and remaining messaging work. Complete verification and open a reviewable PR; do not resume product interviews or claim live Oie XMPP messaging/sync/outbox features are present.
 
 ### Chat formatting feasibility
 

@@ -1,0 +1,33 @@
+CREATE TABLE engine_identity (
+    singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+    id TEXT NOT NULL UNIQUE
+);
+CREATE TABLE accounts (
+    id TEXT PRIMARY KEY,
+    revision_id TEXT NOT NULL UNIQUE REFERENCES revisions(id) DEFERRABLE INITIALLY DEFERRED,
+    protocol TEXT NOT NULL,
+    address TEXT NOT NULL,
+    label TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(protocol, address)
+);
+CREATE TABLE revisions (
+    id TEXT PRIMARY KEY,
+    entity_id TEXT NOT NULL REFERENCES accounts(id),
+    parents TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE operations (
+    id TEXT PRIMARY KEY,
+    fingerprint TEXT NOT NULL,
+    resource_id TEXT NOT NULL REFERENCES accounts(id) DEFERRABLE INITIALLY DEFERRED,
+    result TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE changes (
+    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    payload TEXT NOT NULL,
+    occurred_at TEXT NOT NULL
+);
+PRAGMA user_version = 1;
