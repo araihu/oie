@@ -1,0 +1,625 @@
+# Oie first specification
+
+Draft 1 · 2026-11-07 · Intended repository: `araihu/oie`
+
+Oie is a single-owner, multi-account chat application written in Go, with a Goshtoso web interface and protocol adapters behind a hexagonal application core. The alpha implements XMPP, runs with a local or hosted native Go engine, and optionally synchronizes independent local engines through a user-hostable service.
+
+The experience should feel close to WhatsApp: a familiar conversation list, message timeline, composer, media cards, room details, and settings. The user's explicit Oie decisions take precedence over WhatsApp behavior. For unresolved user-facing choices, prefer WhatsApp-like behavior where it fits the selected protocols and deployment modes. Do not infer WhatsApp's internal architecture or copy every WhatsApp feature into scope.
+
+## 1. Decision status and scope
+
+This draft consolidates the [discussion record](unified-chat-discussion.md) and [formatting feasibility report](oie-formatting-feasibility.md). Later explicit decisions supersede earlier proposals in those notes.
+
+The status labels have distinct meanings:
+
+| Label | Meaning |
+| --- | --- |
+| **AGREED** | Confirmed product requirement or architectural decision. |
+| **RECOMMENDED Rxx** | Proposed implementation or product default, not yet separately accepted. |
+| **OPEN Oxx** | A choice or precise contract still needs resolution. A linked recommendation is a starting point. |
+| **BACKLOG Bxx** | Explicitly deferred from alpha. |
+
+Sections 2–13 describe **AGREED** behavior unless a paragraph carries a recommendation or open-decision label. Section 14 contains recommendations, not additional accepted scope. Acceptance scenarios distinguish agreed outcomes from proposed engineering details.
+
+Alpha includes local standalone operation, hosted-engine operation, optional app/history sync, multi-account XMPP, reliable immediate and scheduled sends, retained searchable history, rooms, attachments, responsive web UI, PWA/offline behavior, and manual merge restore.
+
+Alpha is single-user: one Oie owner per instance. Multiple accounts and devices remain supported. Built-in application authentication, multi-user hosting, XMPP E2EE, calls, and other deferred features are listed in section 16. Protocol account credentials are still needed to connect existing XMPP accounts; this does not reopen the deferred application-login design.
+
+No specific XMPP client, SQLite driver, browser database, UUID library, Go toolchain version, or final library dependency set is selected by this draft.
+
+## 2. Deployment and application boundaries
+
+### 2.1 Runtime and packaging
+
+Ship one Go executable supporting native engine, presentation/BFF, and optional sync-service roles. Use a data directory containing SQLite data and separate media files. SQLite is the alpha persistence choice for local engines, hosted engines, and the sync service.
+
+| Mode | Protocol sessions and authoritative engine store | Device behavior |
+| --- | --- | --- |
+| Local without sync | Native Go engine on the user's machine, with SQLite and separate media files. | App-owned data can diverge from other independent engines. |
+| Local with optional sync | Each local engine owns its sessions/store; an optional service exchanges selected app data and retained history. | Devices can operate with different preferences and temporarily divergent data. |
+| Hosted engine | A native Go engine owns sessions/store on the host. | Device UIs share the engine's account state; drafts, cache, and device preferences remain device-specific. |
+
+Each device/UI selects **one engine at a time**, supporting multiple accounts within that engine. The alpha UI does not simultaneously aggregate multiple independent engines. An engine's replicated history can still contain data obtained from other synced engines.
+
+Use an embedded engine initially, with no separate daemon required. In a future native window host, closing the window keeps the engine running; explicit quit stops it. In the browser-first alpha, closing a tab does not stop the serving Go process. Closing a hosted UI does not terminate its shared remote engine. Wails remains a possible later desktop host, not an alpha dependency.
+
+Ordinary engine restart/reconnect resumes eligible pending sends automatically. Backup recovery has a separate review rule in section 13.
+
+**OPEN O01:** Exact commands, configuration, role combinations, process supervision, and data-directory layout. **RECOMMENDED R01:** a modular monolith with explicit role configuration.
+
+### 2.2 Hexagonal architecture
+
+The application core owns messaging rules, identity, revisions, history policy, schedules, outbox transitions, and synchronization semantics. Protocol clients, persistence, transports, and presentation sit behind or implement application-owned interfaces.
+
+The engine exposes structured operations, queries, capabilities, and events. It does not return Goshtoso components or HTML. The BFF owns templ/Goshtoso rendering, browser routes, HTMX fragments, and presentation updates derived from engine events. The frontend contains no XMPP, Matrix, IRC, or Nostr client.
+
+The diagram describes logical boundaries, not mandatory separate processes:
+
+```mermaid
+flowchart LR
+    UI["Browser / installed PWA"]
+    CACHE["Device cache, drafts, pending submissions"]
+    BFF["Go BFF: Goshtoso / templ / HTMX"]
+    API["Engine adapter: HTTP + structured SSE"]
+    CORE["Application core and ports"]
+    XMPP["Compiled-in XMPP adapter"]
+    PROVIDER["XMPP services and peers"]
+    STORE["SQLite and separate media store"]
+    SYNC["Optional sync adapter / service"]
+    FUTURE["Future compiled-in protocols"]
+    UI <--> BFF
+    UI <--> CACHE
+    BFF <--> API
+    API <--> CORE
+    CORE <--> XMPP
+    XMPP <--> PROVIDER
+    CORE <--> STORE
+    CORE <--> SYNC
+    CORE -.-> FUTURE
+```
+
+Alpha uses **HTTP commands/queries and structured SSE live events**. Follow API-first development: define the HTTP contract in OpenAPI, lint with vacuum, and generate supported Go types/bindings with oapi-codegen. Streaming payloads, reconnection, and recovery need an explicit contract alongside generated bindings.
+
+Keep application contracts independent of wire transport. Future WebSocket, IPC, Unix-socket, daemon, and WASM adapters must preserve operation semantics. An ordinary browser needs an intermediary to use a Unix socket; HTTP itself can be carried over a Unix socket behind such an intermediary.
+
+**RECOMMENDED R02:** narrow application ports and protocol feature interfaces, with transport adapters translating into the same use cases. **RECOMMENDED R03:** stable operation IDs, revision preconditions, and recoverable event subscriptions.
+
+## 3. Accounts, contacts, rooms, and capabilities
+
+### 3.1 Protocol scope and effective capabilities
+
+XMPP is the initial implementation. Matrix, IRC, and Nostr are likely future candidates and design references, without an agreed implementation order. Alpha adapters are compiled-in Go packages registered at startup; adding one requires a rebuild. Independently installable plugins are backlogged.
+
+Discover capabilities and expose effective application capabilities at the relevant account, peer, room, message, or conversation scope. Availability may depend on the adapter, protocol server, receiving client, permissions, content format, or selected runtime. It is not a single server-wide boolean.
+
+The BFF uses application capabilities; protocol namespaces and stanza handling remain in adapters. Optional operations include history retrieval, room discovery/creation, invitations, name/topic changes, attachments and limits, replies, corrections, retractions, reactions, formatting, receipts, typing, and presence.
+
+**RECOMMENDED R04:** distinguish unsupported, supported, permission-denied, and temporarily unknown/unavailable states; revalidate at operation time. **OPEN O02:** the complete capability schema and minimum tested XMPP interoperability matrix.
+
+### 3.2 Accounts and contacts
+
+Support multiple simultaneous existing XMPP accounts, such as personal and work. Display the owning/sending account clearly in conversations and account-sensitive actions. In-app XMPP registration is backlogged.
+
+An Oie contact can group multiple protocol identities. Link identity and Unlink identity are manual, reversible operations. Each account/protocol conversation retains its own timeline; linking does not merge histories or retarget pending sends.
+
+Support per-account contact add/remove and contact-request acceptance/decline where the protocol permits. Removing a contact preserves retained conversation history. Provider contact/presence subscriptions remain distinct from app-owned aliases and identity grouping.
+
+Allow starting a direct chat by address without first adding a contact, where permitted, with the sending account clearly selected. Neither sending nor receiving a message automatically adds a contact, requests presence access, or links identities.
+
+Incoming non-contact chats appear in the normal conversation list with a localized **Not in contacts** label. Blocking/unblocking is backlogged; conversation muting is not a protocol block.
+
+### 3.3 Rooms
+
+Support, subject to protocol support and permissions:
+
+- Public-room discovery and joining by room address.
+- Creation of group rooms.
+- Sending invitations and accepting/declining received invitations.
+- A room-details panel with name, topic, and the available participant list.
+- Name/topic editing where permitted.
+
+Do not imply that an available participant list is a complete persistent membership roster.
+
+Rejoin previously active rooms after reconnecting unless the user explicitly left or access was revoked. Preserve explicit leave decisions across restart. Leaving a room does not delete stored history. Kicking, banning, and role-management controls are backlogged; incoming removal/permission changes still need truthful handling.
+
+**OPEN O03:** room creation defaults, protocol-specific leave/rejoin behavior across independent engines, and the exact representation of participants and memberships.
+
+## 4. Identity, revisions, and merge semantics
+
+Application entities and revisions use **UUIDv7** identifiers, preserved through sync and backup/restore. Protocol identifiers remain separate, scoped external references. UTC is used internally; timezone conversion belongs to presentation.
+
+Persistent content revisions are immutable and have their own revision UUIDs and parent revision references. Message edit history consists of the versions Oie actually received/stored. A conversation references the stable logical message UUID and displays its derived current revision.
+
+Select current message revisions as follows:
+
+1. A descendant supersedes its ancestor, even when device clocks disagree.
+2. Among genuinely concurrent revision heads, choose the most recent revision creation timestamp in UTC.
+3. Break equal-timestamp ties deterministically by revision UUID.
+4. Preserve alternate revisions for history.
+
+Import/receive time must not make an old revision win. A cached current-revision pointer is a projection of these rules, not an independently authoritative collection of `is_current` flags. UUIDv7's embedded timestamp does not substitute for ancestry or conflict metadata.
+
+For ordinary shared preferences and contact fields, resolve conflicts automatically **per field**, preserving independent edits to different fields. Message revisions, deletion markers, read state, and outbox ownership retain their own rules. Do not apply unrestricted whole-entity last-writer-wins to every state machine.
+
+Sync and backup merge use the same type-specific conflict/deletion policies. A merge must not replay a message to its protocol provider merely because a historical record arrived.
+
+**RECOMMENDED R05:** a common revision envelope with entity ID, revision ID, parent IDs, originating engine/device, authored UTC time, schema/profile version, and source/protocol provenance, with type-specific payloads.
+
+**OPEN O04:** canonical identity when independent engines observe the same provider message before syncing. UUIDs alone do not make two independently created local records the same message. Provider-ID matching, revision deduplication, aliases, and missing provider ancestry require a concrete design.
+
+## 5. Outgoing messages and scheduling
+
+### 5.1 Durable acceptance and delivery evidence
+
+Use a **transactional outbox**: durably commit the outgoing message and send intent together in the accepting engine's database. Immediate sends become eligible immediately, with no artificial undo delay. Retry recoverable failures and resume after ordinary restart/reconnect.
+
+The guarantee is durable committed intent and eventual submission under recoverable failures while the owning engine runs and the provider is available, unless cancelled. This is not an unconditional guarantee of recipient delivery or exactly-once external delivery.
+
+Keep these milestones distinct:
+
+- Device-local pending submission: explicit Send has been saved in the UI device, but engine acceptance is not confirmed.
+- Engine acceptance: message/send intent committed in its transactional outbox.
+- Dispatch/in-flight: a provider attempt has begun.
+- Provider acceptance: evidence as defined by that adapter.
+- Recipient delivery and read evidence: distinct optional protocol milestones.
+- Unknown outcome or permanent failure: explicit, actionable states rather than inferred success.
+
+Missing optional delivery/read receipts must not trigger indefinite resending of an otherwise accepted message.
+
+### 5.2 Mutation cutoff and races
+
+| State/evidence | Cancel, edit pending content, or reschedule |
+| --- | --- |
+| Scheduled, queued, or waiting for retry with known-unsent status, before dispatch | Allowed through an atomic engine-side guard. |
+| Dispatch has started or the original transmission is in flight | Reject the mutation and return actual status. |
+| A previous transmission may have been accepted, but its outcome is unknown | Preserve uncertainty; do not present this as a safely unsent item. Reconciliation policy is open. |
+| Provider-accepted/delivered/read | Pending-send mutation no longer applies. Supported correction/retraction is a separate operation. |
+| Successfully cancelled before dispatch | Terminal; ordinary restart, backfill, sync, or restore must not revive that cancelled intent. |
+
+The engine enforces the cutoff, including stale UI state and races with dispatch. A hidden/disabled UI control is not the guard.
+
+**RECOMMENDED R03:** durable idempotency keys for submissions, operation lookup after lost responses, and revision/state preconditions on mutations. Repeated requests must not create another logical send. The API's exact status codes/envelopes are **OPEN O05**.
+
+### 5.3 Scheduling and ownership
+
+Persist a scheduled send as a future send intent with a UTC not-before instant. Timezone conversion affects input/display, not the scheduled instant. Changing device timezone does not move an existing schedule.
+
+If the time is missed because the engine was stopped, asleep, offline, or disconnected, send as soon as that owning engine is available and connected again, unless cancelled. No overdue approval step or automatic expiry has been selected.
+
+Show pending/scheduled items across synced devices, including their owning engine and potentially stale status. Initially, editing/rescheduling/cancelling from another device requires reaching that engine for authoritative confirmation before dispatch. Multiple UIs using the same reachable hosted engine can already act through it.
+
+This reachability restriction is temporary. Full centralized sync should eventually support pending-send control from any synced device without requiring the original local engine to be directly reachable. That coordination is backlogged; alpha replication must not create a second dispatcher.
+
+**RECOMMENDED R06:** separate send ownership from replicated visibility, select eligible work without letting a future schedule block an immediate send, and reconcile ambiguous provider outcomes before retrying.
+
+**OPEN O06:** permanent-failure recovery, ambiguous acceptance, ordering of eligible sends, staged-upload cutoff, and explicit engine migration/ownership transfer. Recurring schedules are not selected.
+
+### 5.4 Explicit Send while the UI is offline
+
+When the PWA cannot reach its selected engine, an explicit Send saves a durable device-local pending submission and automatically submits it when the engine becomes reachable and the client runtime executes again. Display **Waiting for connection** until engine acceptance is confirmed.
+
+Composing/saving a draft alone never auto-sends. Drafts remain device-specific even when UIs share a hosted engine.
+
+**RECOMMENDED R03/R09:** allocate an operation ID before the first attempt and bind it to the selected engine/account/destination. If a request might have reached the engine before the response was lost, reconcile by operation ID before resubmitting or promising cancellation. Only an entirely unsubmitted item can be edited/cancelled purely locally without that engine check.
+
+The closed browser is not assumed to run a persistent background dispatcher. Switching engines must not silently submit the same pending operation to another owner.
+
+## 6. Sent-message actions and formatting
+
+Support quoted replies with referenced sender/excerpt and a stable message reference. This does not select separate threaded timelines.
+
+Allow the user to edit their own sent messages where supported and permitted, displaying **Edited**. This is a new protocol correction operation, not mutation of an in-flight original send. Preserve observed previous versions behind **View edit history**; Oie cannot recover versions it never obtained.
+
+Support emoji reactions where supported, using provider-normalized targets and restrictions.
+
+Support retraction of the user's own sent messages where supported, with a distinct **Retract message** action and a removed-message placeholder. Show real request/failure state; removal of other clients' copies cannot be guaranteed.
+
+Retain already-stored retracted messages, including incoming retractions, behind **Message retracted** and **Reveal original**. Retraction does not perform Oie history deletion.
+
+Allow manual forwarding across conversations/accounts using the destination account and its capabilities. Forward as a new outgoing message through that account's outbox. Use a generic **Forwarded** label where supported. Original sender/conversation attribution is omitted unless explicitly chosen. This does not select automatic cross-protocol relaying.
+
+Forwarding media retrieves the full file if necessary and uploads through the destination account, with progress and clear errors. Do not silently substitute a source URL. Explicit forwarding authorizes retrieval of that selected file independently of automatic incoming download preferences.
+
+### 6.1 Markdown and Copy
+
+Use `araihu/margo` with its current syntax/parsing behavior for this alpha subset: bold, italic, strikethrough, inline code, fenced/preformatted code, links, lists, and blockquotes. WhatsApp is a feature/presentation reference; it does not replace Margo's delimiter grammar.
+
+Attempt Markdown rendering by default, with an option to disable it and a readable fallback on rendering failure. Preserve the original message source separately from rendered output.
+
+Adapters translate semantic formatting to supported provider representations, falling back readably for unsupported features. Formatting support is not uniformly a server capability.
+
+Copy always writes original message content as `text/plain`, preserving Markdown markers. For example, `**hello**` copies literally as `**hello**`. Copy rendered text without markers is backlogged.
+
+Needed public Margo API additions are authorized, provided existing behavior is preserved. The feasibility report identifies a gap in public semantic spans/blocks and restricted chat-profile support; do not import parser internals or scrape rendered HTML for protocol encoding.
+
+**RECOMMENDED R07:** an additive Margo semantic projection/chat profile and readable text projection, preserving literal chat content and safe rendering. **OPEN O07:** exact public APIs, treatment of unsupported document syntax/newlines, rendering-toggle scope, and protocol mappings.
+
+## 7. History, search, and shared links
+
+Persist history independently of protocol-server retention. Automatically backfill **all available authorized history**, serially and without overwhelming the provider. Serve retained history without downloading the full archive again whenever a conversation opens.
+
+Keep retrieved history until explicit user deletion, even after the provider expires it. Optional Oie history sync also transfers records no longer available from the provider. Oie cannot retrieve history that neither the provider nor a participating Oie store still possesses.
+
+**RECOMMENDED R08:** a bounded, paced backfill queue with checkpoints, resumable pages, backoff, foreground/live-message priority, and explicit partial-history status. Scope serialization and limits deliberately rather than launching one unbounded worker per room.
+
+Search across accounts/sources in the selected engine and within a direct/group conversation. Alpha indexes message text, captions, filenames, URLs, page titles/descriptions, and available media metadata. Document-body extraction, image OCR, and audio transcription are backlogged.
+
+Provide searchable **Media, Files, and Links** views. Catalog shared URLs automatically from messages, including backfilled/synced messages; retain source message/conversation/account context. Here, bookmarks means a shared-link catalog, not an accepted browser-bookmark exporter or independent manual-save feature.
+
+Provide WhatsApp-like rich link cards using structured engine metadata. Preview enrichment must not require a provider client in the browser.
+
+Search matches the latest message revision by default. **Include edit history** explicitly enables retained earlier versions, with historical matches labeled. Retracted content is hidden from search and Media/Files/Links by default; **Include retracted** enables deliberate retrieval. These filters are independent and never bypass explicit deletion.
+
+**RECOMMENDED R08/R10:** SQLite FTS5 as a derived index; source-linked catalog records; bounded, cached link-preview enrichment independent of history fetching. **OPEN O08:** indexing/tokenization, filters/ranking, preview fetching/refresh policy, cache limits, and provider capability fallbacks.
+
+## 8. Media and downloaded files
+
+Allow media sharing when effective protocol/server capabilities permit. Expose known upload limits and meaningful transfer errors through the uniform API.
+
+Default incoming behavior is **small previews automatically, full files on demand**, configurable per device. Do not fetch a full file merely to generate a thumbnail against that policy.
+
+Downloaded-file retention is configurable per device and defaults to **retain until explicit deletion**. The PWA's evictable message cache is a separate policy; it does not silently authorize downloaded-original eviction.
+
+SQLite stores attachment references, metadata, and media integrity hashes; binary previews and full files are stored outside SQLite in native deployments. The phrase “only media hash” excludes media blobs from SQLite, not the retrieval/verification metadata the application needs.
+
+Use an advertised supported expected digest where available and verify it against a complete download. If none is available, compute a local hash on full download. Distinguish expected-and-verified from computed-only: a first-download fingerprint does not independently verify the sender's original. Preview and original-file digests are separate.
+
+Support audio-file attachments and inline playback in alpha where the format is supported. Inline player display does not force a full-file automatic download. Voice recording and calls are backlogged.
+
+Media-file sync is separate from history sync and **off by default**. When explicitly enabled, downloaded files can be retained by the sync service and retrieved by other devices after provider expiration. Receiving devices still obey their own download preferences. Message/metadata sync alone does not upload all full files.
+
+**RECOMMENDED R10:** durable attachment staging, streaming hash computation, integrity status/provenance, reference-aware file storage, and SHA-256 as the computed-only fingerprint default. A queued/scheduled attachment should not depend on an ephemeral browser file handle.
+
+**OPEN O09:** precise file types, upload staging/cancellation boundary, multi-attachment send semantics, preview retention, quotas, transcodes, transfer resumption, and cleanup of retained unreferenced files. WhatsApp-like interaction defaults are proposed in section 14; WhatsApp's file-size limits do not determine XMPP limits.
+
+## 9. Deletion and synchronization
+
+### 9.1 Explicit deletion
+
+Offer these clearly labeled scopes:
+
+- **Delete on this device** — the default.
+- **Delete from all my synced Oie copies** — including the sync service.
+
+Deleting a message removes all its retained revisions and associated search results and message-derived Media/Files/Links entries within the chosen scope. Preserve entries belonging to other messages, even when they share a URL or file.
+
+Offer **Also delete downloaded files**, off by default. File removal respects the scope and preserves physical files still referenced by other retained messages. Keeping the binary does not preserve deleted text/revisions or restore that message's catalog entry.
+
+Preserve scoped deletion/exclusion metadata so backfill, sync, and backup merge do not resurrect explicitly deleted content. `Include edit history` and `Include retracted` do not override deletion.
+
+Neither history-deletion scope performs a protocol retraction or claims to erase provider/other-participant copies. Retraction remains the separate capability-aware action in section 6.
+
+For a hosted engine shared by multiple devices, device-local deletion excludes the content from that device without erasing another device's shared history. Exact physical purge and per-device storage mechanics remain **OPEN O10**. All-copy deletion reaches disconnected copies when they synchronize; no immediate removal from an unreachable device is implied.
+
+**RECOMMENDED R11:** retain content-free tombstones/exclusions with Oie identity and sufficient provider-ID mapping to reject re-import. Reconcile known deletion markers before exposing restored records. An isolated old backup cannot reveal a later deletion whose marker is absent from every reachable store; this is a recovery boundary to handle explicitly.
+
+### 9.2 Sync scope
+
+Optional sync is independent of provider-native multi-client features and independent of the engine's live UI SSE stream. A sync-only host need not own protocol sessions merely to exchange application data.
+
+| Data | Agreed scope |
+| --- | --- |
+| Retained history and observed message revisions | Shared through optional history sync, including history beyond provider retention. |
+| Contact aliases and manual identity links | Shared through optional app sync. |
+| Conversation pins/favorites and archive state | Shared; archived chats stay archived on new arrivals. |
+| Read positions and manual read/unread actions | Shared; unread reminder does not undo sent receipts. |
+| Conversation mutes | Shared, with optional per-device overrides. |
+| Read-receipt and typing-sending preferences | Shared per protocol account; both default enabled where supported. |
+| Manual Available/Away/Do Not Disturb choice | Shared per account; DND suppresses notifications once received. |
+| Pending/scheduled send visibility | Shared visibility; execution and initial mutations remain owner-controlled. |
+| Full media files | Separate optional sync, off by default. |
+| Drafts and UI pending submissions | Device-specific; a draft never becomes a send merely through sync. |
+| Theme, language override, sounds, notification permission | Device-specific. |
+| Media download/retention preferences | Device-specific. |
+| Offline cache limit and Keep available offline | Device-specific, distinct from shared conversation pins. |
+| Enter-to-send preference | Device-specific. |
+
+Without app sync, independent engines can diverge. Configured sync can also diverge temporarily while offline; communicate which mode is active and which state is local/shared. Hosted-engine UI clients already share hosted state but still retain device-scoped preferences.
+
+**RECOMMENDED R11:** incremental, idempotent entity/revision replication with scoped deletion handling; rebuild indexes rather than replicate SQLite/FTS files. History import never creates a new send intent or transfers execution ownership.
+
+**OPEN O11:** sync transport, enrollment/device identity, account matching, credential handling, retention/quotas, checkpoints, tombstone lifetime, encryption/trust boundary, and detailed read/preference merging. Built-in application auth remains backlogged.
+
+## 10. Read state, presence, and notifications
+
+### 10.1 Read and typing
+
+Automatically mark incoming messages read only when visible in the active, focused conversation. Receipt, indexing, fetching, and background tabs are not automatic read triggers.
+
+Provide synced **Mark as read** and **Mark as unread**. Unread is a reminder, not reversal of delivery/read evidence. Explicit Mark as read sends supported/enabled protocol read receipts, respecting the account setting, without requiring every message to be individually viewed.
+
+Read-receipt sending defaults on where supported, with a synced per-account disable setting. Internal read-state tracking/sync remains independent.
+
+Support incoming/outgoing typing indicators where supported. Sending defaults on with a synced per-account toggle. Typing events are ephemeral, expiring state, not retained message history or outbox items to replay.
+
+Show contact presence and manual per-account Available, Away, and Do Not Disturb where supported. Sync the manual account choice. DND suppresses that account's browser notifications and sounds while reception/unread counts continue. Automatic idle/away detection is backlogged.
+
+**OPEN O12:** visibility thresholds, unread reminder clearing, read-position merging, offline read commands, receipt coalescing, typing timing, and provider presence aggregation. A synced read record must not repeatedly emit another receipt merely because it was imported.
+
+### 10.2 Notification eligibility and coordination
+
+Alpha supports browser notifications while the app is open and permission/platform behavior allows. Web Push and closed-app notification delivery are backlogged.
+
+Suppress notifications and sounds for the conversation visible in the active, focused window. Other conversations follow conversation mute, per-device override, account DND, notification permission, and device sound preferences.
+
+Archived conversations remain archived on new arrivals; unread counts update and mute settings independently govern notifications. Archiving does not leave a room, delete history, or automatically mute it.
+
+Coordinate cooperating tabs/windows, including installed PWA windows, within the same browser profile and app origin: at most one notification and one notification sound per eligible message. Do not assume this coordinates independent browser profiles or origins.
+
+Separate devices notify independently even if another device is active. Activity-based routing/suppression across devices is backlogged; normal read-state and mute/DND policies still apply.
+
+**RECOMMENDED R12:** notify on new incoming messages rather than replaying historical backfill, and treat old stream replays as recovery, not a fresh notification batch. Request browser permission through an intentional user action. Time-limited mute choices are proposed in section 14.
+
+## 11. Presentation, PWA, and internationalization
+
+### 11.1 WhatsApp-like presentation
+
+Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screenshots. On wide screens, use navigation, a searchable/filterable conversation list, and the active conversation workspace. Include account identity, message bubbles, composer, media/link cards, room/contact details, and settings.
+
+Alpha is responsive: on phones, show one primary panel at a time with access to the other views. The screenshots do not require native window controls or add stories, calls, AI, communities, or recording features.
+
+Theme follows the system by default with per-device Light/Dark overrides.
+
+Desktop composer defaults: Enter sends, Shift+Enter inserts a newline, with a per-device Enter-to-send setting. On mobile, Enter inserts a newline and the Send button sends. Preserve IME composition.
+
+Open at the first unread message, otherwise at latest, with **Jump to latest**. Incoming messages auto-scroll only if the user is already at the bottom; otherwise preserve position and show **New messages**. Explicit search/reply navigation targets its selected message.
+
+### 11.2 Goshtoso discovery and composition
+
+**AGREED:** explore and reuse Goshtoso public components and examples before introducing custom primitives. If a dependency has a limitation, a generic change that belongs in the library can be developed upstream under the workflow below.
+
+The discovery inspected published **Goshtoso v0.6.1** and **Goshtoso App Shells v0.1.9**, plus the local Goshtoso application-patterns and chat examples. These are inspected candidates, not a committed Oie dependency set. App Shells v0.1.9 declares Goshtoso v0.4.6; its combined compatibility with v0.6.1 still needs a consumer integration check. Both inspected releases declare Go 1.27.3.
+
+| Oie surface | Closest public surface | Decision |
+| --- | --- | --- |
+| Overall frame, navigation, theme, HTMX fragment lifecycle | App Shells `consoleshell.Layout`, `Fragment`, appearance and navigation configs; core `appshell` where appropriate | **Compose**; validate a chat workspace's height/scroll containment through supported slots/hooks. |
+| Incoming/outgoing plain messages, grouped sender/avatar rows | `chatbubble.ChatBubble` with Side, Grouped, sender/avatar fields | **Reuse** for plain messages. |
+| Typing indicator | `chatbubble.TypingIndicator` | **Reuse**. |
+| Rich Markdown/media/reply/reaction content inside a bubble | `chatbubble.Config` currently has `Message string` and no public rich-body slot | **Gap G01**: generic rich-body/metadata composition extension. |
+| Composer | `textarea.Textarea`, `button`, `dropdown`/`actiongroup` | **Compose** with Oie send/draft/IME policies; `TextareaWithActions` exists but its fit is not assumed without inspecting its rendered contract. |
+| Attachment selection | `fileinput.FileInput`, compact upload/drop-zone appearances and input attributes | **Compose** with application upload/staging service. |
+| Conversation rows and identity/status | `avatar`, `badge`, `link`, `panel`, public slots/attributes | **Compose**; account identity and unread policy are app data. |
+| Search and content categories | `search`, `tabs`, form controls and badges | **Compose**; index/query semantics remain engine-owned. |
+| Details/settings/confirmation surfaces | `drawer`, `modal`, `panel`, `dropdown`, `toggle`, `select`, `radio` | **Reuse/compose**. |
+| Media and link cards | `card.Config.Media`, Body and Footer slots | **Compose** with controlled images/native media content and Oie transfer actions. |
+| Bounded scroll surfaces | `scrollregion.ScrollRegion` and shell layout hooks | **Compose**; follow-bottom and history anchoring remain product behavior. |
+| Loading, errors, empty views, toast feedback | `skeleton`, `spinner`, `alert`, `emptystate`, `toast` | **Reuse/compose** with localized domain status. |
+| Component language | `expressions.With`, `NewRenderer`, `LoadFS`, `WithExpressions` | **Reuse**; Oie owns product catalogs/locale negotiation. |
+| Shell document language and shell-owned labels | Inspected `consoleshell` emits fixed `lang="en"` and a literal skip-link label | **Gap G02**: generic language/label configuration if this shell is selected. |
+| Icons | Goshtoso bundled Heroicons and public `icon` API | **Reuse**; use iconpack only for a demonstrated missing icon set. |
+
+The local chat example demonstrates public bubble composition, composer inputs, per-recipient alignment, and OOB message updates. Its in-memory demo hub, cookies, WebSocket transport, and hardcoded demo copy are not Oie's engine or API design. The application-patterns example demonstrates public-component composition, full-page/fragment routes, local assets, and loading/error/empty states.
+
+Do not import `goshtoso/site` or dependency `internal/` packages, copy private component DOM/CSS, or adopt a demo's transport simply because it is illustrated there. The examples are usage evidence. Chat-specific layout composition and application state remain Oie-owned.
+
+**RECOMMENDED R13:** extend bubbles with generic renderable content and metadata/action slots while preserving the existing text fallback and behavior. Do not put XMPP types, Oie outbox enums, or Oie message IDs in Goshtoso. A shell language/label change should similarly serve any consumer.
+
+### 11.3 Upstream dependency workflow
+
+**AGREED:** this workflow applies to any Arai Hû dependency, including Goshtoso, App Shells, and Margo:
+
+1. Reuse/compose existing public APIs; identify a concrete remaining limitation.
+2. Make a generic, backward-compatible upstream change that makes sense for the library.
+3. Keep an open upstream PR for the change and follow that repository's contribution/worktree rules.
+4. During Oie development, pin its module dependency to the Go pseudo-version resolved from a **specific commit on that PR**.
+5. Update the pin deliberately when the upstream PR changes. A PR number or floating branch is not a reproducible Go module version.
+
+**RECOMMENDED R13:** keep the PR backed by a branch resolvable from the canonical module repository, and let Go resolve the version from its commit rather than constructing one manually. Go validates commit reachability and pseudo-version metadata. Record the PR URL, pinned commit, pseudo-version, and consumer verification together; replace the temporary pin with an appropriate release after upstream merge/release. Verify the published/pseudo-version consumer path rather than relying solely on sibling `replace` directives.
+
+This specification authorizes no fabricated PR URL/version; actual upstream work and pins are implementation deliverables.
+
+### 11.4 PWA and offline data
+
+Make the app installable as a PWA. Installation does not imply a browser WASM engine, arbitrary filesystem access, or an always-running background process.
+
+When the engine is unreachable, display previously cached conversations and preserve device drafts. Cache recently viewed conversations under a configurable per-device storage limit. Drafts and explicit pending submissions are excluded from ordinary cache eviction.
+
+Provide device-specific **Keep available offline**, protecting a conversation's cached messages from automatic app eviction while respecting the limit. Show when additional content cannot fit. This is separate from synced conversation pins/favorites and does not automatically fetch all history or full attachments.
+
+Offline search covers cached content only, with limited coverage clearly labeled globally and per conversation. Use the reachable engine for full retained-history search. A cache miss is not proof of no matching engine history.
+
+Device preferences remain meaningful with a hosted engine. Browser/site-data removal or denied storage can still affect local persistence; do not report a pending send as durably saved if local persistence failed.
+
+**RECOMMENDED R09:** IndexedDB for device metadata/drafts/pending submissions and Cache Storage for versioned local UI assets/BFF-produced snapshots, with a service-worker offline shell and limited presentation coordinator. Do not add provider clients to solve offline presentation. **OPEN O13:** exact browser storage/rendering contract, coverage of protected conversations, quota defaults, and cache invalidation across locale/engine/device/deletion changes.
+
+### 11.5 Language and timestamps
+
+Internationalization is required from the start. Ship **English (`en`) and Brazilian Portuguese (`pt-BR`)**. Follow device/browser language unless explicitly overridden on that device; fall back to English when no supported language matches.
+
+Use and expand reusable Goshtoso expression support rather than hardcoding user-facing expressions. Oie owns product copy, locale selection, complete parameterized/plural messages, and locale-aware date/time/number/size formatting. Cover labels, statuses, errors, notifications, accessibility text, and offline UI.
+
+Do not mutate a process-global locale for a hosted engine's devices. Full-page rendering, HTMX fragments, SSE-driven rendering, and cached offline presentation need the same resolved device locale.
+
+Use UTC internally for timestamps and scheduling. Convert local input into an instant at the presentation boundary and format that instant locally. DST input ambiguity and exact wire precision are **OPEN O14**.
+
+## 12. Backup and merge restore
+
+Include manual engine-data backup and restore, with media files optionally included. Restore **merges into existing data** using stable entity/revision UUIDv7 IDs. Fresh-directory-only restore with merging deferred was explicitly rejected.
+
+Apply the same type-specific revision/conflict/deletion rules as sync. Preserve newer descendant revisions, resolve concurrent revisions deterministically, retain alternatives, and honor known deletion markers. Import time is not a new edit.
+
+Recovered pending/scheduled sends stay **paused until reviewed and explicitly resumed**. Ordinary engine restarts still resume eligible sends automatically. Restore must not reset an existing accepted/delivered/cancelled operation to queued, infer ownership takeover, or revive a cancelled intent through a stale backup.
+
+Explicit resume still requires reconciliation of unknown outcomes and current ownership. A backup may predate provider delivery or later edits/cancellation.
+
+**RECOMMENDED R14:** a versioned manifest, consistent SQLite snapshot, optional verified media entries, and validation before a transactional/checkpointed merge. Distinguish newly recovered stale intents from existing live outbox entries; do not pause unrelated live work merely because an older copy was imported.
+
+**OPEN O15:** archive format, encryption, credential inclusion, running-engine backup mechanics, interruption recovery, and interaction with active sync/dispatch. Backup/import is not a replacement for app sync.
+
+## 13. Reliability boundaries and operational state
+
+The UI must distinguish an unavailable engine, unavailable sync service, disconnected protocol account, partial history, failed media retrieval, and unknown send outcome; they are different states with different consequences.
+
+Local standalone use does not depend on a hidden hosted bus. A sync-only outage should not be represented as a provider disconnect. A hosted-engine outage leaves only the accepted cached/offline behavior until its engine is reachable.
+
+**RECOMMENDED R01/R06:** do not automatically switch from an unavailable hosted engine to a local dispatcher. Show the selected engine and preserve pending ownership until an explicit migration design is chosen.
+
+**RECOMMENDED R15:** bounded jobs/streams/transfers, backpressure, graceful shutdown, startup recovery, structured status/error codes, and operational logging without message bodies or credentials by default. No external broker or database server is proposed for alpha.
+
+Persistence details, numeric resource budgets, schema migrations, upgrade behavior, and operational interfaces remain recommendations/open choices, not accepted third-party infrastructure.
+
+## 14. Recommendations for implementation and unresolved interactions
+
+Everything in this section is **RECOMMENDED**, rather than a previously accepted implementation choice. The WhatsApp-aligned defaults implement the user's direction to use WhatsApp as the reference for open user-facing choices; the exact proposed values remain visible for review.
+
+### 14.1 Engineering recommendations
+
+| ID | Proposed starting point |
+| --- | --- |
+| **R01** | Use a modular monolith with a composition root for local, hosted, and sync-only roles. Keep role flags and package layout explicit; avoid automatic hosted-to-local failover. Default local browser serving to loopback. |
+| **R02** | Define application operations for accounts, contacts, conversations, messages, pending sends, history, search, media, preferences, sync, and backup. Separate outbound protocol, repository/transaction, media, clock, and sync ports. Optional protocol feature interfaces avoid forcing every adapter to implement unsupported operations. |
+| **R03** | Give mutation requests a stable operation ID and expected revision/state where relevant. Repeated identical operations return their established result; a reused ID with a different payload produces an explicit conflict. Document SSE envelopes, application cursors, snapshot/subscription handoff, cursor-expiration reset, and bounded replay/refetch. Commit durable state changes and their recovery evidence together. |
+| **R04** | Represent capability scope, known limits, permissions, and unknown/unavailable state. Hide actions that are permanently unsupported, and show explanatory disabled/error state for temporary restrictions. Recheck server-side. Treat protocol correction/retraction sender and target validation as adapter obligations. |
+| **R05** | Store logical entities and immutable revision payloads separately from mutable projections. Track parent links and per-field changes; derive current message heads. Use provider-scoped identity mappings and canonical aliases to converge independently observed copies. Do not derive causality from UUID order. |
+| **R06** | Separate replicated send visibility from executing ownership. Persist attempt/evidence state and reconcile uncertain acceptance before retransmission. Use a due/retry queue that does not let future schedules block eligible sends. On restore, import stale executable intents as review-required recovery records; preserve newer terminal evidence. |
+| **R07** | Add a public Margo chat profile and semantic projection for text/spans/blocks. Reuse its current parser and existing templ composition. Treat unsupported document constructs readably; keep raw HTML, frontmatter consumption, document runtime features, and Markdown image fetching from bypassing chat/media policy. |
+| **R08** | Use SQLite FTS5 and rebuildable projections. Start with one in-flight background history page per engine, paced across its accounts, with a fair queue, live/foreground priority, backoff, opaque scoped cursors, and checkpointed coverage/gaps. Keep provider archive cursors, read positions, and UI SSE cursors distinct. |
+| **R09** | Use IndexedDB for durable device records and pending submissions, plus versioned Cache Storage/BFF snapshots for offline presentation. Scope cache identity by selected engine, device, locale, and schema. Coordinate tab ownership and stale controls; local persistence failure must keep the draft and report failure rather than claim queued success. Exact browser rendering/storage fit needs a prototype. |
+| **R10** | Stream attachment bytes into durable staging, hash incrementally, compare supported expected digests, and finalize only when complete. Store algorithm/provenance/outcome, using SHA-256 for a computed-only baseline. Keep binary data separate from SQLite; retain shared-reference accounting. Use a bounded cached preview resolver with URL/redirect/content-size controls, without blocking message acceptance or history backfill. |
+| **R11** | Share a type-specific merge implementation between sync and backup import. Replicate missing revisions/records incrementally, process known scoped tombstones, and rebuild indexes. Keep per-device exclusions separate from shared content deletion. Use monotonic read progress plus an independently versioned manual-unread reminder rather than regressing receipt evidence. |
+| **R12** | Notify on new incoming messages, not historical imports or event replays. Coordinate a notification owner among cooperating local views and deduplicate by message identity. Obtain browser permission from a user action; preserve per-device sounds and shared mute/DND semantics. |
+| **R13** | Compose public Goshtoso components first. Use generic upstream content/metadata slots for rich bubbles (G01) and configurable shell language/labels if needed (G02). Pin concrete PR-commit pseudo-versions, record their PR/commit provenance, and verify the consumer dependency graph without permanent local replacements. |
+| **R14** | Use a versioned backup manifest and consistent SQLite snapshot, optional media entries/digests, validation, and a resumable/transactional merge. Reconcile deletion/current operation evidence before exposing imported state or resuming recovered work. |
+| **R15** | Add bounded workers/streams, graceful shutdown and recovery, stable structured error codes, progress/status without misleading percentages, and local operational logs with content/credential omission by default. Reuse accessible controls, focus management, keyboard navigation, and reduced-motion behavior instead of rebuilding them. |
+
+These are behavioral recommendations, not a selection of event sourcing, CRDTs, a replication product, or an external broker.
+
+**R02 operation contract outline:** commands/queries cover account connection/configuration, scoped capability reads, contact/room actions, conversation/message pages, send/schedule/pending mutations, sent-message actions, read/typing/presence, search/catalog queries, attachment staging/transfers, preferences, and backup/sync status. The exact versioned paths, schemas, error/status envelopes, and idempotency retention belong in the next OpenAPI artifact, not an invented fixed route list here. Sync transport remains separately open.
+
+**R04 XMPP mapping candidates:** evaluate these primary protocol surfaces when choosing the adapter/library. Listing an extension does not claim universal server/client support or choose a specific extension version.
+
+| Capability | Candidate protocol surface |
+| --- | --- |
+| Discovery and scoped client capabilities | [XEP-0030](https://xmpp.org/extensions/xep-0030.html), [XEP-0115](https://xmpp.org/extensions/xep-0115.html). |
+| Rooms, discovery, invitations, participants, name/topic | [XEP-0045](https://xmpp.org/extensions/xep-0045.html), with discovery. |
+| Retained server history and paging | [XEP-0313](https://xmpp.org/extensions/xep-0313.html), [XEP-0059](https://xmpp.org/extensions/xep-0059.html). |
+| Multi-client observation and scoped message identifiers | [XEP-0280](https://xmpp.org/extensions/xep-0280.html), [XEP-0359](https://xmpp.org/extensions/xep-0359.html). |
+| Stream recovery and delivery evidence | [XEP-0198](https://xmpp.org/extensions/xep-0198.html), [XEP-0184](https://xmpp.org/extensions/xep-0184.html); these are separate milestones. |
+| Display/read markers and typing | [XEP-0333](https://xmpp.org/extensions/xep-0333.html), [XEP-0085](https://xmpp.org/extensions/xep-0085.html). |
+| Reply, correction, retraction, reactions | [XEP-0461](https://xmpp.org/extensions/xep-0461.html), [XEP-0308](https://xmpp.org/extensions/xep-0308.html), [XEP-0424](https://xmpp.org/extensions/xep-0424.html), [XEP-0444](https://xmpp.org/extensions/xep-0444.html). |
+| Upload, sharing metadata, optional digests | [XEP-0363](https://xmpp.org/extensions/xep-0363.html), [XEP-0447](https://xmpp.org/extensions/xep-0447.html), [XEP-0446](https://xmpp.org/extensions/xep-0446.html), [XEP-0300](https://xmpp.org/extensions/xep-0300.html). |
+| Formatting | [XEP-0393](https://xmpp.org/extensions/xep-0393.html), mapped from the accepted Margo subset with readable fallback. |
+
+Provider restrictions remain authoritative. For example, correction/reply support is not permission to edit arbitrary messages or target an unscoped ID. Formatting is not a promise that all clients render every Margo construct identically. The completed formatting report covers why deprecated XHTML-IM is not the proposed starting point.
+
+### 14.2 WhatsApp-aligned defaults
+
+| ID | Recommended user-facing behavior | Basis and Oie adaptation |
+| --- | --- | --- |
+| **R16** | Offer conversation mute durations **8 hours, 1 week, Always**, with Unmute available. Store finite expiry as a UTC instant. | These choices are documented in [WhatsApp's mute help](https://faq.whatsapp.com/694350718331007/?cms_platform=iphone&locale=pa_IN). Oie keeps its agreed shared mute plus device override, account DND, and archive behavior. Do not silently add mention-based exceptions to the agreed mute policy. |
+| **R17** | Selecting/pasting/dropping an attachment opens a draft preview with filename/size, supported thumbnail/playback, optional caption, remove action, and explicit Send. Use an image/video viewer and native inline audio controls for supported content. Keep clear progress/retry/error affordances. | Inspired by the supplied screenshots and [WhatsApp's media-send flow](https://faq.whatsapp.com/453914586839706/?cms_platform=web&locale=en_US). This proposes UI composition, not WhatsApp's size limits, compression, camera capture, PDF editor, or a new transcoding requirement. Destination capabilities and Oie download policy govern behavior. |
+| **R18** | Use hover/context actions on desktop and long-press menus on touch. For an initial sent-text correction policy, use a **15-minute edit window** measured from confirmed send time, further restricted by provider rules. Show Edited and do not generate a fresh incoming-message alert merely for a correction. | [WhatsApp's editing help](https://faq.whatsapp.com/6614640168569481/?cms_platform=web&lang=id) documents the window, label, and lack of a new notification. The window is a proposal, not a previously agreed Oie limit. Oie deliberately preserves View edit history. Retraction limits remain provider-specific/open; do not invent a universal recall guarantee. |
+| **R19** | Keep pinned conversations ahead of ordinary chats, then sort ordinary chats by latest message activity. Show a manual-unread dot without inventing unread message counts. Clear the reminder on explicit Mark as read or when the current messages are actually read. Preserve scroll while paging/laying out media; use day separators and a transient highlight when navigating to a quoted/search result. | WhatsApp-like navigation and visual conventions, adapted as Oie proposals rather than claims about WhatsApp's internal model. Receipt/typing events alone should not promote a chat; archive placement follows the accepted rule. Exact reminder clearing and sort ties remain open. |
+| **R20** | Keep protocol credentials per engine and exclude them from ordinary app sync and backups by default; re-enter or explicitly import them on another local engine. Hosted UI clients need not hold the hosted engine's protocol credentials. | An Oie technical recommendation, not inferred from WhatsApp. Optional protected credential transfer/export, encryption, and secret-store choices remain open. This does not add built-in application auth to alpha. |
+
+For remaining UI ambiguity, prefer the familiar WhatsApp flow using Goshtoso composition, and document any meaningful deviation. This defaulting rule does not override agreed device-local deletion, retained retracted originals, exposed edit history, original-text Copy, per-account settings, or explicit backlog.
+
+## 15. Open decisions
+
+These are design tasks, not another mandatory interview checklist. They should be resolved through implementation design/prototypes or a focused consequential question when necessary. Recommendations above are explicit starting points.
+
+| ID | Still open | Starting point or boundary |
+| --- | --- | --- |
+| **O01** | Role commands/configuration, packaging, process supervision, upgrade behavior, exact data-directory layout. | R01; one executable and SQLite/separate media are already agreed. |
+| **O02** | XMPP client library, tested servers/clients, supported extension versions, runtime capability schema and fallbacks. | R04 candidate matrix; do not promise all extensions from a server-level flag. |
+| **O03** | Room creation defaults, available participant/membership data, cross-engine leave/rejoin effects, unsupported invite/decline mapping. | WhatsApp-like basic details/invites; provider permissions and explicit leave decisions govern. |
+| **O04** | Canonical account/message/revision identity across independently ingesting engines; provider aliases; incomplete ancestry; exact per-field revision metadata. | UUIDv7 plus R05; no raw-date-only whole-entity merge. |
+| **O05** | Full OpenAPI schemas/paths/versioning, operation lookup, error codes, idempotency lifetime, revision preconditions, SSE recovery/expiry contract. | R03; HTTP/SSE and vacuum/oapi-codegen are agreed. |
+| **O06** | Ambiguous acceptance, terminal failures and safe retry UI, send ordering, attachment dispatch barrier, engine migration/takeover, future centralized send control. | R06; preserve actual evidence and one executing owner. Recurrence is not selected. |
+| **O07** | Margo semantic API/chat profile, unsupported syntax/newline treatment, Markdown toggle scope, provider formatting conversion, correction/retraction limits. | R07 and R18; preserve existing syntax and accepted visible revision/retraction behavior. |
+| **O08** | Search tokenization/ranking, extra filters, URL normalization/grouping, preview generation opt-out/refresh/fetch policy, catalog update details. | R08/R10; immediate URL cataloging with bounded enrichment; metadata-only search. |
+| **O09** | Exact attachment types/limits, multi-file operations, durable staging and transfer cancellation/resume, preview retention, storage quotas, orphaned retained-file management. | R10/R17; no silent link fallback, no automatic downloaded-original eviction. |
+| **O10** | Per-device deletion/exclusion in a shared hosted engine, tombstone schema/retention, reference-aware physical purge, quoted snapshots/previews derived from deleted messages. | R11; every accepted deletion scope and filter must remain effective. |
+| **O11** | Sync transport/enrollment, durable device identity, account credentials, trust/encryption, service quotas/retention, checkpoints, retirement of old devices. | R11/R20; sync-only hosting and hosted engine have different credential boundaries. App auth remains deferred. |
+| **O12** | Viewport thresholds, manual unread reminder lifecycle, cross-device read merging, offline read command replay, presence aggregation, typing expiry, mute/notification details. | R11/R12/R16/R19; visible/focused automatic reads and per-account toggles are already agreed. |
+| **O13** | Browser storage/rendering fit, cache size default, protected-history coverage, quota-full behavior, installed-PWA/tab coordination and storage persistence. | R09; recently viewed cache, protected drafts/pending sends, offline pinning, and limited offline search are agreed. |
+| **O14** | Locale regional matching/plurals, timestamp precision/encoding, DST input ambiguity, exact formatting and catalog tooling. | English/pt-BR, per-device selection, English fallback, and UTC underneath are agreed. |
+| **O15** | Backup archive/schema versions, snapshot consistency while running, merge recovery, credential inclusion/encryption, active outbox/sync interaction. | R14/R20; merge into existing data and review restored sends are agreed. |
+| **O16** | Compatible pinned Goshtoso/App Shells/Margo releases or PR pseudo-versions; generic APIs for G01/G02/Margo; driver/UUID libraries and implementation toolchain. | R13; inspected versions are evidence, not a completed consumer compatibility test. |
+
+Manual link stars/export, separate threads, automatic protocol relaying, multi-engine UI aggregation, recurring schedules, and native mobile packaging have **not been selected**. Do not silently implement them as either confirmed alpha scope or explicitly approved backlog.
+
+## 16. Explicit backlog and later runtime options
+
+| ID | Deferred item |
+| --- | --- |
+| **B01** | Blocking/unblocking protocol identities. |
+| **B02** | Activity-based notification routing/suppression across devices. |
+| **B03** | Automatic idle/away detection and activity aggregation. |
+| **B04** | Room kicking, banning, and role/affiliation-management controls. |
+| **B05** | Voice and video calls. |
+| **B06** | Built-in voice-message recording. Audio attachments/playback remain alpha scope. |
+| **B07** | Full centralized sync coordination allowing pending-send control from any device without direct access to its original local engine. |
+| **B08** | In-app XMPP account registration. |
+| **B09** | Copy rendered text with Markdown markers removed. |
+| **B10** | Browser-hosted WASM engine. API/runtime boundaries remain ready for future adapters. |
+| **B11** | Independently installable protocol plugins; likely hosted-server-only, with mechanism/portability still to revisit. |
+| **B12** | Document-body text extraction. |
+| **B13** | Image OCR. |
+| **B14** | Audio transcription. |
+| **B15** | Web Push and notifications while the app is closed. |
+| **B16** | XMPP end-to-end encryption, including keys/trust, encrypted history, and the hosted-engine endpoint model. |
+| **B17** | Multi-user hosted instances with isolated accounts/history/schedules/outbox. |
+| **B18** | Built-in Oie application authentication. No external authentication provider is selected in its place. |
+
+A separate native daemon is an accepted future option. Wails is a possible desktop host. Matrix, IRC, and Nostr are likely future protocol candidates. These do not require alpha daemon/native-shell implementations or implement all candidate protocols now.
+
+## 17. Recommended delivery sequence and validation
+
+### 17.1 Proposed milestones
+
+This sequence is **RECOMMENDED**, not a reduction of the agreed final alpha scope.
+
+1. **Contracts and dependency fit.** Establish the Oie module, dependency boundary checks, OpenAPI generation/lint, minimal engine/BFF roles, SQLite migrations, and a public-component consumer proof. Resolve G01/G02/Margo gaps through generic upstream PRs with pinned commit pseudo-versions as needed. Establish canonical identity and operation IDs before replication.
+2. **Usable XMPP messaging.** Connect multiple existing accounts, ingest/store messages, show responsive conversation list/timeline/composer, and exercise transactional sends/retries/receipts with en/pt-BR and System/Light/Dark from the start.
+3. **History and message operations.** Implement serial resumable backfill, search/coverage, replies/reactions/corrections/revisions/retractions, read/unread and presence, schedules/cutoffs, contacts, rooms/discovery/invitations, and archive/mute behavior.
+4. **Media and shared content.** Add durable attachment staging, downloads/hashes/retention, forwarding, audio playback, link previews, and Media/Files/Links search with the accepted visibility filters.
+5. **Devices and recovery.** Implement optional history/app sync and separate media sync, scoped deletions, independent device policies, PWA/offline cache/search/drafts/pending submissions, alert coordination, and manual backup/merge restore.
+6. **Complete alpha verification.** Exercise local/hosted modes and multi-device failures against the accepted outcomes below. Close or explicitly document remaining open contracts and actual protocol capability limits.
+
+### 17.2 Acceptance scenarios
+
+These scenarios validate **AGREED** behavior; proposed mechanisms such as a particular index, cache store, or event-log design are not required merely because listed in section 14.
+
+| Area | Required observable outcome |
+| --- | --- |
+| Architecture | Browser/BFF code contains no protocol clients; HTML/templ types do not become the engine API. Local and hosted callers observe the same operation semantics. |
+| Deployment | Standalone works without sync. Hosted UIs share one owner engine while retaining separate drafts/preferences. Each device selects one engine. Browser close does not terminate a remote engine. |
+| Protocol capabilities | Missing upload, history, reaction, or room permissions produce truthful availability/errors; supported text chat remains usable. The UI never reports an unsupported action as successfully performed. |
+| Identity | Linking identities preserves separate account timelines and pending-send destinations. Contact removal preserves history. Address-started chats do not implicitly add contacts. |
+| Revisions | Import an ancestor after its descendant and keep the descendant current. Import concurrent revisions in both orders and obtain the same timestamp/UUID winner while retaining alternatives. Distinct field edits survive merge. |
+| Send durability | After engine acceptance, ordinary restart preserves intent and retries known-unsent recoverable work. Provider/recipient/read evidence remains distinct. A missing read receipt does not resend a delivered message. |
+| Cutoff races | Race cancel/edit/reschedule with dispatch. The winner is applied atomically; a rejected mutation returns actual state, and no UI falsely shows a successful cancellation. Unknown acceptance remains unknown until reconciled. |
+| Scheduling | Do not send before the UTC instant. A timezone display change does not move it. A missed schedule sends on next owning-engine availability unless cancelled. Backup-recovered schedules remain paused. |
+| Offline Send | Offline explicit Send persists a pending submission and later submits automatically. A saved draft does not. Lost acceptance responses do not create a second logical send; storage failure does not claim success or discard the draft. |
+| Ownership | Synced pending items are visible without another engine dispatching them. Alpha remote changes require owning-engine confirmation. Copying history or changing the selected engine does not silently take over sends. |
+| History | Import all available authorized history serially, resume after interruption, and retain it beyond provider expiry. Reopening a conversation does not trigger a complete redownload. Do not manufacture unavailable history. |
+| Search | Global/per-conversation metadata search returns source context. Latest versions are default; historical/retracted matches require their independent filters. Offline results clearly cover only cached data. |
+| Retraction | Supported own retraction uses its separate action. Stored retracted originals display a placeholder/Reveal original and remain outside ordinary search/library views. No guarantee of erasing another client's copy is shown. |
+| Deletion | Device-local deletion leaves other device copies intact, including with a shared hosted engine. All-copy deletion propagates on sync. All revisions/derived entries disappear within scope, including under both Include filters; known deletion markers prevent revival. |
+| Downloaded files | Small previews default automatic, originals on demand, preferences per device. Downloads persist until explicit deletion under the default. Optional file removal preserves shared references. A supported digest mismatch is not shown as verified success. |
+| Forwarding | Destination account/capabilities govern the new outgoing message. Source attribution is opt-in. Media is obtained/uploaded with progress/errors; unavailable files do not silently become forwarded source links. |
+| Rooms | Discover/join/create/invite and name/topic changes follow support/permissions. Reconnect rejoins active rooms except explicit leave/revoked access. Leaving preserves saved history. |
+| Read and presence | Background/unseen messages do not automatically become read. Explicit Mark as read sends enabled/supported receipts; unread reminders do not reverse them. Account DND suppresses alerts while reception/counts continue. |
+| Notifications | Focused active chat is silent. Cooperating same-profile tabs/PWA windows issue at most one alert/sound. Independent devices notify under their own effective policies. Backlogged Web Push is not required. |
+| Presentation | Desktop/mobile layouts, send-key preferences, first-unread opening, Jump to latest, and follow-bottom behavior work without losing drafts/scroll on ordinary updates. |
+| PWA storage | Recently viewed history respects the configured device limit; protected cached conversations report insufficient space. Drafts and pending sends are not ordinary eviction candidates. Media-file retention is independent. |
+| i18n and theme | en/pt-BR, device language/override/fallback, complete labels, and system/light/dark work for full pages, fragments, notifications, and offline views without changing another device's locale. |
+| Backup/restore | Merge a backup into existing data repeatedly without duplicate logical entities. Preserve newer/terminal/deleted state; keep newly recovered executable sends paused for review and preserve optional media handling. |
+
+**RECOMMENDED validation methods:** unit/property tests for revision/type-specific merges; transactional/crash/fault tests for outbox and restore; adapter integration tests against selected XMPP services; generated-contract and streaming tests; and browser tests for stale tabs, offline recovery, device scopes, focus, layout, locale, theme, and real side-effect counts. Numeric performance and resource budgets remain open until representative histories/media are measured.
+
+## 18. Evidence and implementation references
+
+The discussion record is the decision history; this draft is the consolidated first specification. The formatting report contains the earlier executed public-API feasibility probe. UI discovery for this draft read source/examples; it did not implement or run Oie or create upstream PRs.
+
+- [Discussion record](unified-chat-discussion.md) and [Margo formatting feasibility](oie-formatting-feasibility.md).
+- [Goshtoso v0.6.1 chat bubble public configuration](https://github.com/araihu/goshtoso/blob/v0.6.1/components/chatbubble/types.go), [template](https://github.com/araihu/goshtoso/blob/v0.6.1/components/chatbubble/chatbubble.templ), [textarea](https://github.com/araihu/goshtoso/blob/v0.6.1/components/textarea/types.go), [file input](https://github.com/araihu/goshtoso/blob/v0.6.1/components/fileinput/types.go), and [card slots](https://github.com/araihu/goshtoso/blob/v0.6.1/components/card/types.go).
+- [App Shells v0.1.9 console configuration](https://github.com/araihu/goshtoso-app-shells/blob/v0.1.9/consoleshell/config.go) and [layout](https://github.com/araihu/goshtoso-app-shells/blob/v0.1.9/consoleshell/layout.templ). Published module sources were inspected at commits `6803d219baa31824503dcfc9868e60204625494b` and `9c35317cd259b61a7f5996121c19ae08608dc0b6`, respectively.
+- Local Goshtoso usage examples inspected at `7580655a` (`v0.4.2-1-g7580655a`): `examples/application-patterns/README.md`, `views.templ`, and `site/internal/pages/demo/examplepages/chat/chat.templ`. These are example evidence, not dependency imports or proof of the v0.6.1/App Shells consumer pair.
+- [Goshtoso expressions](https://github.com/araihu/goshtoso/blob/v0.6.1/docs/EXPRESSIONS.md), [expression files](https://github.com/araihu/goshtoso/blob/v0.6.1/docs/EXPRESSION_FILES.md), and [component model](https://github.com/araihu/goshtoso/blob/v0.6.1/docs/COMPONENT_MODEL.md).
+- [UUIDv7 and timestamp considerations, RFC 9562](https://www.rfc-editor.org/rfc/rfc9562.html), [ULID specification](https://github.com/ulid/spec), and [Go module pseudo-versions](https://go.dev/ref/mod#pseudo-versions).
+- [SQLite FTS5](https://sqlite.org/fts5.html), [transactional outbox pattern](https://microservices.io/patterns/data/transactional-outbox.html), [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen), and [vacuum](https://quobix.com/vacuum/).
+- [WhatsApp editing](https://faq.whatsapp.com/6614640168569481/?cms_platform=web&lang=id), [mute durations](https://faq.whatsapp.com/694350718331007/?cms_platform=iphone&locale=pa_IN), and [web media composition](https://faq.whatsapp.com/453914586839706/?cms_platform=web&locale=en_US). These support the specifically identified interface recommendations, not assumptions about WhatsApp's backend.
+
+The supplied screenshots remain the visual reference. Do not reuse their private contact names, phone numbers, or message content as Oie fixtures.
