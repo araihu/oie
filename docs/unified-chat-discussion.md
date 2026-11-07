@@ -787,7 +787,7 @@ These are remaining design details, not a mandatory interview checklist. As of t
 
 ## Current topic and next conversational step
 
-The user authorized creating araihu/oie, moving the spec, implementing the API-first first milestone, exploring oapi-cli-gen for testing, and adding a development XMPP server. The repository exists and docs were moved. The codex/api-foundation worktree implements the OpenAPI-first metadata/identity/operation/SSE foundation, SQLite migration, Goshtoso HTTP-client consumer, generated standalone CLI, and pinned Prosody Compose environment. See milestone-one.md for actual scope, tests, chosen dependencies, and remaining messaging work. Complete verification and open a reviewable PR; do not resume product interviews or claim live Oie XMPP messaging/sync/outbox features are present.
+The user authorized creating araihu/oie, moving the spec, implementing the API-first first milestone, exploring oapi-cli-gen for testing, and adding a development XMPP server. The repository exists and docs were moved. The codex/api-foundation worktree implements the OpenAPI-first metadata/identity/operation/SSE foundation, SQLite migration, Goshtoso HTTP-client consumer, generated standalone CLI, and pinned Prosody Compose environment. See milestone-one.md for actual scope, tests, chosen dependencies, and remaining messaging work. Local verification is complete and the implementation is open for review in [draft PR #1](https://github.com/araihu/oie/pull/1). Check its current CI/review status before continuing. Do not resume product interviews or claim live Oie XMPP messaging/sync/outbox features are present; the next implementation milestone is usable XMPP messaging.
 
 ### Chat formatting feasibility
 
