@@ -15,6 +15,8 @@ func TestBFFUsesHTTPAndDeviceScopedPresentation(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/v1/engine":
 			_, _ = w.Write([]byte(`{"id":"019a5df0-0000-7000-8000-000000000001","role":"hosted","apiVersion":"0.1.0","eventCursor":"019a5df0-0000-7000-8000-000000000001:0"}`))
+		case "/api/v1/conversations":
+			http.NotFound(w, r)
 		case "/api/v1/accounts":
 			_, _ = w.Write([]byte(`{"items":[]}`))
 		default:

@@ -16,8 +16,8 @@ jobs:
           cache-dependency-path: |
             go.sum
             cli/go.sum
-            tools/vacuum/go.sum
             tools/go.sum
+            tools/vacuum/go.sum
       - run: make check
       - run: make test-race
   development-xmpp:
@@ -46,20 +46,26 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: tests/browser/package-lock.json
-      - run: make build
+      - run: |
+          make build
+          go build -o bin/oie-mock ./cmd/oie-mock
       - working-directory: tests/browser
         run: |
           npm ci
           npx playwright install --with-deps chromium
       - run: |
-          bin/oie --data-dir "$RUNNER_TEMP/oie-browser" > "$RUNNER_TEMP/oie.log" 2>&1 &
+          bin/oie-mock > "$RUNNER_TEMP/oie-mock.log" 2>&1 &
+          mock_pid=$!
+          bin/oie --role bff --engine-url http://127.0.0.1:18082 > "$RUNNER_TEMP/oie.log" 2>&1 &
           oie_pid=$!
-          trap 'kill "$oie_pid"' EXIT
+          trap 'kill "$oie_pid" "$mock_pid"' EXIT
           for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:8080/api/v1/health; then break; fi
+            if curl --fail --silent --output /dev/null http://127.0.0.1:8080/; then break; fi
             sleep 1
           done
           npm --prefix tests/browser test
+          npm --prefix tests/browser run test:chat
+          npm --prefix tests/browser run test:states
       - if: always()
         uses: actions/upload-artifact@v4
         with:

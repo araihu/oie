@@ -2,7 +2,9 @@
   "name": "oie-browser-checks",
   "private": true,
   "scripts": {
-    "test": "node smoke.cjs"
+    "test": "node smoke.cjs",
+    "test:chat": "node chat.cjs",
+    "test:states": "node states.cjs"
   },
   "devDependencies": {
     "axe-core": "4.13.0",

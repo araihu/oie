@@ -9,6 +9,7 @@ CLI_ARGS = --spec api/openapi.cli.json --name oiectl --module github.com/araihu/
 generate:
 	$(CODEGEN) sqlc generate
 	$(CODEGEN) oapi-codegen --config api/codegen.yaml api/openapi.yaml
+	$(CODEGEN) oapi-codegen --config api/ui-preview.codegen.yaml api/ui-preview.openapi.yaml
 	$(CODEGEN) templ generate
 	$(VACUUM) bundle --composed ../../api/openapi.yaml ../../api/openapi.bundle.yaml
 	$(VACUUM) apply-overlay --fail-on-warnings ../../api/openapi.bundle.yaml ../../api/cli.overlay.yaml ../../api/openapi.cli.yaml
@@ -18,6 +19,7 @@ generate:
 
 lint:
 	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn ../../api/openapi.yaml
+	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn ../../api/ui-preview.openapi.yaml
 
 build:
 	GOWORK=off $(GO) build -trimpath -o bin/oie ./cmd/oie
@@ -59,3 +61,7 @@ test-engine-xmpp:
 	GOWORK=off CGO_ENABLED=0 GOOS=linux $(GO) test -c -o bin/oie-xmpp-test ./tests/xmpp
 	$(COMPOSE) build engine-check
 	$(COMPOSE) run --rm --no-deps -T engine-check
+
+.PHONY: mock-api
+mock-api:
+	GOWORK=off $(GO) run ./cmd/oie-mock

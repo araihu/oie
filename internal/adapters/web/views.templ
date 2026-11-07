@@ -2,12 +2,44 @@ package web
 
 import (
 	"github.com/araihu/goshtoso/components/appshell"
-	"github.com/araihu/goshtoso/components/badge"
+	"github.com/araihu/goshtoso/components/avatar"
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/card"
+	"github.com/araihu/goshtoso/components/chatbubble"
+	"github.com/araihu/goshtoso/components/drawer"
+	"github.com/araihu/goshtoso/components/dropdown"
 	"github.com/araihu/goshtoso/components/emptystate"
 	"github.com/araihu/goshtoso/components/head"
+	"github.com/araihu/goshtoso/components/icon"
+	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/link"
-	"github.com/araihu/goshtoso/components/panel"
+	"github.com/araihu/goshtoso/components/sidebar"
+	"github.com/araihu/goshtoso/components/textarea"
+	"github.com/araihu/goshtoso/components/textinput"
+	"github.com/araihu/oie/internal/adapters/previewapi"
+	"strconv"
+	"strings"
 )
+
+func navigation(v view) sidebar.Config {
+	return sidebar.Config{
+		Logo: brand(), LogoHref: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), DisableSkipLink: true, RootClass: "oie-navigation", FooterSlot: profile(v),
+		Items: []sidebar.Item{
+			{ID: "chats", Label: v.Text.Chats, Href: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidQueueList), Active: v.Section == "chats"},
+			{ID: "media", Label: v.Text.SharedMedia, Href: v.href("section", "media", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidRectangleGroup), Active: v.Section == "media"},
+			{ID: "archived", Label: v.Text.Archived, Href: v.href("section", "archived", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidFolder), Active: v.Section == "archived"},
+			{ID: "favorites", Label: v.Text.Favorites, Href: v.href("section", "favorites", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidStar), Active: v.Section == "favorites"},
+		},
+	}
+}
+
+templ glyph(symbol icon.Symbol) {
+	@icon.Icon(icon.Config{SpriteURL: heroicons.SpriteURL, Symbol: symbol, Decorative: true, RootClass: "oie-icon"})
+}
+
+templ brand() {
+	<span class="oie-brand-mark" aria-hidden="true">o</span><span class="oie-brand-name">Oie</span>
+}
 
 templ page(v view) {
 	<!DOCTYPE html>
@@ -22,78 +54,289 @@ templ page(v view) {
 			<link rel="stylesheet" href="/ui/app.css"/>
 		</head>
 		<body>
-			@appshell.AppShell(appshell.Config{
-				Header: header(v),
-				Content: workspace(v),
-			})
+			<h1 class="sr-only">Oie</h1>
+			@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: sidebar.Sidebar(navigation(v)), Content: workspace(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
+			@settings(v)
+			@accounts(v)
+			if v.Selected != nil {
+				@drawer.Drawer(drawer.Config{ID: "details", Title: v.Text.Details}) {
+					<div class="oie-details">
+						@avatar.Avatar(avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeLG})
+						<h2>{ v.Selected.Title }</h2>
+						<p>{ v.Text.PreviewOnly }</p>
+						<h3>{ v.Text.Participants }</h3>
+						<ul>
+							for _,name:=range participantNames(*v.Selected) {
+								<li>{ name }</li>
+							}
+						</ul>
+					</div>
+				}
+			}
 		</body>
 	</html>
 }
 
-templ header(v view) {
-	<div class="oie-header">
-		<h1>Oie</h1>
-		<nav aria-label={ v.Text.Languages }>
-			@link.Link("/?lang=en") { { v.Text.English } }
-			@link.Link("/?lang=pt-BR") { { v.Text.Portuguese } }
-		</nav>
-		<nav aria-label={ v.Text.Appearance }>
-			@link.Link("/?theme=system") { { v.Text.System } }
-			@link.Link("/?theme=light") { { v.Text.Light } }
-			@link.Link("/?theme=dark") { { v.Text.Dark } }
-		</nav>
-	</div>
-}
-
-templ workspace(v view) {
-	<div id="workspace" class="oie-workspace">
-		if v.Unavailable {
-			@panel.Panel(panel.Config{Body: unavailable(v)})
-		} else if v.NotFound {
-			@panel.Panel(panel.Config{}) {
-				@emptystate.EmptyState(emptystate.Config{Title: v.Text.NotFound, Description: v.Text.NotFoundBody})
-				@link.Link("/") { { v.Text.Retry } }
-			}
-		} else {
-			<section aria-label={ v.Text.Accounts }>
-				@panel.Panel(panel.Config{Header: accountHeader(v), Body: accountList(v)})
-			</section>
-			<section aria-label={ v.Text.Conversations }>
-				@panel.Panel(panel.Config{Body: conversationEmpty(v)})
-			</section>
+templ profile(v view) {
+	<div class="oie-profile" x-data="{}">
+		@avatar.Avatar(avatar.Config{Name: v.Text.You, Size: avatar.SizeXS})
+		<span>{ v.Text.You }</span>
+		@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Settings, "title": v.Text.Settings}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'settings'})"})) {
+			@glyph(heroicons.Icon16SolidCog6Tooth)
 		}
 	</div>
 }
 
-templ accountHeader(v view) {
-	<h2>{ v.Text.Accounts }</h2>
-	@badge.Badge(badge.Config{Label: v.Role})
-}
-
-templ accountList(v view) {
-	if len(v.Accounts) == 0 {
-		@emptystate.EmptyState(emptystate.Config{Title: v.Text.EmptyTitle, Description: v.Text.EmptyBody})
-	} else {
-		<ul class="oie-accounts">
-			for _, a := range v.Accounts {
-				<li>
-					<strong>{ a.Label }</strong>
-					<p>{ a.Address }</p>
-					@badge.Badge(badge.Config{Label: v.Text.NotConnected})
-				</li>
+templ workspace(v view) {
+	<div id="workspace" class={ "oie-workspace",templ.KV("oie-chat-open",v.ChatOpen) }>
+		<section class="oie-list-pane" aria-label={ v.Text.Chats }>
+			<div class="oie-list-heading">
+				<div class="oie-mobile-nav">
+					@sidebar.Overlay(sidebar.OverlayConfig{ID: "mobile-navigation", Sidebar: navigation(v), TriggerLabel: v.Text.OpenNavigation, Trigger: glyph(heroicons.Icon16SolidBars3)})
+				</div>
+				<h2>
+					switch v.Section {
+						case "archived":
+							{ v.Text.Archived }
+						case "favorites":
+							{ v.Text.Favorites }
+						case "media":
+							{ v.Text.SharedMedia }
+						default:
+							{ v.Text.Chats }
+					}
+				</h2>
+				<div x-data="{}">
+					@button.Button(button.WithRootClass("oie-icon-button oie-new-chat"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.NewChat, "title": v.Text.NewChat}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'accounts'})"})) {
+						@glyph(heroicons.Icon16SolidPlus)
+					}
+				</div>
+				@dropdown.Dropdown(dropdown.Config{ID: "list-options", Label: v.Text.More, Trigger: menuTrigger(v.Text.More), MenuAlign: dropdown.AlignEnd, Sections: []dropdown.Section{{Items: []dropdown.Item{{Label: v.Text.Settings, OnClick: "$dispatch('drawer:open', {id: 'settings'})"}, {Label: v.Text.Accounts, OnClick: "$dispatch('drawer:open', {id: 'accounts'})"}}}}})
+			</div>
+			if v.Preview {
+				<p class="oie-preview-label">{ v.Text.Preview }</p>
 			}
-		</ul>
-	}
-	if v.Next != "" {
-		@link.Link(v.Next) { { v.Text.Next } }
+			<form action="/" method="get" class="oie-search" role="search">
+				<input type="hidden" name="section" value={ v.Section }/>
+				<input type="hidden" name="filter" value={ v.Filter }/>
+				@textinput.TextInput(textinput.Config{ID: "conversation-search", Name: "q", Value: v.Query, Type: textinput.TypeSearch, Placeholder: v.Text.SearchChats, InputAttrs: templ.Attributes{"style": "padding-left:2.5rem;border-radius:1.4rem;background:var(--oie-raised);border-color:var(--oie-border);color:var(--oie-text)"}})
+			</form>
+			<nav class="oie-filters" aria-label={ v.Text.Chats }>
+				@filterLink(v, "all", v.Text.All)
+				@filterLink(v, "unread", v.Text.Unread)
+				@filterLink(v, "favorites", v.Text.Favorites)
+				@filterLink(v, "groups", v.Text.Groups)
+			</nav>
+			<div class="oie-conversation-scroll">
+				if v.Unavailable {
+					<div class="oie-list-state">
+						@emptystate.EmptyState(emptystate.Config{Title: v.Text.Unavailable, Description: v.Text.UnavailableBody}) @link.Link(v.href()) {
+	{ v.Text.Retry }
+}
+					</div>
+				} else if len(v.Chats)==0 {
+					<div class="oie-list-state">
+						if v.Query!="" || v.Filter!="all" {
+							@emptystate.EmptyState(emptystate.Config{Title: v.Text.NoResults, Description: v.Text.NoResultsBody})
+						} else {
+							@emptystate.EmptyState(emptystate.Config{Title: v.Text.NoChats, Description: v.Text.NoChatsBody})
+						}
+					</div>
+				} else {
+					<ul class="oie-conversations">
+						for _,c:=range v.Chats {
+							@conversationRow(v, c)
+						}
+					</ul>
+				}
+			</div>
+			<div class="oie-list-footer" x-data="{}">
+				<span class={ "oie-status-dot",templ.KV("oie-status-error",v.Unavailable) } aria-hidden="true"></span>
+				<span>{ v.Role }</span>
+				@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Settings}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'settings'})"})) {
+					@glyph(heroicons.Icon16SolidCog6Tooth)
+				}
+			</div>
+		</section>
+		<section class="oie-chat-pane" aria-label={ v.Text.Conversations }>
+			if v.Unavailable && v.ChatOpen {
+				<div class="oie-chat-empty">
+					@emptystate.EmptyState(emptystate.Config{Title: v.Text.Unavailable, Description: v.Text.UnavailableBody})
+					@link.Link(v.href()) {
+						{ v.Text.Retry }
+					}
+					@link.Link(v.href("chat", "")) {
+						{ v.Text.Back }
+					}
+				</div>
+			} else if v.NotFound {
+				<div class="oie-chat-empty">
+					@emptystate.EmptyState(emptystate.Config{Title: v.Text.NotFound, Description: v.Text.NotFoundBody}) @link.Link(v.href("chat", "")) {
+	{ v.Text.Back }
+}
+				</div>
+			} else if v.Section=="media" {
+				<div class="oie-chat-empty">@glyph(heroicons.Icon16SolidRectangleGroup) @emptystate.EmptyState(emptystate.Config{Title: v.Text.MediaEmpty, Description: v.Text.MediaBody})</div>
+			} else if v.Selected!=nil && !v.Unavailable {
+				@chatHeader(v)
+				if v.Preview {
+					<p class="oie-preview-note">{ v.Text.PreviewNote }</p>
+				}
+				<div class="oie-timeline" x-data="{}" x-init="$nextTick(() => { $el.scrollTop = $el.scrollHeight })" tabindex="0" aria-label={ v.Text.Conversations }>
+					<div class="oie-day-divider"><span>{ v.Text.Today }</span></div>
+					for index, m := range v.Messages {
+						@message(v, m, index > 0 && v.Messages[index-1].Sender.Id == m.Sender.Id && v.Messages[index-1].IsOwn == m.IsOwn && v.Messages[index-1].Attachment == nil && m.Attachment == nil)
+					}
+				</div>
+				@composer(v)
+			} else {
+				<div class="oie-chat-empty">
+					<div class="oie-empty-mark" aria-hidden="true">o</div>
+					@emptystate.EmptyState(emptystate.Config{Title: v.Text.SelectChat, Description: v.Text.SelectChatBody})
+				</div>
+			}
+		</section>
+	</div>
+}
+
+templ menuTrigger(label string) {
+	@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": label, "title": label})) {
+		@glyph(heroicons.Icon16SolidEllipsisHorizontal)
 	}
 }
 
-templ conversationEmpty(v view) {
-	@emptystate.EmptyState(emptystate.Config{Title: v.Text.Conversations, Description: v.Text.ConversationBody})
+templ filterLink(v view, key, label string) {
+	@link.Link(v.href("filter", key, "chat", ""), link.WithRootClass("oie-filter"), link.WithAttrs(templ.Attributes{"aria-current": strconv.FormatBool(v.Filter == key), "data-filter": key})) {
+		{ label }
+	}
 }
 
-templ unavailable(v view) {
-	@emptystate.EmptyState(emptystate.Config{Title: v.Text.Unavailable, Description: v.Text.UnavailableBody})
-	@link.Link("/") { { v.Text.Retry } }
+templ conversationRow(v view, c previewapi.Conversation) {
+	<li>
+		@link.Link(v.href("chat", c.Id), link.WithRootClass("oie-chat-link"), link.WithAttrs(templ.Attributes{"data-conversation-id": c.Id, "aria-current": strconv.FormatBool(v.Selected != nil && v.Selected.Id == c.Id)})) {
+			@avatar.Avatar(avatar.Config{Name: c.Title, Initials: chatInitials(c), Size: avatar.SizeSM, RootClass: "oie-chat-avatar"})
+			<div class="oie-row-content">
+				<div class="oie-row-top"><strong>{ c.Title }</strong><time datetime={ c.UpdatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ c.UpdatedAt.Format("15:04") }</time></div>
+				<div class="oie-row-bottom">
+					<span>{ c.LastMessage }</span>
+					if c.UnreadCount>0 {
+						<span class="oie-unread-count" aria-label={ v.Text.Unread + ": " + strconv.Itoa(c.UnreadCount) }>{ strconv.Itoa(c.UnreadCount) }</span>
+					} else if c.Favorite {
+						<span class="oie-pin" title={ v.Text.Favorites }>@glyph(heroicons.Icon16SolidStar)</span>
+					}
+				</div>
+			</div>
+		}
+	</li>
+}
+
+templ chatHeader(v view) {
+	<header class="oie-chat-header" x-data="{}">
+		@link.Link(v.href("chat", ""), link.WithRootClass("oie-back-button"), link.WithAttrs(templ.Attributes{"aria-label": v.Text.Back})) {
+			@glyph(heroicons.Icon16SolidChevronLeft)
+		}
+		@avatar.Avatar(avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeXS})
+		<div class="oie-chat-identity"><h2>{ v.Selected.Title }</h2><p>{ strings.Join(participantNames(*v.Selected),", ") }</p></div>
+		@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Details, "title": v.Text.Details}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'details'})"})) {
+			@glyph(heroicons.Icon16SolidInformationCircle)
+		}
+		@dropdown.Dropdown(dropdown.Config{ID: "chat-options", Label: v.Text.More, Trigger: menuTrigger(v.Text.More), MenuAlign: dropdown.AlignEnd, Sections: []dropdown.Section{{Items: []dropdown.Item{{Label: v.Text.Details, OnClick: "$dispatch('drawer:open', {id: 'details'})"}, {Label: v.Text.Settings, OnClick: "$dispatch('drawer:open', {id: 'settings'})"}}}}})
+	</header>
+}
+
+templ message(v view, m previewapi.Message, grouped bool) {
+	<div class={ "oie-message",templ.KV("oie-message-own",m.IsOwn), templ.KV("oie-message-grouped",grouped) }>
+		if m.Attachment!=nil {
+			<div class="oie-media-message">
+				<span class="oie-media-sender">{ m.Sender.DisplayName }</span>
+				@card.Card(card.Config{Media: sampleMedia(*m.Attachment), Title: m.Attachment.Title, Description: m.Attachment.Description, RootClass: "oie-media-card", Density: card.DensityCompact})
+				<time datetime={ m.CreatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ m.CreatedAt.Format("15:04") }</time>
+			</div>
+		} else {
+			@chatbubble.ChatBubble(chatbubble.Config{Side: messageSide(m.IsOwn), Message: m.OriginalText, SenderName: m.Sender.DisplayName, Timestamp: m.CreatedAt.Format("15:04"), ShowAvatar: !m.IsOwn, AvatarInitials: initials(m.Sender.DisplayName), RootClass: "oie-bubble", Grouped: grouped})
+			if m.IsOwn {
+				<time class="oie-message-time" datetime={ m.CreatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ m.CreatedAt.Format("15:04") }</time>
+			}
+		}
+	</div>
+}
+
+func messageSide(own bool) chatbubble.Side {
+	if own {
+		return chatbubble.Sent
+	}
+	return chatbubble.Received
+}
+
+templ sampleMedia(a previewapi.Attachment) {
+	<img src={ a.PreviewUrl } alt={ a.Title } width="560" height="320" loading="lazy"/>
+}
+
+templ composer(v view) {
+	<footer class="oie-composer" title={ v.Text.SendingUnavailable }>
+		@button.Button(button.Disabled(), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Attach, "title": v.Text.SendingUnavailable})) {
+			@glyph(heroicons.Icon16SolidPlus)
+		}
+		@textarea.Textarea(textarea.Config{ID: "message-composer", Rows: 1, Placeholder: v.Text.Message, Disabled: true, RootClass: "oie-composer-input", InputAttrs: templ.Attributes{"aria-label": v.Text.Message, "style": "resize:none;min-height:2.7rem;background:var(--oie-raised);border-color:var(--oie-border);border-radius:1.5rem;color:var(--oie-text)"}})
+		@button.Button(button.Disabled(), button.WithRootClass("oie-icon-button oie-send"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Send, "title": v.Text.SendingUnavailable})) {
+			@glyph(heroicons.Icon16SolidArrowUp)
+		}
+	</footer>
+}
+
+templ settings(v view) {
+	@drawer.Drawer(drawer.Config{ID: "settings", Title: v.Text.Settings}) {
+		<div class="oie-settings">
+			<h2>{ v.Text.Appearance }</h2>
+			<p>{ v.Text.ThemeHelp }</p>
+			<div class="oie-settings-links" aria-label={ v.Text.Appearance }>
+				@link.Link(v.href("theme", "system")) {
+					{ v.Text.System }
+				}
+				@link.Link(v.href("theme", "light")) {
+					{ v.Text.Light }
+				}
+				@link.Link(v.href("theme", "dark")) {
+					{ v.Text.Dark }
+				}
+			</div>
+			<h2>{ v.Text.Languages }</h2>
+			<p>{ v.Text.LanguageHelp }</p>
+			<div class="oie-settings-links" aria-label={ v.Text.Languages }>
+				@link.Link(v.href("lang", "en")) {
+					{ v.Text.English }
+				}
+				@link.Link(v.href("lang", "pt-BR")) {
+					{ v.Text.Portuguese }
+				}
+			</div>
+			<h2>{ v.Text.EngineState }</h2>
+			<p>{ v.Role }</p>
+			if v.Preview {
+				<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
+			}
+		</div>
+	}
+}
+
+templ accounts(v view) {
+	@drawer.Drawer(drawer.Config{ID: "accounts", Title: v.Text.Accounts}) {
+		<div class="oie-settings">
+			<p>{ v.Text.AccountHelp }</p>
+			if len(v.Accounts)==0 {
+				@emptystate.EmptyState(emptystate.Config{Title: v.Text.EmptyTitle, Description: v.Text.EmptyBody})
+			} else {
+				<ul class="oie-accounts">
+					for _,a:=range v.Accounts {
+						<li><strong>{ a.Label }</strong><p>{ a.Address }</p><span>{ v.Text.NotConnected }</span></li>
+					}
+				</ul>
+			}
+			if v.Next!="" {
+				@link.Link(v.Next) {
+					{ v.Text.Next }
+				}
+			}
+		</div>
+	}
 }
