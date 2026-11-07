@@ -1,21 +1,24 @@
 GO ?= go
 COMPOSE ?= docker compose
+CODEGEN = GOWORK=off $(GO) tool -modfile=tools/go.mod
 VACUUM = GOWORK=off $(GO) -C tools/vacuum tool vacuum
 CLI_ARGS = --spec api/openapi.cli.json --name oiectl --module github.com/araihu/oie/cli --out cli
 
 .PHONY: generate lint build build-cli run check test test-race check-generated dev-up dev-down test-xmpp
 
 generate:
-	GOWORK=off $(GO) tool oapi-codegen --config api/codegen.yaml api/openapi.yaml
-	GOWORK=off $(GO) tool templ generate
+	$(CODEGEN) oapi-codegen --config api/codegen.yaml api/openapi.yaml
+	$(CODEGEN) oapi-codegen --config api/ui-preview.codegen.yaml api/ui-preview.openapi.yaml
+	$(CODEGEN) templ generate
 	$(VACUUM) bundle --composed ../../api/openapi.yaml ../../api/openapi.bundle.yaml
 	$(VACUUM) apply-overlay --fail-on-warnings ../../api/openapi.bundle.yaml ../../api/cli.overlay.yaml ../../api/openapi.cli.yaml
 	$(VACUUM) bundle --composed --format json ../../api/openapi.cli.yaml ../../api/openapi.cli.json
-	@if [ -f cli/.oapi-cli-gen.json ]; then GOWORK=off $(GO) tool oapi-cli-gen generate $(CLI_ARGS) --update; else GOWORK=off $(GO) tool oapi-cli-gen generate $(CLI_ARGS); fi
+	@if [ -f cli/.oapi-cli-gen.json ]; then $(CODEGEN) oapi-cli-gen generate $(CLI_ARGS) --update; else $(CODEGEN) oapi-cli-gen generate $(CLI_ARGS); fi
 	GOWORK=off $(GO) -C cli mod tidy
 
 lint:
 	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn ../../api/openapi.yaml
+	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn ../../api/ui-preview.openapi.yaml
 
 build:
 	GOWORK=off $(GO) build -trimpath -o bin/oie ./cmd/oie
@@ -51,3 +54,8 @@ dev-down:
 
 test-xmpp:
 	$(COMPOSE) run --rm --no-deps -T xmpp-check < scripts/test-xmpp.py
+
+# Development UI: run this API beside a BFF pointed at port 18082.
+.PHONY: mock-api
+mock-api:
+	GOWORK=off $(GO) run ./cmd/oie-mock

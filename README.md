@@ -131,7 +131,9 @@ make check           # warning-free lint, drift checks, vet, tests and Compose v
 make test-race
 ```
 
-Build tools are pinned. Vacuum has a separate module under `tools/vacuum` so
+Build and generation tools are pinned in the module under `tools`; the root
+module contains application dependencies only. Vacuum has its isolated module
+under `tools/vacuum` so
 its documentation renderer's templ dependency cannot change the application
 generator/runtime graph. No sibling checkout or local module replacement is
 required.
@@ -148,3 +150,11 @@ OIE_BROWSER_URL=http://127.0.0.1:8080 npm test
 The checks cover 390/1440px layouts, Goshtoso/Minimal themes, light/dark modes,
 en/pt-BR, focus, accessibility, console errors, and system-theme changes.
 Screenshots and a report are written to the ignored `tests/browser/artifacts`.
+
+## Chat design preview
+
+The independent [chat UI preview](docs/ui-preview.md) runs a BFF against a separate
+read-only mock API. Start `make mock-api`, then run Oie with
+`--role bff --engine-url http://127.0.0.1:18082`. The sample label stays visible;
+message sending is disabled until engine integration. Its draft OpenAPI contract
+is separate from the engine contract while UI and engine work proceed in parallel.
