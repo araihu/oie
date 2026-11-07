@@ -5,6 +5,7 @@ XMPP is the first protocol; local and hosted engines share the same API.
 
 The alpha is single-owner, with multiple accounts and optional device sync.
 
+- [Live browser setup and development accounts](docs/live-preview.md)
 - [First specification](docs/oie-spec.md)
 - [Decision history](docs/unified-chat-discussion.md)
 - [Formatting feasibility](docs/oie-formatting-feasibility.md)
@@ -17,8 +18,10 @@ idempotent acceptance, restart recovery, explicit uncertain outcomes, and guarde
 queued cancellation. Enabled accounts reconnect after network failure/restart.
 The API also exposes retained conversations/messages and durable SSE updates.
 
-The foundation Goshtoso BFF remains read-only here. A separate UI worktree is
-building the WhatsApp-like interface against a mock engine before integration.
+The Goshtoso interface now uses the real engine: register/connect accounts, choose
+a sending account, start direct conversations, send/cancel queued messages, and
+receive live updates. Device drafts and unresolved acceptance keys survive refresh.
+The independent read-only mock remains available for presentation tests.
 Rooms/history backfill, media, schedules, sync, PWA/offline and backup/restore are
 later work. See [engine milestone notes](docs/milestone-two-engine.md) and
 [foundation notes](docs/milestone-one.md) for scope and invariants.
@@ -161,6 +164,7 @@ This environment's nested Docker builder required the classic-builder fallback:
 make generate        # OpenAPI bindings, templ, CLI overlay/bundle and standalone CLI
 make check           # warning-free lint, drift checks, vet, tests and Compose validation
 make test-race
+make test-live-browser # real UI + engine + Prosody; browser dependencies required
 ```
 
 Build/generation tools are pinned in the `tools` module; root go.mod contains

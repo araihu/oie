@@ -1246,3 +1246,17 @@ and repository tooling in the tools module with only app dependencies at root.
 See milestone-two-engine.md for concrete contracts, implementation and verification.
 The UI draft follows the canonical read shapes; do not merge mock delivery data
 into the real engine or claim browser messaging is integrated yet.
+
+
+## Live UI integration
+
+The user authorized combining the UI and real XMPP engine so development accounts
+can connect and exchange messages from the browser. Work is on codex/live-chat in
+the original managed worktree. The UI and engine branches were merged locally;
+source PRs remain separate and were not merged into main. The BFF now uses the
+canonical generated client, with POST/CSRF controls, actual send states, structured
+SSE updates, device-local drafts/acceptance journal, and account identity/filtering.
+The independent mock stays available only for development tests. See live-preview.md
+and live-ui-integration.md for deployment, invariant ledger and remaining limits.
+The user also reported an oval New conversation icon at1076px; the public root
+geometry now enforces equal minimum width and height.

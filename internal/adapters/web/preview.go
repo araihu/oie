@@ -2,7 +2,7 @@ package web
 
 import (
 	_ "embed"
-	"github.com/araihu/oie/internal/adapters/previewapi"
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,6 +15,7 @@ func (v *view) configureWorkspace(r *http.Request) {
 	q := r.URL.Query()
 	v.ChatOpen = q.Get("chat") != ""
 	v.ChatID = q.Get("chat")
+	v.AccountFilter = q.Get("account")
 	v.Section = q.Get("section")
 	switch v.Section {
 	case "favorites", "archived", "media":
@@ -34,6 +35,9 @@ func (v *view) configureWorkspace(r *http.Request) {
 }
 func (v view) href(pairs ...string) string {
 	q := url.Values{}
+	if v.AccountFilter != "" {
+		q.Set("account", v.AccountFilter)
+	}
 	if v.Section != "chats" {
 		q.Set("section", v.Section)
 	}
@@ -70,15 +74,5 @@ func initials(name string) string {
 	return strings.ToUpper(string(out))
 }
 
-func chatInitials(c previewapi.Conversation) string {
-	if c.Initials != nil {
-		return *c.Initials
-	}
-	return initials(c.Title)
-}
-func participantNames(c previewapi.Conversation) []string {
-	if c.Participants != nil {
-		return *c.Participants
-	}
-	return []string{c.Address}
-}
+func chatInitials(c engineapi.Conversation) string       { return initials(c.Title) }
+func participantNames(c engineapi.Conversation) []string { return []string{c.Address} }

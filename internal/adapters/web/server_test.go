@@ -41,7 +41,7 @@ func TestBFFUsesHTTPAndDeviceScopedPresentation(t *testing.T) {
 		if w.Code != 200 || !strings.Contains(w.Body.String(), `lang="`+tc.wantLang+`"`) || !strings.Contains(w.Body.String(), tc.wantText) {
 			t.Fatalf("BFF locale failure: status=%d body=%s", w.Code, w.Body.String())
 		}
-		if tc.url != "/" && (!strings.Contains(w.Body.String(), `class="dark"`) || len(w.Result().Cookies()) != 2) {
+		if tc.url != "/" && (!strings.Contains(w.Body.String(), `class="dark"`) || preferenceCookieCount(w.Result().Cookies()) != 2) {
 			t.Fatal("device theme/language overrides not retained")
 		}
 	}
@@ -95,4 +95,14 @@ func TestCatalogsHaveAllTypedExpressions(t *testing.T) {
 			t.Errorf("pt-BR missing %s", key)
 		}
 	}
+}
+
+func preferenceCookieCount(cookies []*http.Cookie) int {
+	count := 0
+	for _, c := range cookies {
+		if c.Name == "oie_theme" || c.Name == "oie_lang" {
+			count++
+		}
+	}
+	return count
 }

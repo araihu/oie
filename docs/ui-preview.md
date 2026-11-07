@@ -1,5 +1,9 @@
 # Chat UI preview
 
+This records the mock-only UI delivered in PR #3. The current integrated browser
+uses the real engine; see [live preview setup](live-preview.md). The independent
+mock remains useful for deterministic presentation checks.
+
 The UI work is developed independently of the engine in the managed worktree
 `oie-chat-ui`, branch `codex/chat-interface`, stacked on the foundation. It uses
 an independent read-only mock HTTP API rather than BFF-owned sample data or the

@@ -6,14 +6,17 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
-	"github.com/araihu/oie/internal/adapters/previewapi"
+
 	"golang.org/x/text/language"
 )
 
@@ -30,9 +33,9 @@ var themeScript []byte
 var localeFiles embed.FS
 
 type Server struct {
-	client     *engineapi.ClientWithResponses
-	chatClient *previewapi.ClientWithResponses
-	catalogs   map[string]copy
+	client       *engineapi.ClientWithResponses
+	streamClient *engineapi.Client
+	catalogs     map[string]copy
 }
 
 func New(engineURL string) (*Server, error) {
@@ -44,12 +47,16 @@ func New(engineURL string) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	client, err := engineapi.NewClientWithResponses(engineURL, engineapi.WithHTTPClient(&http.Client{Timeout: 3 * time.Second}))
+	client, err := engineapi.NewClientWithResponses(engineURL, engineapi.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	if err != nil {
 		return nil, err
 	}
-	chatClient, err := previewapi.NewClientWithResponses(engineURL, previewapi.WithHTTPClient(&http.Client{Timeout: 3 * time.Second}))
-	return &Server{client: client, chatClient: chatClient, catalogs: catalogs}, err
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DialContext = (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext
+	transport.ResponseHeaderTimeout = 5 * time.Second
+	transport.TLSHandshakeTimeout = 5 * time.Second
+	streamClient, err := engineapi.NewClient(engineURL, engineapi.WithHTTPClient(&http.Client{Transport: transport}))
+	return &Server{client: client, streamClient: streamClient, catalogs: catalogs}, err
 }
 
 type errInvalidURL struct{}
@@ -58,36 +65,56 @@ func (errInvalidURL) Error() string {
 	return "expected an HTTP(S) engine base URL without credentials, query, or fragment"
 }
 
+type messageView struct {
+	engineapi.Message
+	Attachment *mediaView
+}
+type mediaView struct{ Kind, Title, Description, PreviewUrl string }
+type connectionView struct {
+	Known bool
+	Value engineapi.Connection
+}
 type view struct {
-	Locale                         string
-	Theme                          string
-	Text                           copy
-	Role                           string
-	Accounts                       []engineapi.Account
-	Next                           string
-	Unavailable                    bool
-	NotFound                       bool
-	Preview                        bool
-	ChatOpen                       bool
-	Section, Filter, Query, ChatID string
-	Chats                          []previewapi.Conversation
-	Selected                       *previewapi.Conversation
-	Messages                       []previewapi.Message
+	Locale, Theme, Role                                   string
+	Text                                                  copy
+	Accounts                                              []engineapi.Account
+	Connections                                           map[string]connectionView
+	Next                                                  string
+	Unavailable, NotFound, Preview, ChatOpen              bool
+	Section, Filter, Query, ChatID, AccountFilter         string
+	Chats                                                 []engineapi.Conversation
+	Selected                                              *engineapi.Conversation
+	Messages                                              []messageView
+	EngineID, EventCursor, CSRF, ErrorMessage, FormTarget string
+	Values                                                map[string]string
 }
 
 type copy struct {
-	Accounts, EmptyTitle, EmptyBody, NotConnected, Conversations    string
-	Unavailable, UnavailableBody, Retry, Local, Hosted              string
-	Skip, Languages, Appearance, System, Light                      string
-	Dark, Next, English, Portuguese, NotFound                       string
-	NotFoundBody, Chats, Favorites, Archived, SharedMedia           string
-	Settings, You, All, Unread, Groups                              string
-	SearchChats, NoResults, NoResultsBody, NewChat, More            string
-	Preview, PreviewNote, Message, Send, Attach                     string
-	SendingUnavailable, Back, Today, Navigation, Active             string
-	OpenNavigation, Close, Details, Participants, MediaEmpty        string
-	MediaBody, SelectChat, SelectChatBody, EngineState, AccountHelp string
-	PreviewOnly, ThemeHelp, LanguageHelp, NoChats, NoChatsBody      string
+	Accounts, EmptyTitle, EmptyBody, NotConnected, Conversations                       string
+	Unavailable, UnavailableBody, Retry, Local, Hosted                                 string
+	Skip, Languages, Appearance, System, Light                                         string
+	Dark, Next, English, Portuguese, NotFound                                          string
+	NotFoundBody, Chats, Favorites, Archived, SharedMedia                              string
+	Settings, You, All, Unread, Groups                                                 string
+	SearchChats, NoResults, NoResultsBody, NewChat, More                               string
+	Preview, PreviewNote, Message, Send, Attach                                        string
+	SendingUnavailable, Back, Today, Navigation, Active                                string
+	OpenNavigation, Close, Details, Participants, MediaEmpty                           string
+	MediaBody, SelectChat, SelectChatBody, EngineState, AccountHelp                    string
+	PreviewOnly, ThemeHelp, LanguageHelp, NoChats, NoChatsBody                         string
+	AddAccount, AccountAddress, AccountLabel, AddressPlaceholder, LabelPlaceholder     string
+	RegisterAccount, Password, PasswordHelp, Endpoint, EndpointHelp                    string
+	Connect, Disconnect, Connected, Connecting, ConnectionError                        string
+	ConnectionUnknown, AuthFailed, TLSFailed, ConnectionFailed, ChooseAccount          string
+	AllAccounts, PeerAddress, StartConversation, AccountSaved, ConnectionRequested     string
+	Disconnected, Queued, Dispatching, Submitted, UnknownSend                          string
+	FailedSend, Cancelled, SubmittedHint, UnknownHint, CancelSend                      string
+	CancelConflict, CancelSuccess, MessageAccepted, PendingAcceptance, RetrySubmission string
+	Saving, InvalidForm, InvalidMessage, CSRFError, OperationConflict                  string
+	AccountExists, EngineChanged, LiveConnecting, LiveReady, LiveRetry                 string
+	NewMessages, QueueHelp, DraftStorageUnavailable, DraftLocked, MessageUnavailable   string
+	MediaUnavailable, NativeError, NewerHistory, ShowPassword, ChooseOption            string
+	ValidationFailed, Edit, Done                                                       string
 }
 
 func loadCatalogs() (map[string]copy, error) {
@@ -108,33 +135,43 @@ func loadCatalogs() (map[string]copy, error) {
 	return out, nil
 }
 
+//go:embed live.js
+var liveScript []byte
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if isMutationPath(r.URL.Path) && r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST")
+		w.WriteHeader(405)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/ui/") && r.Method == http.MethodPost {
+		s.mutate(w, r)
+		return
+	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	switch r.URL.Path {
-	case "/ui/app.css":
-		w.Header().Set("Content-Type", "text/css")
-		_, _ = w.Write(stylesheet)
-		return
-	case "/ui/chat-pattern.svg":
-		w.Header().Set("Content-Type", "image/svg+xml")
-		_, _ = w.Write(chatPattern)
-		return
-	case "/ui/preview-landscape.svg":
-		w.Header().Set("Content-Type", "image/svg+xml")
-		_, _ = w.Write(previewLandscape)
-		return
-	case "/ui/theme.js":
-		w.Header().Set("Content-Type", "text/javascript")
-		_, _ = w.Write(themeScript)
+	assets := map[string]struct {
+		mime string
+		body []byte
+	}{
+		"/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
+	}
+	if asset, ok := assets[r.URL.Path]; ok {
+		w.Header().Set("Content-Type", asset.mime)
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = w.Write(asset.body)
 		return
 	}
-	v := view{Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system")}
-	v.Text = s.catalogs[v.Locale]
-	v.configureWorkspace(r)
-	if r.URL.Path != "/" {
+	if r.URL.Path == "/ui/events" {
+		s.events(w, r)
+		return
+	}
+	token := csrfToken(w, r)
+	v := s.baseView(r)
+	v.CSRF = token
+	if r.URL.Path != "/" && r.URL.Path != "/ui/refresh" {
 		v.NotFound = true
 		v.ChatOpen = true
 		s.render(w, r, v)
@@ -142,8 +179,29 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	savePreference(w, r, "lang", v.Locale)
 	savePreference(w, r, "theme", v.Theme)
-	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
+	s.load(ctx, r, &v)
+	if r.URL.Path == "/ui/refresh" {
+		var buf bytes.Buffer
+		if err := liveRegions(v).Render(presentationContext(r.Context(), v), &buf); err != nil {
+			w.WriteHeader(503)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = buf.WriteTo(w)
+		return
+	}
+	s.render(w, r, v)
+}
+func (s *Server) baseView(r *http.Request) view {
+	v := view{Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system"), Connections: map[string]connectionView{}, Values: map[string]string{}}
+	v.Text = s.catalogs[v.Locale]
+	v.configureWorkspace(r)
+	return v
+}
+func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	editor := func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept-Language", v.Locale)
 		return nil
@@ -151,94 +209,220 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	engine, err := s.client.GetEngineWithResponse(ctx, editor)
 	if err != nil || engine.JSON200 == nil {
 		v.Unavailable = true
-	} else {
-		v.Preview = engine.HTTPResponse.Header.Get("X-Oie-Mock") == "true"
-		v.Role = v.Text.Local
-		if engine.JSON200.Role == "hosted" {
-			v.Role = v.Text.Hosted
+		return
+	}
+	v.EngineID = engine.JSON200.Id
+	v.EventCursor = engine.JSON200.EventCursor
+	v.Preview = engine.HTTPResponse.Header.Get("X-Oie-Mock") == "true"
+	v.Role = v.Text.Local
+	if engine.JSON200.Role == "hosted" {
+		v.Role = v.Text.Hosted
+	}
+	limit := 100
+	accounts, err := s.client.ListAccountsWithResponse(ctx, &engineapi.ListAccountsParams{Limit: &limit}, editor)
+	if err != nil || accounts.JSON200 == nil {
+		v.Unavailable = true
+		return
+	}
+	v.Accounts = accounts.JSON200.Items
+	for _, a := range v.Accounts {
+		connection, err := s.client.GetAccountConnectionWithResponse(ctx, a.Id, editor)
+		if err == nil && connection.JSON200 != nil {
+			v.Connections[a.Id] = connectionView{Known: true, Value: *connection.JSON200}
 		}
-		params := &engineapi.ListAccountsParams{}
-		if after := r.URL.Query().Get("after"); after != "" {
-			params.After = &after
-		}
-		accounts, err := s.client.ListAccountsWithResponse(ctx, params, editor)
-		if err != nil || accounts.JSON200 == nil {
+	}
+	params := &engineapi.ListConversationsParams{Limit: &limit}
+	archived := v.Section == "archived"
+	params.Archived = &archived
+	if v.AccountFilter != "" {
+		params.AccountId = &v.AccountFilter
+	}
+	if v.Query != "" {
+		params.Q = &v.Query
+	}
+	if v.Filter == "unread" {
+		yes := true
+		params.UnreadOnly = &yes
+	}
+	if v.Filter == "favorites" || v.Section == "favorites" {
+		yes := true
+		params.FavoritesOnly = &yes
+	}
+	if v.Filter == "groups" {
+		kind := engineapi.ListConversationsParamsKindRoom
+		params.Kind = &kind
+	}
+	chats, err := s.client.ListConversationsWithResponse(ctx, params, editor)
+	if err != nil {
+		v.Unavailable = true
+		return
+	}
+	if chats.JSON200 == nil {
+		if chats.StatusCode() != 404 {
 			v.Unavailable = true
+		}
+		return
+	}
+	v.Chats = chats.JSON200.Items
+	selected := v.ChatID
+	if selected == "" && len(v.Chats) > 0 {
+		selected = v.Chats[0].Id
+	}
+	if selected == "" || v.Section == "media" {
+		return
+	}
+	conversation, err := s.client.GetConversationWithResponse(ctx, selected, editor)
+	if err != nil {
+		v.Unavailable = true
+		return
+	}
+	if conversation.JSON200 == nil {
+		if conversation.StatusCode() == 400 || conversation.StatusCode() == 404 {
+			v.NotFound = true
 		} else {
-			v.Accounts = accounts.JSON200.Items
-			if accounts.JSON200.NextCursor != nil {
-				v.Next = "/?after=" + url.QueryEscape(*accounts.JSON200.NextCursor)
+			v.Unavailable = true
+		}
+		return
+	}
+	if v.AccountFilter != "" && conversation.JSON200.AccountId != v.AccountFilter {
+		v.NotFound = true
+		return
+	}
+	messages, err := s.client.ListMessagesWithResponse(ctx, selected, &engineapi.ListMessagesParams{}, editor)
+	if err != nil || messages.JSON200 == nil {
+		v.Unavailable = true
+		return
+	}
+	v.Selected = conversation.JSON200
+	v.ChatID = selected
+	items := messages.JSON200.Items
+	slices.Reverse(items)
+	extras := map[string]*mediaView{}
+	if v.Preview {
+		var mock struct {
+			Items []struct {
+				Id         string
+				Attachment *mediaView
+			}
+		}
+		if json.Unmarshal(messages.Body, &mock) == nil {
+			for _, m := range mock.Items {
+				extras[m.Id] = m.Attachment
 			}
 		}
 	}
-	if !v.Unavailable {
-		params := &previewapi.ListConversationsParams{}
-		archived := v.Section == "archived"
-		params.Archived = &archived
-		if v.Query != "" {
-			params.Q = &v.Query
-		}
-		if v.Filter == "unread" {
-			value := true
-			params.UnreadOnly = &value
-		}
-		if v.Filter == "favorites" || v.Section == "favorites" {
-			value := true
-			params.FavoritesOnly = &value
-		}
-		if v.Filter == "groups" {
-			kind := previewapi.ListConversationsParamsKindRoom
-			params.Kind = &kind
-		}
-		chatEditor := func(_ context.Context, req *http.Request) error {
-			req.Header.Set("Accept-Language", v.Locale)
-			return nil
-		}
-		chats, err := s.chatClient.ListConversationsWithResponse(ctx, params, chatEditor)
-		if err != nil {
-			v.Unavailable = true
-		} else if chats.JSON200 != nil {
-			v.Chats = chats.JSON200.Items
-			selected := v.ChatID
-			if selected == "" && len(v.Chats) > 0 {
-				selected = v.Chats[0].Id
-			}
-			if selected != "" && v.Section != "media" {
-				conversation, err := s.chatClient.GetConversationWithResponse(ctx, selected, chatEditor)
-				if err != nil {
-					v.Unavailable = true
-				} else if conversation.JSON200 == nil {
-					if conversation.StatusCode() == 404 || conversation.StatusCode() == 400 {
-						v.NotFound = true
-					} else {
-						v.Unavailable = true
-					}
-				} else {
-					messages, err := s.chatClient.ListMessagesWithResponse(ctx, selected, &previewapi.ListMessagesParams{}, chatEditor)
-					if err != nil || messages.JSON200 == nil {
-						v.Unavailable = true
-					} else {
-						v.Selected = conversation.JSON200
-						v.Messages = messages.JSON200.Items
-						slices.Reverse(v.Messages)
-						v.ChatID = selected
-					}
-				}
-			}
-		} else if chats.StatusCode() != 404 {
-			v.Unavailable = true
-		}
+	for _, m := range items {
+		v.Messages = append(v.Messages, messageView{Message: m, Attachment: extras[m.Id]})
 	}
-	s.render(w, r, v)
 }
+func (v view) account(id string) engineapi.Account {
+	for _, a := range v.Accounts {
+		if a.Id == id {
+			return a
+		}
+	}
+	return engineapi.Account{Id: id}
+}
+func (v view) accountLabel(id string) string {
+	a := v.account(id)
+	if a.Label != "" {
+		return a.Label + " · " + a.Address
+	}
+	return a.Address
+}
+func (v view) connectionLabel(id string) string {
+	c := v.Connections[id]
+	if !c.Known {
+		return v.Text.ConnectionUnknown
+	}
+	switch c.Value.State {
+	case "connected":
+		return v.Text.Connected
+	case "connecting":
+		return v.Text.Connecting
+	case "error":
+		return v.Text.ConnectionError
+	default:
+		return v.Text.NotConnected
+	}
+}
+func (v view) connectionError(id string) string {
+	c := v.Connections[id]
+	if c.Value.LastErrorCode == nil {
+		return ""
+	}
+	switch *c.Value.LastErrorCode {
+	case "authentication_failed":
+		return v.Text.AuthFailed
+	case "tls_failed":
+		return v.Text.TLSFailed
+	default:
+		return v.Text.ConnectionFailed
+	}
+}
+func (v view) stateLabel(state engineapi.MessageSendState) string {
+	switch state {
+	case "queued":
+		return v.Text.Queued
+	case "dispatching":
+		return v.Text.Dispatching
+	case "submitted":
+		return v.Text.Submitted
+	case "unknown":
+		return v.Text.UnknownSend
+	case "failed":
+		return v.Text.FailedSend
+	case "cancelled":
+		return v.Text.Cancelled
+	default:
+		return ""
+	}
+}
+func (v view) timelineVersion() string {
+	var out strings.Builder
+	out.WriteString(v.ChatID)
+	for _, m := range v.Messages {
+		out.WriteString(m.Id + ":" + m.RevisionId + ":" + string(m.SendState) + ";")
+	}
+	return out.String()
+}
+func (v view) headerVersion() string {
+	if v.Selected == nil {
+		return ""
+	}
+	return v.Selected.Id + v.Selected.Title + v.accountLabel(v.Selected.AccountId) + v.connectionLabel(v.Selected.AccountId)
+}
+func (v view) accountVersion() string {
+	var out strings.Builder
+	for _, a := range v.Accounts {
+		out.WriteString(a.Id + ";")
+	}
+	return out.String()
+}
+func (v view) sendAllowed() bool {
+	return !v.Preview && v.Selected != nil && v.account(v.Selected.AccountId).Address != "" && !v.Unavailable
+}
+func (v view) csrfFields() map[string]string {
+	return map[string]string{"csrf": v.CSRF, "engineId": v.EngineID, "returnTo": v.href()}
+}
+func (v view) selectedAccount() string {
+	if v.AccountFilter != "" {
+		return v.AccountFilter
+	}
+	if v.Selected != nil {
+		return v.Selected.AccountId
+	}
+	if len(v.Accounts) > 0 {
+		return v.Accounts[0].Id
+	}
+	return ""
+}
+func (v view) field(key string) string    { return v.Values[key] }
+func (v view) boolText(value bool) string { return strconv.FormatBool(value) }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	var buf bytes.Buffer
-	ctx := expressions.With(r.Context(), expressions.Set{AppShell: expressions.AppShell{SkipLinkLabel: v.Text.Skip},
-		Sidebar:   expressions.Sidebar{AriaLabel: v.Text.Navigation, ActiveLabel: v.Text.Active, TriggerLabel: v.Text.OpenNavigation, SkipLabel: v.Text.Skip},
-		Drawer:    expressions.Drawer{CloseAriaLabel: v.Text.Close},
-		TextInput: expressions.TextInput{SearchAriaLabel: v.Text.SearchChats},
-	})
+	ctx := presentationContext(r.Context(), v)
 	component := page(v)
 	if r.Header.Get("HX-Request") == "true" {
 		component = workspace(v)
@@ -292,4 +476,14 @@ func savePreference(w http.ResponseWriter, r *http.Request, key, value string) {
 			HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode,
 		})
 	}
+}
+
+func presentationContext(ctx context.Context, v view) context.Context {
+	return expressions.With(ctx, expressions.Set{AppShell: expressions.AppShell{SkipLinkLabel: v.Text.Skip},
+		Sidebar:   expressions.Sidebar{AriaLabel: v.Text.Navigation, ActiveLabel: v.Text.Active, TriggerLabel: v.Text.OpenNavigation, SkipLabel: v.Text.Skip},
+		Drawer:    expressions.Drawer{CloseAriaLabel: v.Text.Close},
+		TextInput: expressions.TextInput{SearchAriaLabel: v.Text.SearchChats, ShowPasswordAriaLabel: v.Text.ShowPassword},
+		Select:    expressions.Select{Placeholder: v.Text.ChooseOption, ListAriaLabel: func(label string) string { return label }},
+		Form:      expressions.Form{ErrorTitle: v.Text.ValidationFailed, EditLabel: v.Text.Edit, DoneLabel: v.Text.Done},
+	})
 }

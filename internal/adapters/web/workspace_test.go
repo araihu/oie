@@ -35,7 +35,7 @@ func TestWorkspaceReadsMockThroughHTTPAndPreservesPresentationState(t *testing.T
 		if w.Code != 200 || !strings.Contains(w.Body.String(), tc.want) {
 			t.Fatalf("%s status=%d missing %q", tc.path, w.Code, tc.want)
 		}
-		if got := strings.Count(w.Body.String(), "data-conversation-id="); got != tc.rows {
+		if got := strings.Count(w.Body.String(), "data-conversation-id=") - 1; got != tc.rows {
 			t.Errorf("%s rows=%d want=%d", tc.path, got, tc.rows)
 		}
 	}

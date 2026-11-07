@@ -4,8 +4,8 @@ import (
 	"github.com/araihu/goshtoso/components/appshell"
 	"github.com/araihu/goshtoso/components/avatar"
 	"github.com/araihu/goshtoso/components/button"
-	"github.com/araihu/goshtoso/components/card"
-	"github.com/araihu/goshtoso/components/chatbubble"
+"github.com/araihu/goshtoso/components/card"
+		"github.com/araihu/goshtoso/components/chatbubble"
 	"github.com/araihu/goshtoso/components/drawer"
 	"github.com/araihu/goshtoso/components/dropdown"
 	"github.com/araihu/goshtoso/components/emptystate"
@@ -16,9 +16,10 @@ import (
 	"github.com/araihu/goshtoso/components/sidebar"
 	"github.com/araihu/goshtoso/components/textarea"
 	"github.com/araihu/goshtoso/components/textinput"
-	"github.com/araihu/oie/internal/adapters/previewapi"
+"github.com/araihu/goshtoso/components/form"
+selectfield "github.com/araihu/goshtoso/components/select"
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"strconv"
-	"strings"
 )
 
 func navigation(v view) sidebar.Config {
@@ -52,18 +53,31 @@ templ page(v view) {
 			<script src="/ui/theme.js"></script>
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href="/ui/app.css"/>
+<script src="/ui/live.js" defer></script>
+<meta name="oie-csrf" content={v.CSRF}/>
 		</head>
-		<body>
+		<body data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-mock={strconv.FormatBool(v.Preview)}>
+@liveCopy(v)
+<div class="oie-live-status" data-live-status role="status" aria-live="polite"></div>
+if v.ErrorMessage!="" {
+<div class="oie-native-error" role="alert" tabindex="-1" data-native-error>
+{v.ErrorMessage}
+if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
+@nativeRecovery(v)
+}
+</div>
+}
 			<h1 class="sr-only">Oie</h1>
 			@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: sidebar.Sidebar(navigation(v)), Content: workspace(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
 			@settings(v)
 			@accounts(v)
+@newConversation(v)
 			if v.Selected != nil {
 				@drawer.Drawer(drawer.Config{ID: "details", Title: v.Text.Details}) {
 					<div class="oie-details">
 						@avatar.Avatar(avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeLG})
 						<h2>{ v.Selected.Title }</h2>
-						<p>{ v.Text.PreviewOnly }</p>
+						<p>{ v.accountLabel(v.Selected.AccountId) }</p>
 						<h3>{ v.Text.Participants }</h3>
 						<ul>
 							for _,name:=range participantNames(*v.Selected) {
@@ -107,16 +121,21 @@ templ workspace(v view) {
 					}
 				</h2>
 				<div x-data="{}">
-					@button.Button(button.WithRootClass("oie-icon-button oie-new-chat"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.NewChat, "title": v.Text.NewChat}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'accounts'})"})) {
+					@button.Button(button.WithRootClass("oie-icon-button oie-new-chat"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.NewChat, "title": v.Text.NewChat,"data-new-conversation":""}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'newchat'})"})) {
 						@glyph(heroicons.Icon16SolidPlus)
 					}
 				</div>
-				@dropdown.Dropdown(dropdown.Config{ID: "list-options", Label: v.Text.More, Trigger: menuTrigger(v.Text.More), MenuAlign: dropdown.AlignEnd, Sections: []dropdown.Section{{Items: []dropdown.Item{{Label: v.Text.Settings, OnClick: "$dispatch('drawer:open', {id: 'settings'})"}, {Label: v.Text.Accounts, OnClick: "$dispatch('drawer:open', {id: 'accounts'})"}}}}})
+<div x-data="{}">
+@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Accounts,"data-open-accounts":""}),button.WithAlpine(&button.AlpineConfig{OnClick:"$dispatch('drawer:open', {id: 'accounts'})"})){@glyph(heroicons.Icon16SolidUserCircle)}
+</div>
+				@dropdown.Dropdown(dropdown.Config{ID: "list-options", Label: v.Text.More, Trigger: menuTrigger(v.Text.More), MenuAlign: dropdown.AlignEnd, Sections: []dropdown.Section{{Items: []dropdown.Item{{Label: v.Text.Settings, OnClick: "$dispatch('drawer:open', {id: 'settings'})"}, {ID:"open-accounts",Label: v.Text.Accounts, OnClick: "$dispatch('drawer:open', {id: 'accounts'})"}}}}})
 			</div>
 			if v.Preview {
 				<p class="oie-preview-label">{ v.Text.Preview }</p>
 			}
-			<form action="/" method="get" class="oie-search" role="search">
+			@accountFilter(v)
+<form action="/" method="get" class="oie-search" role="search">
+<input type="hidden" name="account" value={v.AccountFilter}/>
 				<input type="hidden" name="section" value={ v.Section }/>
 				<input type="hidden" name="filter" value={ v.Filter }/>
 				@textinput.TextInput(textinput.Config{ID: "conversation-search", Name: "q", Value: v.Query, Type: textinput.TypeSearch, Placeholder: v.Text.SearchChats, InputAttrs: templ.Attributes{"style": "padding-left:2.5rem;border-radius:1.4rem;background:var(--oie-raised);border-color:var(--oie-border);color:var(--oie-text)"}})
@@ -127,29 +146,9 @@ templ workspace(v view) {
 				@filterLink(v, "favorites", v.Text.Favorites)
 				@filterLink(v, "groups", v.Text.Groups)
 			</nav>
-			<div class="oie-conversation-scroll">
-				if v.Unavailable {
-					<div class="oie-list-state">
-						@emptystate.EmptyState(emptystate.Config{Title: v.Text.Unavailable, Description: v.Text.UnavailableBody}) @link.Link(v.href()) {
-	{ v.Text.Retry }
-}
-					</div>
-				} else if len(v.Chats)==0 {
-					<div class="oie-list-state">
-						if v.Query!="" || v.Filter!="all" {
-							@emptystate.EmptyState(emptystate.Config{Title: v.Text.NoResults, Description: v.Text.NoResultsBody})
-						} else {
-							@emptystate.EmptyState(emptystate.Config{Title: v.Text.NoChats, Description: v.Text.NoChatsBody})
-						}
-					</div>
-				} else {
-					<ul class="oie-conversations">
-						for _,c:=range v.Chats {
-							@conversationRow(v, c)
-						}
-					</ul>
-				}
-			</div>
+<div class="oie-conversation-scroll" id="conversation-list">
+@conversationList(v)
+</div>
 			<div class="oie-list-footer" x-data="{}">
 				<span class={ "oie-status-dot",templ.KV("oie-status-error",v.Unavailable) } aria-hidden="true"></span>
 				<span>{ v.Role }</span>
@@ -182,12 +181,11 @@ templ workspace(v view) {
 				if v.Preview {
 					<p class="oie-preview-note">{ v.Text.PreviewNote }</p>
 				}
-				<div class="oie-timeline" x-data="{}" x-init="$nextTick(() => { $el.scrollTop = $el.scrollHeight })" tabindex="0" aria-label={ v.Text.Conversations }>
-					<div class="oie-day-divider"><span>{ v.Text.Today }</span></div>
-					for index, m := range v.Messages {
-						@message(v, m, index > 0 && v.Messages[index-1].Sender.Id == m.Sender.Id && v.Messages[index-1].IsOwn == m.IsOwn && v.Messages[index-1].Attachment == nil && m.Attachment == nil)
-					}
-				</div>
+				<div class="oie-timeline" id="message-timeline" tabindex="0" aria-label={v.Text.Conversations} data-version={v.timelineVersion()}>
+@timeline(v)
+</div>
+<button type="button" class="oie-jump-latest" data-jump-latest hidden>{v.Text.NewMessages}</button>
+
 				@composer(v)
 			} else {
 				<div class="oie-chat-empty">
@@ -211,7 +209,7 @@ templ filterLink(v view, key, label string) {
 	}
 }
 
-templ conversationRow(v view, c previewapi.Conversation) {
+templ conversationRow(v view, c engineapi.Conversation) {
 	<li>
 		@link.Link(v.href("chat", c.Id), link.WithRootClass("oie-chat-link"), link.WithAttrs(templ.Attributes{"data-conversation-id": c.Id, "aria-current": strconv.FormatBool(v.Selected != nil && v.Selected.Id == c.Id)})) {
 			@avatar.Avatar(avatar.Config{Name: c.Title, Initials: chatInitials(c), Size: avatar.SizeSM, RootClass: "oie-chat-avatar"})
@@ -225,18 +223,21 @@ templ conversationRow(v view, c previewapi.Conversation) {
 						<span class="oie-pin" title={ v.Text.Favorites }>@glyph(heroicons.Icon16SolidStar)</span>
 					}
 				</div>
+if len(v.Accounts)>1 {
+<small class="oie-row-account">{v.accountLabel(c.AccountId)}</small>
+}
 			</div>
 		}
 	</li>
 }
 
 templ chatHeader(v view) {
-	<header class="oie-chat-header" x-data="{}">
+	<header class="oie-chat-header" id="chat-header" data-version={v.headerVersion()} x-data="{}">
 		@link.Link(v.href("chat", ""), link.WithRootClass("oie-back-button"), link.WithAttrs(templ.Attributes{"aria-label": v.Text.Back})) {
 			@glyph(heroicons.Icon16SolidChevronLeft)
 		}
 		@avatar.Avatar(avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeXS})
-		<div class="oie-chat-identity"><h2>{ v.Selected.Title }</h2><p>{ strings.Join(participantNames(*v.Selected),", ") }</p></div>
+		<div class="oie-chat-identity"><h2>{ v.Selected.Title }</h2><p>{v.accountLabel(v.Selected.AccountId)} · {v.connectionLabel(v.Selected.AccountId)}</p></div>
 		@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Details, "title": v.Text.Details}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'details'})"})) {
 			@glyph(heroicons.Icon16SolidInformationCircle)
 		}
@@ -244,22 +245,29 @@ templ chatHeader(v view) {
 	</header>
 }
 
-templ message(v view, m previewapi.Message, grouped bool) {
-	<div class={ "oie-message",templ.KV("oie-message-own",m.IsOwn), templ.KV("oie-message-grouped",grouped) }>
-		if m.Attachment!=nil {
-			<div class="oie-media-message">
-				<span class="oie-media-sender">{ m.Sender.DisplayName }</span>
-				@card.Card(card.Config{Media: sampleMedia(*m.Attachment), Title: m.Attachment.Title, Description: m.Attachment.Description, RootClass: "oie-media-card", Density: card.DensityCompact})
-				<time datetime={ m.CreatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ m.CreatedAt.Format("15:04") }</time>
-			</div>
-		} else {
-			@chatbubble.ChatBubble(chatbubble.Config{Side: messageSide(m.IsOwn), Message: m.OriginalText, SenderName: m.Sender.DisplayName, Timestamp: m.CreatedAt.Format("15:04"), ShowAvatar: !m.IsOwn, AvatarInitials: initials(m.Sender.DisplayName), RootClass: "oie-bubble", Grouped: grouped})
-			if m.IsOwn {
-				<time class="oie-message-time" datetime={ m.CreatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ m.CreatedAt.Format("15:04") }</time>
-			}
-		}
-	</div>
+templ message(v view,m messageView,grouped bool){
+<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-grouped",grouped)} data-message-id={m.Id} data-send-state={string(m.SendState)} data-created-at={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>
+if m.Attachment!=nil {
+<div class="oie-media-message">@card.Card(card.Config{Image:m.Attachment.PreviewUrl,ImageAlt:m.Attachment.Title,Title:m.Attachment.Title,Description:m.Attachment.Description,Density:card.DensityCompact,RootClass:"oie-media-card"})</div>
+}else{
+@chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),Message:m.OriginalText,SenderName:m.Sender.DisplayName,Timestamp:m.CreatedAt.Format("15:04"),ShowAvatar:!m.IsOwn,AvatarInitials:initials(m.Sender.DisplayName),RootClass:"oie-bubble",Grouped:grouped})
 }
+if m.IsOwn {
+<div class="oie-message-meta"><time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
+<span data-message-status title={statusHint(v,m.SendState)}>{v.stateLabel(m.SendState)}</span>
+if m.SendState=="queued" && !v.Preview {
+@form.Form(form.Config{ID:"cancel-"+m.Id,Action:"/ui/messages/cancel",Method:"post",RootClass:"oie-cancel-form",RootAttrs:templ.Attributes{"data-oie-action":"cancel","data-cancel-message":""}}){
+@mutationFields(v,"cancel-"+m.Id,newOperationKey())
+<input type="hidden" name="messageId" value={m.Id}/><input type="hidden" name="expectedRevisionId" value={m.RevisionId}/>
+@button.Button(button.WithType("submit"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"aria-label":v.Text.CancelSend})){ {v.Text.CancelSend} }
+<div data-form-feedback role="status" aria-live="polite"></div>
+}
+}
+</div>
+}
+</div>
+}
+func statusHint(v view,state engineapi.MessageSendState)string{if state=="submitted"{return v.Text.SubmittedHint};if state=="unknown"{return v.Text.UnknownHint};return v.stateLabel(state)}
 
 func messageSide(own bool) chatbubble.Side {
 	if own {
@@ -268,21 +276,21 @@ func messageSide(own bool) chatbubble.Side {
 	return chatbubble.Received
 }
 
-templ sampleMedia(a previewapi.Attachment) {
-	<img src={ a.PreviewUrl } alt={ a.Title } width="560" height="320" loading="lazy"/>
-}
+func selectedAccountID(v view)string{if v.Selected!=nil{return v.Selected.AccountId};return ""}
 
-templ composer(v view) {
-	<footer class="oie-composer" title={ v.Text.SendingUnavailable }>
-		@button.Button(button.Disabled(), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Attach, "title": v.Text.SendingUnavailable})) {
-			@glyph(heroicons.Icon16SolidPlus)
-		}
-		@textarea.Textarea(textarea.Config{ID: "message-composer", Rows: 1, Placeholder: v.Text.Message, Disabled: true, RootClass: "oie-composer-input", InputAttrs: templ.Attributes{"aria-label": v.Text.Message, "style": "resize:none;min-height:2.7rem;background:var(--oie-raised);border-color:var(--oie-border);border-radius:1.5rem;color:var(--oie-text)"}})
-		@button.Button(button.Disabled(), button.WithRootClass("oie-icon-button oie-send"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Send, "title": v.Text.SendingUnavailable})) {
-			@glyph(heroicons.Icon16SolidArrowUp)
-		}
-	</footer>
+templ composer(v view){
+<form id="send-message-form" action="/ui/messages/send" method="post" data-oie-action="send" data-send-allowed={strconv.FormatBool(v.sendAllowed())}>
+@mutationFields(v,"send",sendKey(v))
+<input type="hidden" name="conversationId" value={v.ChatID}/><input type="hidden" name="accountId" value={selectedAccountID(v)}/>
+<div class="oie-composer">
+@button.Button(button.Disabled(),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Attach,"title":v.Text.MediaUnavailable})){@glyph(heroicons.Icon16SolidPlus)}
+@textarea.Textarea(textarea.Config{ID:"message-composer",Name:"originalText",Value:v.field("originalText"),Rows:1,Placeholder:v.Text.Message,Disabled:!v.sendAllowed(),RootClass:"oie-composer-input",InputAttrs:templ.Attributes{"aria-label":v.Text.Message,"style":"resize:none;min-height:2.7rem;background:var(--oie-raised);border-color:var(--oie-border);border-radius:1.5rem;color:var(--oie-text)"}})
+@button.Button(button.WithType("submit"),button.WithRootClass("oie-icon-button oie-send"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Send,"data-send-message":"","disabled":!v.sendAllowed()})){@glyph(heroicons.Icon16SolidArrowUp)}
+</div>
+<div class="oie-composer-feedback" data-form-feedback role="status" aria-live="polite"></div>
+</form>
 }
+func sendKey(v view)string{if v.FormTarget=="send"&&v.field("operationKey")!=""{return v.field("operationKey")};return newOperationKey()}
 
 templ settings(v view) {
 	@drawer.Drawer(drawer.Config{ID: "settings", Title: v.Text.Settings}) {
@@ -319,24 +327,138 @@ templ settings(v view) {
 	}
 }
 
-templ accounts(v view) {
-	@drawer.Drawer(drawer.Config{ID: "accounts", Title: v.Text.Accounts}) {
-		<div class="oie-settings">
-			<p>{ v.Text.AccountHelp }</p>
-			if len(v.Accounts)==0 {
-				@emptystate.EmptyState(emptystate.Config{Title: v.Text.EmptyTitle, Description: v.Text.EmptyBody})
-			} else {
-				<ul class="oie-accounts">
-					for _,a:=range v.Accounts {
-						<li><strong>{ a.Label }</strong><p>{ a.Address }</p><span>{ v.Text.NotConnected }</span></li>
-					}
-				</ul>
-			}
-			if v.Next!="" {
-				@link.Link(v.Next) {
-					{ v.Text.Next }
-				}
-			}
-		</div>
-	}
+templ accounts(v view){
+@drawer.Drawer(drawer.Config{ID:"accounts",Title:v.Text.Accounts}){
+<div class="oie-settings">
+<p>{v.Text.AccountHelp}</p>
+<div id="account-blocks">@accountBlocks(v)</div>
+<h2>{v.Text.AddAccount}</h2>
+@form.Form(form.Config{ID:"register-account-form",Action:"/ui/accounts/register",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"register"}}){
+@mutationFields(v,"register",newOperationKey())
+@textinput.TextInput(textinput.Config{ID:"register-address",Name:"address",Label:v.Text.AccountAddress,Placeholder:v.Text.AddressPlaceholder,Value:v.field("address"),Required:true,Autocomplete:"username"})
+@textinput.TextInput(textinput.Config{ID:"register-label",Name:"label",Label:v.Text.AccountLabel,Placeholder:v.Text.LabelPlaceholder,Value:v.field("label"),Required:true})
+@button.Button(button.WithType("submit")){ {v.Text.RegisterAccount} }
+<div data-form-feedback role="status" aria-live="polite"></div>
+}
+</div>
+}
+}
+templ mutationFields(v view,target,key string){
+<input type="hidden" name="csrf" value={v.CSRF}/><input type="hidden" name="engineId" value={v.EngineID}/><input type="hidden" name="returnTo" value={v.href()}/><input type="hidden" name="formTarget" value={target}/><input type="hidden" name="operationKey" value={key}/>
+}
+templ accountBlocks(v view){
+for _,a:=range v.Accounts {
+<section class="oie-account-block" data-account-id={a.Id}>
+<h3>{a.Label}</h3><p>{a.Address}</p>
+<div id={"connection-status-"+a.Id}>@connectionStatus(v,a.Id)</div>
+@form.Form(form.Config{ID:"connect-"+a.Id,Action:"/ui/accounts/connect",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"connect","data-connect-account":""}}){
+@mutationFields(v,"connect-"+a.Id,newOperationKey())
+<input type="hidden" name="accountId" value={a.Id}/>
+@textinput.TextInput(textinput.Config{ID:"password-"+a.Id,Name:"password",Type:textinput.TypePassword,Label:v.Text.Password,Required:true,Autocomplete:"current-password",HelperText:v.Text.PasswordHelp})
+@textinput.TextInput(textinput.Config{ID:"endpoint-"+a.Id,Name:"endpoint",Label:v.Text.Endpoint,HelperText:v.Text.EndpointHelp,Value:connectionField(v,a.Id,"endpoint")})
+@button.Button(button.WithType("submit")){ {v.Text.Connect} }
+<div data-form-feedback role="status" aria-live="polite"></div>
+}
+@form.Form(form.Config{ID:"disconnect-"+a.Id,Action:"/ui/accounts/disconnect",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"disconnect","data-disconnect-account":""}}){
+@mutationFields(v,"disconnect-"+a.Id,newOperationKey())
+<input type="hidden" name="accountId" value={a.Id}/>
+@button.Button(button.WithType("submit"),button.WithAppearance(button.AppearancePlain)){ {v.Text.Disconnect} }
+<div data-form-feedback role="status" aria-live="polite"></div>
+}
+</section>
+}
+}
+func connectionField(v view,id,key string)string{if v.FormTarget=="connect-"+id{return v.field(key)};return ""}
+templ connectionStatus(v view,id string){
+<span data-connection-state={connectionState(v,id)} data-account-id={id}>{v.connectionLabel(id)}</span>
+if problem:=v.connectionError(id);problem!="" {
+<p class="oie-field-error">{problem}</p>
+}
+}
+func connectionState(v view,id string)string{if c:=v.Connections[id];c.Known{return string(c.Value.State)};return "unknown"}
+func accountOptions(v view,all bool)[]selectfield.Option{
+ out:=[]selectfield.Option{}
+ if all{out=append(out,selectfield.Option{Value:"",Label:v.Text.AllAccounts,Selected:v.AccountFilter==""})}
+ selected:=v.AccountFilter;if !all{selected=v.selectedAccount()}
+ for _,a:=range v.Accounts{out=append(out,selectfield.Option{Value:a.Id,Label:a.Label+" · "+a.Address,Selected:selected==a.Id})};return out
+}
+templ accountFilter(v view){
+<form id="account-filter-form" action="/" method="get" class="oie-account-filter">
+<input type="hidden" name="section" value={v.Section}/><input type="hidden" name="filter" value={v.Filter}/><input type="hidden" name="q" value={v.Query}/>
+<div id="account-filter-select">@selectfield.Select(selectfield.Config{ID:"account-filter",Name:"account",Label:v.Text.Accounts,Options:accountOptions(v,true),InputAttrs:templ.Attributes{"x-on:change":"$el.form.requestSubmit()"}})</div>
+</form>
+}
+templ newConversation(v view){
+@drawer.Drawer(drawer.Config{ID:"newchat",Title:v.Text.NewChat}){
+<div class="oie-settings">
+if len(v.Accounts)==0 {
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.EmptyTitle,Description:v.Text.NoChatsBody})
+@link.Link(v.href("open","accounts")){ {v.Text.AddAccount} }
+}else{
+@form.Form(form.Config{ID:"new-conversation-form",Action:"/ui/conversations/open",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"open"}}){
+@mutationFields(v,"open",newOperationKey())
+<div id="newchat-account-select">@selectfield.Select(selectfield.Config{ID:"sending-account",Name:"accountId",Label:v.Text.ChooseAccount,Options:accountOptions(v,false),Required:true})</div>
+@textinput.TextInput(textinput.Config{ID:"peer-address",Name:"address",Label:v.Text.PeerAddress,Placeholder:v.Text.AddressPlaceholder,Value:v.field("address"),Required:true})
+@button.Button(button.WithType("submit")){ {v.Text.StartConversation} }
+<div data-form-feedback role="status" aria-live="polite"></div>
+}
+}
+</div>
+}
+}
+templ liveCopy(v view){
+<div id="oie-live-copy" hidden data-saving={v.Text.Saving} data-invalid-message={v.Text.InvalidMessage} data-pending={v.Text.PendingAcceptance} data-storage-unavailable={v.Text.DraftStorageUnavailable} data-locked={v.Text.DraftLocked} data-retry={v.Text.RetrySubmission} data-send={v.Text.Send} data-live-ready={v.Text.LiveReady} data-live-retry={v.Text.LiveRetry} data-live-connecting={v.Text.LiveConnecting} data-new-messages={v.Text.NewMessages} data-engine-changed={v.Text.EngineChanged} data-today={v.Text.Today}></div>
+}
+templ liveRegions(v view){
+<div id="oie-live-regions" data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
+<div id="live-list">@conversationList(v)</div>
+<div id="live-timeline" data-version={v.timelineVersion()}>@timeline(v)</div>
+<div id="live-header" data-version={v.headerVersion()}>
+if v.Selected!=nil {
+@chatHeader(v)
+}
+</div>
+<div id="live-account-blocks">@accountBlocks(v)</div>
+<div id="live-account-filter">@selectfield.Select(selectfield.Config{ID:"account-filter",Name:"account",Label:v.Text.Accounts,Options:accountOptions(v,true),InputAttrs:templ.Attributes{"x-on:change":"$el.form.requestSubmit()"}})</div>
+<div id="live-newchat-account">@selectfield.Select(selectfield.Config{ID:"sending-account",Name:"accountId",Label:v.Text.ChooseAccount,Options:accountOptions(v,false),Required:true})</div>
+</div>
+}
+
+templ conversationList(v view){
+if v.Unavailable {
+<div class="oie-list-state">
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.Unavailable,Description:v.Text.UnavailableBody})
+@link.Link(v.href()){ {v.Text.Retry} }
+</div>
+}else if len(v.Chats)==0 {
+<div class="oie-list-state">
+if v.Query!=""||v.Filter!="all" {
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.NoResults,Description:v.Text.NoResultsBody})
+}else{
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.NoChats,Description:v.Text.NoChatsBody})
+}
+</div>
+}else{
+<ul class="oie-conversations">
+for _,c:=range v.Chats {
+@conversationRow(v,c)
+}
+</ul>
+}
+}
+
+templ timeline(v view){
+<div class="oie-day-divider"><span>{v.Text.Today}</span></div>
+for index,m:=range v.Messages {
+@message(v,m,index>0&&v.Messages[index-1].Sender.Id==m.Sender.Id&&v.Messages[index-1].IsOwn==m.IsOwn&&v.Messages[index-1].Attachment==nil&&m.Attachment==nil)
+}
+}
+
+templ nativeRecovery(v view){
+<form action="/ui/messages/send" method="post" class="oie-native-recovery">
+@mutationFields(v,"send",v.field("operationKey"))
+<input type="hidden" name="conversationId" value={v.field("conversationId")}/><input type="hidden" name="accountId" value={v.field("accountId")}/>
+@textarea.Textarea(textarea.Config{ID:"native-retained-message",Name:"originalText",Label:v.Text.Message,Value:v.field("originalText"),ReadOnly:true,Rows:4})
+@button.Button(button.WithType("submit")){ {v.Text.RetrySubmission} }
+</form>
 }

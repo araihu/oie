@@ -66,8 +66,37 @@ jobs:
           npm --prefix tests/browser test
           npm --prefix tests/browser run test:chat
           npm --prefix tests/browser run test:states
+      - run: OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/live-chat.cjs
       - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: browser-consumer-evidence
+          path: tests/browser/artifacts
+
+  live-browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tests/browser/package-lock.json
+      - run: make dev-up
+      - working-directory: tests/browser
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - run: make test-live-browser
+      - if: always()
+        run: docker compose logs --tail 100
+      - if: always()
+        run: make dev-down
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-engine-browser-evidence
           path: tests/browser/artifacts

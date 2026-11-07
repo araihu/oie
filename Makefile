@@ -41,9 +41,10 @@ check-generated:
 	sh scripts/check-generated.sh
 
 check: lint check-generated
-	@test -z "$$(gofmt -l cmd internal api/spec.go tests)" || { echo 'Go formatting drift'; exit 1; }
+	@test -z "$$(gofmt -l cmd internal api/spec.go tests tools/cmd)" || { echo 'Go formatting drift'; exit 1; }
 	GOWORK=off $(GO) vet ./...
 	GOWORK=off $(GO) -C cli vet ./...
+	GOWORK=off $(GO) -C tools vet ./cmd/...
 	$(MAKE) test
 	$(COMPOSE) config --quiet
 
@@ -65,3 +66,14 @@ test-engine-xmpp:
 .PHONY: mock-api
 mock-api:
 	GOWORK=off $(GO) run ./cmd/oie-mock
+
+.PHONY: build-dev-bridge dev-bridge
+build-dev-bridge:
+	GOWORK=off $(GO) -C tools build -trimpath -o ../bin/oie-xmpp-bridge ./cmd/xmpp-bridge
+
+dev-bridge: build-dev-bridge
+	bin/oie-xmpp-bridge
+
+.PHONY: test-live-browser
+test-live-browser: build
+	sh scripts/test-live-browser.sh
