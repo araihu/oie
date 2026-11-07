@@ -1,6 +1,7 @@
 # Milestone one implementation
 
 This is the API-first foundation for the alpha described in [the specification](oie-spec.md).
+This records the foundation as delivered in PR #1; see [the next engine increment](milestone-two-engine.md) for current XMPP messaging.
 It implements selected foundation recommendations without treating the entire
 alpha feature list as completed.
 

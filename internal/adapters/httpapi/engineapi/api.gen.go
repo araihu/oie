@@ -26,12 +26,21 @@ import (
 
 // Defines values for AccountConnectionState.
 const (
+	AccountConnectionStateConnected    AccountConnectionState = "connected"
+	AccountConnectionStateConnecting   AccountConnectionState = "connecting"
+	AccountConnectionStateError        AccountConnectionState = "error"
 	AccountConnectionStateNotConnected AccountConnectionState = "not_connected"
 )
 
 // Valid indicates whether the value is a known member of the AccountConnectionState enum.
 func (e AccountConnectionState) Valid() bool {
 	switch e {
+	case AccountConnectionStateConnected:
+		return true
+	case AccountConnectionStateConnecting:
+		return true
+	case AccountConnectionStateError:
+		return true
 	case AccountConnectionStateNotConnected:
 		return true
 	default:
@@ -56,12 +65,15 @@ func (e AccountProtocol) Valid() bool {
 
 // Defines values for CapabilitiesReason.
 const (
-	CapabilitiesReasonNotConnected CapabilitiesReason = "not_connected"
+	CapabilitiesReasonAdapterConnected CapabilitiesReason = "adapter_connected"
+	CapabilitiesReasonNotConnected     CapabilitiesReason = "not_connected"
 )
 
 // Valid indicates whether the value is a known member of the CapabilitiesReason enum.
 func (e CapabilitiesReason) Valid() bool {
 	switch e {
+	case CapabilitiesReasonAdapterConnected:
+		return true
 	case CapabilitiesReasonNotConnected:
 		return true
 	default:
@@ -71,13 +83,79 @@ func (e CapabilitiesReason) Valid() bool {
 
 // Defines values for CapabilitiesState.
 const (
-	Unknown CapabilitiesState = "unknown"
+	CapabilitiesStateKnown   CapabilitiesState = "known"
+	CapabilitiesStateUnknown CapabilitiesState = "unknown"
 )
 
 // Valid indicates whether the value is a known member of the CapabilitiesState enum.
 func (e CapabilitiesState) Valid() bool {
 	switch e {
-	case Unknown:
+	case CapabilitiesStateKnown:
+		return true
+	case CapabilitiesStateUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConnectionLastErrorCode.
+const (
+	AuthenticationFailed ConnectionLastErrorCode = "authentication_failed"
+	ConnectionFailed     ConnectionLastErrorCode = "connection_failed"
+	TlsFailed            ConnectionLastErrorCode = "tls_failed"
+)
+
+// Valid indicates whether the value is a known member of the ConnectionLastErrorCode enum.
+func (e ConnectionLastErrorCode) Valid() bool {
+	switch e {
+	case AuthenticationFailed:
+		return true
+	case ConnectionFailed:
+		return true
+	case TlsFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConnectionState.
+const (
+	ConnectionStateConnected    ConnectionState = "connected"
+	ConnectionStateConnecting   ConnectionState = "connecting"
+	ConnectionStateError        ConnectionState = "error"
+	ConnectionStateNotConnected ConnectionState = "not_connected"
+)
+
+// Valid indicates whether the value is a known member of the ConnectionState enum.
+func (e ConnectionState) Valid() bool {
+	switch e {
+	case ConnectionStateConnected:
+		return true
+	case ConnectionStateConnecting:
+		return true
+	case ConnectionStateError:
+		return true
+	case ConnectionStateNotConnected:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConversationKind.
+const (
+	ConversationKindDirect ConversationKind = "direct"
+	ConversationKindRoom   ConversationKind = "room"
+)
+
+// Valid indicates whether the value is a known member of the ConversationKind enum.
+func (e ConversationKind) Valid() bool {
+	switch e {
+	case ConversationKindDirect:
+		return true
+	case ConversationKindRoom:
 		return true
 	default:
 		return false
@@ -86,13 +164,13 @@ func (e CapabilitiesState) Valid() bool {
 
 // Defines values for EngineApiVersion.
 const (
-	N010 EngineApiVersion = "0.1.0"
+	N020 EngineApiVersion = "0.2.0"
 )
 
 // Valid indicates whether the value is a known member of the EngineApiVersion enum.
 func (e EngineApiVersion) Valid() bool {
 	switch e {
-	case N010:
+	case N020:
 		return true
 	default:
 		return false
@@ -119,13 +197,28 @@ func (e EngineRole) Valid() bool {
 
 // Defines values for EventType.
 const (
-	AccountRegistered EventType = "account.registered"
+	AccountConnectionChanged EventType = "account.connection_changed"
+	AccountRegistered        EventType = "account.registered"
+	ConversationCreated      EventType = "conversation.created"
+	ConversationUpdated      EventType = "conversation.updated"
+	MessageCreated           EventType = "message.created"
+	MessageUpdated           EventType = "message.updated"
 )
 
 // Valid indicates whether the value is a known member of the EventType enum.
 func (e EventType) Valid() bool {
 	switch e {
+	case AccountConnectionChanged:
+		return true
 	case AccountRegistered:
+		return true
+	case ConversationCreated:
+		return true
+	case ConversationUpdated:
+		return true
+	case MessageCreated:
+		return true
+	case MessageUpdated:
 		return true
 	default:
 		return false
@@ -147,15 +240,57 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
+// Defines values for MessageSendState.
+const (
+	MessageSendStateCancelled   MessageSendState = "cancelled"
+	MessageSendStateDispatching MessageSendState = "dispatching"
+	MessageSendStateFailed      MessageSendState = "failed"
+	MessageSendStateQueued      MessageSendState = "queued"
+	MessageSendStateReceived    MessageSendState = "received"
+	MessageSendStateSubmitted   MessageSendState = "submitted"
+	MessageSendStateUnknown     MessageSendState = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the MessageSendState enum.
+func (e MessageSendState) Valid() bool {
+	switch e {
+	case MessageSendStateCancelled:
+		return true
+	case MessageSendStateDispatching:
+		return true
+	case MessageSendStateFailed:
+		return true
+	case MessageSendStateQueued:
+		return true
+	case MessageSendStateReceived:
+		return true
+	case MessageSendStateSubmitted:
+		return true
+	case MessageSendStateUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OperationKind.
 const (
-	OperationKindRegisterAccount OperationKind = "register_account"
+	OperationKindCancelMessage    OperationKind = "cancel_message"
+	OperationKindOpenConversation OperationKind = "open_conversation"
+	OperationKindRegisterAccount  OperationKind = "register_account"
+	OperationKindSendMessage      OperationKind = "send_message"
 )
 
 // Valid indicates whether the value is a known member of the OperationKind enum.
 func (e OperationKind) Valid() bool {
 	switch e {
+	case OperationKindCancelMessage:
+		return true
+	case OperationKindOpenConversation:
+		return true
 	case OperationKindRegisterAccount:
+		return true
+	case OperationKindSendMessage:
 		return true
 	default:
 		return false
@@ -184,6 +319,8 @@ const (
 	ProblemCodeInvalidCursor       ProblemCode = "invalid_cursor"
 	ProblemCodeInvalidRequest      ProblemCode = "invalid_request"
 	ProblemCodeNotFound            ProblemCode = "not_found"
+	ProblemCodeProtocolUnavailable ProblemCode = "protocol_unavailable"
+	ProblemCodeStateConflict       ProblemCode = "state_conflict"
 	ProblemCodeUnavailable         ProblemCode = "unavailable"
 )
 
@@ -199,6 +336,10 @@ func (e ProblemCode) Valid() bool {
 	case ProblemCodeInvalidRequest:
 		return true
 	case ProblemCodeNotFound:
+		return true
+	case ProblemCodeProtocolUnavailable:
+		return true
+	case ProblemCodeStateConflict:
 		return true
 	case ProblemCodeUnavailable:
 		return true
@@ -216,6 +357,24 @@ const (
 func (e RegisterAccountProtocol) Valid() bool {
 	switch e {
 	case RegisterAccountProtocolXmpp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListConversationsParamsKind.
+const (
+	ListConversationsParamsKindDirect ListConversationsParamsKind = "direct"
+	ListConversationsParamsKindRoom   ListConversationsParamsKind = "room"
+)
+
+// Valid indicates whether the value is a known member of the ListConversationsParamsKind enum.
+func (e ListConversationsParamsKind) Valid() bool {
+	switch e {
+	case ListConversationsParamsKindDirect:
+		return true
+	case ListConversationsParamsKindRoom:
 		return true
 	default:
 		return false
@@ -255,14 +414,25 @@ type AccountPage struct {
 	NextCursor *ID `json:"nextCursor,omitempty"`
 }
 
+// CancelMessage Cancel only while queued and before dispatch starts. A conflict returns currentMessage with actual state.
+//
+// Example: {"expectedRevisionId":"019a5df0-0000-7000-8000-000000000001"}
+type CancelMessage struct {
+	// ExpectedRevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	ExpectedRevisionId ID `json:"expectedRevisionId"`
+}
+
 // Capabilities Protocol feature evidence scoped to one account.
 //
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","reason":"not_connected","state":"unknown"}
 type Capabilities struct {
 	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
-	AccountId ID                 `json:"accountId"`
-	Reason    CapabilitiesReason `json:"reason"`
-	State     CapabilitiesState  `json:"state"`
+	AccountId ID `json:"accountId"`
+
+	// DirectText True only while the basic direct-text adapter is connected. No other optional protocol support is implied.
+	DirectText *bool              `json:"directText,omitempty"`
+	Reason     CapabilitiesReason `json:"reason"`
+	State      CapabilitiesState  `json:"state"`
 }
 
 // CapabilitiesReason defines model for Capabilities.Reason.
@@ -271,9 +441,88 @@ type CapabilitiesReason string
 // CapabilitiesState defines model for Capabilities.State.
 type CapabilitiesState string
 
+// ConfigureConnection Desired enabled connection. Repeating unchanged configuration does not create another session. Credentials are kept in private engine-local files and are excluded from reads/events.
+//
+// Example: {"password":"alice-local-only"}
+type ConfigureConnection struct {
+	// Endpoint Optional TCP host:port override. TLS verifies the account domain. Omit to use XMPP SRV discovery.
+	Endpoint *string `json:"endpoint,omitempty"`
+
+	// Password Protocol password; never returned.
+	Password *string `json:"password,omitempty"`
+}
+
+// Connection Current owning-engine connection state. Contains no credentials.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","state":"not_connected","updatedAt":"2026-11-07T12:00:00Z"}
+type Connection struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	AccountId ID `json:"accountId"`
+
+	// LastErrorCode Stable localized-error key; raw provider errors are never returned.
+	LastErrorCode *ConnectionLastErrorCode `json:"lastErrorCode,omitempty"`
+
+	// State Runtime connection state.
+	State ConnectionState `json:"state"`
+
+	// UpdatedAt UTC timestamp.
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// ConnectionLastErrorCode Stable localized-error key; raw provider errors are never returned.
+type ConnectionLastErrorCode string
+
+// ConnectionState Runtime connection state.
+type ConnectionState string
+
+// Conversation One account-scoped conversation. This milestone creates direct conversations; rooms are not implemented.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","address":"bob@localhost","archived":false,"favorite":false,"id":"019a5df0-0000-7000-8000-000000000001","kind":"direct","lastMessage":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","title":"bob@localhost","unreadCount":0,"updatedAt":"2026-11-07T12:00:00Z"}
+type Conversation struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	AccountId ID `json:"accountId"`
+
+	// Address Canonical peer address.
+	Address  string `json:"address"`
+	Archived bool   `json:"archived"`
+	Favorite bool   `json:"favorite"`
+
+	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
+	Id ID `json:"id"`
+
+	// Kind Conversation kind.
+	Kind ConversationKind `json:"kind"`
+
+	// LastMessage Original text preview of the most recently retained message.
+	LastMessage string `json:"lastMessage"`
+
+	// RevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	RevisionId ID `json:"revisionId"`
+
+	// Title Display title; initially the peer address.
+	Title       string `json:"title"`
+	UnreadCount int    `json:"unreadCount"`
+
+	// UpdatedAt UTC timestamp.
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// ConversationKind Conversation kind.
+type ConversationKind string
+
+// ConversationPage Conversations in descending engine activity order. New activity can move items between pages; reconcile using stable IDs and SSE.
+//
+// Example: {"items":[]}
+type ConversationPage struct {
+	Items []Conversation `json:"items"`
+
+	// NextCursor Opaque engine-scoped activity cursor.
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
 // Engine Persistent engine identity and event boundary.
 //
-// Example: {"apiVersion":"0.1.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
+// Example: {"apiVersion":"0.2.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
 type Engine struct {
 	ApiVersion EngineApiVersion `json:"apiVersion"`
 
@@ -291,17 +540,32 @@ type EngineApiVersion string
 // EngineRole defines model for Engine.Role.
 type EngineRole string
 
-// Event Durable event data encoded as JSON in an SSE data field.
+// Event Durable event with the payload corresponding to its type. Accounts, connections, conversations, and messages are separate payloads. No credentials or raw protocol errors are included.
 //
 // Example: {"account":{"address":"alice@localhost","connectionState":"not_connected","createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000001","label":"Personal","protocol":"xmpp","revisionId":"019a5df0-0000-7000-8000-000000000002"},"id":"019a5df0-0000-7000-8000-000000000003:1","occurredAt":"2026-11-07T12:00:00Z","type":"account.registered"}
 type Event struct {
 	// Account Stable account identity and its current initial revision.
 	//
 	// Example: {"address":"alice@localhost","connectionState":"not_connected","createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000001","label":"Personal","protocol":"xmpp","revisionId":"019a5df0-0000-7000-8000-000000000002"}
-	Account Account `json:"account"`
+	Account *Account `json:"account,omitempty"`
+
+	// Connection Current owning-engine connection state. Contains no credentials.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","state":"not_connected","updatedAt":"2026-11-07T12:00:00Z"}
+	Connection *Connection `json:"connection,omitempty"`
+
+	// Conversation One account-scoped conversation. This milestone creates direct conversations; rooms are not implemented.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","address":"bob@localhost","archived":false,"favorite":false,"id":"019a5df0-0000-7000-8000-000000000001","kind":"direct","lastMessage":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","title":"bob@localhost","unreadCount":0,"updatedAt":"2026-11-07T12:00:00Z"}
+	Conversation *Conversation `json:"conversation,omitempty"`
 
 	// Id Engine-scoped durable event cursor.
-	Id         string    `json:"id"`
+	Id string `json:"id"`
+
+	// Message Retained original text and actual send evidence. submitted means the stanza was written to the authenticated stream; it does not prove provider acceptance, recipient delivery, or read state. unknown is not automatically resent.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000001","isOwn":false,"originalText":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","sendState":"received","sender":{"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}}
+	Message    *Message  `json:"message,omitempty"`
 	OccurredAt time.Time `json:"occurredAt"`
 	Type       EventType `json:"type"`
 }
@@ -322,6 +586,62 @@ type HealthStatus string
 
 // ID Canonical lowercase UUIDv7; IDs do not establish causal order.
 type ID = string
+
+// Message Retained original text and actual send evidence. submitted means the stanza was written to the authenticated stream; it does not prove provider acceptance, recipient delivery, or read state. unknown is not automatically resent.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000001","isOwn":false,"originalText":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","sendState":"received","sender":{"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}}
+type Message struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	AccountId ID `json:"accountId"`
+
+	// ConversationId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	ConversationId ID `json:"conversationId"`
+
+	// CreatedAt UTC timestamp.
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
+	Id    ID   `json:"id"`
+	IsOwn bool `json:"isOwn"`
+
+	// OriginalText Unmodified original text.
+	OriginalText string `json:"originalText"`
+
+	// RevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	RevisionId ID `json:"revisionId"`
+
+	// SendState Durable transport evidence.
+	SendState MessageSendState `json:"sendState"`
+
+	// Sender Stable engine-local protocol identity for a sender.
+	//
+	// Example: {"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}
+	Sender Sender `json:"sender"`
+}
+
+// MessageSendState Durable transport evidence.
+type MessageSendState string
+
+// MessagePage Messages newest first in stable engine ingestion-ID order. Use nextCursor for older records; render the page in reverse for a chronological timeline.
+//
+// Example: {"items":[]}
+type MessagePage struct {
+	Items []Message `json:"items"`
+
+	// NextCursor Canonical lowercase UUIDv7; IDs do not establish causal order.
+	NextCursor *ID `json:"nextCursor,omitempty"`
+}
+
+// OpenConversation Open or find a direct conversation in a registered account.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","address":"bob@localhost"}
+type OpenConversation struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	AccountId ID `json:"accountId"`
+
+	// Address Destination protocol address, normalized by the owning adapter.
+	Address string `json:"address"`
+}
 
 // Operation Durable receipt used to reconcile repeated mutations.
 //
@@ -348,10 +668,15 @@ type OperationStatus string
 //
 // Example: {"code":"unavailable","status":503,"title":"Service Unavailable","type":"urn:oie:problem:unavailable"}
 type Problem struct {
-	Code   ProblemCode `json:"code"`
-	Status int         `json:"status"`
-	Title  string      `json:"title"`
-	Type   string      `json:"type"`
+	Code ProblemCode `json:"code"`
+
+	// CurrentMessage Retained original text and actual send evidence. submitted means the stanza was written to the authenticated stream; it does not prove provider acceptance, recipient delivery, or read state. unknown is not automatically resent.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000001","isOwn":false,"originalText":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","sendState":"received","sender":{"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}}
+	CurrentMessage *Message `json:"currentMessage,omitempty"`
+	Status         int      `json:"status"`
+	Title          string   `json:"title"`
+	Type           string   `json:"type"`
 }
 
 // ProblemCode defines model for Problem.Code.
@@ -369,8 +694,33 @@ type RegisterAccount struct {
 // RegisterAccountProtocol defines model for RegisterAccount.Protocol.
 type RegisterAccountProtocol string
 
+// SendMessage Durably accept an immediate plain text send.
+//
+// Example: {"originalText":"Hello from Oie!"}
+type SendMessage struct {
+	// OriginalText Original UTF-8 text. Whitespace/newlines are preserved; empty or whitespace-only bodies are rejected.
+	OriginalText string `json:"originalText"`
+}
+
+// Sender Stable engine-local protocol identity for a sender.
+//
+// Example: {"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}
+type Sender struct {
+	// DisplayName Display name, initially a protocol address.
+	DisplayName string `json:"displayName"`
+
+	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
+	Id ID `json:"id"`
+}
+
 // AccountID Canonical lowercase UUIDv7; IDs do not establish causal order.
 type AccountID = ID
+
+// ConversationID Canonical lowercase UUIDv7; IDs do not establish causal order.
+type ConversationID = ID
+
+// MessageID Canonical lowercase UUIDv7; IDs do not establish causal order.
+type MessageID = ID
 
 // Conflict Stable codes for presentation-owned localization; no raw storage errors or credentials.
 //
@@ -407,14 +757,83 @@ type RegisterAccountParams struct {
 	IdempotencyKey ID `json:"Idempotency-Key"`
 }
 
+// ListConversationsParams defines parameters for ListConversations.
+type ListConversationsParams struct {
+	// Cursor Opaque nextCursor from the preceding page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Maximum page size.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// AccountId Stable accountId reference.
+	AccountId *ID `form:"accountId,omitempty" json:"accountId,omitempty"`
+
+	// Q Conversation address/title/latest-preview substring.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// UnreadOnly Only conversations with unread messages.
+	UnreadOnly *bool `form:"unreadOnly,omitempty" json:"unreadOnly,omitempty"`
+
+	// FavoritesOnly Only favorite conversations.
+	FavoritesOnly *bool `form:"favoritesOnly,omitempty" json:"favoritesOnly,omitempty"`
+
+	// Archived Archived state; defaults to false.
+	Archived *bool `form:"archived,omitempty" json:"archived,omitempty"`
+
+	// Kind Conversation kind.
+	Kind *ListConversationsParamsKind `form:"kind,omitempty" json:"kind,omitempty"`
+}
+
+// ListConversationsParamsKind defines parameters for ListConversations.
+type ListConversationsParamsKind string
+
+// OpenConversationParams defines parameters for OpenConversation.
+type OpenConversationParams struct {
+	// IdempotencyKey Stable Idempotency-Key reference.
+	IdempotencyKey ID `json:"Idempotency-Key"`
+}
+
+// ListMessagesParams defines parameters for ListMessages.
+type ListMessagesParams struct {
+	// Cursor Read records older than this nextCursor UUID.
+	Cursor *ID `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Maximum page size.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// SendMessageParams defines parameters for SendMessage.
+type SendMessageParams struct {
+	// IdempotencyKey Stable Idempotency-Key reference.
+	IdempotencyKey ID `json:"Idempotency-Key"`
+}
+
 // StreamEventsParams defines parameters for StreamEvents.
 type StreamEventsParams struct {
 	// LastEventID Previously applied engine-scoped cursor.
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
 }
 
+// CancelMessageParams defines parameters for CancelMessage.
+type CancelMessageParams struct {
+	// IdempotencyKey Stable Idempotency-Key reference.
+	IdempotencyKey ID `json:"Idempotency-Key"`
+}
+
 // RegisterAccountJSONRequestBody defines body for RegisterAccount for application/json ContentType.
 type RegisterAccountJSONRequestBody = RegisterAccount
+
+// ConfigureAccountConnectionJSONRequestBody defines body for ConfigureAccountConnection for application/json ContentType.
+type ConfigureAccountConnectionJSONRequestBody = ConfigureConnection
+
+// OpenConversationJSONRequestBody defines body for OpenConversation for application/json ContentType.
+type OpenConversationJSONRequestBody = OpenConversation
+
+// SendMessageJSONRequestBody defines body for SendMessage for application/json ContentType.
+type SendMessageJSONRequestBody = SendMessage
+
+// CancelMessageJSONRequestBody defines body for CancelMessage for application/json ContentType.
+type CancelMessageJSONRequestBody = CancelMessage
 
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -503,7 +922,7 @@ type ClientInterface interface {
 	// and account.registered event. Repeating a key with the same normalized input
 	// returns the original result. Reusing it with different input conflicts.
 	// No credentials are accepted, and no protocol session is opened.
-	// Address matching is exact after trimming; provider canonicalization is deferred.
+	// New XMPP registrations use the compiled-in adapter to normalize bare JIDs before matching. Existing foundation metadata is retained without rewriting identities.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -516,7 +935,7 @@ type ClientInterface interface {
 	// and account.registered event. Repeating a key with the same normalized input
 	// returns the original result. Reusing it with different input conflicts.
 	// No credentials are accepted, and no protocol session is opened.
-	// Address matching is exact after trimming; provider canonicalization is deferred.
+	// New XMPP registrations use the compiled-in adapter to normalize bare JIDs before matching. Existing foundation metadata is retained without rewriting identities.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -537,6 +956,95 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/accounts/{accountId}/capabilities (the `GetAccountCapabilities` operationId).
 	GetAccountCapabilities(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DisconnectAccount Disconnect and disable automatic connection
+	//
+	// Keeps protocol credentials local for a later explicit configuration; does not delete account history or pending sends. Repeating disconnect is safe.
+	//
+	// Corresponds with DELETE /api/v1/accounts/{accountId}/connection (the `DisconnectAccount` operationId).
+	DisconnectAccount(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAccountConnection Read account connection state
+	//
+	// State is runtime evidence, distinct from saved account metadata.
+	//
+	// Corresponds with GET /api/v1/accounts/{accountId}/connection (the `GetAccountConnection` operationId).
+	GetAccountConnection(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ConfigureAccountConnectionWithBody Configure and connect an account
+	//
+	// Persists write-only credentials before starting an asynchronous TLS/SASL connection. Transient network failures reconnect with bounded backoff; invalid credentials or TLS verification failures require corrected configuration. Ordinary engine restart reloads enabled configurations.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/v1/accounts/{accountId}/connection (the `ConfigureAccountConnection` operationId).
+	ConfigureAccountConnectionWithBody(ctx context.Context, accountId AccountID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ConfigureAccountConnection Configure and connect an account
+	//
+	// Persists write-only credentials before starting an asynchronous TLS/SASL connection. Transient network failures reconnect with bounded backoff; invalid credentials or TLS verification failures require corrected configuration. Ordinary engine restart reloads enabled configurations.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /api/v1/accounts/{accountId}/connection (the `ConfigureAccountConnection` operationId).
+	ConfigureAccountConnection(ctx context.Context, accountId AccountID, body ConfigureAccountConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListConversations List retained conversations
+	//
+	// Keyset pages ordered by descending engine activity. Search matches conversation address/title and latest text preview; this is not full message search.
+	//
+	// Corresponds with GET /api/v1/conversations (the `ListConversations` operationId).
+	ListConversations(ctx context.Context, params *ListConversationsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// OpenConversationWithBody Open a direct conversation
+	//
+	// Finds an existing conversation for the canonical account/peer or creates one. Durable operation keys retain original results. Does not add a contact or send presence subscriptions.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/conversations (the `OpenConversation` operationId).
+	OpenConversationWithBody(ctx context.Context, params *OpenConversationParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// OpenConversation Open a direct conversation
+	//
+	// Finds an existing conversation for the canonical account/peer or creates one. Durable operation keys retain original results. Does not add a contact or send presence subscriptions.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/conversations (the `OpenConversation` operationId).
+	OpenConversation(ctx context.Context, params *OpenConversationParams, body OpenConversationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetConversation Read a conversation
+	//
+	// Returns the current conversation projection.
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId} (the `GetConversation` operationId).
+	GetConversation(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListMessages Read retained messages
+	//
+	// Returns newest-first pages. This milestone has live ingestion, not MAM history backfill.
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId}/messages (the `ListMessages` operationId).
+	ListMessages(ctx context.Context, conversationId ConversationID, params *ListMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SendMessageWithBody Accept an immediate text message
+	//
+	// Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/messages (the `SendMessage` operationId).
+	SendMessageWithBody(ctx context.Context, conversationId ConversationID, params *SendMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SendMessage Accept an immediate text message
+	//
+	// Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/messages (the `SendMessage` operationId).
+	SendMessage(ctx context.Context, conversationId ConversationID, params *SendMessageParams, body SendMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetEngine Read the persistent engine identity
 	//
 	// Read eventCursor before fetching snapshots to replay changes during the snapshot.
@@ -550,7 +1058,7 @@ type ClientInterface interface {
 	// Last-Event-ID resumes strictly after its sequence. Without a cursor replay
 	// from zero. Cursors from another engine or ahead of current state return 409
 	// before streaming. Heartbeat comments are not durable events.
-	// Milestone one retains the complete change log. Clients deduplicate by event
+	// This engine retains the complete change log. Clients deduplicate by event
 	// ID and refresh snapshots if a future retention policy expires a cursor.
 	//
 	// Corresponds with GET /api/v1/events (the `StreamEvents` operationId).
@@ -563,9 +1071,34 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/health (the `GetHealth` operationId).
 	GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetMessage Read a retained message
+	//
+	// Returns the latest revision and send evidence.
+	//
+	// Corresponds with GET /api/v1/messages/{messageId} (the `GetMessage` operationId).
+	GetMessage(ctx context.Context, messageId MessageID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CancelMessageWithBody Cancel a queued send
+	//
+	// Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/messages/{messageId}/cancel (the `CancelMessage` operationId).
+	CancelMessageWithBody(ctx context.Context, messageId MessageID, params *CancelMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CancelMessage Cancel a queued send
+	//
+	// Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/messages/{messageId}/cancel (the `CancelMessage` operationId).
+	CancelMessage(ctx context.Context, messageId MessageID, params *CancelMessageParams, body CancelMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetOperation Reconcile a mutation after an ambiguous response
 	//
-	// A known receipt proves the registration committed; unknown IDs return 404.
+	// A receipt proves the local mutation committed; send receipts prove durable engine acceptance, never recipient delivery. Unknown IDs return 404.
 	//
 	// Corresponds with GET /api/v1/operations/{operationId} (the `GetOperation` operationId).
 	GetOperation(ctx context.Context, operationId ID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -594,7 +1127,7 @@ func (c *Client) ListAccounts(ctx context.Context, params *ListAccountsParams, r
 // and account.registered event. Repeating a key with the same normalized input
 // returns the original result. Reusing it with different input conflicts.
 // No credentials are accepted, and no protocol session is opened.
-// Address matching is exact after trimming; provider canonicalization is deferred.
+// New XMPP registrations use the compiled-in adapter to normalize bare JIDs before matching. Existing foundation metadata is retained without rewriting identities.
 //
 // Takes any type of body and a specified content type.
 //
@@ -617,7 +1150,7 @@ func (c *Client) RegisterAccountWithBody(ctx context.Context, params *RegisterAc
 // and account.registered event. Repeating a key with the same normalized input
 // returns the original result. Reusing it with different input conflicts.
 // No credentials are accepted, and no protocol session is opened.
-// Address matching is exact after trimming; provider canonicalization is deferred.
+// New XMPP registrations use the compiled-in adapter to normalize bare JIDs before matching. Existing foundation metadata is retained without rewriting identities.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -668,6 +1201,205 @@ func (c *Client) GetAccountCapabilities(ctx context.Context, accountId AccountID
 	return c.Client.Do(req)
 }
 
+// DisconnectAccount Disconnect and disable automatic connection
+//
+// Keeps protocol credentials local for a later explicit configuration; does not delete account history or pending sends. Repeating disconnect is safe.
+//
+// Corresponds with DELETE /api/v1/accounts/{accountId}/connection (the `DisconnectAccount` operationId).
+func (c *Client) DisconnectAccount(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDisconnectAccountRequest(c.Server, accountId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetAccountConnection Read account connection state
+//
+// State is runtime evidence, distinct from saved account metadata.
+//
+// Corresponds with GET /api/v1/accounts/{accountId}/connection (the `GetAccountConnection` operationId).
+func (c *Client) GetAccountConnection(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAccountConnectionRequest(c.Server, accountId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ConfigureAccountConnectionWithBody Configure and connect an account
+//
+// Persists write-only credentials before starting an asynchronous TLS/SASL connection. Transient network failures reconnect with bounded backoff; invalid credentials or TLS verification failures require corrected configuration. Ordinary engine restart reloads enabled configurations.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/v1/accounts/{accountId}/connection (the `ConfigureAccountConnection` operationId).
+func (c *Client) ConfigureAccountConnectionWithBody(ctx context.Context, accountId AccountID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewConfigureAccountConnectionRequestWithBody(c.Server, accountId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ConfigureAccountConnection Configure and connect an account
+//
+// Persists write-only credentials before starting an asynchronous TLS/SASL connection. Transient network failures reconnect with bounded backoff; invalid credentials or TLS verification failures require corrected configuration. Ordinary engine restart reloads enabled configurations.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /api/v1/accounts/{accountId}/connection (the `ConfigureAccountConnection` operationId).
+func (c *Client) ConfigureAccountConnection(ctx context.Context, accountId AccountID, body ConfigureAccountConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewConfigureAccountConnectionRequest(c.Server, accountId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListConversations List retained conversations
+//
+// Keyset pages ordered by descending engine activity. Search matches conversation address/title and latest text preview; this is not full message search.
+//
+// Corresponds with GET /api/v1/conversations (the `ListConversations` operationId).
+func (c *Client) ListConversations(ctx context.Context, params *ListConversationsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListConversationsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// OpenConversationWithBody Open a direct conversation
+//
+// Finds an existing conversation for the canonical account/peer or creates one. Durable operation keys retain original results. Does not add a contact or send presence subscriptions.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/conversations (the `OpenConversation` operationId).
+func (c *Client) OpenConversationWithBody(ctx context.Context, params *OpenConversationParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewOpenConversationRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// OpenConversation Open a direct conversation
+//
+// Finds an existing conversation for the canonical account/peer or creates one. Durable operation keys retain original results. Does not add a contact or send presence subscriptions.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/conversations (the `OpenConversation` operationId).
+func (c *Client) OpenConversation(ctx context.Context, params *OpenConversationParams, body OpenConversationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewOpenConversationRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetConversation Read a conversation
+//
+// Returns the current conversation projection.
+//
+// Corresponds with GET /api/v1/conversations/{conversationId} (the `GetConversation` operationId).
+func (c *Client) GetConversation(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetConversationRequest(c.Server, conversationId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListMessages Read retained messages
+//
+// Returns newest-first pages. This milestone has live ingestion, not MAM history backfill.
+//
+// Corresponds with GET /api/v1/conversations/{conversationId}/messages (the `ListMessages` operationId).
+func (c *Client) ListMessages(ctx context.Context, conversationId ConversationID, params *ListMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListMessagesRequest(c.Server, conversationId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SendMessageWithBody Accept an immediate text message
+//
+// Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/messages (the `SendMessage` operationId).
+func (c *Client) SendMessageWithBody(ctx context.Context, conversationId ConversationID, params *SendMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSendMessageRequestWithBody(c.Server, conversationId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SendMessage Accept an immediate text message
+//
+// Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/messages (the `SendMessage` operationId).
+func (c *Client) SendMessage(ctx context.Context, conversationId ConversationID, params *SendMessageParams, body SendMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSendMessageRequest(c.Server, conversationId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetEngine Read the persistent engine identity
 //
 // Read eventCursor before fetching snapshots to replay changes during the snapshot.
@@ -691,7 +1423,7 @@ func (c *Client) GetEngine(ctx context.Context, reqEditors ...RequestEditorFn) (
 // Last-Event-ID resumes strictly after its sequence. Without a cursor replay
 // from zero. Cursors from another engine or ahead of current state return 409
 // before streaming. Heartbeat comments are not durable events.
-// Milestone one retains the complete change log. Clients deduplicate by event
+// This engine retains the complete change log. Clients deduplicate by event
 // ID and refresh snapshots if a future retention policy expires a cursor.
 //
 // Corresponds with GET /api/v1/events (the `StreamEvents` operationId).
@@ -724,9 +1456,64 @@ func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (
 	return c.Client.Do(req)
 }
 
+// GetMessage Read a retained message
+//
+// Returns the latest revision and send evidence.
+//
+// Corresponds with GET /api/v1/messages/{messageId} (the `GetMessage` operationId).
+func (c *Client) GetMessage(ctx context.Context, messageId MessageID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMessageRequest(c.Server, messageId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CancelMessageWithBody Cancel a queued send
+//
+// Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/messages/{messageId}/cancel (the `CancelMessage` operationId).
+func (c *Client) CancelMessageWithBody(ctx context.Context, messageId MessageID, params *CancelMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCancelMessageRequestWithBody(c.Server, messageId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CancelMessage Cancel a queued send
+//
+// Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/messages/{messageId}/cancel (the `CancelMessage` operationId).
+func (c *Client) CancelMessage(ctx context.Context, messageId MessageID, params *CancelMessageParams, body CancelMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCancelMessageRequest(c.Server, messageId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetOperation Reconcile a mutation after an ambiguous response
 //
-// A known receipt proves the registration committed; unknown IDs return 404.
+// A receipt proves the local mutation committed; send receipts prove durable engine acceptance, never recipient delivery. Unknown IDs return 404.
 //
 // Corresponds with GET /api/v1/operations/{operationId} (the `GetOperation` operationId).
 func (c *Client) GetOperation(ctx context.Context, operationId ID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -928,6 +1715,479 @@ func NewGetAccountCapabilitiesRequest(server string, accountId AccountID) (*http
 	return req, nil
 }
 
+// NewDisconnectAccountRequest constructs an http.Request for the DisconnectAccount method
+func NewDisconnectAccountRequest(server string, accountId AccountID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "accountId", accountId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/%s/connection", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAccountConnectionRequest constructs an http.Request for the GetAccountConnection method
+func NewGetAccountConnectionRequest(server string, accountId AccountID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "accountId", accountId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/%s/connection", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewConfigureAccountConnectionRequest calls the generic ConfigureAccountConnection builder with application/json body
+func NewConfigureAccountConnectionRequest(server string, accountId AccountID, body ConfigureAccountConnectionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewConfigureAccountConnectionRequestWithBody(server, accountId, "application/json", bodyReader)
+}
+
+// NewConfigureAccountConnectionRequestWithBody constructs an http.Request for the ConfigureAccountConnection method, with any body, and a specified content type
+func NewConfigureAccountConnectionRequestWithBody(server string, accountId AccountID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "accountId", accountId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/%s/connection", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListConversationsRequest constructs an http.Request for the ListConversations method
+func NewListConversationsRequest(server string, params *ListConversationsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/conversations")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AccountId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "accountId", *params.AccountId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", *params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.UnreadOnly != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "unreadOnly", *params.UnreadOnly, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FavoritesOnly != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "favoritesOnly", *params.FavoritesOnly, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Archived != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "archived", *params.Archived, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Kind != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "kind", *params.Kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewOpenConversationRequest calls the generic OpenConversation builder with application/json body
+func NewOpenConversationRequest(server string, params *OpenConversationParams, body OpenConversationJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewOpenConversationRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewOpenConversationRequestWithBody constructs an http.Request for the OpenConversation method, with any body, and a specified content type
+func NewOpenConversationRequestWithBody(server string, params *OpenConversationParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/conversations")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: "uuid"})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewGetConversationRequest constructs an http.Request for the GetConversation method
+func NewGetConversationRequest(server string, conversationId ConversationID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/conversations/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListMessagesRequest constructs an http.Request for the ListMessages method
+func NewListMessagesRequest(server string, conversationId ConversationID, params *ListMessagesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/conversations/%s/messages", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSendMessageRequest calls the generic SendMessage builder with application/json body
+func NewSendMessageRequest(server string, conversationId ConversationID, params *SendMessageParams, body SendMessageJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSendMessageRequestWithBody(server, conversationId, params, "application/json", bodyReader)
+}
+
+// NewSendMessageRequestWithBody constructs an http.Request for the SendMessage method, with any body, and a specified content type
+func NewSendMessageRequestWithBody(server string, conversationId ConversationID, params *SendMessageParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/conversations/%s/messages", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: "uuid"})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
 // NewGetEngineRequest constructs an http.Request for the GetEngine method
 func NewGetEngineRequest(server string) (*http.Request, error) {
 	var err error
@@ -1019,6 +2279,100 @@ func NewGetHealthRequest(server string) (*http.Request, error) {
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetMessageRequest constructs an http.Request for the GetMessage method
+func NewGetMessageRequest(server string, messageId MessageID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "messageId", messageId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/messages/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCancelMessageRequest calls the generic CancelMessage builder with application/json body
+func NewCancelMessageRequest(server string, messageId MessageID, params *CancelMessageParams, body CancelMessageJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCancelMessageRequestWithBody(server, messageId, params, "application/json", bodyReader)
+}
+
+// NewCancelMessageRequestWithBody constructs an http.Request for the CancelMessage method, with any body, and a specified content type
+func NewCancelMessageRequestWithBody(server string, messageId MessageID, params *CancelMessageParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "messageId", messageId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/messages/%s/cancel", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: "uuid"})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
 	}
 
 	return req, nil
@@ -1117,7 +2471,7 @@ type ClientWithResponsesInterface interface {
 	// and account.registered event. Repeating a key with the same normalized input
 	// returns the original result. Reusing it with different input conflicts.
 	// No credentials are accepted, and no protocol session is opened.
-	// Address matching is exact after trimming; provider canonicalization is deferred.
+	// New XMPP registrations use the compiled-in adapter to normalize bare JIDs before matching. Existing foundation metadata is retained without rewriting identities.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -1130,7 +2484,7 @@ type ClientWithResponsesInterface interface {
 	// and account.registered event. Repeating a key with the same normalized input
 	// returns the original result. Reusing it with different input conflicts.
 	// No credentials are accepted, and no protocol session is opened.
-	// Address matching is exact after trimming; provider canonicalization is deferred.
+	// New XMPP registrations use the compiled-in adapter to normalize bare JIDs before matching. Existing foundation metadata is retained without rewriting identities.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -1155,6 +2509,105 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/accounts/{accountId}/capabilities (the `GetAccountCapabilities` operationId).
 	GetAccountCapabilitiesWithResponse(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*GetAccountCapabilitiesResponse, error)
 
+	// DisconnectAccountWithResponse Disconnect and disable automatic connection
+	//
+	// Keeps protocol credentials local for a later explicit configuration; does not delete account history or pending sends. Repeating disconnect is safe.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/v1/accounts/{accountId}/connection (the `DisconnectAccount` operationId).
+	DisconnectAccountWithResponse(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*DisconnectAccountResponse, error)
+
+	// GetAccountConnectionWithResponse Read account connection state
+	//
+	// State is runtime evidence, distinct from saved account metadata.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/accounts/{accountId}/connection (the `GetAccountConnection` operationId).
+	GetAccountConnectionWithResponse(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*GetAccountConnectionResponse, error)
+
+	// ConfigureAccountConnectionWithBodyWithResponse Configure and connect an account
+	//
+	// Persists write-only credentials before starting an asynchronous TLS/SASL connection. Transient network failures reconnect with bounded backoff; invalid credentials or TLS verification failures require corrected configuration. Ordinary engine restart reloads enabled configurations.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/accounts/{accountId}/connection (the `ConfigureAccountConnection` operationId).
+	ConfigureAccountConnectionWithBodyWithResponse(ctx context.Context, accountId AccountID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ConfigureAccountConnectionResponse, error)
+
+	// ConfigureAccountConnectionWithResponse Configure and connect an account
+	//
+	// Persists write-only credentials before starting an asynchronous TLS/SASL connection. Transient network failures reconnect with bounded backoff; invalid credentials or TLS verification failures require corrected configuration. Ordinary engine restart reloads enabled configurations.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/accounts/{accountId}/connection (the `ConfigureAccountConnection` operationId).
+	ConfigureAccountConnectionWithResponse(ctx context.Context, accountId AccountID, body ConfigureAccountConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*ConfigureAccountConnectionResponse, error)
+
+	// ListConversationsWithResponse List retained conversations
+	//
+	// Keyset pages ordered by descending engine activity. Search matches conversation address/title and latest text preview; this is not full message search.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/conversations (the `ListConversations` operationId).
+	ListConversationsWithResponse(ctx context.Context, params *ListConversationsParams, reqEditors ...RequestEditorFn) (*ListConversationsResponse, error)
+
+	// OpenConversationWithBodyWithResponse Open a direct conversation
+	//
+	// Finds an existing conversation for the canonical account/peer or creates one. Durable operation keys retain original results. Does not add a contact or send presence subscriptions.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/conversations (the `OpenConversation` operationId).
+	OpenConversationWithBodyWithResponse(ctx context.Context, params *OpenConversationParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*OpenConversationResponse, error)
+
+	// OpenConversationWithResponse Open a direct conversation
+	//
+	// Finds an existing conversation for the canonical account/peer or creates one. Durable operation keys retain original results. Does not add a contact or send presence subscriptions.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/conversations (the `OpenConversation` operationId).
+	OpenConversationWithResponse(ctx context.Context, params *OpenConversationParams, body OpenConversationJSONRequestBody, reqEditors ...RequestEditorFn) (*OpenConversationResponse, error)
+
+	// GetConversationWithResponse Read a conversation
+	//
+	// Returns the current conversation projection.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId} (the `GetConversation` operationId).
+	GetConversationWithResponse(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*GetConversationResponse, error)
+
+	// ListMessagesWithResponse Read retained messages
+	//
+	// Returns newest-first pages. This milestone has live ingestion, not MAM history backfill.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId}/messages (the `ListMessages` operationId).
+	ListMessagesWithResponse(ctx context.Context, conversationId ConversationID, params *ListMessagesParams, reqEditors ...RequestEditorFn) (*ListMessagesResponse, error)
+
+	// SendMessageWithBodyWithResponse Accept an immediate text message
+	//
+	// Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/messages (the `SendMessage` operationId).
+	SendMessageWithBodyWithResponse(ctx context.Context, conversationId ConversationID, params *SendMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SendMessageResponse, error)
+
+	// SendMessageWithResponse Accept an immediate text message
+	//
+	// Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/messages (the `SendMessage` operationId).
+	SendMessageWithResponse(ctx context.Context, conversationId ConversationID, params *SendMessageParams, body SendMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*SendMessageResponse, error)
+
 	// GetEngineWithResponse Read the persistent engine identity
 	//
 	// Read eventCursor before fetching snapshots to replay changes during the snapshot.
@@ -1170,7 +2623,7 @@ type ClientWithResponsesInterface interface {
 	// Last-Event-ID resumes strictly after its sequence. Without a cursor replay
 	// from zero. Cursors from another engine or ahead of current state return 409
 	// before streaming. Heartbeat comments are not durable events.
-	// Milestone one retains the complete change log. Clients deduplicate by event
+	// This engine retains the complete change log. Clients deduplicate by event
 	// ID and refresh snapshots if a future retention policy expires a cursor.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -1187,9 +2640,36 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/health (the `GetHealth` operationId).
 	GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error)
 
+	// GetMessageWithResponse Read a retained message
+	//
+	// Returns the latest revision and send evidence.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/messages/{messageId} (the `GetMessage` operationId).
+	GetMessageWithResponse(ctx context.Context, messageId MessageID, reqEditors ...RequestEditorFn) (*GetMessageResponse, error)
+
+	// CancelMessageWithBodyWithResponse Cancel a queued send
+	//
+	// Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/messages/{messageId}/cancel (the `CancelMessage` operationId).
+	CancelMessageWithBodyWithResponse(ctx context.Context, messageId MessageID, params *CancelMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CancelMessageResponse, error)
+
+	// CancelMessageWithResponse Cancel a queued send
+	//
+	// Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/messages/{messageId}/cancel (the `CancelMessage` operationId).
+	CancelMessageWithResponse(ctx context.Context, messageId MessageID, params *CancelMessageParams, body CancelMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*CancelMessageResponse, error)
+
 	// GetOperationWithResponse Reconcile a mutation after an ambiguous response
 	//
-	// A known receipt proves the registration committed; unknown IDs return 404.
+	// A receipt proves the local mutation committed; send receipts prove durable engine acceptance, never recipient delivery. Unknown IDs return 404.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -1460,6 +2940,530 @@ func (r GetAccountCapabilitiesResponse) ContentType() string {
 	return ""
 }
 
+type DisconnectAccountResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Connection
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DisconnectAccountResponse) GetJSON200() *Connection {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r DisconnectAccountResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r DisconnectAccountResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r DisconnectAccountResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r DisconnectAccountResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DisconnectAccountResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DisconnectAccountResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DisconnectAccountResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetAccountConnectionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Connection
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetAccountConnectionResponse) GetJSON200() *Connection {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetAccountConnectionResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetAccountConnectionResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetAccountConnectionResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAccountConnectionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAccountConnectionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAccountConnectionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAccountConnectionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ConfigureAccountConnectionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *Connection
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r ConfigureAccountConnectionResponse) GetJSON202() *Connection {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ConfigureAccountConnectionResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ConfigureAccountConnectionResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r ConfigureAccountConnectionResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ConfigureAccountConnectionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ConfigureAccountConnectionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ConfigureAccountConnectionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ConfigureAccountConnectionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListConversationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ConversationPage
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Conflict
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListConversationsResponse) GetJSON200() *ConversationPage {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListConversationsResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r ListConversationsResponse) GetApplicationproblemJSON409() *Conflict {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r ListConversationsResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListConversationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListConversationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListConversationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListConversationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type OpenConversationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Conversation
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Conversation
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Conflict
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r OpenConversationResponse) GetJSON200() *Conversation {
+	return r.JSON200
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r OpenConversationResponse) GetJSON201() *Conversation {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r OpenConversationResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r OpenConversationResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r OpenConversationResponse) GetApplicationproblemJSON409() *Conflict {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r OpenConversationResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r OpenConversationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r OpenConversationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r OpenConversationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r OpenConversationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetConversationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Conversation
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetConversationResponse) GetJSON200() *Conversation {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetConversationResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetConversationResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetConversationResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetConversationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetConversationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetConversationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetConversationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListMessagesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MessagePage
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListMessagesResponse) GetJSON200() *MessagePage {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListMessagesResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListMessagesResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r ListMessagesResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListMessagesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListMessagesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListMessagesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListMessagesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SendMessageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Message
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *Message
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Conflict
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SendMessageResponse) GetJSON200() *Message {
+	return r.JSON200
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r SendMessageResponse) GetJSON202() *Message {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r SendMessageResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r SendMessageResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r SendMessageResponse) GetApplicationproblemJSON409() *Conflict {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r SendMessageResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r SendMessageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SendMessageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SendMessageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SendMessageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetEngineResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -1611,6 +3615,137 @@ func (r GetHealthResponse) ContentType() string {
 	return ""
 }
 
+type GetMessageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Message
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetMessageResponse) GetJSON200() *Message {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetMessageResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetMessageResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetMessageResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetMessageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMessageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMessageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetMessageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CancelMessageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Message
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Conflict
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r CancelMessageResponse) GetJSON200() *Message {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r CancelMessageResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r CancelMessageResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r CancelMessageResponse) GetApplicationproblemJSON409() *Conflict {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r CancelMessageResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r CancelMessageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CancelMessageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CancelMessageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CancelMessageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetOperationResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -1694,7 +3829,7 @@ func (c *ClientWithResponses) ListAccountsWithResponse(ctx context.Context, para
 // and account.registered event. Repeating a key with the same normalized input
 // returns the original result. Reusing it with different input conflicts.
 // No credentials are accepted, and no protocol session is opened.
-// Address matching is exact after trimming; provider canonicalization is deferred.
+// New XMPP registrations use the compiled-in adapter to normalize bare JIDs before matching. Existing foundation metadata is retained without rewriting identities.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -1713,7 +3848,7 @@ func (c *ClientWithResponses) RegisterAccountWithBodyWithResponse(ctx context.Co
 // and account.registered event. Repeating a key with the same normalized input
 // returns the original result. Reusing it with different input conflicts.
 // No credentials are accepted, and no protocol session is opened.
-// Address matching is exact after trimming; provider canonicalization is deferred.
+// New XMPP registrations use the compiled-in adapter to normalize bare JIDs before matching. Existing foundation metadata is retained without rewriting identities.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -1756,6 +3891,171 @@ func (c *ClientWithResponses) GetAccountCapabilitiesWithResponse(ctx context.Con
 	return ParseGetAccountCapabilitiesResponse(rsp)
 }
 
+// DisconnectAccountWithResponse Disconnect and disable automatic connection
+//
+// Keeps protocol credentials local for a later explicit configuration; does not delete account history or pending sends. Repeating disconnect is safe.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/v1/accounts/{accountId}/connection (the `DisconnectAccount` operationId).
+func (c *ClientWithResponses) DisconnectAccountWithResponse(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*DisconnectAccountResponse, error) {
+	rsp, err := c.DisconnectAccount(ctx, accountId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDisconnectAccountResponse(rsp)
+}
+
+// GetAccountConnectionWithResponse Read account connection state
+//
+// State is runtime evidence, distinct from saved account metadata.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/accounts/{accountId}/connection (the `GetAccountConnection` operationId).
+func (c *ClientWithResponses) GetAccountConnectionWithResponse(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*GetAccountConnectionResponse, error) {
+	rsp, err := c.GetAccountConnection(ctx, accountId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAccountConnectionResponse(rsp)
+}
+
+// ConfigureAccountConnectionWithBodyWithResponse Configure and connect an account
+//
+// Persists write-only credentials before starting an asynchronous TLS/SASL connection. Transient network failures reconnect with bounded backoff; invalid credentials or TLS verification failures require corrected configuration. Ordinary engine restart reloads enabled configurations.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/accounts/{accountId}/connection (the `ConfigureAccountConnection` operationId).
+func (c *ClientWithResponses) ConfigureAccountConnectionWithBodyWithResponse(ctx context.Context, accountId AccountID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ConfigureAccountConnectionResponse, error) {
+	rsp, err := c.ConfigureAccountConnectionWithBody(ctx, accountId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseConfigureAccountConnectionResponse(rsp)
+}
+
+// ConfigureAccountConnectionWithResponse Configure and connect an account
+//
+// Persists write-only credentials before starting an asynchronous TLS/SASL connection. Transient network failures reconnect with bounded backoff; invalid credentials or TLS verification failures require corrected configuration. Ordinary engine restart reloads enabled configurations.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/accounts/{accountId}/connection (the `ConfigureAccountConnection` operationId).
+func (c *ClientWithResponses) ConfigureAccountConnectionWithResponse(ctx context.Context, accountId AccountID, body ConfigureAccountConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*ConfigureAccountConnectionResponse, error) {
+	rsp, err := c.ConfigureAccountConnection(ctx, accountId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseConfigureAccountConnectionResponse(rsp)
+}
+
+// ListConversationsWithResponse List retained conversations
+//
+// Keyset pages ordered by descending engine activity. Search matches conversation address/title and latest text preview; this is not full message search.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/conversations (the `ListConversations` operationId).
+func (c *ClientWithResponses) ListConversationsWithResponse(ctx context.Context, params *ListConversationsParams, reqEditors ...RequestEditorFn) (*ListConversationsResponse, error) {
+	rsp, err := c.ListConversations(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListConversationsResponse(rsp)
+}
+
+// OpenConversationWithBodyWithResponse Open a direct conversation
+//
+// Finds an existing conversation for the canonical account/peer or creates one. Durable operation keys retain original results. Does not add a contact or send presence subscriptions.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/conversations (the `OpenConversation` operationId).
+func (c *ClientWithResponses) OpenConversationWithBodyWithResponse(ctx context.Context, params *OpenConversationParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*OpenConversationResponse, error) {
+	rsp, err := c.OpenConversationWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseOpenConversationResponse(rsp)
+}
+
+// OpenConversationWithResponse Open a direct conversation
+//
+// Finds an existing conversation for the canonical account/peer or creates one. Durable operation keys retain original results. Does not add a contact or send presence subscriptions.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/conversations (the `OpenConversation` operationId).
+func (c *ClientWithResponses) OpenConversationWithResponse(ctx context.Context, params *OpenConversationParams, body OpenConversationJSONRequestBody, reqEditors ...RequestEditorFn) (*OpenConversationResponse, error) {
+	rsp, err := c.OpenConversation(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseOpenConversationResponse(rsp)
+}
+
+// GetConversationWithResponse Read a conversation
+//
+// Returns the current conversation projection.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/conversations/{conversationId} (the `GetConversation` operationId).
+func (c *ClientWithResponses) GetConversationWithResponse(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*GetConversationResponse, error) {
+	rsp, err := c.GetConversation(ctx, conversationId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetConversationResponse(rsp)
+}
+
+// ListMessagesWithResponse Read retained messages
+//
+// Returns newest-first pages. This milestone has live ingestion, not MAM history backfill.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/conversations/{conversationId}/messages (the `ListMessages` operationId).
+func (c *ClientWithResponses) ListMessagesWithResponse(ctx context.Context, conversationId ConversationID, params *ListMessagesParams, reqEditors ...RequestEditorFn) (*ListMessagesResponse, error) {
+	rsp, err := c.ListMessages(ctx, conversationId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListMessagesResponse(rsp)
+}
+
+// SendMessageWithBodyWithResponse Accept an immediate text message
+//
+// Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/messages (the `SendMessage` operationId).
+func (c *ClientWithResponses) SendMessageWithBodyWithResponse(ctx context.Context, conversationId ConversationID, params *SendMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SendMessageResponse, error) {
+	rsp, err := c.SendMessageWithBody(ctx, conversationId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSendMessageResponse(rsp)
+}
+
+// SendMessageWithResponse Accept an immediate text message
+//
+// Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/messages (the `SendMessage` operationId).
+func (c *ClientWithResponses) SendMessageWithResponse(ctx context.Context, conversationId ConversationID, params *SendMessageParams, body SendMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*SendMessageResponse, error) {
+	rsp, err := c.SendMessage(ctx, conversationId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSendMessageResponse(rsp)
+}
+
 // GetEngineWithResponse Read the persistent engine identity
 //
 // Read eventCursor before fetching snapshots to replay changes during the snapshot.
@@ -1777,7 +4077,7 @@ func (c *ClientWithResponses) GetEngineWithResponse(ctx context.Context, reqEdit
 // Last-Event-ID resumes strictly after its sequence. Without a cursor replay
 // from zero. Cursors from another engine or ahead of current state return 409
 // before streaming. Heartbeat comments are not durable events.
-// Milestone one retains the complete change log. Clients deduplicate by event
+// This engine retains the complete change log. Clients deduplicate by event
 // ID and refresh snapshots if a future retention policy expires a cursor.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -1806,9 +4106,54 @@ func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEdit
 	return ParseGetHealthResponse(rsp)
 }
 
+// GetMessageWithResponse Read a retained message
+//
+// Returns the latest revision and send evidence.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/messages/{messageId} (the `GetMessage` operationId).
+func (c *ClientWithResponses) GetMessageWithResponse(ctx context.Context, messageId MessageID, reqEditors ...RequestEditorFn) (*GetMessageResponse, error) {
+	rsp, err := c.GetMessage(ctx, messageId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMessageResponse(rsp)
+}
+
+// CancelMessageWithBodyWithResponse Cancel a queued send
+//
+// Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/messages/{messageId}/cancel (the `CancelMessage` operationId).
+func (c *ClientWithResponses) CancelMessageWithBodyWithResponse(ctx context.Context, messageId MessageID, params *CancelMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CancelMessageResponse, error) {
+	rsp, err := c.CancelMessageWithBody(ctx, messageId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCancelMessageResponse(rsp)
+}
+
+// CancelMessageWithResponse Cancel a queued send
+//
+// Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/messages/{messageId}/cancel (the `CancelMessage` operationId).
+func (c *ClientWithResponses) CancelMessageWithResponse(ctx context.Context, messageId MessageID, params *CancelMessageParams, body CancelMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*CancelMessageResponse, error) {
+	rsp, err := c.CancelMessage(ctx, messageId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCancelMessageResponse(rsp)
+}
+
 // GetOperationWithResponse Reconcile a mutation after an ambiguous response
 //
-// A known receipt proves the registration committed; unknown IDs return 404.
+// A receipt proves the local mutation committed; send receipts prove durable engine acceptance, never recipient delivery. Unknown IDs return 404.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -2039,6 +4384,410 @@ func ParseGetAccountCapabilitiesResponse(rsp *http.Response) (*GetAccountCapabil
 	return response, nil
 }
 
+// ParseDisconnectAccountResponse parses an HTTP response from a DisconnectAccountWithResponse call
+func ParseDisconnectAccountResponse(rsp *http.Response) (*DisconnectAccountResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DisconnectAccountResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Connection
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAccountConnectionResponse parses an HTTP response from a GetAccountConnectionWithResponse call
+func ParseGetAccountConnectionResponse(rsp *http.Response) (*GetAccountConnectionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAccountConnectionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Connection
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseConfigureAccountConnectionResponse parses an HTTP response from a ConfigureAccountConnectionWithResponse call
+func ParseConfigureAccountConnectionResponse(rsp *http.Response) (*ConfigureAccountConnectionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ConfigureAccountConnectionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Connection
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListConversationsResponse parses an HTTP response from a ListConversationsWithResponse call
+func ParseListConversationsResponse(rsp *http.Response) (*ListConversationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListConversationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ConversationPage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseOpenConversationResponse parses an HTTP response from a OpenConversationWithResponse call
+func ParseOpenConversationResponse(rsp *http.Response) (*OpenConversationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &OpenConversationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Conversation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Conversation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetConversationResponse parses an HTTP response from a GetConversationWithResponse call
+func ParseGetConversationResponse(rsp *http.Response) (*GetConversationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetConversationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Conversation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListMessagesResponse parses an HTTP response from a ListMessagesWithResponse call
+func ParseListMessagesResponse(rsp *http.Response) (*ListMessagesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListMessagesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MessagePage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSendMessageResponse parses an HTTP response from a SendMessageWithResponse call
+func ParseSendMessageResponse(rsp *http.Response) (*SendMessageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SendMessageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Message
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Message
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetEngineResponse parses an HTTP response from a GetEngineWithResponse call
 func ParseGetEngineResponse(rsp *http.Response) (*GetEngineResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -2145,6 +4894,107 @@ func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
 	return response, nil
 }
 
+// ParseGetMessageResponse parses an HTTP response from a GetMessageWithResponse call
+func ParseGetMessageResponse(rsp *http.Response) (*GetMessageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMessageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Message
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCancelMessageResponse parses an HTTP response from a CancelMessageWithResponse call
+func ParseCancelMessageResponse(rsp *http.Response) (*CancelMessageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CancelMessageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Message
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetOperationResponse parses an HTTP response from a GetOperationWithResponse call
 func ParseGetOperationResponse(rsp *http.Response) (*GetOperationResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -2206,6 +5056,30 @@ type ServerInterface interface {
 	// GetAccountCapabilities Read account capability evidence
 	// (GET /api/v1/accounts/{accountId}/capabilities)
 	GetAccountCapabilities(w http.ResponseWriter, r *http.Request, accountId AccountID)
+	// DisconnectAccount Disconnect and disable automatic connection
+	// (DELETE /api/v1/accounts/{accountId}/connection)
+	DisconnectAccount(w http.ResponseWriter, r *http.Request, accountId AccountID)
+	// GetAccountConnection Read account connection state
+	// (GET /api/v1/accounts/{accountId}/connection)
+	GetAccountConnection(w http.ResponseWriter, r *http.Request, accountId AccountID)
+	// ConfigureAccountConnection Configure and connect an account
+	// (PUT /api/v1/accounts/{accountId}/connection)
+	ConfigureAccountConnection(w http.ResponseWriter, r *http.Request, accountId AccountID)
+	// ListConversations List retained conversations
+	// (GET /api/v1/conversations)
+	ListConversations(w http.ResponseWriter, r *http.Request, params ListConversationsParams)
+	// OpenConversation Open a direct conversation
+	// (POST /api/v1/conversations)
+	OpenConversation(w http.ResponseWriter, r *http.Request, params OpenConversationParams)
+	// GetConversation Read a conversation
+	// (GET /api/v1/conversations/{conversationId})
+	GetConversation(w http.ResponseWriter, r *http.Request, conversationId ConversationID)
+	// ListMessages Read retained messages
+	// (GET /api/v1/conversations/{conversationId}/messages)
+	ListMessages(w http.ResponseWriter, r *http.Request, conversationId ConversationID, params ListMessagesParams)
+	// SendMessage Accept an immediate text message
+	// (POST /api/v1/conversations/{conversationId}/messages)
+	SendMessage(w http.ResponseWriter, r *http.Request, conversationId ConversationID, params SendMessageParams)
 	// GetEngine Read the persistent engine identity
 	// (GET /api/v1/engine)
 	GetEngine(w http.ResponseWriter, r *http.Request)
@@ -2215,6 +5089,12 @@ type ServerInterface interface {
 	// GetHealth Check engine readiness
 	// (GET /api/v1/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// GetMessage Read a retained message
+	// (GET /api/v1/messages/{messageId})
+	GetMessage(w http.ResponseWriter, r *http.Request, messageId MessageID)
+	// CancelMessage Cancel a queued send
+	// (POST /api/v1/messages/{messageId}/cancel)
+	CancelMessage(w http.ResponseWriter, r *http.Request, messageId MessageID, params CancelMessageParams)
 	// GetOperation Reconcile a mutation after an ambiguous response
 	// (GET /api/v1/operations/{operationId})
 	GetOperation(w http.ResponseWriter, r *http.Request, operationId ID)
@@ -2372,6 +5252,388 @@ func (siw *ServerInterfaceWrapper) GetAccountCapabilities(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// DisconnectAccount operation middleware
+func (siw *ServerInterfaceWrapper) DisconnectAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "accountId" -------------
+	var accountId AccountID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "accountId", r.PathValue("accountId"), &accountId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "accountId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisconnectAccount(w, r, accountId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAccountConnection operation middleware
+func (siw *ServerInterfaceWrapper) GetAccountConnection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "accountId" -------------
+	var accountId AccountID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "accountId", r.PathValue("accountId"), &accountId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "accountId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAccountConnection(w, r, accountId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConfigureAccountConnection operation middleware
+func (siw *ServerInterfaceWrapper) ConfigureAccountConnection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "accountId" -------------
+	var accountId AccountID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "accountId", r.PathValue("accountId"), &accountId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "accountId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfigureAccountConnection(w, r, accountId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListConversations operation middleware
+func (siw *ServerInterfaceWrapper) ListConversations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListConversationsParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "accountId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "accountId", r.URL.Query(), &params.AccountId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "accountId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "accountId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "unreadOnly" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "unreadOnly", r.URL.Query(), &params.UnreadOnly, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "unreadOnly"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "unreadOnly", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "favoritesOnly" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "favoritesOnly", r.URL.Query(), &params.FavoritesOnly, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "favoritesOnly"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "favoritesOnly", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "archived" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "archived", r.URL.Query(), &params.Archived, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "archived"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "archived", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListConversations(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// OpenConversation operation middleware
+func (siw *ServerInterfaceWrapper) OpenConversation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params OpenConversationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey ID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OpenConversation(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetConversation operation middleware
+func (siw *ServerInterfaceWrapper) GetConversation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", r.PathValue("conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetConversation(w, r, conversationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMessages operation middleware
+func (siw *ServerInterfaceWrapper) ListMessages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", r.PathValue("conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMessagesParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMessages(w, r, conversationId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SendMessage operation middleware
+func (siw *ServerInterfaceWrapper) SendMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", r.PathValue("conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SendMessageParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey ID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SendMessage(w, r, conversationId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetEngine operation middleware
 func (siw *ServerInterfaceWrapper) GetEngine(w http.ResponseWriter, r *http.Request) {
 
@@ -2432,6 +5694,86 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMessage operation middleware
+func (siw *ServerInterfaceWrapper) GetMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "messageId" -------------
+	var messageId MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "messageId", r.PathValue("messageId"), &messageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "messageId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMessage(w, r, messageId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelMessage operation middleware
+func (siw *ServerInterfaceWrapper) CancelMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "messageId" -------------
+	var messageId MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "messageId", r.PathValue("messageId"), &messageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "messageId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CancelMessageParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey ID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelMessage(w, r, messageId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2595,6 +5937,16 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/accounts/{accountId}/capabilities", wrapper.GetAccountCapabilities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/operations/{operationId}", wrapper.GetOperation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/events", wrapper.StreamEvents)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/accounts/{accountId}/connection", wrapper.DisconnectAccount)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/accounts/{accountId}/connection", wrapper.GetAccountConnection)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/accounts/{accountId}/connection", wrapper.ConfigureAccountConnection)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/conversations", wrapper.ListConversations)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/conversations", wrapper.OpenConversation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/conversations/{conversationId}", wrapper.GetConversation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/conversations/{conversationId}/messages", wrapper.ListMessages)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/conversations/{conversationId}/messages", wrapper.SendMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/messages/{messageId}", wrapper.GetMessage)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/messages/{messageId}/cancel", wrapper.CancelMessage)
 
 	return m
 }
@@ -2910,6 +6262,631 @@ func (response GetAccountCapabilities503ApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type DisconnectAccountRequestObject struct {
+	AccountId AccountID `json:"accountId"`
+}
+
+type DisconnectAccountResponseObject interface {
+	VisitDisconnectAccountResponse(w http.ResponseWriter) error
+}
+
+type DisconnectAccount200JSONResponse Connection
+
+func (response DisconnectAccount200JSONResponse) VisitDisconnectAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisconnectAccount400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response DisconnectAccount400ApplicationProblemPlusJSONResponse) VisitDisconnectAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisconnectAccount404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DisconnectAccount404ApplicationProblemPlusJSONResponse) VisitDisconnectAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisconnectAccount503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response DisconnectAccount503ApplicationProblemPlusJSONResponse) VisitDisconnectAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAccountConnectionRequestObject struct {
+	AccountId AccountID `json:"accountId"`
+}
+
+type GetAccountConnectionResponseObject interface {
+	VisitGetAccountConnectionResponse(w http.ResponseWriter) error
+}
+
+type GetAccountConnection200JSONResponse Connection
+
+func (response GetAccountConnection200JSONResponse) VisitGetAccountConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAccountConnection400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response GetAccountConnection400ApplicationProblemPlusJSONResponse) VisitGetAccountConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAccountConnection404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetAccountConnection404ApplicationProblemPlusJSONResponse) VisitGetAccountConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAccountConnection503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response GetAccountConnection503ApplicationProblemPlusJSONResponse) VisitGetAccountConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfigureAccountConnectionRequestObject struct {
+	AccountId AccountID `json:"accountId"`
+	Body      *ConfigureAccountConnectionJSONRequestBody
+}
+
+type ConfigureAccountConnectionResponseObject interface {
+	VisitConfigureAccountConnectionResponse(w http.ResponseWriter) error
+}
+
+type ConfigureAccountConnection202JSONResponse Connection
+
+func (response ConfigureAccountConnection202JSONResponse) VisitConfigureAccountConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfigureAccountConnection400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response ConfigureAccountConnection400ApplicationProblemPlusJSONResponse) VisitConfigureAccountConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfigureAccountConnection404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ConfigureAccountConnection404ApplicationProblemPlusJSONResponse) VisitConfigureAccountConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfigureAccountConnection503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response ConfigureAccountConnection503ApplicationProblemPlusJSONResponse) VisitConfigureAccountConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConversationsRequestObject struct {
+	Params ListConversationsParams
+}
+
+type ListConversationsResponseObject interface {
+	VisitListConversationsResponse(w http.ResponseWriter) error
+}
+
+type ListConversations200JSONResponse ConversationPage
+
+func (response ListConversations200JSONResponse) VisitListConversationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConversations400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response ListConversations400ApplicationProblemPlusJSONResponse) VisitListConversationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConversations409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response ListConversations409ApplicationProblemPlusJSONResponse) VisitListConversationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConversations503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response ListConversations503ApplicationProblemPlusJSONResponse) VisitListConversationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OpenConversationRequestObject struct {
+	Params OpenConversationParams
+	Body   *OpenConversationJSONRequestBody
+}
+
+type OpenConversationResponseObject interface {
+	VisitOpenConversationResponse(w http.ResponseWriter) error
+}
+
+type OpenConversation200JSONResponse Conversation
+
+func (response OpenConversation200JSONResponse) VisitOpenConversationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OpenConversation201JSONResponse Conversation
+
+func (response OpenConversation201JSONResponse) VisitOpenConversationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OpenConversation400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response OpenConversation400ApplicationProblemPlusJSONResponse) VisitOpenConversationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OpenConversation404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response OpenConversation404ApplicationProblemPlusJSONResponse) VisitOpenConversationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OpenConversation409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response OpenConversation409ApplicationProblemPlusJSONResponse) VisitOpenConversationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OpenConversation503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response OpenConversation503ApplicationProblemPlusJSONResponse) VisitOpenConversationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetConversationRequestObject struct {
+	ConversationId ConversationID `json:"conversationId"`
+}
+
+type GetConversationResponseObject interface {
+	VisitGetConversationResponse(w http.ResponseWriter) error
+}
+
+type GetConversation200JSONResponse Conversation
+
+func (response GetConversation200JSONResponse) VisitGetConversationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetConversation400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response GetConversation400ApplicationProblemPlusJSONResponse) VisitGetConversationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetConversation404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetConversation404ApplicationProblemPlusJSONResponse) VisitGetConversationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetConversation503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response GetConversation503ApplicationProblemPlusJSONResponse) VisitGetConversationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMessagesRequestObject struct {
+	ConversationId ConversationID `json:"conversationId"`
+	Params         ListMessagesParams
+}
+
+type ListMessagesResponseObject interface {
+	VisitListMessagesResponse(w http.ResponseWriter) error
+}
+
+type ListMessages200JSONResponse MessagePage
+
+func (response ListMessages200JSONResponse) VisitListMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMessages400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response ListMessages400ApplicationProblemPlusJSONResponse) VisitListMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMessages404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListMessages404ApplicationProblemPlusJSONResponse) VisitListMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMessages503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response ListMessages503ApplicationProblemPlusJSONResponse) VisitListMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendMessageRequestObject struct {
+	ConversationId ConversationID `json:"conversationId"`
+	Params         SendMessageParams
+	Body           *SendMessageJSONRequestBody
+}
+
+type SendMessageResponseObject interface {
+	VisitSendMessageResponse(w http.ResponseWriter) error
+}
+
+type SendMessage200JSONResponse Message
+
+func (response SendMessage200JSONResponse) VisitSendMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendMessage202JSONResponse Message
+
+func (response SendMessage202JSONResponse) VisitSendMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendMessage400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response SendMessage400ApplicationProblemPlusJSONResponse) VisitSendMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendMessage404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response SendMessage404ApplicationProblemPlusJSONResponse) VisitSendMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendMessage409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response SendMessage409ApplicationProblemPlusJSONResponse) VisitSendMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendMessage503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response SendMessage503ApplicationProblemPlusJSONResponse) VisitSendMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetEngineRequestObject struct {
 }
 
@@ -3083,6 +7060,164 @@ func (response GetHealth503ApplicationProblemPlusJSONResponse) VisitGetHealthRes
 	return err
 }
 
+type GetMessageRequestObject struct {
+	MessageId MessageID `json:"messageId"`
+}
+
+type GetMessageResponseObject interface {
+	VisitGetMessageResponse(w http.ResponseWriter) error
+}
+
+type GetMessage200JSONResponse Message
+
+func (response GetMessage200JSONResponse) VisitGetMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessage400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessage400ApplicationProblemPlusJSONResponse) VisitGetMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessage404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessage404ApplicationProblemPlusJSONResponse) VisitGetMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessage503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessage503ApplicationProblemPlusJSONResponse) VisitGetMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelMessageRequestObject struct {
+	MessageId MessageID `json:"messageId"`
+	Params    CancelMessageParams
+	Body      *CancelMessageJSONRequestBody
+}
+
+type CancelMessageResponseObject interface {
+	VisitCancelMessageResponse(w http.ResponseWriter) error
+}
+
+type CancelMessage200JSONResponse Message
+
+func (response CancelMessage200JSONResponse) VisitCancelMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelMessage400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response CancelMessage400ApplicationProblemPlusJSONResponse) VisitCancelMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelMessage404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CancelMessage404ApplicationProblemPlusJSONResponse) VisitCancelMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelMessage409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CancelMessage409ApplicationProblemPlusJSONResponse) VisitCancelMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelMessage503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response CancelMessage503ApplicationProblemPlusJSONResponse) VisitCancelMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetOperationRequestObject struct {
 	OperationId ID `json:"operationId"`
 }
@@ -3167,6 +7302,30 @@ type StrictServerInterface interface {
 	// GetAccountCapabilities Read account capability evidence
 	// (GET /api/v1/accounts/{accountId}/capabilities)
 	GetAccountCapabilities(ctx context.Context, request GetAccountCapabilitiesRequestObject) (GetAccountCapabilitiesResponseObject, error)
+	// DisconnectAccount Disconnect and disable automatic connection
+	// (DELETE /api/v1/accounts/{accountId}/connection)
+	DisconnectAccount(ctx context.Context, request DisconnectAccountRequestObject) (DisconnectAccountResponseObject, error)
+	// GetAccountConnection Read account connection state
+	// (GET /api/v1/accounts/{accountId}/connection)
+	GetAccountConnection(ctx context.Context, request GetAccountConnectionRequestObject) (GetAccountConnectionResponseObject, error)
+	// ConfigureAccountConnection Configure and connect an account
+	// (PUT /api/v1/accounts/{accountId}/connection)
+	ConfigureAccountConnection(ctx context.Context, request ConfigureAccountConnectionRequestObject) (ConfigureAccountConnectionResponseObject, error)
+	// ListConversations List retained conversations
+	// (GET /api/v1/conversations)
+	ListConversations(ctx context.Context, request ListConversationsRequestObject) (ListConversationsResponseObject, error)
+	// OpenConversation Open a direct conversation
+	// (POST /api/v1/conversations)
+	OpenConversation(ctx context.Context, request OpenConversationRequestObject) (OpenConversationResponseObject, error)
+	// GetConversation Read a conversation
+	// (GET /api/v1/conversations/{conversationId})
+	GetConversation(ctx context.Context, request GetConversationRequestObject) (GetConversationResponseObject, error)
+	// ListMessages Read retained messages
+	// (GET /api/v1/conversations/{conversationId}/messages)
+	ListMessages(ctx context.Context, request ListMessagesRequestObject) (ListMessagesResponseObject, error)
+	// SendMessage Accept an immediate text message
+	// (POST /api/v1/conversations/{conversationId}/messages)
+	SendMessage(ctx context.Context, request SendMessageRequestObject) (SendMessageResponseObject, error)
 	// GetEngine Read the persistent engine identity
 	// (GET /api/v1/engine)
 	GetEngine(ctx context.Context, request GetEngineRequestObject) (GetEngineResponseObject, error)
@@ -3176,6 +7335,12 @@ type StrictServerInterface interface {
 	// GetHealth Check engine readiness
 	// (GET /api/v1/health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
+	// GetMessage Read a retained message
+	// (GET /api/v1/messages/{messageId})
+	GetMessage(ctx context.Context, request GetMessageRequestObject) (GetMessageResponseObject, error)
+	// CancelMessage Cancel a queued send
+	// (POST /api/v1/messages/{messageId}/cancel)
+	CancelMessage(ctx context.Context, request CancelMessageRequestObject) (CancelMessageResponseObject, error)
 	// GetOperation Reconcile a mutation after an ambiguous response
 	// (GET /api/v1/operations/{operationId})
 	GetOperation(ctx context.Context, request GetOperationRequestObject) (GetOperationResponseObject, error)
@@ -3331,6 +7496,237 @@ func (sh *strictHandler) GetAccountCapabilities(w http.ResponseWriter, r *http.R
 	}
 }
 
+// DisconnectAccount operation middleware
+func (sh *strictHandler) DisconnectAccount(w http.ResponseWriter, r *http.Request, accountId AccountID) {
+	var request DisconnectAccountRequestObject
+
+	request.AccountId = accountId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisconnectAccount(ctx, request.(DisconnectAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisconnectAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisconnectAccountResponseObject); ok {
+		if err := validResponse.VisitDisconnectAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAccountConnection operation middleware
+func (sh *strictHandler) GetAccountConnection(w http.ResponseWriter, r *http.Request, accountId AccountID) {
+	var request GetAccountConnectionRequestObject
+
+	request.AccountId = accountId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAccountConnection(ctx, request.(GetAccountConnectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAccountConnection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAccountConnectionResponseObject); ok {
+		if err := validResponse.VisitGetAccountConnectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ConfigureAccountConnection operation middleware
+func (sh *strictHandler) ConfigureAccountConnection(w http.ResponseWriter, r *http.Request, accountId AccountID) {
+	var request ConfigureAccountConnectionRequestObject
+
+	request.AccountId = accountId
+
+	var body ConfigureAccountConnectionJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ConfigureAccountConnection(ctx, request.(ConfigureAccountConnectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConfigureAccountConnection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ConfigureAccountConnectionResponseObject); ok {
+		if err := validResponse.VisitConfigureAccountConnectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListConversations operation middleware
+func (sh *strictHandler) ListConversations(w http.ResponseWriter, r *http.Request, params ListConversationsParams) {
+	var request ListConversationsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListConversations(ctx, request.(ListConversationsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListConversations")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListConversationsResponseObject); ok {
+		if err := validResponse.VisitListConversationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// OpenConversation operation middleware
+func (sh *strictHandler) OpenConversation(w http.ResponseWriter, r *http.Request, params OpenConversationParams) {
+	var request OpenConversationRequestObject
+
+	request.Params = params
+
+	var body OpenConversationJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.OpenConversation(ctx, request.(OpenConversationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "OpenConversation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(OpenConversationResponseObject); ok {
+		if err := validResponse.VisitOpenConversationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetConversation operation middleware
+func (sh *strictHandler) GetConversation(w http.ResponseWriter, r *http.Request, conversationId ConversationID) {
+	var request GetConversationRequestObject
+
+	request.ConversationId = conversationId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetConversation(ctx, request.(GetConversationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetConversation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetConversationResponseObject); ok {
+		if err := validResponse.VisitGetConversationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMessages operation middleware
+func (sh *strictHandler) ListMessages(w http.ResponseWriter, r *http.Request, conversationId ConversationID, params ListMessagesParams) {
+	var request ListMessagesRequestObject
+
+	request.ConversationId = conversationId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMessages(ctx, request.(ListMessagesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMessages")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMessagesResponseObject); ok {
+		if err := validResponse.VisitListMessagesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SendMessage operation middleware
+func (sh *strictHandler) SendMessage(w http.ResponseWriter, r *http.Request, conversationId ConversationID, params SendMessageParams) {
+	var request SendMessageRequestObject
+
+	request.ConversationId = conversationId
+	request.Params = params
+
+	var body SendMessageJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SendMessage(ctx, request.(SendMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SendMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SendMessageResponseObject); ok {
+		if err := validResponse.VisitSendMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetEngine operation middleware
 func (sh *strictHandler) GetEngine(w http.ResponseWriter, r *http.Request) {
 	var request GetEngineRequestObject
@@ -3405,6 +7801,66 @@ func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetMessage operation middleware
+func (sh *strictHandler) GetMessage(w http.ResponseWriter, r *http.Request, messageId MessageID) {
+	var request GetMessageRequestObject
+
+	request.MessageId = messageId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMessage(ctx, request.(GetMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMessageResponseObject); ok {
+		if err := validResponse.VisitGetMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelMessage operation middleware
+func (sh *strictHandler) CancelMessage(w http.ResponseWriter, r *http.Request, messageId MessageID, params CancelMessageParams) {
+	var request CancelMessageRequestObject
+
+	request.MessageId = messageId
+	request.Params = params
+
+	var body CancelMessageJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelMessage(ctx, request.(CancelMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelMessageResponseObject); ok {
+		if err := validResponse.VisitCancelMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetOperation operation middleware
 func (sh *strictHandler) GetOperation(w http.ResponseWriter, r *http.Request, operationId ID) {
 	var request GetOperationRequestObject
@@ -3436,62 +7892,112 @@ func (sh *strictHandler) GetOperation(w http.ResponseWriter, r *http.Request, op
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"FjTeOrklnfX9JPVL9DQCsIVY1RAIQWl5sfz3AA==",
+	"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",
+	"2w+3/zsA",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

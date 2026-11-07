@@ -10,3 +10,4 @@ test-results/
 /api/openapi.cli.yaml
 /tests/browser/node_modules/
 /tests/browser/artifacts/
+/.codegen-check.*/

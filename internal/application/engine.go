@@ -32,6 +32,7 @@ type Operation struct {
 	ID         domain.ID
 	ResourceID domain.ID
 	CreatedAt  time.Time
+	Kind       string
 }
 
 type Registration struct {
@@ -46,9 +47,13 @@ type RegistrationResult struct {
 }
 
 type Event struct {
-	Sequence   int64
-	Account    domain.Account
-	OccurredAt time.Time
+	Sequence     int64
+	Account      *domain.Account
+	Conversation *domain.Conversation
+	Message      *domain.Message
+	Connection   *domain.Connection
+	Type         string
+	OccurredAt   time.Time
 }
 
 type Snapshot struct {
@@ -70,17 +75,19 @@ type Repository interface {
 type NewID func() (domain.ID, error)
 
 type Engine struct {
-	repo  Repository
-	role  string
-	newID NewID
-	now   func() time.Time
+	repo      Repository
+	role      string
+	newID     NewID
+	now       func() time.Time
+	protocols Protocols
+	work      chan struct{}
 }
 
 func New(repo Repository, role string, ids NewID, now func() time.Time) (*Engine, error) {
 	if role != "local" && role != "hosted" {
 		return nil, ErrInvalid
 	}
-	return &Engine{repo: repo, role: role, newID: ids, now: now}, nil
+	return &Engine{repo: repo, role: role, newID: ids, now: now, work: make(chan struct{}, 1)}, nil
 }
 
 func (e *Engine) Ping(ctx context.Context) error { return e.repo.Ping(ctx) }
@@ -96,6 +103,13 @@ func (e *Engine) Register(ctx context.Context, key domain.ID, input RegisterInpu
 	}
 	input.Protocol = strings.TrimSpace(input.Protocol)
 	input.Address = strings.TrimSpace(input.Address)
+	if e.protocols != nil {
+		var err error
+		input.Address, err = e.canonical(input.Protocol, input.Address)
+		if err != nil {
+			return RegistrationResult{}, err
+		}
+	}
 	input.Label = strings.TrimSpace(input.Label)
 	if input.Protocol != "xmpp" || !validText(input.Address, 1023) || !validText(input.Label, 120) {
 		return RegistrationResult{}, ErrInvalid
@@ -117,7 +131,7 @@ func (e *Engine) Register(ctx context.Context, key domain.ID, input RegisterInpu
 	return e.repo.Register(ctx, Registration{
 		Account: domain.Account{ID: accountID, RevisionID: revisionID,
 			Protocol: input.Protocol, Address: input.Address, Label: input.Label, CreatedAt: now},
-		Operation:   Operation{ID: key, ResourceID: accountID, CreatedAt: now},
+		Operation:   Operation{ID: key, ResourceID: accountID, CreatedAt: now, Kind: "register_account"},
 		Fingerprint: hex.EncodeToString(hash[:]),
 	})
 }

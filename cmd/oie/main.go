@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/x509"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -18,6 +20,7 @@ import (
 	"github.com/araihu/oie/internal/adapters/httpapi"
 	"github.com/araihu/oie/internal/adapters/sqlite"
 	"github.com/araihu/oie/internal/adapters/web"
+	xmpadapter "github.com/araihu/oie/internal/adapters/xmpp"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	"github.com/google/uuid"
@@ -40,6 +43,7 @@ func run() error {
 	role := flag.String("role", "local", "local, hosted, or bff")
 	dataDir := flag.String("data-dir", "./data", "engine database and media directory")
 	engineURL := flag.String("engine-url", "", "engine base URL (required for bff role)")
+	xmppCA := flag.String("xmpp-ca-file", "", "additional trusted CA certificate PEM for XMPP TLS (development/private servers)")
 	flag.Parse()
 	if *role != "local" && *role != "hosted" && *role != "bff" {
 		return errors.New("role must be local, hosted, or bff; sync service is not implemented yet")
@@ -57,6 +61,7 @@ func run() error {
 		return err
 	}
 	defer listener.Close()
+	var engineDone <-chan error
 	mux := http.NewServeMux()
 	mux.Handle("GET /assets/", assets.Handler())
 	if *role != "bff" {
@@ -73,6 +78,30 @@ func run() error {
 		if err != nil {
 			return err
 		}
+		roots, err := x509.SystemCertPool()
+		if err != nil {
+			roots = x509.NewCertPool()
+		}
+		if *xmppCA != "" {
+			pem, err := os.ReadFile(*xmppCA)
+			if err != nil {
+				return err
+			}
+			if !roots.AppendCertsFromPEM(pem) {
+				return errors.New("xmpp-ca-file contains no valid certificates")
+			}
+		}
+		protocols := xmpadapter.New(filepath.Join(*dataDir, "private", "connections"), roots)
+		engine.SetProtocols(protocols)
+		defer protocols.Close()
+		if err := protocols.Start(ctx, engine); err != nil {
+			return err
+		}
+		workerResult := make(chan error, 1)
+		workerStopped := make(chan struct{})
+		engineDone = workerResult
+		go func() { defer close(workerStopped); workerResult <- engine.Run(ctx) }()
+		defer func() { stop(); <-workerStopped }()
 		handler, err := httpapi.New(engine)
 		if err != nil {
 			return err
@@ -100,6 +129,7 @@ func run() error {
 		Handler: mux, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second,
 		BaseContext: func(net.Listener) context.Context { return ctx },
 	}
+	defer server.Close()
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
 	slog.Info("oie listening", "address", listener.Addr(), "role", *role)
@@ -107,6 +137,11 @@ func run() error {
 	case err := <-done:
 		if !errors.Is(err, http.ErrServerClosed) {
 			return err
+		}
+	case err := <-engineDone:
+		stop()
+		if err != nil && !errors.Is(err, context.Canceled) {
+			return fmt.Errorf("engine worker: %w", err)
 		}
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

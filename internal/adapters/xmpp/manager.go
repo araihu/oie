@@ -1,0 +1,508 @@
+// Package xmpp implements the protocol port using Mellium. No protocol types
+// escape this adapter; credentials never enter events, receipts, or message data.
+package xmpp
+
+import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/json"
+	"encoding/xml"
+	"errors"
+	"io"
+	"net"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/araihu/oie/internal/application"
+	"github.com/araihu/oie/internal/domain"
+	"mellium.im/sasl"
+	"mellium.im/xmlstream"
+	mx "mellium.im/xmpp"
+	"mellium.im/xmpp/dial"
+	"mellium.im/xmpp/jid"
+	"mellium.im/xmpp/stanza"
+)
+
+type configuration struct {
+	AccountID          domain.ID
+	Password, Endpoint string
+	Enabled            bool
+}
+type entry struct {
+	account domain.Account
+	config  configuration
+	cancel  context.CancelFunc
+	mu      sync.RWMutex
+	state   domain.Connection
+	session *mx.Session
+	raw     net.Conn
+}
+type Manager struct {
+	dir     string
+	roots   *x509.CertPool
+	mu      sync.RWMutex
+	entries map[domain.ID]*entry
+	ctx     context.Context
+	cancel  context.CancelFunc
+	host    application.ProtocolHost
+	workers sync.WaitGroup
+}
+
+func New(dir string, roots *x509.CertPool) *Manager {
+	return &Manager{dir: dir, roots: roots, entries: make(map[domain.ID]*entry)}
+}
+func (m *Manager) NormalizeAddress(protocol, address string) (string, error) {
+	if protocol != "xmpp" {
+		return "", application.ErrInvalid
+	}
+	j, err := jid.Parse(address)
+	if err != nil || j.Localpart() == "" || j.Domainpart() == "" {
+		return "", application.ErrInvalid
+	}
+	return j.Bare().String(), nil
+}
+func (m *Manager) Start(ctx context.Context, host application.ProtocolHost) error {
+	m.ctx, m.cancel = context.WithCancel(ctx)
+	m.host = host
+	if err := os.MkdirAll(m.dir, 0700); err != nil {
+		return err
+	}
+	files, err := os.ReadDir(m.dir)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		if file.IsDir() || !strings.HasSuffix(file.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(m.dir, file.Name()))
+		if err != nil {
+			return err
+		}
+		var cfg configuration
+		if err = json.Unmarshal(data, &cfg); err != nil {
+			return errors.New("invalid private connection configuration")
+		}
+		if _, err = domain.ParseID(string(cfg.AccountID)); err != nil || file.Name() != string(cfg.AccountID)+".json" {
+			return errors.New("invalid private connection identity")
+		}
+		a, err := host.Account(ctx, cfg.AccountID)
+		if err != nil {
+			return err
+		}
+		if err = m.validate(a, cfg); err != nil {
+			return err
+		}
+		m.mu.Lock()
+		m.replace(a, cfg)
+		m.mu.Unlock()
+	}
+	return nil
+}
+func (m *Manager) Close() {
+	if m.cancel != nil {
+		m.cancel()
+	}
+	m.mu.Lock()
+	for _, e := range m.entries {
+		e.stop()
+	}
+	m.mu.Unlock()
+	m.workers.Wait()
+}
+func (e *entry) stop() {
+	if e.cancel != nil {
+		e.cancel()
+	}
+	e.mu.RLock()
+	raw := e.raw
+	e.mu.RUnlock()
+	if raw != nil {
+		_ = raw.Close()
+	}
+}
+func (m *Manager) validate(a domain.Account, cfg configuration) error {
+	if _, err := m.NormalizeAddress(a.Protocol, a.Address); err != nil {
+		return err
+	}
+	if cfg.Password == "" || len(cfg.Password) > 4096 || strings.ContainsRune(cfg.Password, 0) {
+		return application.ErrInvalid
+	}
+	if cfg.Endpoint != "" {
+		host, port, err := net.SplitHostPort(cfg.Endpoint)
+		n, parseErr := strconv.Atoi(port)
+		if err != nil || parseErr != nil || host == "" || n < 1 || n > 65535 {
+			return application.ErrInvalid
+		}
+	}
+	return nil
+}
+func (m *Manager) save(ctx context.Context, cfg configuration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(m.dir, ".connection-")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+	if err = f.Chmod(0600); err != nil {
+		return err
+	}
+	if err = json.NewEncoder(f).Encode(cfg); err != nil {
+		return err
+	}
+	if err = f.Sync(); err != nil {
+		return err
+	}
+	if err = f.Close(); err != nil {
+		return err
+	}
+	if err = os.Rename(f.Name(), filepath.Join(m.dir, string(cfg.AccountID)+".json")); err != nil {
+		return err
+	}
+	dir, err := os.Open(m.dir)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
+}
+func (m *Manager) replace(a domain.Account, cfg configuration) *entry {
+	if old := m.entries[a.ID]; old != nil {
+		old.stop()
+	}
+	state := "not_connected"
+	if cfg.Enabled {
+		state = "connecting"
+	}
+	ctx, cancel := context.WithCancel(m.ctx)
+	e := &entry{account: a, config: cfg, cancel: cancel, state: domain.Connection{AccountID: a.ID, State: state, UpdatedAt: time.Now().UTC()}}
+	m.entries[a.ID] = e
+	m.workers.Add(1)
+	go func() {
+		defer m.workers.Done()
+		if !cfg.Enabled {
+			_ = m.publish(ctx, e, "not_connected", "")
+			return
+		}
+		m.run(ctx, e)
+	}()
+	return e
+}
+func (m *Manager) Configure(ctx context.Context, a domain.Account, in application.ConnectionInput) (domain.Connection, error) {
+	cfg := configuration{AccountID: a.ID, Password: in.Password, Endpoint: in.Endpoint, Enabled: true}
+	if err := m.validate(a, cfg); err != nil {
+		return domain.Connection{}, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.ctx == nil || m.ctx.Err() != nil {
+		return domain.Connection{}, application.ErrProtocolUnavailable
+	}
+	if old := m.entries[a.ID]; old != nil && old.config == cfg {
+		old.mu.RLock()
+		state := old.state
+		old.mu.RUnlock()
+		return state, nil
+	}
+	if err := m.save(ctx, cfg); err != nil {
+		return domain.Connection{}, err
+	}
+	e := m.replace(a, cfg)
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.state, nil
+}
+func (m *Manager) Disconnect(ctx context.Context, a domain.Account) (domain.Connection, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	old := m.entries[a.ID]
+	if old == nil {
+		return domain.Connection{AccountID: a.ID, State: "not_connected", UpdatedAt: a.CreatedAt}, nil
+	}
+	cfg := old.config
+	cfg.Enabled = false
+	if err := m.save(ctx, cfg); err != nil {
+		return domain.Connection{}, err
+	}
+	e := m.replace(a, cfg)
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.state, nil
+}
+func (m *Manager) Connection(_ context.Context, a domain.Account) (domain.Connection, error) {
+	m.mu.RLock()
+	e := m.entries[a.ID]
+	m.mu.RUnlock()
+	if e == nil {
+		return domain.Connection{AccountID: a.ID, State: "not_connected", UpdatedAt: a.CreatedAt}, nil
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.state, nil
+}
+func (m *Manager) publish(ctx context.Context, e *entry, state, code string) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	current := m.entries[e.account.ID] == e
+	if !current {
+		return context.Canceled
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	e.mu.Lock()
+	e.state = domain.Connection{AccountID: e.account.ID, State: state, LastErrorCode: code, UpdatedAt: time.Now().UTC()}
+	snapshot := e.state
+	e.mu.Unlock()
+	return m.host.ConnectionChanged(ctx, snapshot)
+}
+func (m *Manager) run(ctx context.Context, e *entry) {
+	delay := time.Second
+	for ctx.Err() == nil {
+		if err := m.publish(ctx, e, "connecting", ""); err != nil {
+			return
+		}
+		session, raw, err := m.connect(ctx, e)
+		if err == nil {
+			e.mu.Lock()
+			e.session = session
+			e.raw = raw
+			e.mu.Unlock()
+			if ctx.Err() != nil {
+				_ = raw.Close()
+				return
+			}
+			if err = m.publish(ctx, e, "connected", ""); err == nil {
+				delay = time.Second
+				err = session.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
+					return m.handle(ctx, e, tokens, start)
+				}))
+			}
+			_ = raw.Close()
+			e.mu.Lock()
+			e.session = nil
+			e.raw = nil
+			e.mu.Unlock()
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		code, permanent := connectionError(err)
+		if m.publish(ctx, e, "error", code) != nil {
+			return
+		}
+		if permanent {
+			return
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+		delay *= 2
+		if delay > 30*time.Second {
+			delay = 30 * time.Second
+		}
+	}
+}
+
+type authenticationError struct{ error }
+
+func connectionError(err error) (string, bool) {
+	var cert *tls.CertificateVerificationError
+	var unknown x509.UnknownAuthorityError
+	var hostname x509.HostnameError
+	var record tls.RecordHeaderError
+	if errors.As(err, &cert) || errors.As(err, &unknown) || errors.As(err, &hostname) || errors.As(err, &record) {
+		return "tls_failed", true
+	}
+	var auth authenticationError
+	if errors.As(err, &auth) {
+		var network net.Error
+		if !errors.As(auth.error, &network) && !errors.Is(auth.error, io.EOF) && !errors.Is(auth.error, context.DeadlineExceeded) {
+			return "authentication_failed", true
+		}
+	}
+	return "connection_failed", false
+}
+func (m *Manager) connect(ctx context.Context, e *entry) (*mx.Session, net.Conn, error) {
+	j, err := jid.Parse(e.account.Address)
+	if err != nil {
+		return nil, nil, err
+	}
+	j, err = j.Bare().WithResource("oie-" + string(e.account.ID))
+	if err != nil {
+		return nil, nil, err
+	}
+	attempt, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	var raw net.Conn
+	if e.config.Endpoint != "" {
+		raw, err = (&net.Dialer{KeepAlive: 30 * time.Second}).DialContext(attempt, "tcp", e.config.Endpoint)
+	} else {
+		raw, err = dial.Client(attempt, "tcp", j)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	stop := context.AfterFunc(attempt, func() { _ = raw.Close() })
+	defer stop()
+	_ = raw.SetDeadline(time.Now().Add(10 * time.Second))
+	auth := mx.SASL("", e.config.Password, sasl.ScramSha256Plus, sasl.ScramSha256, sasl.ScramSha1Plus, sasl.ScramSha1, sasl.Plain)
+	negotiate := auth.Negotiate
+	auth.Negotiate = func(ctx context.Context, s *mx.Session, data interface{}) (mx.SessionState, io.ReadWriter, error) {
+		state, rw, err := negotiate(ctx, s, data)
+		if err != nil {
+			err = authenticationError{err}
+		}
+		return state, rw, err
+	}
+	session, err := mx.NewClientSession(attempt, j, raw, mx.StartTLS(&tls.Config{ServerName: j.Domainpart(), RootCAs: m.roots, MinVersion: tls.VersionTLS12}), auth, mx.BindResource())
+	if err == nil && session.State()&mx.Secure == 0 {
+		err = errors.New("TLS required")
+	}
+	if err == nil {
+		err = session.Send(attempt, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(nil))
+	}
+	if err != nil {
+		_ = raw.Close()
+		return nil, nil, err
+	}
+	_ = raw.SetDeadline(time.Time{})
+	return session, raw, nil
+}
+func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Outgoing) string {
+	m.mu.RLock()
+	e := m.entries[a.ID]
+	m.mu.RUnlock()
+	if e == nil {
+		return application.NotSent
+	}
+	e.mu.RLock()
+	session, raw, state := e.session, e.raw, e.state.State
+	e.mu.RUnlock()
+	if session == nil || raw == nil || state != "connected" {
+		return application.NotSent
+	}
+	to, err := jid.Parse(out.Address)
+	if err != nil {
+		return application.Failed
+	}
+	if ctx.Err() != nil {
+		return application.NotSent
+	}
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(10 * time.Second)
+	}
+	_ = raw.SetWriteDeadline(deadline)
+	defer raw.SetWriteDeadline(time.Time{})
+	payload := struct {
+		stanza.Message
+		Body   string `xml:"body"`
+		Origin struct {
+			XMLName xml.Name `xml:"urn:xmpp:sid:0 origin-id"`
+			ID      string   `xml:"id,attr"`
+		}
+	}{Message: stanza.Message{To: to.Bare(), Type: stanza.ChatMessage, ID: string(out.ID)}, Body: out.OriginalText}
+	payload.Origin.ID = string(out.ID)
+	if err = session.Encode(ctx, payload); err != nil {
+		_ = raw.Close()
+		return application.Unknown
+	}
+	return application.Submitted
+}
+
+type boundedTokens struct {
+	reader    xml.TokenReader
+	remaining int
+}
+
+func (b *boundedTokens) Token() (xml.Token, error) {
+	token, err := b.reader.Token()
+	if err != nil {
+		return token, err
+	}
+	switch t := token.(type) {
+	case xml.CharData:
+		b.remaining -= len(t)
+	case xml.StartElement:
+		b.remaining -= len(t.Name.Local) + len(t.Name.Space)
+		for _, a := range t.Attr {
+			b.remaining -= len(a.Name.Local) + len(a.Value)
+		}
+	}
+	if b.remaining < 0 {
+		return nil, errors.New("XMPP stanza exceeds size limit")
+	}
+	return token, nil
+}
+func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEncoder, start *xml.StartElement) error {
+	decoder := xml.NewTokenDecoder(xmlstream.MultiReader(xmlstream.Token(*start), &boundedTokens{reader: t, remaining: 1 << 20}))
+	if start.Name.Space != "jabber:client" {
+		return nil
+	}
+	switch start.Name.Local {
+	case "message":
+		var msg struct {
+			stanza.Message
+			Body  string `xml:"jabber:client body"`
+			Delay struct {
+				Stamp string `xml:"stamp,attr"`
+			} `xml:"urn:xmpp:delay delay"`
+		}
+		if err := decoder.Decode(&msg); err != nil {
+			return err
+		}
+		if msg.Type == stanza.ErrorMessage {
+			own, _ := jid.Parse(e.account.Address)
+			return m.host.Reject(ctx, application.Rejected{AccountID: e.account.ID, MessageID: msg.ID, Address: msg.From.Bare().String(), FromServer: msg.From.Equal(own.Domain())})
+		}
+		if msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage {
+			return nil
+		}
+		if strings.TrimSpace(msg.Body) == "" || msg.From.Localpart() == "" {
+			return nil
+		}
+		created := time.Now().UTC()
+		if delayed, err := time.Parse(time.RFC3339Nano, msg.Delay.Stamp); err == nil {
+			created = delayed.UTC()
+		}
+		err := m.host.Receive(ctx, application.Incoming{AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID, OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address})
+		if errors.Is(err, application.ErrInvalid) {
+			return nil
+		}
+		return err
+	case "iq":
+		iq, err := stanza.NewIQ(*start)
+		if err != nil {
+			return nil
+		}
+		if iq.Type != stanza.GetIQ && iq.Type != stanza.SetIQ {
+			return nil
+		}
+		var query struct {
+			Ping *struct{} `xml:"urn:xmpp:ping ping"`
+		}
+		if err = decoder.Decode(&query); err != nil {
+			return err
+		}
+		reply := iq.Error(stanza.Error{Type: stanza.Cancel, Condition: stanza.ServiceUnavailable})
+		if query.Ping != nil && iq.Type == stanza.GetIQ {
+			reply = iq.Result(nil)
+		}
+		_, err = xmlstream.Copy(t, reply)
+		return err
+	}
+	return nil
+}

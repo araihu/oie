@@ -16,14 +16,24 @@ func New() (*cobra.Command, error) {
 		return nil, err
 	}
 	return cliruntime.New("oiectl", spec, map[string]cliruntime.Builder{
-		"ListAccounts":           build0,
-		"RegisterAccount":        build1,
-		"GetAccount":             build2,
-		"GetAccountCapabilities": build3,
-		"GetEngine":              build4,
-		"StreamEvents":           build5,
-		"GetHealth":              build6,
-		"GetOperation":           build7,
+		"ListAccounts":               build0,
+		"RegisterAccount":            build1,
+		"GetAccount":                 build2,
+		"GetAccountCapabilities":     build3,
+		"DisconnectAccount":          build4,
+		"GetAccountConnection":       build5,
+		"ConfigureAccountConnection": build6,
+		"ListConversations":          build7,
+		"OpenConversation":           build8,
+		"GetConversation":            build9,
+		"ListMessages":               build10,
+		"SendMessage":                build11,
+		"GetEngine":                  build12,
+		"StreamEvents":               build13,
+		"GetHealth":                  build14,
+		"GetMessage":                 build15,
+		"CancelMessage":              build16,
+		"GetOperation":               build17,
 	})
 }
 func build0(server string, input cliruntime.Input) (*http.Request, error) {
@@ -58,19 +68,125 @@ func build3(server string, input cliruntime.Input) (*http.Request, error) {
 	return api.NewGetAccountCapabilitiesRequest(server, path0)
 }
 func build4(server string, input cliruntime.Input) (*http.Request, error) {
-	return api.NewGetEngineRequest(server)
+	var path0 api.AccountID
+	if err := input.Decode("path", "accountId", &path0); err != nil {
+		return nil, err
+	}
+	return api.NewDisconnectAccountRequest(server, path0)
 }
 func build5(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.AccountID
+	if err := input.Decode("path", "accountId", &path0); err != nil {
+		return nil, err
+	}
+	return api.NewGetAccountConnectionRequest(server, path0)
+}
+func build6(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.AccountID
+	if err := input.Decode("path", "accountId", &path0); err != nil {
+		return nil, err
+	}
+	return api.NewConfigureAccountConnectionRequestWithBody(server, path0, input.ContentType, bytes.NewReader(input.Body))
+}
+func build7(server string, input cliruntime.Input) (*http.Request, error) {
+	var params api.ListConversationsParams
+	if err := input.Decode("query", "cursor", &params.Cursor); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "limit", &params.Limit); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "accountId", &params.AccountId); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "q", &params.Q); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "unreadOnly", &params.UnreadOnly); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "favoritesOnly", &params.FavoritesOnly); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "archived", &params.Archived); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "kind", &params.Kind); err != nil {
+		return nil, err
+	}
+	return api.NewListConversationsRequest(server, &params)
+}
+func build8(server string, input cliruntime.Input) (*http.Request, error) {
+	var params api.OpenConversationParams
+	if err := input.Decode("header", "Idempotency-Key", &params.IdempotencyKey); err != nil {
+		return nil, err
+	}
+	return api.NewOpenConversationRequestWithBody(server, &params, input.ContentType, bytes.NewReader(input.Body))
+}
+func build9(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.ConversationID
+	if err := input.Decode("path", "conversationId", &path0); err != nil {
+		return nil, err
+	}
+	return api.NewGetConversationRequest(server, path0)
+}
+func build10(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.ConversationID
+	if err := input.Decode("path", "conversationId", &path0); err != nil {
+		return nil, err
+	}
+	var params api.ListMessagesParams
+	if err := input.Decode("query", "cursor", &params.Cursor); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "limit", &params.Limit); err != nil {
+		return nil, err
+	}
+	return api.NewListMessagesRequest(server, path0, &params)
+}
+func build11(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.ConversationID
+	if err := input.Decode("path", "conversationId", &path0); err != nil {
+		return nil, err
+	}
+	var params api.SendMessageParams
+	if err := input.Decode("header", "Idempotency-Key", &params.IdempotencyKey); err != nil {
+		return nil, err
+	}
+	return api.NewSendMessageRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
+}
+func build12(server string, input cliruntime.Input) (*http.Request, error) {
+	return api.NewGetEngineRequest(server)
+}
+func build13(server string, input cliruntime.Input) (*http.Request, error) {
 	var params api.StreamEventsParams
 	if err := input.Decode("header", "Last-Event-ID", &params.LastEventID); err != nil {
 		return nil, err
 	}
 	return api.NewStreamEventsRequest(server, &params)
 }
-func build6(server string, input cliruntime.Input) (*http.Request, error) {
+func build14(server string, input cliruntime.Input) (*http.Request, error) {
 	return api.NewGetHealthRequest(server)
 }
-func build7(server string, input cliruntime.Input) (*http.Request, error) {
+func build15(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.MessageID
+	if err := input.Decode("path", "messageId", &path0); err != nil {
+		return nil, err
+	}
+	return api.NewGetMessageRequest(server, path0)
+}
+func build16(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.MessageID
+	if err := input.Decode("path", "messageId", &path0); err != nil {
+		return nil, err
+	}
+	var params api.CancelMessageParams
+	if err := input.Decode("header", "Idempotency-Key", &params.IdempotencyKey); err != nil {
+		return nil, err
+	}
+	return api.NewCancelMessageRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
+}
+func build17(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "operationId", &path0); err != nil {
 		return nil, err

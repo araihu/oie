@@ -14,6 +14,7 @@ import (
 	"github.com/araihu/oie/internal/adapters/httpapi"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/araihu/oie/internal/adapters/sqlite"
+	xmppadapter "github.com/araihu/oie/internal/adapters/xmpp"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	"github.com/google/uuid"
@@ -34,6 +35,7 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	}
 	defer store.Close()
 	engine, _ := application.New(store, "hosted", ids, time.Now)
+	engine.SetProtocols(xmppadapter.New(t.TempDir(), nil))
 	handler, err := httpapi.New(engine)
 	if err != nil {
 		t.Fatal(err)
@@ -73,4 +75,44 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err != nil || seq != 1 {
 		t.Fatal("generated CLI retries created extra state")
 	}
+	// Exercise the newly generated messaging commands against the real store.
+	// The adapter is deliberately disconnected: this tests durable acceptance,
+	// reconciliation and cancellation, not a simulated protocol delivery.
+	openKey, _ := ids()
+	output, err = run(`{"accountId":"`+account.Id+`","address":"bob@localhost"}`, "conversations", "open-conversation", "--idempotency-key", string(openKey), "--body-stdin")
+	if err != nil {
+		t.Fatalf("CLI conversation: %v %s", err, output)
+	}
+	var conversation engineapi.Conversation
+	if err = json.Unmarshal(output, &conversation); err != nil {
+		t.Fatal(err)
+	}
+	sendKey, _ := ids()
+	text := `{"originalText":"Olá from the generated CLI"}`
+	output, err = run(text, "messages", "send-message", "--conversation-id", conversation.Id, "--idempotency-key", string(sendKey), "--body-stdin")
+	if err != nil {
+		t.Fatalf("CLI accept: %v %s", err, output)
+	}
+	var message engineapi.Message
+	if err = json.Unmarshal(output, &message); err != nil || message.SendState != "queued" {
+		t.Fatalf("CLI queued evidence: %v %s", err, output)
+	}
+	replay, err = run(text, "messages", "send-message", "--conversation-id", conversation.Id, "--idempotency-key", string(sendKey), "--body-stdin")
+	if err != nil || !bytes.Equal(output, replay) {
+		t.Fatal("CLI message replay changed")
+	}
+	cancelKey, _ := ids()
+	output, err = run(`{"expectedRevisionId":"`+message.RevisionId+`"}`, "messages", "cancel-message", "--message-id", message.Id, "--idempotency-key", string(cancelKey), "--body-stdin")
+	if err != nil || !bytes.Contains(output, []byte(`"sendState": "cancelled"`)) {
+		t.Fatalf("CLI cancel: %v %s", err, output)
+	}
+	output, err = run("", "operations", "get-operation", "--operation-id", string(sendKey))
+	if err != nil || !bytes.Contains(output, []byte(message.Id)) {
+		t.Fatal("CLI send receipt reconciliation failed")
+	}
+	output, err = run("", "messages", "list-messages", "--conversation-id", conversation.Id)
+	if err != nil || !bytes.Contains(output, []byte(`"sendState": "cancelled"`)) {
+		t.Fatalf("CLI retained timeline: %v %s", err, output)
+	}
+
 }

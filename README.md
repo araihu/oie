@@ -11,19 +11,17 @@ The alpha is single-owner, with multiple accounts and optional device sync.
 
 ## Current implementation
 
-Milestone one provides a running local/hosted engine foundation and a separate
-BFF mode. It includes the OpenAPI contract, generated Go client/server bindings,
-SQLite migrations, UUIDv7 identities/revisions, idempotent account metadata
-registration, operation reconciliation, durable SSE replay, and a Goshtoso
-consumer interface in English and Brazilian Portuguese.
+The engine now connects existing XMPP accounts and sends/receives direct plain
+text through the API. Immediate sends use a transactional SQLite outbox with
+idempotent acceptance, restart recovery, explicit uncertain outcomes, and guarded
+queued cancellation. Enabled accounts reconnect after network failure/restart.
+The API also exposes retained conversations/messages and durable SSE updates.
 
-Account registration stores metadata only: it does **not** open an XMPP session.
-Live messaging, message outbox/scheduling, protocol capability discovery, sync,
-PWA/offline behavior, and backup/restore are later implementation work. The
-development XMPP service is ready for the next milestone.
-
-See [milestone-one implementation notes](docs/milestone-one.md) for contracts,
-dependency choices, invariant checks, and remaining work.
+The foundation Goshtoso BFF remains read-only here. A separate UI worktree is
+building the WhatsApp-like interface against a mock engine before integration.
+Rooms/history backfill, media, schedules, sync, PWA/offline and backup/restore are
+later work. See [engine milestone notes](docs/milestone-two-engine.md) and
+[foundation notes](docs/milestone-one.md) for scope and invariants.
 
 ## Run
 
@@ -80,11 +78,45 @@ curl -N http://127.0.0.1:8080/api/v1/events
 curl -N -H 'Last-Event-ID: ENGINE_UUID:SEQUENCE' http://127.0.0.1:8080/api/v1/events
 ```
 
+## Connect and message through the API
+
+Start the development server, copy its certificate as shown below, then start an
+engine trusting that certificate:
+
+```sh
+bin/oie --data-dir ./data --xmpp-ca-file bin/xmpp-localhost.crt
+```
+
+After registering the fixture accounts, replace `ACCOUNT_UUID` and
+`CONVERSATION_UUID` with IDs returned by the API. Connection credentials go on
+stdin and are never included in account reads or operation receipts:
+
+```sh
+printf '%s\n' '{"password":"alice-local-only","endpoint":"localhost:5222"}' |
+  bin/oiectl accounts configure-account-connection --account-id ACCOUNT_UUID --body-stdin
+bin/oiectl accounts get-account-connection --account-id ACCOUNT_UUID
+printf '%s\n' '{"accountId":"ACCOUNT_UUID","address":"bob@localhost"}' |
+  bin/oiectl conversations open-conversation \
+    --idempotency-key 019a5df0-0000-7000-8000-000000000005 --body-stdin
+printf '%s\n' '{"originalText":"Olá from Oie!"}' |
+  bin/oiectl messages send-message --conversation-id CONVERSATION_UUID \
+    --idempotency-key 019a5df0-0000-7000-8000-000000000006 --body-stdin
+bin/oiectl messages list-messages --conversation-id CONVERSATION_UUID
+```
+
+Connect Bob with `bob-local-only` too to receive the exchange in this engine.
+Use new UUIDv7 operation keys for new logical actions. A send acceptance is durable
+`queued` intent; read the message for current `sendState`. `submitted` means a
+stream write, not recipient delivery. Unknown outcomes are never blindly resent.
+Passwords currently reside in private 0600 engine-local JSON files (plaintext);
+credential-store/encryption integration remains open.
+
 ## Development XMPP server
 
 ```sh
 make dev-up
 make test-xmpp
+make test-engine-xmpp
 make dev-down
 ```
 
@@ -131,10 +163,12 @@ make check           # warning-free lint, drift checks, vet, tests and Compose v
 make test-race
 ```
 
-Build tools are pinned. Vacuum has a separate module under `tools/vacuum` so
-its documentation renderer's templ dependency cannot change the application
-generator/runtime graph. No sibling checkout or local module replacement is
-required.
+Build/generation tools are pinned in the `tools` module; root go.mod contains
+application dependencies. Vacuum stays isolated under `tools/vacuum` so its templ
+dependency cannot change the application generator/runtime graph. SQL queries are
+generated with sqlc; golang-migrate applies embedded migrations on startup and
+preserves the earlier foundation database. One process owns each engine data
+directory. No sibling checkout or local module replacement is required.
 
 To run browser consumer checks against a running Oie:
 

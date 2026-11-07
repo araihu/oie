@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.1.0",
-    "description": "Protocol-neutral engine foundation. This milestone registers account metadata;\nit does not connect protocol sessions or accept chat messages yet.\nAll timestamps are UTC. Application entities and operations use UUIDv7 IDs.\nThe BFF owns HTML; this API returns structured data and SSE.\n",
+    "version": "0.2.0",
+    "description": "Native engine API for account metadata, XMPP connections, direct text conversations, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.",
     "contact": {
       "name": "Arai Hû",
       "url": "https://github.com/araihu/oie"
@@ -31,6 +31,14 @@
     {
       "name": "Events",
       "description": "Recoverable engine changes"
+    },
+    {
+      "name": "Conversations",
+      "description": "Account-scoped direct conversations"
+    },
+    {
+      "name": "Messages",
+      "description": "Retained text messages and durable send intents"
     }
   ],
   "paths": {
@@ -81,7 +89,7 @@
                 "example": {
                   "id": "019a5df0-0000-7000-8000-000000000003",
                   "role": "local",
-                  "apiVersion": "0.1.0",
+                  "apiVersion": "0.2.0",
                   "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
                 }
               }
@@ -160,7 +168,7 @@
         ],
         "operationId": "registerAccount",
         "summary": "Register protocol account metadata",
-        "description": "Atomically stores an account, initial immutable revision, operation receipt,\nand account.registered event. Repeating a key with the same normalized input\nreturns the original result. Reusing it with different input conflicts.\nNo credentials are accepted, and no protocol session is opened.\nAddress matching is exact after trimming; provider canonicalization is deferred.\n",
+        "description": "Atomically stores an account, initial immutable revision, operation receipt,\nand account.registered event. Repeating a key with the same normalized input\nreturns the original result. Reusing it with different input conflicts.\nNo credentials are accepted, and no protocol session is opened.\nNew XMPP registrations use the compiled-in adapter to normalize bare JIDs before matching. Existing foundation metadata is retained without rewriting identities.\n",
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -354,7 +362,7 @@
         ],
         "operationId": "getOperation",
         "summary": "Reconcile a mutation after an ambiguous response",
-        "description": "A known receipt proves the registration committed; unknown IDs return 404.",
+        "description": "A receipt proves the local mutation committed; send receipts prove durable engine acceptance, never recipient delivery. Unknown IDs return 404.",
         "parameters": [
           {
             "name": "operationId",
@@ -407,7 +415,7 @@
         },
         "x-cli-ignore": true,
         "summary": "Replay durable changes and follow new events",
-        "description": "SSE id is engineUUID:sequence; event is the event type; data is Event JSON.\nLast-Event-ID resumes strictly after its sequence. Without a cursor replay\nfrom zero. Cursors from another engine or ahead of current state return 409\nbefore streaming. Heartbeat comments are not durable events.\nMilestone one retains the complete change log. Clients deduplicate by event\nID and refresh snapshots if a future retention policy expires a cursor.\n",
+        "description": "SSE id is engineUUID:sequence; event is the event type; data is Event JSON.\nLast-Event-ID resumes strictly after its sequence. Without a cursor replay\nfrom zero. Cursors from another engine or ahead of current state return 409\nbefore streaming. Heartbeat comments are not durable events.\nThis engine retains the complete change log. Clients deduplicate by event\nID and refresh snapshots if a future retention policy expires a cursor.\n",
         "parameters": [
           {
             "name": "Last-Event-ID",
@@ -442,6 +450,665 @@
           }
         }
       }
+    },
+    "/api/v1/accounts/{accountId}/connection": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AccountID"
+        }
+      ],
+      "get": {
+        "operationId": "getAccountConnection",
+        "tags": [
+          "Accounts"
+        ],
+        "summary": "Read account connection state",
+        "description": "State is runtime evidence, distinct from saved account metadata.",
+        "responses": {
+          "200": {
+            "description": "Current resource",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connection"
+                },
+                "example": {
+                  "accountId": "019a5df0-0000-7000-8000-000000000001",
+                  "state": "not_connected",
+                  "updatedAt": "2026-11-07T12:00:00Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "configureAccountConnection",
+        "tags": [
+          "Accounts"
+        ],
+        "summary": "Configure and connect an account",
+        "description": "Persists write-only credentials before starting an asynchronous TLS/SASL connection. Transient network failures reconnect with bounded backoff; invalid credentials or TLS verification failures require corrected configuration. Ordinary engine restart reloads enabled configurations.",
+        "responses": {
+          "202": {
+            "description": "Connection configuration accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connection"
+                },
+                "example": {
+                  "accountId": "019a5df0-0000-7000-8000-000000000001",
+                  "state": "not_connected",
+                  "updatedAt": "2026-11-07T12:00:00Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Structured operation input.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfigureConnection"
+              },
+              "example": {
+                "password": "alice-local-only"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "disconnectAccount",
+        "tags": [
+          "Accounts"
+        ],
+        "summary": "Disconnect and disable automatic connection",
+        "description": "Keeps protocol credentials local for a later explicit configuration; does not delete account history or pending sends. Repeating disconnect is safe.",
+        "responses": {
+          "200": {
+            "description": "Current resource",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connection"
+                },
+                "example": {
+                  "accountId": "019a5df0-0000-7000-8000-000000000001",
+                  "state": "not_connected",
+                  "updatedAt": "2026-11-07T12:00:00Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations": {
+      "get": {
+        "operationId": "listConversations",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "List retained conversations",
+        "description": "Keyset pages ordered by descending engine activity. Search matches conversation address/title and latest text preview; this is not full message search.",
+        "responses": {
+          "200": {
+            "description": "Current resource",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationPage"
+                },
+                "example": {
+                  "items": []
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque nextCursor from the preceding page.",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum page size.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": false,
+            "description": "Stable accountId reference.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Conversation address/title/latest-preview substring.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "unreadOnly",
+            "in": "query",
+            "description": "Only conversations with unread messages.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "favoritesOnly",
+            "in": "query",
+            "description": "Only favorite conversations.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "archived",
+            "in": "query",
+            "description": "Archived state; defaults to false.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "description": "Conversation kind.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "direct",
+                "room"
+              ]
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "openConversation",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Open a direct conversation",
+        "description": "Finds an existing conversation for the canonical account/peer or creates one. Durable operation keys retain original results. Does not add a contact or send presence subscriptions.",
+        "responses": {
+          "201": {
+            "description": "Direct conversation opened",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conversation"
+                },
+                "example": {
+                  "id": "019a5df0-0000-7000-8000-000000000001",
+                  "revisionId": "019a5df0-0000-7000-8000-000000000001",
+                  "accountId": "019a5df0-0000-7000-8000-000000000001",
+                  "kind": "direct",
+                  "address": "bob@localhost",
+                  "title": "bob@localhost",
+                  "lastMessage": "Hello from Oie!",
+                  "updatedAt": "2026-11-07T12:00:00Z",
+                  "unreadCount": 0,
+                  "archived": false,
+                  "favorite": false
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Existing conversation or original operation replay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conversation"
+                },
+                "example": {
+                  "id": "019a5df0-0000-7000-8000-000000000001",
+                  "revisionId": "019a5df0-0000-7000-8000-000000000001",
+                  "accountId": "019a5df0-0000-7000-8000-000000000001",
+                  "kind": "direct",
+                  "address": "bob@localhost",
+                  "title": "bob@localhost",
+                  "lastMessage": "Hello from Oie!",
+                  "updatedAt": "2026-11-07T12:00:00Z",
+                  "unreadCount": 0,
+                  "archived": false,
+                  "favorite": false
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Stable Idempotency-Key reference.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Structured operation input.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenConversation"
+              },
+              "example": {
+                "accountId": "019a5df0-0000-7000-8000-000000000001",
+                "address": "bob@localhost"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversationId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationID"
+        }
+      ],
+      "get": {
+        "operationId": "getConversation",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Read a conversation",
+        "description": "Returns the current conversation projection.",
+        "responses": {
+          "200": {
+            "description": "Current resource",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conversation"
+                },
+                "example": {
+                  "id": "019a5df0-0000-7000-8000-000000000001",
+                  "revisionId": "019a5df0-0000-7000-8000-000000000001",
+                  "accountId": "019a5df0-0000-7000-8000-000000000001",
+                  "kind": "direct",
+                  "address": "bob@localhost",
+                  "title": "bob@localhost",
+                  "lastMessage": "Hello from Oie!",
+                  "updatedAt": "2026-11-07T12:00:00Z",
+                  "unreadCount": 0,
+                  "archived": false,
+                  "favorite": false
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversationId}/messages": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationID"
+        }
+      ],
+      "get": {
+        "operationId": "listMessages",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Read retained messages",
+        "description": "Returns newest-first pages. This milestone has live ingestion, not MAM history backfill.",
+        "responses": {
+          "200": {
+            "description": "Current resource",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessagePage"
+                },
+                "example": {
+                  "items": []
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Read records older than this nextCursor UUID.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum page size.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "sendMessage",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Accept an immediate text message",
+        "description": "Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.",
+        "responses": {
+          "202": {
+            "description": "Message and send intent committed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                },
+                "example": {
+                  "id": "019a5df0-0000-7000-8000-000000000001",
+                  "revisionId": "019a5df0-0000-7000-8000-000000000001",
+                  "accountId": "019a5df0-0000-7000-8000-000000000001",
+                  "conversationId": "019a5df0-0000-7000-8000-000000000001",
+                  "sender": {
+                    "id": "019a5df0-0000-7000-8000-000000000001",
+                    "displayName": "bob@localhost"
+                  },
+                  "originalText": "Hello from Oie!",
+                  "createdAt": "2026-11-07T12:00:00Z",
+                  "isOwn": false,
+                  "sendState": "received"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Original acceptance replayed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                },
+                "example": {
+                  "id": "019a5df0-0000-7000-8000-000000000001",
+                  "revisionId": "019a5df0-0000-7000-8000-000000000001",
+                  "accountId": "019a5df0-0000-7000-8000-000000000001",
+                  "conversationId": "019a5df0-0000-7000-8000-000000000001",
+                  "sender": {
+                    "id": "019a5df0-0000-7000-8000-000000000001",
+                    "displayName": "bob@localhost"
+                  },
+                  "originalText": "Hello from Oie!",
+                  "createdAt": "2026-11-07T12:00:00Z",
+                  "isOwn": false,
+                  "sendState": "received"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Stable Idempotency-Key reference.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Structured operation input.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessage"
+              },
+              "example": {
+                "originalText": "Hello from Oie!"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/messages/{messageId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MessageID"
+        }
+      ],
+      "get": {
+        "operationId": "getMessage",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Read a retained message",
+        "description": "Returns the latest revision and send evidence.",
+        "responses": {
+          "200": {
+            "description": "Current resource",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                },
+                "example": {
+                  "id": "019a5df0-0000-7000-8000-000000000001",
+                  "revisionId": "019a5df0-0000-7000-8000-000000000001",
+                  "accountId": "019a5df0-0000-7000-8000-000000000001",
+                  "conversationId": "019a5df0-0000-7000-8000-000000000001",
+                  "sender": {
+                    "id": "019a5df0-0000-7000-8000-000000000001",
+                    "displayName": "bob@localhost"
+                  },
+                  "originalText": "Hello from Oie!",
+                  "createdAt": "2026-11-07T12:00:00Z",
+                  "isOwn": false,
+                  "sendState": "received"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/messages/{messageId}/cancel": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MessageID"
+        }
+      ],
+      "post": {
+        "operationId": "cancelMessage",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Cancel a queued send",
+        "description": "Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.",
+        "responses": {
+          "200": {
+            "description": "Current resource",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                },
+                "example": {
+                  "id": "019a5df0-0000-7000-8000-000000000001",
+                  "revisionId": "019a5df0-0000-7000-8000-000000000001",
+                  "accountId": "019a5df0-0000-7000-8000-000000000001",
+                  "conversationId": "019a5df0-0000-7000-8000-000000000001",
+                  "sender": {
+                    "id": "019a5df0-0000-7000-8000-000000000001",
+                    "displayName": "bob@localhost"
+                  },
+                  "originalText": "Hello from Oie!",
+                  "createdAt": "2026-11-07T12:00:00Z",
+                  "isOwn": false,
+                  "sendState": "received"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Stable Idempotency-Key reference.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Structured operation input.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelMessage"
+              },
+              "example": {
+                "expectedRevisionId": "019a5df0-0000-7000-8000-000000000001"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -451,6 +1118,24 @@
         "in": "path",
         "required": true,
         "description": "Stable account UUIDv7.",
+        "schema": {
+          "$ref": "#/components/schemas/ID"
+        }
+      },
+      "ConversationID": {
+        "name": "conversationId",
+        "in": "path",
+        "required": true,
+        "description": "Stable conversationId UUIDv7.",
+        "schema": {
+          "$ref": "#/components/schemas/ID"
+        }
+      },
+      "MessageID": {
+        "name": "messageId",
+        "in": "path",
+        "required": true,
+        "description": "Stable messageId UUIDv7.",
         "schema": {
           "$ref": "#/components/schemas/ID"
         }
@@ -490,7 +1175,7 @@
         }
       },
       "Conflict": {
-        "description": "Idempotency conflict, duplicate address, or invalid stream cursor",
+        "description": "Idempotency conflict, duplicate address, invalid stream cursor, or message state conflict",
         "content": {
           "application/problem+json": {
             "schema": {
@@ -506,7 +1191,7 @@
         }
       },
       "Unavailable": {
-        "description": "Persistence temporarily unavailable",
+        "description": "Engine persistence or protocol service temporarily unavailable",
         "content": {
           "application/problem+json": {
             "schema": {
@@ -556,7 +1241,7 @@
         "example": {
           "id": "019a5df0-0000-7000-8000-000000000003",
           "role": "local",
-          "apiVersion": "0.1.0",
+          "apiVersion": "0.2.0",
           "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
         },
         "additionalProperties": false,
@@ -580,7 +1265,7 @@
           "apiVersion": {
             "type": "string",
             "enum": [
-              "0.1.0"
+              "0.2.0"
             ]
           },
           "eventCursor": {
@@ -666,7 +1351,10 @@
           "connectionState": {
             "type": "string",
             "enum": [
-              "not_connected"
+              "not_connected",
+              "connecting",
+              "connected",
+              "error"
             ]
           },
           "createdAt": {
@@ -728,14 +1416,20 @@
           "state": {
             "type": "string",
             "enum": [
-              "unknown"
+              "unknown",
+              "known"
             ]
           },
           "reason": {
             "type": "string",
             "enum": [
-              "not_connected"
+              "not_connected",
+              "adapter_connected"
             ]
+          },
+          "directText": {
+            "type": "boolean",
+            "description": "True only while the basic direct-text adapter is connected. No other optional protocol support is implied."
           }
         }
       },
@@ -764,7 +1458,10 @@
           "kind": {
             "type": "string",
             "enum": [
-              "register_account"
+              "register_account",
+              "open_conversation",
+              "send_message",
+              "cancel_message"
             ]
           },
           "status": {
@@ -784,7 +1481,7 @@
       },
       "Event": {
         "type": "object",
-        "description": "Durable event data encoded as JSON in an SSE data field.",
+        "description": "Durable event with the payload corresponding to its type. Accounts, connections, conversations, and messages are separate payloads. No credentials or raw protocol errors are included.",
         "example": {
           "id": "019a5df0-0000-7000-8000-000000000003:1",
           "type": "account.registered",
@@ -803,8 +1500,7 @@
         "required": [
           "id",
           "type",
-          "occurredAt",
-          "account"
+          "occurredAt"
         ],
         "properties": {
           "id": {
@@ -814,7 +1510,12 @@
           "type": {
             "type": "string",
             "enum": [
-              "account.registered"
+              "account.registered",
+              "account.connection_changed",
+              "conversation.created",
+              "conversation.updated",
+              "message.created",
+              "message.updated"
             ]
           },
           "occurredAt": {
@@ -823,6 +1524,15 @@
           },
           "account": {
             "$ref": "#/components/schemas/Account"
+          },
+          "conversation": {
+            "$ref": "#/components/schemas/Conversation"
+          },
+          "message": {
+            "$ref": "#/components/schemas/Message"
+          },
+          "connection": {
+            "$ref": "#/components/schemas/Connection"
           }
         }
       },
@@ -860,9 +1570,358 @@
               "idempotency_conflict",
               "account_exists",
               "invalid_cursor",
-              "unavailable"
+              "unavailable",
+              "state_conflict",
+              "protocol_unavailable"
+            ]
+          },
+          "currentMessage": {
+            "$ref": "#/components/schemas/Message"
+          }
+        }
+      },
+      "Connection": {
+        "type": "object",
+        "description": "Current owning-engine connection state. Contains no credentials.",
+        "additionalProperties": false,
+        "required": [
+          "accountId",
+          "state",
+          "updatedAt"
+        ],
+        "properties": {
+          "accountId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "state": {
+            "type": "string",
+            "description": "Runtime connection state.",
+            "enum": [
+              "not_connected",
+              "connecting",
+              "connected",
+              "error"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp."
+          },
+          "lastErrorCode": {
+            "type": "string",
+            "description": "Stable localized-error key; raw provider errors are never returned.",
+            "enum": [
+              "authentication_failed",
+              "tls_failed",
+              "connection_failed"
             ]
           }
+        },
+        "example": {
+          "accountId": "019a5df0-0000-7000-8000-000000000001",
+          "state": "not_connected",
+          "updatedAt": "2026-11-07T12:00:00Z"
+        }
+      },
+      "ConfigureConnection": {
+        "type": "object",
+        "description": "Desired enabled connection. Repeating unchanged configuration does not create another session. Credentials are kept in private engine-local files and are excluded from reads/events.",
+        "additionalProperties": false,
+        "required": [
+          "password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "Protocol password; never returned.",
+            "minLength": 1,
+            "maxLength": 4096,
+            "writeOnly": true
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "Optional TCP host:port override. TLS verifies the account domain. Omit to use XMPP SRV discovery.",
+            "maxLength": 255
+          }
+        },
+        "example": {
+          "password": "alice-local-only"
+        }
+      },
+      "OpenConversation": {
+        "type": "object",
+        "description": "Open or find a direct conversation in a registered account.",
+        "additionalProperties": false,
+        "required": [
+          "accountId",
+          "address"
+        ],
+        "properties": {
+          "accountId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "address": {
+            "type": "string",
+            "description": "Destination protocol address, normalized by the owning adapter.",
+            "minLength": 1,
+            "maxLength": 1023
+          }
+        },
+        "example": {
+          "accountId": "019a5df0-0000-7000-8000-000000000001",
+          "address": "bob@localhost"
+        }
+      },
+      "Conversation": {
+        "type": "object",
+        "description": "One account-scoped conversation. This milestone creates direct conversations; rooms are not implemented.",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "revisionId",
+          "accountId",
+          "kind",
+          "address",
+          "title",
+          "lastMessage",
+          "updatedAt",
+          "unreadCount",
+          "archived",
+          "favorite"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "revisionId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Conversation kind.",
+            "enum": [
+              "direct",
+              "room"
+            ]
+          },
+          "address": {
+            "type": "string",
+            "description": "Canonical peer address."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title; initially the peer address."
+          },
+          "lastMessage": {
+            "type": "string",
+            "description": "Original text preview of the most recently retained message."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp."
+          },
+          "unreadCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "favorite": {
+            "type": "boolean"
+          }
+        },
+        "example": {
+          "id": "019a5df0-0000-7000-8000-000000000001",
+          "revisionId": "019a5df0-0000-7000-8000-000000000001",
+          "accountId": "019a5df0-0000-7000-8000-000000000001",
+          "kind": "direct",
+          "address": "bob@localhost",
+          "title": "bob@localhost",
+          "lastMessage": "Hello from Oie!",
+          "updatedAt": "2026-11-07T12:00:00Z",
+          "unreadCount": 0,
+          "archived": false,
+          "favorite": false
+        }
+      },
+      "ConversationPage": {
+        "type": "object",
+        "description": "Conversations in descending engine activity order. New activity can move items between pages; reconcile using stable IDs and SSE.",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Conversation"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "Opaque engine-scoped activity cursor."
+          }
+        },
+        "example": {
+          "items": []
+        }
+      },
+      "Sender": {
+        "type": "object",
+        "description": "Stable engine-local protocol identity for a sender.",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "displayName"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Display name, initially a protocol address."
+          }
+        },
+        "example": {
+          "id": "019a5df0-0000-7000-8000-000000000001",
+          "displayName": "bob@localhost"
+        }
+      },
+      "Message": {
+        "type": "object",
+        "description": "Retained original text and actual send evidence. submitted means the stanza was written to the authenticated stream; it does not prove provider acceptance, recipient delivery, or read state. unknown is not automatically resent.",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "revisionId",
+          "accountId",
+          "conversationId",
+          "sender",
+          "originalText",
+          "createdAt",
+          "isOwn",
+          "sendState"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "revisionId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "conversationId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "sender": {
+            "$ref": "#/components/schemas/Sender"
+          },
+          "originalText": {
+            "type": "string",
+            "description": "Unmodified original text."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp."
+          },
+          "isOwn": {
+            "type": "boolean"
+          },
+          "sendState": {
+            "type": "string",
+            "description": "Durable transport evidence.",
+            "enum": [
+              "received",
+              "queued",
+              "dispatching",
+              "submitted",
+              "unknown",
+              "failed",
+              "cancelled"
+            ]
+          }
+        },
+        "example": {
+          "id": "019a5df0-0000-7000-8000-000000000001",
+          "revisionId": "019a5df0-0000-7000-8000-000000000001",
+          "accountId": "019a5df0-0000-7000-8000-000000000001",
+          "conversationId": "019a5df0-0000-7000-8000-000000000001",
+          "sender": {
+            "id": "019a5df0-0000-7000-8000-000000000001",
+            "displayName": "bob@localhost"
+          },
+          "originalText": "Hello from Oie!",
+          "createdAt": "2026-11-07T12:00:00Z",
+          "isOwn": false,
+          "sendState": "received"
+        }
+      },
+      "MessagePage": {
+        "type": "object",
+        "description": "Messages newest first in stable engine ingestion-ID order. Use nextCursor for older records; render the page in reverse for a chronological timeline.",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            }
+          },
+          "nextCursor": {
+            "$ref": "#/components/schemas/ID"
+          }
+        },
+        "example": {
+          "items": []
+        }
+      },
+      "SendMessage": {
+        "type": "object",
+        "description": "Durably accept an immediate plain text send.",
+        "additionalProperties": false,
+        "required": [
+          "originalText"
+        ],
+        "properties": {
+          "originalText": {
+            "type": "string",
+            "description": "Original UTF-8 text. Whitespace/newlines are preserved; empty or whitespace-only bodies are rejected.",
+            "minLength": 1,
+            "maxLength": 16384
+          }
+        },
+        "example": {
+          "originalText": "Hello from Oie!"
+        }
+      },
+      "CancelMessage": {
+        "type": "object",
+        "description": "Cancel only while queued and before dispatch starts. A conflict returns currentMessage with actual state.",
+        "additionalProperties": false,
+        "required": [
+          "expectedRevisionId"
+        ],
+        "properties": {
+          "expectedRevisionId": {
+            "$ref": "#/components/schemas/ID"
+          }
+        },
+        "example": {
+          "expectedRevisionId": "019a5df0-0000-7000-8000-000000000001"
         }
       }
     }

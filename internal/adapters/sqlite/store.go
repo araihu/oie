@@ -3,24 +3,28 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	_ "embed"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
+	"github.com/gofrs/flock"
 	sqlitedriver "modernc.org/sqlite"
 )
 
-//go:embed migrations/001_foundation.sql
-var migration string
-
-type Store struct{ db *sql.DB }
+type Store struct {
+	db        *sql.DB
+	queries   *dbgen.Queries
+	lock      *flock.Flock
+	closeOnce sync.Once
+	closeErr  error
+}
 
 func Open(ctx context.Context, dir string, initialID domain.ID) (_ *Store, err error) {
 	if _, err = domain.ParseID(string(initialID)); err != nil {
@@ -29,6 +33,19 @@ func Open(ctx context.Context, dir string, initialID domain.ID) (_ *Store, err e
 	if err = os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
+	owner := flock.New(filepath.Join(dir, "engine.lock"))
+	locked, err := owner.TryLock()
+	if err != nil {
+		return nil, err
+	}
+	if !locked {
+		return nil, errors.New("engine data directory already in use")
+	}
+	defer func() {
+		if err != nil {
+			_ = owner.Close()
+		}
+	}()
 	path, err := filepath.Abs(filepath.Join(dir, "oie.sqlite"))
 	if err != nil {
 		return nil, err
@@ -55,27 +72,11 @@ func Open(ctx context.Context, dir string, initialID domain.ID) (_ *Store, err e
 		}
 	}()
 	db.SetMaxOpenConns(1)
-	var version int
-	if err = db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
+	if err = migrateDatabase(ctx, db); err != nil {
 		return nil, err
 	}
-	if version > 1 {
-		return nil, fmt.Errorf("database schema %d is newer than supported version 1", version)
-	}
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-	if version == 0 {
-		if _, err = tx.ExecContext(ctx, migration); err != nil {
-			return nil, err
-		}
-	}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO engine_identity(singleton,id) VALUES(1,?) ON CONFLICT(singleton) DO NOTHING", initialID); err != nil {
-		return nil, err
-	}
-	if err = tx.Commit(); err != nil {
+	queries := dbgen.New(db)
+	if err = queries.InsertEngineIdentity(ctx, string(initialID)); err != nil {
 		return nil, err
 	}
 	if _, err = db.ExecContext(ctx, "PRAGMA journal_mode=WAL"); err != nil {
@@ -84,59 +85,76 @@ func Open(ctx context.Context, dir string, initialID domain.ID) (_ *Store, err e
 	if err = os.MkdirAll(filepath.Join(dir, "media"), 0700); err != nil {
 		return nil, err
 	}
-	return &Store{db: db}, nil
+	return &Store{db: db, queries: queries, lock: owner}, nil
 }
-
-func (s *Store) Close() error                   { return s.db.Close() }
+func (s *Store) Close() error {
+	s.closeOnce.Do(func() { s.closeErr = errors.Join(s.db.Close(), s.lock.Close()) })
+	return s.closeErr
+}
 func (s *Store) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
-
 func (s *Store) Snapshot(ctx context.Context) (domain.ID, int64, error) {
-	var id domain.ID
-	var seq int64
-	err := s.db.QueryRowContext(ctx,
-		"SELECT id,(SELECT COALESCE(MAX(sequence),0) FROM changes) FROM engine_identity WHERE singleton=1").Scan(&id, &seq)
-	return id, seq, err
+	row, err := s.queries.Snapshot(ctx)
+	return domain.ID(row.ID), row.Sequence, err
 }
-
-func (s *Store) Register(ctx context.Context, in application.Registration) (application.RegistrationResult, error) {
-	data, err := json.Marshal(in.Account)
+func stamp(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000000000Z") }
+func jsonText(value any) string {
+	data, err := json.Marshal(value)
 	if err != nil {
-		return application.RegistrationResult{}, err
+		panic(err)
 	}
+	return string(data)
+} // Only concrete domain structs reach this helper.
+func notFound(err error) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return application.ErrNotFound
+	}
+	return err
+}
+func begin(ctx context.Context, s *Store) (*sql.Tx, *dbgen.Queries, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	return tx, s.queries.WithTx(tx), nil
+}
+func operation(ctx context.Context, q *dbgen.Queries, op application.Operation, hash string, value any) (*dbgen.Operation, error) {
+	changed, err := q.InsertOperation(ctx, dbgen.InsertOperationParams{ID: string(op.ID), Fingerprint: hash, ResourceID: string(op.ResourceID), Result: jsonText(value), CreatedAt: stamp(op.CreatedAt), Kind: op.Kind})
+	if err != nil {
+		return nil, err
+	}
+	if changed != 0 {
+		return nil, nil
+	}
+	existing, err := q.GetOperation(ctx, string(op.ID))
+	if err != nil {
+		return nil, err
+	}
+	if existing.Fingerprint != hash || existing.Kind != op.Kind {
+		return nil, application.ErrIdempotencyConflict
+	}
+	return &existing, nil
+}
+func change(ctx context.Context, q *dbgen.Queries, kind string, value any, at time.Time) (int64, error) {
+	return q.InsertChange(ctx, dbgen.InsertChangeParams{Payload: jsonText(value), OccurredAt: stamp(at), Kind: kind})
+}
+func (s *Store) Register(ctx context.Context, in application.Registration) (application.RegistrationResult, error) {
+	tx, q, err := begin(ctx, s)
 	if err != nil {
 		return application.RegistrationResult{}, err
 	}
 	defer tx.Rollback()
-	// Acquire the write lock before any reads: concurrent connections must see
-	// the committed receipt, not race a read-to-write transaction upgrade.
-	result, err := tx.ExecContext(ctx,
-		"INSERT INTO operations(id,fingerprint,resource_id,result,created_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO NOTHING",
-		in.Operation.ID, in.Fingerprint, in.Account.ID, string(data), stamp(in.Operation.CreatedAt))
+	in.Operation.Kind = "register_account"
+	existing, err := operation(ctx, q, in.Operation, in.Fingerprint, in.Account)
 	if err != nil {
 		return application.RegistrationResult{}, err
 	}
-	changed, err := result.RowsAffected()
-	if err != nil {
-		return application.RegistrationResult{}, err
+	if existing != nil {
+		var a domain.Account
+		err = json.Unmarshal([]byte(existing.Result), &a)
+		return application.RegistrationResult{Account: a, Replayed: true}, err
 	}
-	if changed == 0 {
-		var fingerprint, original string
-		if err = tx.QueryRowContext(ctx, "SELECT fingerprint,result FROM operations WHERE id=?", in.Operation.ID).Scan(&fingerprint, &original); err != nil {
-			return application.RegistrationResult{}, err
-		}
-		if fingerprint != in.Fingerprint {
-			return application.RegistrationResult{}, application.ErrIdempotencyConflict
-		}
-		var account domain.Account
-		if err = json.Unmarshal([]byte(original), &account); err != nil {
-			return application.RegistrationResult{}, err
-		}
-		return application.RegistrationResult{Account: account, Replayed: true}, nil
-	}
-	_, err = tx.ExecContext(ctx,
-		"INSERT INTO accounts(id,revision_id,protocol,address,label,created_at) VALUES(?,?,?,?,?,?)",
-		in.Account.ID, in.Account.RevisionID, in.Account.Protocol, in.Account.Address, in.Account.Label, stamp(in.Account.CreatedAt))
+	a := in.Account
+	err = q.InsertAccount(ctx, dbgen.InsertAccountParams{ID: string(a.ID), RevisionID: string(a.RevisionID), Protocol: a.Protocol, Address: a.Address, Label: a.Label, CreatedAt: stamp(a.CreatedAt)})
 	if err != nil {
 		var dbErr *sqlitedriver.Error
 		if errors.As(err, &dbErr) && dbErr.Code() == 2067 {
@@ -144,94 +162,82 @@ func (s *Store) Register(ctx context.Context, in application.Registration) (appl
 		}
 		return application.RegistrationResult{}, err
 	}
-	_, err = tx.ExecContext(ctx, "INSERT INTO revisions(id,entity_id,parents,payload,created_at) VALUES(?,?,'[]',?,?)",
-		in.Account.RevisionID, in.Account.ID, string(data), stamp(in.Account.CreatedAt))
-	if err != nil {
+	if err = q.InsertAccountRevision(ctx, dbgen.InsertAccountRevisionParams{ID: string(a.RevisionID), EntityID: string(a.ID), Payload: jsonText(a), CreatedAt: stamp(a.CreatedAt)}); err != nil {
 		return application.RegistrationResult{}, err
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO changes(payload,occurred_at) VALUES(?,?)", string(data), stamp(in.Account.CreatedAt)); err != nil {
+	if _, err = change(ctx, q, "account.registered", a, a.CreatedAt); err != nil {
 		return application.RegistrationResult{}, err
 	}
 	if err = tx.Commit(); err != nil {
 		return application.RegistrationResult{}, err
 	}
-	return application.RegistrationResult{Account: in.Account}, nil
+	return application.RegistrationResult{Account: a}, nil
 }
-
-func stamp(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
-
 func (s *Store) Account(ctx context.Context, id domain.ID) (domain.Account, error) {
-	var data string
-	err := s.db.QueryRowContext(ctx, "SELECT payload FROM revisions WHERE id=(SELECT revision_id FROM accounts WHERE id=?)", id).Scan(&data)
-	if errors.Is(err, sql.ErrNoRows) {
-		return domain.Account{}, application.ErrNotFound
-	}
+	data, err := s.queries.GetAccount(ctx, string(id))
 	if err != nil {
-		return domain.Account{}, err
+		return domain.Account{}, notFound(err)
 	}
-	var account domain.Account
-	err = json.Unmarshal([]byte(data), &account)
-	return account, err
+	var a domain.Account
+	err = json.Unmarshal([]byte(data), &a)
+	return a, err
 }
-
 func (s *Store) Accounts(ctx context.Context, after domain.ID, limit int) ([]domain.Account, error) {
-	rows, err := s.db.QueryContext(ctx,
-		"SELECT r.payload FROM accounts a JOIN revisions r ON a.revision_id=r.id WHERE a.id>? ORDER BY a.id LIMIT ?", after, limit)
+	rows, err := s.queries.ListAccounts(ctx, dbgen.ListAccountsParams{ID: string(after), Limit: int64(limit)})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := make([]domain.Account, 0)
-	for rows.Next() {
-		var data string
-		if err := rows.Scan(&data); err != nil {
+	out := make([]domain.Account, 0, len(rows))
+	for _, data := range rows {
+		var a domain.Account
+		if err = json.Unmarshal([]byte(data), &a); err != nil {
 			return nil, err
 		}
-		var account domain.Account
-		if err := json.Unmarshal([]byte(data), &account); err != nil {
-			return nil, err
-		}
-		out = append(out, account)
+		out = append(out, a)
 	}
-	return out, rows.Err()
+	return out, nil
 }
-
 func (s *Store) Operation(ctx context.Context, id domain.ID) (application.Operation, error) {
-	var op application.Operation
-	var created string
-	err := s.db.QueryRowContext(ctx, "SELECT id,resource_id,created_at FROM operations WHERE id=?", id).
-		Scan(&op.ID, &op.ResourceID, &created)
-	if errors.Is(err, sql.ErrNoRows) {
-		return op, application.ErrNotFound
-	}
+	row, err := s.queries.GetOperation(ctx, string(id))
 	if err != nil {
-		return op, err
+		return application.Operation{}, notFound(err)
 	}
-	op.CreatedAt, err = time.Parse(time.RFC3339Nano, created)
-	return op, err
+	at, err := time.Parse(time.RFC3339Nano, row.CreatedAt)
+	return application.Operation{ID: domain.ID(row.ID), ResourceID: domain.ID(row.ResourceID), CreatedAt: at, Kind: row.Kind}, err
 }
-
 func (s *Store) Events(ctx context.Context, after int64, limit int) ([]application.Event, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT sequence,payload,occurred_at FROM changes WHERE sequence>? ORDER BY sequence LIMIT ?", after, limit)
+	rows, err := s.queries.ListChanges(ctx, dbgen.ListChangesParams{Sequence: after, Limit: int64(limit)})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := make([]application.Event, 0)
-	for rows.Next() {
-		var e application.Event
-		var data, created string
-		if err := rows.Scan(&e.Sequence, &data, &created); err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal([]byte(data), &e.Account); err != nil {
-			return nil, err
-		}
-		e.OccurredAt, err = time.Parse(time.RFC3339Nano, created)
+	out := make([]application.Event, 0, len(rows))
+	for _, row := range rows {
+		e := application.Event{Sequence: row.Sequence, Type: row.Kind}
+		e.OccurredAt, err = time.Parse(time.RFC3339Nano, row.OccurredAt)
 		if err != nil {
+			return nil, err
+		}
+		var target any
+		switch row.Kind {
+		case "account.registered":
+			e.Account = &domain.Account{}
+			target = e.Account
+		case "account.connection_changed":
+			e.Connection = &domain.Connection{}
+			target = e.Connection
+		case "conversation.created", "conversation.updated":
+			e.Conversation = &domain.Conversation{}
+			target = e.Conversation
+		case "message.created", "message.updated":
+			e.Message = &domain.Message{}
+			target = e.Message
+		default:
+			return nil, errors.New("unsupported durable event type")
+		}
+		if err = json.Unmarshal([]byte(row.Payload), target); err != nil {
 			return nil, err
 		}
 		out = append(out, e)
 	}
-	return out, rows.Err()
+	return out, nil
 }

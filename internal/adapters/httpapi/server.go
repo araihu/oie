@@ -71,8 +71,20 @@ func WriteProblem(w http.ResponseWriter, err error) {
 		status, code = http.StatusConflict, "idempotency_conflict"
 	case errors.Is(err, application.ErrAccountExists):
 		status, code = http.StatusConflict, "account_exists"
+	case errors.Is(err, application.ErrStateConflict):
+		status, code = http.StatusConflict, "state_conflict"
+	case errors.Is(err, application.ErrProtocolUnavailable):
+		status, code = http.StatusServiceUnavailable, "protocol_unavailable"
 	case errors.Is(err, application.ErrInvalidCursor):
 		status, code = http.StatusConflict, "invalid_cursor"
+	}
+	var conflict application.StateConflict
+	if errors.As(err, &conflict) {
+		current := message(conflict.Current)
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(engineapi.Problem{Type: "urn:oie:problem:" + code, Title: http.StatusText(status), Status: status, Code: engineapi.ProblemCode(code), CurrentMessage: &current})
+		return
 	}
 	writeProblem(w, status, code)
 }
@@ -104,7 +116,7 @@ func (s *Server) GetEngine(ctx context.Context, _ engineapi.GetEngineRequestObje
 	}
 	return engineapi.GetEngine200JSONResponse{
 		Id: string(state.ID), Role: engineapi.EngineRole(state.Role),
-		ApiVersion: "0.1.0", EventCursor: cursor(state.ID, state.Sequence),
+		ApiVersion: "0.2.0", EventCursor: cursor(state.ID, state.Sequence),
 	}, nil
 }
 
@@ -139,7 +151,7 @@ func (s *Server) GetAccount(ctx context.Context, r engineapi.GetAccountRequestOb
 	if err != nil {
 		return nil, err
 	}
-	return engineapi.GetAccount200JSONResponse(account(a)), nil
+	return engineapi.GetAccount200JSONResponse(s.currentAccount(ctx, a)), nil
 }
 
 func (s *Server) ListAccounts(ctx context.Context, r engineapi.ListAccountsRequestObject) (engineapi.ListAccountsResponseObject, error) {
@@ -162,7 +174,7 @@ func (s *Server) ListAccounts(ctx context.Context, r engineapi.ListAccountsReque
 		list = list[:limit]
 	}
 	for _, a := range list {
-		page.Items = append(page.Items, account(a))
+		page.Items = append(page.Items, s.currentAccount(ctx, a))
 	}
 	return engineapi.ListAccounts200JSONResponse(page), nil
 }
@@ -172,9 +184,18 @@ func (s *Server) GetAccountCapabilities(ctx context.Context, r engineapi.GetAcco
 	if err != nil {
 		return nil, err
 	}
-	return engineapi.GetAccountCapabilities200JSONResponse{
-		AccountId: string(a.ID), State: "unknown", Reason: "not_connected",
-	}, nil
+	state, err := s.engine.Connection(ctx, a.ID)
+	if err != nil {
+		return nil, err
+	}
+	result := engineapi.Capabilities{AccountId: string(a.ID), State: "unknown", Reason: "not_connected"}
+	if state.State == "connected" {
+		supported := true
+		result.State = "known"
+		result.Reason = "adapter_connected"
+		result.DirectText = &supported
+	}
+	return engineapi.GetAccountCapabilities200JSONResponse(result), nil
 }
 
 func (s *Server) GetOperation(ctx context.Context, r engineapi.GetOperationRequestObject) (engineapi.GetOperationResponseObject, error) {
@@ -184,7 +205,7 @@ func (s *Server) GetOperation(ctx context.Context, r engineapi.GetOperationReque
 	}
 	return engineapi.GetOperation200JSONResponse{
 		Id: string(op.ID), ResourceId: string(op.ResourceID), CreatedAt: op.CreatedAt,
-		Kind: "register_account", Status: "succeeded",
+		Kind: engineapi.OperationKind(op.Kind), Status: "succeeded",
 	}, nil
 }
 
@@ -243,10 +264,8 @@ func (s stream) VisitStreamEventsResponse(w http.ResponseWriter) error {
 		}
 		for _, e := range events {
 			id := cursor(s.engineID, e.Sequence)
-			data, err := json.Marshal(engineapi.Event{
-				Id: id, Type: "account.registered", Account: account(e.Account), OccurredAt: e.OccurredAt,
-			})
-			if err != nil || !write(fmt.Sprintf("id: %s\nevent: account.registered\ndata: %s\n\n", id, data)) {
+			data, err := json.Marshal(event(e, s.engineID))
+			if err != nil || !write(fmt.Sprintf("id: %s\nevent: %s\ndata: %s\n\n", id, e.Type, data)) {
 				return nil
 			}
 			s.after = e.Sequence

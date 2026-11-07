@@ -1,17 +1,19 @@
 GO ?= go
 COMPOSE ?= docker compose
+CODEGEN = GOWORK=off $(GO) tool -modfile=tools/go.mod
 VACUUM = GOWORK=off $(GO) -C tools/vacuum tool vacuum
 CLI_ARGS = --spec api/openapi.cli.json --name oiectl --module github.com/araihu/oie/cli --out cli
 
-.PHONY: generate lint build build-cli run check test test-race check-generated dev-up dev-down test-xmpp
+.PHONY: generate lint build build-cli run check test test-race check-generated dev-up dev-down test-xmpp test-engine-xmpp
 
 generate:
-	GOWORK=off $(GO) tool oapi-codegen --config api/codegen.yaml api/openapi.yaml
-	GOWORK=off $(GO) tool templ generate
+	$(CODEGEN) sqlc generate
+	$(CODEGEN) oapi-codegen --config api/codegen.yaml api/openapi.yaml
+	$(CODEGEN) templ generate
 	$(VACUUM) bundle --composed ../../api/openapi.yaml ../../api/openapi.bundle.yaml
 	$(VACUUM) apply-overlay --fail-on-warnings ../../api/openapi.bundle.yaml ../../api/cli.overlay.yaml ../../api/openapi.cli.yaml
 	$(VACUUM) bundle --composed --format json ../../api/openapi.cli.yaml ../../api/openapi.cli.json
-	@if [ -f cli/.oapi-cli-gen.json ]; then GOWORK=off $(GO) tool oapi-cli-gen generate $(CLI_ARGS) --update; else GOWORK=off $(GO) tool oapi-cli-gen generate $(CLI_ARGS); fi
+	@if [ -f cli/.oapi-cli-gen.json ]; then $(CODEGEN) oapi-cli-gen generate $(CLI_ARGS) --update; else $(CODEGEN) oapi-cli-gen generate $(CLI_ARGS); fi
 	GOWORK=off $(GO) -C cli mod tidy
 
 lint:
@@ -51,3 +53,9 @@ dev-down:
 
 test-xmpp:
 	$(COMPOSE) run --rm --no-deps -T xmpp-check < scripts/test-xmpp.py
+
+# The scratch test container shares Prosody's network, including remote daemons.
+test-engine-xmpp:
+	GOWORK=off CGO_ENABLED=0 GOOS=linux $(GO) test -c -o bin/oie-xmpp-test ./tests/xmpp
+	$(COMPOSE) build engine-check
+	$(COMPOSE) run --rm --no-deps -T engine-check

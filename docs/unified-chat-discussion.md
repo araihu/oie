@@ -1233,3 +1233,16 @@ These are architectural implications and proposals, not a complete agreed sync d
 - SSE streaming semantics: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events
 
 The repository name `araihu/oie` is confirmed. No repository, application scaffold, implementation, or formal spec has been created by this discussion.
+
+
+## Engine/UI implementation split and next increment
+
+The user split UI into its own worktree/worker with a mock server and retained
+this session for the engine. UI: codex/chat-interface in the oie-chat-ui managed
+worktree; engine: codex/xmpp-messaging in the original managed worktree, stacked on
+foundation commit 5b7da71. The user explicitly authorized XMPP connections and basic
+send/receive against the development server, then required sqlc, golang-migrate,
+and repository tooling in the tools module with only app dependencies at root.
+See milestone-two-engine.md for concrete contracts, implementation and verification.
+The UI draft follows the canonical read shapes; do not merge mock delivery data
+into the real engine or claim browser messaging is integrated yet.

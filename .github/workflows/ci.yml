@@ -1,4 +1,4 @@
-name: Foundation checks
+name: Engine checks
 on:
   push:
     branches: [main]
@@ -17,6 +17,7 @@ jobs:
             go.sum
             cli/go.sum
             tools/vacuum/go.sum
+            tools/go.sum
       - run: make check
       - run: make test-race
   development-xmpp:
@@ -24,7 +25,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: make dev-up
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
       - run: make test-xmpp
+      - run: make test-engine-xmpp
       - if: always()
         run: docker compose logs --tail 100
       - if: always()
