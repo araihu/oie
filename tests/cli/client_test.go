@@ -114,5 +114,28 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err != nil || !bytes.Contains(output, []byte(`"sendState": "cancelled"`)) {
 		t.Fatalf("CLI retained timeline: %v %s", err, output)
 	}
-
+	// Star metadata is independent of the already-cancelled message and uses an
+	// explicit null precondition on the first write through the generated CLI.
+	starKey, _ := ids()
+	starBody := `{"starred":true,"expectedRevisionId":null}`
+	output, err = run(starBody, "messages", "set-message-star", "--message-id", message.Id, "--idempotency-key", string(starKey), "--body-stdin")
+	if err != nil {
+		t.Fatalf("CLI star acceptance: %v %s", err, output)
+	}
+	var state engineapi.MessageStar
+	if err = json.Unmarshal(output, &state); err != nil || !state.Starred || state.RevisionId == nil {
+		t.Fatalf("CLI star state: %v %s", err, output)
+	}
+	replay, err = run(starBody, "messages", "set-message-star", "--message-id", message.Id, "--idempotency-key", string(starKey), "--body-stdin")
+	if err != nil || !bytes.Equal(output, replay) {
+		t.Fatalf("CLI star replay changed receipt: %v %s", err, replay)
+	}
+	output, err = run("", "messages", "list-starred-messages", "--account-id", account.Id)
+	if err != nil || !bytes.Contains(output, []byte(message.Id)) || !bytes.Contains(output, []byte(`"sendState": "cancelled"`)) {
+		t.Fatalf("CLI starred source projection: %v %s", err, output)
+	}
+	output, err = run("", "operations", "get-operation", "--operation-id", string(starKey))
+	if err != nil || !bytes.Contains(output, []byte(`"kind": "set_message_star"`)) {
+		t.Fatalf("CLI star receipt: %v %s", err, output)
+	}
 }

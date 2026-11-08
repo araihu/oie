@@ -1,6 +1,8 @@
 package httpapi_test
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -14,6 +16,69 @@ import (
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 )
+
+func TestReadOnlyRoomStarProducesSourceLinkedSSE(t *testing.T) {
+	e, store, server := newMessagingEngine(t, t.TempDir(), &protocolStub{})
+	c := openTestConversation(t, e, "alice@localhost")
+	if err := e.Receive(t.Context(), application.Incoming{AccountID: c.AccountID, Address: "room@conference.localhost", Kind: "room", OriginalText: "https://example.test/photo.png", SenderName: "Room member", Historical: true, ProviderID: "room-source"}); err != nil {
+		t.Fatal(err)
+	}
+	rooms, err := e.Conversations(t.Context(), "", application.ConversationQuery{Kind: "room", Limit: 50})
+	if err != nil || len(rooms) != 1 {
+		t.Fatal(rooms, err)
+	}
+	items, err := e.Messages(t.Context(), rooms[0].ID, "", 50)
+	if err != nil || len(items) != 1 {
+		t.Fatal(items, err)
+	}
+	snapshot, err := e.Snapshot(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := e.SetMessageStar(t.Context(), id(), items[0].ID, "", true)
+	if err != nil {
+		t.Fatal("room read-only messaging must not disable app-owned stars", err)
+	}
+	client, err := engineapi.NewClient(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	cursor := fmt.Sprintf("%s:%d", snapshot.ID, snapshot.Sequence)
+	response, err := client.StreamEvents(ctx, &engineapi.StreamEventsParams{LastEventID: &cursor})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	scanner := bufio.NewScanner(response.Body)
+	found := false
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		var event engineapi.Event
+		if err = json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &event); err != nil {
+			t.Fatal(err)
+		}
+		if event.Type != "message.star_changed" {
+			continue
+		}
+		if event.Star == nil || event.Star.MessageId != string(items[0].ID) || event.Star.AccountId != string(c.AccountID) || event.Star.ConversationId != string(rooms[0].ID) || event.Star.RevisionId == nil || *event.Star.RevisionId != string(result.Star.RevisionID) {
+			t.Fatal("SSE omitted source star context", event)
+		}
+		found = true
+		break
+	}
+	if !found {
+		t.Fatal("missing star event", scanner.Err())
+	}
+	pending, err := store.PendingMessages(t.Context(), time.Now().Add(time.Hour))
+	if err != nil || len(pending) != 0 {
+		t.Fatal("room star queued protocol work", err)
+	}
+}
 
 func TestStarHTTPContractReplaysConflictsAndPersists(t *testing.T) {
 	dir := t.TempDir()

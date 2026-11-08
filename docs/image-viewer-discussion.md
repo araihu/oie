@@ -34,4 +34,8 @@ Oie supplies conversation context and actions through the uniform engine API.
 - Source-message favorite API, media pagination and jump-to-message routing.
 - Keyboard/touch behavior and precise toolbar/overflow layout.
 
-The feature set is agreed. The viewer action implementation has not started.
+The feature set is agreed. API 0.6.0 implements source-message stars and a
+paginated starred-message collection. Timeline/viewer star actions, message
+context menus and the compact sender header are being integrated. See
+[message-star invariants](message-stars.md). Zoom/navigation, device sharing,
+Copy image, Forward, Reply and React remain unimplemented in this increment.

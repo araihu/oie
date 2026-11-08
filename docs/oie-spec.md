@@ -212,6 +212,10 @@ The closed browser is not assumed to run a persistent background dispatcher. Swi
 
 ## 6. Sent-message actions and formatting
 
+Star or unstar a retained source message from the timeline or its image viewer.
+All images attached to that message share its star. This is app-owned metadata,
+independent of protocol support, conversation favorites, and message content edits.
+
 Support quoted replies with referenced sender/excerpt and a stable message reference. This does not select separate threaded timelines.
 
 Allow the user to edit their own sent messages where supported and permitted, displaying **Edited**. This is a new protocol correction operation, not mutation of an in-flight original send. Preserve observed previous versions behind **View edit history**; Oie cannot recover versions it never obtained.
