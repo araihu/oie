@@ -26,7 +26,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{const url=new URL(request.url());if(request.isNavigationRequest()&&request.resourceType()==='document')documents++;if(request.method()!=='GET'&&request.method()!=='HEAD')writes++;if(url.origin===base&&url.pathname==='/'&&url.searchParams.has('q'))requests.push(url.searchParams.get('q'));if(url.origin===base&&url.pathname==='/'&&url.searchParams.has('infoQuery'))infoRequests.push({query:url.searchParams.get('infoQuery'),cursor:url.searchParams.get('infoCursor'),inbox:url.searchParams.get('q'),chat:url.searchParams.get('chat'),account:url.searchParams.get('account'),hx:request.headers()['hx-request'],target:request.headers()['hx-target']})});
    await page.goto(base+'/?'+new URLSearchParams({section:'media',contentType:'documents',account:alpha.id,lang:config.locale,theme:config.theme}));
    await page.waitForFunction(()=>window.OieRuntime?.generation>0);const input=page.locator('#shared-search');await input.focus();await input.evaluate(node=>window.searchInput=node);
-   assert.equal(await page.locator('[data-shared-item]').count(),50,'only first page initially loaded');
+   assert.equal(await page.locator('[data-shared-item]').count(),50,'only first page initially loaded');assert.equal(await page.locator('#shared-content-search button[type=submit]').count(),0);
    const generation=await page.evaluate(()=>window.OieRuntime.generation),history=await page.evaluate(()=>history.length);
    await input.pressSequentially('orcamento',{delay:20});
    await until(async()=>new URL(page.url()).searchParams.get('q')==='orcamento'&&await page.locator('[data-shared-item]').count()===2,'accent-insensitive older-page matches');
@@ -57,12 +57,11 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    // Clearing also updates results without Enter and retains account/category context.
    await input.fill('');await until(async()=>!new URL(page.url()).searchParams.get('q')&&await page.locator('[data-shared-item]').count()===50,'clear search');
    assert.equal(new URL(page.url()).searchParams.get('account'),alpha.id);assert.equal(new URL(page.url()).searchParams.get('contentType'),'documents');assert.equal(documents,1);assert.equal(writes,0);
-   // Account selection retains its explicit-submit contract and current query.
+   // Picker typeahead stays local; committing an account applies it immediately.
    await input.fill('faturamneto');await until(()=>new URL(page.url()).searchParams.get('q')==='faturamneto','query before scope change');
-   await page.getByRole('combobox',{name:config.locale==='en'?'Account':'Conta',exact:true}).click();await page.getByRole('option',{name:'Work · beta@fixture.invalid',exact:true}).click();
-   await page.getByRole('button',{name:config.locale==='en'?'Search':'Pesquisar',exact:true}).click();
+   const pickerRequests=requests.length,pickerURL=page.url();await page.getByRole('combobox',{name:config.locale==='en'?'Account':'Conta',exact:true}).click();await page.locator('#shared-account [data-combobox-search]').fill('Work');await page.waitForTimeout(350);assert.equal(requests.length,pickerRequests,'account typeahead must not search the catalog');assert.equal(page.url(),pickerURL);await page.getByRole('option',{name:'Work · beta@fixture.invalid',exact:true}).click();
    await until(async()=>new URL(page.url()).searchParams.get('account')===beta.id&&await page.locator('[data-shared-item]').count()===1,'account scope applied');
-   assert.equal(new URL(page.url()).searchParams.get('q'),'faturamneto');assert.equal(documents,1);assert.equal(writes,0);
+   assert.equal(new URL(page.url()).searchParams.get('q'),'faturamneto');assert.equal(new URL(page.url()).searchParams.get('contentType'),'documents');assert.equal(new URL(page.url()).searchParams.get('contentCursor'),null);assert.equal(requests.length,pickerRequests+1,'one account commit produces one fragment request');assert.equal(documents,1);assert.equal(writes,0);assert((await page.locator('[data-account-switcher]').first().textContent()).includes('Work'));assert.equal(await page.locator('body').getAttribute('data-account-id'),'');
    await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);
    const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,`shared-search-${config.width}.png`)});
    // The conversation drawer searches only its shared catalog and keeps the
