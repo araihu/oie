@@ -285,3 +285,7 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-discovery-list{font-size:12px}.oie-discovery-detail{overflow-wrap:anywhere;word-break:break-word}.oie-discovery-detail ul{padding-left:18px;margin:6px 0}.oie-discovery-detail li{margin:4px 0}.oie-discovery-detail code{white-space:normal;font-size:11px}
 @media(max-width:720px){.oie-capabilities-drawer .oie-account-workspace{padding:12px 8px 24px}.oie-capability-note{max-width:none}}
 #account-capabilities-title{width:fit-content;max-width:100%;outline-color:var(--oie-accent);outline-offset:4px}
+
+.oie-account-status{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:6px}
+.oie-account-connection-dot{display:block;width:8px;height:8px;min-width:8px;padding:0;border:0;border-radius:50%}
+.oie-account-status[data-connection-state="unknown"] .oie-account-connection-dot,.oie-account-status[data-connection-state="not_connected"] .oie-account-connection-dot{background:var(--oie-muted)}

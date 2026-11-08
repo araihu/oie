@@ -4,6 +4,7 @@ import (
 	"github.com/araihu/goshtoso/components/appshell"
 "github.com/araihu/goshtoso/components/accordion"
 	"github.com/araihu/goshtoso/components/avatar"
+	"github.com/araihu/goshtoso/components/badge"
 	"github.com/araihu/goshtoso/components/button"
 "github.com/araihu/goshtoso/components/card"
 		"github.com/araihu/goshtoso/components/chatbubble"
@@ -134,8 +135,11 @@ if v.AccountFilter=="" {
 for _,a:=range v.Accounts {
 @link.Link(v.href("account",a.Id,"chat",""),link.WithRootClass("oie-account-choice"),link.WithAttrs(templ.Attributes{"data-switch-account":a.Id,"aria-current":strconv.FormatBool(v.AccountFilter==a.Id)})){
 @profileAvatar(v,a.Id,a.Address,avatar.Config{Name:a.Label,Size:avatar.SizeXS})
-<span class="oie-profile-identity"><strong>{a.Label}</strong><small>{a.Address}</small><small>{v.connectionLabel(a.Id)}</small></span>
+<span class="oie-profile-identity"><strong>{a.Label}</strong><small>{a.Address}</small></span>
 <span class="oie-account-indicators">
+<span class="oie-account-status" data-account-status={a.Id} data-connection-state={connectionState(v,a.Id)} title={v.connectionLabel(a.Id)} role="img" aria-label={v.connectionLabel(a.Id)}>
+@badge.Badge(badge.Config{Tone:connectionTone(v,a.Id),Size:badge.SizeSM,RootClass:"oie-account-connection-dot"})
+</span>
 if v.AccountFilter==a.Id {
 <span class="oie-account-selected" aria-label={v.Text.Active}>@glyph(heroicons.Icon16SolidCheckCircle)</span>
 }

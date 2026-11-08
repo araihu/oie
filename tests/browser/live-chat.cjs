@@ -55,6 +55,18 @@ const engine=id(1),account=id(2),chat=id(3);
   for(let i=0;i<50;i++){try{if((await fetch(base)).ok)break}catch{}await new Promise(r=>setTimeout(r,100))}
   const context=await browser.newContext({viewport:{width:1440,height:900},locale:'en',timezoneId:'America/Sao_Paulo'});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(base+'/?chat='+chat+'&lang=en&theme=dark');await page.locator('#message-composer').waitFor();
+  await page.locator('[data-account-switcher]:visible').click();
+  const switcher=page.getByRole('dialog',{name:'Switch account',exact:true});
+  const accountLink=switcher.locator('[data-switch-account="'+account+'"]');await accountLink.focus();
+  for(const [value,label]of [['connecting','Connecting…'],['connected','Connected'],['error','Connection error'],['not_connected','Not connected']]){
+   state.connection=value;emit('account.connection_changed');
+   const dot=accountLink.locator('[data-account-status]');
+   await until(async()=>await dot.getAttribute('data-connection-state')===value,'focused account status '+value);
+   assert.equal(await dot.getAttribute('title'),label);assert.equal(await dot.getAttribute('aria-label'),label);
+   assert(await accountLink.evaluate(el=>document.activeElement===el));
+   assert.equal(await accountLink.locator('.oie-profile-identity small').count(),1);
+  }
+  await page.keyboard.press('Escape');
   const draft='Keep this device draft 👋';await page.locator('#message-composer').fill(draft);await page.reload();await until(async()=>await page.locator('#message-composer').inputValue()===draft,'draft reload');
   const forged=await page.evaluate(async()=>{const form=document.querySelector('#send-message-form');const values=new URLSearchParams(new FormData(form));values.set('originalText','forged');values.set('csrf','forged');return(await fetch(form.action,{method:'POST',body:values,headers:{Accept:'application/json'}})).status});assert.equal(forged,403);assert.equal(state.effects,0);
   const guards=await page.evaluate(async()=>{const form=document.querySelector('#send-message-form');const values=new URLSearchParams(new FormData(form));values.set('originalText','blocked');values.set('engineId','019a5df0-0000-7000-8000-000000009999');const rejected=await fetch(form.action,{method:'POST',headers:{Accept:'application/json'},body:values});return {engine:rejected.status,method:(await fetch(form.action)).status}});assert.equal(guards.engine,409);assert.equal(guards.method,405);assert.equal(state.effects,0);

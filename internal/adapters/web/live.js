@@ -257,6 +257,15 @@
           const next = nextMenu.querySelector(`[data-account-unread="${CSS.escape(badge.dataset.accountUnread)}"]`);
           if (next) {badge.textContent = next.textContent;badge.hidden = next.hidden;badge.setAttribute('aria-label',next.getAttribute('aria-label'));}
         }
+        for (const status of menu.querySelectorAll('[data-account-status]')) {
+          const next = nextMenu.querySelector(`[data-account-status="${CSS.escape(status.dataset.accountStatus)}"]`);
+          if (next && status.dataset.connectionState !== next.dataset.connectionState) {
+            status.dataset.connectionState = next.dataset.connectionState;
+            status.title = next.title;
+            status.setAttribute('aria-label',next.getAttribute('aria-label'));
+            mutateDOM(status,next.innerHTML);
+          }
+        }
       }
       applyAvatars();document.dispatchEvent(new CustomEvent("oie:stars-refresh",{detail:{page,generation:starGeneration}}));document.dispatchEvent(new CustomEvent("oie:previews-refresh",{detail:page}));localizeTimes();
     } catch { announce(text('liveRetry')); }
