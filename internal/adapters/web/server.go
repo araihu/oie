@@ -819,6 +819,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	component := page(v)
 	if r.Header.Get("HX-Request") == "true" {
 		component = appFragment(v)
+		if r.Header.Get("X-Oie-Fragment") == "conversation" && v.Section != "media" {
+			component = conversationPane(v)
+		}
 		if r.Header.Get("X-Oie-Fragment") == "info" && v.Selected != nil {
 			component = chatInfoShell(v)
 		}

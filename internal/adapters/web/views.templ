@@ -97,10 +97,9 @@ templ appFragment(v view) {
 <div id="oie-app" hx-history-elt data-route-loading={v.Text.NavLoading} data-route-error={v.Text.NavFailed} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
 <p class="oie-live-status" data-navigation-status role="status" aria-live="polite" hidden></p>
 @liveCopy(v)
-if v.Section!="media"{
-@starData(v)
-}
+if v.Section=="media" {
 @avatarData(v)
+}
 <div class="oie-live-status" data-live-status role="status" aria-live="polite" hidden></div>
 if v.ErrorMessage!="" {
 <div class="oie-native-error" role="alert" tabindex="-1" data-native-error>
@@ -119,7 +118,9 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 @documentViewer(v)
 @roomSessionDialog(v)
 
+if v.Section=="media" {
 @conversationDetails(v)
+}
 </div>
 }
 
@@ -220,7 +221,7 @@ if v.Section=="media"{
 				@filterLink(v, "groups", v.Text.Groups)
 			</nav>
 <div id="history-status" class="oie-history-status" role="status">@historyBanner(v)</div>
-<div class="oie-conversation-scroll" id="conversation-list">
+<div class="oie-conversation-scroll" id="conversation-list" data-version={v.conversationListVersion()}>
 @conversationList(v)
 </div>
 			<div class="oie-list-account" x-data="{}">
@@ -235,44 +236,7 @@ if v.Section=="media"{
 				}
 			</div>
 		</section>
-		<section class="oie-chat-pane" aria-label={ v.Text.Conversations }>
-			if v.Unavailable && v.ChatOpen {
-				<div class="oie-chat-empty">
-					@emptystate.EmptyState(emptystate.Config{Title: v.Text.Unavailable, Description: v.Text.UnavailableBody})
-					@link.Link(v.href()) {
-						{ v.Text.Retry }
-					}
-					@link.Link(v.href("chat", "")) {
-						{ v.Text.Back }
-					}
-				</div>
-			} else if v.NotFound {
-				<div class="oie-chat-empty">
-					@emptystate.EmptyState(emptystate.Config{Title: v.Text.NotFound, Description: v.Text.NotFoundBody}) @link.Link(v.href("chat", "")) {
-	{ v.Text.Back }
-}
-				</div>
-			} else if v.Section=="media" {
-				<div class="oie-chat-empty">@glyph(heroicons.Icon16SolidRectangleGroup) @emptystate.EmptyState(emptystate.Config{Title: v.Text.MediaEmpty, Description: v.Text.MediaBody})</div>
-			} else if v.Selected!=nil && !v.Unavailable {
-				@chatHeader(v)
-				if v.Preview {
-					<p class="oie-preview-note">{ v.Text.PreviewNote }</p>
-				}
-				<div id="context-notice" class="oie-context-notice" role="status">@contextNotice(v)</div>
-<div class="oie-timeline" id="message-timeline" tabindex="0" aria-label={v.Text.Conversations} data-version={v.timelineVersion()}>
-@timeline(v)
-</div>
-<button type="button" class="oie-jump-latest" data-jump-latest hidden?={!v.ContextHasNewer&&!v.ContextMissing}>{v.Text.JumpToLatest}</button>
-
-				@composer(v)
-			} else {
-				<div class="oie-chat-empty">
-					<div class="oie-empty-mark" aria-hidden="true">o</div>
-					@emptystate.EmptyState(emptystate.Config{Title: v.Text.SelectChat, Description: v.Text.SelectChatBody})
-				</div>
-			}
-		</section>
+@conversationPane(v)
 	</div>
 }
 }
@@ -291,7 +255,7 @@ templ filterLink(v view, key, label string) {
 
 templ conversationRow(v view, c engineapi.Conversation) {
 	<li>
-		@link.Link(v.href("chat", c.Id), link.WithRootClass("oie-chat-link"), link.WithAttrs(templ.Attributes{"data-conversation-id": c.Id, "aria-current": strconv.FormatBool(v.Selected != nil && v.Selected.Id == c.Id)})) {
+		@link.Link(v.href("chat", c.Id,"message","","infoView","","infoType","","infoCursor","","infoQuery","","infoFocus","","lang",v.Locale,"theme",v.Theme), link.WithRootClass("oie-chat-link"), link.WithAttrs(templ.Attributes{"data-conversation-id": c.Id, "aria-current": strconv.FormatBool(v.Selected != nil && v.Selected.Id == c.Id)})) {
 			@profileAvatar(v,c.AccountId,c.Address,avatar.Config{Name: c.Title, Initials: chatInitials(c), Size: avatar.SizeSM, RootClass: "oie-chat-avatar"})
 			<div class="oie-row-content">
 				<div class="oie-row-top"><strong>{ c.Title }</strong><time datetime={ c.UpdatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ c.UpdatedAt.Format("15:04") }</time></div>
@@ -595,7 +559,7 @@ if v.Section=="media"{
 <div id="live-shared-content"><div id="live-shared-status">@sharedStatus(v)</div><div id="live-shared-results" data-version={v.sharedVersion()}>@sharedItems(v)</div><div id="live-shared-pagination">@sharedPagination(v)</div></div>
 }
 <div id="live-history-status">@historyBanner(v)</div>
-<div id="live-list">@conversationList(v)</div>
+<div id="live-list" data-version={v.conversationListVersion()}>@conversationList(v)</div>
 <div id="live-timeline" data-version={v.timelineVersion()}>@timeline(v)</div>
 <div id="live-header" data-version={v.headerVersion()}>
 if v.Selected!=nil {
