@@ -8,9 +8,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"image"
-	"image/color"
 	_ "image/gif"
-	_ "image/jpeg"
+	"image/jpeg"
 	"image/png"
 	"io"
 	"os"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
+	"golang.org/x/image/draw"
 )
 
 const MaxOriginal = 32 << 20
@@ -71,19 +71,19 @@ func (s *Store) Thumbnail(ctx context.Context, data []byte) (domain.MediaFile, e
 	if err := ctx.Err(); err != nil {
 		return domain.MediaFile{}, err
 	}
-	source, _, err := decode(data)
+	source, mime, err := decode(data)
 	if err != nil {
 		return domain.MediaFile{}, err
 	}
 	bounds := source.Bounds()
 	width, height := bounds.Dx(), bounds.Dy()
-	if width > 256 || height > 256 {
+	if width > 1024 || height > 1024 {
 		if width >= height {
-			height = height * 256 / width
-			width = 256
+			height = height * 1024 / width
+			width = 1024
 		} else {
-			width = width * 256 / height
-			height = 256
+			width = width * 1024 / height
+			height = 1024
 		}
 	}
 	if width < 1 {
@@ -93,12 +93,14 @@ func (s *Store) Thumbnail(ctx context.Context, data []byte) (domain.MediaFile, e
 		height = 1
 	}
 	thumb := image.NewNRGBA(image.Rect(0, 0, width, height))
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			thumb.SetNRGBA(x, y, color.NRGBAModel.Convert(source.At(bounds.Min.X+x*bounds.Dx()/width, bounds.Min.Y+y*bounds.Dy()/height)).(color.NRGBA))
-		}
-	}
+	draw.CatmullRom.Scale(thumb, thumb.Bounds(), source, bounds, draw.Src, nil)
 	var out bytes.Buffer
+	if mime == "image/jpeg" {
+		if err = jpeg.Encode(&out, thumb, &jpeg.Options{Quality: 90}); err != nil {
+			return domain.MediaFile{}, err
+		}
+		return s.persist(ctx, out.Bytes(), "image/jpeg")
+	}
 	if err = png.Encode(&out, thumb); err != nil {
 		return domain.MediaFile{}, err
 	}

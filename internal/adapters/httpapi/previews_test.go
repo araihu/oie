@@ -34,7 +34,7 @@ func (f *previewFixture) Image(context.Context, string) ([]byte, error) {
 
 func TestPreviewLifecycleDoesNotDownloadOriginalUntilExplicitDemand(t *testing.T) {
 	dir := t.TempDir()
-	e, _, server := newMessagingEngine(t, dir, &protocolStub{})
+	e, store, server := newMessagingEngine(t, dir, &protocolStub{})
 	var data bytes.Buffer
 	if err := png.Encode(&data, image.NewGray(image.Rect(0, 0, 16, 16))); err != nil {
 		t.Fatal(err)
@@ -116,6 +116,26 @@ func TestPreviewLifecycleDoesNotDownloadOriginalUntilExplicitDemand(t *testing.T
 	if loaded.Id != img.Id || loaded.RevisionId == img.RevisionId {
 		t.Fatal("preview entity/revision identity changed incorrectly")
 	}
+	// A renderer upgrade must reuse retained original bytes, without another GET
+	// to the provider or any change to the source message.
+	legacy, err := e.Preview(t.Context(), domain.ID(img.Id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := legacy.RevisionID
+	legacy.RevisionID = id()
+	legacy.PreviewVersion = 0
+	if err = store.SavePreview(t.Context(), legacy, expected); err != nil {
+		t.Fatal(err)
+	}
+	get("/api/v1/conversations/" + string(c.ID) + "/previews")
+	wait(img.Id, func(p engineapi.MessagePreview) bool {
+		return p.State == "ready" && p.RevisionId != string(legacy.RevisionID)
+	})
+	if fetch.images.Load() != 1 {
+		t.Fatal("thumbnail upgrade downloaded the original again")
+	}
+
 	if got := get("/api/v1/media/" + *loaded.FileHash); !bytes.Equal(got, data.Bytes()) {
 		t.Fatal("retained original differs")
 	}

@@ -51,6 +51,8 @@ func (e *Engine) previewRepo() (PreviewRepository, error) {
 	return r, nil
 }
 
+const previewRendererVersion = 2
+
 var messageURLs = regexp.MustCompile(`https?://[^\s<>"\x00-\x1f]+`)
 
 func previewURLs(text string) []string {
@@ -119,7 +121,7 @@ func (e *Engine) ConversationPreviews(ctx context.Context, conversation domain.I
 			if err != nil {
 				return nil, err
 			}
-			p := domain.MessagePreview{ID: id, RevisionID: rev, AccountID: c.AccountID, ConversationID: c.ID, MessageID: m.ID, URL: address, Kind: "link", State: "queued", DownloadState: "not_downloaded", UpdatedAt: e.now().UTC()}
+			p := domain.MessagePreview{ID: id, RevisionID: rev, AccountID: c.AccountID, ConversationID: c.ID, MessageID: m.ID, URL: address, PreviewVersion: previewRendererVersion, Kind: "link", State: "queued", DownloadState: "not_downloaded", UpdatedAt: e.now().UTC()}
 			u, _ := url.Parse(address)
 			ext := strings.ToLower(path.Ext(u.Path))
 			if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" {
@@ -135,6 +137,24 @@ func (e *Engine) ConversationPreviews(ctx context.Context, conversation domain.I
 			if err != nil {
 				return nil, err
 			}
+			if p.PreviewVersion < previewRendererVersion && p.ImageHash != "" {
+				old := p.RevisionID
+				p.RevisionID, err = e.newID()
+				if err != nil {
+					return nil, err
+				}
+				p.PreviewVersion = previewRendererVersion
+				p.State = "queued"
+				p.UpdatedAt = e.now().UTC()
+				err = r.SavePreview(ctx, p, old)
+				if errors.Is(err, ErrStateConflict) {
+					p, err = r.Preview(ctx, p.ID)
+				}
+				if err != nil {
+					return nil, err
+				}
+			}
+
 			out = append(out, p)
 		}
 	}
@@ -316,6 +336,13 @@ func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p doma
 				}
 			}
 		}
+	} else if p.Kind == "image" && p.DownloadState == "ready" && p.FileHash != "" {
+		var file domain.MediaFile
+		file, fetchErr = r.MediaFile(ctx, p.FileHash)
+		if fetchErr == nil {
+			image, fetchErr = e.mediaFiles.Read(ctx, file)
+		}
+		p.State = "ready"
 	} else {
 		var metadata PreviewMetadata
 		metadata, fetchErr = e.previewFetcher.Link(ctx, p.URL)
@@ -356,6 +383,7 @@ func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p doma
 		p.LastErrorCode = ""
 	}
 	var err error
+	p.PreviewVersion = previewRendererVersion
 	p.RevisionID, err = e.newID()
 	if err != nil {
 		return err

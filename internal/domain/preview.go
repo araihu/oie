@@ -8,6 +8,7 @@ type MessagePreview struct {
 	URL, Kind, State, DownloadState                      string
 	Title, Description, SiteName                         string
 	ImageHash, FileHash, FileMimeType                    string
+	PreviewVersion                                       int
 	FileSize                                             int64
 	LastErrorCode                                        string
 	UpdatedAt                                            time.Time

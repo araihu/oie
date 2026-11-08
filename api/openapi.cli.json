@@ -209,7 +209,7 @@
         ],
         "operationId": "getMediaImage",
         "summary": "Read a retained preview or original image",
-        "description": "Serves only local hash-verified PNG, JPEG or GIF bytes, without fetching the provider. Thumbnails are normalized static PNGs; originals retain their validated media type. No remote redirects.",
+        "description": "Serves only local hash-verified PNG, JPEG or GIF bytes, without fetching the provider. Thumbnails are normalized static PNGs or JPEGs, up to 1024 pixels per axis; originals retain their validated media type. No remote redirects.",
         "parameters": [
           {
             "name": "hash",
@@ -2145,7 +2145,7 @@
           "imageHash": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$",
-            "description": "Local normalized PNG thumbnail digest."
+            "description": "Local static PNG or JPEG thumbnail digest, sized for high-DPI message cards."
           },
           "fileHash": {
             "type": "string",
