@@ -160,4 +160,54 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err != nil || !bytes.Contains(output, []byte(`"kind": "set_message_star"`)) {
 		t.Fatalf("CLI star receipt: %v %s", err, output)
 	}
+	// Reply composition freezes the authored body and source UUID in acceptance.
+	replyKey, _ := ids()
+	replyBody := `{"originalText":"Resposta CLI 😀","replyToMessageId":"` + message.Id + `"}`
+	output, err = run(replyBody, "messages", "send-message", "--conversation-id", conversation.Id, "--idempotency-key", string(replyKey), "--body-stdin")
+	var reply engineapi.Message
+	if err != nil || json.Unmarshal(output, &reply) != nil || reply.ReplyToMessageId == nil || *reply.ReplyToMessageId != message.Id || reply.Reply == nil || reply.Reply.BodyText != "Resposta CLI 😀" {
+		t.Fatalf("CLI reply composition: %v %s", err, output)
+	}
+	replay, err = run(replyBody, "messages", "send-message", "--conversation-id", conversation.Id, "--idempotency-key", string(replyKey), "--body-stdin")
+	if err != nil || !bytes.Equal(output, replay) {
+		t.Fatalf("CLI reply changed frozen receipt: %v %s", err, replay)
+	}
+	// Room commands stay local while the native adapter is disconnected.
+	if err = engine.Receive(t.Context(), application.Incoming{AccountID: domain.ID(account.Id), Address: "room@rooms.localhost", Kind: "room", ProviderID: "cli-room-source", OriginalText: "Saved room source", Historical: true, CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	chats, err := engine.Conversations(t.Context(), "", application.ConversationQuery{AccountID: domain.ID(account.Id), Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var roomID string
+	for _, chat := range chats {
+		if chat.Kind == "room" {
+			roomID = string(chat.ID)
+		}
+	}
+	output, err = run("", "conversations", "get-room-session", "--conversation-id", roomID)
+	var session engineapi.RoomSession
+	if err != nil || json.Unmarshal(output, &session) != nil || session.Active {
+		t.Fatalf("CLI room read: %v %s", err, output)
+	}
+	joinKey, _ := ids()
+	output, err = run(`{"expectedRevisionId":null}`, "conversations", "join-room", "--conversation-id", roomID, "--idempotency-key", string(joinKey), "--body-stdin")
+	if err != nil || json.Unmarshal(output, &session) != nil || !session.Active || session.IntentRevisionId == nil || session.State == "joined" {
+		t.Fatalf("CLI explicit room intent: %v %s", err, output)
+	}
+	leaveKey, _ := ids()
+	output, err = run(`{"expectedRevisionId":"`+*session.IntentRevisionId+`"}`, "conversations", "leave-room", "--conversation-id", roomID, "--idempotency-key", string(leaveKey), "--body-stdin")
+	if err != nil || json.Unmarshal(output, &session) != nil || session.Active {
+		t.Fatalf("CLI explicit room leave: %v %s", err, output)
+	}
+	output, err = run(`{"expectedRevisionId":null}`, "conversations", "join-room", "--conversation-id", roomID, "--idempotency-key", string(joinKey), "--body-stdin")
+	if err != nil || json.Unmarshal(output, &session) != nil || session.Active {
+		t.Fatalf("CLI old join replay reactivated room: %v %s", err, output)
+	}
+	output, err = run("", "operations", "get-operation", "--operation-id", string(joinKey))
+	if err != nil || !bytes.Contains(output, []byte(`"kind": "join_room"`)) {
+		t.Fatalf("CLI room operation receipt: %v %s", err, output)
+	}
+
 }

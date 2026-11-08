@@ -368,6 +368,9 @@ func (e ConversationDetailsKind) Valid() bool {
 
 // Defines values for ConversationDetailsRoomSession.
 const (
+	ConversationDetailsRoomSessionFailed    ConversationDetailsRoomSession = "failed"
+	ConversationDetailsRoomSessionJoined    ConversationDetailsRoomSession = "joined"
+	ConversationDetailsRoomSessionJoining   ConversationDetailsRoomSession = "joining"
 	ConversationDetailsRoomSessionNotJoined ConversationDetailsRoomSession = "not_joined"
 	ConversationDetailsRoomSessionUnknown   ConversationDetailsRoomSession = "unknown"
 )
@@ -375,6 +378,12 @@ const (
 // Valid indicates whether the value is a known member of the ConversationDetailsRoomSession enum.
 func (e ConversationDetailsRoomSession) Valid() bool {
 	switch e {
+	case ConversationDetailsRoomSessionFailed:
+		return true
+	case ConversationDetailsRoomSessionJoined:
+		return true
+	case ConversationDetailsRoomSessionJoining:
+		return true
 	case ConversationDetailsRoomSessionNotJoined:
 		return true
 	case ConversationDetailsRoomSessionUnknown:
@@ -515,13 +524,13 @@ func (e DiscoveredServiceState) Valid() bool {
 
 // Defines values for EngineApiVersion.
 const (
-	N0100 EngineApiVersion = "0.10.0"
+	N0110 EngineApiVersion = "0.11.0"
 )
 
 // Valid indicates whether the value is a known member of the EngineApiVersion enum.
 func (e EngineApiVersion) Valid() bool {
 	switch e {
-	case N0100:
+	case N0110:
 		return true
 	default:
 		return false
@@ -548,16 +557,17 @@ func (e EngineRole) Valid() bool {
 
 // Defines values for EventType.
 const (
-	AccountConnectionChanged EventType = "account.connection_changed"
-	AccountHistoryChanged    EventType = "account.history_changed"
-	AccountRegistered        EventType = "account.registered"
-	ConversationCreated      EventType = "conversation.created"
-	ConversationUpdated      EventType = "conversation.updated"
-	MessageCreated           EventType = "message.created"
-	MessagePreviewChanged    EventType = "message.preview_changed"
-	MessageStarChanged       EventType = "message.star_changed"
-	MessageUpdated           EventType = "message.updated"
-	ProfileAvatarChanged     EventType = "profile.avatar_changed"
+	AccountConnectionChanged       EventType = "account.connection_changed"
+	AccountHistoryChanged          EventType = "account.history_changed"
+	AccountRegistered              EventType = "account.registered"
+	ConversationCreated            EventType = "conversation.created"
+	ConversationRoomSessionChanged EventType = "conversation.room_session_changed"
+	ConversationUpdated            EventType = "conversation.updated"
+	MessageCreated                 EventType = "message.created"
+	MessagePreviewChanged          EventType = "message.preview_changed"
+	MessageStarChanged             EventType = "message.star_changed"
+	MessageUpdated                 EventType = "message.updated"
+	ProfileAvatarChanged           EventType = "profile.avatar_changed"
 )
 
 // Valid indicates whether the value is a known member of the EventType enum.
@@ -570,6 +580,8 @@ func (e EventType) Valid() bool {
 	case AccountRegistered:
 		return true
 	case ConversationCreated:
+		return true
+	case ConversationRoomSessionChanged:
 		return true
 	case ConversationUpdated:
 		return true
@@ -792,6 +804,8 @@ func (e MessagePreviewState) Valid() bool {
 // Defines values for OperationKind.
 const (
 	OperationKindCancelMessage    OperationKind = "cancel_message"
+	OperationKindJoinRoom         OperationKind = "join_room"
+	OperationKindLeaveRoom        OperationKind = "leave_room"
 	OperationKindOpenConversation OperationKind = "open_conversation"
 	OperationKindRegisterAccount  OperationKind = "register_account"
 	OperationKindSendMessage      OperationKind = "send_message"
@@ -802,6 +816,10 @@ const (
 func (e OperationKind) Valid() bool {
 	switch e {
 	case OperationKindCancelMessage:
+		return true
+	case OperationKindJoinRoom:
+		return true
+	case OperationKindLeaveRoom:
 		return true
 	case OperationKindOpenConversation:
 		return true
@@ -909,6 +927,72 @@ const (
 func (e RegisterAccountProtocol) Valid() bool {
 	switch e {
 	case RegisterAccountProtocolXmpp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoomSessionLastErrorCode.
+const (
+	RoomSessionLastErrorCodeForbidden            RoomSessionLastErrorCode = "forbidden"
+	RoomSessionLastErrorCodeNicknameConflict     RoomSessionLastErrorCode = "nickname_conflict"
+	RoomSessionLastErrorCodeNotAuthorized        RoomSessionLastErrorCode = "not_authorized"
+	RoomSessionLastErrorCodeNotConnected         RoomSessionLastErrorCode = "not_connected"
+	RoomSessionLastErrorCodeRegistrationRequired RoomSessionLastErrorCode = "registration_required"
+	RoomSessionLastErrorCodeRemoved              RoomSessionLastErrorCode = "removed"
+	RoomSessionLastErrorCodeRoomUnavailable      RoomSessionLastErrorCode = "room_unavailable"
+	RoomSessionLastErrorCodeTimeout              RoomSessionLastErrorCode = "timeout"
+	RoomSessionLastErrorCodeUnknown              RoomSessionLastErrorCode = "unknown"
+	RoomSessionLastErrorCodeUnsupported          RoomSessionLastErrorCode = "unsupported"
+)
+
+// Valid indicates whether the value is a known member of the RoomSessionLastErrorCode enum.
+func (e RoomSessionLastErrorCode) Valid() bool {
+	switch e {
+	case RoomSessionLastErrorCodeForbidden:
+		return true
+	case RoomSessionLastErrorCodeNicknameConflict:
+		return true
+	case RoomSessionLastErrorCodeNotAuthorized:
+		return true
+	case RoomSessionLastErrorCodeNotConnected:
+		return true
+	case RoomSessionLastErrorCodeRegistrationRequired:
+		return true
+	case RoomSessionLastErrorCodeRemoved:
+		return true
+	case RoomSessionLastErrorCodeRoomUnavailable:
+		return true
+	case RoomSessionLastErrorCodeTimeout:
+		return true
+	case RoomSessionLastErrorCodeUnknown:
+		return true
+	case RoomSessionLastErrorCodeUnsupported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoomSessionState.
+const (
+	RoomSessionStateFailed    RoomSessionState = "failed"
+	RoomSessionStateJoined    RoomSessionState = "joined"
+	RoomSessionStateJoining   RoomSessionState = "joining"
+	RoomSessionStateNotJoined RoomSessionState = "not_joined"
+)
+
+// Valid indicates whether the value is a known member of the RoomSessionState enum.
+func (e RoomSessionState) Valid() bool {
+	switch e {
+	case RoomSessionStateFailed:
+		return true
+	case RoomSessionStateJoined:
+		return true
+	case RoomSessionStateJoining:
+		return true
+	case RoomSessionStateNotJoined:
 		return true
 	default:
 		return false
@@ -1378,7 +1462,7 @@ type DiscoveredServiceState string
 
 // Engine Persistent engine identity and event boundary.
 //
-// Example: {"apiVersion":"0.10.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
+// Example: {"apiVersion":"0.11.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
 type Engine struct {
 	ApiVersion EngineApiVersion `json:"apiVersion"`
 
@@ -1441,6 +1525,11 @@ type Event struct {
 	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","downloadState":"not_downloaded","id":"019a5df0-0000-7000-8000-000000000001","kind":"link","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":"019a5df0-0000-7000-8000-000000000001","siteName":"Example","state":"ready","title":"Shared article","updatedAt":"2026-11-08T12:00:00Z","url":"https://example.com/article"}
 	Preview *MessagePreview `json:"preview,omitempty"`
 
+	// RoomSession Own engine's room intent and observed session, distinct from account connectivity and public occupant discovery.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","active":false,"conversationId":"019a5df0-0000-7000-8000-000000000002","state":"not_joined","updatedAt":"2026-11-08T12:00:00Z"}
+	RoomSession *RoomSession `json:"roomSession,omitempty"`
+
 	// Star App-owned source message star, keyed by messageId with its own revision history. Never a message edit.
 	//
 	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":null,"starred":false,"updatedAt":null}
@@ -1488,6 +1577,29 @@ type HistoryStatusState string
 // Example: 019a5df0-0000-7000-8000-000000000001
 type ID = string
 
+// JoinRoom Explicit room-entry command with optimistic intent revision.
+//
+// Example: {"expectedRevisionId":null}
+type JoinRoom struct {
+	// ExpectedRevisionId Canonical UUIDv7 of app-owned state; null means no revision has been created.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000004
+	ExpectedRevisionId *NullableRevisionID `json:"expectedRevisionId"`
+
+	// Nickname Optional nickname; the adapter chooses its account default when omitted. No password is accepted in this increment.
+	Nickname *string `json:"nickname,omitempty"`
+}
+
+// LeaveRoom Explicit room-exit command preserving retained history and pending work.
+//
+// Example: {"expectedRevisionId":"019a5df0-0000-7000-8000-000000000003"}
+type LeaveRoom struct {
+	// ExpectedRevisionId Canonical UUIDv7 of app-owned state; null means no revision has been created.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000004
+	ExpectedRevisionId *NullableRevisionID `json:"expectedRevisionId"`
+}
+
 // Message Retained original text and actual send evidence. submitted means the stanza was written to the authenticated stream; it does not prove provider acceptance, recipient delivery, or read state. unknown is not automatically resent.
 //
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000001","isOwn":false,"originalText":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","sendState":"received","sender":{"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}}
@@ -1521,6 +1633,9 @@ type Message struct {
 	//
 	// Example: {"available":true,"bodyText":"Great idea!","excerpt":"We should bake a cake.","messageId":"019a5df0-0000-7000-8000-000000000001","senderName":"Bob"}
 	Reply *MessageReply `json:"reply,omitempty"`
+
+	// ReplyToMessageId Canonical target UUID frozen in an outgoing reply intent, including a text-only fallback. It does not imply the original is still available. Reply bodyText preserves the authored response for receipt reconciliation.
+	ReplyToMessageId *ID `json:"replyToMessageId,omitempty"`
 
 	// RevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
 	//
@@ -1787,6 +1902,11 @@ type Problem struct {
 	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000001","isOwn":false,"originalText":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","sendState":"received","sender":{"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}}
 	CurrentMessage *Message `json:"currentMessage,omitempty"`
 
+	// CurrentRoomSession Own engine's room intent and observed session, distinct from account connectivity and public occupant discovery.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","active":false,"conversationId":"019a5df0-0000-7000-8000-000000000002","state":"not_joined","updatedAt":"2026-11-08T12:00:00Z"}
+	CurrentRoomSession *RoomSession `json:"currentRoomSession,omitempty"`
+
 	// CurrentStar App-owned source message star, keyed by messageId with its own revision history. Never a message edit.
 	//
 	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":null,"starred":false,"updatedAt":null}
@@ -1811,12 +1931,55 @@ type RegisterAccount struct {
 // RegisterAccountProtocol defines model for RegisterAccount.Protocol.
 type RegisterAccountProtocol string
 
-// SendMessage Durably accept an immediate plain text send.
+// RoomSession Own engine's room intent and observed session, distinct from account connectivity and public occupant discovery.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","active":false,"conversationId":"019a5df0-0000-7000-8000-000000000002","state":"not_joined","updatedAt":"2026-11-08T12:00:00Z"}
+type RoomSession struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	AccountId ID `json:"accountId"`
+
+	// Active This engine has a durable active join intent. False after explicit leave or revoked access.
+	Active bool `json:"active"`
+
+	// ConversationId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	ConversationId ID `json:"conversationId"`
+
+	// IntentId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	IntentId *ID `json:"intentId,omitempty"`
+
+	// IntentRevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	IntentRevisionId *ID                       `json:"intentRevisionId,omitempty"`
+	LastErrorCode    *RoomSessionLastErrorCode `json:"lastErrorCode,omitempty"`
+
+	// Nickname Selected room nickname when known.
+	Nickname  *string          `json:"nickname,omitempty"`
+	State     RoomSessionState `json:"state"`
+	UpdatedAt time.Time        `json:"updatedAt"`
+}
+
+// RoomSessionLastErrorCode defines model for RoomSession.LastErrorCode.
+type RoomSessionLastErrorCode string
+
+// RoomSessionState defines model for RoomSession.State.
+type RoomSessionState string
+
+// SendMessage Durably accept authored text with an optional source-message reply. The engine validates the retained target within the same account and conversation and snapshots the sender, excerpt, wire reference and compatibility quote. Clients submit only the target UUID, never a quoted body or protocol identifier. originalText in the resulting Message is the full transmitted body, including fallback text. Message.reply.bodyText contains the authored response. Structured references are emitted where valid protocol identifiers are available, with text fallback for legacy clients or an unavailable stable target identifier. Room sends require an active explicit join intent; dispatch waits for confirmed own membership. No room is joined by accepting or preparing a reply.
 //
 // Example: {"originalText":"Hello from Oie!"}
 type SendMessage struct {
 	// OriginalText Original UTF-8 text. Whitespace/newlines are preserved; empty or whitespace-only bodies are rejected.
 	OriginalText string `json:"originalText"`
+
+	// ReplyToMessageId Retained source UUID in this conversation. Omitted for an ordinary message. Part of the immutable send intent and operation fingerprint.
+	ReplyToMessageId *ID `json:"replyToMessageId,omitempty"`
 }
 
 // Sender Engine-local source identity. For recovered room messages, this is the room-scoped source with an observed speaker nickname, not a verified personal identity.
@@ -2068,6 +2231,18 @@ type ListConversationPreviewsParams struct {
 	MessageId *[]ID `form:"messageId,omitempty" json:"messageId,omitempty"`
 }
 
+// JoinRoomParams defines parameters for JoinRoom.
+type JoinRoomParams struct {
+	// IdempotencyKey Stable operation UUID for this join intent.
+	IdempotencyKey ID `json:"Idempotency-Key"`
+}
+
+// LeaveRoomParams defines parameters for LeaveRoom.
+type LeaveRoomParams struct {
+	// IdempotencyKey Stable operation UUID for this leave intent.
+	IdempotencyKey ID `json:"Idempotency-Key"`
+}
+
 // StreamEventsParams defines parameters for StreamEvents.
 type StreamEventsParams struct {
 	// LastEventID Previously applied engine-scoped cursor.
@@ -2142,6 +2317,12 @@ type OpenConversationJSONRequestBody = OpenConversation
 
 // SendMessageJSONRequestBody defines body for SendMessage for application/json ContentType.
 type SendMessageJSONRequestBody = SendMessage
+
+// JoinRoomJSONRequestBody defines body for JoinRoom for application/json ContentType.
+type JoinRoomJSONRequestBody = JoinRoom
+
+// LeaveRoomJSONRequestBody defines body for LeaveRoom for application/json ContentType.
+type LeaveRoomJSONRequestBody = LeaveRoom
 
 // CancelMessageJSONRequestBody defines body for CancelMessage for application/json ContentType.
 type CancelMessageJSONRequestBody = CancelMessage
@@ -2407,6 +2588,49 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/conversations/{conversationId}/previews (the `ListConversationPreviews` operationId).
 	ListConversationPreviews(ctx context.Context, conversationId ID, params *ListConversationPreviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRoomSession Read this engine's room session and durable join intent
+	//
+	// Reads local state without joining. Active denotes a durable intent to rejoin, not observed membership. A joined state requires confirmed self-presence. Missing room intent has no intent identifiers.
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId}/room-session (the `GetRoomSession` operationId).
+	GetRoomSession(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// JoinRoomWithBody Explicitly request entry and reconnect recovery for a saved room
+	//
+	// Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session (the `JoinRoom` operationId).
+	JoinRoomWithBody(ctx context.Context, conversationId ConversationID, params *JoinRoomParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// JoinRoom Explicitly request entry and reconnect recovery for a saved room
+	//
+	// Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session (the `JoinRoom` operationId).
+	JoinRoom(ctx context.Context, conversationId ConversationID, params *JoinRoomParams, body JoinRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// LeaveRoomWithBody Leave a room and stop this engine's automatic rejoin
+	//
+	// Durably records an explicit leave before sending unavailable presence. Saved history and queued messages are retained. Queued room work cannot dispatch while the intent is inactive. An old operation replay never reactivates a later leave or revoked intent.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
+	LeaveRoomWithBody(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// LeaveRoom Leave a room and stop this engine's automatic rejoin
+	//
+	// Durably records an explicit leave before sending unavailable presence. Saved history and queued messages are retained. Queued room work cannot dispatch while the intent is inactive. An old operation replay never reactivates a later leave or revoked intent.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
+	LeaveRoom(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, body LeaveRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetEngine Read the persistent engine identity
 	//
@@ -2932,6 +3156,99 @@ func (c *Client) GetMessageContext(ctx context.Context, conversationId Conversat
 // Corresponds with GET /api/v1/conversations/{conversationId}/previews (the `ListConversationPreviews` operationId).
 func (c *Client) ListConversationPreviews(ctx context.Context, conversationId ID, params *ListConversationPreviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListConversationPreviewsRequest(c.Server, conversationId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetRoomSession Read this engine's room session and durable join intent
+//
+// Reads local state without joining. Active denotes a durable intent to rejoin, not observed membership. A joined state requires confirmed self-presence. Missing room intent has no intent identifiers.
+//
+// Corresponds with GET /api/v1/conversations/{conversationId}/room-session (the `GetRoomSession` operationId).
+func (c *Client) GetRoomSession(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRoomSessionRequest(c.Server, conversationId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// JoinRoomWithBody Explicitly request entry and reconnect recovery for a saved room
+//
+// Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/room-session (the `JoinRoom` operationId).
+func (c *Client) JoinRoomWithBody(ctx context.Context, conversationId ConversationID, params *JoinRoomParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewJoinRoomRequestWithBody(c.Server, conversationId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// JoinRoom Explicitly request entry and reconnect recovery for a saved room
+//
+// Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/room-session (the `JoinRoom` operationId).
+func (c *Client) JoinRoom(ctx context.Context, conversationId ConversationID, params *JoinRoomParams, body JoinRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewJoinRoomRequest(c.Server, conversationId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// LeaveRoomWithBody Leave a room and stop this engine's automatic rejoin
+//
+// Durably records an explicit leave before sending unavailable presence. Saved history and queued messages are retained. Queued room work cannot dispatch while the intent is inactive. An old operation replay never reactivates a later leave or revoked intent.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
+func (c *Client) LeaveRoomWithBody(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLeaveRoomRequestWithBody(c.Server, conversationId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// LeaveRoom Leave a room and stop this engine's automatic rejoin
+//
+// Durably records an explicit leave before sending unavailable presence. Saved history and queued messages are retained. Queued room work cannot dispatch while the intent is inactive. An old operation replay never reactivates a later leave or revoked intent.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
+func (c *Client) LeaveRoom(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, body LeaveRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLeaveRoomRequest(c.Server, conversationId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4250,6 +4567,160 @@ func NewListConversationPreviewsRequest(server string, conversationId ID, params
 	return req, nil
 }
 
+// NewGetRoomSessionRequest constructs an http.Request for the GetRoomSession method
+func NewGetRoomSessionRequest(server string, conversationId ConversationID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/conversations/%s/room-session", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewJoinRoomRequest calls the generic JoinRoom builder with application/json body
+func NewJoinRoomRequest(server string, conversationId ConversationID, params *JoinRoomParams, body JoinRoomJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewJoinRoomRequestWithBody(server, conversationId, params, "application/json", bodyReader)
+}
+
+// NewJoinRoomRequestWithBody constructs an http.Request for the JoinRoom method, with any body, and a specified content type
+func NewJoinRoomRequestWithBody(server string, conversationId ConversationID, params *JoinRoomParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/conversations/%s/room-session", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: "uuid"})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewLeaveRoomRequest calls the generic LeaveRoom builder with application/json body
+func NewLeaveRoomRequest(server string, conversationId ConversationID, params *LeaveRoomParams, body LeaveRoomJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewLeaveRoomRequestWithBody(server, conversationId, params, "application/json", bodyReader)
+}
+
+// NewLeaveRoomRequestWithBody constructs an http.Request for the LeaveRoom method, with any body, and a specified content type
+func NewLeaveRoomRequestWithBody(server string, conversationId ConversationID, params *LeaveRoomParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/conversations/%s/room-session/leave", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: "uuid"})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
 // NewGetEngineRequest constructs an http.Request for the GetEngine method
 func NewGetEngineRequest(server string) (*http.Request, error) {
 	var err error
@@ -5147,6 +5618,51 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/conversations/{conversationId}/previews (the `ListConversationPreviews` operationId).
 	ListConversationPreviewsWithResponse(ctx context.Context, conversationId ID, params *ListConversationPreviewsParams, reqEditors ...RequestEditorFn) (*ListConversationPreviewsResponse, error)
+
+	// GetRoomSessionWithResponse Read this engine's room session and durable join intent
+	//
+	// Reads local state without joining. Active denotes a durable intent to rejoin, not observed membership. A joined state requires confirmed self-presence. Missing room intent has no intent identifiers.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId}/room-session (the `GetRoomSession` operationId).
+	GetRoomSessionWithResponse(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*GetRoomSessionResponse, error)
+
+	// JoinRoomWithBodyWithResponse Explicitly request entry and reconnect recovery for a saved room
+	//
+	// Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session (the `JoinRoom` operationId).
+	JoinRoomWithBodyWithResponse(ctx context.Context, conversationId ConversationID, params *JoinRoomParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*JoinRoomResponse, error)
+
+	// JoinRoomWithResponse Explicitly request entry and reconnect recovery for a saved room
+	//
+	// Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session (the `JoinRoom` operationId).
+	JoinRoomWithResponse(ctx context.Context, conversationId ConversationID, params *JoinRoomParams, body JoinRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*JoinRoomResponse, error)
+
+	// LeaveRoomWithBodyWithResponse Leave a room and stop this engine's automatic rejoin
+	//
+	// Durably records an explicit leave before sending unavailable presence. Saved history and queued messages are retained. Queued room work cannot dispatch while the intent is inactive. An old operation replay never reactivates a later leave or revoked intent.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
+	LeaveRoomWithBodyWithResponse(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LeaveRoomResponse, error)
+
+	// LeaveRoomWithResponse Leave a room and stop this engine's automatic rejoin
+	//
+	// Durably records an explicit leave before sending unavailable presence. Saved history and queued messages are retained. Queued room work cannot dispatch while the intent is inactive. An old operation replay never reactivates a later leave or revoked intent.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
+	LeaveRoomWithResponse(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, body LeaveRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*LeaveRoomResponse, error)
 
 	// GetEngineWithResponse Read the persistent engine identity
 	//
@@ -6504,6 +7020,206 @@ func (r ListConversationPreviewsResponse) ContentType() string {
 	return ""
 }
 
+type GetRoomSessionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RoomSession
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetRoomSessionResponse) GetJSON200() *RoomSession {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetRoomSessionResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetRoomSessionResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetRoomSessionResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetRoomSessionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRoomSessionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRoomSessionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetRoomSessionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type JoinRoomResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RoomSession
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Conflict
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r JoinRoomResponse) GetJSON200() *RoomSession {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r JoinRoomResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r JoinRoomResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r JoinRoomResponse) GetApplicationproblemJSON409() *Conflict {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r JoinRoomResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r JoinRoomResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r JoinRoomResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r JoinRoomResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r JoinRoomResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type LeaveRoomResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RoomSession
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Conflict
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r LeaveRoomResponse) GetJSON200() *RoomSession {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r LeaveRoomResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r LeaveRoomResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r LeaveRoomResponse) GetApplicationproblemJSON409() *Conflict {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r LeaveRoomResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r LeaveRoomResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r LeaveRoomResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r LeaveRoomResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r LeaveRoomResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetEngineResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -7655,6 +8371,81 @@ func (c *ClientWithResponses) ListConversationPreviewsWithResponse(ctx context.C
 		return nil, err
 	}
 	return ParseListConversationPreviewsResponse(rsp)
+}
+
+// GetRoomSessionWithResponse Read this engine's room session and durable join intent
+//
+// Reads local state without joining. Active denotes a durable intent to rejoin, not observed membership. A joined state requires confirmed self-presence. Missing room intent has no intent identifiers.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/conversations/{conversationId}/room-session (the `GetRoomSession` operationId).
+func (c *ClientWithResponses) GetRoomSessionWithResponse(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*GetRoomSessionResponse, error) {
+	rsp, err := c.GetRoomSession(ctx, conversationId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRoomSessionResponse(rsp)
+}
+
+// JoinRoomWithBodyWithResponse Explicitly request entry and reconnect recovery for a saved room
+//
+// Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/room-session (the `JoinRoom` operationId).
+func (c *ClientWithResponses) JoinRoomWithBodyWithResponse(ctx context.Context, conversationId ConversationID, params *JoinRoomParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*JoinRoomResponse, error) {
+	rsp, err := c.JoinRoomWithBody(ctx, conversationId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseJoinRoomResponse(rsp)
+}
+
+// JoinRoomWithResponse Explicitly request entry and reconnect recovery for a saved room
+//
+// Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/room-session (the `JoinRoom` operationId).
+func (c *ClientWithResponses) JoinRoomWithResponse(ctx context.Context, conversationId ConversationID, params *JoinRoomParams, body JoinRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*JoinRoomResponse, error) {
+	rsp, err := c.JoinRoom(ctx, conversationId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseJoinRoomResponse(rsp)
+}
+
+// LeaveRoomWithBodyWithResponse Leave a room and stop this engine's automatic rejoin
+//
+// Durably records an explicit leave before sending unavailable presence. Saved history and queued messages are retained. Queued room work cannot dispatch while the intent is inactive. An old operation replay never reactivates a later leave or revoked intent.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
+func (c *ClientWithResponses) LeaveRoomWithBodyWithResponse(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LeaveRoomResponse, error) {
+	rsp, err := c.LeaveRoomWithBody(ctx, conversationId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLeaveRoomResponse(rsp)
+}
+
+// LeaveRoomWithResponse Leave a room and stop this engine's automatic rejoin
+//
+// Durably records an explicit leave before sending unavailable presence. Saved history and queued messages are retained. Queued room work cannot dispatch while the intent is inactive. An old operation replay never reactivates a later leave or revoked intent.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
+func (c *ClientWithResponses) LeaveRoomWithResponse(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, body LeaveRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*LeaveRoomResponse, error) {
+	rsp, err := c.LeaveRoom(ctx, conversationId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLeaveRoomResponse(rsp)
 }
 
 // GetEngineWithResponse Read the persistent engine identity
@@ -8847,6 +9638,161 @@ func ParseListConversationPreviewsResponse(rsp *http.Response) (*ListConversatio
 	return response, nil
 }
 
+// ParseGetRoomSessionResponse parses an HTTP response from a GetRoomSessionWithResponse call
+func ParseGetRoomSessionResponse(rsp *http.Response) (*GetRoomSessionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRoomSessionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoomSession
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseJoinRoomResponse parses an HTTP response from a JoinRoomWithResponse call
+func ParseJoinRoomResponse(rsp *http.Response) (*JoinRoomResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &JoinRoomResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoomSession
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseLeaveRoomResponse parses an HTTP response from a LeaveRoomWithResponse call
+func ParseLeaveRoomResponse(rsp *http.Response) (*LeaveRoomResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &LeaveRoomResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoomSession
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetEngineResponse parses an HTTP response from a GetEngineWithResponse call
 func ParseGetEngineResponse(rsp *http.Response) (*GetEngineResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -9526,6 +10472,15 @@ type ServerInterface interface {
 	// ListConversationPreviews Read cached message link and image previews
 	// (GET /api/v1/conversations/{conversationId}/previews)
 	ListConversationPreviews(w http.ResponseWriter, r *http.Request, conversationId ID, params ListConversationPreviewsParams)
+	// GetRoomSession Read this engine's room session and durable join intent
+	// (GET /api/v1/conversations/{conversationId}/room-session)
+	GetRoomSession(w http.ResponseWriter, r *http.Request, conversationId ConversationID)
+	// JoinRoom Explicitly request entry and reconnect recovery for a saved room
+	// (POST /api/v1/conversations/{conversationId}/room-session)
+	JoinRoom(w http.ResponseWriter, r *http.Request, conversationId ConversationID, params JoinRoomParams)
+	// LeaveRoom Leave a room and stop this engine's automatic rejoin
+	// (POST /api/v1/conversations/{conversationId}/room-session/leave)
+	LeaveRoom(w http.ResponseWriter, r *http.Request, conversationId ConversationID, params LeaveRoomParams)
 	// GetEngine Read the persistent engine identity
 	// (GET /api/v1/engine)
 	GetEngine(w http.ResponseWriter, r *http.Request)
@@ -10393,6 +11348,140 @@ func (siw *ServerInterfaceWrapper) ListConversationPreviews(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
+// GetRoomSession operation middleware
+func (siw *ServerInterfaceWrapper) GetRoomSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", r.PathValue("conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRoomSession(w, r, conversationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// JoinRoom operation middleware
+func (siw *ServerInterfaceWrapper) JoinRoom(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", r.PathValue("conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params JoinRoomParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey ID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.JoinRoom(w, r, conversationId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LeaveRoom operation middleware
+func (siw *ServerInterfaceWrapper) LeaveRoom(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", r.PathValue("conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params LeaveRoomParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey ID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LeaveRoom(w, r, conversationId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetEngine operation middleware
 func (siw *ServerInterfaceWrapper) GetEngine(w http.ResponseWriter, r *http.Request) {
 
@@ -11066,6 +12155,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/accounts/{accountId}/connection", wrapper.ConfigureAccountConnection)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/conversations", wrapper.ListConversations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/conversations", wrapper.OpenConversation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/conversations/{conversationId}/room-session", wrapper.GetRoomSession)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/conversations/{conversationId}/room-session", wrapper.JoinRoom)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/conversations/{conversationId}/room-session/leave", wrapper.LeaveRoom)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/conversations/{conversationId}/details", wrapper.GetConversationDetails)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/conversations/{conversationId}", wrapper.GetConversation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/conversations/{conversationId}/messages", wrapper.ListMessages)
@@ -12518,6 +13610,252 @@ func (response ListConversationPreviews503ApplicationProblemPlusJSONResponse) Vi
 	return err
 }
 
+type GetRoomSessionRequestObject struct {
+	ConversationId ConversationID `json:"conversationId"`
+}
+
+type GetRoomSessionResponseObject interface {
+	VisitGetRoomSessionResponse(w http.ResponseWriter) error
+}
+
+type GetRoomSession200JSONResponse RoomSession
+
+func (response GetRoomSession200JSONResponse) VisitGetRoomSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRoomSession400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response GetRoomSession400ApplicationProblemPlusJSONResponse) VisitGetRoomSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRoomSession404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetRoomSession404ApplicationProblemPlusJSONResponse) VisitGetRoomSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRoomSession503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response GetRoomSession503ApplicationProblemPlusJSONResponse) VisitGetRoomSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type JoinRoomRequestObject struct {
+	ConversationId ConversationID `json:"conversationId"`
+	Params         JoinRoomParams
+	Body           *JoinRoomJSONRequestBody
+}
+
+type JoinRoomResponseObject interface {
+	VisitJoinRoomResponse(w http.ResponseWriter) error
+}
+
+type JoinRoom200JSONResponse RoomSession
+
+func (response JoinRoom200JSONResponse) VisitJoinRoomResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type JoinRoom400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response JoinRoom400ApplicationProblemPlusJSONResponse) VisitJoinRoomResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type JoinRoom404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response JoinRoom404ApplicationProblemPlusJSONResponse) VisitJoinRoomResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type JoinRoom409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response JoinRoom409ApplicationProblemPlusJSONResponse) VisitJoinRoomResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type JoinRoom503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response JoinRoom503ApplicationProblemPlusJSONResponse) VisitJoinRoomResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LeaveRoomRequestObject struct {
+	ConversationId ConversationID `json:"conversationId"`
+	Params         LeaveRoomParams
+	Body           *LeaveRoomJSONRequestBody
+}
+
+type LeaveRoomResponseObject interface {
+	VisitLeaveRoomResponse(w http.ResponseWriter) error
+}
+
+type LeaveRoom200JSONResponse RoomSession
+
+func (response LeaveRoom200JSONResponse) VisitLeaveRoomResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LeaveRoom400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response LeaveRoom400ApplicationProblemPlusJSONResponse) VisitLeaveRoomResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LeaveRoom404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response LeaveRoom404ApplicationProblemPlusJSONResponse) VisitLeaveRoomResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LeaveRoom409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response LeaveRoom409ApplicationProblemPlusJSONResponse) VisitLeaveRoomResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LeaveRoom503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response LeaveRoom503ApplicationProblemPlusJSONResponse) VisitLeaveRoomResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetEngineRequestObject struct {
 }
 
@@ -13597,6 +14935,15 @@ type StrictServerInterface interface {
 	// ListConversationPreviews Read cached message link and image previews
 	// (GET /api/v1/conversations/{conversationId}/previews)
 	ListConversationPreviews(ctx context.Context, request ListConversationPreviewsRequestObject) (ListConversationPreviewsResponseObject, error)
+	// GetRoomSession Read this engine's room session and durable join intent
+	// (GET /api/v1/conversations/{conversationId}/room-session)
+	GetRoomSession(ctx context.Context, request GetRoomSessionRequestObject) (GetRoomSessionResponseObject, error)
+	// JoinRoom Explicitly request entry and reconnect recovery for a saved room
+	// (POST /api/v1/conversations/{conversationId}/room-session)
+	JoinRoom(ctx context.Context, request JoinRoomRequestObject) (JoinRoomResponseObject, error)
+	// LeaveRoom Leave a room and stop this engine's automatic rejoin
+	// (POST /api/v1/conversations/{conversationId}/room-session/leave)
+	LeaveRoom(ctx context.Context, request LeaveRoomRequestObject) (LeaveRoomResponseObject, error)
 	// GetEngine Read the persistent engine identity
 	// (GET /api/v1/engine)
 	GetEngine(ctx context.Context, request GetEngineRequestObject) (GetEngineResponseObject, error)
@@ -14207,6 +15554,100 @@ func (sh *strictHandler) ListConversationPreviews(w http.ResponseWriter, r *http
 	}
 }
 
+// GetRoomSession operation middleware
+func (sh *strictHandler) GetRoomSession(w http.ResponseWriter, r *http.Request, conversationId ConversationID) {
+	var request GetRoomSessionRequestObject
+
+	request.ConversationId = conversationId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRoomSession(ctx, request.(GetRoomSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRoomSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRoomSessionResponseObject); ok {
+		if err := validResponse.VisitGetRoomSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// JoinRoom operation middleware
+func (sh *strictHandler) JoinRoom(w http.ResponseWriter, r *http.Request, conversationId ConversationID, params JoinRoomParams) {
+	var request JoinRoomRequestObject
+
+	request.ConversationId = conversationId
+	request.Params = params
+
+	var body JoinRoomJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.JoinRoom(ctx, request.(JoinRoomRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "JoinRoom")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(JoinRoomResponseObject); ok {
+		if err := validResponse.VisitJoinRoomResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// LeaveRoom operation middleware
+func (sh *strictHandler) LeaveRoom(w http.ResponseWriter, r *http.Request, conversationId ConversationID, params LeaveRoomParams) {
+	var request LeaveRoomRequestObject
+
+	request.ConversationId = conversationId
+	request.Params = params
+
+	var body LeaveRoomJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.LeaveRoom(ctx, request.(LeaveRoomRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "LeaveRoom")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LeaveRoomResponseObject); ok {
+		if err := validResponse.VisitLeaveRoomResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetEngine operation middleware
 func (sh *strictHandler) GetEngine(w http.ResponseWriter, r *http.Request) {
 	var request GetEngineRequestObject
@@ -14563,244 +16004,264 @@ func (sh *strictHandler) ListStarredMessages(w http.ResponseWriter, r *http.Requ
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"ipOzYBniO+A3s1fV8kTU0bSuf77+fwMA",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.10.0",
-    "description": "Native engine API for account metadata, XMPP connections, direct text conversations, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.",
+    "version": "0.11.0",
+    "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.",
     "contact": {
       "name": "Arai Hû",
       "url": "https://github.com/araihu/oie"
@@ -702,7 +702,7 @@
                 "example": {
                   "id": "019a5df0-0000-7000-8000-000000000003",
                   "role": "local",
-                  "apiVersion": "0.10.0",
+                  "apiVersion": "0.11.0",
                   "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
                 }
               }
@@ -1571,6 +1571,157 @@
         }
       }
     },
+    "/api/v1/conversations/{conversationId}/room-session": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationID"
+        }
+      ],
+      "get": {
+        "operationId": "getRoomSession",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Read this engine's room session and durable join intent",
+        "description": "Reads local state without joining. Active denotes a durable intent to rejoin, not observed membership. A joined state requires confirmed self-presence. Missing room intent has no intent identifiers.",
+        "responses": {
+          "200": {
+            "description": "Current own room-session projection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      },
+      "post": {
+        "operationId": "joinRoom",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Explicitly request entry and reconnect recovery for a saved room",
+        "description": "Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Stable operation UUID for this join intent.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Desired nickname and observed join-intent revision.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinRoom"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Join intent durably accepted or replayed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversationId}/room-session/leave": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationID"
+        }
+      ],
+      "post": {
+        "operationId": "leaveRoom",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Leave a room and stop this engine's automatic rejoin",
+        "description": "Durably records an explicit leave before sending unavailable presence. Saved history and queued messages are retained. Queued room work cannot dispatch while the intent is inactive. An old operation replay never reactivates a later leave or revoked intent.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Stable operation UUID for this leave intent.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Observed join-intent revision.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeaveRoom"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Leave intent durably accepted or replayed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/conversations/{conversationId}/details": {
       "parameters": [
         {
@@ -2292,7 +2443,7 @@
         "example": {
           "id": "019a5df0-0000-7000-8000-000000000003",
           "role": "local",
-          "apiVersion": "0.10.0",
+          "apiVersion": "0.11.0",
           "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
         },
         "additionalProperties": false,
@@ -2316,7 +2467,7 @@
           "apiVersion": {
             "type": "string",
             "enum": [
-              "0.10.0"
+              "0.11.0"
             ]
           },
           "eventCursor": {
@@ -2719,7 +2870,9 @@
               "open_conversation",
               "send_message",
               "cancel_message",
-              "set_message_star"
+              "set_message_star",
+              "join_room",
+              "leave_room"
             ]
           },
           "status": {
@@ -2776,6 +2929,7 @@
               "message.star_changed",
               "conversation.created",
               "conversation.updated",
+              "conversation.room_session_changed",
               "message.created",
               "message.updated"
             ]
@@ -2807,6 +2961,9 @@
           },
           "preview": {
             "$ref": "#/components/schemas/MessagePreview"
+          },
+          "roomSession": {
+            "$ref": "#/components/schemas/RoomSession"
           }
         }
       },
@@ -2854,6 +3011,9 @@
           },
           "currentMessage": {
             "$ref": "#/components/schemas/Message"
+          },
+          "currentRoomSession": {
+            "$ref": "#/components/schemas/RoomSession"
           }
         }
       },
@@ -3615,6 +3775,9 @@
             "type": "string",
             "enum": [
               "not_joined",
+              "joining",
+              "joined",
+              "failed",
               "unknown"
             ]
           },
@@ -3823,6 +3986,14 @@
           "reply": {
             "$ref": "#/components/schemas/MessageReply"
           },
+          "replyToMessageId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ID"
+              }
+            ],
+            "description": "Canonical target UUID frozen in an outgoing reply intent, including a text-only fallback. It does not imply the original is still available. Reply bodyText preserves the authored response for receipt reconciliation."
+          },
           "originalText": {
             "type": "string",
             "description": "Unmodified original text."
@@ -3890,9 +4061,117 @@
           "items": []
         }
       },
+      "RoomSession": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Own engine's room intent and observed session, distinct from account connectivity and public occupant discovery.",
+        "required": [
+          "accountId",
+          "conversationId",
+          "active",
+          "state",
+          "updatedAt"
+        ],
+        "properties": {
+          "accountId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "conversationId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "intentId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "intentRevisionId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "active": {
+            "type": "boolean",
+            "description": "This engine has a durable active join intent. False after explicit leave or revoked access."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "not_joined",
+              "joining",
+              "joined",
+              "failed"
+            ]
+          },
+          "nickname": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Selected room nickname when known."
+          },
+          "lastErrorCode": {
+            "type": "string",
+            "enum": [
+              "not_connected",
+              "forbidden",
+              "not_authorized",
+              "nickname_conflict",
+              "registration_required",
+              "room_unavailable",
+              "removed",
+              "timeout",
+              "unsupported",
+              "unknown"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "example": {
+          "accountId": "019a5df0-0000-7000-8000-000000000001",
+          "conversationId": "019a5df0-0000-7000-8000-000000000002",
+          "active": false,
+          "state": "not_joined",
+          "updatedAt": "2026-11-08T12:00:00Z"
+        }
+      },
+      "JoinRoom": {
+        "description": "Explicit room-entry command with optimistic intent revision.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedRevisionId"
+        ],
+        "properties": {
+          "nickname": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Optional nickname; the adapter chooses its account default when omitted. No password is accepted in this increment."
+          },
+          "expectedRevisionId": {
+            "$ref": "#/components/schemas/NullableRevisionID"
+          }
+        },
+        "example": {
+          "expectedRevisionId": null
+        }
+      },
+      "LeaveRoom": {
+        "description": "Explicit room-exit command preserving retained history and pending work.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedRevisionId"
+        ],
+        "properties": {
+          "expectedRevisionId": {
+            "$ref": "#/components/schemas/NullableRevisionID"
+          }
+        },
+        "example": {
+          "expectedRevisionId": "019a5df0-0000-7000-8000-000000000003"
+        }
+      },
       "SendMessage": {
         "type": "object",
-        "description": "Durably accept an immediate plain text send.",
+        "description": "Durably accept authored text with an optional source-message reply. The engine validates the retained target within the same account and conversation and snapshots the sender, excerpt, wire reference and compatibility quote. Clients submit only the target UUID, never a quoted body or protocol identifier. originalText in the resulting Message is the full transmitted body, including fallback text. Message.reply.bodyText contains the authored response. Structured references are emitted where valid protocol identifiers are available, with text fallback for legacy clients or an unavailable stable target identifier. Room sends require an active explicit join intent; dispatch waits for confirmed own membership. No room is joined by accepting or preparing a reply.",
         "additionalProperties": false,
         "required": [
           "originalText"
@@ -3903,6 +4182,14 @@
             "description": "Original UTF-8 text. Whitespace/newlines are preserved; empty or whitespace-only bodies are rejected.",
             "minLength": 1,
             "maxLength": 16384
+          },
+          "replyToMessageId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ID"
+              }
+            ],
+            "description": "Retained source UUID in this conversation. Omitted for an ordinary message. Part of the immutable send intent and operation fingerprint."
           }
         },
         "example": {

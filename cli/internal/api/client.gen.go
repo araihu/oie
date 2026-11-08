@@ -365,6 +365,9 @@ func (e ConversationDetailsKind) Valid() bool {
 
 // Defines values for ConversationDetailsRoomSession.
 const (
+	ConversationDetailsRoomSessionFailed    ConversationDetailsRoomSession = "failed"
+	ConversationDetailsRoomSessionJoined    ConversationDetailsRoomSession = "joined"
+	ConversationDetailsRoomSessionJoining   ConversationDetailsRoomSession = "joining"
 	ConversationDetailsRoomSessionNotJoined ConversationDetailsRoomSession = "not_joined"
 	ConversationDetailsRoomSessionUnknown   ConversationDetailsRoomSession = "unknown"
 )
@@ -372,6 +375,12 @@ const (
 // Valid indicates whether the value is a known member of the ConversationDetailsRoomSession enum.
 func (e ConversationDetailsRoomSession) Valid() bool {
 	switch e {
+	case ConversationDetailsRoomSessionFailed:
+		return true
+	case ConversationDetailsRoomSessionJoined:
+		return true
+	case ConversationDetailsRoomSessionJoining:
+		return true
 	case ConversationDetailsRoomSessionNotJoined:
 		return true
 	case ConversationDetailsRoomSessionUnknown:
@@ -512,13 +521,13 @@ func (e DiscoveredServiceState) Valid() bool {
 
 // Defines values for EngineApiVersion.
 const (
-	N0100 EngineApiVersion = "0.10.0"
+	N0110 EngineApiVersion = "0.11.0"
 )
 
 // Valid indicates whether the value is a known member of the EngineApiVersion enum.
 func (e EngineApiVersion) Valid() bool {
 	switch e {
-	case N0100:
+	case N0110:
 		return true
 	default:
 		return false
@@ -747,6 +756,8 @@ func (e MessagePreviewState) Valid() bool {
 // Defines values for OperationKind.
 const (
 	OperationKindCancelMessage    OperationKind = "cancel_message"
+	OperationKindJoinRoom         OperationKind = "join_room"
+	OperationKindLeaveRoom        OperationKind = "leave_room"
 	OperationKindOpenConversation OperationKind = "open_conversation"
 	OperationKindRegisterAccount  OperationKind = "register_account"
 	OperationKindSendMessage      OperationKind = "send_message"
@@ -757,6 +768,10 @@ const (
 func (e OperationKind) Valid() bool {
 	switch e {
 	case OperationKindCancelMessage:
+		return true
+	case OperationKindJoinRoom:
+		return true
+	case OperationKindLeaveRoom:
 		return true
 	case OperationKindOpenConversation:
 		return true
@@ -864,6 +879,72 @@ const (
 func (e RegisterAccountProtocol) Valid() bool {
 	switch e {
 	case RegisterAccountProtocolXmpp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoomSessionLastErrorCode.
+const (
+	RoomSessionLastErrorCodeForbidden            RoomSessionLastErrorCode = "forbidden"
+	RoomSessionLastErrorCodeNicknameConflict     RoomSessionLastErrorCode = "nickname_conflict"
+	RoomSessionLastErrorCodeNotAuthorized        RoomSessionLastErrorCode = "not_authorized"
+	RoomSessionLastErrorCodeNotConnected         RoomSessionLastErrorCode = "not_connected"
+	RoomSessionLastErrorCodeRegistrationRequired RoomSessionLastErrorCode = "registration_required"
+	RoomSessionLastErrorCodeRemoved              RoomSessionLastErrorCode = "removed"
+	RoomSessionLastErrorCodeRoomUnavailable      RoomSessionLastErrorCode = "room_unavailable"
+	RoomSessionLastErrorCodeTimeout              RoomSessionLastErrorCode = "timeout"
+	RoomSessionLastErrorCodeUnknown              RoomSessionLastErrorCode = "unknown"
+	RoomSessionLastErrorCodeUnsupported          RoomSessionLastErrorCode = "unsupported"
+)
+
+// Valid indicates whether the value is a known member of the RoomSessionLastErrorCode enum.
+func (e RoomSessionLastErrorCode) Valid() bool {
+	switch e {
+	case RoomSessionLastErrorCodeForbidden:
+		return true
+	case RoomSessionLastErrorCodeNicknameConflict:
+		return true
+	case RoomSessionLastErrorCodeNotAuthorized:
+		return true
+	case RoomSessionLastErrorCodeNotConnected:
+		return true
+	case RoomSessionLastErrorCodeRegistrationRequired:
+		return true
+	case RoomSessionLastErrorCodeRemoved:
+		return true
+	case RoomSessionLastErrorCodeRoomUnavailable:
+		return true
+	case RoomSessionLastErrorCodeTimeout:
+		return true
+	case RoomSessionLastErrorCodeUnknown:
+		return true
+	case RoomSessionLastErrorCodeUnsupported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoomSessionState.
+const (
+	RoomSessionStateFailed    RoomSessionState = "failed"
+	RoomSessionStateJoined    RoomSessionState = "joined"
+	RoomSessionStateJoining   RoomSessionState = "joining"
+	RoomSessionStateNotJoined RoomSessionState = "not_joined"
+)
+
+// Valid indicates whether the value is a known member of the RoomSessionState enum.
+func (e RoomSessionState) Valid() bool {
+	switch e {
+	case RoomSessionStateFailed:
+		return true
+	case RoomSessionStateJoined:
+		return true
+	case RoomSessionStateJoining:
+		return true
+	case RoomSessionStateNotJoined:
 		return true
 	default:
 		return false
@@ -1333,7 +1414,7 @@ type DiscoveredServiceState string
 
 // Engine Persistent engine identity and event boundary.
 //
-// Example: {"apiVersion":"0.10.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
+// Example: {"apiVersion":"0.11.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
 type Engine struct {
 	ApiVersion EngineApiVersion `json:"apiVersion"`
 
@@ -1390,6 +1471,29 @@ type HistoryStatusState string
 // Example: 019a5df0-0000-7000-8000-000000000001
 type ID = string
 
+// JoinRoom Explicit room-entry command with optimistic intent revision.
+//
+// Example: {"expectedRevisionId":null}
+type JoinRoom struct {
+	// ExpectedRevisionId Canonical UUIDv7 of app-owned state; null means no revision has been created.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000004
+	ExpectedRevisionId *NullableRevisionID `json:"expectedRevisionId"`
+
+	// Nickname Optional nickname; the adapter chooses its account default when omitted. No password is accepted in this increment.
+	Nickname *string `json:"nickname,omitempty"`
+}
+
+// LeaveRoom Explicit room-exit command preserving retained history and pending work.
+//
+// Example: {"expectedRevisionId":"019a5df0-0000-7000-8000-000000000003"}
+type LeaveRoom struct {
+	// ExpectedRevisionId Canonical UUIDv7 of app-owned state; null means no revision has been created.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000004
+	ExpectedRevisionId *NullableRevisionID `json:"expectedRevisionId"`
+}
+
 // Message Retained original text and actual send evidence. submitted means the stanza was written to the authenticated stream; it does not prove provider acceptance, recipient delivery, or read state. unknown is not automatically resent.
 //
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000001","isOwn":false,"originalText":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","sendState":"received","sender":{"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}}
@@ -1423,6 +1527,9 @@ type Message struct {
 	//
 	// Example: {"available":true,"bodyText":"Great idea!","excerpt":"We should bake a cake.","messageId":"019a5df0-0000-7000-8000-000000000001","senderName":"Bob"}
 	Reply *MessageReply `json:"reply,omitempty"`
+
+	// ReplyToMessageId Canonical target UUID frozen in an outgoing reply intent, including a text-only fallback. It does not imply the original is still available. Reply bodyText preserves the authored response for receipt reconciliation.
+	ReplyToMessageId *ID `json:"replyToMessageId,omitempty"`
 
 	// RevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
 	//
@@ -1687,6 +1794,11 @@ type Problem struct {
 	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000001","isOwn":false,"originalText":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","sendState":"received","sender":{"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}}
 	CurrentMessage *Message `json:"currentMessage,omitempty"`
 
+	// CurrentRoomSession Own engine's room intent and observed session, distinct from account connectivity and public occupant discovery.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","active":false,"conversationId":"019a5df0-0000-7000-8000-000000000002","state":"not_joined","updatedAt":"2026-11-08T12:00:00Z"}
+	CurrentRoomSession *RoomSession `json:"currentRoomSession,omitempty"`
+
 	// CurrentStar App-owned source message star, keyed by messageId with its own revision history. Never a message edit.
 	//
 	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":null,"starred":false,"updatedAt":null}
@@ -1711,12 +1823,55 @@ type RegisterAccount struct {
 // RegisterAccountProtocol defines model for RegisterAccount.Protocol.
 type RegisterAccountProtocol string
 
-// SendMessage Durably accept an immediate plain text send.
+// RoomSession Own engine's room intent and observed session, distinct from account connectivity and public occupant discovery.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","active":false,"conversationId":"019a5df0-0000-7000-8000-000000000002","state":"not_joined","updatedAt":"2026-11-08T12:00:00Z"}
+type RoomSession struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	AccountId ID `json:"accountId"`
+
+	// Active This engine has a durable active join intent. False after explicit leave or revoked access.
+	Active bool `json:"active"`
+
+	// ConversationId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	ConversationId ID `json:"conversationId"`
+
+	// IntentId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	IntentId *ID `json:"intentId,omitempty"`
+
+	// IntentRevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	IntentRevisionId *ID                       `json:"intentRevisionId,omitempty"`
+	LastErrorCode    *RoomSessionLastErrorCode `json:"lastErrorCode,omitempty"`
+
+	// Nickname Selected room nickname when known.
+	Nickname  *string          `json:"nickname,omitempty"`
+	State     RoomSessionState `json:"state"`
+	UpdatedAt time.Time        `json:"updatedAt"`
+}
+
+// RoomSessionLastErrorCode defines model for RoomSession.LastErrorCode.
+type RoomSessionLastErrorCode string
+
+// RoomSessionState defines model for RoomSession.State.
+type RoomSessionState string
+
+// SendMessage Durably accept authored text with an optional source-message reply. The engine validates the retained target within the same account and conversation and snapshots the sender, excerpt, wire reference and compatibility quote. Clients submit only the target UUID, never a quoted body or protocol identifier. originalText in the resulting Message is the full transmitted body, including fallback text. Message.reply.bodyText contains the authored response. Structured references are emitted where valid protocol identifiers are available, with text fallback for legacy clients or an unavailable stable target identifier. Room sends require an active explicit join intent; dispatch waits for confirmed own membership. No room is joined by accepting or preparing a reply.
 //
 // Example: {"originalText":"Hello from Oie!"}
 type SendMessage struct {
 	// OriginalText Original UTF-8 text. Whitespace/newlines are preserved; empty or whitespace-only bodies are rejected.
 	OriginalText string `json:"originalText"`
+
+	// ReplyToMessageId Retained source UUID in this conversation. Omitted for an ordinary message. Part of the immutable send intent and operation fingerprint.
+	ReplyToMessageId *ID `json:"replyToMessageId,omitempty"`
 }
 
 // Sender Engine-local source identity. For recovered room messages, this is the room-scoped source with an observed speaker nickname, not a verified personal identity.
@@ -1968,6 +2123,18 @@ type ListConversationPreviewsParams struct {
 	MessageId *[]ID `form:"messageId,omitempty" json:"messageId,omitempty"`
 }
 
+// JoinRoomParams defines parameters for JoinRoom.
+type JoinRoomParams struct {
+	// IdempotencyKey Stable operation UUID for this join intent.
+	IdempotencyKey ID `json:"Idempotency-Key"`
+}
+
+// LeaveRoomParams defines parameters for LeaveRoom.
+type LeaveRoomParams struct {
+	// IdempotencyKey Stable operation UUID for this leave intent.
+	IdempotencyKey ID `json:"Idempotency-Key"`
+}
+
 // StreamEventsParams defines parameters for StreamEvents.
 type StreamEventsParams struct {
 	// LastEventID Previously applied engine-scoped cursor.
@@ -2042,6 +2209,12 @@ type OpenConversationJSONRequestBody = OpenConversation
 
 // SendMessageJSONRequestBody defines body for SendMessage for application/json ContentType.
 type SendMessageJSONRequestBody = SendMessage
+
+// JoinRoomJSONRequestBody defines body for JoinRoom for application/json ContentType.
+type JoinRoomJSONRequestBody = JoinRoom
+
+// LeaveRoomJSONRequestBody defines body for LeaveRoom for application/json ContentType.
+type LeaveRoomJSONRequestBody = LeaveRoom
 
 // CancelMessageJSONRequestBody defines body for CancelMessage for application/json ContentType.
 type CancelMessageJSONRequestBody = CancelMessage
@@ -2307,6 +2480,49 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/conversations/{conversationId}/previews (the `ListConversationPreviews` operationId).
 	ListConversationPreviews(ctx context.Context, conversationId ID, params *ListConversationPreviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRoomSession Read this engine's room session and durable join intent
+	//
+	// Reads local state without joining. Active denotes a durable intent to rejoin, not observed membership. A joined state requires confirmed self-presence. Missing room intent has no intent identifiers.
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId}/room-session (the `GetRoomSession` operationId).
+	GetRoomSession(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// JoinRoomWithBody Explicitly request entry and reconnect recovery for a saved room
+	//
+	// Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session (the `JoinRoom` operationId).
+	JoinRoomWithBody(ctx context.Context, conversationId ConversationID, params *JoinRoomParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// JoinRoom Explicitly request entry and reconnect recovery for a saved room
+	//
+	// Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session (the `JoinRoom` operationId).
+	JoinRoom(ctx context.Context, conversationId ConversationID, params *JoinRoomParams, body JoinRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// LeaveRoomWithBody Leave a room and stop this engine's automatic rejoin
+	//
+	// Durably records an explicit leave before sending unavailable presence. Saved history and queued messages are retained. Queued room work cannot dispatch while the intent is inactive. An old operation replay never reactivates a later leave or revoked intent.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
+	LeaveRoomWithBody(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// LeaveRoom Leave a room and stop this engine's automatic rejoin
+	//
+	// Durably records an explicit leave before sending unavailable presence. Saved history and queued messages are retained. Queued room work cannot dispatch while the intent is inactive. An old operation replay never reactivates a later leave or revoked intent.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
+	LeaveRoom(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, body LeaveRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetEngine Read the persistent engine identity
 	//
@@ -2832,6 +3048,99 @@ func (c *Client) GetMessageContext(ctx context.Context, conversationId Conversat
 // Corresponds with GET /api/v1/conversations/{conversationId}/previews (the `ListConversationPreviews` operationId).
 func (c *Client) ListConversationPreviews(ctx context.Context, conversationId ID, params *ListConversationPreviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListConversationPreviewsRequest(c.Server, conversationId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetRoomSession Read this engine's room session and durable join intent
+//
+// Reads local state without joining. Active denotes a durable intent to rejoin, not observed membership. A joined state requires confirmed self-presence. Missing room intent has no intent identifiers.
+//
+// Corresponds with GET /api/v1/conversations/{conversationId}/room-session (the `GetRoomSession` operationId).
+func (c *Client) GetRoomSession(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRoomSessionRequest(c.Server, conversationId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// JoinRoomWithBody Explicitly request entry and reconnect recovery for a saved room
+//
+// Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/room-session (the `JoinRoom` operationId).
+func (c *Client) JoinRoomWithBody(ctx context.Context, conversationId ConversationID, params *JoinRoomParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewJoinRoomRequestWithBody(c.Server, conversationId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// JoinRoom Explicitly request entry and reconnect recovery for a saved room
+//
+// Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/room-session (the `JoinRoom` operationId).
+func (c *Client) JoinRoom(ctx context.Context, conversationId ConversationID, params *JoinRoomParams, body JoinRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewJoinRoomRequest(c.Server, conversationId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// LeaveRoomWithBody Leave a room and stop this engine's automatic rejoin
+//
+// Durably records an explicit leave before sending unavailable presence. Saved history and queued messages are retained. Queued room work cannot dispatch while the intent is inactive. An old operation replay never reactivates a later leave or revoked intent.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
+func (c *Client) LeaveRoomWithBody(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLeaveRoomRequestWithBody(c.Server, conversationId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// LeaveRoom Leave a room and stop this engine's automatic rejoin
+//
+// Durably records an explicit leave before sending unavailable presence. Saved history and queued messages are retained. Queued room work cannot dispatch while the intent is inactive. An old operation replay never reactivates a later leave or revoked intent.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
+func (c *Client) LeaveRoom(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, body LeaveRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLeaveRoomRequest(c.Server, conversationId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4150,6 +4459,160 @@ func NewListConversationPreviewsRequest(server string, conversationId ID, params
 	return req, nil
 }
 
+// NewGetRoomSessionRequest constructs an http.Request for the GetRoomSession method
+func NewGetRoomSessionRequest(server string, conversationId ConversationID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/conversations/%s/room-session", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewJoinRoomRequest calls the generic JoinRoom builder with application/json body
+func NewJoinRoomRequest(server string, conversationId ConversationID, params *JoinRoomParams, body JoinRoomJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewJoinRoomRequestWithBody(server, conversationId, params, "application/json", bodyReader)
+}
+
+// NewJoinRoomRequestWithBody constructs an http.Request for the JoinRoom method, with any body, and a specified content type
+func NewJoinRoomRequestWithBody(server string, conversationId ConversationID, params *JoinRoomParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/conversations/%s/room-session", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: "uuid"})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewLeaveRoomRequest calls the generic LeaveRoom builder with application/json body
+func NewLeaveRoomRequest(server string, conversationId ConversationID, params *LeaveRoomParams, body LeaveRoomJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewLeaveRoomRequestWithBody(server, conversationId, params, "application/json", bodyReader)
+}
+
+// NewLeaveRoomRequestWithBody constructs an http.Request for the LeaveRoom method, with any body, and a specified content type
+func NewLeaveRoomRequestWithBody(server string, conversationId ConversationID, params *LeaveRoomParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/conversations/%s/room-session/leave", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: "uuid"})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
 // NewGetEngineRequest constructs an http.Request for the GetEngine method
 func NewGetEngineRequest(server string) (*http.Request, error) {
 	var err error
@@ -5047,6 +5510,51 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/conversations/{conversationId}/previews (the `ListConversationPreviews` operationId).
 	ListConversationPreviewsWithResponse(ctx context.Context, conversationId ID, params *ListConversationPreviewsParams, reqEditors ...RequestEditorFn) (*ListConversationPreviewsResponse, error)
+
+	// GetRoomSessionWithResponse Read this engine's room session and durable join intent
+	//
+	// Reads local state without joining. Active denotes a durable intent to rejoin, not observed membership. A joined state requires confirmed self-presence. Missing room intent has no intent identifiers.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId}/room-session (the `GetRoomSession` operationId).
+	GetRoomSessionWithResponse(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*GetRoomSessionResponse, error)
+
+	// JoinRoomWithBodyWithResponse Explicitly request entry and reconnect recovery for a saved room
+	//
+	// Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session (the `JoinRoom` operationId).
+	JoinRoomWithBodyWithResponse(ctx context.Context, conversationId ConversationID, params *JoinRoomParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*JoinRoomResponse, error)
+
+	// JoinRoomWithResponse Explicitly request entry and reconnect recovery for a saved room
+	//
+	// Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session (the `JoinRoom` operationId).
+	JoinRoomWithResponse(ctx context.Context, conversationId ConversationID, params *JoinRoomParams, body JoinRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*JoinRoomResponse, error)
+
+	// LeaveRoomWithBodyWithResponse Leave a room and stop this engine's automatic rejoin
+	//
+	// Durably records an explicit leave before sending unavailable presence. Saved history and queued messages are retained. Queued room work cannot dispatch while the intent is inactive. An old operation replay never reactivates a later leave or revoked intent.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
+	LeaveRoomWithBodyWithResponse(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LeaveRoomResponse, error)
+
+	// LeaveRoomWithResponse Leave a room and stop this engine's automatic rejoin
+	//
+	// Durably records an explicit leave before sending unavailable presence. Saved history and queued messages are retained. Queued room work cannot dispatch while the intent is inactive. An old operation replay never reactivates a later leave or revoked intent.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
+	LeaveRoomWithResponse(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, body LeaveRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*LeaveRoomResponse, error)
 
 	// GetEngineWithResponse Read the persistent engine identity
 	//
@@ -6404,6 +6912,206 @@ func (r ListConversationPreviewsResponse) ContentType() string {
 	return ""
 }
 
+type GetRoomSessionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RoomSession
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetRoomSessionResponse) GetJSON200() *RoomSession {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetRoomSessionResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetRoomSessionResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetRoomSessionResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetRoomSessionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRoomSessionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRoomSessionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetRoomSessionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type JoinRoomResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RoomSession
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Conflict
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r JoinRoomResponse) GetJSON200() *RoomSession {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r JoinRoomResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r JoinRoomResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r JoinRoomResponse) GetApplicationproblemJSON409() *Conflict {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r JoinRoomResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r JoinRoomResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r JoinRoomResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r JoinRoomResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r JoinRoomResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type LeaveRoomResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RoomSession
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Conflict
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r LeaveRoomResponse) GetJSON200() *RoomSession {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r LeaveRoomResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r LeaveRoomResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r LeaveRoomResponse) GetApplicationproblemJSON409() *Conflict {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r LeaveRoomResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r LeaveRoomResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r LeaveRoomResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r LeaveRoomResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r LeaveRoomResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetEngineResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -7555,6 +8263,81 @@ func (c *ClientWithResponses) ListConversationPreviewsWithResponse(ctx context.C
 		return nil, err
 	}
 	return ParseListConversationPreviewsResponse(rsp)
+}
+
+// GetRoomSessionWithResponse Read this engine's room session and durable join intent
+//
+// Reads local state without joining. Active denotes a durable intent to rejoin, not observed membership. A joined state requires confirmed self-presence. Missing room intent has no intent identifiers.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/conversations/{conversationId}/room-session (the `GetRoomSession` operationId).
+func (c *ClientWithResponses) GetRoomSessionWithResponse(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*GetRoomSessionResponse, error) {
+	rsp, err := c.GetRoomSession(ctx, conversationId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRoomSessionResponse(rsp)
+}
+
+// JoinRoomWithBodyWithResponse Explicitly request entry and reconnect recovery for a saved room
+//
+// Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/room-session (the `JoinRoom` operationId).
+func (c *ClientWithResponses) JoinRoomWithBodyWithResponse(ctx context.Context, conversationId ConversationID, params *JoinRoomParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*JoinRoomResponse, error) {
+	rsp, err := c.JoinRoomWithBody(ctx, conversationId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseJoinRoomResponse(rsp)
+}
+
+// JoinRoomWithResponse Explicitly request entry and reconnect recovery for a saved room
+//
+// Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/room-session (the `JoinRoom` operationId).
+func (c *ClientWithResponses) JoinRoomWithResponse(ctx context.Context, conversationId ConversationID, params *JoinRoomParams, body JoinRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*JoinRoomResponse, error) {
+	rsp, err := c.JoinRoom(ctx, conversationId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseJoinRoomResponse(rsp)
+}
+
+// LeaveRoomWithBodyWithResponse Leave a room and stop this engine's automatic rejoin
+//
+// Durably records an explicit leave before sending unavailable presence. Saved history and queued messages are retained. Queued room work cannot dispatch while the intent is inactive. An old operation replay never reactivates a later leave or revoked intent.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
+func (c *ClientWithResponses) LeaveRoomWithBodyWithResponse(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LeaveRoomResponse, error) {
+	rsp, err := c.LeaveRoomWithBody(ctx, conversationId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLeaveRoomResponse(rsp)
+}
+
+// LeaveRoomWithResponse Leave a room and stop this engine's automatic rejoin
+//
+// Durably records an explicit leave before sending unavailable presence. Saved history and queued messages are retained. Queued room work cannot dispatch while the intent is inactive. An old operation replay never reactivates a later leave or revoked intent.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
+func (c *ClientWithResponses) LeaveRoomWithResponse(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, body LeaveRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*LeaveRoomResponse, error) {
+	rsp, err := c.LeaveRoom(ctx, conversationId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLeaveRoomResponse(rsp)
 }
 
 // GetEngineWithResponse Read the persistent engine identity
@@ -8747,6 +9530,161 @@ func ParseListConversationPreviewsResponse(rsp *http.Response) (*ListConversatio
 	return response, nil
 }
 
+// ParseGetRoomSessionResponse parses an HTTP response from a GetRoomSessionWithResponse call
+func ParseGetRoomSessionResponse(rsp *http.Response) (*GetRoomSessionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRoomSessionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoomSession
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseJoinRoomResponse parses an HTTP response from a JoinRoomWithResponse call
+func ParseJoinRoomResponse(rsp *http.Response) (*JoinRoomResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &JoinRoomResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoomSession
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseLeaveRoomResponse parses an HTTP response from a LeaveRoomWithResponse call
+func ParseLeaveRoomResponse(rsp *http.Response) (*LeaveRoomResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &LeaveRoomResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoomSession
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetEngineResponse parses an HTTP response from a GetEngineWithResponse call
 func ParseGetEngineResponse(rsp *http.Response) (*GetEngineResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -9372,241 +10310,261 @@ func ParseListStarredMessagesResponse(rsp *http.Response) (*ListStarredMessagesR
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"7L3pkhtHkif+KjH5H7P/jG0CBZIltVRlazsUSbXYzWtY1PTatrS0QKYDCDERmYqIrCKaVk+2H/fF1tzj",
-	"zANXVZESW9QHsQBkxunh4cfP3T9kRb1uagnS6OzsQ9ZwxddgQNGnh0VRt9I8fYwfStCFEo0RtczOsgvD",
-	"5xUwbp9gP/749PHln6ZZngn8teFmleWZ5GvIzjL30NMyyzMFv7ZCQZmdGdVCnuliBWuO7f+rgkV2lv1/",
-	"J3FEJ/ZXffL0cXZ9nWePankJSnMcw45BFelj5e6xdZ+97QCfg9Z8CTvGtnZP7BlWeOx2I7rGt3VTSw20",
-	"oY9quahEYfDvopYGJP3Jm6YSBa3BSaPqeQXr//aLxmF/yOA9XzcV2DdKHJsoYd3UBmSxeVv4BvNMG25a",
-	"nZ2dzr7NMyMMvhM7zDOzafCbVsmzWsCZ6+dstLXrQ2f5yrZip9pd8KexYeYbzlnZ2qkC42WpQOucCXnJ",
-	"K1EybRTwNStapWuVs1r5zWI4NWDp6J7ad263jraNt7i/oLtLOItL+B0v2evwyLZV7LV1Jwvo1iVp80Vt",
-	"vq9bebt5y9q8XVAr6YxP44xf1IZ97x7YMt/Yxl3M9DXoulUFMFkbFpr9UfJLLio8treab5u0E2f81exB",
-	"nPEFqEtRAPux8+iWuaft3cXsn8ilkMAaUFpoPC+AtN+o2tRFXTHtxmbwOCmuRLVhnSGEMaR3Bv7Jy1Jg",
-	"H7x6peoGlBGgs7MFrzTku68TUYI0wmwYlyUTRuOhVIA/SGEEr5iCS6FFLZF9JivuznR2lvFKFPAfVV3w",
-	"alXTySlqKaHA/i7wODtCdN8C0lqhgBsoH5rsLLs/u//15N69yexPb+7dP5vNzmaz/5XlGR75bHbvW/5V",
-	"uZhNZrPZbPIn/N83s5n96P67l+VZxedQZWfZK1AaFyHLM7+o2Vn2ft00xNztRJ4e2PB93PImWc5k0h88",
-	"xWijhFzik4NJf8hAtuvs7O/D2btH5TJ+oB9AqVplP+cjrccF+5AtarXmuHQlNzAxYg3ZyCui3EepeHGF",
-	"xRuZUlzDOBdazLERpst70A0eL9u/41g7LSR952HV/VCHa52uTxxbPf8F7B3iTsorvoQjT8tD9g42Gsyk",
-	"4UshsYtwcoq6quwgekdDGFjr7Ozvf5BD8vPgmLgFSP7YRQ6ejV2HjeNK8Q1+lvDePCIh4SY0RZ2PksMl",
-	"N1wdSQmvwXAhoUR2vRAVMLFGgaVR9S92G3Omi7qBkpmacRnIBPlqwWUtRcGryOsdaUzZk3VjNraxH7he",
-	"sTVwqZlZUdOXogTF4D1egsJUG6bAtApHIWv7zpS9Co8h99DsHUBD71dcG/ZO1lfSPdrj4EFXOGinHyQn",
-	"8Syb1/MONR9DiGGu2Vl2I5LLs7Ypdx+NIeuOsz2EKSacvksGj8JW+g2uVUcN8jt7zgpeVaA0M3iOmTCM",
-	"aySMuuG/thAv3newmd6GfyfL2R+spa1FrQK55Kw2K1BXQgO7+OHh5P5XX7N6QeQi8VapxD+gZK9e/Pmc",
-	"tRrYEow9LE+J2E2NBKgEXAITBkfdcGNAYV//+9/+Ppt8yyeLnz98fXr97//jX7NbXxKdfT7s2tt7r6Qa",
-	"crxY4hqmfW7nHTe5SWzHE8ckPBdZg+ElN5w1wxPqL5Jbc1ga8ydksI+4LKByKvqR62TfZbWsNuxqhUv0",
-	"awst3ruyZHNY1ApYKXTDTbFi2nBl9JQ9DCqj45BBjnWDYFfCrBgvTMsrq2T21hreN3Tvvj6SG90bspqx",
-	"po5e3JFGxle64XNRiURCPXShn+LU1yCNY1uyxHUt6ktQULIFcNMqYIB3Cyoq8XKrZVAfbnel4GXgu9zg",
-	"+04BIpq3+ttQLrrOMzc295gCTgrhQH7y77eSLsFb3wmlUFCYN/DeDDntG9VCSrPIUOdci4LZtyYG3hvG",
-	"S94YUExoFgY6ZS9qy5RZ3ditSzTCtmlqZfAFsW4qAWVyVczrugIus+veKu6aSaCXzePwSmdFt1kfmyaQ",
-	"hKqv9JS9WYHGk8iXstZGFJpJuATFeGtWtRL/AHvXgeJeRD6IV8UBfm+7w+Gt+fun9uWvT4dMzBPAdoXL",
-	"rXvy3ZgGo/t6myecPLP//rzvukkvF+00Eze6ZI3T7dp5ppM9OlLHB408Y0ISWjjVG2YtInTUiUDR/gIl",
-	"c4JIPcfzR9ulvXYDJdM1W3A1zfqnp1hB8c7fzd3+f3zzKG2N4V2dMz7XII3n4VwybtDSgZoUMhADGjs5",
-	"TLmNnKLf93duUgkvo/kJ0DlZnXjojwwueBzlJUhTq82UefNQsmbvRKMZ0i6TdQl29XAGYhmF/LJecyH1",
-	"lL2u63XkmUW9Bm3ZwkLV63g2Sqb5JZQThY+vhMbOY5/EEuinX2px+NF5HGbsZtE9Og/uD4+O3meqaECW",
-	"3k5hFw2/5MoIUiAXXFRQ7j8Y/jCEbdtN9/7oH0f1LyUEHoWj5Yq0dVVrzV4KYKJz4eWRy5awIGuXuwXd",
-	"TeeIw2/m8ADwprmw/HnfzrjHrKIfRHu/5vaGeIs3RBRQ3zqqwEVDUnmL9KCzPMN/kx/pY+Qn7gtrTrcb",
-	"h2Lm27apal56SfdtgzIxXGF7lZDv0s8KChDUIeCFo2nXZPoRSmFcD2DfMIoXva846cTub3y7ANEYbc+y",
-	"HVijQOPK0p8kDb+l0enABZyJDO4DPuTaf6sNVzSsYgVlW9khbmQxytT9Jt9wp4gW0s0ilhq3ydE0qEjc",
-	"dGpAua0Yv2nolRsNaUzBSQhxOOF+b35OoyewlguxbBU8CsapI8/gY9DCslwUG0oWrVxT9hoa4LilrJXF",
-	"isul/Z16tPdEWYMmHm1NX4xLKxhpe59N2SMFpDbzSjOugL2DxjAhWaPEJb4AZGB39x5SlGXX+Ci8L6oW",
-	"LwbixEiU+gSQ7+ueENtwra9qVXqrnW1tglx8RNaXZVMLOXIHvvTC3JtHrxhaSc5IksNjqkQJU/bm2QW7",
-	"BCUWAqy9p3uZTNnLtTAob6Mi/j+fv3rFLl7/V3JJZMTcn4FcmlV2dv+rr8aoP8ylP7xXnvn5R86d/OYt",
-	"TL32T2fffp1nayH9F/f63eXZlRIGXuI6kf+0T6thMFtI72YU98j5K+orKeRyYikgoTun7bFHtTRcSKQv",
-	"VkQyur0Go7eYbz+6jari2jxBm98j8n5tkdyJelHkmJB9EM1N50zxq8S8aO2GeEiGJOD5HoouuGTWF/fW",
-	"Xfx5ZiodP8RVf7tVMkiEjp6BtZUo7Q23LhnFHXhSOialodiKQ9CGr5tDZdEDVIDdFqUUanEDiYd37Uqp",
-	"KXLKHpNo0flSB6WSVFJtBbxzK5CS1Ol4ZpRV8UvGVbESl2DpRIGXrZGREm9ENmxWQjMhC0Vi1u2P1nZ7",
-	"sxtNGRZmwS9rZD/hi2Ms0u+ExKetIJbZkxWsV9kPUFW1vTZeCviXG5is72XRAd2fSStxCR9ZT+7s92Ha",
-	"RvkleCjG1K+4/B9GrBFxL8Z+PdSubTdlMMjU1I6PpOwhbOBWyauzs4MrW4mlwCubToaTib15fF1rg3QP",
-	"0vlhrDfICaXTu7B2OxLpD+ux0E3FN4x+PveO+WpDw9q7VR36+oA3uFjjas3Cs0IaWIL6BMxxtzmeNjy1",
-	"ytv16G5aOsbu5BKqTEhwH8d9jBtZ6VsZWDrun54VZT0nMiHzM+6XFVMSJ7K/7HJ6pm4NI9kYHwpE1unA",
-	"oWPGuWtPjDqO5d5PpJm9ksw3XZZ0g64id8fj+h+oCoAiVdvNa2rAu8pT5ODBLLdrJ3ZMHvvyNoxCNNzB",
-	"MYOvJeh8WV0Urf09Lku0hxjVygKXxZHIteU6jjKcPIj2GyhH3t/GxLv7t9NQGp/sLv+Rd8AQapLa9Q6z",
-	"xvU36JAhdA7Uh44qM5vNRjpJbdTBHuY5f9POK1FkebYSZQmSrAXrOSj9lvS2PKsb+jZArwzOw+Gs8Pd1",
-	"XYLijt5l+smrLW9Rsw5HQmooWkV/47W5WdetzvJM1vJt/Dx2A0WD3L2vhwY5f+ltvdHCkfeEPOjA4lo7",
-	"K/pgdEE9fYe7oc/j0GwwUYDCIpTMPV5sciZkCUjJpHctGPJza7hDZ3iAKFRCG1bREJwyaW+e+/dO/3T6",
-	"zYOvT/+U77mO+od0z3kINPgqfe/a2mNeeWvTXviefe5l5ONZ/2x37aXhkHt/wU6lZ6cFly6jYHwydSOK",
-	"Qw5H75odIK133rJeSxlyoI7PorMX+27VG/jHH3V0FCEZ/my5pTPrMF4YcWmprAQ1ZS/gKn5XcMnWNQET",
-	"YK3ZHMwVgCS3uj4nhUUW6JlrNbaorXL89LFVdi4unnwk33s6rf0e+L4JiZAizqjlFLw4YXprul/o2u6m",
-	"Hz8yR0Pk3MhIFEUGUNfriWcuqTx0TgBTC3xZCOsHtR4ZZwcrCRqLvQZ4zNDsXlpx+MWhbE6UW1c2GUp0",
-	"b5MS20FvdVTqF2QiQZscZ1IU75DdErInAsOSoSejuze7fzpqoL4VX7Jw6u6VEZ0BofGfDxLN06UNTY+2",
-	"speIjpWovdvOExHdKRVEOtKSN3pVm3M04MVrnLl7fiUapmpt7NveWSVBa7ZsueLSAOzxYR4Iq73x8U+P",
-	"WEcQuD+bDRnDwPPgnApRKr2zayZKskN9ve/Io1HFS8MuQtrGGI2kHQ7PYuIopmbPU9A7BYcITUxbSLtF",
-	"+KS1VFqwJJcMCOlGhqpa4Rf1YlF5rL1D6A68+lGYD99Ez2at5l6U7IYVDOy80hnUtpg7h27ZY/krBYdw",
-	"4z3ZG+YjjRyqqbzEBjSUDJmRbngBOvdsSDgfSN1f5uFpSLSC/XwLUsvzgPfssv+OCvL7O0zOy1cjknOc",
-	"bqfdnQvdYwbcwLJWm95wxm+Vg6Vs+8XeB/sinB+Le3DsVO3WJAb8Y6fHcrurso8Q8EdlxwZ3GMo4m69V",
-	"CAYLaIkrrlm9FsZAee7BIp5WmII1F5K5wzuGguqtYCLg9nhWItQmRLOPh9nYnSPP7qt4TzkZthNvQ/5H",
-	"C8PhatOTQHkj/gtfp4Zm03uz6QwfwFe8wHgQbvvs3hH47AdECzgA5+keGiqSYUWqcOMbo4bOiPv08DDG",
-	"d/moQL8cOdPQcMUNWNt78Fd5vIwVgPWtwNN2rkP3PhrnoTxQbKJG8nRlurMeI6cfgFdmdXQMAi8FyTTO",
-	"KO2ICtejD2j10W+EvxjxXPvf49ztg10bA311CLqnHVcxfrB7dRE6O2K2z7g2YbOdx2lD/upzRqxMM/vC",
-	"HKzQblfj/9fRcIpvqdIBv0xteDUgo9t7qTretezsQZ75/p97RMzZV7NoA0SsihU7Prqvpze0feb/gUd5",
-	"670ejO3xi1Zapfqt+2VLlFh/ZfaNaRSiRrhv6jUu5ihALRXODvYK35HbdzDX/n7s8ww/fbzLSVfVV6AK",
-	"rsHFt5+TNaOsidaB9kLoFSt4q3nlTCYprR9sRfer0bai7IZ8hIiPb64n4e/T68mfwocH15O/f/Mtn//c",
-	"+cb/fe/+9TBMJM/eT5b1ZLBFNwsnCGFbdce5Rx5uFw0AMgohU6bbuZVBkkgsbbj8BycBBTEuBqQ1FABL",
-	"YBHg49rRzBGhTMhvklguXhTQGC4LyJE7iUaANKyESuDxyq0BlZceteLknWApaU2NClBB/j9Sy83dMrCj",
-	"3rvbAEWhX17JsI1+vyze/o6c8LjXPtzSAx3d16AGxqVbRLld3yXnPvidNEj4Dry3eWbvSCS3LSEPGFvm",
-	"+D3ia2uKxnnZOUC0n1P2qEJK12zdamOvYxwtHiJN9jMJV8y6c71PXeNhWCjQK3xeLJycqMdDIA4Ol7NU",
-	"NoZM6JLcYAnRK2StlB1essX131R7gzEcR3tNz94AL5BQ8wAz0CqynhjFpcZt6eCYo8QXjoANsnI2QIyt",
-	"sqw4cMPEvRF0vzwrKFhrK9ArHKud+Fb71HFYgYGLw/XV28T0TPitT9dt7NZ1u4J4QUcHNzBjBgkUTxYZ",
-	"oq6ELOsrtB+L5WqOx8balKzfTKDQWnGD58hdLcGPBu+NgjX0oYorrl/AFSgLtszx88uK1tuNLIlD/3In",
-	"/C7uBCQ3rpZgbhFdGLc9yYBiKWDI0SJNJA+7xRw+fZxp28tjXUvUbEZOXf9xaJeKC3B0TGR4NdqdwwTz",
-	"uDA7DvUN/JLP/WUk4Qq0YQuhNGHOnQvR23XkEjS+Mnn62Psnf9TAon+P7soaB+vVUnRLIpFZIBdfYiuY",
-	"bwWUdjcrK1aqlnVVL0nk98zkI/kqkx39RIHCflss1O5YEBb5pyYYwAIlKziGg4R46il7Yu1sqBw566H2",
-	"e8Y1A6lEsVqDNCdlfSUxOiakutEWggVT9lB6Q2Q/QYOsLbKamVW7nksuKuThwU8wZTZiXoHDNOkA7+LJ",
-	"K26VQoaHKFmEQblwOYdGPIH3DZdj+Xg+HYv3Q0vzlvjvoDyKJQZUFm5iDPE5ZjQ3YvnCgGPnT9wSRvNM",
-	"sHn5jFErG0imjCgqOAQOl2etqrKzbGVMo89OTjycrajXJ76Z30I/6EGueqbqigsLl2DJDwMf9qiPo0cR",
-	"XVtNhzSimOm+tWKmX/NdXiNRbclyMVTx6bCyUiBLzskZ3FLmnoWB6BsOR2y6xajx9en1v2ZbRvJcrOHN",
-	"putgoV5PGpqQ/fuXBuKHpVhsndiF+Ad0LE9Cmq9PU9DUgwdffXV6ijGcwVx2b8xcdgdZQ54RX8PjIApM",
-	"BYJq2F9ePflzwrf80mqKD8CraiWWq8njV09DJr+Cq1Ifu7Q0ESXMZjiqFzXzORGYlc3cKMgsg1a+Srix",
-	"kDH4x9fPIvdNlR5PDhYZOLYjfRCeY060ZFtR5fsjcZC4bWxqaa93F5rDu/DfblwOKy1AeRCONeYhjdzz",
-	"IN/Hsepm4JpbeEdLFkdQ5IZGqkERGf/ux6qNMpGBoTfwCs8dUj/82DZswc8nnI2ewJFZDoFHb2R8447c",
-	"o03E7hrYGmVA61WwH968eYVDwn8vwvH58fWzFGtEJE0oozmmXwA/A4vR6Rh0WiXGQvdug8wfaNtp0lSc",
-	"ZIAVett390bYZ+juGEKORUf4gNdJQHOhJNdUmyQ315Q9NQ4yIhBlrqMfltTHX9sa+QqZc9jDgD2xoh68",
-	"5wXGfNQSEr2edBEb9ARMI8Fvw4yxNdpTXJBnxHL4cSdcKs1KmYqOa+4jTpAAnIkBzyk3HngL7wtQjcnZ",
-	"HCMIuJS1YXNgkl+KJXbXFxd9N153nNflxqnVf7b5qkrg/0IvUcPZWfY3YHpVt1XJ5vwdoHLC39mjc7zU",
-	"Zjm4k8G+q+cj8lCaEbS7539bAYUFc9ZKgTg+NZQAElmceK1biL7gvE1xjsuxLRoHn3ASBe1ppMM1V6iQ",
-	"/CiF5fS8qua8eMcU6hQ2fg6BqqU39BDx0X05ZamFI2gtMVx6Qdi2ZiPkcsqe8woPPU2bTKdFvZT2Qu51",
-	"aRvyxIoj7yxCb8eHHnxPAuOcdR4wHW7xaWlqNViRMCzXoGdw4cb74c3zZ92Rbae5yN++unf/9pdhSpDj",
-	"CLV0hkEAsbSAd0juvT31Ar3znCng1eSqVlXZQYTGuSHZ50figlIgWqDRuEM7mOvF8SkPHzbNpL6SULpr",
-	"Js3SrHKMJIaSzTdJpm3CowmjMcwpqNPB0+62m4d2oBS3dF/dv6Ee++D2yqZsq4ouPKWSONRESsAHfgs1",
-	"76OJgS/aimgv5CR7nF0nK7CNTbuwN1DMPUrfdEmqE1OCd+2Ccblh3BhurTQHce1Dwxc9fKbiBrShYTmT",
-	"T85w17zRBZ+x9j77a/f8btH9R0VD6ZauN/YtpzwVr3bKYR2JzW/EgdLWxc3yGHoPB0l62ulb4FOXD3kF",
-	"2t8o9Tum37DJP0zdkq3Op5gey8d3Y+fF754j3JGV9mI0pePBlteRs7wDa2IRJnQq451gsdp0XoJNNPJ8",
-	"jjE4IF0ql/Jo6MnpCPSkf4p+KyjKywbkbdI2NCDJty1kybjLENhVGUjSV7AU2oCKSac/XkqFj5ZV4DFo",
-	"I6SdVT/7cZ4mnZ1vOgHSNmXfMIbmwe4sNLuAWX6MY+fhpc9UeGzCI+dodwmuUFkvbZ5cH3CmKO0RuiZa",
-	"EwEMyS7eocv0NFrUPfG8jbhv5YovHJvdhmCkui0KgBLKIal8xOT0fVPcyKzqBuTb9PD4jGXrkDLAwhSS",
-	"LzSEdGWEJdyCVYzLdchYh4jauGaHAYkTI0qruxu2L8X9WHjYkVzJazk+3GuQs9AovliIIpoqKRaRwG1z",
-	"i9Yh4wryKx9+syXSpHZ97ZLUrM0rDIaiA9xrIZfkgjRfC5HzTx6RRHJ7ws9Uz+JXfIPqVqs3dHANoAD0",
-	"1n1drLg5wDZp99SbFI5T+vRWrIpznN4kHbWxGU3MSkHwLqY2J1xa4JhjGVwi0H7Ok5y1jbVhYBOrVpa4",
-	"8yRyDHf8RjKOm14vj+UwWu5gqcfXZrlRyZSiLt26WFKz3NxJQ6ktn0IUMcUWqr2k59oMW7XakXns05Sw",
-	"6THuHsx7WCcprSC0pRqVT1gJ74U2OstDKzY+I8tH5gRpA14qeLvvDHVTeh+BZnAvehPIEdJ15OlDV1tw",
-	"N2yN+dp9rOlX30zC9WlXxqj3tbv8blb4x70VM87bu1QN3U9WRttOqrvKmhxQZeT64LjDfbJeHovXpC/e",
-	"n+1974jSNr1d21GYZmzPEN14M+S6lSw3DjHOuGRivYZScAOsIcNrSODW2589MLnB+u/GvQZ/1Y9vvp98",
-	"43wkf1sJYyNNTyRc4VVvDdvEGfGKPnchubViV+FZmyhuXpfCPa7gF5sEvSfmf/3gm9Pj5PzOHLZtBBxr",
-	"AX2S5hN1ho1gzGXf1yrNhIfBxx66nLtceNbpgz/5/A2uFRu5K4NIw3QD/B2okFMgPyg1QrLrdwZT3JNw",
-	"YdwdYoccc5PxYambm+sB+3IVjO+3ubnl26exJcugrUnIZcnWXJacwtHqxoi10EYUSPJFLW3T5z4xBOaN",
-	"8xqlhaBZPB/+UEIxVlFtrGxEz6JEWVVvX27iSDuuX4xLXrVIltaILxlfz8WyrVvNTL1cVnBAUG40UR5Y",
-	"38KCrx7ZlGdPZQnvkXCOjCNMTu/EmyWFawvJdGltEe6Azjfe2nLSMcmgY7WX+Mjw+YkGjH8YEXixg26g",
-	"2xDdc1zk20gy9lEYRG14deN+t2Ru70+n383+zTOwvkF6U01tdNE80c1ErvmomPRMz+SI76QHZnRRj6gn",
-	"bsefba2Fl5LCm62CHwJKjkxMc7wNxOKQ8gx9pnWWZ7wtRe0yuRP0omjXIM149rGjZecmYnOP09iOrvW0",
-	"EyyD6JgTC5FJ8BJJMh5KAxLi4wJMhiSmjwiTcSYbC4IJ2593CWqMfOJe7D06t/HSUDsTlzPSFply0GS3",
-	"sS47iFtnHzuNYotQHX634nrlcolY30/fY5Nw5wHzm42mUOwyqnuz2XW+C8yedLAzoGj0zjg6vmHIvYaR",
-	"Drth8nswCqNWizxOc5Qu7AV6M43imXN3jnDJ9KKLsCkd8pb2aCHKRQMrRs8r8iXp810lfU5Y95d4rt9L",
-	"jK/2usVn46Q+1I3UUToOyQE8Yl3s8oJj0iQeL6foY41745iL3sa4hTiAF98k5WUa3IV41VBj2EutbhOC",
-	"WYFyXlab8L0LJKPkl7xpgCtWSwZcVQIUtje8pQOu4gur/sKqv7DqPyarvi0GqSeGfrqA0U4xrLFsYizJ",
-	"+BNgSSbWfsOCm6965TXDk1QIzkNRePSFjKAThwXlbPFAUINWg4k3SdQY882ghy35ISadUVDBJWU+RRSB",
-	"1ou2wlK4aHx0+TVojC6bnTcX+1p2lxANkBhOClLwamptXG+jIC8BSt3J3JsM7cck+Qwp2sZyGFS2bVaP",
-	"JKwqzbO0Lf9S9K/jrMOO51lvWO6BuCxjbhkKF1vUTtIwvCDfhc3LmD1UXLAf/u//GcRiLoVZtXMXisnF",
-	"qj2pBQyCI7MXNhWDC+5++Oqptd/2XGi5rcsVizjo3KO5yDeT8g38yWGFguaV5ALi0kat8A09ggmpB9XO",
-	"qL6W9aFYLbwmqAV+7oKn7LCn7GFVRdCrbQPRFfiydSGcRCP108fuAYL6TQmLz+ZQ1XKpfaTCd99/P02u",
-	"SjwDT8IKZXl22c9XeG3hObwR2Vn2YDqbPiDqMCviMCe8ESeX907cstJ3SzBbA+hwaBOKrYcS0ecajJeZ",
-	"yPaeOjRjAqaYCotLu1++nJwFD6nI1p8JbR76wRAZ8zUYUFZgGuQrN0K24GJAOlmjcaBTUuWzs4zObOYz",
-	"hmb0uKteuOaHMcd+389tVKiNacMYzG2dVWItTKezEha8rYzNSBeiS33ahq2BpddUaNlmnaV9uj+b+ZMH",
-	"zhUdUzme/OIL8o4Cene4j+NRuthSVu2OpZwD/NXHX8r3M7phD9tiR3CkPxBXGwS44S4j9NZT5nWenc5m",
-	"29oN23Ty1AIx8PmvZg/2P58CSnAgul2vudq4gzECRw2MMMszw5e4vVk4PyRj4K4Or2lTr53KQzzMmm7t",
-	"e8GHiN7u1jhspV3+PPGpObxl/pO0qdzo5WkyRErAmRad5MgyYiEeCtlL4KdCNq35Sfry8fhICPdRoNuK",
-	"GrPVA4Sx7ZRiQaZoY98ORej19Cf5olNmkFir5fcEX5MlpTEPgojlSHjTIr+EEhuAK8uuUramXTSorXAr",
-	"KignQoa64qaOM2Jz7PIvyNZdNMPapXWasicI1cGJELTHBSm6rWTC24ChDKAQBXj30NRDxtzpT3LAQPsI",
-	"lX08lFcVqMkSpK224i6fPA7AhxdUYgEECuwmPqVMH573rYDbTDCO+T2NeKXJX4Fq4wYZ00rKR/Dgn+3b",
-	"oM13dbk5jvXdHi9z2ED7qz/CTZ77XV7YNOngKSGQYoou6K7X9W2vgD8E4z+S7Y9tUnB6eTZr+Y+TD5Nj",
-	"GerjihIYLBbWOmLPAW1RegReu7d3ZfKLYPVE6egU8Y+TG7j6cSL3Z/e+0MTHoImHgRT8DXeTnf4etbbA",
-	"VG1oW7LT8B6K9oCdzglTMZ5Hxg8UdSaPXx9tLipyN5BnTmff7n/+kbuO70AA8qw18snDRKDrfKDlnHwI",
-	"FqjrrRrPayeGJAJNuKBReKBCOk5Q8sZiT5hDvebPYB6mUSBfePhHP6+vB8JydiMyP93//IvafE8Q7bsg",
-	"c14mwvhWsb4r1I31Fh/xq4Ri1M97zsMJv+SGq+2WgIfdasetBjXqwLaFmNbcZj8wSgAlXFipul1a+d8T",
-	"ypQ9tecopEkg1uhTFdC1aINNKL6FE7MU89C8h1PMNwY0q8jw1hq6kS/+85kwwcFOsAoy1iRax6sXSVol",
-	"vdMi8dAtzU3sEvSq8xZ9FtYJa5D4DcwTR+jttKjb1Pa/upgkS4nRYOjNV/NNSEZoNwd35bNhEUE/6xy1",
-	"/eaAj8Y3Ct7YVLoCtjMPy90iHfQM+Hmij7sS6VyGxJK2aA4LlRBi3RpfpqTaTNkbPG7WSm9N5s40rTs8",
-	"xzU2ZU98G0I7+Gke0qlQ3xUQ/PFqBZLxtDQ+yFKn+SmDrRyn088+T44CzgpKwT2p4BIq7zfAnhMjPZaM",
-	"9xNUrdSsxtE1oJK+z7t+AmyBV7pmRV25SLGyRdFuULtjl2DyKN3AWwspxztdw77i+64ukq8HPCrMXPfr",
-	"CyvgupaD5+L73vtxMIfprMkIj3nkBL9QTNo/H4nz8xE6dszh03OTThXmEghqPWAnfwVo9Gi8lEsNa1Xq",
-	"iuM9HDK8oo1QLFvlfBbhpNpewjr4s4PRhq4KqrZnPlo0iWZppMQ/+AKGJ+xxeObONIDjD5feog4cgqU4",
-	"8KjEHdtxULw++jmcirhxdBOUQltpISCcEyLdckC2+dIM8WzVSrKo+mOGrktthCyMxXVofjli6d/Jw9MR",
-	"fSGyz471RunCR33cMd/Ns6YdSyNnq+Tp1MGdclPnv6CiT+TJkYzrjbS50VvN3jy7OLl4ePEsmcGUvVFc",
-	"amExDuaqVu98/lVtc3PQySIvjhe4UN+rF4vzUJkwHUOtsBsXjefEx6RBm8a7qJWyElCHy0/ZS1UKydXG",
-	"+y0U0GQQ41HzUjOQuDm910bUwUfudxg/cTf0T/gK996oY+MdaR+OOhx2aLtPyYVRbYFSU5k488h7dojD",
-	"4f4/PxcJv3aJITgPPwe2EmjB2z7cNbbbrrRPKnMi0Q71zikudLZQdUmEs4QzXNDFZnUYaZQvkJsmOqES",
-	"YRbC6gOVOamAFNxqg+XTItRUR7qphTS2rRLKNlDmlP0Qyij5Ikm+Tps1iFrRzqfx5KUrbzhlj3yu8ggL",
-	"q7g2g7F2qiOyhZBCrzAGW5hYY32BibpCSk6v/hUVF+t0TeJ8LSMW0oUyy0KRckn4OZuvswFFtZm7vHBt",
-	"0y0ra5zGcfEl7JIbXJHI30Jo6BVInI1VKJx1uUKsPXh3PKFbJnOELSSFZFVC5s666MfMbg4Q+U0lj2GR",
-	"TxeU+3FVP2tQPfmAkW37XTF0GrhV7apNWPOclVDU3mCTAkrQJHbuzEAKLC6QoHQh3+2Pr5/pKcMs/BPn",
-	"V/HvWUj/HLz1qVHikkxM1IuHxmyxqNC8nroo0Z3GYgrXrFtN87H4a+ZjBZ+84cvt2IrF5EUtYfIcMSU7",
-	"vXv7LbOxbsLZh6ShEKk5J9EpG0WADnUbUXSN6jnjLtXR/a++Zo14DxVdDSBsDun3Qnc9qY9wxSdoRlf1",
-	"SETqK7sTCTyJtog1dSWKzW5PZ57hog7b/E+bftyvPNLjfpfpg9npsKU3K4i1ELAzpo2oPKpjISgLeYrw",
-	"ocX/fBhGPA/W7hy2eZRTYP7GohITsZS1gpg/YdeRuPjh4QQpxQGNtvlqwslANGs8F7h1O4FGh1fD6PCq",
-	"QSHfUVb114CJBZ16GvApZ0RyCghlbqMkJheUvyDkqE878pk7TmzZBOQ8LmMuCR0ugPg8pDpBOWNh04G6",
-	"PNEhN8LQq/WoVwp356a8bDjmeU+LaaGJwtrUoQCaWuPEjDFXU8hFFXeiW9ZmuPy/B9RtvgUJHSSdbomT",
-	"scF0KhPfwqv3aCthnFiimDh6wAq6dhG3DenXbftw/6B9eEn2gZR8rDzeqx66rXf7GDayB+Qy2q+PY+sO",
-	"YFtf/ml9g+4euhA6n2jX0RBJECH6YnTH3YtH9tfZYIy429a+z1IZ2o5Vwl18HuoRYyEbv4GXNp3VNl/t",
-	"3VjuPi0gySGyg9zfZab+Kuwy2e2I7O8F6p8pHrRzD3jAWBESQvsMOT5yyOqxKFjBlPmcuNHAg8EabrR9",
-	"VLWessfeB8LL0no5DS8Ib0G1uUMKUGQsftAjxrFBVuZ9N73lpT2Y8AhH/f0Ci+80//Nhgx6s8p0b+Wa/",
-	"2SL80eOWj2epY7v/ZJSH1Cqe/DSMA6Gq2Y2Qw1/2/fe1749H8tjbaJZPol9+6huYsviPZu/fcQFvU+lO",
-	"PnRjzPebo+g+doLLlvQ9o9ah3g35hff+U53Bz9cJfegJOtb4m77ftwDvPoInrvTmbjxheg5HPOkUqG2j",
-	"+1wa2W5pwFCu2p/rkOS32pxHyB+UIcgPiwEiOZQtGgISVxPaoq2LisxVEamoYKFAr5is2Rod6fXCAHp1",
-	"uIzwPi3emw3TlMpUOxyjNV3/UgupGSfnUO7r/OAXqTie+yIAPCQTsD6tUOxryl4WRdtwaZKRCZ0UNNSS",
-	"N3pVm5BiNJbqXcN6jlb0WmNNEPZcaG2D1pxmECvlEcTOoRit25EwlD4LwzbHeo8xPnY7fyP+ePxJ9t2N",
-	"xf0kxSiT+I8AJ1sIqEpf69Di5kIJ3KKXVOkjM4LhoXYo/Q7Fl2Fpfwcn3NHmRO8MOsC5aFfs4N5sFnFS",
-	"w7J4Jin0TjoxkimmokSsL1K8f3bdauPSK/jsCrGEVjrMc9xPEEuSoNeO8H0rGN1rc2hTC1erugrtYM1T",
-	"WFszsEP5NlBQLun9FtkkU9Ze4+zFSMEvWwKHlzlVTbWA6NAIMRwfhRCkib8fduv+jK80FVUusMr2mI0q",
-	"raC2XTm/Qd8Hpcd5+ngkV+RaSP9xmC5Hmw2Og5xe2Q3tZIfxnX71tx1ChKXntHZbZDsUSEgeTzT4e+FJ",
-	"u4osvsLb2jvRPxcxJCa2tFNxCajSqUTGFZMf/wY8Sx8QO+hrFaO3RsIVGultzOd8E5XxbmVEdJaKqhJW",
-	"EiDvisu9YDPW07llRsBkroC/w+gpJA7QAR2TpMR3En3HJD/kO0lO6Z18xkWeuIx3vdx5dVVStBN3cJXE",
-	"VZQyJvZvyVRl2ZvNvx/hPvpjZW053OCepkP8Z1JQ+tWPPhYjODxpCt74oRTTMDMK0bdRXGpeuCxgdWvm",
-	"9XsmaPen7D+pwD4jcKxu1SWh3Tw0Fd++4sJoV3TaajTWZ/yiZlwZBMIKVwwZwxf4huTuBj3JFlemmeIF",
-	"MB6HTkzElmOrHDjORqtjx8i2uolXYoasoB2cWyxeMnk7wPTOmrKHsTYBroBHqc2hqNcQ9ISoacwrYXFU",
-	"Y1FKaQ2Xf3qfwv7iMYcNJF20z9BF8CUJ58dJwnnMHbIvN4pnDT4vinUj3P9CG39Q2nieZLSnS8ledGhG",
-	"shkz/yn9EA9H6oORxB8zWo/IKcfrGycfglJNEZLGVQvbYTLBS9pwtQQrTkjgClLYggSxXM1rpSOci9Ky",
-	"pUPInebCbqq5jMj5idaSDBEuQVoBhQRwdm/KCPJjzbZh0DFJGi/PmUzgvF7dQXFe2IKoyuksIBpjkfVG",
-	"ieUStSOqH+YNO0npw55VKQhGoRTjlD2iQG7N9KpuKyq2Cso/ZmoP0qOg8RXXL+DKWoDwLh01fTq6eOQ2",
-	"dY+M4/WYKyHL+oo0mdRGEFf096rfHMVo/KKM5niJ8Bs6cW5FxtbiM3LEeHs8Hi0q4ssVfkPZwbo60MdR",
-	"gfK9b7jOjjSc+II3ew0nvFMbF0tP+VfJctlfhSn7m7P4BgaZs1aDj9cxlnstzCbJ408oc7LnAiWMaKET",
-	"h7i0S96kWTUYSCWKlY3BCXKQCxdA1rIAQ1a3NCNwsNiV9ZXEYMMknRvzFyYRrw0k8XY8bK+VxYrL5SH2",
-	"4ld+bQ/Tj2yKwW4mmi6Qurt5t1OHhpaYjqna3T09h4mvblzLUNt4yl7ivRByUo7ubHa0ffp3Z4/Os1aK",
-	"X1twPzsV7NOZqNOq1mMmJJeQJWqQ/nim19Cv1rjRu1v9Wfps2LGLd/CmDqzx5kKA0hpeCSMOJ7Ej41nY",
-	"/25PNmXMdTZTF3JNHAVX01tfnGOHSn5a5qB9theS3txjo1KGTRV+e8xJI/6rn2c8z5LBH1if4ezeERoK",
-	"5i1XNdE/iYOH20HcrMdwcvRLSLjaKVdI07E3AhLDHRETblEStQrdASREdLHRBtY9EsIh7cjRfvGEiRLF",
-	"TNss8tYzjVYoWcC5m5Crh2s/IM85D+L0E/ruLxcvX0x/ks+4NhP6ZvL0MQGF0WqnjRIF1l+wqc2E0cx3",
-	"EO9gzqyx3lHpT5LY+z9A1VNm6cNxfJ881a1CrRhHoxwG/nSMiV6wPp19+5MMqQgU8DXlUv4BuDJz4FbN",
-	"JLEc705K6eJw0Hblpj9JQlWEFACGIAs+lzPhHOyRYlW9jEJ+AvDAS50a+0k+fewubAvtiOdTLCjWl4J7",
-	"FeA+EyiMotNQGhCUb9st0lgO5wua2xO724fHD3IXdGan5xP0uW62WT07+7wtKuTr05tEEqBMY2l2Yner",
-	"w0ayM7byG/eT/El2+t4fZ3jxxJEAuty1zUNtoRhoLq+q+or21dK0a/izyHJKjN3TrWfwSGhuVli/GDxp",
-	"eG7haGU03A6/0xombicOY5n4bHadMp8V8MqstjKf6PLk5cbKv6T9mpXdmznX4CNqrXZejl5RP9hubntF",
-	"uVL+ZxmN54gwcNv99rsitHfbBA2YryByIl4K2Y22HrsAyLi0L1qaauC4YGlrOMHnJ6GK+asXf87ZX149",
-	"+TMy3D8//d7mzcwDaCZIHC5fHllWEI/mc2Q67hqiMnWI+SWDCzat8wDWuX/qQ34bF+x7vq3WKZ06bsv2",
-	"lILT9USuLgXrmq4BF8K9xYRSCn5QzPWz+gpUgQTpQ01LsQRtfMRpzH0vKvgEYab5zqBwPFc+TPimIeGd",
-	"SMv7N+LmNkZ8KRbHxojn7tVfGlje9N27CE1/3Qm4tlSP+T1ohpM3mwbSGO3+KZn+3kLULcneMEj9uStE",
-	"QfREJlS/+2xel5vpZ2QrSxKh2uDXNMzFF+oeqmajgekdVju0uR8UEeBsEt6OE10hoarXDvtv9sXP+sWX",
-	"9vkHEnwcK/UWm/O4d4wALvYevmkf23BAr+2d3w0A6px3Z/lySJiXsgCCMRIsx6bGypkvc3Q6+9ZhcmxL",
-	"qQt1zd9RXK7TA9BmjdOqwDtWdUhug/o5oyA/l+fOoYhGMthRG38YNA28byh64/XRDOOILMHpin6B2ny5",
-	"Aj7nK+BTmzzs6WE8cE2Q5V7ExCjT9/WFx+tWNM2kvpKeLaf1ZFHvc80E8Trxw8kyJO3zaemn7DtrhoxF",
-	"fCyLzkNhcKETiH4kVfoYohGtKt1WFYIwOXlNQjpqn5iQRlurCHIwii8WotglR1J99U8TwrAnfMFh+T8b",
-	"4QU3dBhUpO5egtmSiTcBGWMb3MsZ2pYP8WUYY9XGlI6jutl7nAeL4gClTATJpa/WGDKBQClM/1TkbN6u",
-	"GyR1E/JX5d5krlz0hqVWUnm43JiViPFVqTUJCB9US1urH48LngMXvWKbLEOBJY8pxj+q3ptekKJn3voC",
-	"kB2ZCul0N8zZL0aMgMT1QFO+TR7vDbF1QU2WDgPddVNYpwiXOAFQZNjydGcLRVTWOurLQKLBq4UQUMHD",
-	"KEJ1uWjtHcNE9077IYIcobBCeCK854U7paHtpPQjL1StffUe/TsV9Q7FQps9POsxaBxyktPTUmywxIUi",
-	"4p2zdVcC3N3wXQ+zTDjvlrQfntD/KUWKC6JoZCS0DolC2mXte8WMsF765ENy+rZbgh6GM4y8zgOQyAqP",
-	"rNlllXa7dG65pHtD21eiz9LnCYwlyr2yV4hGkA0QsNqV2sRC8U8fB/52OjsdFRFe+i/2sYw3KYPsHfIt",
-	"VvG0s9uzgdtoQXeompzGXBa+GOBbnpbyIJo6NsU5eaeo8iOUFhd9cPYntT0BzLZb/vOQv4paFoJyKoTD",
-	"Eu5UHuKJfFvJ6Q2L0ju/Hp1z8sH9tduKy0sd4T5JrH/XnhyBfE4sCTKTFVcMTsA/s0tKd9boO0PshTn+",
-	"FmfvuNhEN/MdukPIZflZqQ8h2YYf/15c2BiJnnjqwfGMGyGfOFQpuQhdQpCORGtLHyHf+u+WaqPNjjkU",
-	"jG5VyipcBSOLLzNqc8bwPAYThOtEr7gC9msSuOgUCC/ddrynjGD6rSawPRcVlOFkhATbVr4sHdY/OoGj",
-	"Cw57QE+1Q9pa1/KD++y5+I5+87hdcjSzUqxBRgytH49VOuxd7P2+CyGXoBolLDIKd7w1YPPu51YN8jXW",
-	"6gWzVqKJ02KsDXapKB7zGaICC67KUFfAF7AjQbtTwLlXHsoth6OOgxzYfyyOEAPOehR2eLTZXQ3Fb1aC",
-	"bRUy5sr/LLiUB1z0bzXLMA5lW8QGykmy7qN36neqvtKQSMElKJvjnhte1csQWxQG4/knVcaypjVS5YWB",
-	"dQgi0ltjjabMJR8/6eZPFZUBpQkjt/HY2oZjlx6I7+57mzHbVs3QGHqQ48uABypnqPNZb77LuRSSodvL",
-	"ymZjTpYgd0wj76X1lrH0ApVQRttGEnWAfBUU2Xbe42SrJPqJU1hdUa+TNDQaOZBN+ehFVB0GFYMWLCjI",
-	"o+e70JITAjaHS6KD0rEZ7B0ArYRLUdD95h/t5kMahjlQgtmixRGc8LYU9QnyzzrWflE2xiO2aHlvKA7q",
-	"LxOKJF+A0lP2HS/eLXBUtSIjCVcIuag0JecSUoMyRDKhdlUnWx9hIs9d8Sdmaodap6fWuBcjxGPJ0GNW",
-	"/e5RXRY6zeMhGhd0ThzK5JDKwTQ+bmBZq825A0IV9XouJGi7UzmjRaRVtwsZF25bwBchQ0bjvTLqIstD",
-	"Dmn/GelBZ3lWuq3T2c8HQJdegyaMsA/cqK8kUqVbrhy3q/YhHEjW7gf9sZOn98flDAHdeJP+4A7KMD6I",
-	"k7nNMH+UoqhLYAXXMEEylloYm8DF86ePndvdJvq36zNJeOwJHqcJceB3tspBgHk7PjLfjEg7x9cC+Ore",
-	"/SNqAUQuhqc97/t1iIUiBc6t9/13nPTlQEtmylC2BejYhxwD5DJct3E5vMzCnDCgwVUO5mPXJ2HJPwfx",
-	"xskbVjoJzrxoyN6drL3LrLvyjnXrTfbmfnpGdRQTxwC+FkOJ3VA822O1vVeETIqzddaeShfa6OGeX+rA",
-	"4OtYeiTHnZbdbEzxVzQi0nCJX/vD7R8ObkkK37ai09JpkpRDkuruuwLUNmjc1jxT9T9AJrljJMVCY0dW",
-	"AeRNA1yN3dJUTQThv8Hz6ZXQvCPTqESl5L5KJep7nXoKoRAEPbPF+0vD2nKR2508NFXWy8Zn/OlcgE6W",
-	"+Ni3Xeh95JpzQ6DSdJQDkS8VgJNufP8WvD+vzcouqSto9EnuwDQ21AI+Yiqxc4o52mLOH0vpGPgasbBP",
-	"kl1MtpQqFQ0G/dPfgNpZJOczuYI6R+GAHIYp56T5/1N6ndzdE4mzv/t0xGyoQzyXLt/DmB8KWwd1uS2I",
-	"warTl1DVzToGE2LssKrQTWtMc3Zycu/+n6az6Wx67+yb2TczAh64vj4cEA2ZRqY4GnWBKWNRCw4k069Y",
-	"Hd8NhcGGb3vXRbD8e7dYfDux8o8J+LbQZeI6c0772IALkxq+7MblY+ZGMsprtxw+sWIsz0klO2Mf3Vy6",
-	"Y+NMc0JGuUCWwfOXZM5JGn4eM3l+2BuPXUV7ZKqcV5twV4Y6h7GHYOm5zsczzE6wWR+ek7OgGVIf+Jve",
-	"K2p5IupIWtc/X/+/AQA=",
+	"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",
+	"dq+oFYioI2l9+PnD/z8A",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

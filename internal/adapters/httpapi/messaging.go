@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/araihu/oie/internal/application"
@@ -21,6 +22,13 @@ func conversation(c domain.Conversation) engineapi.Conversation {
 }
 func message(m domain.Message) engineapi.Message {
 	out := engineapi.Message{Id: string(m.ID), RevisionId: string(m.RevisionID), AccountId: string(m.AccountID), ConversationId: string(m.ConversationID), Sender: engineapi.Sender{Id: string(m.Sender.ID), DisplayName: m.Sender.DisplayName}, OriginalText: m.OriginalText, CreatedAt: m.CreatedAt, IsOwn: m.IsOwn, SendState: engineapi.MessageSendState(m.SendState)}
+	if m.OutboundReply != nil {
+		target := string(m.OutboundReply.TargetID)
+		out.ReplyToMessageId = &target
+		if m.Reply == nil {
+			out.Reply = &engineapi.MessageReply{Available: false, Excerpt: m.OutboundReply.Excerpt, BodyText: m.OutboundReply.BodyText}
+		}
+	}
 	if m.Historical {
 		v := true
 		out.Historical = &v
@@ -143,7 +151,16 @@ func (s *Server) SendMessage(ctx context.Context, r engineapi.SendMessageRequest
 	if r.Body == nil {
 		return nil, application.ErrInvalid
 	}
-	result, err := s.engine.SendMessage(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.ConversationId), r.Body.OriginalText)
+	target := domain.ID("")
+	if r.Body.ReplyToMessageId != nil {
+		target = domain.ID(*r.Body.ReplyToMessageId)
+	}
+	result, err := s.engine.SendMessageWithReply(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.ConversationId), r.Body.OriginalText, target)
+	if errors.Is(err, application.ErrRoomNotJoined) {
+		if current, readErr := s.engine.RoomSession(ctx, domain.ID(r.ConversationId)); readErr == nil {
+			return nil, application.RoomStateConflict{Current: current}
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -210,6 +227,10 @@ func event(e application.Event, engineID domain.ID) engineapi.Event {
 	if e.Connection != nil {
 		v := connection(*e.Connection)
 		out.Connection = &v
+	}
+	if e.RoomSession != nil {
+		value := roomSession(*e.RoomSession)
+		out.RoomSession = &value
 	}
 	if e.Preview != nil {
 		v := preview(*e.Preview)

@@ -70,7 +70,7 @@ func (p *protocolStub) Send(ctx context.Context, _ domain.Account, _ application
 	}
 	return outcome
 }
-func newMessagingEngine(t *testing.T, dir string, p *protocolStub) (*application.Engine, *sqlite.Store, *httptest.Server) {
+func newMessagingEngine(t *testing.T, dir string, p application.Protocols) (*application.Engine, *sqlite.Store, *httptest.Server) {
 	t.Helper()
 	store, err := sqlite.Open(t.Context(), dir, id())
 	if err != nil {

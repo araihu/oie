@@ -71,12 +71,20 @@ func WriteProblem(w http.ResponseWriter, err error) {
 		status, code = http.StatusConflict, "idempotency_conflict"
 	case errors.Is(err, application.ErrAccountExists):
 		status, code = http.StatusConflict, "account_exists"
-	case errors.Is(err, application.ErrStateConflict):
+	case errors.Is(err, application.ErrStateConflict), errors.Is(err, application.ErrRoomNotJoined):
 		status, code = http.StatusConflict, "state_conflict"
 	case errors.Is(err, application.ErrProtocolUnavailable):
 		status, code = http.StatusServiceUnavailable, "protocol_unavailable"
 	case errors.Is(err, application.ErrInvalidCursor):
 		status, code = http.StatusConflict, "invalid_cursor"
+	}
+	var roomConflict application.RoomStateConflict
+	if errors.As(err, &roomConflict) {
+		current := roomSession(roomConflict.Current)
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(engineapi.Problem{Type: "urn:oie:problem:" + code, Title: http.StatusText(status), Status: status, Code: engineapi.ProblemCode(code), CurrentRoomSession: &current})
+		return
 	}
 	var conflict application.StateConflict
 	var starConflict application.StarConflict
@@ -124,7 +132,7 @@ func (s *Server) GetEngine(ctx context.Context, _ engineapi.GetEngineRequestObje
 	}
 	return engineapi.GetEngine200JSONResponse{
 		Id: string(state.ID), Role: engineapi.EngineRole(state.Role),
-		ApiVersion: "0.10.0", EventCursor: cursor(state.ID, state.Sequence),
+		ApiVersion: "0.11.0", EventCursor: cursor(state.ID, state.Sequence),
 	}, nil
 }
 
