@@ -77,7 +77,7 @@ const engine=id(1),account=id(2),chat=id(3);
   assert(!(await page.content()).includes('never-journal-this-secret'));assert(!(await page.evaluate(()=>JSON.stringify(localStorage))).includes('never-journal-this-secret'));
   findings.push('Authentication error remains visible; passwords are cleared and absent from markup/journals');
   state.showRoom=true;await page.goto(base+'/?chat='+chat+'&account='+account+'&lang=en');
-  assert(await page.locator('#message-composer').isDisabled());assert(await page.locator('[data-room-readonly]').isVisible());
+  assert(await page.locator('#message-composer').isDisabled());assert.equal(await page.locator('[data-room-readonly]').count(),0);
   assert((await page.locator('#history-status').textContent()).includes('Some history is unavailable'));
   const guarded=await page.evaluate(async()=>{const form=document.querySelector('#send-message-form');const values=new URLSearchParams(new FormData(form));values.set('originalText','forged room send');const response=await fetch(form.action,{method:'POST',headers:{Accept:'application/json'},body:values});return {status:response.status,body:await response.json()}});
   assert.equal(guarded.status,409);assert.equal(guarded.body.code,'read_only');assert.equal(state.effects,1);
