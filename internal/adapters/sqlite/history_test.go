@@ -140,7 +140,7 @@ func TestHistoryMigrationDownUpPreservesExistingMessagesAndOutbox(t *testing.T) 
 	if err = runner.Migrate(2); err != nil {
 		t.Fatal(err)
 	}
-	if err = runner.Migrate(4); err != nil {
+	if err = runner.Migrate(5); err != nil {
 		t.Fatal(err)
 	}
 	messages, err := store.Messages(t.Context(), c.ID, "", 100)
@@ -150,5 +150,49 @@ func TestHistoryMigrationDownUpPreservesExistingMessagesAndOutbox(t *testing.T) 
 	pending, err := store.PendingMessages(t.Context(), time.Now().Add(time.Hour))
 	if err != nil || len(pending) != 1 || pending[0].SendState != "queued" {
 		t.Fatal("migration lost pending intent")
+	}
+}
+
+func TestVerifiedRoomAuthorReplayKeepsMessageIdentityAndOutboxEmpty(t *testing.T) {
+	store, _, base := outboxFixture(t)
+	c := base
+	c.ID = migrationID()
+	c.RevisionID = migrationID()
+	c.PeerID = migrationID()
+	c.Kind = "room"
+	c.Address = "room@conference.localhost"
+	if err := store.RestoreConversation(t.Context(), c); err != nil {
+		t.Fatal(err)
+	}
+	m := domain.Message{ID: migrationID(), RevisionID: migrationID(), AccountID: c.AccountID, OriginalText: "historical own content", CreatedAt: time.Now().UTC().Add(-time.Hour), ProviderID: "room-provider", ArchiveScope: c.Address, ArchiveID: "archive-own", Historical: true, SendState: "received", Sender: domain.Sender{DisplayName: "observed nickname"}}
+	if err := store.ReceiveMessage(t.Context(), c, m, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+	observed := m
+	observed.ID = migrationID()
+	observed.RevisionID = migrationID()
+	observed.IsOwn = true
+	observed.Sender.ID = c.AccountID
+	observed.OriginalText = "a replay must not replace stored content"
+	for n := 0; n < 2; n++ {
+		if err := store.ReceiveMessage(t.Context(), c, observed, migrationID()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := store.Message(t.Context(), m.ID)
+	if err != nil || !got.IsOwn || got.Sender.ID != c.AccountID || got.OriginalText != m.OriginalText || got.RevisionID == m.RevisionID {
+		t.Fatal("incorrect reconciliation", got, err)
+	}
+	rows, err := store.Messages(t.Context(), c.ID, "", 100)
+	if err != nil || len(rows) != 1 {
+		t.Fatal("replay duplicated message", len(rows), err)
+	}
+	pending, err := store.PendingMessages(t.Context(), time.Now().Add(time.Hour))
+	if err != nil || len(pending) != 0 {
+		t.Fatal("identity repair created sends", err)
+	}
+	var revisions int
+	if err = store.db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM message_revisions WHERE entity_id=?", m.ID).Scan(&revisions); err != nil || revisions != 2 {
+		t.Fatal("replay created extra revisions", revisions, err)
 	}
 }

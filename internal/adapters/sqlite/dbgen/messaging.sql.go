@@ -426,6 +426,21 @@ func (q *Queries) PendingMessages(ctx context.Context, nextAttemptAt string) ([]
 	return items, nil
 }
 
+const reconcileMessageAuthor = `-- name: ReconcileMessageAuthor :exec
+UPDATE messages SET revision_id=?,is_own=1,state='submitted',payload=? WHERE id=? AND is_own=0
+`
+
+type ReconcileMessageAuthorParams struct {
+	RevisionID string
+	Payload    string
+	ID         string
+}
+
+func (q *Queries) ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error {
+	_, err := q.db.ExecContext(ctx, reconcileMessageAuthor, arg.RevisionID, arg.Payload, arg.ID)
+	return err
+}
+
 const updateConversation = `-- name: UpdateConversation :exec
 UPDATE conversations SET revision_id=?,payload=?,activity_sequence=?,unread_count=? WHERE id=?
 `

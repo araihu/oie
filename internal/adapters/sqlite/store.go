@@ -222,6 +222,9 @@ func (s *Store) Events(ctx context.Context, after int64, limit int) ([]applicati
 		case "account.registered":
 			e.Account = &domain.Account{}
 			target = e.Account
+		case "message.preview_changed":
+			e.Preview = &domain.MessagePreview{}
+			target = e.Preview
 		case "profile.avatar_changed":
 			e.Avatar = &domain.Avatar{}
 			target = e.Avatar

@@ -53,3 +53,27 @@ func TestBoundedTokensPreservesFinalTokenWithEOF(t *testing.T) {
 		t.Fatal("expected final EOF")
 	}
 }
+
+func TestRoomOwnAuthorRequiresUnambiguousArchivedJID(t *testing.T) {
+	account := domain.Account{Address: "alice@localhost"}
+	for _, test := range []struct {
+		nick, meta string
+		own        bool
+	}{
+		{"alice", ``, false},
+		{"different-nickname", `<x xmlns="http://jabber.org/protocol/muc#user"><item jid="alice@localhost/phone"/></x>`, true},
+		{"alice", `<x xmlns="http://jabber.org/protocol/muc#user"><item jid="bob@localhost/phone"/></x>`, false},
+		{"alice", `<x xmlns="wrong"><item jid="alice@localhost"/></x>`, false},
+		{"alice", `<x xmlns="http://jabber.org/protocol/muc#user"><item jid="alice@localhost"/><item jid="bob@localhost"/></x>`, false},
+	} {
+		raw := `<result xmlns="urn:xmpp:mam:2" id="one"><forwarded xmlns="urn:xmpp:forward:0"><delay xmlns="urn:xmpp:delay" stamp="2020-01-01T10:00:00Z"/><message xmlns="jabber:client" type="groupchat" from="room@conference.localhost/` + test.nick + `"><body>retained</body>` + test.meta + `</message></forwarded></result>`
+		var result archiveResult
+		if err := xml.Unmarshal([]byte(raw), &result); err != nil {
+			t.Fatal(err)
+		}
+		in, ok, err := archivedIncoming(account, "room@conference.localhost", &result)
+		if err != nil || !ok || in.IsOwn != test.own {
+			t.Fatalf("own classification: %v %+v", err, in)
+		}
+	}
+}

@@ -80,6 +80,13 @@ type HistoryStatus struct {
 	Payload   string
 }
 
+type MediaFile struct {
+	Hash      string
+	MimeType  string
+	Size      int64
+	CreatedAt string
+}
+
 type Message struct {
 	ID             string
 	RevisionID     string
@@ -90,6 +97,19 @@ type Message struct {
 	State          string
 	Payload        string
 	CreatedAtMs    int64
+}
+
+type MessagePreview struct {
+	ID             string
+	RevisionID     string
+	AccountID      string
+	ConversationID string
+	MessageID      string
+	Url            string
+	State          string
+	DownloadState  string
+	UpdatedAt      string
+	Payload        string
 }
 
 type MessageRevision struct {
@@ -114,6 +134,14 @@ type Outbox struct {
 	State         string
 	AttemptCount  int64
 	NextAttemptAt string
+}
+
+type PreviewRevision struct {
+	ID        string
+	EntityID  string
+	Parents   string
+	Payload   string
+	CreatedAt string
 }
 
 type Revision struct {

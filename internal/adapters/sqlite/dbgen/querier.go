@@ -12,6 +12,7 @@ type Querier interface {
 	AcquireWriteLock(ctx context.Context) error
 	FindAvatar(ctx context.Context, arg FindAvatarParams) (Avatar, error)
 	FindConversation(ctx context.Context, arg FindConversationParams) (Conversation, error)
+	FindMessagePreview(ctx context.Context, arg FindMessagePreviewParams) (MessagePreview, error)
 	FindProviderMessage(ctx context.Context, arg FindProviderMessageParams) (Message, error)
 	GetAccount(ctx context.Context, id string) (string, error)
 	GetArchiveAlias(ctx context.Context, arg GetArchiveAliasParams) (string, error)
@@ -19,7 +20,9 @@ type Querier interface {
 	GetConversation(ctx context.Context, id string) (Conversation, error)
 	GetHistoryCounts(ctx context.Context, ownerID string) (GetHistoryCountsRow, error)
 	GetHistoryStatus(ctx context.Context, accountID string) (string, error)
+	GetMediaFile(ctx context.Context, hash string) (MediaFile, error)
 	GetMessage(ctx context.Context, id string) (Message, error)
+	GetMessagePreview(ctx context.Context, id string) (MessagePreview, error)
 	GetOperation(ctx context.Context, id string) (Operation, error)
 	InsertAccount(ctx context.Context, arg InsertAccountParams) error
 	InsertAccountRevision(ctx context.Context, arg InsertAccountRevisionParams) error
@@ -30,11 +33,15 @@ type Querier interface {
 	InsertConversation(ctx context.Context, arg InsertConversationParams) error
 	InsertConversationRevision(ctx context.Context, arg InsertConversationRevisionParams) error
 	InsertEngineIdentity(ctx context.Context, id string) error
+	InsertMediaFile(ctx context.Context, arg InsertMediaFileParams) error
 	InsertMessage(ctx context.Context, arg InsertMessageParams) error
+	InsertMessagePreview(ctx context.Context, arg InsertMessagePreviewParams) (int64, error)
 	InsertMessageRevision(ctx context.Context, arg InsertMessageRevisionParams) error
 	InsertOperation(ctx context.Context, arg InsertOperationParams) (int64, error)
 	InsertOutbox(ctx context.Context, arg InsertOutboxParams) error
+	InsertPreviewRevision(ctx context.Context, arg InsertPreviewRevisionParams) error
 	InterruptedMessages(ctx context.Context) ([]Message, error)
+	InterruptedPreviewJobs(ctx context.Context, limit int64) ([]MessagePreview, error)
 	ListAccounts(ctx context.Context, arg ListAccountsParams) ([]string, error)
 	ListAvatarTargets(ctx context.Context, ownerID string) ([]ListAvatarTargetsRow, error)
 	ListAvatars(ctx context.Context, arg ListAvatarsParams) ([]Avatar, error)
@@ -42,13 +49,16 @@ type Querier interface {
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
 	PendingMessages(ctx context.Context, nextAttemptAt string) ([]Message, error)
+	PreviewJobs(ctx context.Context, arg PreviewJobsParams) ([]MessagePreview, error)
 	PutArchiveCheckpoint(ctx context.Context, arg PutArchiveCheckpointParams) error
 	PutHistoryStatus(ctx context.Context, arg PutHistoryStatusParams) error
+	ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error
 	SetOperationResult(ctx context.Context, arg SetOperationResultParams) error
 	Snapshot(ctx context.Context) (SnapshotRow, error)
 	UpdateAvatar(ctx context.Context, arg UpdateAvatarParams) error
 	UpdateConversation(ctx context.Context, arg UpdateConversationParams) error
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) error
+	UpdateMessagePreview(ctx context.Context, arg UpdateMessagePreviewParams) (int64, error)
 	UpdateOutbox(ctx context.Context, arg UpdateOutboxParams) error
 }
 

@@ -44,3 +44,6 @@ SELECT m.* FROM outbox o JOIN messages m ON o.message_id=m.id WHERE o.state='que
 SELECT * FROM messages WHERE state='dispatching';
 -- name: AcquireWriteLock :exec
 UPDATE engine_identity SET singleton=1 WHERE singleton=1;
+
+-- name: ReconcileMessageAuthor :exec
+UPDATE messages SET revision_id=?,is_own=1,state='submitted',payload=? WHERE id=? AND is_own=0;

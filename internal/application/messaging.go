@@ -379,7 +379,7 @@ func (e *Engine) wake() {
 
 // Run owns one serial dispatcher. Network I/O happens only after an atomic SQL
 // claim; no transaction spans a network write. Interrupted claims become unknown.
-func (e *Engine) Run(ctx context.Context) error {
+func (e *Engine) runOutbox(ctx context.Context) error {
 	r, err := e.messaging()
 	if err != nil {
 		return err

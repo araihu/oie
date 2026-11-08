@@ -19,6 +19,8 @@ import (
 	"github.com/araihu/oie/api"
 	"github.com/araihu/oie/internal/adapters/avatarfiles"
 	"github.com/araihu/oie/internal/adapters/httpapi"
+	"github.com/araihu/oie/internal/adapters/mediafiles"
+	"github.com/araihu/oie/internal/adapters/previewfetch"
 	"github.com/araihu/oie/internal/adapters/sqlite"
 	"github.com/araihu/oie/internal/adapters/web"
 	xmpadapter "github.com/araihu/oie/internal/adapters/xmpp"
@@ -80,6 +82,7 @@ func run() error {
 			return err
 		}
 		engine.SetAvatarFiles(avatarfiles.New(filepath.Join(*dataDir, "media", "avatars")))
+		engine.SetPreviewServices(previewfetch.New(), mediafiles.New(filepath.Join(*dataDir, "media", "images")))
 		roots, err := x509.SystemCertPool()
 		if err != nil {
 			roots = x509.NewCertPool()

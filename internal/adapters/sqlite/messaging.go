@@ -204,9 +204,13 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		return err
 	}
 	if m.ArchiveID != "" {
-		_, err = q.GetArchiveAlias(ctx, dbgen.GetArchiveAliasParams{AccountID: string(m.AccountID), Scope: m.ArchiveScope, ArchiveID: m.ArchiveID})
+		var existingID string
+		existingID, err = q.GetArchiveAlias(ctx, dbgen.GetArchiveAliasParams{AccountID: string(m.AccountID), Scope: m.ArchiveScope, ArchiveID: m.ArchiveID})
 		if err == nil {
-			return nil
+			if err = s.reconcileArchivedAuthor(ctx, q, existingID, c, m, revision); err != nil {
+				return err
+			}
+			return tx.Commit()
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
 			return err
@@ -349,5 +353,38 @@ func (s *Store) TransitionMessage(ctx context.Context, id domain.ID, expected, s
 }
 func (s *Store) RecordConnection(ctx context.Context, c domain.Connection) error {
 	_, err := change(ctx, s.queries, "account.connection_changed", c, c.UpdatedAt)
+	return err
+}
+
+// Replaying verified room identity metadata updates the retained projection and
+// revision only. It never creates outbox work or replaces historical content.
+func (s *Store) reconcileArchivedAuthor(ctx context.Context, q *dbgen.Queries, id string, c domain.Conversation, in domain.Message, revision domain.ID) error {
+	if !in.Historical || !in.IsOwn || c.Kind != "room" {
+		return nil
+	}
+	row, err := q.GetMessage(ctx, id)
+	if err != nil {
+		return err
+	}
+	old, err := decodeMessage(row)
+	if err != nil {
+		return err
+	}
+	if old.IsOwn || !old.Historical || old.AccountID != in.AccountID {
+		return nil
+	}
+	parents := jsonText([]domain.ID{old.RevisionID})
+	old.IsOwn = true
+	old.Sender.ID = in.AccountID
+	old.SendState = "submitted"
+	old.RevisionID = revision
+	at := time.Now().UTC()
+	if err = q.ReconcileMessageAuthor(ctx, dbgen.ReconcileMessageAuthorParams{RevisionID: string(revision), Payload: jsonText(old), ID: id}); err != nil {
+		return err
+	}
+	if err = q.InsertMessageRevision(ctx, dbgen.InsertMessageRevisionParams{ID: string(revision), EntityID: id, Parents: parents, Payload: jsonText(old), CreatedAt: stamp(at)}); err != nil {
+		return err
+	}
+	_, err = change(ctx, q, "message.updated", old, at)
 	return err
 }

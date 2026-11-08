@@ -27,7 +27,12 @@ var errUnstable = errors.New("archive not stable")
 
 type archiveMessage struct {
 	stanza.Message
-	Body string `xml:"jabber:client body"`
+	Body  string `xml:"jabber:client body"`
+	Users []struct {
+		Items []struct {
+			JID string `xml:"jid,attr"`
+		} `xml:"item"`
+	} `xml:"http://jabber.org/protocol/muc#user x"`
 }
 type archiveResult struct {
 	ID        string `xml:"id,attr"`
@@ -109,6 +114,13 @@ func archivedIncoming(account domain.Account, scope string, r *archiveResult) (a
 		in.Kind = "room"
 		in.Address = msg.From.Bare().String()
 		in.SenderName = msg.From.Resourcepart()
+		// MUC nicknames are not account identities. Only an unambiguous real JID
+		// supplied inside an authenticated archive result establishes own authorship.
+		if len(msg.Users) == 1 && len(msg.Users[0].Items) == 1 {
+			author, err := jid.Parse(msg.Users[0].Items[0].JID)
+			in.IsOwn = err == nil && author.Bare().Equal(own.Bare())
+		}
+
 		if msg.ID != "" {
 			h := sha256.Sum256([]byte(msg.From.String() + "\x00" + msg.ID))
 			in.ProviderID = "room:" + hex.EncodeToString(h[:])
