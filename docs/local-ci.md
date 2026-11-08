@@ -1,5 +1,11 @@
 # Local CI loop
 
+The conversation-wallpaper update passes `make check` and Dagger `make ci-check`,
+including lint, generation checks, native/race tests and builds. Read-only live
+browser checks pass at 390 px and 1440 px in light and dark modes, with no page
+errors or mutations. This native Dagger result does not claim the full XMPP and
+browser pipeline has completed.
+
 The received-corrections increment passes native `make check`, core and web race
 tests, direct/room development XMPP integration, and browser workflows. Its
 final Dagger attempt remained at runner connection and was stopped after 196

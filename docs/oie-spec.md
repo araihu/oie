@@ -370,6 +370,8 @@ Separate devices notify independently even if another device is active. Activity
 
 Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screenshots. On wide screens, use navigation, a searchable/filterable conversation list, and the active conversation workspace. Include account identity, message bubbles, composer, media/link cards, room/contact details, and settings.
 
+**AGREED:** the default conversation wallpaper uses subtle outline doodles of a hammer, sickle, GNU mascot, Brazil outline, Christ the Redeemer, football, mobile phone, paper plane, speech balloon, stars and Go gopher. Keep the repeating artwork readable in light and dark themes without competing with message content.
+
 **AGREED:** keep conversation information in a sidebar/drawer, using the supplied group-info reference for identity, description/topic, available participants and access to that conversation's media, links, documents and starred messages. Content subviews stay within the drawer and provide a way back to chat information. Source-message stars are distinct from favorite conversations. Show only available operations and authoritative counts; an observed occupant list is not a persistent membership roster.
 
 **AGREED:** ordinary in-app navigation and filtering should use HTMX fragment swaps rather than full-document reloads. Preserve addressable URLs, browser Back/Forward, account/conversation isolation, drafts and meaningful focus/scroll. Keep native links/forms as a fallback. Dispose obsolete listeners, timers and live subscriptions when a fragment replaces their owning screen; stale responses must not overwrite a newer screen or repeat a mutation.
