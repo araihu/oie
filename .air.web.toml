@@ -1,0 +1,33 @@
+# BFF only. The independently running engine and its protocol sessions stay alive.
+root = "."
+tmp_dir = "bin/air-web"
+env_files = []
+
+[build]
+cmd = "make dev-web-build"
+full_bin = 'exec ./bin/oie-dev-web -role bff -dev-reload -listen "${OIE_DEV_WEB_LISTEN:-0.0.0.0:8080}" -engine-url "${OIE_DEV_ENGINE_URL:-http://127.0.0.1:18084}"'
+include_ext = ["go", "templ", "js", "mjs", "wasm", "bcmap", "ttf", "otf", "pfb", "css", "json", "svg", "png", "jpg", "jpeg", "gif", "ico", "webp", "woff", "woff2"]
+include_file = ["go.mod", "go.sum"]
+exclude_dir = [".git", "bin", "data", "dist", "tools", "tests", "node_modules", "vendor"]
+exclude_regex = ["_templ\\.go$", "_test\\.go$"]
+exclude_unchanged = false
+delay = 500
+stop_on_error = false
+send_interrupt = true
+kill_delay = "2s"
+log = "build-errors.log"
+
+[log]
+time = true
+
+[misc]
+clean_on_exit = true
+
+[screen]
+clear_on_rebuild = false
+keep_scroll = true
+
+# Keep Range and live event streams on the app's own HTTP server. Air's proxy
+# applies its app-start timeout to the entire upstream response body.
+[proxy]
+enabled = false

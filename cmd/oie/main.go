@@ -46,10 +46,14 @@ func run() error {
 	role := flag.String("role", "local", "local, hosted, or bff")
 	dataDir := flag.String("data-dir", "./data", "engine database and media directory")
 	engineURL := flag.String("engine-url", "", "engine base URL (required for bff role)")
+	devReload := flag.Bool("dev-reload", false, "reload the development browser after BFF restarts (bff role only)")
 	xmppCA := flag.String("xmpp-ca-file", "", "additional trusted CA certificate PEM for XMPP TLS (development/private servers)")
 	flag.Parse()
 	if *role != "local" && *role != "hosted" && *role != "bff" {
 		return errors.New("role must be local, hosted, or bff; sync service is not implemented yet")
+	}
+	if *devReload && *role != "bff" {
+		return errors.New("dev-reload is only supported by the bff role")
 	}
 	if *role == "bff" && *engineURL == "" {
 		return errors.New("bff role requires engine-url")
@@ -127,7 +131,11 @@ func run() error {
 		}
 		*engineURL = "http://" + net.JoinHostPort(host, port)
 	}
-	ui, err := web.New(*engineURL)
+	var webOptions []web.Option
+	if *devReload {
+		webOptions = append(webOptions, web.WithDevReload())
+	}
+	ui, err := web.New(*engineURL, webOptions...)
 	if err != nil {
 		return err
 	}

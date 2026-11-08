@@ -87,3 +87,15 @@ ci:
 
 ci-check:
 	sh tools/ci/run.sh checks
+
+# Restart only the frontend/BFF. Run the engine separately to retain XMPP sessions.
+DEV_ENGINE_URL ?= http://127.0.0.1:18084
+DEV_WEB_LISTEN ?= 0.0.0.0:8080
+.PHONY: dev-web dev-web-build
+
+dev-web:
+	OIE_DEV_ENGINE_URL="$(DEV_ENGINE_URL)" OIE_DEV_WEB_LISTEN="$(DEV_WEB_LISTEN)" $(CODEGEN) air -c .air.web.toml
+
+dev-web-build:
+	$(CODEGEN) templ generate
+	GOWORK=off $(GO) build -o bin/oie-dev-web ./cmd/oie
