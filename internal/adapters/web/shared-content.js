@@ -161,7 +161,8 @@ window.OieRuntime.register('shared-search', life => {
   on(input,'input',event=>{if(!event.isComposing&&!composing){alignTabs();schedule()}});
   on(input,'compositionstart',()=>{composing=true;clearTimeout(pending)});
   on(input,'compositionend',()=>{composing=false;alignTabs();schedule()});
-  on(form,'submit',()=>clearTimeout(pending),{capture:true});on(form,'combobox:change',alignTabs);
+  on(form,'submit',()=>clearTimeout(pending),{capture:true});
+  on(form,'combobox:change',event=>{alignTabs();if(!info&&event.detail?.id==='shared-account'&&connected()){cancel();form.requestSubmit()}});
   on(document,'htmx:before:request',event=>{
    const ctx=event.detail.ctx;if(['oie-app','chat-info-content'].includes(ctx?.target?.id))cancel();if(!owned(ctx)||!connected())return;
    active.add(ctx);ctx.oieSearch={form,scope:scope(),generation:Number(document.body.dataset.starGeneration||0),engine:document.body.dataset.engineId,conversation:document.body.dataset.conversationId};accepted=null;region()?.setAttribute('aria-busy','true');announce();

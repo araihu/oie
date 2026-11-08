@@ -11,8 +11,12 @@ swapped, so the field, caret and composer remain connected. Closing the drawer
 or leaving its shared-content screen cancels pending work. Category links carry
 the current typed query, including input whose debounce has not fired yet.
 
-Enter remains a native-form fallback. The global gallery keeps its Search button
-and its existing explicit-submit account-filter behavior.
+Enter remains a native-form fallback. The global gallery has no Search button.
+Selecting an account applies the filter immediately, preserving the typed query
+and category while clearing the pagination cursor. Searching account names in
+the picker only filters its options. Committing a selection uses the existing
+HTMX application-fragment navigation so the active account, sidebar and browser
+Back/Forward history stay consistent.
 
 The engine searches all scoped retained metadata before pagination. Comparison
 ignores accents and case. Exact substrings and prefixes match first; otherwise
@@ -36,12 +40,18 @@ the first page, typo/accent handling, a single debounced fragment request, stabl
 input/form/caret/composer, cursor reset, separate inbox/conversation queries,
 IME, stale HTTP/SSE responses, category changes, Back navigation and account
 isolation. It sends no messages or browser mutations and reports no page errors.
-The chat-info suite also passes eight responsive/theme/locale variants; the
+The account-filter browser checks also verify one option commit produces one
+request, with no extra document navigation, and retains account history. The
+chat-info suite also passes eight responsive/theme/locale variants; the
 infinite-scroll suite passes its cursor, cancellation and playback checks.
 Logs are `/tmp/oie-drawer-search-check.log`,
 `/tmp/oie-drawer-search-browser-target.log`,
 `/tmp/oie-drawer-search-info-final.log` and
-`/tmp/oie-drawer-search-scroll-typing.log`.
+`/tmp/oie-drawer-search-scroll-typing.log`. The automatic account-filter update
+also passes `make check` and the search, shared-content and document browser
+suites. Logs are `/tmp/oie-auto-filter-check.log`,
+`/tmp/oie-gallery-search-live.log`, `/tmp/oie-gallery-account-live.log` and
+`/tmp/oie-gallery-documents-live.log`.
 
 Full Dagger validation remains incomplete. The most recent transport run timed
 out after 360 seconds during the race suite, as recorded in
