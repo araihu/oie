@@ -7,8 +7,9 @@ type MessagePreview struct {
 	ID, RevisionID, AccountID, ConversationID, MessageID ID
 	URL, Kind, State, DownloadState                      string
 	Title, Description, SiteName                         string
-	ImageHash, FileHash, FileMimeType                    string
+	ImageHash, FaviconHash, FileHash, FileMimeType       string
 	PreviewVersion                                       int
+	RefreshRequested                                     bool
 	FileSize                                             int64
 	LastErrorCode                                        string
 	UpdatedAt                                            time.Time

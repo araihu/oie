@@ -24,13 +24,17 @@ type PreviewRepository interface {
 }
 type PreviewMetadata struct {
 	Title, Description, SiteName string
-	Image                        []byte
+	Image, Favicon               []byte
 	IsImage                      bool
 }
 type PreviewFetcher interface {
 	Link(context.Context, string) (PreviewMetadata, error)
 	Image(context.Context, string) ([]byte, error)
 }
+type PreviewCacheInvalidator interface {
+	InvalidateLink(string)
+}
+
 type MediaFiles interface {
 	Put(context.Context, []byte, bool) (domain.MediaFile, error)
 	Thumbnail(context.Context, []byte) (domain.MediaFile, error)
@@ -51,7 +55,7 @@ func (e *Engine) previewRepo() (PreviewRepository, error) {
 	return r, nil
 }
 
-const previewRendererVersion = 2
+const previewRendererVersion = 3
 
 var messageURLs = regexp.MustCompile(`https?://[^\s<>"\x00-\x1f]+`)
 
@@ -148,7 +152,7 @@ func (e *Engine) ensureMessagePreview(ctx context.Context, r PreviewRepository, 
 	if err != nil {
 		return domain.MessagePreview{}, err
 	}
-	if p.PreviewVersion < previewRendererVersion && p.ImageHash != "" {
+	if p.PreviewVersion < previewRendererVersion && (p.ImageHash != "" || p.Kind == "link") {
 		old := p.RevisionID
 		p.RevisionID, err = e.newID()
 		if err != nil {
@@ -178,6 +182,63 @@ func (e *Engine) Preview(ctx context.Context, id domain.ID) (domain.MessagePrevi
 	}
 	return r.Preview(ctx, id)
 }
+
+// RefreshPreview queues fresh metadata without mutating source text or fetching
+// an original. A persisted flag coalesces retries and survives engine restart.
+func (e *Engine) RefreshPreview(ctx context.Context, id domain.ID) (domain.MessagePreview, error) {
+	if _, ok := e.previewFetcher.(PreviewCacheInvalidator); !ok || e.mediaFiles == nil {
+		return domain.MessagePreview{}, ErrProtocolUnavailable
+	}
+	r, err := e.previewRepo()
+	if err != nil {
+		return domain.MessagePreview{}, err
+	}
+	for attempt := 0; attempt < 3; attempt++ {
+		p, err := e.Preview(ctx, id)
+		if err != nil {
+			return p, err
+		}
+		if p.Kind != "link" {
+			return p, ErrInvalid
+		}
+		m, err := e.Message(ctx, p.MessageID)
+		if err != nil {
+			return p, err
+		}
+		current := false
+		for _, ref := range SharedReferences(domain.DisplayBody(m)) {
+			if ref.URL == p.URL && ref.Kind == "link" {
+				current = true
+				break
+			}
+		}
+		if !current || m.AccountID != p.AccountID || m.ConversationID != p.ConversationID {
+			return p, ErrNotFound
+		}
+		if p.RefreshRequested && p.State == "queued" {
+			return p, nil
+		}
+		old := p.RevisionID
+		p.RevisionID, err = e.newID()
+		if err != nil {
+			return p, err
+		}
+		p.State = "queued"
+		p.RefreshRequested = true
+		p.LastErrorCode = ""
+		p.UpdatedAt = e.now().UTC()
+		if err = r.SavePreview(ctx, p, old); errors.Is(err, ErrStateConflict) {
+			continue
+		} else if err != nil {
+			return p, err
+		}
+		e.previewFetcher.(PreviewCacheInvalidator).InvalidateLink(p.URL)
+		e.wakePreviews()
+		return p, nil
+	}
+	return domain.MessagePreview{}, ErrStateConflict
+}
+
 func (e *Engine) DownloadPreview(ctx context.Context, id domain.ID) (domain.MessagePreview, error) {
 	r, err := e.previewRepo()
 	if err != nil {
@@ -327,7 +388,7 @@ func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p doma
 		old = p.RevisionID
 	}
 	var fetchErr error
-	var image []byte
+	var image, favicon []byte
 	if original {
 		image, fetchErr = e.previewFetcher.Image(ctx, p.URL)
 		if fetchErr == nil {
@@ -352,13 +413,25 @@ func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p doma
 		p.State = "ready"
 	} else {
 		var metadata PreviewMetadata
-		metadata, fetchErr = e.previewFetcher.Link(ctx, p.URL)
+		if p.RefreshRequested {
+			if invalidator, ok := e.previewFetcher.(PreviewCacheInvalidator); ok {
+				invalidator.InvalidateLink(p.URL)
+			} else {
+				fetchErr = ErrProtocolUnavailable
+			}
+		}
+		if fetchErr == nil {
+			metadata, fetchErr = e.previewFetcher.Link(ctx, p.URL)
+		}
 		if fetchErr == nil {
 			p.Title = metadata.Title
 			p.Description = metadata.Description
 			p.SiteName = metadata.SiteName
 			p.State = "ready"
 			image = metadata.Image
+			favicon = metadata.Favicon
+			p.ImageHash = ""
+			p.FaviconHash = ""
 			if metadata.IsImage {
 				p.Kind = "image"
 			}
@@ -379,6 +452,16 @@ func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p doma
 			fetchErr = err
 		}
 	}
+	if fetchErr == nil && len(favicon) > 0 {
+		icon, iconErr := e.mediaFiles.Thumbnail(ctx, favicon)
+		if iconErr == nil {
+			if err := r.SaveMediaFile(ctx, icon, e.now().UTC()); err != nil {
+				return err
+			}
+			p.FaviconHash = icon.Hash
+		}
+	}
+	p.RefreshRequested = false
 	if fetchErr != nil {
 		p.LastErrorCode = previewFailureCode(fetchErr)
 		if original {

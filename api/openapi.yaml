@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.12.0
+  version: 0.14.0
   description: Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
     are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.
@@ -345,6 +345,37 @@ paths:
           $ref: '#/components/responses/Invalid'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/previews/{previewId}/refresh:
+    post:
+      tags: [Previews]
+      operationId: refreshMessagePreview
+      summary: Refresh cached link metadata
+      description: >-
+        Explicitly queues fresh metadata for a current retained link reference,
+        bypassing the metadata cache. Existing metadata remains usable during
+        refresh or failure. Concurrent pending refreshes share queued work.
+        Does not edit a message or request an original image download.
+      parameters:
+      - name: previewId
+        in: path
+        required: true
+        description: Stable preview entity UUID.
+        schema: *id001
+      responses:
+        '202':
+          description: Refresh queued with existing metadata preserved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessagePreview'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/Unavailable'
   /api/v1/previews/{previewId}/download:
@@ -2103,6 +2134,10 @@ components:
           type: string
           pattern: ^[0-9a-f]{64}$
           description: Local static PNG or JPEG thumbnail digest, sized for high-DPI message cards.
+        faviconHash:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          description: Optional locally cached and normalized site icon. Never a provider URL.
         fileHash:
           type: string
           pattern: ^[0-9a-f]{64}$

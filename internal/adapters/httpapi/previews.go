@@ -21,6 +21,7 @@ func preview(p domain.MessagePreview) engineapi.MessagePreview {
 	out.Description = ptr(p.Description)
 	out.SiteName = ptr(p.SiteName)
 	out.ImageHash = ptr(p.ImageHash)
+	out.FaviconHash = ptr(p.FaviconHash)
 	out.FileHash = ptr(p.FileHash)
 	out.LastErrorCode = ptr(p.LastErrorCode)
 	if p.FileHash != "" {
@@ -103,4 +104,12 @@ func (s *Server) GetMediaImage(ctx context.Context, r engineapi.GetMediaImageReq
 		}
 	}
 	return result, nil
+}
+
+func (s *Server) RefreshMessagePreview(ctx context.Context, r engineapi.RefreshMessagePreviewRequestObject) (engineapi.RefreshMessagePreviewResponseObject, error) {
+	p, err := s.engine.RefreshPreview(ctx, domain.ID(r.PreviewId))
+	if err != nil {
+		return nil, err
+	}
+	return engineapi.RefreshMessagePreview202JSONResponse(preview(p)), nil
 }

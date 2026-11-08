@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"errors"
 	"io"
 	"mime"
@@ -29,11 +30,12 @@ type resolver interface {
 	LookupNetIP(context.Context, string, string) ([]netip.Addr, error)
 }
 type Fetcher struct {
-	client   *http.Client
-	resolver resolver
-	dial     func(context.Context, string, string) (net.Conn, error)
-	mu       sync.Mutex
-	cache    map[string]cachedLink
+	client          *http.Client
+	resolver        resolver
+	dial            func(context.Context, string, string) (net.Conn, error)
+	mu              sync.Mutex
+	cache           map[string]cachedLink
+	cacheGeneration uint64
 }
 
 func New() *Fetcher {
@@ -224,9 +226,11 @@ type cachedLink struct {
 func (f *Fetcher) Link(ctx context.Context, address string) (application.PreviewMetadata, error) {
 	f.mu.Lock()
 	cached, found := f.cache[address]
+	generation := f.cacheGeneration
 	f.mu.Unlock()
 	if found && time.Now().Before(cached.expires) {
 		cached.metadata.Image = bytes.Clone(cached.metadata.Image)
+		cached.metadata.Favicon = bytes.Clone(cached.metadata.Favicon)
 		return cached.metadata, cached.err
 	}
 	metadata, err := f.link(ctx, address)
@@ -239,6 +243,9 @@ func (f *Fetcher) Link(ctx context.Context, address string) (application.Preview
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if generation != f.cacheGeneration {
+		return metadata, err
+	}
 	if f.cache == nil {
 		f.cache = map[string]cachedLink{}
 	}
@@ -255,6 +262,7 @@ func (f *Fetcher) Link(ctx context.Context, address string) (application.Preview
 	}
 	copy := metadata
 	copy.Image = bytes.Clone(copy.Image)
+	copy.Favicon = bytes.Clone(copy.Favicon)
 	f.cache[address] = cachedLink{metadata: copy, err: err, expires: time.Now().Add(ttl), timeStored: time.Now()}
 	return metadata, err
 }
@@ -288,6 +296,7 @@ func (f *Fetcher) link(ctx context.Context, address string) (application.Preview
 	tokenizer := html.NewTokenizer(io.LimitReader(reader, 2<<20))
 	inTitle := false
 	title := ""
+	icons := []string{}
 	for {
 		kind := tokenizer.Next()
 		if kind == html.ErrorToken {
@@ -301,6 +310,30 @@ func (f *Fetcher) link(ctx context.Context, address string) (application.Preview
 		case html.StartTagToken, html.SelfClosingTagToken:
 			if token.Data == "title" {
 				inTitle = true
+			}
+			if token.Data == "link" && len(icons) < 3 {
+				rel, href, kind := "", "", ""
+				for _, attr := range token.Attr {
+					switch strings.ToLower(attr.Key) {
+					case "rel":
+						rel = strings.ToLower(attr.Val)
+					case "href":
+						href = attr.Val
+					case "type":
+						kind = strings.ToLower(attr.Val)
+					}
+				}
+				icon := false
+				for _, part := range strings.Fields(rel) {
+					if part == "icon" || part == "apple-touch-icon" || part == "apple-touch-icon-precomposed" {
+						icon = true
+					}
+				}
+				if icon && href != "" && kind != "image/svg+xml" {
+					if address, parseErr := response.Request.URL.Parse(href); parseErr == nil {
+						icons = append(icons, address.String())
+					}
+				}
 			}
 			if token.Data == "meta" {
 				key, value := "", ""
@@ -351,5 +384,66 @@ func (f *Fetcher) link(ctx context.Context, address string) (application.Preview
 			out.Image = f.smallImage(ctx, imageURL.String())
 		}
 	}
+	if len(out.Image) == 0 {
+		if len(icons) == 0 {
+			if icon, parseErr := response.Request.URL.Parse("/favicon.ico"); parseErr == nil {
+				icons = append(icons, icon.String())
+			}
+		}
+		for _, icon := range icons {
+			if out.Favicon = f.siteIcon(ctx, icon); len(out.Favicon) > 0 {
+				break
+			}
+		}
+	}
 	return out, nil
+}
+
+// Invalidation also prevents an older in-flight result from re-populating cache.
+func (f *Fetcher) InvalidateLink(address string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.cache, address)
+	f.cacheGeneration++
+}
+
+func (f *Fetcher) siteIcon(ctx context.Context, address string) []byte {
+	response, err := f.get(ctx, address)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = response.Body.Close() }()
+	kind, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
+	if !imageMIME(kind) && kind != "image/x-icon" && kind != "image/vnd.microsoft.icon" {
+		return nil
+	}
+	data, err := readBounded(response, 64<<10)
+	if err != nil {
+		return nil
+	}
+	if imageMIME(kind) {
+		return data
+	}
+	// Modern ICO files may contain PNG entries. DIB/SVG icons remain unsupported
+	// and fall through to local initials; no active content reaches the browser.
+	if len(data) < 6 || binary.LittleEndian.Uint16(data[:2]) != 0 || binary.LittleEndian.Uint16(data[2:4]) != 1 {
+		return nil
+	}
+	count := int(binary.LittleEndian.Uint16(data[4:6]))
+	if count < 1 || count > 32 || len(data) < 6+16*count {
+		return nil
+	}
+	for i := 0; i < count; i++ {
+		entry := data[6+16*i : 6+16*(i+1)]
+		size := uint64(binary.LittleEndian.Uint32(entry[8:12]))
+		offset := uint64(binary.LittleEndian.Uint32(entry[12:16]))
+		if offset+size > uint64(len(data)) || size < 8 {
+			continue
+		}
+		image := data[offset : offset+size]
+		if bytes.HasPrefix(image, []byte{137, 80, 78, 71, 13, 10, 26, 10}) {
+			return image
+		}
+	}
+	return nil
 }
