@@ -191,3 +191,75 @@ func TestMediaReaderTruncationHasNoSyntheticContent(t *testing.T) {
 		t.Fatal("truncated original changed", string(body), err)
 	}
 }
+
+func TestDocumentMediaFormatBoundsAndPlainText(t *testing.T) {
+	for _, tt := range []struct {
+		format     application.MediaFormat
+		mime, want string
+	}{
+		{"txt", "text/plain", "text/plain"}, {"log", "text/plain", "text/plain"}, {"md", "text/markdown", "text/plain"}, {"csv", "text/csv", "text/plain"}, {"json", "application/json", "text/plain"}, {"xml", "application/xml", "text/plain"}, {"pdf", "application/pdf", "application/pdf"},
+		{"txt", "text/html", ""}, {"xml", "image/svg+xml", ""}, {"json", "application/pdf", ""}, {"pdf", "text/plain", ""}, {"pdf", "video/mp4", ""}, {"video", "application/pdf", ""}, {"docx", "application/pdf", ""},
+	} {
+		t.Run(string(tt.format)+"/"+tt.mime, func(t *testing.T) {
+			f, _ := fixtureFetcher(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", tt.mime)
+				w.Header().Set("Content-Length", "9")
+				_, _ = io.WriteString(w, "<script/>")
+			})
+			result, err := f.Open(t.Context(), "http://public.example/file", application.MediaReadRequest{Format: tt.format})
+			if tt.want == "" {
+				if err == nil {
+					_ = result.Body.Close()
+					t.Fatal("unsupported MIME exposed", result)
+				}
+				if len(f.mediaActive) != 0 {
+					t.Fatal("reader leaked")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, err := io.ReadAll(result.Body)
+			_ = result.Body.Close()
+			if err != nil || result.MediaType != tt.want || string(body) != "<script/>" {
+				t.Fatal(result, string(body), err)
+			}
+		})
+	}
+	for _, format := range []application.MediaFormat{"txt", "pdf"} {
+		t.Run(string(format)+"/size", func(t *testing.T) {
+			f, _ := fixtureFetcher(t, func(w http.ResponseWriter, r *http.Request) {
+				kind := "text/plain"
+				if format == "pdf" {
+					kind = "application/pdf"
+				}
+				w.Header().Set("Content-Type", kind)
+				w.Header().Set("Content-Length", fmt.Sprint(format.Limit()+1))
+			})
+			if _, err := f.Open(t.Context(), "http://public.example/file", application.MediaReadRequest{Format: format}); mediaCode(err) != "media_too_large" {
+				t.Fatal("oversize document accepted", err)
+			}
+		})
+	}
+}
+func TestDocumentRangeChecksCompleteSizeAndPreservesBytes(t *testing.T) {
+	data := []byte("<html>shown as text only</html>")
+	f, _ := fixtureFetcher(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		http.ServeContent(w, r, "file.xml", time.Unix(1000, 0), bytes.NewReader(data))
+	})
+	value, err := f.Open(t.Context(), "http://public.example/file.xml", application.MediaReadRequest{Format: "xml", Range: &application.ByteRange{Start: 6, End: 10}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := io.ReadAll(value.Body)
+	_ = value.Body.Close()
+	if err != nil || string(body) != string(data[6:11]) || !value.Partial || value.MediaType != "text/plain" || value.Total != int64(len(data)) {
+		t.Fatal(value, string(body), err)
+	}
+	large := &http.Response{StatusCode: 206, ContentLength: 1, Header: http.Header{"Content-Type": []string{"text/plain"}, "Content-Range": []string{fmt.Sprintf("bytes 0-0/%d", application.MaxTextSource+1)}}}
+	if _, err = validateMediaResponse(large, application.MediaReadRequest{Format: "txt", Range: &application.ByteRange{Start: 0, End: 0}}); mediaCode(err) != "media_too_large" {
+		t.Fatal("partial bypassed complete source limit", err)
+	}
+}

@@ -103,7 +103,7 @@ func rangeFailure(response *http.Response, request application.MediaReadRequest)
 	if err != nil || request.Range == nil {
 		return application.MediaFailure{Code: "media_fetch_failed"}
 	}
-	if total > application.MaxMediaSource {
+	if total > request.Format.Limit() {
 		return application.MediaFailure{Code: "media_too_large"}
 	}
 	if _, _, ok := request.Range.Resolve(total); ok {
@@ -127,7 +127,7 @@ func validateMediaResponse(response *http.Response, request application.MediaRea
 		return out, application.MediaFailure{Code: "media_fetch_failed"}
 	}
 	out.MediaType, _, _ = mime.ParseMediaType(response.Header.Get("Content-Type"))
-	if !application.VideoMediaType(out.MediaType) {
+	if request.Format.MediaType(out.MediaType) == "" {
 		return out, application.MediaFailure{Code: "media_unsupported"}
 	}
 	out.Total = response.ContentLength
@@ -149,12 +149,13 @@ func validateMediaResponse(response *http.Response, request application.MediaRea
 	} else if response.Header.Get("Content-Range") != "" {
 		return out, application.MediaFailure{Code: "media_fetch_failed"}
 	}
-	if out.Total > application.MaxMediaSource {
+	if out.Total > request.Format.Limit() {
 		return out, application.MediaFailure{Code: "media_too_large"}
 	}
 	if out.Total <= 0 || out.Length <= 0 {
 		return out, application.MediaFailure{Code: "media_fetch_failed"}
 	}
+	out.MediaType = request.Format.MediaType(out.MediaType)
 	out.RangeSupported = out.Partial || strings.EqualFold(response.Header.Get("Accept-Ranges"), "bytes")
 	out.ETag = safeEntityTag(response.Header.Get("ETag"))
 	out.ModifiedAt, _ = http.ParseTime(response.Header.Get("Last-Modified"))
@@ -192,7 +193,7 @@ func (b *mediaBody) Read(p []byte) (int, error) {
 // media store, creates thumbnails or represents partial bytes as a full hash.
 func (f *Fetcher) Open(parent context.Context, address string, request application.MediaReadRequest) (application.MediaRead, error) {
 	empty := application.MediaRead{}
-	if request.Range != nil && !request.Range.Valid() {
+	if request.Format.Limit() == 0 || request.Range != nil && !request.Range.Valid() {
 		return empty, application.ErrInvalid
 	}
 	ctx, cancel := context.WithTimeout(parent, 15*time.Minute)
@@ -222,8 +223,8 @@ func (f *Fetcher) Open(parent context.Context, address string, request applicati
 	if err != nil {
 		return empty, application.MediaFailure{Code: "media_blocked"}
 	}
-	req.Header.Set("User-Agent", "Oie/0.13 media")
-	req.Header.Set("Accept", "video/mp4, video/webm, video/ogg, video/quicktime")
+	req.Header.Set("User-Agent", "Oie/0.15 media")
+	req.Header.Set("Accept", "video/mp4, video/webm, video/ogg, video/quicktime, text/plain, text/markdown, text/csv, application/json, text/json, application/xml, text/xml, application/pdf")
 	req.Header.Set("Accept-Encoding", "identity")
 	if request.Range != nil {
 		req.Header.Set("Range", rangeHeader(*request.Range))

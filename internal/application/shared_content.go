@@ -14,7 +14,7 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
-const SharedContentVersion = 1
+const SharedContentVersion = 2
 
 type SharedContentRepository interface {
 	SharedContentCandidates(context.Context, int, int) ([]domain.Message, error)
@@ -46,7 +46,7 @@ func SharedReferences(text string) []domain.SharedReference {
 			kind = "video"
 		case ".mp3", ".ogg", ".opus", ".m4a", ".wav", ".flac", ".aac":
 			kind = "audio"
-		case ".pdf", ".doc", ".docx", ".odt", ".xls", ".xlsx", ".ods", ".ppt", ".pptx", ".odp", ".txt", ".csv", ".md", ".zip", ".tar", ".gz", ".7z", ".rar", ".epub":
+		case ".pdf", ".doc", ".docx", ".odt", ".xls", ".xlsx", ".ods", ".ppt", ".pptx", ".odp", ".txt", ".log", ".json", ".xml", ".csv", ".md", ".zip", ".tar", ".gz", ".7z", ".rar", ".epub":
 			kind = "document"
 		}
 		name := path.Base(u.Path)

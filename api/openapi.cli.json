@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.14.0",
+    "version": "0.15.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.",
     "contact": {
       "name": "Arai Hû",
@@ -168,14 +168,14 @@
           "SharedContent"
         ],
         "operationId": "getSharedContentMedia",
-        "summary": "Stream an explicitly selected video reference",
-        "description": "Reads the current retained canonical source before opening its video URL through the engine's public-network policy. Never redirects the browser to the provider. Supports one byte range and If-Range; an upstream that ignores Range returns 200 rather than an invented 206. Sources must advertise a valid complete size no larger than 2 GiB. Only MP4, WebM, Ogg video and QuickTime media types are accepted; codec playback remains a browser capability. This is on-demand streaming, not a retained download: no full-file hash, sender verification, offline availability or transfer state is implied. Listing/mounting UI must not call this operation; set a player source only after explicit user activation. Client disconnect cancels the upstream read. HEAD is unsupported and returns 405 without contacting the provider. Multiple or malformed ranges are invalid.",
+        "summary": "Stream an explicitly selected video or supported document reference",
+        "description": "Reads the current retained canonical source before opening its URL through the engine's public-network policy. Never redirects the browser to the provider. Supports one byte range and If-Range; an upstream that ignores Range returns 200 rather than an invented 206. Video accepts MP4, WebM, Ogg video and QuickTime MIME types up to 2 GiB; codec playback remains a browser capability. Document references are restricted by URL extension and provider MIME: .txt/.log/.md/.csv/.json/.xml are served as text/plain up to 2 MiB and .pdf as application/pdf up to 100 MiB. Text MIME must be text/plain or the matching format's text/markdown, text/csv, application/json, text/json, application/xml or text/xml. HTML, SVG, office documents and mismatched MIME types are unsupported. A known complete size is required. This is explicit on-demand streaming, not a retained download: no full-file hash, sender verification, offline availability or transfer state is implied. Listing/mounting UI must not call this operation. Client disconnect cancels the upstream read. HEAD returns 405 without contacting the provider. Multiple or malformed ranges are invalid. JSON, XML and Markdown are returned as plain text, never active markup.",
         "parameters": [
           {
             "name": "itemId",
             "in": "path",
             "required": true,
-            "description": "Current video catalog item UUID, never an arbitrary provider URL.",
+            "description": "Current supported catalog item UUID, never an arbitrary provider URL.",
             "schema": {
               "$ref": "#/components/schemas/ID"
             }
@@ -201,7 +201,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Complete video response; the provider may have ignored Range.",
+            "description": "Complete media/document response; the provider may have ignored Range.",
             "headers": {
               "Accept-Ranges": {
                 "description": "Byte-range capability for this source.",
@@ -214,7 +214,7 @@
                 }
               },
               "Content-Disposition": {
-                "description": "Inline playback with a sanitized retained source filename.",
+                "description": "Inline content with a sanitized retained source filename.",
                 "schema": {
                   "type": "string"
                 }
@@ -247,6 +247,18 @@
               }
             },
             "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
               "video/mp4": {
                 "schema": {
                   "type": "string",
@@ -274,7 +286,7 @@
             }
           },
           "206": {
-            "description": "Validated partial video response.",
+            "description": "Validated partial media/document response.",
             "headers": {
               "Accept-Ranges": {
                 "description": "Byte-range capability for this source.",
@@ -287,7 +299,7 @@
                 }
               },
               "Content-Disposition": {
-                "description": "Inline playback with a sanitized retained source filename.",
+                "description": "Inline content with a sanitized retained source filename.",
                 "schema": {
                   "type": "string"
                 }
@@ -320,6 +332,18 @@
               }
             },
             "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
               "video/mp4": {
                 "schema": {
                   "type": "string",
@@ -357,7 +381,7 @@
             }
           },
           "404": {
-            "description": "The current retained video reference does not exist.",
+            "description": "The current retained supported reference does not exist.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -388,7 +412,7 @@
             }
           },
           "413": {
-            "description": "The complete source exceeds the 2 GiB streaming limit.",
+            "description": "The complete source exceeds its type-specific streaming limit.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -398,7 +422,7 @@
             }
           },
           "415": {
-            "description": "The provider response is not an accepted video media type.",
+            "description": "The provider MIME type does not match the retained supported reference.",
             "content": {
               "application/problem+json": {
                 "schema": {

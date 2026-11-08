@@ -3,12 +3,91 @@ package application
 import (
 	"context"
 	"io"
+	"net/url"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/araihu/oie/internal/domain"
 )
 
-const MaxMediaSource int64 = 2 << 30
+const (
+	MaxMediaSource int64 = 2 << 30
+	MaxTextSource  int64 = 2 << 20
+	MaxPDFSource   int64 = 100 << 20
+)
+
+// MediaFormat is selected from a retained canonical reference, never a client URL.
+// Its zero value preserves the original video reader contract.
+type MediaFormat string
+
+func (f MediaFormat) Limit() int64 {
+	switch f {
+	case "", "video":
+		return MaxMediaSource
+	case "txt", "log", "md", "csv", "json", "xml":
+		return MaxTextSource
+	case "pdf":
+		return MaxPDFSource
+	}
+	return 0
+}
+
+// MediaType validates provider MIME against the source format and returns the safe
+// response MIME. Structured textual documents are deliberately served as plain text.
+func (f MediaFormat) MediaType(value string) string {
+	if f == "" || f == "video" {
+		if VideoMediaType(value) {
+			return value
+		}
+		return ""
+	}
+	if f == "pdf" {
+		if value == "application/pdf" {
+			return value
+		}
+		return ""
+	}
+	if f.Limit() == 0 {
+		return ""
+	}
+	if value == "text/plain" {
+		return "text/plain"
+	}
+	switch f {
+	case "md":
+		if value == "text/markdown" {
+			return "text/plain"
+		}
+	case "csv":
+		if value == "text/csv" {
+			return "text/plain"
+		}
+	case "json":
+		if value == "application/json" || value == "text/json" {
+			return "text/plain"
+		}
+	case "xml":
+		if value == "application/xml" || value == "text/xml" {
+			return "text/plain"
+		}
+	}
+	return ""
+}
+func sharedMediaFormat(item domain.SharedContentItem) (MediaFormat, bool) {
+	if item.Kind == "video" {
+		return "video", true
+	}
+	if item.Kind != "document" {
+		return "", false
+	}
+	u, err := url.Parse(item.URL)
+	if err != nil {
+		return "", false
+	}
+	format := MediaFormat(strings.TrimPrefix(strings.ToLower(path.Ext(u.Path)), "."))
+	return format, format.Limit() > 0 && format != "video"
+}
 
 // ByteRange is an inclusive byte selection. End=-1 means open-ended; for a
 // suffix selection Start is the positive suffix length and End remains -1.
@@ -46,6 +125,7 @@ type MediaCondition struct {
 	ModifiedAt time.Time
 }
 type MediaReadRequest struct {
+	Format    MediaFormat
 	Range     *ByteRange
 	Condition MediaCondition
 }
@@ -89,7 +169,8 @@ func (e *Engine) SharedContentMedia(ctx context.Context, id domain.ID, request M
 	if err != nil {
 		return MediaRead{}, err
 	}
-	if item.ID != id || item.Kind != "video" {
+	format, supported := sharedMediaFormat(item)
+	if item.ID != id || !supported {
 		return MediaRead{}, ErrNotFound
 	}
 	source, err := e.Message(ctx, item.Message.ID)
@@ -101,7 +182,7 @@ func (e *Engine) SharedContentMedia(ctx context.Context, id domain.ID, request M
 	}
 	current := false
 	for _, ref := range SharedReferences(domain.DisplayBody(source)) {
-		if ref.URL == item.URL && ref.Kind == "video" {
+		if ref.URL == item.URL && ref.Kind == item.Kind {
 			current = true
 			break
 		}
@@ -109,11 +190,12 @@ func (e *Engine) SharedContentMedia(ctx context.Context, id domain.ID, request M
 	if !current {
 		return MediaRead{}, ErrNotFound
 	}
+	request.Format = format
 	result, err := e.mediaReader.Open(ctx, item.URL, request)
 	if err != nil {
 		return MediaRead{}, err
 	}
-	valid := result.Body != nil && VideoMediaType(result.MediaType) && result.Length > 0 && result.Total > 0 && result.Total <= MaxMediaSource && result.Length <= result.Total && result.Offset >= 0
+	valid := result.Body != nil && format.MediaType(result.MediaType) != "" && result.Length > 0 && result.Total > 0 && result.Total <= format.Limit() && result.Length <= result.Total && result.Offset >= 0
 	if result.Partial {
 		valid = valid && request.Range != nil
 		if request.Range != nil {
@@ -129,6 +211,7 @@ func (e *Engine) SharedContentMedia(ctx context.Context, id domain.ID, request M
 		}
 		return MediaRead{}, MediaFailure{Code: "media_fetch_failed"}
 	}
+	result.MediaType = format.MediaType(result.MediaType)
 	result.FileName = item.FileName
 	return result, nil
 }

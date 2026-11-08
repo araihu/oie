@@ -49,7 +49,13 @@ func (f *streamedFixture) Open(_ context.Context, _ string, r application.MediaR
 		}
 	}
 	body := &streamedBody{Reader: bytes.NewReader(f.data[start : end+1]), closed: f.closed}
-	return application.MediaRead{Body: body, MediaType: "video/mp4", Length: end - start + 1, Total: total, Offset: start, Partial: partial, RangeSupported: true, ETag: `"clip-v1"`, ModifiedAt: time.Unix(1000, 0)}, nil
+	mimeType := "video/mp4"
+	if r.Format == "pdf" {
+		mimeType = "application/pdf"
+	} else if r.Format != "" && r.Format != "video" {
+		mimeType = "text/plain"
+	}
+	return application.MediaRead{Body: body, MediaType: mimeType, Length: end - start + 1, Total: total, Offset: start, Partial: partial, RangeSupported: true, ETag: `"clip-v1"`, ModifiedAt: time.Unix(1000, 0)}, nil
 }
 func startMediaEngine(t *testing.T, e *application.Engine) {
 	t.Helper()
@@ -87,7 +93,7 @@ func TestSharedMediaHTTPRangesScopeAndNoSpeculation(t *testing.T) {
 	e.SetPreviewServices(preview, mediafiles.New(dir+"/media/images"))
 	stream := &streamedFixture{data: []byte("0123456789abcdefghijklmnopqrstuvwxyz"), closed: make(chan struct{}, 32)}
 	e.SetMediaReader(stream)
-	for i, body := range []string{"https://files.example/older.mp4", "https://files.example/newer.webm", "https://files.example/report.pdf", "https://files.example/voice.ogg"} {
+	for i, body := range []string{"https://files.example/older.mp4", "https://files.example/newer.webm", "https://files.example/report.docx", "https://files.example/voice.ogg"} {
 		incoming := application.Incoming{AccountID: c.AccountID, Address: c.Address, ProviderID: fmt.Sprint("source-", i), OriginalText: body, Historical: true, CreatedAt: time.Unix(int64(1000+i), 0)}
 		if i == 0 {
 			incoming.Correction = &domain.MessageCorrection{Scope: "sender:peer", Author: "peer", ID: "source-0"}
@@ -330,5 +336,96 @@ func TestSharedMediaHTTPFlushesBeforeBodyAndCancelsReader(t *testing.T) {
 	case <-media.closed:
 	case <-time.After(time.Second):
 		t.Fatal("disconnect did not close engine source")
+	}
+}
+
+func TestSharedDocumentHTTPPlainTextPDFRangesAndNoMutation(t *testing.T) {
+	e, store, server := newMessagingEngine(t, t.TempDir(), &protocolStub{})
+	c := openTestConversation(t, e, "alice@localhost")
+	for i, ext := range []string{"txt", "log", "md", "csv", "json", "xml", "pdf", "docx"} {
+		if err := e.Receive(t.Context(), application.Incoming{AccountID: c.AccountID, Address: c.Address, ProviderID: fmt.Sprint("document-", i), OriginalText: "https://files.example/report." + ext, Historical: true, CreatedAt: time.Unix(1000+int64(i), 0)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Seed the prior parser's retained derived rows. The versioned worker must
+	// reclassify new document formats while preserving each shared item UUID.
+	priorIDs := map[string]domain.ID{}
+	sources, err := e.Messages(t.Context(), c.ID, "", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range sources {
+		refs := application.SharedReferences(source.OriginalText)
+		for i := range refs {
+			refs[i].ID = id()
+			refs[i].RevisionID = id()
+			priorIDs[refs[i].URL] = refs[i].ID
+			if refs[i].FileName == "report.log" || refs[i].FileName == "report.json" || refs[i].FileName == "report.xml" {
+				refs[i].Kind = "link"
+			}
+		}
+		if err := store.IndexSharedContent(t.Context(), []domain.SharedContentMutation{{Message: source, References: refs, ParserVersion: 1}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stream := &streamedFixture{data: []byte("<script>alert('plain')</script>"), closed: make(chan struct{}, 32)}
+	e.SetMediaReader(stream)
+	startMediaEngine(t, e)
+	var page domain.SharedContentPage
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		var err error
+		page, err = e.SharedContent(t.Context(), domain.SharedContentQuery{Type: "documents", Limit: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if page.Indexing.State == "complete" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(page.Items) != 8 || stream.calls.Load() != 0 {
+		t.Fatal("catalog fetched document or omitted format", len(page.Items), stream.calls.Load())
+	}
+	for _, item := range page.Items {
+		if item.ID != priorIDs[item.URL] {
+			t.Fatal("reindex replaced retained catalog identity", item)
+		}
+		before := stream.calls.Load()
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/api/v1/shared-content/"+string(item.ID)+"/content", nil)
+		req.Header.Set("Range", "bytes=0-7")
+		response, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if item.FileName == "report.docx" {
+			if response.StatusCode != 404 || stream.calls.Load() != before {
+				t.Fatal("office fetched", response.StatusCode)
+			}
+			continue
+		}
+		want := "text/plain"
+		if item.FileName == "report.pdf" {
+			want = "application/pdf"
+		}
+		if err != nil || response.StatusCode != 206 || response.Header.Get("Content-Type") != want || response.Header.Get("X-Content-Type-Options") != "nosniff" || response.Header.Get("Content-Security-Policy") != "default-src 'none'; sandbox" || string(body) != string(stream.data[:8]) || response.Header.Get("Content-Range") != fmt.Sprintf("bytes 0-7/%d", len(stream.data)) {
+			t.Fatal(response.StatusCode, response.Header, string(body), err)
+		}
+		before = stream.calls.Load()
+		head, _ := http.NewRequestWithContext(t.Context(), http.MethodHead, req.URL.String(), nil)
+		headResponse, err := http.DefaultClient.Do(head)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = headResponse.Body.Close()
+		if headResponse.StatusCode != 405 || headResponse.Header.Get("Allow") != "GET" || stream.calls.Load() != before {
+			t.Fatal("HEAD reached provider")
+		}
+	}
+	pending, err := store.PendingMessages(t.Context(), time.Now().Add(time.Hour))
+	if err != nil || len(pending) != 0 {
+		t.Fatal("viewing mutated outbox", err)
 	}
 }

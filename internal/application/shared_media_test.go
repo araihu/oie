@@ -110,3 +110,71 @@ func TestMediaByteRangesResolveWithoutOverflow(t *testing.T) {
 		}
 	}
 }
+
+type documentMediaReader struct {
+	calls  int
+	format MediaFormat
+	mime   string
+	total  int64
+	closed bool
+}
+
+func (r *documentMediaReader) Open(_ context.Context, _ string, request MediaReadRequest) (MediaRead, error) {
+	r.calls++
+	r.format = request.Format
+	return MediaRead{Body: countedMediaBody{Reader: strings.NewReader("data"), closed: &r.closed}, MediaType: r.mime, Length: r.total, Total: r.total}, nil
+}
+func TestSharedDocumentCanonicalClassificationAndNoUnsupportedFetch(t *testing.T) {
+	for _, extension := range []string{"txt", "log", "md", "csv", "json", "xml", "pdf", "html", "svg", "docx", "zip"} {
+		t.Run(extension, func(t *testing.T) {
+			message := domain.Message{ID: "019a5df0-0000-7000-8000-000000000001", AccountID: "019a5df0-0000-7000-8000-000000000002", ConversationID: "019a5df0-0000-7000-8000-000000000003", OriginalText: "https://files.example/report." + extension}
+			refs := SharedReferences(message.OriginalText)
+			if len(refs) != 1 {
+				t.Fatal(refs)
+			}
+			item := domain.SharedContentItem{SharedReference: refs[0], Message: message}
+			item.ID = "019a5df0-0000-7000-8000-000000000004"
+			e, _ := New(scopedMediaRepository{item: item, source: message}, "local", nil, time.Now)
+			reader := &documentMediaReader{mime: "text/plain", total: 4}
+			if extension == "pdf" {
+				reader.mime = "application/pdf"
+			}
+			e.SetMediaReader(reader)
+			result, err := e.SharedContentMedia(t.Context(), item.ID, MediaReadRequest{Format: "video"})
+			if MediaFormat(extension).Limit() == 0 {
+				if !errors.Is(err, ErrNotFound) || reader.calls != 0 {
+					t.Fatal("unsupported document fetched", err, reader.calls)
+				}
+				return
+			}
+			if err != nil || reader.calls != 1 || reader.format != MediaFormat(extension) || result.FileName != "report."+extension {
+				t.Fatal(result, err, reader)
+			}
+			_ = result.Body.Close()
+		})
+	}
+}
+func TestSharedDocumentRejectsInvalidReaderAndStaleSource(t *testing.T) {
+	message := domain.Message{ID: "019a5df0-0000-7000-8000-000000000001", AccountID: "019a5df0-0000-7000-8000-000000000002", ConversationID: "019a5df0-0000-7000-8000-000000000003", OriginalText: "https://files.example/report.pdf"}
+	item := domain.SharedContentItem{SharedReference: domain.SharedReference{ID: "019a5df0-0000-7000-8000-000000000004", Kind: "document", URL: message.OriginalText, FileName: "report.pdf"}, Message: message}
+	for _, tt := range []struct {
+		name, mime string
+		total      int64
+	}{{"mismatch", "text/plain", 4}, {"oversize", "application/pdf", MaxPDFSource + 1}} {
+		t.Run(tt.name, func(t *testing.T) {
+			e, _ := New(scopedMediaRepository{item: item, source: message}, "local", nil, time.Now)
+			reader := &documentMediaReader{mime: tt.mime, total: tt.total}
+			e.SetMediaReader(reader)
+			if _, err := e.SharedContentMedia(t.Context(), item.ID, MediaReadRequest{}); err == nil || !reader.closed {
+				t.Fatal("invalid reader result accepted or leaked", err)
+			}
+		})
+	}
+	message.OriginalText = "corrected without document"
+	e, _ := New(scopedMediaRepository{item: item, source: message}, "local", nil, time.Now)
+	reader := &documentMediaReader{}
+	e.SetMediaReader(reader)
+	if _, err := e.SharedContentMedia(t.Context(), item.ID, MediaReadRequest{}); !errors.Is(err, ErrNotFound) || reader.calls != 0 {
+		t.Fatal("stale source fetched", err)
+	}
+}

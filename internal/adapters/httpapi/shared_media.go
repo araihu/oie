@@ -97,7 +97,7 @@ func (r sharedMediaResponse) VisitGetSharedContentMediaResponse(w http.ResponseW
 		return r
 	}, r.read.FileName)
 	if name == "" {
-		name = "video"
+		name = "media"
 	}
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": name}))
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
@@ -140,7 +140,7 @@ func (s *Server) GetSharedContentMedia(ctx context.Context, r engineapi.GetShare
 }
 
 // Renew the deadline per bounded write, including flush, rather than timing the
-// complete video. A stalled downstream cannot indefinitely retain a reader slot.
+// complete resource. A stalled downstream cannot indefinitely retain a reader slot.
 type mediaStreamWriter struct {
 	writer     http.ResponseWriter
 	controller *http.ResponseController
