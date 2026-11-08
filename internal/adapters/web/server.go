@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/a-h/templ"
 	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 
@@ -26,6 +27,9 @@ var stylesheet []byte
 
 //go:embed chat-pattern.svg
 var chatPattern []byte
+
+//go:embed formatting.js
+var formattingScript []byte
 
 //go:embed theme.js
 var themeScript []byte
@@ -68,6 +72,7 @@ func (errInvalidURL) Error() string {
 
 type messageView struct {
 	engineapi.Message
+	Formatted  templ.Component
 	Attachment *mediaView
 }
 type mediaView struct{ Kind, Title, Description, PreviewUrl string }
@@ -125,6 +130,8 @@ type copy struct {
 	NewMessages, QueueHelp, DraftStorageUnavailable, DraftLocked, MessageUnavailable                                                                                                    string
 	MediaUnavailable, NativeError, NewerHistory, ShowPassword, ChooseOption                                                                                                             string
 	PreviewLoading, PreviewUnavailable, LoadImage, LoadingImage, OpenImage, ImageView, ImageDownloadFailed, ImageTooLarge, ImageBlocked, ImageUnsupported, ImageNotFound, ImageComputed string
+	RenderMarkdown, RenderMarkdownHelp, CopyOriginal, MessageCopied, CopyFailed                                                                                                         string
+	DevicePreferences, AutoImageDownloads, AutoImageDownloadsHelp, DevicePreferenceUnavailable                                                                                          string
 	ValidationFailed, Edit, Done                                                                                                                                                        string
 }
 
@@ -170,7 +177,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mime string
 		body []byte
 	}{
-		"/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
+		"/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
 	}
 	if asset, ok := assets[r.URL.Path]; ok {
 		w.Header().Set("Content-Type", asset.mime)
@@ -342,7 +349,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		}
 	}
 	for _, m := range items {
-		v.Messages = append(v.Messages, messageView{Message: m, Attachment: extras[m.Id]})
+		v.Messages = append(v.Messages, messageView{Message: m, Attachment: extras[m.Id], Formatted: formattedMessage(ctx, m.OriginalText)})
 	}
 	s.loadMessagePreviews(ctx, v)
 }

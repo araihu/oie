@@ -1,0 +1,65 @@
+const assert=require('node:assert/strict');
+const http=require('node:http'),path=require('node:path'),fs=require('node:fs/promises');
+const {spawn}=require('node:child_process'),{once}=require('node:events');const {chromium}=require('playwright');
+const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
+(async()=>{
+ const engine=id(1),account=id(2),chat=id(3),revision=id(4),streams=new Set();let seq=0;
+ const cases=[
+ '>> kDE: O documentário\n>> **bold** _italic_ ~~strike~~\n> Lembrando...\n> next line',
+ '**bold** *italic* ~~strike~~\n\n- item one\n- item two\n\n3. third\n\n`inline`\n\n```go\nfmt.Println("<tag>")\n```',
+ '---\ntitle: Keep visible\n---\n# A heading stays readable\n\nline one\nline two',
+ '<script>window.untrustedRan=true</script>\n\n[bad](javascript:alert%281%29) ![remote](https://images.example.test/picture.png) [page](https://example.test/article)',
+ '```mermaid\ngraph TD; A-->B\n```\n\n```html\n<img src=x onerror="bad()">\n```',
+ '>> Quote **markers**\r\n> Reply _source_ 😀\r\n',
+ ];
+ const messages=Array.from({length:40},(_,i)=>({id:id(100+i),revisionId:revision,accountId:account,conversationId:chat,sender:{id:i%2?account:id(9),displayName:i%2?'Alice':'Bob'},originalText:i<cases.length?cases[i]:'Retained message '+i,createdAt:new Date(Date.UTC(2026,10,8,12,i)).toISOString(),isOwn:i%2===1,sendState:i%2?'submitted':'received'}));
+ const emit=()=>{seq++;for(const s of streams)s.write(`id: ${engine}:${seq}\nevent: message.created\ndata: {}\n\n`)};
+ const api=http.createServer((req,res)=>{const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(code,data)=>{res.statusCode=code;res.end(JSON.stringify(data))};
+  if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.5.0',eventCursor:engine+':'+seq});
+  if(u.pathname==='/api/v1/accounts')return send(200,{items:[{id:account,revisionId:revision,address:'alice@fixture',label:'Alice',protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z',connectionState:'connected'}]});
+  if(u.pathname.endsWith('/avatars'))return send(200,{items:[]});
+  if(u.pathname.endsWith('/connection'))return send(200,{accountId:account,state:'connected',updatedAt:'2026-11-08T12:00:00Z'});
+  if(u.pathname.endsWith('/history'))return send(200,{accountId:account,state:'complete',retainedMessages:messages.length,conversations:1,updatedAt:'2026-11-08T12:00:00Z'});
+  const c={id:chat,revisionId:revision,accountId:account,kind:'direct',address:'bob@fixture',title:'Bob',lastMessage:'Latest',updatedAt:'2026-11-08T12:00:00Z',unreadCount:0,archived:false,favorite:false};
+  if(u.pathname==='/api/v1/conversations')return send(200,{items:[c]});if(u.pathname===`/api/v1/conversations/${chat}`)return send(200,c);
+  if(u.pathname.endsWith('/messages'))return send(200,{items:[...messages].reverse()});
+  if(u.pathname.endsWith('/previews'))return send(200,{items:[{id:id(500),revisionId:revision,accountId:account,conversationId:chat,messageId:messages[3].id,url:'https://example.test/article',kind:'link',state:'ready',downloadState:'not_downloaded',title:'Structured card stays separate',updatedAt:'2026-11-08T12:00:00Z'}]});
+  if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}send(404,{status:404});
+ });api.listen(0,'127.0.0.1');await once(api,'listening');
+ const allocation=http.createServer();allocation.listen(0,'127.0.0.1');await once(allocation,'listening');const port=allocation.address().port;await new Promise(r=>allocation.close(r));
+ const child=spawn(process.env.OIE_WEB_BINARY||path.resolve(__dirname,'../../bin/oie-markdown-ui'),['--role','bff','--listen','127.0.0.1:'+port,'--engine-url','http://127.0.0.1:'+api.address().port],{stdio:['ignore','ignore','pipe']});
+ const base='http://127.0.0.1:'+port,browser=await chromium.launch({headless:true}),errors=[],external=[],findings=[];
+ const until=async(fn,label)=>{for(let i=0;i<160;i++){if(await fn())return;await new Promise(r=>setTimeout(r,50))}throw Error('Timed out: '+label)};
+ const row=(page,n)=>page.locator(`[data-message-id="${messages[n].id}"]`);
+ const setting=async(page,on)=>{await page.evaluate(()=>window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'settings'}})));await page.locator('label[for="render-markdown"]').waitFor({state:'visible'});await page.waitForTimeout(250);if(await page.locator('[data-render-markdown]').isChecked()!==on)await page.locator('label[for="render-markdown"]').click();};
+ try{
+  await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
+  const context=await browser.newContext({viewport:{width:1440,height:1000},locale:'en'});
+  await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==base){external.push(route.request().url());route.abort()}else route.continue()});
+  await context.addInitScript(()=>{window.copied=[];Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>window.copied.push(value)}})});
+  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(`${base}/?chat=${chat}&account=${account}&lang=en&theme=dark`);await until(()=>streams.size>0,'SSE');
+  assert.equal(await row(page,0).locator('[data-rendered-message] blockquote blockquote').count(),1);assert.equal(await row(page,0).locator('strong').textContent(),'bold');
+  for(const tag of ['ul','ol','code','pre','em','del'])assert(await row(page,1).locator(`[data-rendered-message] ${tag}`).count()>0);
+  assert((await row(page,2).locator('[data-rendered-message]').textContent()).includes('title: Keep visible'));assert.equal(await row(page,2).locator('h1,h2').count(),0);
+  assert.equal(await row(page,3).locator('[data-rendered-message] script,[data-rendered-message] img,[data-rendered-message] iframe,[data-rendered-message] [href^="javascript:"]').count(),0);assert.equal(await row(page,4).locator('[data-rendered-message] svg,[data-rendered-message] script,[data-rendered-message] [data-margo-runtime]').count(),0);assert.equal(await page.evaluate(()=>window.untrustedRan),undefined);
+  const anchor=row(page,3).locator('[data-rendered-message] a[href="https://example.test/article"]');assert.equal(await anchor.getAttribute('target'),'_blank');assert.equal(await row(page,3).locator('[data-preview-id]').count(),1);
+  findings.push('Default Margo rendering supports nested quotes, existing delimiters, lists, code, links and visible frontmatter; unsafe HTML/images/runtime fences stay inert and structured previews coexist');
+  await row(page,5).locator('[data-copy-original]').click();await until(async()=>await page.evaluate(()=>copied.length)===1,'original copied');assert.equal(await page.evaluate(()=>copied[0]),cases[5]);
+  // Exercise the plaintext fallback without touching the system clipboard.
+  await page.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:undefined});document.execCommand=command=>{const e=new Event('copy',{bubbles:true,cancelable:true});Object.defineProperty(e,'clipboardData',{value:new DataTransfer()});document.activeElement.dispatchEvent(e);window.fallbackCopy={command,types:[...e.clipboardData.types],text:e.clipboardData.getData('text/plain')};return true}});
+  await row(page,5).locator('[data-copy-original]').click();const fallback=await page.evaluate(()=>fallbackCopy);assert.deepEqual(fallback.types,['text/plain']);assert.equal(fallback.text,cases[5]);
+  await page.evaluate(()=>{document.execCommand=()=>{throw new Error('unavailable')}});await row(page,5).locator('[data-copy-original]').click();await until(async()=>await page.locator('#oie-copy-status').textContent()==='The message could not be copied.','copy failure localized');assert(await row(page,5).locator('[data-copy-original]').evaluate(el=>document.activeElement===el));assert.equal(await page.locator('body>textarea').count(),0);
+  findings.push('Copy preserves original Markdown, Unicode and CRLF bytes through writeText and a single text/plain fallback; failures restore focus and remove temporary controls');
+  const draft='Draft survives Markdown preferences';await page.locator('#message-composer').fill(draft);
+  await page.evaluate(()=>{const timeline=document.querySelector('#message-timeline');timeline.scrollTop=500;window.markdownRow=document.querySelector('[data-message-id]');window.markdownAnchor=[...timeline.querySelectorAll('[data-message-id]')].find(el=>el.getBoundingClientRect().bottom>=timeline.getBoundingClientRect().top);window.markdownTop=window.markdownAnchor.getBoundingClientRect().top});
+  await setting(page,false);await page.waitForTimeout(80);assert(await page.locator('[data-render-markdown]').evaluate(el=>document.activeElement===el));assert(await page.evaluate(()=>document.querySelector('[data-message-id]')===window.markdownRow));assert(await page.evaluate(()=>Math.abs(window.markdownAnchor.getBoundingClientRect().top-window.markdownTop)<2));assert.equal(await page.locator('#message-composer').inputValue(),draft);
+  await page.keyboard.press('Escape');assert(await row(page,0).locator('[data-rendered-message]').isHidden());assert.equal(await row(page,0).locator('[data-original-message]').textContent(),cases[0]);
+  messages.push({...messages[0],id:id(900),revisionId:id(901),originalText:'> new quoted source',createdAt:'2026-11-08T13:00:00Z'});emit();await until(async()=>await page.locator('[data-message-id="'+id(900)+'"]').count()===1,'new original while disabled');assert(await page.locator('[data-message-id="'+id(900)+'"] [data-rendered-message]').isHidden());assert.equal(await page.locator('#message-composer').inputValue(),draft);
+  await page.reload();assert.equal(await page.locator('html').getAttribute('data-message-markdown'),'false');assert(!(await page.locator('[data-render-markdown]').isChecked()));assert.equal(await page.locator('#message-composer').inputValue(),draft);
+  await setting(page,true);await page.keyboard.press('Escape');assert(await row(page,0).locator('[data-rendered-message]').isVisible());
+  findings.push('Per-device disable survives reload and SSE, preserves original source, drafts, focused toggle, row identity and the visible scroll anchor');
+  const denied=await browser.newContext({viewport:{width:390,height:844},locale:'pt-BR'});await denied.addInitScript(()=>{for(const method of ['getItem','setItem','removeItem'])Object.defineProperty(Storage.prototype,method,{configurable:true,value(){throw new DOMException('Denied','SecurityError')}})});const mobile=await denied.newPage();mobile.on('pageerror',e=>errors.push(e.message));await mobile.goto(`${base}/?chat=${chat}&lang=pt-BR&theme=dark`);assert.equal(await mobile.locator('html').getAttribute('data-message-markdown'),'true');await setting(mobile,false);assert(await mobile.locator('[data-device-preference-warning]').isVisible());assert.equal(await mobile.locator('[data-render-markdown]').isChecked(),false);await mobile.keyboard.press('Escape');await row(mobile,0).scrollIntoViewIfNeeded();await mobile.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await mobile.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);
+  findings.push('Denied storage keeps the default and per-window override usable; pt-BR mobile WCAG A/AA checks pass');
+  assert.deepEqual(errors,[]);assert.deepEqual(external,[]);const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await mobile.screenshot({path:path.join(artifacts,'markdown-disabled-mobile.png')});await setting(page,true);await page.keyboard.press('Escape');await row(page,0).scrollIntoViewIfNeeded();await page.waitForTimeout(300);await page.screenshot({path:path.join(artifacts,'markdown-quotes-desktop.png')});await fs.writeFile(path.join(artifacts,'markdown-report.json'),JSON.stringify({findings,pageErrors:errors,externalBrowserRequests:external},null,2));console.log('PASS: Margo quotes/safe formatting, device preference, exact original copy, previews, drafts/focus/scroll and mobile accessibility');
+ }finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(r=>api.close(r))}
+})().catch(error=>{console.error(error);process.exitCode=1});

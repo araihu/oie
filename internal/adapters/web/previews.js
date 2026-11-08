@@ -5,6 +5,66 @@
   const dialog=document.querySelector('#oie-image-viewer');
   const csrf=document.querySelector('meta[name="oie-csrf"]')?.content || '';
   const downloading=new Set();
+  const preferenceKey='oie.device.auto-image-downloads.v1';
+  let automatic=true;
+  try { automatic=localStorage.getItem(preferenceKey)!=='false'; }
+  catch { preferenceWarning(); }
+  function preferenceWarning() {
+    const warning=document.querySelector('[data-device-preference-warning]');if(warning)warning.hidden=false;
+  }
+  function showPreference() {
+    for(const control of document.querySelectorAll('[data-auto-image-downloads]'))control.checked=automatic;
+  }
+  showPreference();
+  document.addEventListener('change',event=>{
+    if(!event.target.matches('[data-auto-image-downloads]'))return;
+    automatic=event.target.checked;
+    try {localStorage.setItem(preferenceKey,String(automatic));}catch{preferenceWarning();}
+    showPreference();scheduleAutomatic();
+  });
+  addEventListener('storage',event=>{
+    if(event.key!==preferenceKey)return;
+    automatic=event.newValue!=='false';showPreference();scheduleAutomatic();
+  });
+  const near=new Set(),observed=new Set(),attempted=new Set();
+  const timeline=document.querySelector('#message-timeline');
+  let activeAutomatic=0,automaticFrame;
+  const observer=timeline&&typeof IntersectionObserver==='function'?new IntersectionObserver(entries=>{
+    for(const entry of entries) {if(entry.isIntersecting)near.add(entry.target);else near.delete(entry.target);}
+    scheduleAutomatic();
+  },{root:timeline,rootMargin:'240px 0px',threshold:0.01}):null;
+  function trackImages() {
+    for(const scope of observed)if(!scope.isConnected){observer?.unobserve(scope);observed.delete(scope);near.delete(scope);}
+    for(const scope of document.querySelectorAll('#message-timeline [data-preview-kind="image"]')) {
+      if(!observed.has(scope)){observed.add(scope);observer?.observe(scope);}
+    }
+    if(!observer)measureImages();
+    scheduleAutomatic();
+  }
+  function measureImages() {
+    if(!timeline)return;
+    const bounds=timeline.getBoundingClientRect();
+    for(const scope of observed){const box=scope.getBoundingClientRect();if(box.height>0&&box.bottom>=bounds.top-240&&box.top<=bounds.bottom+240)near.add(scope);else near.delete(scope);}
+  }
+  function scheduleAutomatic() {
+    if(automaticFrame)return;
+    automaticFrame=requestAnimationFrame(()=>{automaticFrame=0;drainAutomatic();});
+  }
+  function drainAutomatic() {
+    if(!automatic||document.body.dataset.mock==='true'||document.visibilityState==='hidden')return;
+    for(const scope of near) {
+      if(activeAutomatic>=2)break;
+      const id=scope.dataset.previewId;
+      if(!scope.isConnected||scope.dataset.previewFile||scope.dataset.previewDownload!=='not_downloaded'||attempted.has(id)||downloading.has(id))continue;
+      // One automatic attempt per preview per page. Failure and unknown outcomes
+      // stay available for explicit retry, including after SSE replaces rows.
+      attempted.add(id);activeAutomatic++;
+      download(scope).finally(()=>{activeAutomatic--;scheduleAutomatic();});
+    }
+  }
+  if(!observer){timeline?.addEventListener('scroll',()=>{measureImages();scheduleAutomatic();},{passive:true});addEventListener('resize',()=>{measureImages();scheduleAutomatic();});}
+  document.addEventListener('visibilitychange',scheduleAutomatic);
+  requestAnimationFrame(trackImages);
   let viewing='';
   const source=hash=>typeof hash==='string' && /^[0-9a-f]{64}$/.test(hash)?'/ui/media/'+hash:'';
   const find=id=>document.querySelector(`[data-preview-id="${CSS.escape(id)}"]`);
@@ -61,7 +121,7 @@
       else if(anchor?.isConnected)timeline.scrollTop+=anchor.getBoundingClientRect().top-anchorTop;
     });
   }
-  document.addEventListener('oie:previews-refresh',event=>synchronize(event.detail));
+  document.addEventListener('oie:previews-refresh',event=>{synchronize(event.detail);trackImages();});
   async function download(scope) {
     const id=scope.dataset.previewId;if(downloading.has(id))return;
     downloading.add(id);if(state(scope))state(scope).previewBusy=true;

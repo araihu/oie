@@ -145,5 +145,14 @@
   "ImageBlocked": "Este endereço de imagem não pode ser baixado.",
   "ImageUnsupported": "Este formato de imagem não é compatível.",
   "ImageNotFound": "Esta imagem não está mais disponível.",
-  "ImageComputed": "Identificação do arquivo calculada após o download."
+  "ImageComputed": "Identificação do arquivo calculada após o download.",
+  "DevicePreferences": "Este dispositivo",
+  "AutoImageDownloads": "Baixar imagens automaticamente",
+  "AutoImageDownloadsHelp": "As imagens são baixadas conforme você navega. Desative para carregá-las manualmente. Outros arquivos continuam sob demanda.",
+  "DevicePreferenceUnavailable": "O armazenamento do dispositivo está indisponível. Esta configuração vale até a página ser recarregada.",
+  "RenderMarkdown": "Formatar mensagens com Markdown",
+  "RenderMarkdownHelp": "Exiba citações, ênfase, listas, links e código neste dispositivo. A cópia sempre preserva a mensagem original.",
+  "CopyOriginal": "Copiar mensagem original",
+  "MessageCopied": "Mensagem original copiada",
+  "CopyFailed": "Não foi possível copiar a mensagem."
 }

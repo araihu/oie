@@ -18,6 +18,7 @@ import (
 	"github.com/araihu/goshtoso/components/sidebar"
 	"github.com/araihu/goshtoso/components/textarea"
 	"github.com/araihu/goshtoso/components/textinput"
+ "github.com/araihu/goshtoso/components/toggle"
 "github.com/araihu/goshtoso/components/form"
 selectfield "github.com/araihu/goshtoso/components/select"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -55,6 +56,7 @@ templ page(v view) {
 			<title>Oie</title>
 			<link rel="icon" href="data:,"/>
 			<script src="/ui/theme.js"></script>
+<script src="/ui/formatting.js"></script>
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href="/ui/app.css"/>
 <script src="/ui/previews.js" defer></script>
@@ -300,7 +302,7 @@ templ chatHeader(v view) {
 }
 
 templ message(v view,m messageView,grouped bool){
-<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-grouped",grouped)} data-message-id={m.Id} data-send-state={string(m.SendState)} data-created-at={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>
+<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-grouped",grouped)} data-message-id={m.Id} data-send-state={string(m.SendState)} data-created-at={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-message-source={originalMessageJSON(m.OriginalText)}>
 if m.Attachment!=nil {
 <div class="oie-media-message">@card.Card(card.Config{Image:m.Attachment.PreviewUrl,ImageAlt:m.Attachment.Title,Title:m.Attachment.Title,Description:m.Attachment.Description,Density:card.DensityCompact,RootClass:"oie-media-card"})</div>
 }else{
@@ -308,7 +310,10 @@ if m.Attachment!=nil {
 if !m.IsOwn && !grouped {
 @profileAvatar(v,m.AccountId,v.messageAvatarAddress(m),avatar.Config{Name:m.Sender.DisplayName,Initials:initials(m.Sender.DisplayName),Size:avatar.SizeSM})
 }
-@chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),Message:m.OriginalText,SenderName:m.Sender.DisplayName,Timestamp:m.CreatedAt.Format("15:04"),RootClass:"oie-bubble",Grouped:grouped})
+@chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),Message:m.OriginalText,MessageContent:messageBody(m),SenderName:m.Sender.DisplayName,Timestamp:m.CreatedAt.Format("15:04"),RootClass:"oie-bubble",Grouped:grouped})
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithRootClass("oie-copy-message"),button.WithAttrs(templ.Attributes{"data-copy-original":"","aria-label":v.Text.CopyOriginal,"title":v.Text.CopyOriginal})){
+@glyph(heroicons.Icon16SolidDocumentDuplicate)
+}
 </div>
 }
 <div class="oie-message-previews" data-message-previews={m.Id}>
@@ -385,7 +390,13 @@ templ settings(v view) {
 					{ v.Text.Portuguese }
 				}
 			</div>
-			<h2>{ v.Text.EngineState }</h2>
+			<h2>{v.Text.DevicePreferences}</h2>
+@toggle.Toggle(toggle.Config{ID:"render-markdown",Label:v.Text.RenderMarkdown,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-render-markdown":"","aria-describedby":"render-markdown-help"}})
+<p id="render-markdown-help">{v.Text.RenderMarkdownHelp}</p>
+@toggle.Toggle(toggle.Config{ID:"auto-image-downloads",Label:v.Text.AutoImageDownloads,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-auto-image-downloads":"","aria-describedby":"auto-image-downloads-help"}})
+<p id="auto-image-downloads-help">{v.Text.AutoImageDownloadsHelp}</p>
+<p class="oie-settings-note" data-device-preference-warning role="status" hidden>{v.Text.DevicePreferenceUnavailable}</p>
+<h2>{ v.Text.EngineState }</h2>
 			<p>{ v.Role }</p>
 			if v.Preview {
 				<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
@@ -516,6 +527,8 @@ if len(v.Accounts)==0 {
 }
 }
 templ liveCopy(v view){
+<div id="oie-formatting-copy" hidden data-copy={v.Text.CopyOriginal} data-copied={v.Text.MessageCopied} data-failed={v.Text.CopyFailed}></div>
+<div id="oie-copy-status" class="sr-only" role="status" aria-live="polite"></div>
 <div id="oie-preview-copy" hidden data-loading={v.Text.LoadingImage} data-image={v.Text.ImageView} data-failed={v.Text.ImageDownloadFailed}></div>
 <div id="oie-live-copy" hidden data-saving={v.Text.Saving} data-invalid-message={v.Text.InvalidMessage} data-pending={v.Text.PendingAcceptance} data-storage-unavailable={v.Text.DraftStorageUnavailable} data-locked={v.Text.DraftLocked} data-retry={v.Text.RetrySubmission} data-send={v.Text.Send} data-live-ready={v.Text.LiveReady} data-live-retry={v.Text.LiveRetry} data-live-connecting={v.Text.LiveConnecting} data-new-messages={v.Text.NewMessages} data-engine-changed={v.Text.EngineChanged} data-today={v.Text.Today}></div>
 }
@@ -616,4 +629,17 @@ for identity,hash:=range v.Avatars {
 <div data-avatar-entry data-account-id={identity.Account} data-address={identity.Address} data-hash={hash}></div>
 }
 </div>
+}
+
+// Rendered and original projections share one public ChatBubble content slot.
+// A device preference switches visibility without replacing message rows.
+templ messageBody(m messageView){
+<div class="oie-rendered-message" data-rendered-message>
+if m.Formatted!=nil {
+@m.Formatted
+}else{
+<div class="oie-plain-fallback">{m.OriginalText}</div>
+}
+</div>
+<div class="oie-original-message" data-original-message>{m.OriginalText}</div>
 }

@@ -5,6 +5,7 @@ go 1.27.3
 require (
 	github.com/a-h/templ v0.3.1100
 	github.com/araihu/goshtoso v0.6.2-0.20261108131345-8a027990413f
+	github.com/araihu/margo v0.0.36-0.20261108131344-c6676eea4fe0
 	github.com/getkin/kin-openapi v0.152.0
 	github.com/gofrs/flock v0.13.1
 	github.com/golang-migrate/migrate/v4 v4.20.1
@@ -23,8 +24,6 @@ require (
 require (
 	github.com/alecthomas/chroma/v2 v2.27.0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
-	github.com/araihu/margo v0.0.36-0.20261108131344-c6676eea4fe0 // indirect
-	github.com/dlclark/regexp2 v1.12.0 // indirect
 	github.com/dlclark/regexp2/v2 v2.12.0 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/go-openapi/jsonpointer v1.0.2 // indirect

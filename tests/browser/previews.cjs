@@ -15,12 +15,12 @@ function thumbnail(color,width=8,height=8){
  const engine=id(1),account=id(2),chat=id(3),revision=id(4),streams=new Set();
  const thumb=thumbnail([25,166,122],256,144),original=thumbnail([200,60,140],600,400);
  const thumbHash=createHash('sha256').update(thumb).digest('hex'),originalHash=createHash('sha256').update(original).digest('hex');
- const state={seq:0,downloads:0,originalReads:0,batchReads:0,room:false,failNext:false};
+ const state={seq:0,downloads:0,originalReads:0,batchReads:0,room:false,failNext:false,ensureRequests:new Map()};
  const accountData={id:account,revisionId:revision,address:'alice@fixture',label:'Alice',protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z',connectionState:'connected'};
  const conversation=()=>({id:chat,revisionId:revision,accountId:account,kind:state.room?'room':'direct',address:state.room?'room@fixture':'bob@fixture',title:state.room?'Saved room':'Bob',lastMessage:'Latest',updatedAt:'2026-11-08T12:00:00Z',unreadCount:0,archived:false,favorite:false});
  const messages=Array.from({length:24},(_,i)=>({id:id(100+i),revisionId:revision,accountId:account,conversationId:chat,sender:{id:i%2?account:id(9),displayName:i%2?'Alice':'Bob'},originalText:'Retained message '+i,createdAt:new Date(Date.UTC(2026,10,8,12,i)).toISOString(),isOwn:i%2===1,sendState:i%2?'submitted':'received'}));
  const preview=(n,kind,extra={})=>({id:id(300+n),revisionId:revision,accountId:account,conversationId:chat,messageId:messages[n].id,url:kind==='link'?'https://social.example.test/post/'+n:'https://images.example.test/photo'+n+'.png',kind,state:'ready',downloadState:'not_downloaded',updatedAt:'2026-11-08T12:00:00Z',...extra});
- const previews=[preview(16,'link',{state:'queued'}),preview(18,'image'),preview(20,'image',{imageHash:thumbHash,title:'Image with a supplied thumbnail'}),preview(22,'image')];
+ const previews=[preview(16,'link',{state:'queued'}),preview(18,'image'),preview(20,'image',{imageHash:thumbHash,title:'Image with a supplied thumbnail'}),preview(22,'image'),preview(0,'image')];
  for(const p of previews)messages.find(m=>m.id===p.messageId).originalText=p.url;
  const emit=type=>{state.seq++;for(const stream of streams)stream.write(`id: ${engine}:${state.seq}\nevent: ${type}\ndata: {}\n\n`)};
  const finish=(p,fail=false)=>{p.revisionId=id(500+state.seq);p.downloadState=fail?'failed':'ready';if(fail)p.lastErrorCode='fetch_failed';else{p.imageHash=thumbHash;p.fileHash=originalHash;p.fileMimeType='image/png';p.fileSize=original.length;p.integrity='computed_only';delete p.lastErrorCode}emit('message.preview_changed')};
@@ -38,7 +38,7 @@ function thumbnail(color,width=8,height=8){
   for(const p of previews){
    if(u.pathname===`/api/v1/previews/${p.id}`)return send(200,p);
    if(u.pathname===`/api/v1/previews/${p.id}/download`){
-    assert.equal(req.method,'POST');if(p.downloadState==='ready')return send(200,p);
+    assert.equal(req.method,'POST');state.ensureRequests.set(p.id,(state.ensureRequests.get(p.id)||0)+1);if(p.downloadState==='ready')return send(200,p);
     state.downloads++;p.downloadState='queued';p.revisionId=id(400+state.seq);emit('message.preview_changed');send(202,p);setTimeout(()=>finish(p,state.failNext),250);return;
    }
   }
@@ -54,11 +54,48 @@ function thumbnail(color,width=8,height=8){
  const scope=(page,p)=>page.locator(`[data-preview-id="${p.id}"]`);
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
+  const preferenceKey='oie.device.auto-image-downloads.v1';
+  const resetImage=p=>{p.downloadState='not_downloaded';delete p.fileHash;delete p.fileMimeType;delete p.fileSize;delete p.integrity;delete p.lastErrorCode;if(p!==previews[2])delete p.imageHash;p.revisionId=id(800+state.seq);};
+  const changeSetting=async(page,enabled)=>{
+   await page.evaluate(()=>window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'settings'}})));
+   const control=page.locator('[data-auto-image-downloads]');await page.locator('label[for="auto-image-downloads"]').waitFor({state:'visible'});await page.waitForTimeout(250);
+   if(await control.isChecked()!==enabled)await page.locator('label[for="auto-image-downloads"]').click();
+   assert.equal(await control.isChecked(),enabled);await page.keyboard.press('Escape');await page.waitForTimeout(250);
+  };
+  const autoContext=await browser.newContext({viewport:{width:1440,height:1000},locale:'en'}),automaticPage=await autoContext.newPage();automaticPage.on('pageerror',e=>errors.push(e.message));
+  await automaticPage.goto(`${base}/?account=${account}&chat=${chat}&lang=en&theme=dark`);
+  const automaticDraft='Keep this draft while nearby images load';await automaticPage.locator('#message-composer').fill(automaticDraft);await automaticPage.locator('#message-composer').focus();
+  await until(()=>previews[3].downloadState==='ready','default nearby automatic image');await until(()=>previews.every(p=>!['queued','downloading'].includes(p.downloadState)),'automatic batch completes');
+  assert(state.downloads>0);for(const count of state.ensureRequests.values())assert.equal(count,1);assert.equal(previews[4].downloadState,'not_downloaded');assert.equal(state.originalReads,0);assert.equal(await automaticPage.locator('#message-composer').inputValue(),automaticDraft);assert(await automaticPage.locator('#message-composer').evaluate(el=>document.activeElement===el));assert(await automaticPage.locator('[data-auto-image-downloads]').isChecked());
+  findings.push('Automatic downloads default on for nearby raw images; distant old history is untouched and drafts/focus survive');
+  await changeSetting(automaticPage,false);assert.equal(await automaticPage.evaluate(key=>localStorage.getItem(key),preferenceKey),'false');
+  resetImage(previews[3]);emit('message.preview_changed');const beforeOptOut=state.downloads;
+  await until(async()=>await scope(automaticPage,previews[3]).getByRole('button',{name:'Load image',exact:true}).isVisible(),'opt-out manual action');await automaticPage.waitForTimeout(400);assert.equal(state.downloads,beforeOptOut);
+  await scope(automaticPage,previews[3]).getByRole('button',{name:'Load image',exact:true}).click();await until(()=>previews[3].downloadState==='ready','manual image with auto disabled');assert.equal(state.downloads,beforeOptOut+1);
+  resetImage(previews[1]);emit('message.preview_changed');await automaticPage.reload();await automaticPage.waitForTimeout(400);assert(!(await automaticPage.locator('[data-auto-image-downloads]').isChecked()));assert.equal(state.downloads,beforeOptOut+1);
+  findings.push('The device switch persists across reload; disabling automatic downloads has zero ensure effects and manual loading still works');
+  await autoContext.close();
+  // A denied browser store still uses the default and holds changes in memory.
+  for(const p of [previews[1],previews[2]])finish(p,false);resetImage(previews[3]);state.failNext=true;
+  const deniedContext=await browser.newContext({viewport:{width:1440,height:1000},locale:'en'});
+  await deniedContext.addInitScript(()=>{for(const method of ['getItem','setItem','removeItem'])Object.defineProperty(Storage.prototype,method,{configurable:true,value(){throw new DOMException('Denied','SecurityError')}})});
+  const deniedPage=await deniedContext.newPage();deniedPage.on('pageerror',e=>errors.push(e.message));const beforeFailure=state.downloads;
+  await deniedPage.goto(`${base}/?account=${account}&chat=${chat}&lang=en&theme=dark`);await until(()=>previews[3].downloadState==='failed','default automatic failure with denied storage');assert.equal(state.downloads,beforeFailure+1);
+  for(let i=0;i<3;i++){emit('message.preview_changed');await deniedPage.waitForTimeout(150)}
+  await deniedPage.evaluate(()=>{const timeline=document.querySelector('#message-timeline');timeline.scrollTop-=80;timeline.scrollTop+=80});await deniedPage.waitForTimeout(150);assert.equal(state.downloads,beforeFailure+1);
+  state.failNext=false;await scope(deniedPage,previews[3]).getByRole('button',{name:'Load image',exact:true}).click();await until(()=>previews[3].downloadState==='ready','explicit failed-image retry');assert.equal(state.downloads,beforeFailure+2);
+  await changeSetting(deniedPage,false);await deniedPage.evaluate(()=>window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'settings'}})));assert(await deniedPage.locator('[data-device-preference-warning]').isVisible());await deniedPage.waitForTimeout(250);await deniedPage.keyboard.press('Escape');await deniedPage.waitForTimeout(250);resetImage(previews[3]);emit('message.preview_changed');await deniedPage.waitForTimeout(400);assert.equal(state.downloads,beforeFailure+2);
+  findings.push('Denied storage keeps the default working and opt-out in memory; failed images never retry on refresh or scroll and one user action retries once');
+  await deniedContext.close();
+  const automaticDownloads=state.downloads;
+  // Keep the established manual-mode checks as coverage of the explicit opt-out.
+  for(const p of previews)if(p.kind==='image')resetImage(p);state.downloads=0;state.originalReads=0;
   const context=await browser.newContext({viewport:{width:1440,height:1000},locale:'en'});await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==base){external.push(route.request().url());route.abort()}else route.continue()});
+  await context.addInitScript(key=>localStorage.setItem(key,'false'),preferenceKey);
   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(`${base}/?account=${account}&chat=${chat}&lang=en&theme=dark`);await until(()=>streams.size>0,'SSE');
   await until(async()=>await scope(page,previews[2]).locator('img').evaluate(img=>img.naturalWidth===256),'automatic supplied thumbnail');
   assert.equal(state.downloads,0);assert.equal(state.originalReads,0);assert.equal(await scope(page,previews[1]).locator('img').getAttribute('src'),null);assert(await scope(page,previews[1]).getByRole('button',{name:'Load image',exact:true}).isVisible());
-  findings.push('Only supplied local thumbnails load automatically; raw image originals and browser provider requests stay at zero');
+  findings.push('With the device switch off, only supplied thumbnails load; raw originals and provider browser requests stay at zero');
   const draft='Draft survives link enrichment and image downloads';await page.locator('#message-composer').fill(draft);await page.locator('#message-composer').focus();
   await page.evaluate(()=>{window.previewRow=document.querySelector('[data-message-id]');const timeline=document.querySelector('#message-timeline');timeline.scrollTop=150;window.previewAnchor=[...timeline.querySelectorAll('[data-message-id]')].find(row=>row.getBoundingClientRect().bottom>=timeline.getBoundingClientRect().top);window.previewAnchorTop=window.previewAnchor.getBoundingClientRect().top});
   Object.assign(previews[0],{state:'ready',title:'<svg onload="bad()"> Social post',description:'A quoted <script> stays plain text.',siteName:'Example social',imageHash:thumbHash,revisionId:id(700)});emit('message.preview_changed');
@@ -67,7 +104,7 @@ function thumbnail(color,width=8,height=8){
   const card=scope(page,previews[0]).locator('[data-preview-page]');assert.equal(await card.getAttribute('href'),previews[0].url);assert.equal(await card.getAttribute('target'),'_blank');assert((await card.getAttribute('rel')).includes('noopener'));assert.equal(await scope(page,previews[0]).locator('script,svg').count(),0);
   findings.push('Structured social title/description render as plain text in a safe external card; enrichment preserves focus, draft, message nodes and scroll anchor');
   const verifyOwn=async()=>{
-   const styles=await page.locator('.oie-bubble').evaluateAll(rows=>rows.slice(-2).map(row=>{const bubble=row.querySelector('p').parentElement,bounds=bubble.getBoundingClientRect();return {mine:row.dataset.mine,left:bounds.left,right:bounds.right,color:getComputedStyle(bubble).backgroundColor}}));
+   const styles=await page.locator('.oie-bubble').evaluateAll(rows=>rows.slice(-2).map(row=>{const bubble=row.querySelector('[data-rendered-message]').parentElement,bounds=bubble.getBoundingClientRect();return {mine:row.dataset.mine,left:bounds.left,right:bounds.right,color:getComputedStyle(bubble).backgroundColor}}));
    const incoming=styles.find(s=>s.mine==='false'),own=styles.find(s=>s.mine==='true');assert(incoming&&own);assert(own.right>incoming.right+50,JSON.stringify(styles));assert.notEqual(own.color,incoming.color);
   };
   await verifyOwn();
@@ -83,6 +120,6 @@ function thumbnail(color,width=8,height=8){
   findings.push('Canonical isOwn=true messages align right with primary color in both direct and read-only room views');
   await page.setViewportSize({width:390,height:844});await page.goto(`${base}/?account=${account}&chat=${chat}&lang=pt-BR&theme=dark`);await scope(page,previews[1]).locator('[data-preview-expand]').first().click();await page.locator('#oie-image-viewer').waitFor({state:'visible'});await page.waitForTimeout(100);
   assert.equal(await page.locator('#oie-image-viewerTitle').textContent(),'Imagem');await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const accessibility=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(accessibility.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
-  const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,'message-previews-mobile.png')});await page.keyboard.press('Escape');await page.setViewportSize({width:1440,height:1000});await scope(page,previews[0]).scrollIntoViewIfNeeded();await page.waitForTimeout(100);await page.screenshot({path:path.join(artifacts,'message-previews-desktop.png')});await fs.writeFile(path.join(artifacts,'message-previews-report.json'),JSON.stringify({findings,downloads:state.downloads,originalReads:state.originalReads,externalBrowserRequests:external,pageErrors:errors},null,2));console.log('PASS: structured link cards, explicit image downloads, expansion, focus/draft/scroll preservation, no provider browser requests and own-message alignment');
+  const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,'message-previews-mobile.png')});await page.keyboard.press('Escape');await page.setViewportSize({width:1440,height:1000});await scope(page,previews[0]).scrollIntoViewIfNeeded();await page.waitForTimeout(100);await page.screenshot({path:path.join(artifacts,'message-previews-desktop.png')});await fs.writeFile(path.join(artifacts,'message-previews-report.json'),JSON.stringify({findings,automaticDownloads,downloads:state.downloads,originalReads:state.originalReads,externalBrowserRequests:external,pageErrors:errors},null,2));console.log('PASS: lazy automatic/device-controlled image downloads, structured cards, expansion, safe retries, focus/drafts, no provider browser requests and own alignment');
  }finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(r=>api.close(r))}
 })().catch(error=>{console.error(error);process.exitCode=1});

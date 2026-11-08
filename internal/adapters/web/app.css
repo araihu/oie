@@ -201,3 +201,23 @@ html{color-scheme:light}html.dark{color-scheme:dark}
 .oie-expanded-image{display:block;max-height:70dvh;max-width:100%;width:auto;object-fit:contain}
 .oie-image-integrity{font-size:11px;color:var(--oie-muted);margin:0}
 .oie-avatar-initials{display:flex}
+.oie-device-toggle{width:100%;justify-content:space-between;gap:12px}
+/* Margo's static chat profile needs no document runtime or global stylesheet. */
+.oie-original-message{display:none;white-space:pre-wrap;overflow-wrap:anywhere}
+html[data-message-markdown=false] .oie-original-message{display:block}
+html[data-message-markdown=false] .oie-rendered-message{display:none}
+.oie-plain-fallback{white-space:pre-wrap;overflow-wrap:anywhere}
+.oie-rendered-message{white-space:normal;overflow-wrap:anywhere}
+.oie-rendered-message p{margin:0 0 .45em}
+.oie-rendered-message p:last-child{margin-bottom:0}
+.oie-rendered-message blockquote{border-left:3px solid currentColor;margin:.35em 0;padding:.15em 0 .15em .65em;opacity:.9}
+.oie-rendered-message ul,.oie-rendered-message ol{margin:.35em 0;padding-left:1.5em}
+.oie-rendered-message ul{list-style:disc}.oie-rendered-message ol{list-style:decimal}
+.oie-rendered-message pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:.4em 0;padding:.55em;border-radius:6px;background:#0002}
+.oie-rendered-message code{font-family:ui-monospace,monospace;font-size:.92em;background:#0002;border-radius:3px;padding:.05em .2em}
+.oie-rendered-message pre code{padding:0;background:transparent}
+.oie-rendered-message a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.oie-copy-message{flex-shrink:0;align-self:flex-start;min-height:26px;min-width:26px;width:26px;height:26px;padding:4px;border:0;opacity:0;color:var(--oie-muted)}
+.oie-message:hover .oie-copy-message,.oie-copy-message:focus-visible{opacity:1}
+.oie-copy-message[data-copy-state=copied]{color:var(--oie-accent);opacity:1}
+@media(hover:none){.oie-copy-message{opacity:.8}}

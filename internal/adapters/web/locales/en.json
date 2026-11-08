@@ -145,5 +145,14 @@
   "ImageBlocked": "This image address cannot be downloaded.",
   "ImageUnsupported": "This image format is not supported.",
   "ImageNotFound": "This image is no longer available.",
-  "ImageComputed": "File fingerprint computed after download."
+  "ImageComputed": "File fingerprint computed after download.",
+  "DevicePreferences": "This device",
+  "AutoImageDownloads": "Download images automatically",
+  "AutoImageDownloadsHelp": "Images download as you scroll. Turn this off to load them manually. Other files stay on demand.",
+  "DevicePreferenceUnavailable": "Device storage is unavailable. This setting lasts until the page reloads.",
+  "RenderMarkdown": "Format messages with Markdown",
+  "RenderMarkdownHelp": "Show quotes, emphasis, lists, links and code on this device. Copy always preserves the original message.",
+  "CopyOriginal": "Copy original message",
+  "MessageCopied": "Original message copied",
+  "CopyFailed": "The message could not be copied."
 }
