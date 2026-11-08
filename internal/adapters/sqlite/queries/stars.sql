@@ -1,0 +1,26 @@
+-- name: GetMessageStar :one
+SELECT m.id,m.account_id,m.conversation_id,s.payload FROM messages AS m
+LEFT JOIN message_stars AS s ON s.message_id=m.id WHERE m.id=?;
+
+-- name: ListConversationMessageStars :many
+SELECT m.id,m.account_id,m.conversation_id,s.payload FROM messages AS m
+LEFT JOIN message_stars AS s ON s.message_id=m.id
+WHERE m.conversation_id=sqlc.arg(conversation_id)
+AND m.id IN (SELECT value FROM json_each(CAST(sqlc.arg(message_ids) AS TEXT)));
+
+-- name: PutMessageStar :exec
+INSERT INTO message_stars(message_id,revision_id,starred,payload,updated_at) VALUES(?,?,?,?,?)
+ON CONFLICT(message_id) DO UPDATE SET revision_id=excluded.revision_id,starred=excluded.starred,payload=excluded.payload,updated_at=excluded.updated_at;
+
+-- name: InsertMessageStarRevision :exec
+INSERT INTO message_star_revisions(id,message_id,parents,payload,created_at) VALUES(?,?,?,?,?);
+
+-- name: ListStarredMessages :many
+SELECT m.payload AS message_payload,c.payload AS conversation_payload,s.payload AS star_payload
+FROM message_stars AS s JOIN messages AS m ON m.id=s.message_id JOIN conversations AS c ON c.id=m.conversation_id
+WHERE s.starred=1
+AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
+AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
+AND (CAST(sqlc.arg(page_cursor) AS TEXT)='' OR
+ (m.created_at_ms,m.id)<(SELECT x.created_at_ms,x.id FROM messages AS x WHERE x.id=CAST(sqlc.arg(page_cursor) AS TEXT)))
+ORDER BY m.created_at_ms DESC,m.id DESC LIMIT sqlc.arg(page_limit);

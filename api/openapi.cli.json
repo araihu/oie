@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.5.0",
+    "version": "0.6.0",
     "description": "Native engine API for account metadata, XMPP connections, direct text conversations, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.",
     "contact": {
       "name": "Arai Hû",
@@ -46,6 +46,227 @@
     }
   ],
   "paths": {
+    "/api/v1/messages/{messageId}/star": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MessageID"
+        }
+      ],
+      "get": {
+        "operationId": "getMessageStar",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Read the source message star",
+        "description": "App-owned state independent of message content revisions and protocol support. Before the first change, starred is false and revisionId and updatedAt are null. Reading does not create state or provider traffic.",
+        "responses": {
+          "200": {
+            "description": "Current star state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageStar"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "setMessageStar",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Star or unstar a retained source message",
+        "description": "Atomically compares the star revision, stores an independent immutable star revision, a durable operation receipt and an event. Does not edit message content, bump chat activity, change read state or send anything to the provider. The precondition is null for unchanged initial state. A stale precondition returns state_conflict with currentStar. Replays return the original receipt snapshot, even if later changes occurred; read current state after an uncertain response. An already matching value records a receipt without a new event.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Stable UUID for this exact star operation, retained across retries.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Desired state and the previously observed star revision.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetMessageStar"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed star state or original operation snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageStar"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversationId}/message-stars": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationID"
+        }
+      ],
+      "get": {
+        "operationId": "listConversationMessageStars",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Read star states for displayed messages",
+        "description": "Reads up to 100 distinct source message states without creating rows. Every message must belong to the requested conversation; foreign or missing message IDs reject the whole request. Item order is unspecified.",
+        "parameters": [
+          {
+            "name": "messageId",
+            "in": "query",
+            "required": true,
+            "example": [
+              "019a5df0-0000-7000-8000-000000000001"
+            ],
+            "description": "Source message UUIDs to read, one query parameter per UUID.",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "example": [
+                "019a5df0-0000-7000-8000-000000000001"
+              ],
+              "minItems": 1,
+              "maxItems": 100,
+              "items": {
+                "$ref": "#/components/schemas/ID"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current states, including explicit false and null revisions for untouched messages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageStarPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/starred-messages": {
+      "get": {
+        "operationId": "listStarredMessages",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Browse retained starred messages with their source context",
+        "description": "Lists current starred messages across accounts or within an account/conversation. Order is source message UTC timestamp descending, then message UUID descending. Unstarring a cursor message does not break paging. This is a live collection, not a frozen snapshot; newer stars can appear before the current page. No provider requests, enrichment or downloads are started. Conversation favorites are independent of message stars.",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "description": "Optional owning account filter.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "query",
+            "description": "Optional source conversation filter; it must agree with accountId when both are supplied.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Message UUID from nextCursor; its retained source message must belong to the selected scope.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of starred messages per page.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current starred-message page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StarredMessagePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/conversations/{conversationId}/previews": {
       "get": {
         "tags": [
@@ -333,7 +554,7 @@
                 "example": {
                   "id": "019a5df0-0000-7000-8000-000000000003",
                   "role": "local",
-                  "apiVersion": "0.5.0",
+                  "apiVersion": "0.6.0",
                   "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
                 }
               }
@@ -1632,7 +1853,232 @@
         "format": "uuid",
         "x-go-type": "string",
         "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        "example": "019a5df0-0000-7000-8000-000000000001",
         "description": "Canonical lowercase UUIDv7; IDs do not establish causal order."
+      },
+      "NullableRevisionID": {
+        "type": "string",
+        "format": "uuid",
+        "x-go-type": "string",
+        "nullable": true,
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        "example": "019a5df0-0000-7000-8000-000000000004",
+        "description": "Canonical UUIDv7 of app-owned state; null means no revision has been created."
+      },
+      "MessageStar": {
+        "type": "object",
+        "description": "App-owned source message star, keyed by messageId with its own revision history. Never a message edit.",
+        "additionalProperties": false,
+        "required": [
+          "messageId",
+          "accountId",
+          "conversationId",
+          "revisionId",
+          "starred",
+          "updatedAt"
+        ],
+        "properties": {
+          "messageId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "conversationId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "revisionId": {
+            "$ref": "#/components/schemas/NullableRevisionID"
+          },
+          "starred": {
+            "type": "boolean",
+            "example": true,
+            "description": "Whether the owner starred the source message, independently of any attachment."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-11-08T12:00:00Z",
+            "description": "UTC timestamp of the latest star change, null before the first change."
+          }
+        },
+        "example": {
+          "messageId": "019a5df0-0000-7000-8000-000000000001",
+          "accountId": "019a5df0-0000-7000-8000-000000000002",
+          "conversationId": "019a5df0-0000-7000-8000-000000000003",
+          "revisionId": null,
+          "starred": false,
+          "updatedAt": null
+        }
+      },
+      "SetMessageStar": {
+        "type": "object",
+        "description": "Desired star state and mandatory optimistic precondition; use a new operation UUID for a new decision.",
+        "additionalProperties": false,
+        "required": [
+          "starred",
+          "expectedRevisionId"
+        ],
+        "properties": {
+          "starred": {
+            "type": "boolean",
+            "description": "Desired value, never an ambiguous toggle."
+          },
+          "expectedRevisionId": {
+            "$ref": "#/components/schemas/NullableRevisionID"
+          }
+        },
+        "example": {
+          "starred": true,
+          "expectedRevisionId": null
+        }
+      },
+      "MessageStarPage": {
+        "type": "object",
+        "example": {
+          "items": [
+            {
+              "messageId": "019a5df0-0000-7000-8000-000000000001",
+              "accountId": "019a5df0-0000-7000-8000-000000000002",
+              "conversationId": "019a5df0-0000-7000-8000-000000000003",
+              "revisionId": null,
+              "starred": false,
+              "updatedAt": null
+            }
+          ]
+        },
+        "description": "Bounded states for the requested source message UUIDs, including untouched initial state.",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageStar"
+            }
+          }
+        }
+      },
+      "StarredMessage": {
+        "type": "object",
+        "example": {
+          "message": {
+            "id": "019a5df0-0000-7000-8000-000000000001",
+            "revisionId": "019a5df0-0000-7000-8000-000000000001",
+            "accountId": "019a5df0-0000-7000-8000-000000000001",
+            "conversationId": "019a5df0-0000-7000-8000-000000000001",
+            "sender": {
+              "id": "019a5df0-0000-7000-8000-000000000001",
+              "displayName": "bob@localhost"
+            },
+            "originalText": "Hello from Oie!",
+            "createdAt": "2026-11-07T12:00:00Z",
+            "isOwn": false,
+            "sendState": "received"
+          },
+          "conversation": {
+            "id": "019a5df0-0000-7000-8000-000000000001",
+            "revisionId": "019a5df0-0000-7000-8000-000000000001",
+            "accountId": "019a5df0-0000-7000-8000-000000000001",
+            "kind": "direct",
+            "address": "bob@localhost",
+            "title": "bob@localhost",
+            "lastMessage": "Hello from Oie!",
+            "updatedAt": "2026-11-07T12:00:00Z",
+            "unreadCount": 0,
+            "archived": false,
+            "favorite": false
+          },
+          "star": {
+            "messageId": "019a5df0-0000-7000-8000-000000000001",
+            "accountId": "019a5df0-0000-7000-8000-000000000002",
+            "conversationId": "019a5df0-0000-7000-8000-000000000003",
+            "revisionId": "019a5df0-0000-7000-8000-000000000004",
+            "starred": true,
+            "updatedAt": "2026-11-08T12:00:00Z"
+          }
+        },
+        "description": "Latest source message and conversation projections with their independent star state.",
+        "additionalProperties": false,
+        "required": [
+          "message",
+          "conversation",
+          "star"
+        ],
+        "properties": {
+          "message": {
+            "$ref": "#/components/schemas/Message"
+          },
+          "conversation": {
+            "$ref": "#/components/schemas/Conversation"
+          },
+          "star": {
+            "$ref": "#/components/schemas/MessageStar"
+          }
+        }
+      },
+      "StarredMessagePage": {
+        "type": "object",
+        "example": {
+          "items": [
+            {
+              "message": {
+                "id": "019a5df0-0000-7000-8000-000000000001",
+                "revisionId": "019a5df0-0000-7000-8000-000000000001",
+                "accountId": "019a5df0-0000-7000-8000-000000000001",
+                "conversationId": "019a5df0-0000-7000-8000-000000000001",
+                "sender": {
+                  "id": "019a5df0-0000-7000-8000-000000000001",
+                  "displayName": "bob@localhost"
+                },
+                "originalText": "Hello from Oie!",
+                "createdAt": "2026-11-07T12:00:00Z",
+                "isOwn": false,
+                "sendState": "received"
+              },
+              "conversation": {
+                "id": "019a5df0-0000-7000-8000-000000000001",
+                "revisionId": "019a5df0-0000-7000-8000-000000000001",
+                "accountId": "019a5df0-0000-7000-8000-000000000001",
+                "kind": "direct",
+                "address": "bob@localhost",
+                "title": "bob@localhost",
+                "lastMessage": "Hello from Oie!",
+                "updatedAt": "2026-11-07T12:00:00Z",
+                "unreadCount": 0,
+                "archived": false,
+                "favorite": false
+              },
+              "star": {
+                "messageId": "019a5df0-0000-7000-8000-000000000001",
+                "accountId": "019a5df0-0000-7000-8000-000000000002",
+                "conversationId": "019a5df0-0000-7000-8000-000000000003",
+                "revisionId": "019a5df0-0000-7000-8000-000000000004",
+                "starred": true,
+                "updatedAt": "2026-11-08T12:00:00Z"
+              }
+            }
+          ]
+        },
+        "description": "Chronologically paginated current starred messages. Newly starred records can appear on earlier pages.",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StarredMessage"
+            }
+          },
+          "nextCursor": {
+            "$ref": "#/components/schemas/ID"
+          }
+        }
       },
       "Health": {
         "type": "object",
@@ -1660,7 +2106,7 @@
         "example": {
           "id": "019a5df0-0000-7000-8000-000000000003",
           "role": "local",
-          "apiVersion": "0.5.0",
+          "apiVersion": "0.6.0",
           "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
         },
         "additionalProperties": false,
@@ -1684,7 +2130,7 @@
           "apiVersion": {
             "type": "string",
             "enum": [
-              "0.5.0"
+              "0.6.0"
             ]
           },
           "eventCursor": {
@@ -1880,7 +2326,8 @@
               "register_account",
               "open_conversation",
               "send_message",
-              "cancel_message"
+              "cancel_message",
+              "set_message_star"
             ]
           },
           "status": {
@@ -1934,6 +2381,7 @@
               "account.history_changed",
               "profile.avatar_changed",
               "message.preview_changed",
+              "message.star_changed",
               "conversation.created",
               "conversation.updated",
               "message.created",
@@ -1961,6 +2409,9 @@
           },
           "avatar": {
             "$ref": "#/components/schemas/Avatar"
+          },
+          "star": {
+            "$ref": "#/components/schemas/MessageStar"
           },
           "preview": {
             "$ref": "#/components/schemas/MessagePreview"
@@ -2005,6 +2456,9 @@
               "state_conflict",
               "protocol_unavailable"
             ]
+          },
+          "currentStar": {
+            "$ref": "#/components/schemas/MessageStar"
           },
           "currentMessage": {
             "$ref": "#/components/schemas/Message"

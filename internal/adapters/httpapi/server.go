@@ -79,6 +79,14 @@ func WriteProblem(w http.ResponseWriter, err error) {
 		status, code = http.StatusConflict, "invalid_cursor"
 	}
 	var conflict application.StateConflict
+	var starConflict application.StarConflict
+	if errors.As(err, &starConflict) {
+		current := star(starConflict.Current)
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(engineapi.Problem{Type: "urn:oie:problem:" + code, Title: http.StatusText(status), Status: status, Code: engineapi.ProblemCode(code), CurrentStar: &current})
+		return
+	}
 	if errors.As(err, &conflict) {
 		current := message(conflict.Current)
 		w.Header().Set("Content-Type", "application/problem+json")
@@ -116,7 +124,7 @@ func (s *Server) GetEngine(ctx context.Context, _ engineapi.GetEngineRequestObje
 	}
 	return engineapi.GetEngine200JSONResponse{
 		Id: string(state.ID), Role: engineapi.EngineRole(state.Role),
-		ApiVersion: "0.5.0", EventCursor: cursor(state.ID, state.Sequence),
+		ApiVersion: "0.6.0", EventCursor: cursor(state.ID, state.Sequence),
 	}, nil
 }
 

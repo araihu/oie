@@ -23,6 +23,7 @@ type Querier interface {
 	GetMediaFile(ctx context.Context, hash string) (MediaFile, error)
 	GetMessage(ctx context.Context, id string) (Message, error)
 	GetMessagePreview(ctx context.Context, id string) (MessagePreview, error)
+	GetMessageStar(ctx context.Context, id string) (GetMessageStarRow, error)
 	GetOperation(ctx context.Context, id string) (Operation, error)
 	InsertAccount(ctx context.Context, arg InsertAccountParams) error
 	InsertAccountRevision(ctx context.Context, arg InsertAccountRevisionParams) error
@@ -37,6 +38,7 @@ type Querier interface {
 	InsertMessage(ctx context.Context, arg InsertMessageParams) error
 	InsertMessagePreview(ctx context.Context, arg InsertMessagePreviewParams) (int64, error)
 	InsertMessageRevision(ctx context.Context, arg InsertMessageRevisionParams) error
+	InsertMessageStarRevision(ctx context.Context, arg InsertMessageStarRevisionParams) error
 	InsertOperation(ctx context.Context, arg InsertOperationParams) (int64, error)
 	InsertOutbox(ctx context.Context, arg InsertOutboxParams) error
 	InsertPreviewRevision(ctx context.Context, arg InsertPreviewRevisionParams) error
@@ -46,12 +48,15 @@ type Querier interface {
 	ListAvatarTargets(ctx context.Context, ownerID string) ([]ListAvatarTargetsRow, error)
 	ListAvatars(ctx context.Context, arg ListAvatarsParams) ([]Avatar, error)
 	ListChanges(ctx context.Context, arg ListChangesParams) ([]Change, error)
+	ListConversationMessageStars(ctx context.Context, arg ListConversationMessageStarsParams) ([]ListConversationMessageStarsRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
+	ListStarredMessages(ctx context.Context, arg ListStarredMessagesParams) ([]ListStarredMessagesRow, error)
 	PendingMessages(ctx context.Context, nextAttemptAt string) ([]Message, error)
 	PreviewJobs(ctx context.Context, arg PreviewJobsParams) ([]MessagePreview, error)
 	PutArchiveCheckpoint(ctx context.Context, arg PutArchiveCheckpointParams) error
 	PutHistoryStatus(ctx context.Context, arg PutHistoryStatusParams) error
+	PutMessageStar(ctx context.Context, arg PutMessageStarParams) error
 	ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error
 	SetOperationResult(ctx context.Context, arg SetOperationResultParams) error
 	Snapshot(ctx context.Context) (SnapshotRow, error)

@@ -55,6 +55,7 @@ type Event struct {
 	History      *domain.HistoryStatus
 	Avatar       *domain.Avatar
 	Preview      *domain.MessagePreview
+	Star         *domain.MessageStar
 	Type         string
 	OccurredAt   time.Time
 }

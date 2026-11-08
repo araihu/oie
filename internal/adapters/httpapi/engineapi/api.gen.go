@@ -164,13 +164,13 @@ func (e ConversationKind) Valid() bool {
 
 // Defines values for EngineApiVersion.
 const (
-	N050 EngineApiVersion = "0.5.0"
+	N060 EngineApiVersion = "0.6.0"
 )
 
 // Valid indicates whether the value is a known member of the EngineApiVersion enum.
 func (e EngineApiVersion) Valid() bool {
 	switch e {
-	case N050:
+	case N060:
 		return true
 	default:
 		return false
@@ -204,6 +204,7 @@ const (
 	ConversationUpdated      EventType = "conversation.updated"
 	MessageCreated           EventType = "message.created"
 	MessagePreviewChanged    EventType = "message.preview_changed"
+	MessageStarChanged       EventType = "message.star_changed"
 	MessageUpdated           EventType = "message.updated"
 	ProfileAvatarChanged     EventType = "profile.avatar_changed"
 )
@@ -224,6 +225,8 @@ func (e EventType) Valid() bool {
 	case MessageCreated:
 		return true
 	case MessagePreviewChanged:
+		return true
+	case MessageStarChanged:
 		return true
 	case MessageUpdated:
 		return true
@@ -441,6 +444,7 @@ const (
 	OperationKindOpenConversation OperationKind = "open_conversation"
 	OperationKindRegisterAccount  OperationKind = "register_account"
 	OperationKindSendMessage      OperationKind = "send_message"
+	OperationKindSetMessageStar   OperationKind = "set_message_star"
 )
 
 // Valid indicates whether the value is a known member of the OperationKind enum.
@@ -453,6 +457,8 @@ func (e OperationKind) Valid() bool {
 	case OperationKindRegisterAccount:
 		return true
 	case OperationKindSendMessage:
+		return true
+	case OperationKindSetMessageStar:
 		return true
 	default:
 		return false
@@ -552,11 +558,15 @@ type Account struct {
 	CreatedAt       time.Time              `json:"createdAt"`
 
 	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	Id       ID              `json:"id"`
 	Label    string          `json:"label"`
 	Protocol AccountProtocol `json:"protocol"`
 
 	// RevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	RevisionId ID `json:"revisionId"`
 }
 
@@ -573,6 +583,8 @@ type AccountPage struct {
 	Items []Account `json:"items"`
 
 	// NextCursor Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	NextCursor *ID `json:"nextCursor,omitempty"`
 }
 
@@ -581,18 +593,24 @@ type AccountPage struct {
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000003","address":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001","imageHash":"","revisionId":"019a5df0-0000-7000-8000-000000000002","updatedAt":"2026-11-07T12:00:00Z"}
 type Avatar struct {
 	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	AccountId ID `json:"accountId"`
 
 	// Address Canonical account or conversation address; callers treat it as an opaque identity key.
 	Address string `json:"address"`
 
 	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	Id ID `json:"id"`
 
 	// ImageHash Empty for no image, otherwise SHA-256 of the normalized PNG; use getAvatarImage to retrieve it.
 	ImageHash string `json:"imageHash"`
 
 	// RevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	RevisionId ID        `json:"revisionId"`
 	UpdatedAt  time.Time `json:"updatedAt"`
 }
@@ -604,6 +622,8 @@ type AvatarPage struct {
 	Items []Avatar `json:"items"`
 
 	// NextCursor Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	NextCursor *ID `json:"nextCursor,omitempty"`
 }
 
@@ -612,6 +632,8 @@ type AvatarPage struct {
 // Example: {"expectedRevisionId":"019a5df0-0000-7000-8000-000000000001"}
 type CancelMessage struct {
 	// ExpectedRevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	ExpectedRevisionId ID `json:"expectedRevisionId"`
 }
 
@@ -620,6 +642,8 @@ type CancelMessage struct {
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","reason":"not_connected","state":"unknown"}
 type Capabilities struct {
 	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	AccountId ID `json:"accountId"`
 
 	// DirectText True only while the basic direct-text adapter is connected. No other optional protocol support is implied.
@@ -650,6 +674,8 @@ type ConfigureConnection struct {
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","state":"not_connected","updatedAt":"2026-11-07T12:00:00Z"}
 type Connection struct {
 	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	AccountId ID `json:"accountId"`
 
 	// LastErrorCode Stable localized-error key; raw provider errors are never returned.
@@ -673,6 +699,8 @@ type ConnectionState string
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","address":"bob@localhost","archived":false,"favorite":false,"id":"019a5df0-0000-7000-8000-000000000001","kind":"direct","lastMessage":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","title":"bob@localhost","unreadCount":0,"updatedAt":"2026-11-07T12:00:00Z"}
 type Conversation struct {
 	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	AccountId ID `json:"accountId"`
 
 	// Address Canonical peer address.
@@ -681,6 +709,8 @@ type Conversation struct {
 	Favorite bool   `json:"favorite"`
 
 	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	Id ID `json:"id"`
 
 	// Kind Conversation kind.
@@ -690,6 +720,8 @@ type Conversation struct {
 	LastMessage string `json:"lastMessage"`
 
 	// RevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	RevisionId ID `json:"revisionId"`
 
 	// Title Display title; initially the peer address.
@@ -715,7 +747,7 @@ type ConversationPage struct {
 
 // Engine Persistent engine identity and event boundary.
 //
-// Example: {"apiVersion":"0.5.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
+// Example: {"apiVersion":"0.6.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
 type Engine struct {
 	ApiVersion EngineApiVersion `json:"apiVersion"`
 
@@ -723,6 +755,8 @@ type Engine struct {
 	EventCursor string `json:"eventCursor"`
 
 	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	Id   ID         `json:"id"`
 	Role EngineRole `json:"role"`
 }
@@ -775,7 +809,12 @@ type Event struct {
 	//
 	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","downloadState":"not_downloaded","id":"019a5df0-0000-7000-8000-000000000001","kind":"link","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":"019a5df0-0000-7000-8000-000000000001","siteName":"Example","state":"ready","title":"Shared article","updatedAt":"2026-11-08T12:00:00Z","url":"https://example.com/article"}
 	Preview *MessagePreview `json:"preview,omitempty"`
-	Type    EventType       `json:"type"`
+
+	// Star App-owned source message star, keyed by messageId with its own revision history. Never a message edit.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":null,"starred":false,"updatedAt":null}
+	Star *MessageStar `json:"star,omitempty"`
+	Type EventType    `json:"type"`
 }
 
 // EventType defines model for Event.Type.
@@ -797,6 +836,8 @@ type HealthStatus string
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversations":3,"retainedMessages":50,"state":"syncing","updatedAt":"2026-11-07T12:00:00Z"}
 type HistoryStatus struct {
 	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	AccountId        ID                          `json:"accountId"`
 	Conversations    int                         `json:"conversations"`
 	LastErrorCode    *HistoryStatusLastErrorCode `json:"lastErrorCode,omitempty"`
@@ -812,6 +853,8 @@ type HistoryStatusLastErrorCode string
 type HistoryStatusState string
 
 // ID Canonical lowercase UUIDv7; IDs do not establish causal order.
+//
+// Example: 019a5df0-0000-7000-8000-000000000001
 type ID = string
 
 // Message Retained original text and actual send evidence. submitted means the stanza was written to the authenticated stream; it does not prove provider acceptance, recipient delivery, or read state. unknown is not automatically resent.
@@ -819,9 +862,13 @@ type ID = string
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000001","isOwn":false,"originalText":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","sendState":"received","sender":{"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}}
 type Message struct {
 	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	AccountId ID `json:"accountId"`
 
 	// ConversationId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	ConversationId ID `json:"conversationId"`
 
 	// CreatedAt UTC timestamp.
@@ -831,6 +878,8 @@ type Message struct {
 	Historical *bool `json:"historical,omitempty"`
 
 	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	Id    ID   `json:"id"`
 	IsOwn bool `json:"isOwn"`
 
@@ -838,6 +887,8 @@ type Message struct {
 	OriginalText string `json:"originalText"`
 
 	// RevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	RevisionId ID `json:"revisionId"`
 
 	// SendState Durable transport evidence.
@@ -859,6 +910,8 @@ type MessagePage struct {
 	Items []Message `json:"items"`
 
 	// NextCursor Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	NextCursor *ID `json:"nextCursor,omitempty"`
 }
 
@@ -867,9 +920,13 @@ type MessagePage struct {
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","downloadState":"not_downloaded","id":"019a5df0-0000-7000-8000-000000000001","kind":"link","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":"019a5df0-0000-7000-8000-000000000001","siteName":"Example","state":"ready","title":"Shared article","updatedAt":"2026-11-08T12:00:00Z","url":"https://example.com/article"}
 type MessagePreview struct {
 	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	AccountId ID `json:"accountId"`
 
 	// ConversationId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	ConversationId ID `json:"conversationId"`
 
 	// Description Plain page description.
@@ -882,6 +939,8 @@ type MessagePreview struct {
 	FileSize     *int64                      `json:"fileSize,omitempty"`
 
 	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	Id ID `json:"id"`
 
 	// ImageHash Local static PNG or JPEG thumbnail digest, sized for high-DPI message cards.
@@ -895,9 +954,13 @@ type MessagePreview struct {
 	LastErrorCode *string `json:"lastErrorCode,omitempty"`
 
 	// MessageId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	MessageId ID `json:"messageId"`
 
 	// RevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	RevisionId ID `json:"revisionId"`
 
 	// SiteName Plain publisher name or hostname.
@@ -927,11 +990,60 @@ type MessagePreviewKind string
 // MessagePreviewState defines model for MessagePreview.State.
 type MessagePreviewState string
 
+// MessageStar App-owned source message star, keyed by messageId with its own revision history. Never a message edit.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":null,"starred":false,"updatedAt":null}
+type MessageStar struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	AccountId ID `json:"accountId"`
+
+	// ConversationId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	ConversationId ID `json:"conversationId"`
+
+	// MessageId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	MessageId ID `json:"messageId"`
+
+	// RevisionId Canonical UUIDv7 of app-owned state; null means no revision has been created.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000004
+	RevisionId *NullableRevisionID `json:"revisionId"`
+
+	// Starred Whether the owner starred the source message, independently of any attachment.
+	//
+	// Example: true
+	Starred bool `json:"starred"`
+
+	// UpdatedAt UTC timestamp of the latest star change, null before the first change.
+	//
+	// Example: 2026-11-08T12:00:00Z
+	UpdatedAt *time.Time `json:"updatedAt"`
+}
+
+// MessageStarPage Bounded states for the requested source message UUIDs, including untouched initial state.
+//
+// Example: {"items":[{"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":null,"starred":false,"updatedAt":null}]}
+type MessageStarPage struct {
+	Items []MessageStar `json:"items"`
+}
+
+// NullableRevisionID Canonical UUIDv7 of app-owned state; null means no revision has been created.
+//
+// Example: 019a5df0-0000-7000-8000-000000000004
+type NullableRevisionID = string
+
 // OpenConversation Open or find a direct conversation in a registered account.
 //
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","address":"bob@localhost"}
 type OpenConversation struct {
 	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	AccountId ID `json:"accountId"`
 
 	// Address Destination protocol address, normalized by the owning adapter.
@@ -945,10 +1057,14 @@ type Operation struct {
 	CreatedAt time.Time `json:"createdAt"`
 
 	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	Id   ID            `json:"id"`
 	Kind OperationKind `json:"kind"`
 
 	// ResourceId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	ResourceId ID              `json:"resourceId"`
 	Status     OperationStatus `json:"status"`
 }
@@ -976,9 +1092,14 @@ type Problem struct {
 	//
 	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000001","isOwn":false,"originalText":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","sendState":"received","sender":{"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}}
 	CurrentMessage *Message `json:"currentMessage,omitempty"`
-	Status         int      `json:"status"`
-	Title          string   `json:"title"`
-	Type           string   `json:"type"`
+
+	// CurrentStar App-owned source message star, keyed by messageId with its own revision history. Never a message edit.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":null,"starred":false,"updatedAt":null}
+	CurrentStar *MessageStar `json:"currentStar,omitempty"`
+	Status      int          `json:"status"`
+	Title       string       `json:"title"`
+	Type        string       `json:"type"`
 }
 
 // ProblemCode defines model for Problem.Code.
@@ -1012,16 +1133,69 @@ type Sender struct {
 	DisplayName string `json:"displayName"`
 
 	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
 	Id ID `json:"id"`
 }
 
+// SetMessageStar Desired star state and mandatory optimistic precondition; use a new operation UUID for a new decision.
+//
+// Example: {"expectedRevisionId":null,"starred":true}
+type SetMessageStar struct {
+	// ExpectedRevisionId Canonical UUIDv7 of app-owned state; null means no revision has been created.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000004
+	ExpectedRevisionId *NullableRevisionID `json:"expectedRevisionId"`
+
+	// Starred Desired value, never an ambiguous toggle.
+	Starred bool `json:"starred"`
+}
+
+// StarredMessage Latest source message and conversation projections with their independent star state.
+//
+// Example: {"conversation":{"accountId":"019a5df0-0000-7000-8000-000000000001","address":"bob@localhost","archived":false,"favorite":false,"id":"019a5df0-0000-7000-8000-000000000001","kind":"direct","lastMessage":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","title":"bob@localhost","unreadCount":0,"updatedAt":"2026-11-07T12:00:00Z"},"message":{"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000001","isOwn":false,"originalText":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","sendState":"received","sender":{"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}},"star":{"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":"019a5df0-0000-7000-8000-000000000004","starred":true,"updatedAt":"2026-11-08T12:00:00Z"}}
+type StarredMessage struct {
+	// Conversation One account-scoped conversation. Direct conversations support text sending; saved rooms and authorized room archives are recovered read-only in this increment.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","address":"bob@localhost","archived":false,"favorite":false,"id":"019a5df0-0000-7000-8000-000000000001","kind":"direct","lastMessage":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","title":"bob@localhost","unreadCount":0,"updatedAt":"2026-11-07T12:00:00Z"}
+	Conversation Conversation `json:"conversation"`
+
+	// Message Retained original text and actual send evidence. submitted means the stanza was written to the authenticated stream; it does not prove provider acceptance, recipient delivery, or read state. unknown is not automatically resent.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000001","isOwn":false,"originalText":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","sendState":"received","sender":{"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}}
+	Message Message `json:"message"`
+
+	// Star App-owned source message star, keyed by messageId with its own revision history. Never a message edit.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":null,"starred":false,"updatedAt":null}
+	Star MessageStar `json:"star"`
+}
+
+// StarredMessagePage Chronologically paginated current starred messages. Newly starred records can appear on earlier pages.
+//
+// Example: {"items":[{"conversation":{"accountId":"019a5df0-0000-7000-8000-000000000001","address":"bob@localhost","archived":false,"favorite":false,"id":"019a5df0-0000-7000-8000-000000000001","kind":"direct","lastMessage":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","title":"bob@localhost","unreadCount":0,"updatedAt":"2026-11-07T12:00:00Z"},"message":{"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000001","isOwn":false,"originalText":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","sendState":"received","sender":{"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}},"star":{"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":"019a5df0-0000-7000-8000-000000000004","starred":true,"updatedAt":"2026-11-08T12:00:00Z"}}]}
+type StarredMessagePage struct {
+	Items []StarredMessage `json:"items"`
+
+	// NextCursor Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	NextCursor *ID `json:"nextCursor,omitempty"`
+}
+
 // AccountID Canonical lowercase UUIDv7; IDs do not establish causal order.
+//
+// Example: 019a5df0-0000-7000-8000-000000000001
 type AccountID = ID
 
 // ConversationID Canonical lowercase UUIDv7; IDs do not establish causal order.
+//
+// Example: 019a5df0-0000-7000-8000-000000000001
 type ConversationID = ID
 
 // MessageID Canonical lowercase UUIDv7; IDs do not establish causal order.
+//
+// Example: 019a5df0-0000-7000-8000-000000000001
 type MessageID = ID
 
 // Conflict Stable codes for presentation-owned localization; no raw storage errors or credentials.
@@ -1110,6 +1284,12 @@ type OpenConversationParams struct {
 	IdempotencyKey ID `json:"Idempotency-Key"`
 }
 
+// ListConversationMessageStarsParams defines parameters for ListConversationMessageStars.
+type ListConversationMessageStarsParams struct {
+	// MessageId Source message UUIDs to read, one query parameter per UUID.
+	MessageId []ID `form:"messageId" json:"messageId"`
+}
+
 // ListMessagesParams defines parameters for ListMessages.
 type ListMessagesParams struct {
 	// Cursor Read records chronologically older than this nextCursor message UUID (timestamp and UUID tie-break).
@@ -1149,6 +1329,27 @@ type CancelMessageParams struct {
 	IdempotencyKey ID `json:"Idempotency-Key"`
 }
 
+// SetMessageStarParams defines parameters for SetMessageStar.
+type SetMessageStarParams struct {
+	// IdempotencyKey Stable UUID for this exact star operation, retained across retries.
+	IdempotencyKey ID `json:"Idempotency-Key"`
+}
+
+// ListStarredMessagesParams defines parameters for ListStarredMessages.
+type ListStarredMessagesParams struct {
+	// AccountId Optional owning account filter.
+	AccountId *ID `form:"accountId,omitempty" json:"accountId,omitempty"`
+
+	// ConversationId Optional source conversation filter; it must agree with accountId when both are supplied.
+	ConversationId *ID `form:"conversationId,omitempty" json:"conversationId,omitempty"`
+
+	// Cursor Message UUID from nextCursor; its retained source message must belong to the selected scope.
+	Cursor *ID `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Maximum number of starred messages per page.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // RegisterAccountJSONRequestBody defines body for RegisterAccount for application/json ContentType.
 type RegisterAccountJSONRequestBody = RegisterAccount
 
@@ -1163,6 +1364,9 @@ type SendMessageJSONRequestBody = SendMessage
 
 // CancelMessageJSONRequestBody defines body for CancelMessage for application/json ContentType.
 type CancelMessageJSONRequestBody = CancelMessage
+
+// SetMessageStarJSONRequestBody defines body for SetMessageStar for application/json ContentType.
+type SetMessageStarJSONRequestBody = SetMessageStar
 
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -1370,6 +1574,13 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/conversations/{conversationId} (the `GetConversation` operationId).
 	GetConversation(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListConversationMessageStars Read star states for displayed messages
+	//
+	// Reads up to 100 distinct source message states without creating rows. Every message must belong to the requested conversation; foreign or missing message IDs reject the whole request. Item order is unspecified.
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId}/message-stars (the `ListConversationMessageStars` operationId).
+	ListConversationMessageStars(ctx context.Context, conversationId ConversationID, params *ListConversationMessageStarsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListMessages Read retained messages
 	//
 	// Returns retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages.
@@ -1460,6 +1671,31 @@ type ClientInterface interface {
 	// Corresponds with POST /api/v1/messages/{messageId}/cancel (the `CancelMessage` operationId).
 	CancelMessage(ctx context.Context, messageId MessageID, params *CancelMessageParams, body CancelMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetMessageStar Read the source message star
+	//
+	// App-owned state independent of message content revisions and protocol support. Before the first change, starred is false and revisionId and updatedAt are null. Reading does not create state or provider traffic.
+	//
+	// Corresponds with GET /api/v1/messages/{messageId}/star (the `GetMessageStar` operationId).
+	GetMessageStar(ctx context.Context, messageId MessageID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetMessageStarWithBody Star or unstar a retained source message
+	//
+	// Atomically compares the star revision, stores an independent immutable star revision, a durable operation receipt and an event. Does not edit message content, bump chat activity, change read state or send anything to the provider. The precondition is null for unchanged initial state. A stale precondition returns state_conflict with currentStar. Replays return the original receipt snapshot, even if later changes occurred; read current state after an uncertain response. An already matching value records a receipt without a new event.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/v1/messages/{messageId}/star (the `SetMessageStar` operationId).
+	SetMessageStarWithBody(ctx context.Context, messageId MessageID, params *SetMessageStarParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetMessageStar Star or unstar a retained source message
+	//
+	// Atomically compares the star revision, stores an independent immutable star revision, a durable operation receipt and an event. Does not edit message content, bump chat activity, change read state or send anything to the provider. The precondition is null for unchanged initial state. A stale precondition returns state_conflict with currentStar. Replays return the original receipt snapshot, even if later changes occurred; read current state after an uncertain response. An already matching value records a receipt without a new event.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /api/v1/messages/{messageId}/star (the `SetMessageStar` operationId).
+	SetMessageStar(ctx context.Context, messageId MessageID, params *SetMessageStarParams, body SetMessageStarJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetOperation Reconcile a mutation after an ambiguous response
 	//
 	// A receipt proves the local mutation committed; send receipts prove durable engine acceptance, never recipient delivery. Unknown IDs return 404.
@@ -1480,6 +1716,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /api/v1/previews/{previewId}/download (the `DownloadPreviewImage` operationId).
 	DownloadPreviewImage(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListStarredMessages Browse retained starred messages with their source context
+	//
+	// Lists current starred messages across accounts or within an account/conversation. Order is source message UTC timestamp descending, then message UUID descending. Unstarring a cursor message does not break paging. This is a live collection, not a frozen snapshot; newer stars can appear before the current page. No provider requests, enrichment or downloads are started. Conversation favorites are independent of message stars.
+	//
+	// Corresponds with GET /api/v1/starred-messages (the `ListStarredMessages` operationId).
+	ListStarredMessages(ctx context.Context, params *ListStarredMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 // ListAccounts List registered account metadata
@@ -1774,6 +2017,23 @@ func (c *Client) GetConversation(ctx context.Context, conversationId Conversatio
 	return c.Client.Do(req)
 }
 
+// ListConversationMessageStars Read star states for displayed messages
+//
+// Reads up to 100 distinct source message states without creating rows. Every message must belong to the requested conversation; foreign or missing message IDs reject the whole request. Item order is unspecified.
+//
+// Corresponds with GET /api/v1/conversations/{conversationId}/message-stars (the `ListConversationMessageStars` operationId).
+func (c *Client) ListConversationMessageStars(ctx context.Context, conversationId ConversationID, params *ListConversationMessageStarsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListConversationMessageStarsRequest(c.Server, conversationId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListMessages Read retained messages
 //
 // Returns retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages.
@@ -1974,6 +2234,61 @@ func (c *Client) CancelMessage(ctx context.Context, messageId MessageID, params 
 	return c.Client.Do(req)
 }
 
+// GetMessageStar Read the source message star
+//
+// App-owned state independent of message content revisions and protocol support. Before the first change, starred is false and revisionId and updatedAt are null. Reading does not create state or provider traffic.
+//
+// Corresponds with GET /api/v1/messages/{messageId}/star (the `GetMessageStar` operationId).
+func (c *Client) GetMessageStar(ctx context.Context, messageId MessageID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMessageStarRequest(c.Server, messageId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetMessageStarWithBody Star or unstar a retained source message
+//
+// Atomically compares the star revision, stores an independent immutable star revision, a durable operation receipt and an event. Does not edit message content, bump chat activity, change read state or send anything to the provider. The precondition is null for unchanged initial state. A stale precondition returns state_conflict with currentStar. Replays return the original receipt snapshot, even if later changes occurred; read current state after an uncertain response. An already matching value records a receipt without a new event.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/v1/messages/{messageId}/star (the `SetMessageStar` operationId).
+func (c *Client) SetMessageStarWithBody(ctx context.Context, messageId MessageID, params *SetMessageStarParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetMessageStarRequestWithBody(c.Server, messageId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetMessageStar Star or unstar a retained source message
+//
+// Atomically compares the star revision, stores an independent immutable star revision, a durable operation receipt and an event. Does not edit message content, bump chat activity, change read state or send anything to the provider. The precondition is null for unchanged initial state. A stale precondition returns state_conflict with currentStar. Replays return the original receipt snapshot, even if later changes occurred; read current state after an uncertain response. An already matching value records a receipt without a new event.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /api/v1/messages/{messageId}/star (the `SetMessageStar` operationId).
+func (c *Client) SetMessageStar(ctx context.Context, messageId MessageID, params *SetMessageStarParams, body SetMessageStarJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetMessageStarRequest(c.Server, messageId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetOperation Reconcile a mutation after an ambiguous response
 //
 // A receipt proves the local mutation committed; send receipts prove durable engine acceptance, never recipient delivery. Unknown IDs return 404.
@@ -2015,6 +2330,23 @@ func (c *Client) GetMessagePreview(ctx context.Context, previewId ID, reqEditors
 // Corresponds with POST /api/v1/previews/{previewId}/download (the `DownloadPreviewImage` operationId).
 func (c *Client) DownloadPreviewImage(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDownloadPreviewImageRequest(c.Server, previewId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListStarredMessages Browse retained starred messages with their source context
+//
+// Lists current starred messages across accounts or within an account/conversation. Order is source message UTC timestamp descending, then message UUID descending. Unstarring a cursor message does not break paging. This is a live collection, not a frozen snapshot; newer stars can appear before the current page. No provider requests, enrichment or downloads are started. Conversation favorites are independent of message stars.
+//
+// Corresponds with GET /api/v1/starred-messages (the `ListStarredMessages` operationId).
+func (c *Client) ListStarredMessages(ctx context.Context, params *ListStarredMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListStarredMessagesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2708,6 +3040,67 @@ func NewGetConversationRequest(server string, conversationId ConversationID) (*h
 	return req, nil
 }
 
+// NewListConversationMessageStarsRequest constructs an http.Request for the ListConversationMessageStars method
+func NewListConversationMessageStarsRequest(server string, conversationId ConversationID, params *ListConversationMessageStarsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/conversations/%s/message-stars", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.MessageId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "messageId", params.MessageId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListMessagesRequest constructs an http.Request for the ListMessages method
 func NewListMessagesRequest(server string, conversationId ConversationID, params *ListMessagesParams) (*http.Request, error) {
 	var err error
@@ -3141,6 +3534,100 @@ func NewCancelMessageRequestWithBody(server string, messageId MessageID, params 
 	return req, nil
 }
 
+// NewGetMessageStarRequest constructs an http.Request for the GetMessageStar method
+func NewGetMessageStarRequest(server string, messageId MessageID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "messageId", messageId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/messages/%s/star", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSetMessageStarRequest calls the generic SetMessageStar builder with application/json body
+func NewSetMessageStarRequest(server string, messageId MessageID, params *SetMessageStarParams, body SetMessageStarJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetMessageStarRequestWithBody(server, messageId, params, "application/json", bodyReader)
+}
+
+// NewSetMessageStarRequestWithBody constructs an http.Request for the SetMessageStar method, with any body, and a specified content type
+func NewSetMessageStarRequestWithBody(server string, messageId MessageID, params *SetMessageStarParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "messageId", messageId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/messages/%s/star", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: "uuid"})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
 // NewGetOperationRequest constructs an http.Request for the GetOperation method
 func NewGetOperationRequest(server string, operationId ID) (*http.Request, error) {
 	var err error
@@ -3236,6 +3723,96 @@ func NewDownloadPreviewImageRequest(server string, previewId ID) (*http.Request,
 	}
 
 	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListStarredMessagesRequest constructs an http.Request for the ListStarredMessages method
+func NewListStarredMessagesRequest(server string, params *ListStarredMessagesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/starred-messages")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.AccountId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "accountId", *params.AccountId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ConversationId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "conversationId", *params.ConversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -3439,6 +4016,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/conversations/{conversationId} (the `GetConversation` operationId).
 	GetConversationWithResponse(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*GetConversationResponse, error)
 
+	// ListConversationMessageStarsWithResponse Read star states for displayed messages
+	//
+	// Reads up to 100 distinct source message states without creating rows. Every message must belong to the requested conversation; foreign or missing message IDs reject the whole request. Item order is unspecified.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId}/message-stars (the `ListConversationMessageStars` operationId).
+	ListConversationMessageStarsWithResponse(ctx context.Context, conversationId ConversationID, params *ListConversationMessageStarsParams, reqEditors ...RequestEditorFn) (*ListConversationMessageStarsResponse, error)
+
 	// ListMessagesWithResponse Read retained messages
 	//
 	// Returns retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages.
@@ -3543,6 +4129,33 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/v1/messages/{messageId}/cancel (the `CancelMessage` operationId).
 	CancelMessageWithResponse(ctx context.Context, messageId MessageID, params *CancelMessageParams, body CancelMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*CancelMessageResponse, error)
 
+	// GetMessageStarWithResponse Read the source message star
+	//
+	// App-owned state independent of message content revisions and protocol support. Before the first change, starred is false and revisionId and updatedAt are null. Reading does not create state or provider traffic.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/messages/{messageId}/star (the `GetMessageStar` operationId).
+	GetMessageStarWithResponse(ctx context.Context, messageId MessageID, reqEditors ...RequestEditorFn) (*GetMessageStarResponse, error)
+
+	// SetMessageStarWithBodyWithResponse Star or unstar a retained source message
+	//
+	// Atomically compares the star revision, stores an independent immutable star revision, a durable operation receipt and an event. Does not edit message content, bump chat activity, change read state or send anything to the provider. The precondition is null for unchanged initial state. A stale precondition returns state_conflict with currentStar. Replays return the original receipt snapshot, even if later changes occurred; read current state after an uncertain response. An already matching value records a receipt without a new event.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/messages/{messageId}/star (the `SetMessageStar` operationId).
+	SetMessageStarWithBodyWithResponse(ctx context.Context, messageId MessageID, params *SetMessageStarParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetMessageStarResponse, error)
+
+	// SetMessageStarWithResponse Star or unstar a retained source message
+	//
+	// Atomically compares the star revision, stores an independent immutable star revision, a durable operation receipt and an event. Does not edit message content, bump chat activity, change read state or send anything to the provider. The precondition is null for unchanged initial state. A stale precondition returns state_conflict with currentStar. Replays return the original receipt snapshot, even if later changes occurred; read current state after an uncertain response. An already matching value records a receipt without a new event.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/messages/{messageId}/star (the `SetMessageStar` operationId).
+	SetMessageStarWithResponse(ctx context.Context, messageId MessageID, params *SetMessageStarParams, body SetMessageStarJSONRequestBody, reqEditors ...RequestEditorFn) (*SetMessageStarResponse, error)
+
 	// GetOperationWithResponse Reconcile a mutation after an ambiguous response
 	//
 	// A receipt proves the local mutation committed; send receipts prove durable engine acceptance, never recipient delivery. Unknown IDs return 404.
@@ -3569,6 +4182,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /api/v1/previews/{previewId}/download (the `DownloadPreviewImage` operationId).
 	DownloadPreviewImageWithResponse(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*DownloadPreviewImageResponse, error)
+
+	// ListStarredMessagesWithResponse Browse retained starred messages with their source context
+	//
+	// Lists current starred messages across accounts or within an account/conversation. Order is source message UTC timestamp descending, then message UUID descending. Unstarring a cursor message does not break paging. This is a live collection, not a frozen snapshot; newer stars can appear before the current page. No provider requests, enrichment or downloads are started. Conversation favorites are independent of message stars.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/starred-messages (the `ListStarredMessages` operationId).
+	ListStarredMessagesWithResponse(ctx context.Context, params *ListStarredMessagesParams, reqEditors ...RequestEditorFn) (*ListStarredMessagesResponse, error)
 }
 
 type ListAccountsResponse struct {
@@ -4407,6 +5029,68 @@ func (r GetConversationResponse) ContentType() string {
 	return ""
 }
 
+type ListConversationMessageStarsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MessageStarPage
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListConversationMessageStarsResponse) GetJSON200() *MessageStarPage {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListConversationMessageStarsResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListConversationMessageStarsResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r ListConversationMessageStarsResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListConversationMessageStarsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListConversationMessageStarsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListConversationMessageStarsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListConversationMessageStarsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListMessagesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -4952,6 +5636,137 @@ func (r CancelMessageResponse) ContentType() string {
 	return ""
 }
 
+type GetMessageStarResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MessageStar
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetMessageStarResponse) GetJSON200() *MessageStar {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetMessageStarResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetMessageStarResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetMessageStarResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetMessageStarResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMessageStarResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMessageStarResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetMessageStarResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetMessageStarResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MessageStar
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Conflict
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SetMessageStarResponse) GetJSON200() *MessageStar {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r SetMessageStarResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r SetMessageStarResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r SetMessageStarResponse) GetApplicationproblemJSON409() *Conflict {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r SetMessageStarResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r SetMessageStarResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetMessageStarResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetMessageStarResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetMessageStarResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetOperationResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -5139,6 +5954,75 @@ func (r DownloadPreviewImageResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r DownloadPreviewImageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListStarredMessagesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *StarredMessagePage
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Conflict
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListStarredMessagesResponse) GetJSON200() *StarredMessagePage {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListStarredMessagesResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListStarredMessagesResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r ListStarredMessagesResponse) GetApplicationproblemJSON409() *Conflict {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r ListStarredMessagesResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListStarredMessagesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListStarredMessagesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListStarredMessagesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListStarredMessagesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -5393,6 +6277,21 @@ func (c *ClientWithResponses) GetConversationWithResponse(ctx context.Context, c
 	return ParseGetConversationResponse(rsp)
 }
 
+// ListConversationMessageStarsWithResponse Read star states for displayed messages
+//
+// Reads up to 100 distinct source message states without creating rows. Every message must belong to the requested conversation; foreign or missing message IDs reject the whole request. Item order is unspecified.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/conversations/{conversationId}/message-stars (the `ListConversationMessageStars` operationId).
+func (c *ClientWithResponses) ListConversationMessageStarsWithResponse(ctx context.Context, conversationId ConversationID, params *ListConversationMessageStarsParams, reqEditors ...RequestEditorFn) (*ListConversationMessageStarsResponse, error) {
+	rsp, err := c.ListConversationMessageStars(ctx, conversationId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListConversationMessageStarsResponse(rsp)
+}
+
 // ListMessagesWithResponse Read retained messages
 //
 // Returns retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages.
@@ -5563,6 +6462,51 @@ func (c *ClientWithResponses) CancelMessageWithResponse(ctx context.Context, mes
 	return ParseCancelMessageResponse(rsp)
 }
 
+// GetMessageStarWithResponse Read the source message star
+//
+// App-owned state independent of message content revisions and protocol support. Before the first change, starred is false and revisionId and updatedAt are null. Reading does not create state or provider traffic.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/messages/{messageId}/star (the `GetMessageStar` operationId).
+func (c *ClientWithResponses) GetMessageStarWithResponse(ctx context.Context, messageId MessageID, reqEditors ...RequestEditorFn) (*GetMessageStarResponse, error) {
+	rsp, err := c.GetMessageStar(ctx, messageId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMessageStarResponse(rsp)
+}
+
+// SetMessageStarWithBodyWithResponse Star or unstar a retained source message
+//
+// Atomically compares the star revision, stores an independent immutable star revision, a durable operation receipt and an event. Does not edit message content, bump chat activity, change read state or send anything to the provider. The precondition is null for unchanged initial state. A stale precondition returns state_conflict with currentStar. Replays return the original receipt snapshot, even if later changes occurred; read current state after an uncertain response. An already matching value records a receipt without a new event.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/messages/{messageId}/star (the `SetMessageStar` operationId).
+func (c *ClientWithResponses) SetMessageStarWithBodyWithResponse(ctx context.Context, messageId MessageID, params *SetMessageStarParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetMessageStarResponse, error) {
+	rsp, err := c.SetMessageStarWithBody(ctx, messageId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetMessageStarResponse(rsp)
+}
+
+// SetMessageStarWithResponse Star or unstar a retained source message
+//
+// Atomically compares the star revision, stores an independent immutable star revision, a durable operation receipt and an event. Does not edit message content, bump chat activity, change read state or send anything to the provider. The precondition is null for unchanged initial state. A stale precondition returns state_conflict with currentStar. Replays return the original receipt snapshot, even if later changes occurred; read current state after an uncertain response. An already matching value records a receipt without a new event.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/messages/{messageId}/star (the `SetMessageStar` operationId).
+func (c *ClientWithResponses) SetMessageStarWithResponse(ctx context.Context, messageId MessageID, params *SetMessageStarParams, body SetMessageStarJSONRequestBody, reqEditors ...RequestEditorFn) (*SetMessageStarResponse, error) {
+	rsp, err := c.SetMessageStar(ctx, messageId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetMessageStarResponse(rsp)
+}
+
 // GetOperationWithResponse Reconcile a mutation after an ambiguous response
 //
 // A receipt proves the local mutation committed; send receipts prove durable engine acceptance, never recipient delivery. Unknown IDs return 404.
@@ -5606,6 +6550,21 @@ func (c *ClientWithResponses) DownloadPreviewImageWithResponse(ctx context.Conte
 		return nil, err
 	}
 	return ParseDownloadPreviewImageResponse(rsp)
+}
+
+// ListStarredMessagesWithResponse Browse retained starred messages with their source context
+//
+// Lists current starred messages across accounts or within an account/conversation. Order is source message UTC timestamp descending, then message UUID descending. Unstarring a cursor message does not break paging. This is a live collection, not a frozen snapshot; newer stars can appear before the current page. No provider requests, enrichment or downloads are started. Conversation favorites are independent of message stars.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/starred-messages (the `ListStarredMessages` operationId).
+func (c *ClientWithResponses) ListStarredMessagesWithResponse(ctx context.Context, params *ListStarredMessagesParams, reqEditors ...RequestEditorFn) (*ListStarredMessagesResponse, error) {
+	rsp, err := c.ListStarredMessages(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListStarredMessagesResponse(rsp)
 }
 
 // ParseListAccountsResponse parses an HTTP response from a ListAccountsWithResponse call
@@ -6279,6 +7238,53 @@ func ParseGetConversationResponse(rsp *http.Response) (*GetConversationResponse,
 	return response, nil
 }
 
+// ParseListConversationMessageStarsResponse parses an HTTP response from a ListConversationMessageStarsWithResponse call
+func ParseListConversationMessageStarsResponse(rsp *http.Response) (*ListConversationMessageStarsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListConversationMessageStarsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MessageStarPage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListMessagesResponse parses an HTTP response from a ListMessagesWithResponse call
 func ParseListMessagesResponse(rsp *http.Response) (*ListMessagesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -6704,6 +7710,107 @@ func ParseCancelMessageResponse(rsp *http.Response) (*CancelMessageResponse, err
 	return response, nil
 }
 
+// ParseGetMessageStarResponse parses an HTTP response from a GetMessageStarWithResponse call
+func ParseGetMessageStarResponse(rsp *http.Response) (*GetMessageStarResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMessageStarResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MessageStar
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetMessageStarResponse parses an HTTP response from a SetMessageStarWithResponse call
+func ParseSetMessageStarResponse(rsp *http.Response) (*SetMessageStarResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetMessageStarResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MessageStar
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetOperationResponse parses an HTTP response from a GetOperationWithResponse call
 func ParseGetOperationResponse(rsp *http.Response) (*GetOperationResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -6852,6 +7959,60 @@ func ParseDownloadPreviewImageResponse(rsp *http.Response) (*DownloadPreviewImag
 	return response, nil
 }
 
+// ParseListStarredMessagesResponse parses an HTTP response from a ListStarredMessagesWithResponse call
+func ParseListStarredMessagesResponse(rsp *http.Response) (*ListStarredMessagesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListStarredMessagesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest StarredMessagePage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// ListAccounts List registered account metadata
@@ -6893,6 +8054,9 @@ type ServerInterface interface {
 	// GetConversation Read a conversation
 	// (GET /api/v1/conversations/{conversationId})
 	GetConversation(w http.ResponseWriter, r *http.Request, conversationId ConversationID)
+	// ListConversationMessageStars Read star states for displayed messages
+	// (GET /api/v1/conversations/{conversationId}/message-stars)
+	ListConversationMessageStars(w http.ResponseWriter, r *http.Request, conversationId ConversationID, params ListConversationMessageStarsParams)
 	// ListMessages Read retained messages
 	// (GET /api/v1/conversations/{conversationId}/messages)
 	ListMessages(w http.ResponseWriter, r *http.Request, conversationId ConversationID, params ListMessagesParams)
@@ -6920,6 +8084,12 @@ type ServerInterface interface {
 	// CancelMessage Cancel a queued send
 	// (POST /api/v1/messages/{messageId}/cancel)
 	CancelMessage(w http.ResponseWriter, r *http.Request, messageId MessageID, params CancelMessageParams)
+	// GetMessageStar Read the source message star
+	// (GET /api/v1/messages/{messageId}/star)
+	GetMessageStar(w http.ResponseWriter, r *http.Request, messageId MessageID)
+	// SetMessageStar Star or unstar a retained source message
+	// (PUT /api/v1/messages/{messageId}/star)
+	SetMessageStar(w http.ResponseWriter, r *http.Request, messageId MessageID, params SetMessageStarParams)
 	// GetOperation Reconcile a mutation after an ambiguous response
 	// (GET /api/v1/operations/{operationId})
 	GetOperation(w http.ResponseWriter, r *http.Request, operationId ID)
@@ -6929,6 +8099,9 @@ type ServerInterface interface {
 	// DownloadPreviewImage Retain the original image for a preview
 	// (POST /api/v1/previews/{previewId}/download)
 	DownloadPreviewImage(w http.ResponseWriter, r *http.Request, previewId ID)
+	// ListStarredMessages Browse retained starred messages with their source context
+	// (GET /api/v1/starred-messages)
+	ListStarredMessages(w http.ResponseWriter, r *http.Request, params ListStarredMessagesParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -7487,6 +8660,48 @@ func (siw *ServerInterfaceWrapper) GetConversation(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ListConversationMessageStars operation middleware
+func (siw *ServerInterfaceWrapper) ListConversationMessageStars(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", r.PathValue("conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListConversationMessageStarsParams
+
+	// ------------- Required query parameter "messageId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "messageId", r.URL.Query(), &params.MessageId, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "messageId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "messageId", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListConversationMessageStars(w, r, conversationId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMessages operation middleware
 func (siw *ServerInterfaceWrapper) ListMessages(w http.ResponseWriter, r *http.Request) {
 
@@ -7837,6 +9052,86 @@ func (siw *ServerInterfaceWrapper) CancelMessage(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// GetMessageStar operation middleware
+func (siw *ServerInterfaceWrapper) GetMessageStar(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "messageId" -------------
+	var messageId MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "messageId", r.PathValue("messageId"), &messageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "messageId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMessageStar(w, r, messageId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetMessageStar operation middleware
+func (siw *ServerInterfaceWrapper) SetMessageStar(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "messageId" -------------
+	var messageId MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "messageId", r.PathValue("messageId"), &messageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "messageId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetMessageStarParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey ID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetMessageStar(w, r, messageId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetOperation operation middleware
 func (siw *ServerInterfaceWrapper) GetOperation(w http.ResponseWriter, r *http.Request) {
 
@@ -7906,6 +9201,78 @@ func (siw *ServerInterfaceWrapper) DownloadPreviewImage(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DownloadPreviewImage(w, r, previewId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListStarredMessages operation middleware
+func (siw *ServerInterfaceWrapper) ListStarredMessages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListStarredMessagesParams
+
+	// ------------- Optional query parameter "accountId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "accountId", r.URL.Query(), &params.AccountId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "accountId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "accountId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "conversationId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "conversationId", r.URL.Query(), &params.ConversationId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "conversationId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListStarredMessages(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8035,6 +9402,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/messages/{messageId}/star", wrapper.GetMessageStar)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/messages/{messageId}/star", wrapper.SetMessageStar)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/conversations/{conversationId}/message-stars", wrapper.ListConversationMessageStars)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/starred-messages", wrapper.ListStarredMessages)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/conversations/{conversationId}/previews", wrapper.ListConversationPreviews)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/previews/{previewId}", wrapper.GetMessagePreview)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/previews/{previewId}/download", wrapper.DownloadPreviewImage)
@@ -9065,6 +10436,77 @@ func (response GetConversation503ApplicationProblemPlusJSONResponse) VisitGetCon
 	return err
 }
 
+type ListConversationMessageStarsRequestObject struct {
+	ConversationId ConversationID `json:"conversationId"`
+	Params         ListConversationMessageStarsParams
+}
+
+type ListConversationMessageStarsResponseObject interface {
+	VisitListConversationMessageStarsResponse(w http.ResponseWriter) error
+}
+
+type ListConversationMessageStars200JSONResponse MessageStarPage
+
+func (response ListConversationMessageStars200JSONResponse) VisitListConversationMessageStarsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConversationMessageStars400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response ListConversationMessageStars400ApplicationProblemPlusJSONResponse) VisitListConversationMessageStarsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConversationMessageStars404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListConversationMessageStars404ApplicationProblemPlusJSONResponse) VisitListConversationMessageStarsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConversationMessageStars503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response ListConversationMessageStars503ApplicationProblemPlusJSONResponse) VisitListConversationMessageStarsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListMessagesRequestObject struct {
 	ConversationId ConversationID `json:"conversationId"`
 	Params         ListMessagesParams
@@ -9791,6 +11233,164 @@ func (response CancelMessage503ApplicationProblemPlusJSONResponse) VisitCancelMe
 	return err
 }
 
+type GetMessageStarRequestObject struct {
+	MessageId MessageID `json:"messageId"`
+}
+
+type GetMessageStarResponseObject interface {
+	VisitGetMessageStarResponse(w http.ResponseWriter) error
+}
+
+type GetMessageStar200JSONResponse MessageStar
+
+func (response GetMessageStar200JSONResponse) VisitGetMessageStarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessageStar400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessageStar400ApplicationProblemPlusJSONResponse) VisitGetMessageStarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessageStar404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessageStar404ApplicationProblemPlusJSONResponse) VisitGetMessageStarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessageStar503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessageStar503ApplicationProblemPlusJSONResponse) VisitGetMessageStarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetMessageStarRequestObject struct {
+	MessageId MessageID `json:"messageId"`
+	Params    SetMessageStarParams
+	Body      *SetMessageStarJSONRequestBody
+}
+
+type SetMessageStarResponseObject interface {
+	VisitSetMessageStarResponse(w http.ResponseWriter) error
+}
+
+type SetMessageStar200JSONResponse MessageStar
+
+func (response SetMessageStar200JSONResponse) VisitSetMessageStarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetMessageStar400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response SetMessageStar400ApplicationProblemPlusJSONResponse) VisitSetMessageStarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetMessageStar404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response SetMessageStar404ApplicationProblemPlusJSONResponse) VisitSetMessageStarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetMessageStar409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response SetMessageStar409ApplicationProblemPlusJSONResponse) VisitSetMessageStarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetMessageStar503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response SetMessageStar503ApplicationProblemPlusJSONResponse) VisitSetMessageStarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetOperationRequestObject struct {
 	OperationId ID `json:"operationId"`
 }
@@ -10015,6 +11615,92 @@ func (response DownloadPreviewImage503ApplicationProblemPlusJSONResponse) VisitD
 	return err
 }
 
+type ListStarredMessagesRequestObject struct {
+	Params ListStarredMessagesParams
+}
+
+type ListStarredMessagesResponseObject interface {
+	VisitListStarredMessagesResponse(w http.ResponseWriter) error
+}
+
+type ListStarredMessages200JSONResponse StarredMessagePage
+
+func (response ListStarredMessages200JSONResponse) VisitListStarredMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStarredMessages400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response ListStarredMessages400ApplicationProblemPlusJSONResponse) VisitListStarredMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStarredMessages404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListStarredMessages404ApplicationProblemPlusJSONResponse) VisitListStarredMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStarredMessages409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response ListStarredMessages409ApplicationProblemPlusJSONResponse) VisitListStarredMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStarredMessages503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response ListStarredMessages503ApplicationProblemPlusJSONResponse) VisitListStarredMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// ListAccounts List registered account metadata
@@ -10056,6 +11742,9 @@ type StrictServerInterface interface {
 	// GetConversation Read a conversation
 	// (GET /api/v1/conversations/{conversationId})
 	GetConversation(ctx context.Context, request GetConversationRequestObject) (GetConversationResponseObject, error)
+	// ListConversationMessageStars Read star states for displayed messages
+	// (GET /api/v1/conversations/{conversationId}/message-stars)
+	ListConversationMessageStars(ctx context.Context, request ListConversationMessageStarsRequestObject) (ListConversationMessageStarsResponseObject, error)
 	// ListMessages Read retained messages
 	// (GET /api/v1/conversations/{conversationId}/messages)
 	ListMessages(ctx context.Context, request ListMessagesRequestObject) (ListMessagesResponseObject, error)
@@ -10083,6 +11772,12 @@ type StrictServerInterface interface {
 	// CancelMessage Cancel a queued send
 	// (POST /api/v1/messages/{messageId}/cancel)
 	CancelMessage(ctx context.Context, request CancelMessageRequestObject) (CancelMessageResponseObject, error)
+	// GetMessageStar Read the source message star
+	// (GET /api/v1/messages/{messageId}/star)
+	GetMessageStar(ctx context.Context, request GetMessageStarRequestObject) (GetMessageStarResponseObject, error)
+	// SetMessageStar Star or unstar a retained source message
+	// (PUT /api/v1/messages/{messageId}/star)
+	SetMessageStar(ctx context.Context, request SetMessageStarRequestObject) (SetMessageStarResponseObject, error)
 	// GetOperation Reconcile a mutation after an ambiguous response
 	// (GET /api/v1/operations/{operationId})
 	GetOperation(ctx context.Context, request GetOperationRequestObject) (GetOperationResponseObject, error)
@@ -10092,6 +11787,9 @@ type StrictServerInterface interface {
 	// DownloadPreviewImage Retain the original image for a preview
 	// (POST /api/v1/previews/{previewId}/download)
 	DownloadPreviewImage(ctx context.Context, request DownloadPreviewImageRequestObject) (DownloadPreviewImageResponseObject, error)
+	// ListStarredMessages Browse retained starred messages with their source context
+	// (GET /api/v1/starred-messages)
+	ListStarredMessages(ctx context.Context, request ListStarredMessagesRequestObject) (ListStarredMessagesResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -10494,6 +12192,33 @@ func (sh *strictHandler) GetConversation(w http.ResponseWriter, r *http.Request,
 	}
 }
 
+// ListConversationMessageStars operation middleware
+func (sh *strictHandler) ListConversationMessageStars(w http.ResponseWriter, r *http.Request, conversationId ConversationID, params ListConversationMessageStarsParams) {
+	var request ListConversationMessageStarsRequestObject
+
+	request.ConversationId = conversationId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListConversationMessageStars(ctx, request.(ListConversationMessageStarsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListConversationMessageStars")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListConversationMessageStarsResponseObject); ok {
+		if err := validResponse.VisitListConversationMessageStarsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListMessages operation middleware
 func (sh *strictHandler) ListMessages(w http.ResponseWriter, r *http.Request, conversationId ConversationID, params ListMessagesParams) {
 	var request ListMessagesRequestObject
@@ -10743,6 +12468,66 @@ func (sh *strictHandler) CancelMessage(w http.ResponseWriter, r *http.Request, m
 	}
 }
 
+// GetMessageStar operation middleware
+func (sh *strictHandler) GetMessageStar(w http.ResponseWriter, r *http.Request, messageId MessageID) {
+	var request GetMessageStarRequestObject
+
+	request.MessageId = messageId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMessageStar(ctx, request.(GetMessageStarRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMessageStar")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMessageStarResponseObject); ok {
+		if err := validResponse.VisitGetMessageStarResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetMessageStar operation middleware
+func (sh *strictHandler) SetMessageStar(w http.ResponseWriter, r *http.Request, messageId MessageID, params SetMessageStarParams) {
+	var request SetMessageStarRequestObject
+
+	request.MessageId = messageId
+	request.Params = params
+
+	var body SetMessageStarJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetMessageStar(ctx, request.(SetMessageStarRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetMessageStar")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetMessageStarResponseObject); ok {
+		if err := validResponse.VisitSetMessageStarResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetOperation operation middleware
 func (sh *strictHandler) GetOperation(w http.ResponseWriter, r *http.Request, operationId ID) {
 	var request GetOperationRequestObject
@@ -10821,162 +12606,214 @@ func (sh *strictHandler) DownloadPreviewImage(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// ListStarredMessages operation middleware
+func (sh *strictHandler) ListStarredMessages(w http.ResponseWriter, r *http.Request, params ListStarredMessagesParams) {
+	var request ListStarredMessagesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListStarredMessages(ctx, request.(ListStarredMessagesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListStarredMessages")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListStarredMessagesResponseObject); ok {
+		if err := validResponse.VisitListStarredMessagesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"7L1rcxu38if8VfDMc6r2/68lKdpWblJt7SqWE+sc345ln7O1idcFzjRJxEPMBMBIZlT6ZPtyv9hWo3Gb",
+	"4fAmyXYcOy9ikcRgcGk0un99u8ryalFXEqTR2dFVVnPFF2BA2U8neV410pyd4ocCdK5EbUQls6Ps3PBJ",
+	"CYxTC/b69dnpxXejbJAJ/LXmZp4NMskXkB1lrtFZkQ0yBb83QkGRHRnVwCDT+RwWHPv/m4JpdpT9/wdx",
+	"RAf0qz44O82urwfZw0pegNIcx7BhUHnarNg8tnbb2w7wKWjNZ7BhbAvXYsuwQrPbjegan9Z1JTXYDX1Y",
+	"yWkpcoN/55U0IO2fvK5Lkds1OKhVNSlh8V9/0zjsqwze80VdAj1R4NhEAYu6MiDz5dvcdzjItOGm0dnR",
+	"4fiHQWaEwWfiCweZWdb4TaPkUSXgyL3nqLe3611n+YJ6oam2F/wsdsx8xwNWNDRVYLwoFGg9YEJe8FIU",
+	"TBsFfMHyRulKDVil/GYxnBqwdHRn9Mzt1pH6eIv7C7q9hOO4hD/ygr0MTdatYqevO1lAty5Jn88q81PV",
+	"yNvNW1bm7dT2ks74MM74WWXYT67BmvnGPu5ipi9BV43KgcnKsNDta8kvuCjx2N5qvk3ST5zxN+MHccbn",
+	"oC5EDux1q+mauaf93cXsH8mZkMBqUFpoPC+AtF+rylR5VTLtxmbwOCmuRLlkrSGEMaR3Bv7Ji0LgO3j5",
+	"QlU1KCNAZ0dTXmoYbL5ORAHSCLNkXBZMGI2HUgH+IIURvGQKLoQWlUT2may4O9PZUcZLkcP/KKucl/PK",
+	"npy8khJyfN85HmdHiO5bQFrLFXADxYnJjrL74/vfDu/dG46/e3Xv/tF4fDQe/69skOGRz8b3fuDfFNPx",
+	"cDwej4ff4f++H4/po/vvXjbISj6BMjvKXoDSuAjZIPOLmh1l7xd1bZk7TeRsx47v45bXyXImk77yFKON",
+	"EnKGLVcmfZWBbBbZ0S+rs3dN5Sx+sD+AUpXK3gx6eo8LdpVNK7XguHQFNzA0YgFZzyOi2EapeHGFxeuZ",
+	"UlzDOBe7mH0jTJd3pxs8Xra/4FhbPSTvHoRV90NdXet0feLYqslvQHeIOykv+Az2PC0n7B0sNZhhzWdC",
+	"4ivCycmrsqRBdI6GMLDQ2dEvX8ghebNyTNwCJH9sIgfPxq7DxnGl+BI/S3hvHloh4SY0ZV/eSw4X3HC1",
+	"JyW8BMOFhALZ9VSUwMQCBZZaVb/RNg6YzqsaCmYqxmUgE+SrOZeVFDkvI693pDFijxa1WVJnj7meswVw",
+	"qZmZ264vRAGKwXu8BIUpl0yBaRSOQlb0zIi9CM2Qe2j2DqC2z5dcG/ZOVpfSNe1w8KAr7LTTD5KTeJRN",
+	"qkmLmvchxDDX7Ci7EckNsqYuNh+NVdYdZ7sLU0w4fZsMHoat9BtcqZYa5Hf2mOW8LEFpZvAcM2EY10gY",
+	"Vc1/byBevO9gOboN/06WsztYoq1ppQK5DFhl5qAuhQZ2/vhkeP+bb1k1teQi8VYpxR9QsBfPfj5mjQY2",
+	"A0OH5cwSu6mQAJWAC2DC4KhrbgwofNf//o9fxsMf+HD65urbw+v//O9/y259SbT2ebdrb+u9kmrI8WKJ",
+	"a5i+cz3vuMlNQi8eOibhucgCDC+44axePaH+Irk1h7Vj/ogM9iGXOZRORd9znehZVslyyS7nuES/N9Dg",
+	"vSsLNoFppYAVQtfc5HOmDVdGj9hJUBkdhwxyrBsEuxRmznhuGl6SktlZa3hf23v35Z7c6N4qq+nrau/F",
+	"7emkf6VrPhGlSCTUXRf6hb+KpsBNo4ABXiOok8R7rJJBU7jd7XHPnkNuNbcVQUc7AaiR9ra6NfMuhILc",
+	"vIL3ZpUlvlINpMSFnG/CtcgZPTU08N4wXvDagGJCszDQEXtWEfdkVU1rnKhuTV1XyuADYlGXAoqEp0+q",
+	"qgQus+u4BuuVA/fq5Ls+aVt3dQy/doOM/n2zjTWmjFA7KdqNrpfQKjkVs0bBwyC37klvp6Dx3QwkKqAF",
+	"iwLwiL2EGjgqRKyR+ZzLGf1u30i3alGBtqABScWMS9oKDdpqp+yhAnuj8lIzroC9gxqVWFYrcYEPgNW9",
+	"h1ZoYch6teUo2BTe52VTQMGmqlowBbzQB3CBhNUh+pprfVmpwgv01NsQyamHDciiroTsocHnnnxePXzB",
+	"UIA6srRTXYBSooARe/XknF2AElMBJAp6WaOoFlzIEXu+EAbPJ97R//Ppixfs/OW/kCvm2IcVJxb8/ROQ",
+	"MzPPju5/800PBcW5XK1jDL7JMZNwASoIn53+D8c/fDvIFkL6L+51XzfILpUw8BzXyUKrXWIMg1lDejej",
+	"uIcOyqgupZCzIVFAQnfuImAPK2m4kEhfLI9kdHuOp9dodh9cfEXR/xGqAw8tMLYGIbfUiwLf0KoOKIke",
+	"M8UvE82DVAo8JKsk4FkPb8wcl4xgurdTLko7S1Pq+CGuuv9uI1vr6F6NRHFvdeuSUdwByNKSNtsjeP3q",
+	"IcMhaMMXNb72BsJoH8fdLGymVpg9af95vLm9yJlqKSN2aq+71pc6XGP2EtQgCyFnx0zzCyiYqqqF45mN",
+	"mVdK/OG+ZFzlc3EBRCcKLBPC34AXljciGzZzvBplrmABdyFMrFdF3WiKsDBTflEh+wlf7KOsvhMSW5Nw",
+	"kNHJCoJt9hjKsqJr47mA/+8G2uy9LGLT3Zk0EpfwIYG84z+H1lsDqABe9Kl4cfmveuSfuBd9v+6q8tKm",
+	"rAwy1cKxScoewgYixfae/tbOrlzZSiD+V9LJqHGX4dJrzotKo96Rg3QQDQFFzqY1ugtF2JFId1inQtcl",
+	"XzL787HH7MulHdbWrWrR1xXe4GKBqzUObYU0MAP1EZjjZk3dbniqsNN6tDctHWN7cglVJiS4jePeQMl/",
+	"2OKmQjL8mdioE0BRBxUXiPtUqgA1Ys/gMn6Xc8kWlUVXYKHZBMwlgLTYgD62rFXmqLU0GnvUdI2fnRJb",
+	"Pj9/9IEAhHRa22GErrBr4S4nfrurKE7YPjXaTh5rsQayqe2r+3oLnPHb0rKDWeGfTdA8ydWys6i8Fv/C",
+	"x21H49G3ozH+jk/4JdgJTj26twds+sAyLnx/Zi+IHk6fjCpqhTS8Pm7XGnB3z06i1dXb6v1iDJiGmitu",
+	"gK69ICrOhTaV8juqbwVp0lTjNGjOgwzvxV7JsZeZVJZDJAvTnnUvMV3A3gbV00bZY0hEY3Emy335sqw4",
+	"Sl2KHEMsEzCVNbLii0fMQYJ6kAi29CEykYElSHeVkIQVNsC9QltkIlFcEJJ2YjwpcokYLyTpuv0S2Bdk",
+	"2RXFPge1yi2euHFenis6vEzBDFkMkuQ6uWwP0xgPNqvdkN68pTRvYe6+JT3XUjn2uRYcC9j22GNqdk7u",
+	"GYEt9LlK+PuiaJ2xtZfGwHtzbRuCFxmu2zu7q2ndyX87vuWFa036rdrxqfMWZB95YQ95BVlplGjZDkZL",
+	"fnTbk/zijBAjIq7kBy+6uon2/KLbD7R0S8cDul876SzpJDb03/g2u7F426S1hX1M/THw0sz3NvfyQkjQ",
+	"2gv5Tk7AJezaDryjUYYSZw8S6H+Pm0gN3yS9uK+2Tdt11TvN1rHab7ZPuDbhBnca/NLif8eM7ihGD0yA",
+	"NHlajf+io7aDT6lCDyxIayrDyxXZ4PZaf+tqzI4eDDL/fndqrLtXBN70UuaEAH1w3bkztG3q1ApCFxVV",
+	"h+JG7MwpL/GLRpLo/9b9ssYhp7sy28ak+xyXrInNvjUuJi5CCRbAqrlCmYMGRejRPijbHcFoK3Pt7sc2",
+	"pO3sdBPoUVaXoHKuwbkSH1udq6gsrYPdC6HnLOeN5qVT7FJa35W8w2o0jSja1vVgXP/+ehj+Prwefhc+",
+	"PLge/vL9D3zypvWN//ve/etVi/wgez+cVcOVLbqZ5TZ4yFQtsMQihs7wCla5IjPjiOlmshDGQJE4vWjD",
+	"5R+cXXLN0GZgQKLMjL8kMDN4F+JjJkw0DSG/SdxmeJ5DbbjMYYDcSdQCpGEFlAKPl3U7RqbrrQDOgsYE",
+	"dcYbUy04vq60oI6+E9iy4wS/+3N3K1YL/fxShm30+0UW0zsCNXGvvZKgIAeHvuDXQConYVfP+KIP+9x9",
+	"Ntd3ybl3fib1x7wDNMwLz0hua4zW6Mbj+D3amCvr+PC8dYDsfo7YwxIpXbNFow1dxzhaPEQaGNdMwiUj",
+	"eCwqlpViUwV6ju3F1Cn/ut+IvbNnElFZH9LbJrmVJZSLqkDrZ4eX3AmUmhDm1RpV3igutTWEBGaVQMkJ",
+	"NZNrSjbIvEcKcdXA2Oy16A3z0RZmXVzW2sDCCdk0l3NqtR+MuhKC497V2Y+UvP0upuvWd4F6XWf/a+Op",
+	"J0EJl6ANmwqlreXewZseoJMz0PjI8OzUY6evNbCIPdoTUpUFKC+MImSKE3SAzAx7QYd2UNqdJ5bPVSWr",
+	"sprZix4PZynkh3LEStTOj+SJ1VFB9wwVsKEaw1LId2g+5PkciuCwNmKPCDBFkYgpWFgLutszrhlIJfL5",
+	"AqQ5KKpLabEwT5iakeY4YieS8Ym28QYdD1hZkX2amXmzmEguSryZQzDEiJFLooIpKDyh2kJvVWMYTx5x",
+	"qxRcaCM/CYNyPmVO1T2A9zWXfQEPH++y90NLMTb/nWUgNzBg4iZGPXs/t60bXP7CgLvYH7kljEpZ0HR9",
+	"SM6co7kYFYm8hHW62vctYadRZXaUzY2p9dHBgdumUV4tDnw3n0IqaB2fFbeakgsy5bDkh44vzb3xeNxz",
+	"J3Qooq2htUgj3kjuW7qR/Jpv8L1AJKjfjXhVsCff90IgS0bAelE3NjRiakAxrx2GIzZao8p8e3j9t2zN",
+	"SJ6KBbzqQF/2rQe1nRD9/VsN8cNMTNdO7Fz8AS19U0jz7SGtPWnEDx58883h4YP7g6gk3+tTku/ALfuJ",
+	"5Wt4HESOvtYofP39xaOfE77ll1ZbLwu8quZiNh+evjgLoZI5V4Xed2ntRJQwy9VRPauYdzplJBe4UVhl",
+	"DHX7UrixWAjo9csnkfum8pEnh7fWL65vR7z93j/hmJNdsrW2+e3+TEjc6MiaVwVd787BiVN4hr8f2t5N",
+	"rEDqLnXnIB6O16PLu7KDvSXTwDXX8I7G4gygmOQLGzqIyhL+3fX462UiK/BO4BWeO6TBhn3bsMYLIeFs",
+	"tgWOjDgEHr2e8T3oHd/ewJC7Btb6atj1ytnjV69e4JDw3/NwfF6/fILGd3Rqa7RDNblmnE1UdanBz4DC",
+	"VVtqXKNEnwPkbfwbVgTzNCodJxlcIDzi1b4RtsFbqU1hz7CFuh5Wl8j8aSXSSG01QJdBKNhkmUTbWwuo",
+	"MBrdLoPEFyBgt+Q89AOFuCWucv+GotaD28tDsilLsuqoxOEsIWRs8CkkkQ/GqZ41peUPIS7hNLtOVqB7",
+	"Fv89BzN3ChiSkWKuqf2mTVIDJmQBNV491pGqmjIul4wbw0mRaJEJZWhYRRZ29VPydp2SG7zjcFhOKxkw",
+	"3DWvF2AbUkmdzpIOYp142su9pFu6ztjXMIyUA2xkFS2m4jdiD4ZwA5X9R3QGAYecaicSgE9fsMorUEXU",
+	"A+d7QF7+pmqsOunDzPticpJA2r8YR7gjIOG8N6xrZ3Cg5yxvMIKQ6cOeyngn4K4d03kJanvk+Rxd2EC6",
+	"mI1ib5vIYY9NpHuKPpWN5HkN8jb+2TVIC7oKWTDugo/agaRCMs6imf/uArHW+U5/MPfhU9BGSJpVNwJ6",
+	"kAaeTpb+pkAu4UKhVlTk+w82h5tsshj6Mfadh+c1qJvspYeNLTBcG5QnC4qV9f6aysY3IXrWmIisJ7t4",
+	"h/adwwj6eOJ561bA8irizfuGsVj/Bt3kOUDR59H0ARNUdLXFnllVNci36eFxePXbRfANJtA9+UKD8Z+s",
+	"kXuNET0u1y5jXXX1iGu2m09LIuc3ur1h29JcOJT3JsHJhpzYzVxBgEJTbBWveOAYcQslQQRdN/cBa2oy",
+	"1WIX80YWyLPs5XNX1/pXTPVTY6p3JLckHnEL/v6MnkxBgX0lGZ9z6UapkBAuIgqvycxvictJOCmEdGyl",
+	"G35pncCs7kp+tZXaEDb4cVJTdZhxx6doNf9ZmhlsTZY5dzjfwnuhjc4GoRdyv8wGPXOCtAN/07/dBiu1",
+	"Q/X3MKK5B8/396qMfHoV4Q0o18pAjQOkN7Nx+2sMUQmc3O5KH/W+dBfazRJ6uadiJgm6H9Uq6kly13pS",
+	"3eT5vYMj9qZ0WfvJb4OYlCp98P5463N7pKzq7NqGhFN9e4b295u5SZG0uHTuSYxLJhYLKIT16LdIaoi+",
+	"7OzPFj+dlfXf7GQRYNLXr34afk/+Fezfc2FA1zyHAwmXaAqnsAHLGdUFFMcMbFKZSrHL0JaiPCdVIUIQ",
+	"6G+UM6Ejun/74PvD/WT31hzWbQTsi2o+SpMBOLDCRwCN2E+VSsNYMcTV+8kMXCArOavhT95F3fVCeUYk",
+	"qya0XkzXwN+BYlLk7yRfADnIch/fX9hsgJU1qvkBtHf9zvykuuTR6nhdZCENOQYW8tUUVjeX7fvk33RU",
+	"/fttbo5m+xwUFu2jXKM2vIbLglvf56o2YiE0GuZqq75R15QNiVvPqcprieT5QG4k+EMBeV+mxL50MB2U",
+	"yKZEuH0amT2xWb8YF7xskCwJmJeMLyZi1lSNZqaazUrocwJbdUt3sOOOeWvO6YGbcdAnDrJtg4y4kS38",
+	"JKZm0yEsS6gUZE7oYEVq6yA7XyPU7ypCPQnR+epA+2dxoPWBSZ8P0L4rFNZisjvowdc92tTNQ+L2j0fb",
+	"O0Ss327U2Ri3EDvw4ptEvac+lCXGDflcqT6ZsDf6ucFpG/ZeLsP3zl/Txr/zugauWCUZcFUKUBT+vhZE",
+	"+sqqv7Lqr6z6y2TVt8UjO2Lox/LLvraeeNPK3S6GU50IV5HiRHHBHv/f/7MCyc6EmTcTh8hyMW8OKgEr",
+	"fqfZM27ERfCbP3lxRjpKByYaUOK4VuYBZ4W0+EMnC4GPwA7SdhJchZK3AiRw2wTzkKyk47MJ4AgnwOY2",
+	"jLagRIxtox8Ne8ROyjI6a1Af6L+BD5OafBAVsbNT14AKfbDHr54+YRMoKznTPnzsx59+GiXs8bkA9iis",
+	"UDbILjo5Pa7JqsRrkR1lD0bj0QNytZxbojrgtTi4uHfgVtV+NwOz1jURRza0UQtQuJTi/pq06mWK2cWA",
+	"thhayCVtl093SDYvFU/yE6GNzyeRDVrVZX7pSZRkhGzA+euS61tSXiZUSvm9AbVMqstg82y/Qi3ddz8l",
+	"f1vyFkTv1nUvK8VCmNbLCpjypjQU4Rv8du+Nx5tddq/fdEqz3B+PN1SZ6Kku8QUmdN9ti9O8+j3lLk5o",
+	"l9FjxFPm9SA7HI/X9Ru26cBXfbkeZN+MH2xv/7pbJqNZLLhauoPR40UR+GA2yAyf4fZm4fzYawV3dTUz",
+	"jqkWTsq1LEwnqd4DTIaAbmOcSwAt/yCBjZybwOBXSaGx3XwOlOUiTYrKkWXE1DKaL1rpuoWsG/Or9JmP",
+	"sUnw1Fegm9J2RjmjhEtRU4ipNe4aejrkT9ajX2UnmwxXnt1DQcxeVmnREsuREBJFfgkFdgCXxK5Stqad",
+	"ny3YAAEMQxgKGTLtmirOiE3wlX9Hru6c8BYutm7EHqE1CidirVe0oMHyIZJ8BN7uoQCvHjt1OyMjAOe4",
+	"wkC7RphtPNQmdx/OQGIn4ItMDeIAvFdcKaZgs1e2E0nYGCrP++bAKQ7PMb+kotLwH7C8XWmqN/Q0aPNj",
+	"VSz3Y323NwntNtDu6vdwk6d+l600Ixl4SgikmALo7fW6vu0V8IUkRdqL7fdtUjAqeTZL/MeJh8mxDPmb",
+	"RQEMplNSiOkc2C1Kj8BL9/SmyOjoY2U9brSeNmVkuqOWJLGCZuNE7o/vfaWJD0ETJ4EUkoxFe+/0T6i/",
+	"B6ZKHtnJTsN7yJsddnpgo6/6I/T8QFFl8m5Xvd0FW+X1DeSZw/EP29s/TCrg3VIA8qw1MdztJAJdD1a0",
+	"nIOrADpcr9V4XjoxJBFowgXti4x5Qcnjg2mRsfa1/DOYk9R58SsP/+Dn9eWKsJzdiMwPt7cPVQ7vgsx5",
+	"kQjja8X6tlDX97bY5CCWZb1+s+U8HFAStfVIQKcATKNB9dosY3EpHartYLiMqprZ3BeGsoQyYmd0jrSL",
+	"vyfWyMtywvN3dC1ScD0G5ElumaWYhO59DP1kaUAzTIvDqsbYG/n8n0+ECTZVg31brKZdJCgGrOqNiMSJ",
+	"W5qb4BL2UWcg+CzQCQIkPgE8sYfeHosY9Zz/f9g0SN0CRQPm4avJMqR5oM3BXflsWITqr+O2FQ74YHwj",
+	"75Tw6WUeoSZH2tqfep+5qpFGlIxHpdrdX5Qe2ieWswDBYtNN2yoqdOtb98MWCtqN4Fsz6iF5Xykk1Hb0",
+	"7ZchA9DncwdumMPHJ+5WGtoCbNbAFer+B0Ctez1UXQ4Y0vBKbpJqiO0CQccRNae3hHXwaS3Rv9ulYtcg",
+	"C50CbPZs2JEihqT5FFbPx2loc2cC6cetKLPjUYk7tuGgePXoczgVceM8H6TLyyf4S2xg6w7IOtOOAYs5",
+	"uvI0/pihIU0bIXNDlmWqn9LVujZy4HREX4nss2O9nTpFd893B1nd9IkJVNdAp+bWlJs6ON3mdLWGBcm4",
+	"XkpKgtZoLDx2cH5y/qRVnO2V4lLb3JkSzGWl3vlEK5oiHO3JskaFiYsLR/Wjmk6PQ8H/TnL6WN+M6Dbt",
+	"kPJ12az5Ns6sxeVH7LkqhORq6WF0BXYyTIFNhZ9Wl4uP9WgnoZ5d/4m7IVy+pUDczodjpdRezyk5N6rJ",
+	"TWPN6H5qZMzZBf++/9fnIuHXNjEEW9bnwFYCLXhV3F1jm2GObVJZkqh/DYTnMoDbs6VZGradcobzUBiM",
+	"gTRKwEp9MMoA3K4PxgumQdlwAgpPsiEQrhxLPof8na2bSH0VUDSBMkfscciS6nOg+jTMri6kFe2Qx7gE",
+	"pzR7rPHnkpLFVMO2PnZ3rK3k5xidL/Qco16ECYmB2RTTHfgFGfryqXnJxSJdkzjfdVXQYu3uGtRCaN3h",
+	"hQvKq6QIK8VxuXpS6+QGlwP+UwgNnfzn474E5OM2V4ipxe+OJ3SKS6yyhaT0j0rI3IFdfszs5v4Kn1Ty",
+	"WM3hr6qZr5n14VQ/wvcOruZcz7dbBuxp4KTaJQXTBqyAvCpcqefUvwERmliElLzUrGNXSOX2+uUTPWKY",
+	"bm/oYH7/HDkVT8DnL3X1YJ0fmvfUWPafqlj7fBt2aUOaq0bb+ZAHKHPnjT16xWfrTf3T4bNKwvApujhs",
+	"NDZtBwpjgsSjq6SjkI5hYkWnngz7PcJFSE4YMN4B4y5NAFaNr8V7KO3VAMJacvl7oduGvYe44kNEdVVV",
+	"9mFadicSbxm7RayuSpEvNxveBhku6mqf/2wqk6w80uN2C96D8eFqT6/mEJMe4suYNqL0TgauMm/qcGIX",
+	"//NhGPE8EAwatnlHTtGhl8cnQ6QK5+OyzkwQTgE6UsYzMKfK++t9XHZPcdniSys1OXrZ0j+COyboFORe",
+	"X7tvxM4BhRrySwLdtuE4BnRAuRCRy7gcY2ntyOMQSIoyxZQSKLnMerbvfoPKw05Vi42b4krvpRmyEY4g",
+	"ExLkYKdWO5Giz8oRIv3jTrRz1a4u/5/B4XOwxgk3SDXtvKV9g2kVGbmFQenhWsI4IKIYOnrAYhi0iOuG",
+	"9Pu6fbi/0z48t1hASj4ke3cKAax7OzXDTrb4V/S+10fNtAew7l2+tb7B605cwI5PTeZoyEoLVB5h3Y7H",
+	"CqH7vK+36Gxf/z6vT+h718q0n8JAuFIG9YOhdB/XF8Y5AwcZv81M/bXXZrLrnYF/Eqhrpq6IrXvA+yrl",
+	"IYWe4yoHtjIvZY2xCRQrDHjwWcQimINxAm60XYdePWKn3t7BC3udUxwJdmvL7FAumxwsY/GD7gHCVvLY",
+	"bbvpXdHZtodqD0f98/q03mnGvN0GvbLKdw7ojT/ZInzpUZL7s9S+3X/Uy0MqFU9+GkGAXpLZjZxWv+77",
+	"n2vfT3syf1IgxUfRJT/2DWzznvbmO91wAa9T6Q6u2hGt26Enex87wWVNspBeJKhzQ37lvX+pM/j5Gpx3",
+	"PUH7Ar3p8120d/MRPHCa5FBv9IbF4WuXMvTeeBw9JlbLDJiktpOVmPGWxCINI/bIYty+ra13R2G/Puo3",
+	"piRPh3mMsjmImb1frd1FzkIvGHZG+ctsD5fzqgz9jBgmqySQCLGbRuoacpvHaztek2Tt2ArdnPckUKeU",
+	"wrwYoL7ArHrJQidoQQrusYHX/LLbmbSFiOvSZo0kUbxPg00z0q8X3W/w7p1C9c9O2+lCPQzkP66G7muz",
+	"xHFY+Du7oRa9G3/pZtPfwGKIntNc+MGfzbJrsn0gHBiLpU0rlWTMX3hz2ufCpGKSLZqKS4aRTiUyrmAs",
+	"/BQ8S+8Q1OKwA4vlUsXCIQUjTZZRVG9XmkCziShLoW1COYu9uqBgyhZozy0zAoYTBfwduvUjcYAOdvIk",
+	"HaEvAZoCdqt8JymEvJHPOJdol32nk8eHaimaOXeG6wRIThkT+49kqrLozOY/9wCXv6x0ArvDcWlqpr+S",
+	"+NLNIf6hGMHu0fx444eE5qsh+5a+bXVYbnUF1MobM6neM2F3f8T+aWtqMesmpxt1Yf1evJMaPn3JhSE+",
+	"6D1pyKL0rLLZuqciF75SdgElX47YqastSx4mmimeA+Nx6JaJuJqyzk2Gwijxxci22hkBYuYWpiWv9bwy",
+	"x+SVk0yeBpjeWSN2EvNC4gp4f5UJ5NUCtI9CCIkk2aQU5FGheqzraf7cvzziuD1x724DSRftMwQQvyYE",
+	"+zAJwfa5Q7YF7XvW4AP2CWS8/5U2vlDaeJpk17WXEl10mMPFlTj/K6KUJz252a3EH7Nr9sgpu+sbzui/",
+	"Xd/grcIsWHLVP2oV/q4ANWL/dkBJUNYHrNGg01J3UzE1yyQVp3XTsjAIaGZrgrYc+WcKP5CEHQL5Y3Vv",
+	"dMlPqwKT1+sUjFVW0wRvQdENpbdjeg7m6cyuMnlievUX+2skVd/bAWZ54dd2N7ECYhXzNd5JPRX3bixF",
+	"rCowLYTH+eeItkeRL61TyVBYZ8SeL4QJJub+nc32hnX+dDDOIGuk+L0B97OTXD4espOWVOrTvMiHTkfB",
+	"yx/PFOH5nXQCi+IEjhPO0mejrTmHQa8hYPUj50OLH+t47DxrDCexxRrJl24jMEwZ0BzU4GKWLEfB1fRK",
+	"i8NDbZUCYg4as1RiEzwSvlmvOYcyP97ekFOLf3XSRg6yZOw7Zlg9urfHvY5pKFVlyd+KBbtrD27SfbZn",
+	"+0vIn2V31St/djp0ISAt3BEt4Q4lUR/QHkBCQ+dLbWDRoSAc0oaUm+ePmCgQnqdukbUeadTdZA7HbkKu",
+	"ggd9QJZzzHwKuUf2u7+fP382+lU+4doM7TfDs1PrfIO6rjZK5FijljJVoEbvXxCvYM4I4nJE+qu03P0P",
+	"UNWIEX04hu9zYblVqBTjqMqiM21LBffq/OH4h19lCOVTwBc2Nd5j4MpMgJNwBjaCRgGFRDvfIlq50a/y",
+	"1TwsjxMidEjNZ8Nk6ESxspqN2MNS2N5iLA7mDKHOfpVnp+6+nirQ8+R4iqmNlbHBMQpwn62h1Xp3ozAg",
+	"bPpEt0h9KfnO7dwe0W7v7n/PndM2Tc/nW3GvWYcVtPZ5naflt4c38c5DkYZodki71eIi2RGb+437Vf4q",
+	"W+/e7qd//siRABqqNKUVZFMBZYEgU1lWl3ZfiaZdx59F0irL1z3dev6OhOZmhRVXwJOG5xaOVt5g0Vat",
+	"YehWfTf2iG2z65TRzIGXZr6W0USjAC+WJOpezoHgNtyHCdfgo09Q6Oq1Ev4M5jG95ra3USjTacezR8gU",
+	"vX79vRD6u20wI8b2Ra7DCyHbkUl9zN6qX9sii7B0HrjAIsoYge2HocbSi2c/D9jfXzz6GZnrz2c/Ucqj",
+	"WBwtCBcuvZINKhqxVyG9keOkIapBh/gYG2yIXetBMGffP/ThMbULjDkO+Gvw6KRqNPaEUWlYnKi9iiwY",
+	"rGBRWZbvwp16KecpPrNTfNKT6hJUjgTpQzUKMQNtfMRGTFsqSvgIYRqDjQFUeK58SM1Nw6faJeduxLkp",
+	"nmompvvGUw3co7/VMLvps3cRxvWyFZxEVI+xsHaGw1fLGtJ4pu4pGf3ZwrmIZG8Y0PXU5RC29ESlPN3u",
+	"Y+W65egzcvpJclhR8EjqJioWbYCqXwvzIMHBVdD/d/Oec1BDKPIegEGf/WQNo/K42Verw1dk+XN3uuvC",
+	"rndjtnaPdl1X+k7qAZl76c696TvWWcVf0v3edpZtnXcHaDm78HOZg3XqsUZqShkxYD4b/eH4B2ehblX5",
+	"dXUX39kYFiffIxRtrdjgzQw6BH2j3s2sQ7zL/+Js6j2ZXWwfX4xtua9M5M4FQXfNnpeu6FfD89cr4HO+",
+	"Aj42lEGnh/HANUEW/RfGNqbvK3/1pxeua1eynrDCtMxpNQ2ovRelE/OaLEIyG5vxoFJmxH4keDHmWicW",
+	"PQgl+4ROHFYjqdqPwXOf1OamLNEliVtjSEjT6BP22NFWKqjdzCg+nYp8kxxpKx9+HIfeLc68zrP1sxFe",
+	"cENXXezV3UswazLUJS532Af3coamLM++Wk4srpPScVQtO815QApXfPYsQXLpi+qEqFkohOmeigGbNIsa",
+	"Sd2EXA8DD4Ur58tM1GpVHi6XZi5itEGKHEGrgDQeF+vVTb7c1GUR8uB7Dzv8o+w86QUp2+atr9PTkqmQ",
+	"Tjc7/fnF8Oj8wK4HQvSUVNUDrFVuuyycR2Db/EDGDi5xAqAsiOXpbsROJOMlIaG+Wg9Vlg7uxTyMIhQB",
+	"iShun4dg57TvIsiFktzWiA7vee5Oaeg7qdDDc1Vpn2Rd/0lFvV09A80WnpWUPne5rohiA+oWK9anZ+uu",
+	"BLi74bve6Sgt4N4fIusJ/S8pUpxbikZGYtchUUjbrH2rmBHWSx9cJadvPRJ0Es4w8jrvV2QRd2TNLtui",
+	"26Vj4pLuCU2PRFukz6kTC0l6ZS8Xtc03WgAWJVDLEXvtUpyfnQb+djg+7BURnvsvtrGMVymD7BzyNQh4",
+	"+rLbs4HbaEF3qJocxrhPX7PlLU9TXFua2jf1p7VE2QI9UJCX4M6ZEtT6YOl1t/znIX/llcxFCYzHwxLu",
+	"VB68631fyekNi9I5v97p5uDK/bUZxeWFjl48SUmeNnYc/fOcWBJkJhJX8PoIbTZJ6Q55vjNHvDDHT3H2",
+	"9ovUcTPfoDuEvE+flfrAg8hch83dbGjoI9EDTz04nn4Q8pFzFrXmQCsvdQpbUkkA5Fv/jag2YnbMebdo",
+	"9DxJACnK7E9uY0Ytj1Dsj/ime4meo876exLG4xQIL922LKVUcrLR6JH5ExeIXPq5hcSTJF+iyyaap6PB",
+	"N5rb8A1olXYOtGRGfnCfPRU/2t+8O641KrNCLEBG11g/HlI66C72Nt6pkDNQtRLk8YQ73higfLQDUoOc",
+	"1QYxAkKJhk6LIQx2pmx00hN09su5KkK+XYcUkKDdqrPXKZvglsNRx07G6i+LI8Twiw6F7R57cVdD8ZuV",
+	"uKwKGXPIfhZcyjtXdG81Yhi7si0Hcw23RgY/sfn2E0VZqSSg0euYPg03rihqv0ImSbxb0QI2xT1lF+jg",
+	"NO2g4pidcoCzle2Q3Pgrys52VFRIOG/H7wY0zsbqUknymWOgAlV2WxUsr8qSkqMMfApsVf0BMgkgxFBo",
+	"q5Ep4nu8roEH593UkmQTTqKHSwD8PO8dJGEFuFCRk3JftADZXCvlXsgVaNusAT3tsPojB85pw3aNl35e",
+	"+7BPqlbvdhDvAgPqQ2eTDG93lNFON2eHYDOV20QYfKYAXIS5fz/5p00qM6cldflt1417JfLhriIdyM4R",
+	"48mPrQvtGi22L6+HhpLKQ1jvzo8SYi6bxQSUvSe7h7wGtTGP6qcOPt8RQ2odhR0SWaQM0s7/Lwm2/Iip",
+	"ZhIHuZXd93XZhUrOJTr9roFfsHdE2tb46aH8VsAFlFW9iL7x2SBrVJkdZXNj6qODg3v3vxuNR+PRvaPv",
+	"x9+PLd7u3nW1g3N/6nzpaNT5XvY55q0vG+uePYnl/a/WaOxB4fVoUHw6UW5Xn3elKFLEyGHVsQPn9bv6",
+	"cKfkZk/SMe2Ww2fXiNUabAWH+I52QqW+caaJQeL1L4sAeCXhk0nHT2M6l6ut0UVlFMOxZ4hKkr8rQ9r7",
+	"+IYg4Fy/uf5/AwA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

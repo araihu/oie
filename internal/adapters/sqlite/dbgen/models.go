@@ -120,6 +120,22 @@ type MessageRevision struct {
 	CreatedAt string
 }
 
+type MessageStar struct {
+	MessageID  string
+	RevisionID string
+	Starred    int64
+	Payload    string
+	UpdatedAt  string
+}
+
+type MessageStarRevision struct {
+	ID        string
+	MessageID string
+	Parents   string
+	Payload   string
+	CreatedAt string
+}
+
 type Operation struct {
 	ID          string
 	Fingerprint string

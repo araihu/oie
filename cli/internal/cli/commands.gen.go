@@ -16,31 +16,35 @@ func New() (*cobra.Command, error) {
 		return nil, err
 	}
 	return cliruntime.New("oiectl", spec, map[string]cliruntime.Builder{
-		"ListAccounts":               build0,
-		"RegisterAccount":            build1,
-		"GetAccount":                 build2,
-		"ListAccountAvatars":         build3,
-		"GetAccountCapabilities":     build4,
-		"DisconnectAccount":          build5,
-		"GetAccountConnection":       build6,
-		"ConfigureAccountConnection": build7,
-		"GetAccountHistory":          build8,
-		"GetAvatarImage":             build9,
-		"ListConversations":          build10,
-		"OpenConversation":           build11,
-		"GetConversation":            build12,
-		"ListMessages":               build13,
-		"SendMessage":                build14,
-		"ListConversationPreviews":   build15,
-		"GetEngine":                  build16,
-		"StreamEvents":               build17,
-		"GetHealth":                  build18,
-		"GetMediaImage":              build19,
-		"GetMessage":                 build20,
-		"CancelMessage":              build21,
-		"GetOperation":               build22,
-		"GetMessagePreview":          build23,
-		"DownloadPreviewImage":       build24,
+		"ListAccounts":                 build0,
+		"RegisterAccount":              build1,
+		"GetAccount":                   build2,
+		"ListAccountAvatars":           build3,
+		"GetAccountCapabilities":       build4,
+		"DisconnectAccount":            build5,
+		"GetAccountConnection":         build6,
+		"ConfigureAccountConnection":   build7,
+		"GetAccountHistory":            build8,
+		"GetAvatarImage":               build9,
+		"ListConversations":            build10,
+		"OpenConversation":             build11,
+		"GetConversation":              build12,
+		"ListConversationMessageStars": build13,
+		"ListMessages":                 build14,
+		"SendMessage":                  build15,
+		"ListConversationPreviews":     build16,
+		"GetEngine":                    build17,
+		"StreamEvents":                 build18,
+		"GetHealth":                    build19,
+		"GetMediaImage":                build20,
+		"GetMessage":                   build21,
+		"CancelMessage":                build22,
+		"GetMessageStar":               build23,
+		"SetMessageStar":               build24,
+		"GetOperation":                 build25,
+		"GetMessagePreview":            build26,
+		"DownloadPreviewImage":         build27,
+		"ListStarredMessages":          build28,
 	})
 }
 func build0(server string, input cliruntime.Input) (*http.Request, error) {
@@ -174,6 +178,17 @@ func build13(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
 	}
+	var params api.ListConversationMessageStarsParams
+	if err := input.Decode("query", "messageId", &params.MessageId); err != nil {
+		return nil, err
+	}
+	return api.NewListConversationMessageStarsRequest(server, path0, &params)
+}
+func build14(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.ConversationID
+	if err := input.Decode("path", "conversationId", &path0); err != nil {
+		return nil, err
+	}
 	var params api.ListMessagesParams
 	if err := input.Decode("query", "cursor", &params.Cursor); err != nil {
 		return nil, err
@@ -183,7 +198,7 @@ func build13(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewListMessagesRequest(server, path0, &params)
 }
-func build14(server string, input cliruntime.Input) (*http.Request, error) {
+func build15(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
@@ -194,7 +209,7 @@ func build14(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewSendMessageRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build15(server string, input cliruntime.Input) (*http.Request, error) {
+func build16(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
@@ -205,20 +220,20 @@ func build15(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewListConversationPreviewsRequest(server, path0, &params)
 }
-func build16(server string, input cliruntime.Input) (*http.Request, error) {
+func build17(server string, input cliruntime.Input) (*http.Request, error) {
 	return api.NewGetEngineRequest(server)
 }
-func build17(server string, input cliruntime.Input) (*http.Request, error) {
+func build18(server string, input cliruntime.Input) (*http.Request, error) {
 	var params api.StreamEventsParams
 	if err := input.Decode("header", "Last-Event-ID", &params.LastEventID); err != nil {
 		return nil, err
 	}
 	return api.NewStreamEventsRequest(server, &params)
 }
-func build18(server string, input cliruntime.Input) (*http.Request, error) {
+func build19(server string, input cliruntime.Input) (*http.Request, error) {
 	return api.NewGetHealthRequest(server)
 }
-func build19(server string, input cliruntime.Input) (*http.Request, error) {
+func build20(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 string
 	if err := input.Decode("path", "hash", &path0); err != nil {
 		return nil, err
@@ -229,14 +244,14 @@ func build19(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewGetMediaImageRequest(server, path0, &params)
 }
-func build20(server string, input cliruntime.Input) (*http.Request, error) {
+func build21(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetMessageRequest(server, path0)
 }
-func build21(server string, input cliruntime.Input) (*http.Request, error) {
+func build22(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
@@ -247,24 +262,58 @@ func build21(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewCancelMessageRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build22(server string, input cliruntime.Input) (*http.Request, error) {
+func build23(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.MessageID
+	if err := input.Decode("path", "messageId", &path0); err != nil {
+		return nil, err
+	}
+	return api.NewGetMessageStarRequest(server, path0)
+}
+func build24(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.MessageID
+	if err := input.Decode("path", "messageId", &path0); err != nil {
+		return nil, err
+	}
+	var params api.SetMessageStarParams
+	if err := input.Decode("header", "Idempotency-Key", &params.IdempotencyKey); err != nil {
+		return nil, err
+	}
+	return api.NewSetMessageStarRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
+}
+func build25(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "operationId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetOperationRequest(server, path0)
 }
-func build23(server string, input cliruntime.Input) (*http.Request, error) {
+func build26(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "previewId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetMessagePreviewRequest(server, path0)
 }
-func build24(server string, input cliruntime.Input) (*http.Request, error) {
+func build27(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "previewId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewDownloadPreviewImageRequest(server, path0)
+}
+func build28(server string, input cliruntime.Input) (*http.Request, error) {
+	var params api.ListStarredMessagesParams
+	if err := input.Decode("query", "accountId", &params.AccountId); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "conversationId", &params.ConversationId); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "cursor", &params.Cursor); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "limit", &params.Limit); err != nil {
+		return nil, err
+	}
+	return api.NewListStarredMessagesRequest(server, &params)
 }

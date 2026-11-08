@@ -206,6 +206,10 @@ func event(e application.Event, engineID domain.ID) engineapi.Event {
 		v := preview(*e.Preview)
 		out.Preview = &v
 	}
+	if e.Star != nil {
+		v := star(*e.Star)
+		out.Star = &v
+	}
 	if e.Avatar != nil {
 		v := avatar(*e.Avatar)
 		out.Avatar = &v
