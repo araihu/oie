@@ -97,6 +97,7 @@ type view struct {
 	AccountUnread                                         map[string]int
 	AccountPage, ManagedAccount                           string
 	CapabilityEvidence                                    *engineapi.Capabilities
+	ConversationInfo                                      *engineapi.ConversationDetails
 	Connections                                           map[string]connectionView
 	Histories                                             map[string]engineapi.HistoryStatus
 	Next                                                  string
@@ -116,6 +117,56 @@ type view struct {
 }
 
 type copy struct {
+	CapabilityPresenceNote string
+	DetailsRefresh         string
+	DetailsOwningAccount   string
+	DetailsObservation     string
+	DetailsSnapshotHelp    string
+	DetailsPending         string
+	DetailsKnown           string
+	DetailsPartial         string
+	DetailsForbidden       string
+	DetailsUnavailable     string
+	DetailsNotConnected    string
+	DetailsUnsupported     string
+	DetailsUnknown         string
+	DetailsReadUnavailable string
+	DetailsRoomName        string
+	DetailsDescription     string
+	DetailsTopic           string
+	DetailsRoomSession     string
+	RoomNotJoined          string
+
+	DetailsOccupantCount                                                                                                                                                 string
+	DetailsRoomProperties                                                                                                                                                string
+	DetailsPeerPresence                                                                                                                                                  string
+	DetailsPeerPresenceHelp                                                                                                                                              string
+	DetailsParticipantsHelp                                                                                                                                              string
+	DetailsParticipantsTruncated                                                                                                                                         string
+	DetailsNoParticipants                                                                                                                                                string
+	DetailsSourceDiscovery                                                                                                                                               string
+	DetailsSourcePresence                                                                                                                                                string
+	DetailsObservedAt                                                                                                                                                    string
+	UnknownParticipant                                                                                                                                                   string
+	PresenceAvailable                                                                                                                                                    string
+	PresenceAway                                                                                                                                                         string
+	PresenceBusy                                                                                                                                                         string
+	PresenceExtendedAway                                                                                                                                                 string
+	PresenceChat                                                                                                                                                         string
+	PresenceUnavailable                                                                                                                                                  string
+	PresenceUnknown                                                                                                                                                      string
+	RoomPublic                                                                                                                                                           string
+	RoomHidden                                                                                                                                                           string
+	RoomMembersOnly                                                                                                                                                      string
+	RoomOpen                                                                                                                                                             string
+	RoomPersistent                                                                                                                                                       string
+	RoomTemporary                                                                                                                                                        string
+	RoomModerated                                                                                                                                                        string
+	RoomUnmoderated                                                                                                                                                      string
+	RoomPasswordProtected                                                                                                                                                string
+	RoomUnsecured                                                                                                                                                        string
+	RoomAnonymous                                                                                                                                                        string
+	RoomNonAnonymous                                                                                                                                                     string
 	CapabilityPartialDetails                                                                                                                                             string
 	Capabilities                                                                                                                                                         string
 	CapabilitiesIntro                                                                                                                                                    string
@@ -417,6 +468,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	}
 	v.Selected = conversation.JSON200
 	v.ChatID = selected
+	s.loadConversationDetails(ctx, v)
 	items, usedContext := s.contextMessages(ctx, v, v.Selected.AccountId)
 	if v.Unavailable {
 		return

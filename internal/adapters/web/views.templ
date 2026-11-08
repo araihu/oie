@@ -85,25 +85,8 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 			@accounts(v)
 @newConversation(v)
 @imageViewer(v)
-			if v.Selected != nil {
-				@drawer.Drawer(drawer.Config{ID: "details", Title: v.Text.Details}) {
-					<div class="oie-details">
-						@profileAvatar(v,v.Selected.AccountId,v.Selected.Address,avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeLG})
-						<h2>{ v.Selected.Title }</h2>
-						<p>{ v.accountLabel(v.Selected.AccountId) }</p>
-if v.Selected.Kind=="direct" {
-						<h3>{ v.Text.Participants }</h3>
-						<ul>
-							for _,name:=range participantNames(*v.Selected) {
-								<li>{ name }</li>
-							}
-						</ul>
-}else{
-<p>{v.Selected.Address}</p>
-}
-					</div>
-				}
-			}
+
+@conversationDetails(v)
 		</body>
 	</html>
 }
@@ -302,7 +285,7 @@ templ chatHeader(v view) {
 		}
 		@profileAvatar(v,v.Selected.AccountId,v.Selected.Address,avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeXS})
 		<div class="oie-chat-identity"><h2>{ v.Selected.Title }</h2><p>{v.accountLabel(v.Selected.AccountId)} · {v.connectionLabel(v.Selected.AccountId)}</p></div>
-		@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Details, "title": v.Text.Details}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'details'})"})) {
+		@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Details, "title": v.Text.Details,"data-open-details":""}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'details'})"})) {
 			@glyph(heroicons.Icon16SolidInformationCircle)
 		}
 		@dropdown.Dropdown(dropdown.Config{ID: "chat-options", Label: v.Text.More, Trigger: menuTrigger(v.Text.More), MenuAlign: dropdown.AlignEnd, Sections: []dropdown.Section{{Items: []dropdown.Item{{Label: v.Text.Details, OnClick: "$dispatch('drawer:open', {id: 'details'})"}, {Label: v.Text.Settings, OnClick: "$dispatch('drawer:open', {id: 'settings'})"}}}}})
@@ -546,6 +529,14 @@ templ liveRegions(v view){
 <div id="oie-live-regions" data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
 @avatarData(v)
 @starData(v)
+if v.Selected!=nil {
+<div id="live-conversation-details" data-details-conversation={v.Selected.Id}>
+<div id="live-details-identity" data-version={v.detailsVersion("identity")}>@detailsIdentity(v)</div>
+<div id="live-details-account" data-version={v.detailsVersion("account")}>@detailsAccount(v)</div>
+<div id="live-details-metadata" data-version={v.detailsVersion("metadata")}>@detailsMetadata(v)</div>
+<div id="live-details-participants" data-version={v.detailsVersion("participants")}>@detailsParticipants(v)</div>
+</div>
+}
 <div id="live-context-notice">@contextNotice(v)</div>
 <div id="live-history-status">@historyBanner(v)</div>
 <div id="live-list">@conversationList(v)</div>

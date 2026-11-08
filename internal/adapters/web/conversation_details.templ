@@ -1,0 +1,147 @@
+package web
+
+import (
+ "github.com/araihu/goshtoso/components/avatar"
+ "github.com/araihu/goshtoso/components/badge"
+ "github.com/araihu/goshtoso/components/drawer"
+ "github.com/araihu/goshtoso/components/link"
+ "github.com/araihu/goshtoso/components/panel"
+ "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+ "strconv"
+ "time"
+)
+
+templ conversationDetails(v view){
+if v.Selected!=nil {
+@drawer.Drawer(drawer.Config{ID:"details",Title:v.Text.Details,PanelClass:"oie-conversation-details-drawer"}){
+<div class="oie-conversation-details" data-details-conversation={v.Selected.Id}>
+<div id="conversation-details-identity" data-version={v.detailsVersion("identity")}>@detailsIdentity(v)</div>
+@link.Link(v.detailsHref(),link.WithAttrs(templ.Attributes{"data-details-refresh":""}),link.WithRootClass("oie-details-refresh")){ {v.Text.DetailsRefresh} }
+<div id="conversation-details-account" data-version={v.detailsVersion("account")}>@detailsAccount(v)</div>
+<div id="conversation-details-metadata" data-version={v.detailsVersion("metadata")}>@detailsMetadata(v)</div>
+<div id="conversation-details-participants" data-version={v.detailsVersion("participants")}>@detailsParticipants(v)</div>
+<p class="oie-details-help">{v.Text.DetailsSnapshotHelp}</p>
+</div>
+}
+}
+}
+templ detailsIdentity(v view){
+<header class="oie-details-identity">
+@profileAvatar(v,v.Selected.AccountId,v.Selected.Address,avatar.Config{Name:v.Selected.Title,Initials:chatInitials(*v.Selected),Size:avatar.SizeLG})
+<div><h2>{v.Selected.Title}</h2><p>{v.Selected.Address}</p></div>
+</header>
+}
+templ detailsHeading(title string){<h3>{title}</h3>}
+templ detailsAccount(v view){
+@panel.Panel(panel.Config{Header:detailsHeading(v.Text.DetailsOwningAccount),RootClass:"oie-details-panel"}){
+<p class="oie-details-account-label">{v.accountLabel(v.Selected.AccountId)}</p>
+{{ accountView:=v.detailsAccountView() }}
+<div data-details-account-state={connectionState(accountView,v.Selected.AccountId)}>
+@badge.Badge(badge.Config{Label:accountView.connectionLabel(v.Selected.AccountId),Tone:connectionTone(accountView,v.Selected.AccountId),Size:badge.SizeSM})
+</div>
+if problem:=accountView.connectionError(v.Selected.AccountId);problem!="" {
+<p>{problem}</p>
+}
+}
+}
+templ detailsMetadata(v view){
+if d:=v.ConversationInfo;d!=nil {
+@panel.Panel(panel.Config{Header:detailsHeading(v.Text.DetailsObservation),RootClass:"oie-details-panel"}){
+<p data-details-state={string(d.State)}>{v.detailState(string(d.State))}</p>
+@detailsObservedAt(v,d.CheckedAt)
+if v.Selected.Kind=="room" {
+<dl class="oie-details-facts">
+if d.Name!=nil {
+<dt>{v.Text.DetailsRoomName}</dt><dd>{*d.Name}</dd>
+}
+if d.Description!=nil {
+<dt>{v.Text.DetailsDescription}</dt><dd class="oie-details-plain">{*d.Description}</dd>
+}
+if d.Topic!=nil {
+<dt>{v.Text.DetailsTopic}</dt><dd class="oie-details-plain">{*d.Topic}</dd>
+}
+<dt>{v.Text.DetailsRoomSession}</dt><dd data-room-session>{v.roomSessionLabel()}</dd>
+<dt>{v.Text.DetailsOccupantCount}</dt><dd data-occupant-count>
+if d.OccupantCount!=nil {
+{strconv.Itoa(*d.OccupantCount)}
+}else{
+{v.Text.DetailsUnknown}
+}
+</dd>
+</dl>
+if len(d.Features)>0 {
+<h4>{v.Text.DetailsRoomProperties}</h4><ul class="oie-room-properties">
+for _,feature:=range d.Features {
+<li>@badge.Badge(badge.Config{Label:v.roomFeatureLabel(string(feature)),Size:badge.SizeSM})</li>
+}
+</ul>
+}
+}else{
+<h4>{v.Text.DetailsPeerPresence}</h4>
+if d.PeerPresence!=nil {
+@presenceObservation(v,*d.PeerPresence)
+}else{
+@presenceObservation(v,engineapi.PresenceObservation{State:"unknown"})
+}
+if d.PeerPresence==nil||d.PeerPresence.State=="unknown" {
+<p class="oie-details-help">{v.Text.DetailsPeerPresenceHelp}</p>
+}
+}
+}
+}else{
+<p class="oie-details-unavailable" role="status">{v.Text.DetailsReadUnavailable}</p>
+}
+}
+templ detailsParticipants(v view){
+if v.Selected.Kind=="room" {
+@panel.Panel(panel.Config{Header:detailsHeading(v.Text.Participants),RootClass:"oie-details-panel"}){
+<p class="oie-details-help">{v.Text.DetailsParticipantsHelp}</p>
+if d:=v.ConversationInfo;d!=nil {
+<p data-participant-state={string(d.Participants.State)} data-participant-scope={string(d.Participants.Scope)}>{v.detailState(string(d.Participants.State))}</p>
+@detailsObservedAt(v,d.Participants.CheckedAt)
+if d.Participants.Truncated {
+<p data-participants-truncated>{v.Text.DetailsParticipantsTruncated}</p>
+}
+if len(d.Participants.Items)>0 {
+<ul class="oie-participants-list">
+for _,p:=range d.Participants.Items {
+<li data-conversation-participant={p.Id}>
+@avatar.Avatar(avatar.Config{Name:v.participantName(p),Size:avatar.SizeSM})
+<div class="oie-participant-content"><strong>{v.participantName(p)}</strong>
+<small>
+if p.Source=="discovery" {
+{v.Text.DetailsSourceDiscovery}
+}else if p.Source=="presence" {
+{v.Text.DetailsSourcePresence}
+}else{
+{v.Text.DetailsUnknown}
+}
+</small>
+@presenceObservation(v,p.Presence)
+</div>
+</li>
+}
+</ul>
+}else{
+<p data-participants-empty>{v.Text.DetailsNoParticipants}</p>
+}
+}else{
+<p data-participants-empty>{v.Text.DetailsNoParticipants}</p>
+}
+}
+}
+}
+templ presenceObservation(v view,p engineapi.PresenceObservation){
+<div class="oie-presence-observation" data-presence-state={string(p.State)}>
+@badge.Badge(badge.Config{Label:v.presenceLabel(string(p.State)),Tone:presenceTone(string(p.State)),Size:badge.SizeSM})
+if p.StatusText!=nil {
+<p class="oie-details-plain">{*p.StatusText}</p>
+}
+@detailsObservedAt(v,p.ObservedAt)
+</div>
+}
+templ detailsObservedAt(v view,at *time.Time){
+if at!=nil {
+<p class="oie-details-observed">{v.Text.DetailsObservedAt} <time data-details-date datetime={at.Format("2006-01-02T15:04:05Z07:00")}>{at.Format("2006-01-02 15:04")}</time></p>
+}
+}

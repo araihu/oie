@@ -115,7 +115,7 @@
     const locale=document.documentElement.lang || undefined;
     const clock=new Intl.DateTimeFormat(locale,{hour:'2-digit',minute:'2-digit'});
     for (const time of document.querySelectorAll('time[datetime]:not([data-day])')) {
-      const date=new Date(time.dateTime);if(!Number.isNaN(date.getTime()))time.textContent=time.matches('[data-viewer-date],[data-capability-date]')?new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(date):clock.format(date);
+      const date=new Date(time.dateTime);if(!Number.isNaN(date.getTime()))time.textContent=time.matches('[data-viewer-date],[data-capability-date],[data-details-date]')?new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(date):clock.format(date);
     }
     const timeline=document.querySelector('#message-timeline');if(!timeline)return;
     for(const divider of timeline.querySelectorAll('.oie-day-divider'))divider.remove();
@@ -221,6 +221,17 @@
           const oldAction=existing.querySelector('[id^="disconnect-action-"]'),newAction=fresh.querySelector('[id^="disconnect-action-"]');
           if(oldAction&&newAction&&oldAction.innerHTML!==newAction.innerHTML&&!oldAction.contains(document.activeElement))mutateDOM(oldAction,newAction.innerHTML);
         }
+      }
+      const detailsRegion=page.querySelector('#live-conversation-details');
+      if(detailsRegion?.dataset.detailsConversation===body.dataset.conversationId){
+        const detailsScroll=document.getElementById('details-body')?.scrollTop;
+        for(const section of ['identity','account','metadata','participants']){
+          const existing=document.getElementById('conversation-details-'+section),fresh=detailsRegion.querySelector('#live-details-'+section);
+          if(existing&&fresh&&existing.dataset.version!==fresh.dataset.version&&!existing.contains(document.activeElement)){
+            mutateDOM(existing,fresh.innerHTML);existing.dataset.version=fresh.dataset.version;
+          }
+        }
+        if(detailsScroll!==undefined)document.getElementById('details-body').scrollTop=detailsScroll;
       }
       const accountScroll=document.getElementById('accounts-body')?.scrollTop;
       // Read-only evidence refreshes independently from connection forms and drawer navigation.
@@ -355,7 +366,7 @@
   setInterval(() => { if (!mock && !document.hidden) {scheduleRefresh();retryPending();} },15000);
   addEventListener('online', () => {scheduleRefresh();retryPending();});
   const open = new URLSearchParams(location.search).get('open') || body.dataset.openDrawer;
-  if (open === 'accounts' || open === 'newchat') {
+  if (open === 'accounts' || open === 'newchat' || open === 'details') {
     const show = () => {
       dispatchEvent(new CustomEvent('drawer:open',{detail:{id:open}}));
       if(open==='accounts')setTimeout(()=>{

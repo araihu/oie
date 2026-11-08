@@ -111,6 +111,8 @@ func (v view) capabilityNote(id string) string {
 	switch id {
 	case "saved_rooms", "room_history":
 		return v.Text.CapabilitySavedRoomsNote
+	case "presence":
+		return v.Text.CapabilityPresenceNote
 	case "profile_images":
 		return v.Text.CapabilityProfileImagesNote
 	case "formatting":

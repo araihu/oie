@@ -83,8 +83,7 @@ func initials(name string) string {
 	return strings.ToUpper(string(out))
 }
 
-func chatInitials(c engineapi.Conversation) string       { return initials(c.Title) }
-func participantNames(c engineapi.Conversation) []string { return []string{c.Address} }
+func chatInitials(c engineapi.Conversation) string { return initials(c.Title) }
 
 func (v view) accountScreen() string {
 	if v.FormTarget == "register" {
