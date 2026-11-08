@@ -18,6 +18,10 @@ Media/Links/Documents and starred-message subviews stay inside the details drawe
 
 Native navigation remains usable if enhancement is unavailable. Enhanced subview navigation must preserve the composer draft, timeline position, account/conversation identity, selected content tab, and localized theme. Source navigation leaves the drawer for the selected retained message. Image opening reuses existing viewer controls and per-device download policy.
 
+The implemented sidebar uses centered identity and provider-supplied name, available description/topic, reported occupancy and participant observations. Media, links, documents and source-message stars have separate scoped entries. Connection/protocol details use a public Goshtoso Accordion below the main content. Content categories/search/pages/Back use HTMX to replace only `#chat-info-content`; the surrounding Drawer and composer remain mounted. Preview projections can appear in both timeline and drawer, with one canonical download intent and consistent source-message stars. Closing the viewer restores focus to its originating tile and leaves the Drawer open.
+
+The dedicated chat-info fixture verifies canonical account/conversation scope, distinct inbox and content searches, source navigation, duplicate-image projections without duplicate DOM IDs or transfers, generation-safe star evidence, Back focus/scroll and mobile EN/PT light/dark accessibility. The existing conversation-details fixture retains its sixteen appearance/locale variants. A live read-only check against the retained account verified a 50-item scoped media page, category/search/Back fragment swaps, unchanged composer DOM, one document load, no duplicate IDs, no browser errors and zero mutations. The engine process, identity, API 0.10 and clean schema 8 remained unchanged by the BFF-only update.
+
 | State | Read/action | Expected result | Preserved context | Effects |
 |---|---|---|---|---|
 | Connected room | Open/refresh | Available metadata plus visible-occupant scope | Conversation/account, draft, language/theme | Bounded reads, zero joins/messages |
