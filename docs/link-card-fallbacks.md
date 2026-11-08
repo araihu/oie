@@ -36,30 +36,47 @@ this change requires no database migration or modified SQL query.
 
 ## Integration
 
-This feature is isolated in `codex/link-card-fallbacks`, based on `6308b24`.
-It does not restart or replace the main session's live preview or engine.
-Concurrent video work in the original worktree is intentionally preserved.
+The main checkout integrated the fallback commits with video playback and
+bookmark autojoin in `99f6a29`. Generated OpenAPI, CLI and templ files were rebuilt
+from the combined sources. Video source guards remain in the preview worker.
 
-When integrating alongside that work, combine the OpenAPI/source changes and
-regenerate clients with `make generate`; do not hand-merge generated Go or CLI
-files. Keep the video source guards in the preview worker and use API version
-0.14 or newer for the combined contract.
+The deployed preview then advanced to `ef77640` in `codex/link-card-fallbacks`,
+including the search build that was already live. Its existing wallpaper is
+preserved as local `app.css` and `chat-pattern.svg` changes in this worktree.
+The unfinished pagination edits in the main checkout remain there and are not
+part of the published binary. A diagnostic run against those in-progress edits
+failed its SSE scroll-anchor assertion; it is not a validation of this rollout.
+
+Engine and BFF use this worktree's `bin/oie`, with their previous flags and
+working directory. The engine retains the main checkout's `data/live-engine`.
+The current process records are `/tmp/oie-live-engine.json` and
+`/tmp/oie-live-web.json`; use their executable path for later preview updates.
+An online backup, previous executables and rollout logs are retained under
+`/tmp/oie-link-rollout-byjbgdul`. No database migration was needed. Verification
+preserved engine/account identities, all retained source messages and revisions,
+stars and outbox rows, with schema 10 clean. The real account reconnected.
+
+A read-only browser check found 39 compact fallback cards and a cached favicon,
+opened the metadata-refresh menu and verified search swaps with a stable input.
+It observed no JavaScript errors, external browser requests or mutations.
+The live screenshot is `/tmp/oie-link-live-preview.png`.
 
 ## Verification
 
-- `make generate`, `make check` and `make build` passed.
-- Race tests passed for preview fetching, HTTP API, web and application packages.
-- The isolated link-fallback browser suite passed 16 combinations of viewport,
-  theme and locale with no axe violations, external browser requests or
-  unexpected mutations. It covers broken images/icons, URL-only cards, CSRF,
-  refresh coalescing, same-node SSE updates and failure preservation.
-- Existing shared-content and preview browser regression suites passed.
-- Dagger CI was attempted with `make ci-check`. One attempt reached race tests
-  before the 120-second execution limit. The final 240-second attempt stalled
-  while connecting to the Dagger engine and ended with termination status 143
-  from make. A complete Dagger run remains unverified.
+The combined preview snapshot passes `make generate`, `make check` and
+`make build`. The link-fallback browser suite passes 16 combinations of
+viewport, theme and locale with no axe violations, external browser requests or
+unexpected mutations. It covers broken images/icons, URL-only cards, CSRF,
+refresh coalescing, same-node SSE updates and failure preservation.
+The native-engine shared-search, video and shared-content browser suites pass.
+
+`OIE_CI_SSH_HOST=dagger-vm make ci-check` passed through Dagger, including lint,
+generation checks, native/race tests and application/CLI builds. Its final log
+is `/tmp/oie-combined-final-dagger.log`. Earlier timeout attempts do not affect
+this completed result. The full browser pipeline through `make ci` was not run;
+the relevant browser suites ran locally against isolated engines and fixtures.
 
 The local check used a separate temporary directory for the linter lock because
 the original worktree was running its own linter. The browser suites used the
 existing, matching browser dependencies through `NODE_PATH`; they did not
-change the original worktree or its dependencies.
+change the original worktree's dependencies.
