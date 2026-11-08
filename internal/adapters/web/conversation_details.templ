@@ -2,6 +2,8 @@ package web
 
 import (
  "github.com/araihu/goshtoso/components/avatar"
+ "github.com/araihu/goshtoso/components/accordion"
+ "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/badge"
  "github.com/araihu/goshtoso/components/drawer"
  "github.com/araihu/goshtoso/components/link"
@@ -14,23 +16,78 @@ import (
 templ conversationDetails(v view){
 if v.Selected!=nil {
 @drawer.Drawer(drawer.Config{ID:"details",Title:v.Text.Details,PanelClass:"oie-conversation-details-drawer"}){
-<div class="oie-conversation-details" data-details-conversation={v.Selected.Id}>
+@chatInfoShell(v)
+}
+}
+}
+templ chatInfoShell(v view){
+<div id="chat-info-content" class="oie-chat-info-content" data-details-conversation={v.Selected.Id} data-info-view={v.InfoView}>
+@chatInfoContent(v)
+</div>
+}
+
+templ infoFragment(v view){
+<div id="oie-info-fragment" data-engine-id={v.EngineID} data-conversation-id={v.Selected.Id} data-account-id={v.Selected.AccountId} data-info-view={v.InfoView}>@chatInfoContent(v)</div>
+}
+templ chatInfoContent(v view){
+switch v.InfoView {
+case "shared":
+@infoSharedContent(v)
+case "stars":
+@infoStarredContent(v)
+default:
+<div class="oie-conversation-details">
 <div id="conversation-details-identity" data-version={v.detailsVersion("identity")}>@detailsIdentity(v)</div>
-@link.Link(v.detailsHref(),link.WithAttrs(templ.Attributes{"data-details-refresh":""}),link.WithRootClass("oie-details-refresh")){ {v.Text.DetailsRefresh} }
-<div id="conversation-details-account" data-version={v.detailsVersion("account")}>@detailsAccount(v)</div>
-<div id="conversation-details-metadata" data-version={v.detailsVersion("metadata")}>@detailsMetadata(v)</div>
+<nav class="oie-info-rows" aria-label={v.Text.InfoSharedContent}>
+@infoEntry(v,"media",v.Text.SharedMediaTab,heroicons.Icon16SolidRectangleGroup)
+@infoEntry(v,"links",v.Text.SharedLinksTab,heroicons.Icon16SolidLink)
+@infoEntry(v,"documents",v.Text.SharedDocsTab,heroicons.Icon16SolidDocumentText)
+@infoEntry(v,"stars",v.Text.InfoStarred,heroicons.Icon16SolidStar)
+</nav>
+<div id="conversation-details-description" data-version={v.detailsVersion("description")}>@infoDescription(v)</div>
 <div id="conversation-details-participants" data-version={v.detailsVersion("participants")}>@detailsParticipants(v)</div>
+@accordion.Accordion(accordion.AccordionConfig{ID:"chat-info-technical",RootClass:"oie-info-technical",Items:[]accordion.AccordionItem{{ID:"chat-info-connection",Title:v.Text.InfoConnection,Content:infoTechnical(v)}}})
+@link.Link(v.detailsHref(),link.WithAttrs(templ.Attributes{"data-details-refresh":"","data-info-nav":""}),link.WithRootClass("oie-details-refresh")){ {v.Text.DetailsRefresh} }
 <p class="oie-details-help">{v.Text.DetailsSnapshotHelp}</p>
 </div>
 }
 }
-}
 templ detailsIdentity(v view){
-<header class="oie-details-identity">
-@profileAvatar(v,v.Selected.AccountId,v.Selected.Address,avatar.Config{Name:v.Selected.Title,Initials:chatInitials(*v.Selected),Size:avatar.SizeLG})
-<div><h2>{v.Selected.Title}</h2><p>{v.Selected.Address}</p></div>
+<header class="oie-details-identity oie-info-centered">
+@profileAvatar(v,v.Selected.AccountId,v.Selected.Address,avatar.Config{Name:v.infoTitle(),Size:avatar.SizeXL,RootClass:"oie-info-avatar"})
+<h2>{v.infoTitle()}</h2><p>{v.Selected.Address}</p>
+if v.Selected.Kind=="room" {
+<p class="oie-info-kind">{v.Text.InfoGroup}
+if d:=v.ConversationInfo;d!=nil&&d.OccupantCount!=nil {
+<span> · <span data-info-occupant-count>{strconv.Itoa(*d.OccupantCount)}</span> {v.Text.InfoReportedOccupants}</span>
+}
+</p>
+}else{
+if d:=v.ConversationInfo;d!=nil&&d.PeerPresence!=nil {
+@presenceObservation(v,*d.PeerPresence)
+}else{
+@presenceObservation(v,engineapi.PresenceObservation{State:"unknown"})
+}
+}
 </header>
 }
+templ infoTechnical(v view){
+<div id="conversation-details-account" data-version={v.detailsVersion("account")}>@detailsAccount(v)</div>
+<div id="conversation-details-metadata" data-version={v.detailsVersion("metadata")}>@detailsMetadata(v)</div>
+}
+templ infoDescription(v view){
+if d:=v.ConversationInfo;d!=nil {
+if d.Description!=nil&&*d.Description!="" {
+@panel.Panel(panel.Config{Header:detailsHeading(v.Text.DetailsDescription),RootClass:"oie-details-panel"}){<p class="oie-details-plain">{*d.Description}</p>}
+}
+if d.Topic!=nil&&*d.Topic!="" {
+@panel.Panel(panel.Config{Header:detailsHeading(v.Text.DetailsTopic),RootClass:"oie-details-panel"}){<p class="oie-details-plain">{*d.Topic}</p>}
+}
+}else{
+<p class="oie-details-unavailable" role="status">{v.Text.DetailsReadUnavailable}</p>
+}
+}
+
 templ detailsHeading(title string){<h3>{title}</h3>}
 templ detailsAccount(v view){
 @panel.Panel(panel.Config{Header:detailsHeading(v.Text.DetailsOwningAccount),RootClass:"oie-details-panel"}){
@@ -51,15 +108,6 @@ if d:=v.ConversationInfo;d!=nil {
 @detailsObservedAt(v,d.CheckedAt)
 if v.Selected.Kind=="room" {
 <dl class="oie-details-facts">
-if d.Name!=nil {
-<dt>{v.Text.DetailsRoomName}</dt><dd>{*d.Name}</dd>
-}
-if d.Description!=nil {
-<dt>{v.Text.DetailsDescription}</dt><dd class="oie-details-plain">{*d.Description}</dd>
-}
-if d.Topic!=nil {
-<dt>{v.Text.DetailsTopic}</dt><dd class="oie-details-plain">{*d.Topic}</dd>
-}
 <dt>{v.Text.DetailsRoomSession}</dt><dd data-room-session>{v.roomSessionLabel()}</dd>
 <dt>{v.Text.DetailsOccupantCount}</dt><dd data-occupant-count>
 if d.OccupantCount!=nil {
@@ -77,12 +125,6 @@ for _,feature:=range d.Features {
 </ul>
 }
 }else{
-<h4>{v.Text.DetailsPeerPresence}</h4>
-if d.PeerPresence!=nil {
-@presenceObservation(v,*d.PeerPresence)
-}else{
-@presenceObservation(v,engineapi.PresenceObservation{State:"unknown"})
-}
 if d.PeerPresence==nil||d.PeerPresence.State=="unknown" {
 <p class="oie-details-help">{v.Text.DetailsPeerPresenceHelp}</p>
 }

@@ -312,5 +312,16 @@
   "SharedVideo": "Vídeo",
   "SharedDocument": "Documento",
   "SharedLink": "Link",
-  "SharedAccount": "Conta"
+  "SharedAccount": "Conta",
+  "InfoSharedContent": "Conteúdo compartilhado",
+  "InfoStarred": "Mensagens com estrela",
+  "InfoConnection": "Conexão e informações da sala",
+  "InfoBack": "Voltar aos detalhes da conversa",
+  "InfoGroup": "Grupo",
+  "InfoReportedOccupants": "ocupantes informados",
+  "InfoStarsUnavailable": "Não foi possível carregar as mensagens com estrela.",
+  "InfoStarsEmpty": "Nenhuma mensagem com estrela nesta conversa.",
+  "InfoNavigationFailed": "Não foi possível carregar esta visualização. Tente o link novamente.",
+  "NavLoading": "Abrindo…",
+  "NavFailed": "Não foi possível abrir esta tela. Tente novamente."
 }

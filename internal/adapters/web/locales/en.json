@@ -312,5 +312,16 @@
   "SharedVideo": "Video",
   "SharedDocument": "Document",
   "SharedLink": "Link",
-  "SharedAccount": "Account"
+  "SharedAccount": "Account",
+  "InfoSharedContent": "Shared content",
+  "InfoStarred": "Starred messages",
+  "InfoConnection": "Connection and room information",
+  "InfoBack": "Back to chat info",
+  "InfoGroup": "Group",
+  "InfoReportedOccupants": "reported occupants",
+  "InfoStarsUnavailable": "Starred messages could not be loaded.",
+  "InfoStarsEmpty": "No starred messages in this conversation.",
+  "InfoNavigationFailed": "This view could not be loaded. Try the link again.",
+  "NavLoading": "Opening…",
+  "NavFailed": "Could not open this view. Try again."
 }

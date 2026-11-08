@@ -57,10 +57,25 @@ func (s *Server) loadSharedContent(ctx context.Context, v *view) {
 	v.SharedContent = result.JSON200
 }
 func (v view) sharedHref(pairs ...string) string {
+	if v.SharedInDetails {
+		args := []string{}
+		for i := 0; i+1 < len(pairs); i += 2 {
+			switch pairs[i] {
+			case "contentType":
+				args = append(args, "infoType", pairs[i+1])
+			case "contentCursor":
+				args = append(args, "infoCursor", pairs[i+1])
+			}
+		}
+		return v.infoHref("shared", v.SharedType, args...)
+	}
 	base := []string{"section", "media", "chat", "", "message", "", "contentType", v.SharedType, "contentConversation", v.SharedConversation, "contentCursor", v.SharedCursor, "lang", v.Locale, "theme", v.Theme}
 	return v.href(append(base, pairs...)...)
 }
 func (v view) sharedSourceHref(item engineapi.SharedContentItem) string {
+	if v.SharedInDetails {
+		return v.infoSourceHref(item.Message)
+	}
 	return v.href("section", "chats", "chat", item.Message.ConversationId, "message", item.Message.Id, "account", item.Message.AccountId, "q", "", "filter", "all", "contentType", "", "contentCursor", "", "contentConversation", "", "lang", v.Locale, "theme", v.Theme)
 }
 func (v view) sharedVersion() string {
@@ -108,7 +123,7 @@ func (v view) sharedSenderAddress(item engineapi.SharedContentItem) string {
 	return ""
 }
 func previewCardLayout(v view) card.Layout {
-	if v.Section == "media" {
+	if v.Section == "media" || v.SharedInDetails {
 		return card.LayoutHorizontal
 	}
 	return card.LayoutVertical

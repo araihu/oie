@@ -1,0 +1,84 @@
+package web
+
+import (
+ "github.com/araihu/goshtoso/components/avatar"
+ "github.com/araihu/goshtoso/components/card"
+ "github.com/araihu/goshtoso/components/icon"
+ "github.com/araihu/goshtoso/components/icon/heroicons"
+ "github.com/araihu/goshtoso/components/link"
+ "github.com/araihu/goshtoso/components/textinput"
+ "github.com/araihu/goshtoso/components/button"
+ "strconv"
+)
+
+templ infoEntry(v view,kind,label string,symbol icon.Symbol){
+{{ screen:="shared" }}
+if kind=="stars" {
+{{screen="stars"}}
+}
+@link.Link(v.infoHref(screen,kind,"infoQuery",""),link.WithRootClass("oie-info-entry"),link.WithAttrs(templ.Attributes{"data-info-nav":"","data-info-entry":kind})){
+@glyph(symbol)<span>{label}</span>@glyph(heroicons.Icon16SolidChevronRight)
+}
+}
+templ infoBack(v view){
+@link.Link(v.infoBackHref(),link.WithRootClass("oie-account-back oie-info-back"),link.WithAttrs(templ.Attributes{"data-info-nav":"","data-info-back":""})){@glyph(heroicons.Icon16SolidChevronLeft)<span>{v.Text.InfoBack}</span>}
+}
+templ infoSharedContent(v view){
+{{ scoped:=v.infoSharedView() }}
+<div id="details-shared-content" class="oie-info-shared" data-info-shared data-content-type={v.InfoType}>
+@infoBack(v)
+<h2 tabindex="-1" data-info-heading>{v.Text.SharedMedia}</h2>
+<form action="/" method="get" class="oie-info-search" data-info-search>
+@infoSearchFields(v)
+@textinput.TextInput(textinput.Config{ID:"info-shared-search",Name:"infoQuery",Value:v.InfoQuery,Label:v.Text.SharedSearch,RootClass:"oie-info-search-input",Type:textinput.TypeSearch})
+@button.Button(button.WithType("submit")){ {v.Text.SharedSearchAction} }
+</form>
+<nav class="oie-shared-segments" aria-label={v.Text.SharedContentTypes}>
+@sharedTab(scoped,"media",v.Text.SharedMediaTab)
+@sharedTab(scoped,"links",v.Text.SharedLinksTab)
+@sharedTab(scoped,"documents",v.Text.SharedDocsTab)
+</nav>
+<div id="info-shared-status" role="status">@sharedStatus(scoped)</div>
+<div id="info-shared-results" data-version={scoped.sharedVersion()} data-content-type={v.InfoType}>@sharedItems(scoped)</div>
+<div id="info-shared-pagination">@sharedPagination(scoped)</div>
+</div>
+}
+templ infoSearchFields(v view){
+<input type="hidden" name="chat" value={v.ChatID}/><input type="hidden" name="account" value={v.AccountFilter}/><input type="hidden" name="section" value={v.Section}/><input type="hidden" name="filter" value={v.Filter}/><input type="hidden" name="q" value={v.Query}/><input type="hidden" name="message" value={v.FocusMessage}/><input type="hidden" name="open" value="details"/><input type="hidden" name="infoView" value="shared"/><input type="hidden" name="infoType" value={v.InfoType}/><input type="hidden" name="lang" value={v.Locale}/><input type="hidden" name="theme" value={v.Theme}/>
+}
+templ infoStarredContent(v view){
+<div class="oie-info-stars" data-info-stars data-version={v.infoStarsVersion()}>
+@infoBack(v)
+<h2 tabindex="-1" data-info-heading>{v.Text.InfoStarred}</h2>
+<div data-info-star-states data-known={strconv.FormatBool(v.InfoStars!=nil)}>
+if v.InfoStars!=nil {
+for _,item:=range v.InfoStars.Items {
+<span hidden data-star-state data-star-source={item.Message.Id} data-starred={strconv.FormatBool(item.Star.Starred)} data-revision={starRevision(item.Star)}></span>
+}
+}
+</div>
+if v.InfoInvalid {
+<p>{v.Text.SharedPageUnavailable}</p>
+@link.Link(v.infoHref("stars","stars"),link.WithAttrs(templ.Attributes{"data-info-nav":""})){ {v.Text.SharedNewest} }
+}else if v.InfoStars==nil {
+<p>{v.Text.InfoStarsUnavailable}</p>
+@link.Link(v.infoHref("stars","stars","infoCursor",v.InfoCursor),link.WithAttrs(templ.Attributes{"data-info-nav":""})){ {v.Text.Retry} }
+}else if len(v.InfoStars.Items)==0 {
+<p>{v.Text.InfoStarsEmpty}</p>
+}else{
+{{ starView:=v.infoStarView() }}
+for _,item:=range v.InfoStars.Items {
+<article class="oie-info-star" data-info-star-message={item.Message.Id}>
+<header>@avatar.Avatar(avatar.Config{Name:item.Message.Sender.DisplayName,Size:avatar.SizeXS})<strong>{item.Message.Sender.DisplayName}</strong>@starButton(starView,item.Message.Id)</header>
+@card.Card(card.Config{Body:infoStarExcerpt(infoExcerpt(item.Message)),Density:card.DensityCompact,RootClass:"oie-info-star-card"})
+<time data-shared-source-date datetime={item.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{item.Message.CreatedAt.Format("2006-01-02 15:04")}</time>
+@link.Link(v.infoSourceHref(item.Message),link.WithAttrs(templ.Attributes{"data-info-source":item.Message.Id})){ {v.Text.SharedGoToMessage} }
+</article>
+}
+if v.InfoStars.NextCursor!=nil {
+@link.Link(v.infoHref("stars","stars","infoCursor",*v.InfoStars.NextCursor),link.WithAttrs(templ.Attributes{"data-info-nav":"","data-info-stars-next":""})){ {v.Text.SharedNext} }
+}
+}
+</div>
+}
+templ infoStarExcerpt(text string){<p class="oie-details-plain">{text}</p>}

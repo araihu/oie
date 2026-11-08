@@ -119,12 +119,19 @@ func (v view) detailsVersion(section string) string {
 	switch section {
 	case "identity":
 		if v.Selected != nil {
-			value = []string{v.Selected.Id, v.Selected.Title, v.Selected.Address, v.avatarSource(v.Selected.AccountId, v.Selected.Address)}
+			value = []any{v.Selected.Id, v.infoTitle(), v.Selected.Address, v.avatarSource(v.Selected.AccountId, v.Selected.Address)}
+			if v.ConversationInfo != nil {
+				value = []any{value, v.ConversationInfo.OccupantCount, v.ConversationInfo.PeerPresence}
+			}
 		}
 	case "account":
 		if v.Selected != nil {
 			current := v.detailsAccountView()
 			value = []any{v.account(v.Selected.AccountId), current.Connections[v.Selected.AccountId]}
+		}
+	case "description":
+		if v.ConversationInfo != nil {
+			value = []any{v.ConversationInfo.Description, v.ConversationInfo.Topic}
 		}
 	case "metadata":
 		if v.ConversationInfo != nil {
