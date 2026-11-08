@@ -22,6 +22,7 @@ npm --prefix tests/browser run test:chat
 npm --prefix tests/browser run test:states
 npm --prefix tests/browser run test:accounts
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/live-chat.cjs
+OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/account-status.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/avatars.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/previews.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/markdown.cjs
