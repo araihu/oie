@@ -115,6 +115,7 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 @newConversation(v)
 @imageViewer(v)
 @documentViewer(v)
+@roomSessionDialog(v)
 
 @conversationDetails(v)
 </div>
@@ -253,7 +254,6 @@ if v.Section=="media"{
 				<div class="oie-chat-empty">@glyph(heroicons.Icon16SolidRectangleGroup) @emptystate.EmptyState(emptystate.Config{Title: v.Text.MediaEmpty, Description: v.Text.MediaBody})</div>
 			} else if v.Selected!=nil && !v.Unavailable {
 				@chatHeader(v)
-@roomSessionStatus(v)
 				if v.Preview {
 					<p class="oie-preview-note">{ v.Text.PreviewNote }</p>
 				}
@@ -319,7 +319,11 @@ templ chatHeader(v view) {
 		@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Details, "title": v.Text.Details,"data-open-details":""}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'details'})"})) {
 			@glyph(heroicons.Icon16SolidInformationCircle)
 		}
-		@dropdown.Dropdown(dropdown.Config{ID: "chat-options", Label: v.Text.More, Trigger: menuTrigger(v.Text.More), MenuAlign: dropdown.AlignEnd, Sections: []dropdown.Section{{Items: []dropdown.Item{{Label: v.Text.Details, OnClick: "$dispatch('drawer:open', {id: 'details'})"}, {Label: v.Text.Settings, OnClick: "$dispatch('drawer:open', {id: 'settings'})"}}}}})
+{{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{Label:v.Text.Details,OnClick:"$dispatch('drawer:open', {id: 'details'})"},{Label:v.Text.Settings,OnClick:"$dispatch('drawer:open', {id: 'settings'})"}}}} }}
+if v.Selected.Kind=="room" {
+{{ sections=append(sections,dropdown.Section{Items:[]dropdown.Item{{ID:"chat-room-actions",Label:v.Text.RoomActions,OnClick:"$dispatch('modal:open', {id: 'room-session-dialog'})"}}}) }}
+}
+		@dropdown.Dropdown(dropdown.Config{ID:"chat-options",Label:v.Text.More,Trigger:menuTrigger(v.Text.More),MenuAlign:dropdown.AlignEnd,Sections:sections})
 	</header>
 }
 

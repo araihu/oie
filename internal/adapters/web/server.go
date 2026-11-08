@@ -138,6 +138,7 @@ type view struct {
 }
 
 type copy struct {
+	RoomActions                string
 	DocumentOpen               string
 	DocumentViewer             string
 	DocumentDownload           string

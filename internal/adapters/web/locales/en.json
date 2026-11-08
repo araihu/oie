@@ -379,5 +379,6 @@
   "DocumentPage": "Page",
   "DocumentFit": "Fit",
   "DocumentZoomIn": "Zoom in",
-  "DocumentZoomOut": "Zoom out"
+  "DocumentZoomOut": "Zoom out",
+  "RoomActions": "Room actions"
 }

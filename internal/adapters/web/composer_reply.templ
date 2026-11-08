@@ -5,6 +5,7 @@ import (
  "github.com/araihu/goshtoso/components/card"
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/link"
+ "github.com/araihu/goshtoso/components/modal"
  "github.com/araihu/goshtoso/components/textinput"
  "strconv"
 )
@@ -16,6 +17,14 @@ templ composerReply(v view){
 </div>
 }
 templ composerReplyBody(){<strong data-composer-reply-sender></strong><p data-composer-reply-excerpt></p>}
+
+// Room controls stay mounted for live state and pending-operation recovery.
+// The conversation's action menu opens them only on demand.
+templ roomSessionDialog(v view){
+if v.Selected!=nil&&v.Selected.Kind=="room" {
+@modal.Dialog(modal.DialogConfig{ID:"room-session-dialog",Title:v.Text.RoomActions,Content:roomSessionStatus(v),FullscreenMobile:true})
+}
+}
 
 templ roomSessionStatus(v view){
 if v.Selected!=nil&&v.Selected.Kind=="room" {
