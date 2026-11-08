@@ -1,0 +1,2 @@
+# Keep upstream distribution and license bytes identical to their pinned hashes.
+internal/adapters/web/pdfjs/** -whitespace linguist-vendored
