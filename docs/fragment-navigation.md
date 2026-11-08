@@ -23,3 +23,11 @@ The existing Oie identity and public Goshtoso Drawer, Avatar, Panel, Accordion, 
 | Native fallback | Full server-rendered destination | Link/form semantics and localized shell |
 
 Browser coverage includes repeated swaps, source/account isolation, draft restoration with denied storage, one live stream after settlement, exactly one mutation after remounts, overlapping requests, transport failure, native fallback and accessible mobile layouts. Chat-info checks also cover duplicate image projections, source-message stars and closing the viewer while keeping its underlying drawer open.
+
+## Verification on 2026-11-08
+
+`make check` passes, including contracts, golangci-lint, generated-file checks, vet and native tests. HTTP tests distinguish native documents, application fragments and drawer fragments, and verify account/conversation isolation for both shared-content and starred-message reads. The navigation fixture records eighteen HTMX requests and one document load, two distinct send intents with two accepted effects, one active stream after settlement and zero browser errors. It also covers leaving after a committed send but before its response and reconciling the original key on return.
+
+All host browser suites pass, including smoke, chat, presentation states, account switcher, live-chat, avatars, previews, Markdown, stars, replies, capabilities, account drawer, conversation details, shared content and chat info. The isolated development XMPP browser workflow passes. Visible replies use a route-scoped capture handler to focus their existing source before boosted navigation; distant replies retain fragment navigation. Tests wait for URL and rendered DOM postconditions rather than assuming a click waits for a native document load.
+
+The live BFF was updated independently. A read-only observer confirmed scoped media/category/search/Back swaps, unchanged composer DOM, one document load, zero duplicate IDs, zero browser errors and zero mutations. The existing engine process, identity, API 0.10 and clean schema 8 were preserved.
