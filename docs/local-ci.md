@@ -63,3 +63,13 @@ intermittently stopped receiving completed API results and failed their engine
 healthcheck. Independent SSH and Docker connection attempts did not establish a
 completed pipeline. No green full-pipeline result is claimed. The live-preview
 engine and its data are excluded from Dagger tests.
+
+The received-reply increment adds the browser reply fixture to the Dagger browser
+stage. Native checks, engine/web races, development Prosody live/archive reply
+integration and the real-engine browser workflow pass. A read-only observation
+also confirms navigation for a recovered reply in the existing live engine.
+The full Dagger run was attempted with a 180-second bound; its result is recorded
+separately from these native checks.
+The current attempt exited 124 after 180 seconds without a Dagger stage result.
+Native `make check` completed successfully. Full Dagger completion remains
+unverified; no green pipeline result is claimed.

@@ -633,3 +633,9 @@ The discussion record is the decision history; this draft is the consolidated fi
 - [WhatsApp editing](https://faq.whatsapp.com/6614640168569481/?cms_platform=web&lang=id), [mute durations](https://faq.whatsapp.com/694350718331007/?cms_platform=iphone&locale=pa_IN), and [web media composition](https://faq.whatsapp.com/453914586839706/?cms_platform=web&locale=en_US). These support the specifically identified interface recommendations, not assumptions about WhatsApp's backend.
 
 The supplied screenshots remain the visual reference. Do not reuse their private contact names, phone numbers, or message content as Oie fixtures.
+
+### Received reply presentation increment
+
+**AGREED:** render protocol-identified replies as compact cards containing the original sender and a plain-text excerpt. A click or tap navigates to the retained original in the same conversation, with a temporary highlight. Ordinary Markdown blockquotes remain formatting and do not invent a referenced message. Copy preserves the complete original message text, including protocol fallback quoting.
+
+**IMPLEMENTATION SCOPE:** XMPP XEP-0461 received and archived reply metadata, with XEP-0428 fallback offsets interpreted as Unicode code points. Room targets use room-issued stanza IDs only when discovery advertises stable ID assignment. Direct targets use origin IDs or message IDs scoped by sender. Identifiers are scoped to the account and conversation. Unavailable or ambiguous originals produce non-navigable cards. Retained history around a known UUID is exposed through the bounded context API. Sending replies remains a future engine increment.
