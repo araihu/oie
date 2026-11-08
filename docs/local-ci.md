@@ -1,5 +1,11 @@
 # Local CI loop
 
+The received-corrections increment passes native `make check`, core and web race
+tests, direct/room development XMPP integration, and browser workflows. Its
+final Dagger attempt remained at runner connection and was stopped after 196
+seconds. Full pipeline completion remains unverified. See
+[received corrections](received-corrections.md) for validation and live data preservation.
+
 The outgoing-replies increment passes native checks, changed-package races,
 development XMPP integration and host browser workflows. The corrected capability
 fixture passes locally. The final Dagger retry failed attaching a runner step with
