@@ -3,8 +3,10 @@ package web
 import (
  "github.com/araihu/goshtoso/components/button"
  "github.com/araihu/goshtoso/components/card"
+ "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/link"
  "github.com/araihu/goshtoso/components/modal"
+ "github.com/araihu/goshtoso/components/popover"
  "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
@@ -53,30 +55,44 @@ templ previewImageActions(v view){
 <div class="oie-preview-image-actions">
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-preview-download":"","x-cloak":"","x-show":"!previewImage || previewImageFailed","x-bind:disabled":"previewBusy || previewDownload==='queued' || previewDownload==='downloading'"})){ {v.Text.LoadImage} }
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-preview-expand":"","x-cloak":"","x-show":"previewFile && (!previewImage || previewImageFailed)","x-bind:disabled":"previewBusy"})){ {v.Text.OpenImage} }
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-preview-info":"","aria-haspopup":"dialog"})){ {v.Text.ImageInfo} }
 <p data-preview-feedback role="status" aria-live="polite"></p>
 </div>
 }
 
 templ imageViewer(v view){
-<div data-image-viewer x-data="{viewerSrc:'',viewerLabel:'',viewerStatus:'',viewerFailed:false,viewerInfo:false,viewerUrl:'',viewerFilename:'',viewerMime:'',viewerSize:''}">
+<div data-image-viewer x-data="{viewerSrc:'',viewerLabel:'',viewerStatus:'',viewerFailed:false,viewerActive:false,viewerUrl:'',viewerFilename:'',viewerMime:'',viewerSize:''}">
 @modal.Dialog(modal.DialogConfig{ID:"oie-image-viewer",Title:v.Text.ImageView,Content:imageViewerContent(v),FullscreenMobile:true})
 </div>
 }
 
 templ imageViewerContent(v view){
+<div class="oie-image-viewer-layout">
 <div class="oie-image-viewer-content">
 <p role="status" aria-live="polite" x-show="viewerStatus" x-text="viewerStatus"></p>
 <img class="oie-expanded-image" alt={v.Text.ImageView} data-failed={v.Text.ImageDownloadFailed} x-cloak x-show="viewerSrc && !viewerFailed" x-bind:src="viewerSrc || null" x-bind:alt="viewerLabel" x-on:error="viewerFailed=true;viewerStatus=$el.dataset.failed"/>
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAlpine(&button.AlpineConfig{OnClick:"viewerInfo=!viewerInfo"}),button.WithAttrs(templ.Attributes{"data-viewer-info":"","aria-controls":"oie-image-info","x-bind:aria-expanded":"String(viewerInfo)"})){ {v.Text.ImageInfo} }
-<div id="oie-image-info" class="oie-image-info" x-cloak x-show="viewerInfo">
+</div>
+<footer class="oie-image-viewer-footer">
+<template x-if="viewerActive">
+@popover.Popover(popover.Config{ID:"oie-image-info-popover",Trigger:imageInfoTrigger(v),Content:imageInfoContent(v),Placement:popover.PlacementTopEnd,Role:"dialog",Label:v.Text.ImageInfo,PanelClass:"oie-image-info-panel",TrapFocus:true})
+</template>
+</footer>
+</div>
+}
+
+templ imageInfoTrigger(v view){
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithRootClass("oie-image-info-trigger"),button.WithAttrs(templ.Attributes{"data-viewer-info":"","aria-label":v.Text.ImageInfo,"title":v.Text.ImageInfo,"x-on:keydown.escape.stop":"handleEscape($event)"})){
+@glyph(heroicons.Icon16SolidInformationCircle)
+}
+}
+
+templ imageInfoContent(v view){
+<div id="oie-image-info" class="oie-image-info" x-on:keydown.escape.stop="handleEscape($event)">
 <dl>
-<div><dt>{v.Text.ImageSource}</dt><dd>@link.Link("",link.WithAttrs(templ.Attributes{"data-image-source":"","x-bind:href":"viewerUrl || null","x-text":"viewerUrl","target":"_blank","rel":"noopener noreferrer"})){ }</dd></div>
+<div><dt>{v.Text.ImageSource}</dt><dd>@link.Link("",link.WithRootClass("oie-image-source"),link.WithAttrs(templ.Attributes{"data-image-source":"","x-bind:href":"viewerUrl || null","x-text":"viewerUrl","target":"_blank","rel":"noopener noreferrer"})){ }</dd></div>
 <div x-show="viewerFilename"><dt>{v.Text.ImageFilename}</dt><dd data-image-filename x-text="viewerFilename"></dd></div>
 <div x-show="viewerMime"><dt>{v.Text.ImageType}</dt><dd data-image-type x-text="viewerMime"></dd></div>
 <div x-show="viewerSize"><dt>{v.Text.ImageSize}</dt><dd data-image-size x-text="viewerSize"></dd></div>
 </dl>
-</div>
 <p class="oie-image-integrity" x-show="viewerSrc && !viewerFailed">{v.Text.ImageComputed}</p>
 </div>
 }

@@ -65,7 +65,7 @@
   if(!observer){timeline?.addEventListener('scroll',()=>{measureImages();scheduleAutomatic();},{passive:true});addEventListener('resize',()=>{measureImages();scheduleAutomatic();});}
   document.addEventListener('visibilitychange',scheduleAutomatic);
   requestAnimationFrame(trackImages);
-  let viewing='',openerAction='expand';
+  let viewing='';
   const source=hash=>typeof hash==='string' && /^[0-9a-f]{64}$/.test(hash)?'/ui/media/'+hash:'';
   const find=id=>document.querySelector(`[data-preview-id="${CSS.escape(id)}"]`);
   const state=element=>window.Alpine?.$data(element);
@@ -90,16 +90,17 @@
     const size=Number(scope.dataset.previewSize);
     data.viewerSize=scope.dataset.previewSize && Number.isFinite(size)?new Intl.NumberFormat(document.documentElement.lang,{style:'unit',unit:'byte',unitDisplay:'long'}).format(size):'';
   }
-  function expand(scope,showInfo=false) {
+  function expand(scope) {
     if(!dialog||!viewer)return;
-    viewing=scope.dataset.previewId;openerAction=showInfo?'info':'expand';state(viewer).viewerInfo=showInfo;updateViewer(scope);
+    viewing=scope.dataset.previewId;state(viewer).viewerActive=true;updateViewer(scope);
     window.dispatchEvent(new CustomEvent('modal:open',{detail:{id:'oie-image-viewer'}}));
   }
   dialog?.addEventListener('close',()=>{
-    const previous=viewing,action=openerAction;viewing='';
+    const previous=viewing;viewing='';
+    if(state(viewer))state(viewer).viewerActive=false;
     // A new message may replace the timeline while the dialog is open. Restore
     // focus to the equivalent surviving action instead of a detached opener.
-    setTimeout(()=>{const scope=find(previous);const target=scope&&(action==='info'?scope.querySelector('[data-preview-info]'):[...scope.querySelectorAll('[data-preview-expand],[data-preview-download]')].find(el=>el.getClientRects().length));target?.focus({preventScroll:true});},0);
+    setTimeout(()=>{const scope=find(previous);const target=scope&&[...scope.querySelectorAll('[data-preview-expand],[data-preview-download]')].find(el=>el.getClientRects().length);target?.focus({preventScroll:true});},0);
   });
   function synchronize(root) {
     const timeline=document.querySelector('#message-timeline');
@@ -160,10 +161,9 @@
     }
   }
   document.addEventListener('click',event=>{
-    const button=event.target.closest('[data-preview-download],[data-preview-expand],[data-preview-info]');if(!button)return;
+    const button=event.target.closest('[data-preview-download],[data-preview-expand]');if(!button)return;
     const scope=button.closest('[data-preview-id]');if(!scope||scope.dataset.previewKind!=='image')return;
     event.preventDefault();
-    if(button.hasAttribute('data-preview-info')){expand(scope,true);return;}
     if(button.hasAttribute('data-preview-expand')) {
       expand(scope);if(!scope.dataset.previewFile)download(scope);
     } else download(scope);
