@@ -1,4 +1,6 @@
 {
+  "RefreshPreview": "Refresh link preview",
+  "RefreshPreviewFailed": "The preview could not be refreshed. Try again.",
   "AppName": "Oiê",
   "AppDescription": "Your conversations, with warmth and closeness.",
   "Accounts": "Accounts",

@@ -123,6 +123,8 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 		status, result = s.setStar(ctx, r, text)
 	case "/ui/previews/download":
 		status, result = s.downloadPreview(ctx, r, text)
+	case "/ui/previews/refresh":
+		status, result = s.refreshPreview(ctx, r, text)
 	case "/ui/accounts/register":
 		key := r.Form.Get("operationKey")
 		if !validOperationKey(key) {
@@ -416,7 +418,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 
 func isMutationPath(path string) bool {
 	switch path {
-	case "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/cancel":
+	case "/ui/previews/refresh", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/cancel":
 		return true
 	}
 	return false
@@ -460,4 +462,19 @@ func (s *Server) downloadPreview(ctx context.Context, r *http.Request, text copy
 		return response.StatusCode(), mutationResult{Message: (view{Text: text}).previewFailure(problem.Code), Code: problem.Code}
 	}
 	return response.StatusCode(), mutationResult{OK: true, Preview: p, Message: (view{Text: text}).previewStatus(*p)}
+}
+
+func (s *Server) refreshPreview(ctx context.Context, r *http.Request, text copy) (int, mutationResult) {
+	id := r.Form.Get("previewId")
+	if !validOperationKey(id) {
+		return 422, mutationResult{Message: text.InvalidForm, Rejected: true}
+	}
+	response, err := s.client.RefreshMessagePreviewWithResponse(ctx, id)
+	if err != nil {
+		return 503, mutationResult{Message: text.RefreshPreviewFailed}
+	}
+	if response.JSON202 == nil {
+		return response.StatusCode(), mutationResult{Message: text.RefreshPreviewFailed}
+	}
+	return 202, mutationResult{OK: true, Preview: response.JSON202, Message: text.PreviewLoading}
 }

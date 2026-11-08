@@ -350,3 +350,18 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-room-session{flex-shrink:0;padding:9px 16px;background:var(--oie-panel);border-bottom:1px solid var(--oie-border);font-size:12px;line-height:1.5}.oie-room-session>p{margin:0 0 4px}.oie-room-session>p:first-child{font-weight:650}.oie-room-session form{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin:7px 0}.oie-room-nickname{min-width:120px;width:190px}.oie-room-session [data-form-feedback]{flex-basis:100%;font-size:12px}.oie-room-refresh{display:inline-block;font-size:11px;margin-top:3px}
 @media(max-width:720px){.oie-room-session{padding:7px 12px}.oie-room-nickname{width:160px}.oie-composer-reply{gap:4px}}
 .oie-message-edited{display:block;margin-top:5px;font-size:10px;line-height:1.4;text-align:right;color:var(--oie-muted)}
+
+/* Link fallback content belongs to Oie inside the public Card body slot. */
+.oie-link-card-shell{position:relative;min-width:0}
+.oie-link-options{position:absolute;top:4px;right:4px;z-index:2}
+.oie-link-card-image{display:block;width:100%;max-height:220px;object-fit:cover;aspect-ratio:16/9;margin-bottom:12px;border-radius:6px}
+.oie-link-card-summary{display:flex;gap:10px;min-width:0;padding-right:28px;align-items:flex-start}
+.oie-link-card-symbol{display:flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;height:28px;border-radius:6px;color:var(--oie-muted);background:var(--oie-panel)}
+.oie-link-card-symbol .oie-icon{width:16px;height:16px}
+.oie-link-card-favicon{display:block;max-width:24px;max-height:24px;object-fit:contain}
+.oie-link-card-copy{flex:1;min-width:0}
+.oie-link-card-copy .oie-preview-title{font-size:14px;margin:0 0 4px;color:var(--oie-text)}
+.oie-link-card-copy .oie-preview-site{margin-bottom:0}
+.oie-link-refresh-feedback:empty{display:none}
+.oie-link-refresh-feedback{font-size:12px;color:var(--oie-muted);margin:6px 0}
+@media(min-width:721px){.oie-shared-item .oie-link-card:not(.oie-link-card-compact){display:grid;grid-template-columns:minmax(100px,220px)minmax(0,1fr);gap:14px;align-items:center}.oie-shared-item .oie-link-card:not(.oie-link-card-compact) .oie-link-card-image{margin-bottom:0;max-height:180px}}

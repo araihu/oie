@@ -2,7 +2,6 @@ package web
 
 import (
  "github.com/araihu/goshtoso/components/button"
- "github.com/araihu/goshtoso/components/card"
  "github.com/araihu/goshtoso/components/dropdown"
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/link"
@@ -14,11 +13,9 @@ import (
 // Provider text is plain HTML data. The Alpine expression is fixed application
 // code, and image sources are exclusively BFF paths built from validated hashes.
 templ messagePreview(v view,p engineapi.MessagePreview){
-<section class="oie-message-preview" data-preview-id={p.Id} data-preview-revision={p.RevisionId} data-preview-kind={string(p.Kind)} data-preview-title={previewValue(p.Title)} data-preview-message={p.MessageId} data-preview-url={safePreviewURL(p.Url)} data-preview-name={previewFilename(p)} data-preview-mime={previewMime(p)} data-preview-size={previewSize(p)} data-preview-description={previewValue(p.Description)} data-preview-site={previewValue(p.SiteName)} data-preview-image={mediaSource(p.ImageHash)} data-preview-file={mediaSource(p.FileHash)} data-preview-state={string(p.State)} data-preview-download={string(p.DownloadState)} data-preview-status={v.previewStatus(p)} x-data="{previewTitle:$el.dataset.previewTitle,previewDescription:$el.dataset.previewDescription,previewSite:$el.dataset.previewSite,previewImage:$el.dataset.previewImage,previewFile:$el.dataset.previewFile,previewState:$el.dataset.previewState,previewDownload:$el.dataset.previewDownload,previewStatus:$el.dataset.previewStatus,previewBusy:false,previewImageFailed:false}">
+<section class="oie-message-preview" data-preview-id={p.Id} data-preview-revision={p.RevisionId} data-preview-kind={string(p.Kind)} data-preview-title={previewValue(p.Title)} data-preview-message={p.MessageId} data-preview-url={safePreviewURL(p.Url)} data-preview-name={previewFilename(p)} data-preview-mime={previewMime(p)} data-preview-size={previewSize(p)} data-preview-description={previewValue(p.Description)} data-preview-site={previewValue(p.SiteName)} data-preview-image={mediaSource(p.ImageHash)} data-preview-favicon={mediaSource(p.FaviconHash)} data-preview-host={previewHost(p)} data-preview-path={linkPreviewPath(p.Url)} data-preview-file={mediaSource(p.FileHash)} data-preview-state={string(p.State)} data-preview-download={string(p.DownloadState)} data-preview-status={v.previewStatus(p)} x-data="{previewTitle:$el.dataset.previewTitle,previewDescription:$el.dataset.previewDescription,previewSite:$el.dataset.previewSite,previewImage:$el.dataset.previewImage,previewFavicon:$el.dataset.previewFavicon,previewHost:$el.dataset.previewHost,previewPath:$el.dataset.previewPath,previewFaviconFailed:false,get previewLinkTitle(){const title=this.previewTitle.trim();return title && title.toLowerCase()!==this.previewHost.toLowerCase()?title:this.previewPath||this.previewHost},previewFile:$el.dataset.previewFile,previewState:$el.dataset.previewState,previewDownload:$el.dataset.previewDownload,previewStatus:$el.dataset.previewStatus,previewBusy:false,previewImageFailed:false}">
 if p.Kind=="link" {
-@link.Link(safePreviewURL(p.Url),link.WithRootClass("oie-link-preview"),link.WithAttrs(templ.Attributes{"target":"_blank","rel":"noopener noreferrer","data-preview-page":""})){
-@card.Card(card.Config{Layout:previewCardLayout(v),Title:previewHost(p),Media:previewThumbnail(v,p),MediaClass:"oie-preview-media",Body:previewDescription(v,p),Density:card.DensityCompact,RootClass:"oie-preview-card"})
-}
+@linkFallbackCard(v,p)
 }else{
 <div class="oie-image-preview">
 if len(v.imagePreviews(p.MessageId))>1 {

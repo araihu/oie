@@ -205,3 +205,40 @@ func previewSize(p engineapi.MessagePreview) string {
 	}
 	return ""
 }
+
+// The destination retains its complete URL; only its display path is shortened.
+func linkPreviewPath(raw string) string {
+	u, err := url.Parse(safePreviewURL(raw))
+	if err != nil || u == nil {
+		return ""
+	}
+	value, err := url.PathUnescape(u.EscapedPath())
+	if err != nil {
+		return ""
+	}
+	value = strings.Map(func(r rune) rune {
+		if r < 32 || r == 127 {
+			return -1
+		}
+		return r
+	}, value)
+	if value == "/" {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) > 160 {
+		return string(runes[:157]) + "..."
+	}
+	return value
+}
+func linkPreviewTitle(p engineapi.MessagePreview) string {
+	title := strings.TrimSpace(previewValue(p.Title))
+	host := previewHost(p)
+	if title != "" && !strings.EqualFold(title, host) {
+		return title
+	}
+	if value := linkPreviewPath(p.Url); value != "" {
+		return value
+	}
+	return host
+}

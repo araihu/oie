@@ -1,4 +1,6 @@
 {
+  "RefreshPreview": "Atualizar prévia do link",
+  "RefreshPreviewFailed": "Não foi possível atualizar a prévia. Tente novamente.",
   "AppName": "Oiê",
   "AppDescription": "Suas conversas, com carinho e proximidade.",
   "Accounts": "Contas",

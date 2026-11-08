@@ -4,7 +4,7 @@ window.OieRuntime.register('previews', life => {
   const viewer=document.querySelector('[data-image-viewer]');
   const dialog=document.querySelector('#oie-image-viewer');
   const csrf=document.querySelector('meta[name="oie-csrf"]')?.content || '';
-  const downloading=new Set();
+  const downloading=new Set(),refreshing=new Set();
   const preferenceKey='oie.device.auto-image-downloads.v1';
   let automatic=true;
   try { automatic=localStorage.getItem(preferenceKey)!=='false'; }
@@ -59,13 +59,16 @@ window.OieRuntime.register('previews', life => {
   const findAll=id=>document.querySelectorAll(`[data-preview-id="${CSS.escape(id)}"]`);
   const find=id=>{const selector=viewerOrigin==='info'?'#info-shared-results':viewerOrigin==='shared'?'#shared-content-results':'#message-timeline';return document.querySelector(`${selector} [data-preview-id="${CSS.escape(id)}"]`)||document.querySelector(`[data-preview-id="${CSS.escape(id)}"]`);};
   const state=element=>window.Alpine?.$data(element);
-  const fields=['previewUrl','previewName','previewMime','previewSize','previewTitle','previewDescription','previewSite','previewImage','previewFile','previewState','previewDownload','previewStatus','previewRevision'];
+  const fields=['previewUrl','previewName','previewMime','previewSize','previewTitle','previewDescription','previewSite','previewImage','previewFavicon','previewHost','previewPath','previewFile','previewState','previewDownload','previewStatus','previewRevision'];
   function apply(scope,values) {
     const data=state(scope);
     for(const field of fields) if(Object.hasOwn(values,field)) {
       scope.dataset[field]=values[field];if(data)data[field]=values[field];
     }
-    if(data)data.previewBusy=downloading.has(scope.dataset.previewId);
+    if(data)data.previewBusy=downloading.has(scope.dataset.previewId)||refreshing.has(scope.dataset.previewId);
+    const feedback=scope.querySelector('[data-link-refresh-feedback]');
+    if(feedback&&scope.dataset.previewRefreshing==='true'&&scope.dataset.previewState!=='queued'){feedback.textContent=scope.dataset.previewState==='unavailable'?(labels.refreshFailed||''):'';scope.dataset.previewRefreshing='false'}
+    const refresh=scope.querySelector('[id^="refresh-preview-"]');if(refresh)refresh.disabled=scope.dataset.previewState==='queued'||refreshing.has(scope.dataset.previewId);
     const save=document.getElementById('save-preview-'+scope.dataset.previewId);if(save){save.disabled=!scope.dataset.previewFile;save.hidden=!scope.dataset.previewFile;}
     if(viewing===scope.dataset.previewId&&contextOf(scope)===viewerOrigin)updateViewer(scope);
   }
@@ -185,6 +188,23 @@ window.OieRuntime.register('previews', life => {
       clearTimeout(timeout);if(life.signal.aborted)return;downloading.delete(id);for(const matching of findAll(id))if(state(matching))state(matching).previewBusy=false;
     }
   }
+  async function refreshLink(scope){
+    const id=scope.dataset.previewId;if(refreshing.has(id)||scope.dataset.previewState==='queued')return;
+    refreshing.add(id);scope.dataset.previewRefreshing='true';const feedback=scope.querySelector('[data-link-refresh-feedback]');
+    if(feedback)feedback.textContent=labels.refreshLoading||'';
+    const button=scope.querySelector('[id^="refresh-preview-"]');if(button)button.disabled=true;
+    try{
+      const values=new URLSearchParams({engineId:document.body.dataset.engineId,previewId:id});
+      const response=await life.fetch('/ui/previews/refresh',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-Token':csrf},body:values});
+      const result=await response.json();if(life.signal.aborted)return;
+      if(!response.ok||!result.ok||result.preview?.id!==id)throw Error('refresh_failed');
+      const p=result.preview;
+      for(const matching of findAll(id))apply(matching,{previewTitle:p.title||'',previewDescription:p.description||'',previewSite:p.siteName||'',previewImage:source(p.imageHash),previewFavicon:source(p.faviconHash),previewState:p.state,previewRevision:p.revisionId,previewStatus:result.message||''});
+      if(feedback)feedback.textContent=result.message||'';document.dispatchEvent(new CustomEvent('oie:refresh-request'));
+    }catch{scope.dataset.previewRefreshing='false';if(!life.signal.aborted&&feedback)feedback.textContent=labels.refreshFailed||'';}
+    finally{refreshing.delete(id);if(button)button.disabled=scope.dataset.previewState==='queued';}
+  }
+  life.on(document,'click',event=>{const button=event.target.closest('[id^="refresh-preview-"]');if(!button)return;const scope=button.closest('[data-preview-id]');if(!scope||scope.dataset.previewKind!=='link')return;event.preventDefault();refreshLink(scope)});
   life.on(document,'click',event=>{
     const menu=event.target.closest('[id^="open-preview-"],[id^="info-preview-"],[id^="save-preview-"]');
     const button=menu||event.target.closest('button[data-preview-download],button[data-preview-expand]');if(!button)return;

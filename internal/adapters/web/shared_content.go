@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
-	"github.com/araihu/goshtoso/components/card"
 	"github.com/araihu/goshtoso/components/combobox"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
@@ -135,10 +134,4 @@ func (v view) sharedSenderAddress(item engineapi.SharedContentItem) string {
 		return v.account(item.Message.AccountId).Address
 	}
 	return ""
-}
-func previewCardLayout(v view) card.Layout {
-	if v.Section == "media" || v.SharedInDetails {
-		return card.LayoutHorizontal
-	}
-	return card.LayoutVertical
 }

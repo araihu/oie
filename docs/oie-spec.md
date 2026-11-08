@@ -267,6 +267,8 @@ Provide searchable **Media, Files, and Links** views. Catalog shared URLs automa
 
 Provide WhatsApp-like rich link cards using structured engine metadata. Preview enrichment must not require a provider client in the browser.
 
+**AGREED:** link-card fallbacks prefer the available preview image. Without an image, use a compact card with page title, available description and the domain once. Use a cached site icon when available; otherwise use a local link icon. When metadata is unavailable, show a readable URL path and domain, preserving the full URL as the destination. Do not reserve an empty image column. Keep message cards compact and catalog cards full-width. Metadata failures leave the basic card usable; More options offers an explicit metadata refresh without changing the message.
+
 Search matches the latest message revision by default. **Include edit history** explicitly enables retained earlier versions, with historical matches labeled. Retracted content is hidden from search and Media/Files/Links by default; **Include retracted** enables deliberate retrieval. These filters are independent and never bypass explicit deletion.
 
 **RECOMMENDED R08/R10:** SQLite FTS5 as a derived index; source-linked catalog records; bounded, cached link-preview enrichment independent of history fetching. **OPEN O08:** indexing/tokenization, filters/ranking, preview fetching/refresh policy, cache limits, and provider capability fallbacks.

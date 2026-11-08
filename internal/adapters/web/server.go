@@ -126,6 +126,8 @@ type view struct {
 }
 
 type copy struct {
+	RefreshPreview             string
+	RefreshPreviewFailed       string
 	AppName                    string
 	AppDescription             string
 	CapabilityEditMessagesNote string

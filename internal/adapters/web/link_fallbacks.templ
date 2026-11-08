@@ -1,0 +1,49 @@
+package web
+
+import (
+ "github.com/araihu/goshtoso/components/button"
+ "github.com/araihu/goshtoso/components/card"
+ "github.com/araihu/goshtoso/components/dropdown"
+ "github.com/araihu/goshtoso/components/icon/heroicons"
+ "github.com/araihu/goshtoso/components/link"
+ "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+)
+
+templ linkFallbackCard(v view,p engineapi.MessagePreview){
+<div class="oie-link-card-shell">
+@link.Link(safePreviewURL(p.Url),link.WithRootClass("oie-link-preview"),link.WithAttrs(templ.Attributes{"target":"_blank","rel":"noopener noreferrer","data-preview-page":""})){
+@card.Card(card.Config{Body:linkFallbackBody(v,p),Density:card.DensityCompact,RootClass:"oie-preview-card oie-link-fallback-card"})
+}
+@dropdown.Dropdown(dropdown.Config{ID:"link-options-"+p.Id,Label:v.Text.More,Trigger:linkPreviewOptions(v),RootClass:"oie-link-options",MenuAlign:dropdown.AlignEnd,Sections:[]dropdown.Section{{Items:[]dropdown.Item{{ID:"refresh-preview-"+p.Id,Label:v.Text.RefreshPreview,OnClick:"void 0",Disabled:p.State=="queued"}}}}})
+<p class="oie-link-refresh-feedback" data-link-refresh-feedback role="status" aria-live="polite"></p>
+</div>
+}
+
+templ linkPreviewOptions(v view){
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.More,"title":v.Text.More})){@glyph(heroicons.Icon16SolidEllipsisHorizontal)}
+}
+
+templ linkFallbackBody(v view,p engineapi.MessagePreview){
+<div class={"oie-link-card",templ.KV("oie-link-card-compact",mediaSource(p.ImageHash)=="")} data-link-card x-bind:class="{'oie-link-card-compact':!previewImage || previewImageFailed}">
+<img class="oie-link-card-image" if source:=mediaSource(p.ImageHash);source!="" {
+src={source}
+} alt="" x-cloak x-show="previewImage && !previewImageFailed" x-bind:src="previewImage || null" x-effect="previewImage; previewImageFailed=false" x-on:error="previewImageFailed=true" x-init="$nextTick(()=>{if($el.getAttribute('src') && $el.complete && !$el.naturalWidth)previewImageFailed=true})"/>
+<div class="oie-link-card-summary">
+<span class="oie-link-card-symbol" aria-hidden="true">
+<img class="oie-link-card-favicon" if source:=mediaSource(p.FaviconHash);source!="" {
+src={source}
+} alt="" x-cloak x-show="previewFavicon && !previewFaviconFailed" x-bind:src="previewFavicon || null" x-effect="previewFavicon;previewFaviconFailed=false" x-on:error="previewFaviconFailed=true" x-init="$nextTick(()=>{if($el.getAttribute('src') && $el.complete && !$el.naturalWidth)previewFaviconFailed=true})"/>
+<span x-show="!previewFavicon || previewFaviconFailed">@glyph(heroicons.Icon16SolidLink)</span>
+</span>
+<div class="oie-link-card-copy">
+<p class="oie-preview-title" data-link-title x-text="previewLinkTitle">{linkPreviewTitle(p)}</p>
+<p class="oie-preview-excerpt" x-show="previewDescription" x-text="previewDescription">{previewValue(p.Description)}</p>
+<p class="oie-preview-site" data-link-domain x-show="previewLinkTitle!==previewHost" x-text="previewHost">
+if linkPreviewTitle(p)!=previewHost(p) {
+{previewHost(p)}
+}
+</p>
+</div>
+</div>
+</div>
+}

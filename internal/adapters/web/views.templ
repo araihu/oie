@@ -554,7 +554,7 @@ templ liveCopy(v view){
 <p id="oie-star-storage-warning" class="oie-star-warning" role="status" hidden>{v.Text.StarStorageUnavailable}</p>
 <div id="oie-formatting-copy" hidden data-copy={v.Text.CopyOriginal} data-copied={v.Text.MessageCopied} data-failed={v.Text.CopyFailed}></div>
 <div id="oie-copy-status" class="sr-only" role="status" aria-live="polite"></div>
-<div id="oie-preview-copy" hidden data-loading={v.Text.LoadingImage} data-image={v.Text.ImageView} data-not-downloaded={v.Text.ImageNotDownloaded} data-failed={v.Text.ImageDownloadFailed}></div>
+<div id="oie-preview-copy" hidden data-refresh-failed={v.Text.RefreshPreviewFailed} data-refresh-loading={v.Text.PreviewLoading} data-loading={v.Text.LoadingImage} data-image={v.Text.ImageView} data-not-downloaded={v.Text.ImageNotDownloaded} data-failed={v.Text.ImageDownloadFailed}></div>
 <div id="oie-live-copy" hidden data-reply-unavailable={v.Text.ReplyUnavailable} data-reply-preparing={v.Text.ReplyPreparing} data-reply-locked={v.Text.ReplyLocked} data-room-command-unknown={v.Text.RoomCommandUnknown} data-saving={v.Text.Saving} data-invalid-message={v.Text.InvalidMessage} data-pending={v.Text.PendingAcceptance} data-storage-unavailable={v.Text.DraftStorageUnavailable} data-locked={v.Text.DraftLocked} data-retry={v.Text.RetrySubmission} data-send={v.Text.Send} data-live-ready={v.Text.LiveReady} data-live-retry={v.Text.LiveRetry} data-live-connecting={v.Text.LiveConnecting} data-latest={v.Text.JumpToLatest} data-new-messages={v.Text.NewMessages} data-engine-changed={v.Text.EngineChanged} data-today={v.Text.Today}></div>
 }
 templ liveRegions(v view){
