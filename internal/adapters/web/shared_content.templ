@@ -80,7 +80,7 @@ for _,item:=range v.SharedContent.Items {
 }
 }
 templ sharedItem(v view,item engineapi.SharedContentItem){
-<article class="oie-shared-item" data-shared-item={item.Id} data-shared-created-at={item.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-shared-conversation={item.Message.ConversationId}>
+<article class="oie-shared-item" data-shared-item={item.Id} data-shared-created-at={item.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-shared-created-ms={strconv.FormatInt(item.Message.CreatedAt.UnixMilli(),10)} data-shared-conversation={item.Message.ConversationId}>
 @sharedViewerSource(v,item)
 if item.Kind=="video" {
 @videoCard(v,item)
@@ -113,9 +113,7 @@ templ sharedReference(v view,item engineapi.SharedContentItem){
 @link.Link(safePreviewURL(item.Url),link.WithAttrs(templ.Attributes{"target":"_blank","rel":"noopener noreferrer","data-shared-reference":""})){ {v.Text.SharedOpenLink} }
 }
 templ sharedPagination(v view){
-if v.SharedContent!=nil&&v.SharedContent.NextCursor!=nil {
-@link.Link(v.sharedHref("contentCursor",*v.SharedContent.NextCursor),link.WithAppearance(link.AppearanceButton),link.WithRootClass("oie-shared-next"),link.WithAttrs(templ.Attributes{"data-shared-next":""})){ {v.Text.SharedNext} }
-}
+@sharedPageControls(v)
 }
 templ sharedViewerSource(v view,item engineapi.SharedContentItem){
 <template data-viewer-source={item.Message.Id}>

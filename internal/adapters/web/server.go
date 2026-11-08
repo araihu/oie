@@ -129,6 +129,8 @@ type view struct {
 type copy struct {
 	RefreshPreview             string
 	RefreshPreviewFailed       string
+	SharedLoadingOlder         string
+	SharedLoadFailed           string
 	VideoPlay                  string
 	VideoRetry                 string
 	VideoLoading               string

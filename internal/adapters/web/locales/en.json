@@ -362,5 +362,7 @@
   "VideoPaused": "Video paused",
   "VideoReady": "Play this video.",
   "VideoUnavailable": "The video could not be loaded. Check your connection and try again.",
-  "VideoUnsupported": "This video cannot be played in this browser."
+  "VideoUnsupported": "This video cannot be played in this browser.",
+  "SharedLoadingOlder": "Loading older items…",
+  "SharedLoadFailed": "Could not load older items. Try again."
 }

@@ -365,3 +365,5 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-link-refresh-feedback:empty{display:none}
 .oie-link-refresh-feedback{font-size:12px;color:var(--oie-muted);margin:6px 0}
 @media(min-width:721px){.oie-shared-item .oie-link-card:not(.oie-link-card-compact){display:grid;grid-template-columns:minmax(100px,220px)minmax(0,1fr);gap:14px;align-items:center}.oie-shared-item .oie-link-card:not(.oie-link-card-compact) .oie-link-card-image{margin-bottom:0;max-height:180px}}
+
+.oie-shared-next[hidden]{display:none}
