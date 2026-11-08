@@ -15,8 +15,8 @@ import (
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
-// A video source is a retained catalog identity, never a client-supplied URL.
-func (s *Server) sharedVideoContent(w http.ResponseWriter, r *http.Request) {
+// A media source is a retained catalog identity, never a client-supplied URL.
+func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if r.Method != http.MethodGet {
@@ -31,10 +31,14 @@ func (s *Server) sharedVideoContent(w http.ResponseWriter, r *http.Request) {
 	}
 	query := r.URL.Query()
 	for key, values := range query {
-		if key != "engineId" || len(values) != 1 {
+		if key != "engineId" && key != "download" || len(values) != 1 {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+	}
+	if query.Has("download") && query.Get("download") != "1" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 	if query.Has("engineId") {
 		if !validOperationKey(query.Get("engineId")) {
@@ -95,20 +99,22 @@ func (s *Server) sharedVideoContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
-	if err != nil || !videoMediaType(mediaType) || response.Header.Get("Content-Encoding") != "" && response.Header.Get("Content-Encoding") != "identity" {
+	maximum := sharedMediaMaximum(mediaType)
+	if err != nil || maximum == 0 || response.Header.Get("Content-Encoding") != "" && response.Header.Get("Content-Encoding") != "identity" {
 		w.WriteHeader(http.StatusBadGateway)
 		return
 	}
-	const maxVideo = int64(2 << 30)
-	if response.ContentLength < 0 || response.ContentLength > maxVideo {
+	if response.ContentLength < 0 || response.ContentLength > maximum {
 		w.WriteHeader(http.StatusBadGateway)
 		return
 	}
-	if response.StatusCode == http.StatusPartialContent && !validSatisfiedVideoRange(response.Header.Get("Content-Range"), response.ContentLength, maxVideo) {
+	if response.StatusCode == http.StatusPartialContent && !validSatisfiedVideoRange(response.Header.Get("Content-Range"), response.ContentLength, maximum) {
 		w.WriteHeader(http.StatusBadGateway)
 		return
 	}
 	w.Header().Set("Content-Type", mediaType)
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("Content-Length", strconv.FormatInt(response.ContentLength, 10))
 	for _, key := range []string{"Content-Range", "Accept-Ranges", "ETag", "Last-Modified"} {
 		if value := response.Header.Get(key); len(value) <= 1024 && value != "" {
@@ -116,13 +122,23 @@ func (s *Server) sharedVideoContent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	filename := "video"
+	switch mediaType {
+	case "application/pdf":
+		filename = "document.pdf"
+	case "text/plain":
+		filename = "document.txt"
+	}
 	if _, attributes, parseErr := mime.ParseMediaType(response.Header.Get("Content-Disposition")); parseErr == nil {
 		candidate := path.Base(strings.ReplaceAll(attributes["filename"], "\\", "/"))
 		if candidate != "" && candidate != "." && candidate != "/" && len(candidate) <= 300 && !strings.ContainsAny(candidate, "\r\n\x00") {
 			filename = candidate
 		}
 	}
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": filename}))
+	disposition := "inline"
+	if query.Get("download") == "1" {
+		disposition = "attachment"
+	}
+	w.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": filename}))
 	control := http.NewResponseController(w)
 	_ = control.SetWriteDeadline(time.Now().Add(15 * time.Second))
 	defer func() { _ = control.SetWriteDeadline(time.Time{}) }()
@@ -147,6 +163,20 @@ func (s *Server) sharedVideoContent(w http.ResponseWriter, r *http.Request) {
 		if readErr != nil {
 			return
 		}
+	}
+}
+
+func sharedMediaMaximum(kind string) int64 {
+	if videoMediaType(kind) {
+		return 2 << 30
+	}
+	switch kind {
+	case "text/plain":
+		return 2 << 20
+	case "application/pdf":
+		return 100 << 20
+	default:
+		return 0
 	}
 }
 

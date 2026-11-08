@@ -70,10 +70,12 @@ templ page(v view) {
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href="/ui/app.css"/>
 			<link rel="stylesheet" href="/ui/video.css"/>
+<link rel="stylesheet" href="/ui/document.css"/>
 <script src="/ui/actions.js" defer></script>
 <script src="/ui/stars.js" defer></script>
 <script src="/ui/previews.js" defer></script>
 <script src="/ui/videos.js" defer></script>
+<script src="/ui/documents.js" defer></script>
 <script src="/ui/shared-content.js" defer></script>
 <script src="/ui/live.js" defer></script>
 <script src="/ui/navigation.js" defer></script>
@@ -112,6 +114,7 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 			@accounts(v)
 @newConversation(v)
 @imageViewer(v)
+@documentViewer(v)
 
 @conversationDetails(v)
 </div>
