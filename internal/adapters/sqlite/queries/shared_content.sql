@@ -44,7 +44,7 @@ AND ((CAST(sqlc.arg(content_type) AS TEXT)='media' AND (sc.kind IN ('image','vid
  OR (CAST(sqlc.arg(content_type) AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
  OR (CAST(sqlc.arg(content_type) AS TEXT)='documents' AND sc.kind='document' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image'))
 AND (CAST(sqlc.arg(cursor_id) AS TEXT)='' OR (m.created_at_ms,sc.id)<(CAST(sqlc.arg(cursor_ms) AS INTEGER),CAST(sqlc.arg(cursor_id) AS TEXT)))
-AND (CAST(sqlc.arg(search) AS TEXT)='' OR instr(oie_casefold(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),'')),oie_casefold(CAST(sqlc.arg(search) AS TEXT)))>0)
+AND (CAST(sqlc.arg(search) AS TEXT)='' OR oie_search_match(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),''),CAST(sqlc.arg(search) AS TEXT))=1)
 ORDER BY m.created_at_ms DESC,sc.id DESC LIMIT sqlc.arg(page_limit);
 
 -- name: GetSharedContentItem :one

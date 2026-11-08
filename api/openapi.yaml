@@ -79,7 +79,14 @@ paths:
           items:
             $ref: '#/components/schemas/ID'
       - name: q
-        description: Unicode case-insensitive metadata substring.
+        description: >-
+          Accent- and case-insensitive metadata search, applied before pagination.
+          Exact substrings and word prefixes match. Otherwise all query terms must
+          match a metadata word or prefix, in any order. Terms with letters of four
+          to seven characters allow one insertion, deletion, substitution or
+          adjacent transposition; terms of eight or more allow two. Shorter terms,
+          pure numbers and symbols require exact matches. Result order remains
+          chronological.
         in: query
         schema:
           type: string

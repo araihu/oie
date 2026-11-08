@@ -133,3 +133,56 @@ window.OieRuntime.register('shared-content', life => {
  const observer=new MutationObserver(()=>{for(const [key,c]of controllers)if(!c.results.isConnected){dispose(c);controllers.delete(key)}});observer.observe(document.getElementById('oie-app')||document.body,{childList:true,subtree:true});
  life.cleanup(()=>{observer.disconnect();for(const c of controllers.values())dispose(c);controllers.clear()});
 });
+
+// Only results are replaced while typing. The form remains the native GET
+// fallback, and explicit submissions/account changes use ordinary app routing.
+window.OieRuntime.register('shared-search', life => {
+ 'use strict';
+ const form=document.getElementById('shared-content-search'),input=document.getElementById('shared-search');
+ if(!form||!input)return;
+ let accepted=null,pending=0,composing=false;const active=new Set();
+ const status=()=>document.querySelector('[data-navigation-status]');
+ function announce(error=false){const node=status();if(!node)return;node.textContent=document.getElementById('oie-app')?.dataset[error?'routeError':'routeLoading']||'';node.hidden=false;}
+ function scope(){return new URLSearchParams(new FormData(form)).toString();}
+ function alignTabs(){const values=new FormData(form);for(const link of document.querySelectorAll('[data-shared-tab]')){const url=new URL(link.href);for(const key of ['q','account']){const value=values.get(key)||'';if(value)url.searchParams.set(key,value);else url.searchParams.delete(key);}link.href=url.pathname+url.search;}}
+ function owned(ctx){return ctx?.target?.id==='shared-search-results'&&ctx.sourceElement===input;}
+ function schedule(){clearTimeout(pending);pending=setTimeout(()=>{if(!life.signal.aborted&&!composing&&input.isConnected&&input.value!==document.getElementById('shared-search-results')?.dataset.searchQuery)input.dispatchEvent(new CustomEvent('oie:shared-search',{bubbles:true}));},300);}
+ life.on(input,'input',event=>{if(!event.isComposing&&!composing){alignTabs();schedule();}});
+ life.on(input,'compositionstart',()=>{composing=true;clearTimeout(pending);});
+ life.on(input,'compositionend',()=>{composing=false;alignTabs();schedule();});
+ life.on(form,'submit',()=>clearTimeout(pending),{capture:true});
+ life.on(form,'combobox:change',alignTabs);
+ life.on(document,'htmx:before:request',event=>{
+  const ctx=event.detail.ctx;
+  // Abort before navigation begins, rather than during its DOM swap, so the
+  // old request cannot settle while Alpine initializes the destination screen.
+  if(ctx?.target?.id==='oie-app'){for(const old of active)old.request.abort();active.clear();}
+  if(!owned(ctx))return;
+  active.add(ctx);
+  ctx.oieSearch={form,scope:scope(),generation:Number(document.body.dataset.starGeneration||0)};
+  accepted=null;document.getElementById('shared-search-results')?.setAttribute('aria-busy','true');announce();
+ },{capture:true});
+ life.on(document,'htmx:finally:request',event=>active.delete(event.detail.ctx),{capture:true});
+ life.cleanup(()=>{clearTimeout(pending);for(const ctx of active)ctx.request.abort();active.clear();});
+ life.on(document,'htmx:before:swap',event=>{
+  const ctx=event.detail.ctx;if(!owned(ctx))return;
+  const request=ctx.oieSearch;
+  if(!request||!form.isConnected||document.getElementById('shared-content-search')!==form||request.scope!==scope()){
+   event.preventDefault();return;
+  }
+  const page=new DOMParser().parseFromString(ctx.text||'','text/html');
+  if(!page.querySelector('#shared-search-results')){event.preventDefault();announce(true);return;}
+  accepted={...request,page};
+ },{capture:true});
+ life.on(document,'htmx:after:settle',event=>{
+  const root=event.detail.task?.target;
+  if(root?.id!=='shared-search-results'||!root.isConnected||root!==document.getElementById(root.id)||!accepted)return;
+  const fresh=accepted;accepted=null;root.removeAttribute('aria-busy');
+  document.dispatchEvent(new CustomEvent('oie:shared-search-settled',{detail:{root,page:fresh.page}}));
+  document.dispatchEvent(new CustomEvent('oie:stars-refresh',{detail:{page:fresh.page,generation:fresh.generation}}));
+  document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:fresh.page}));
+  document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));
+  const node=status();if(node)node.hidden=true;
+ });
+ life.on(document,'htmx:error',event=>{if(owned(event.detail.ctx)){document.getElementById('shared-search-results')?.removeAttribute('aria-busy');announce(true);}});
+});
