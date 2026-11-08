@@ -3,20 +3,23 @@ package web
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"unicode/utf8"
 )
 
 func TestEmojiCatalogsPreserveLocalizedUnicodeSequences(t *testing.T) {
 	var baseline []string
+	var baselineSearch []string
 	for _, locale := range []string{"en", "pt-BR"} {
 		data, err := emojiFiles.ReadFile("emoji/" + locale + ".json")
 		if err != nil {
 			t.Fatal(err)
 		}
 		var catalog struct {
-			Locale string            `json:"locale"`
-			Items  []json.RawMessage `json:"items"`
+			Locale   string            `json:"locale"`
+			Items    []json.RawMessage `json:"items"`
+			Families map[string]string `json:"families"`
 		}
 		if err := json.Unmarshal(data, &catalog); err != nil {
 			t.Fatal(err)
@@ -43,13 +46,33 @@ func TestEmojiCatalogsPreserveLocalizedUnicodeSequences(t *testing.T) {
 			seen[glyph] = true
 			if locale == "en" {
 				baseline = append(baseline, glyph)
+				baselineSearch = append(baselineSearch, keywords)
 			} else if index >= len(baseline) || baseline[index] != glyph {
 				t.Fatal("localization altered the Unicode sequence", index)
+			} else if baselineSearch[index] != keywords {
+				t.Fatal("search language depends on interface language", index)
+			}
+			if glyph == "👍" || glyph == "👍🏽" {
+				for _, term := range []string{"thumbs up", "joinha", "polegar para cima"} {
+					if !strings.Contains(keywords, term) {
+						t.Fatal("missing cross-language search term", locale, glyph, term)
+					}
+				}
 			}
 		}
 		for _, required := range []string{"❤️", "👍🏽", "👩🏽‍💻", "🇧🇷"} {
 			if !seen[required] {
 				t.Fatal("missing sequence", locale, required)
+			}
+		}
+		for glyph, base := range catalog.Families {
+			if !seen[glyph] || !seen[base] || glyph == base || catalog.Families[base] != "" {
+				t.Fatal("variant does not resolve to a retained base emoji", locale, glyph, base)
+			}
+		}
+		for glyph, base := range map[string]string{"👍🏽": "👍", "👩🏽‍💻": "👩‍💻", "🫱🏻‍🫲🏽": "🤝"} {
+			if catalog.Families[glyph] != base {
+				t.Fatal("incorrect Unicode variant family", locale, glyph, catalog.Families[glyph])
 			}
 		}
 	}
