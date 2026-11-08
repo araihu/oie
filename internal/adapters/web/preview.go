@@ -16,6 +16,8 @@ func (v *view) configureWorkspace(r *http.Request) {
 	v.ChatOpen = q.Get("chat") != ""
 	v.ChatID = q.Get("chat")
 	v.AccountFilter = q.Get("account")
+	v.AccountPage = q.Get("accountPage")
+	v.ManagedAccount = q.Get("managedAccount")
 	v.Section = q.Get("section")
 	switch v.Section {
 	case "favorites", "archived", "media":
@@ -76,3 +78,40 @@ func initials(name string) string {
 
 func chatInitials(c engineapi.Conversation) string       { return initials(c.Title) }
 func participantNames(c engineapi.Conversation) []string { return []string{c.Address} }
+
+func (v view) accountScreen() string {
+	if v.FormTarget == "register" {
+		return "add"
+	}
+	if strings.HasPrefix(v.FormTarget, "connect-") || strings.HasPrefix(v.FormTarget, "disconnect-") {
+		return "detail"
+	}
+	if v.AccountPage == "add" {
+		return "add"
+	}
+	if v.ManagedAccount != "" {
+		return "detail"
+	}
+	return "list"
+}
+func (v view) managedAccountID() string {
+	if strings.HasPrefix(v.FormTarget, "connect-") {
+		return strings.TrimPrefix(v.FormTarget, "connect-")
+	}
+	if strings.HasPrefix(v.FormTarget, "disconnect-") {
+		return strings.TrimPrefix(v.FormTarget, "disconnect-")
+	}
+	return v.ManagedAccount
+}
+func (v view) accountsHref(id string) string {
+	return v.href("open", "accounts", "accountPage", "", "managedAccount", id)
+}
+func (v view) addAccountHref() string {
+	return v.href("open", "accounts", "accountPage", "add", "managedAccount", "")
+}
+func (v view) initialDrawer() string {
+	if v.FormTarget == "register" || strings.HasPrefix(v.FormTarget, "connect-") || strings.HasPrefix(v.FormTarget, "disconnect-") {
+		return "accounts"
+	}
+	return ""
+}

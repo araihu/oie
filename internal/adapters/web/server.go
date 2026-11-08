@@ -79,6 +79,7 @@ type view struct {
 	Text                                                  copy
 	Accounts                                              []engineapi.Account
 	AccountUnread                                         map[string]int
+	AccountPage, ManagedAccount                           string
 	Connections                                           map[string]connectionView
 	Next                                                  string
 	Unavailable, NotFound, Preview, ChatOpen              bool
@@ -97,6 +98,7 @@ type copy struct {
 	Dark, Next, English, Portuguese, NotFound                                          string
 	NotFoundBody, Chats, Favorites, Archived, SharedMedia                              string
 	SwitchAccount, ManageAccounts                                                      string
+	BackToAccounts, AdvancedConnection, AccountMissing, AddAccountHelp                 string
 	Settings, You, All, Unread, Groups                                                 string
 	SearchChats, NoResults, NoResultsBody, NewChat, More                               string
 	Preview, PreviewNote, Message, Send, Attach                                        string

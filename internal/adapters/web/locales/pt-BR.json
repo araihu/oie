@@ -53,7 +53,7 @@
   "SelectChat": "Suas conversas, juntas",
   "SelectChatBody": "Escolha uma conversa para ver as mensagens.",
   "EngineState": "Motor",
-  "AccountHelp": "Adicione uma conta XMPP existente e conecte-a. As contas e os históricos permanecem separados.",
+  "AccountHelp": "Escolha uma conta para gerenciar sua conexão.",
   "PreviewOnly": "Conteúdo de exemplo, apenas nesta prévia.",
   "ThemeHelp": "Siga o dispositivo ou escolha uma aparência.",
   "LanguageHelp": "O idioma do dispositivo é usado até você escolher outro.",
@@ -66,7 +66,7 @@
   "LabelPlaceholder": "Pessoal",
   "RegisterAccount": "Salvar conta",
   "Password": "Senha",
-  "PasswordHelp": "Usada para conectar esta conta. Ela nunca é exibida novamente nesta interface.",
+  "PasswordHelp": "A senha da sua conta XMPP. Ela nunca é exibida novamente aqui.",
   "Endpoint": "Servidor e porta (opcional)",
   "EndpointHelp": "Deixe em branco para descoberta automática. No servidor de desenvolvimento, use 127.0.0.1:5222.",
   "Connect": "Conectar",
@@ -123,5 +123,9 @@
   "Edit": "Editar",
   "Done": "Concluir",
   "SwitchAccount": "Trocar de conta",
-  "ManageAccounts": "Gerenciar contas"
+  "ManageAccounts": "Gerenciar contas",
+  "BackToAccounts": "Todas as contas",
+  "AdvancedConnection": "Configurações avançadas",
+  "AccountMissing": "Conta não encontrada",
+  "AddAccountHelp": "Adicione uma conta XMPP que você já possui."
 }

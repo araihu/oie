@@ -31,9 +31,21 @@ const {chromium}=require('playwright');
    assert((await page.locator('[data-account-switcher]:visible').textContent()).includes('Personal'));
    await page.locator('[data-account-switcher]:visible').click();
    const activePanel=page.getByRole('dialog',{name:label,exact:true});assert.equal(await activePanel.locator('[data-switch-account][aria-current=true]').getAttribute('data-switch-account'),id);
-   await activePanel.locator('[data-open-accounts]').click();await page.locator('#register-account-form').waitFor({state:'visible'});
+   const checkScreen=async screen=>{
+    await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
+    const drawer=page.getByRole('dialog',{name:locale==='en'?'Accounts':'Contas',exact:true});await drawer.waitFor({state:'visible'});await page.waitForFunction(()=>{const box=document.querySelector('.oie-account-drawer').getBoundingClientRect();return box.x>=-1&&box.right<=innerWidth+1});
+    const box=await drawer.boundingBox();assert(box.x>=-1&&box.x+box.width<=width+1);
+    await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+    const result=await page.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));
+    assert.deepEqual(result.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],screen+' '+width+' '+mode+' '+locale);
+    await page.screenshot({path:path.join(artifacts,`accounts-${screen}-${width}-${theme}-${mode}-${locale}.png`)});
+   };
+   await activePanel.locator('[data-open-accounts]').click();await page.locator('#account-overview').waitFor({state:'visible'});assert.equal(await page.locator('[data-connect-account]').count(),0);await checkScreen('list');
+   await page.locator('[data-manage-account="'+id+'"]').click();await page.locator('[data-connect-account]').waitFor({state:'visible'});assert.equal(await page.locator('[data-connect-account]').count(),1);await checkScreen('detail');
+   const endpoint=page.locator('[data-connect-account] [name=endpoint]');assert(!(await endpoint.isVisible()));await page.getByRole('button',{name:locale==='en'?'Advanced connection settings':'Configurações avançadas',exact:true}).click();await endpoint.waitFor({state:'visible'});
+   await page.locator('[data-account-back]').click();await page.locator('#account-overview').waitFor({state:'visible'});
    await page.keyboard.press('Escape');
-   await page.locator('[data-account-switcher]:visible').click();await page.locator('[data-add-account]:visible').click();await page.locator('#register-account-form').waitFor({state:'visible'});
+   await page.locator('[data-account-switcher]:visible').click();await page.locator('[data-add-account]:visible').click();await page.locator('#register-account-form').waitFor({state:'visible'});assert.equal(await page.locator('[data-connect-account]').count(),0);await checkScreen('add');
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(errors,[]);
    findings.push({width,theme,mode,locale,unread:6,accessibilityViolations:0});await page.close();
   }

@@ -173,14 +173,13 @@
         if (existing) {
           const oldStatus = existing.querySelector('[id^="connection-status-"]'), newStatus = fresh.querySelector('[id^="connection-status-"]');
           if (oldStatus && newStatus && oldStatus.innerHTML !== newStatus.innerHTML) mutateDOM(oldStatus,newStatus.innerHTML);
-        } else {
-          const block = fresh.cloneNode(true), host = document.querySelector('#account-blocks');
-          if (host) {
-            const apply = () => { host.append(block); window.Alpine?.initTree(block); };
-            if (window.Alpine?.mutateDom) window.Alpine.mutateDom(apply); else apply();
-          }
+          const oldAction=existing.querySelector('[id^="disconnect-action-"]'),newAction=fresh.querySelector('[id^="disconnect-action-"]');
+          if(oldAction&&newAction&&oldAction.innerHTML!==newAction.innerHTML&&!oldAction.contains(document.activeElement))mutateDOM(oldAction,newAction.innerHTML);
         }
       }
+      const overview=document.querySelector('#account-overview'),nextOverview=page.querySelector('#live-account-overview');
+      if(overview&&nextOverview&&overview.innerHTML!==nextOverview.innerHTML&&!overview.contains(document.activeElement))mutateDOM(overview,nextOverview.innerHTML);
+
       if (accountsVersion !== regions.dataset.accountsVersion && !document.querySelector('#new-conversation-form')?.contains(document.activeElement)) {
         mutateDOM(document.querySelector('#newchat-account-select'), page.querySelector('#live-newchat-account')?.innerHTML || '');
         accountsVersion = regions.dataset.accountsVersion;
@@ -276,7 +275,7 @@
   // Bounded recovery polling also covers a proxy that buffers or disables SSE.
   setInterval(() => { if (!mock && !document.hidden) {scheduleRefresh();retryPending();} },15000);
   addEventListener('online', () => {scheduleRefresh();retryPending();});
-  const open = new URLSearchParams(location.search).get('open');
+  const open = new URLSearchParams(location.search).get('open') || body.dataset.openDrawer;
   if (open === 'accounts' || open === 'newchat') {
     const show = () => dispatchEvent(new CustomEvent('drawer:open',{detail:{id:open}}));
     if (window.Alpine) setTimeout(show,0); else document.addEventListener('alpine:initialized',show,{once:true});

@@ -53,7 +53,7 @@
   "SelectChat": "Your conversations, together",
   "SelectChatBody": "Choose a conversation to see its messages.",
   "EngineState": "Engine",
-  "AccountHelp": "Add an existing XMPP account, then connect it. Accounts and histories stay separate.",
+  "AccountHelp": "Choose an account to manage its connection.",
   "PreviewOnly": "Sample content, only in this preview.",
   "ThemeHelp": "Follow your device or choose an appearance.",
   "LanguageHelp": "Your device language is used unless you choose another.",
@@ -66,7 +66,7 @@
   "LabelPlaceholder": "Personal",
   "RegisterAccount": "Save account",
   "Password": "Password",
-  "PasswordHelp": "Used to connect this account. It is never shown back in this interface.",
+  "PasswordHelp": "Your XMPP account password. It is never shown again here.",
   "Endpoint": "Server endpoint (optional)",
   "EndpointHelp": "Leave blank for automatic discovery. For the development server use 127.0.0.1:5222.",
   "Connect": "Connect",
@@ -123,5 +123,9 @@
   "Edit": "Edit",
   "Done": "Done",
   "SwitchAccount": "Switch account",
-  "ManageAccounts": "Manage accounts"
+  "ManageAccounts": "Manage accounts",
+  "BackToAccounts": "All accounts",
+  "AdvancedConnection": "Advanced connection settings",
+  "AccountMissing": "Account not found",
+  "AddAccountHelp": "Add an existing XMPP account."
 }

@@ -2,6 +2,7 @@ package web
 
 import (
 	"github.com/araihu/goshtoso/components/appshell"
+"github.com/araihu/goshtoso/components/accordion"
 	"github.com/araihu/goshtoso/components/avatar"
 	"github.com/araihu/goshtoso/components/button"
 "github.com/araihu/goshtoso/components/card"
@@ -59,7 +60,7 @@ templ page(v view) {
 <script src="/ui/live.js" defer></script>
 <meta name="oie-csrf" content={v.CSRF}/>
 		</head>
-		<body data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-mock={strconv.FormatBool(v.Preview)}>
+		<body data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-mock={strconv.FormatBool(v.Preview)}>
 @liveCopy(v)
 <div class="oie-live-status" data-live-status role="status" aria-live="polite"></div>
 if v.ErrorMessage!="" {
@@ -132,8 +133,8 @@ if v.AccountFilter==a.Id {
 }
 </nav>
 <div class="oie-account-actions" x-data="{}">
-@link.Link(v.href("open","accounts"),link.WithRootClass("oie-account-action"),link.WithAttrs(templ.Attributes{"data-add-account":""})){ {v.Text.AddAccount} }
-@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-account-action"),button.WithAttrs(templ.Attributes{"data-open-accounts":""}),button.WithAlpine(&button.AlpineConfig{OnClick:"close(); $dispatch('drawer:open', {id: 'accounts'})"})){ {v.Text.ManageAccounts} }
+@link.Link(v.addAccountHref(),link.WithRootClass("oie-account-action"),link.WithAttrs(templ.Attributes{"data-add-account":""})){ {v.Text.AddAccount} }
+@link.Link(v.accountsHref(""),link.WithRootClass("oie-account-action"),link.WithAttrs(templ.Attributes{"data-open-accounts":""})){ {v.Text.ManageAccounts} }
 if v.AccountFilter!="" && connectionState(v,v.AccountFilter)!="not_connected" && connectionState(v,v.AccountFilter)!="unknown" {
 @form.Form(form.Config{ID:"",Action:"/ui/accounts/disconnect",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"disconnect"}}){
 @mutationFields(v,"disconnect-"+v.AccountFilter,newOperationKey())
@@ -373,44 +374,91 @@ templ settings(v view) {
 }
 
 templ accounts(v view){
-@drawer.Drawer(drawer.Config{ID:"accounts",Title:v.Text.Accounts}){
-<div class="oie-settings">
-<p>{v.Text.AccountHelp}</p>
-<div id="account-blocks">@accountBlocks(v)</div>
-<h2>{v.Text.AddAccount}</h2>
+@drawer.Drawer(drawer.Config{ID:"accounts",Title:v.Text.Accounts,PanelClass:"oie-account-drawer"}){
+<div class="oie-account-workspace">
+switch v.accountScreen() {
+case "add":
+@accountBack(v)
+<div class="oie-account-intro"><h2>{v.Text.AddAccount}</h2><p>{v.Text.AddAccountHelp}</p></div>
 @form.Form(form.Config{ID:"register-account-form",Action:"/ui/accounts/register",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"register"}}){
-@mutationFields(v,"register",newOperationKey())
+@mutationFields(v,"register",registerKey(v))
 @textinput.TextInput(textinput.Config{ID:"register-address",Name:"address",Label:v.Text.AccountAddress,Placeholder:v.Text.AddressPlaceholder,Value:v.field("address"),Required:true,Autocomplete:"username"})
 @textinput.TextInput(textinput.Config{ID:"register-label",Name:"label",Label:v.Text.AccountLabel,Placeholder:v.Text.LabelPlaceholder,Value:v.field("label"),Required:true})
 @button.Button(button.WithType("submit")){ {v.Text.RegisterAccount} }
 <div data-form-feedback role="status" aria-live="polite"></div>
 }
+case "detail":
+@accountBack(v)
+if a:=v.account(v.managedAccountID());a.Address!="" {
+<div id="account-blocks">@accountDetail(v,a)</div>
+}else if v.Unavailable {
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.Unavailable,Description:v.Text.UnavailableBody})
+@link.Link(v.accountsHref(v.managedAccountID())){ {v.Text.Retry} }
+}else{
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.AccountMissing,Description:v.Text.AccountHelp})
+}
+default:
+<div class="oie-account-intro"><p>{v.Text.AccountHelp}</p></div>
+<div id="account-overview">@accountOverview(v)</div>
+@link.Link(v.addAccountHref(),link.WithAppearance(link.AppearanceButton),link.WithRootClass("oie-add-account"),link.WithAttrs(templ.Attributes{"data-account-add":""})){@glyph(heroicons.Icon16SolidPlus)<span>{v.Text.AddAccount}</span>}
+}
 </div>
+}
+}
+func registerKey(v view)string{if v.FormTarget=="register"&&validOperationKey(v.field("operationKey")){return v.field("operationKey")};return newOperationKey()}
+templ accountBack(v view){
+@link.Link(v.accountsHref(""),link.WithRootClass("oie-account-back"),link.WithAttrs(templ.Attributes{"data-account-back":""})){@glyph(heroicons.Icon16SolidChevronLeft)<span>{v.Text.BackToAccounts}</span>}
+}
+templ accountOverview(v view){
+if v.Unavailable {
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.Unavailable,Description:v.Text.UnavailableBody})
+@link.Link(v.accountsHref("")){ {v.Text.Retry} }
+}else if len(v.Accounts)==0 {
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.EmptyTitle,Description:v.Text.AddAccountHelp})
+}else{
+<nav class="oie-account-list" aria-label={v.Text.ManageAccounts}>
+for _,a:=range v.Accounts {
+@link.Link(v.accountsHref(a.Id),link.WithRootClass("oie-account-summary"),link.WithAttrs(templ.Attributes{"data-manage-account":a.Id})){
+@avatar.Avatar(avatar.Config{Name:a.Label,Size:avatar.SizeSM})
+<span class="oie-profile-identity"><strong>{a.Label}</strong><small>{a.Address}</small><small>{v.connectionLabel(a.Id)}</small></span>
+@glyph(heroicons.Icon16SolidChevronRight)
+}
+}
+</nav>
 }
 }
 templ mutationFields(v view,target,key string){
 <input type="hidden" name="csrf" value={v.CSRF}/><input type="hidden" name="engineId" value={v.EngineID}/><input type="hidden" name="returnTo" value={v.href()}/><input type="hidden" name="formTarget" value={target}/><input type="hidden" name="operationKey" value={key}/>
 }
-templ accountBlocks(v view){
-for _,a:=range v.Accounts {
-<section class="oie-account-block" data-account-id={a.Id}>
-<h3>{a.Label}</h3><p>{a.Address}</p>
-<div id={"connection-status-"+a.Id}>@connectionStatus(v,a.Id)</div>
+templ accountDetail(v view,a engineapi.Account){
+<section class="oie-account-detail" data-account-id={a.Id}>
+<header class="oie-account-detail-heading">
+@avatar.Avatar(avatar.Config{Name:a.Label,Size:avatar.SizeLG})
+<div><h2>{a.Label}</h2><p>{a.Address}</p></div>
+</header>
+<div class="oie-account-connection" id={"connection-status-"+a.Id}>@connectionStatus(v,a.Id)</div>
 @form.Form(form.Config{ID:"connect-"+a.Id,Action:"/ui/accounts/connect",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"connect","data-connect-account":""}}){
 @mutationFields(v,"connect-"+a.Id,newOperationKey())
 <input type="hidden" name="accountId" value={a.Id}/>
 @textinput.TextInput(textinput.Config{ID:"password-"+a.Id,Name:"password",Type:textinput.TypePassword,Label:v.Text.Password,Required:true,Autocomplete:"current-password",HelperText:v.Text.PasswordHelp})
-@textinput.TextInput(textinput.Config{ID:"endpoint-"+a.Id,Name:"endpoint",Label:v.Text.Endpoint,HelperText:v.Text.EndpointHelp,Value:connectionField(v,a.Id,"endpoint")})
+@accordion.Accordion(accordion.AccordionConfig{ID:"connection-advanced-"+a.Id,RootClass:"oie-account-advanced",Items:[]accordion.AccordionItem{{ID:"endpoint-advanced-"+a.Id,Title:v.Text.AdvancedConnection,Content:connectionEndpoint(v,a.Id),InitiallyExpanded:connectionField(v,a.Id,"endpoint")!=""}}})
 @button.Button(button.WithType("submit")){ {v.Text.Connect} }
 <div data-form-feedback role="status" aria-live="polite"></div>
 }
-@form.Form(form.Config{ID:"disconnect-"+a.Id,Action:"/ui/accounts/disconnect",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"disconnect","data-disconnect-account":""}}){
-@mutationFields(v,"disconnect-"+a.Id,newOperationKey())
-<input type="hidden" name="accountId" value={a.Id}/>
+<div id={"disconnect-action-"+a.Id}>@disconnectAction(v,a.Id)</div>
+</section>
+}
+templ connectionEndpoint(v view,id string){
+@textinput.TextInput(textinput.Config{ID:"endpoint-"+id,Name:"endpoint",Label:v.Text.Endpoint,HelperText:v.Text.EndpointHelp,Value:connectionField(v,id,"endpoint")})
+}
+templ disconnectAction(v view,id string){
+if state:=connectionState(v,id);state=="connected"||state=="connecting"||state=="error" {
+@form.Form(form.Config{ID:"disconnect-"+id,Action:"/ui/accounts/disconnect",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"disconnect","data-disconnect-account":""}}){
+@mutationFields(v,"disconnect-"+id,newOperationKey())
+<input type="hidden" name="accountId" value={id}/>
 @button.Button(button.WithType("submit"),button.WithAppearance(button.AppearancePlain)){ {v.Text.Disconnect} }
 <div data-form-feedback role="status" aria-live="polite"></div>
 }
-</section>
 }
 }
 func connectionField(v view,id,key string)string{if v.FormTarget=="connect-"+id{return v.field(key)};return ""}
@@ -432,7 +480,7 @@ templ newConversation(v view){
 <div class="oie-settings">
 if len(v.Accounts)==0 {
 @emptystate.EmptyState(emptystate.Config{Title:v.Text.EmptyTitle,Description:v.Text.NoChatsBody})
-@link.Link(v.href("open","accounts")){ {v.Text.AddAccount} }
+@link.Link(v.addAccountHref()){ {v.Text.AddAccount} }
 }else{
 @form.Form(form.Config{ID:"new-conversation-form",Action:"/ui/conversations/open",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"open"}}){
 @mutationFields(v,"open",newOperationKey())
@@ -457,7 +505,14 @@ if v.Selected!=nil {
 @chatHeader(v)
 }
 </div>
-<div id="live-account-blocks">@accountBlocks(v)</div>
+<div id="live-account-blocks">
+if v.accountScreen()=="detail" {
+if a:=v.account(v.managedAccountID());a.Address!="" {
+@accountDetail(v,a)
+}
+}
+</div>
+<div id="live-account-overview">@accountOverview(v)</div>
 <div id="live-account-menu">@accountMenu(v)</div>
 <div id="live-newchat-account">@selectfield.Select(selectfield.Config{ID:"sending-account",Name:"accountId",Label:v.Text.ChooseAccount,Options:accountOptions(v,false),Required:true})</div>
 </div>

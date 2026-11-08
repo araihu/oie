@@ -28,7 +28,7 @@ const {chromium} = require('playwright');
   const openAccounts = async page => {
     await page.locator('[data-account-switcher]:visible').first().click();
     await page.locator('[data-open-accounts]:visible').first().click();
-    await page.locator('#register-account-form').waitFor({state: 'visible'});
+    await page.locator('#account-overview').waitFor({state: 'visible'});
   };
   const closeAccounts = async page => {
     await page.keyboard.press('Escape');
@@ -37,11 +37,19 @@ const {chromium} = require('playwright');
   const connectForm = (page, account) => page.locator('form[data-connect-account]').filter({has: page.locator('input[name="accountId"][value="' + account.id + '"]')});
   const disconnectForm = (page, account) => page.locator('form[data-disconnect-account]').filter({has: page.locator('input[name="accountId"][value="' + account.id + '"]')});
   const connect = async (page, account, password) => {
+    if (!(await connectForm(page,account).isVisible())) {
+      if (await page.locator('[data-account-back]:visible').count()) await page.locator('[data-account-back]:visible').click();
+      await page.locator('[data-manage-account="'+account.id+'"]').click();
+    }
     const form = connectForm(page, account);
+    await form.waitFor({state:'visible'});
+    assert.equal(await page.locator('[data-connect-account]').count(),1,'only one account form is rendered');
+    if (!(await form.locator('[name="endpoint"]').isVisible())) await form.getByRole('button',{name:'Advanced connection settings',exact:true}).click();
     await form.locator('[name="password"]').fill(password);
     await form.locator('[name="endpoint"]').fill(endpoint);
-    await form.locator('button[type="submit"]').click();
-    await until(async () => (await api('/api/v1/accounts/' + account.id + '/connection')).state === 'connected', 'verified XMPP connection ' + account.address);
+    const [reply]=await Promise.all([page.waitForResponse(r=>r.url().endsWith('/ui/accounts/connect')&&r.request().method()==='POST'),form.locator('button[type="submit"]').click()]);
+    assert.equal((await reply.json()).ok,true,'connection configuration accepted by real BFF');
+    await until(async () => {const connection=await api('/api/v1/accounts/' + account.id + '/connection');if(connection.state==='error')throw Error('XMPP connection failed: '+connection.lastErrorCode);return connection.state==='connected'}, 'verified XMPP connection ' + account.address);
     await until(async () => await page.locator('[data-connection-state="connected"][data-account-id="' + account.id + '"]').count() > 0, 'visible connected state');
     const remainingPassword = form.locator('[name="password"]');
     if (await remainingPassword.count()) assert.equal(await remainingPassword.inputValue(), '', 'password must clear after accepted connection');
@@ -79,12 +87,17 @@ const {chromium} = require('playwright');
     await openAccounts(alicePage);
     const accounts = [];
     for (const who of ['alice', 'bob']) {
+      if (await alicePage.locator('[data-account-back]:visible').count()) await alicePage.locator('[data-account-back]:visible').click();
+      await alicePage.locator('[data-account-add]').click();
       const form = alicePage.locator('#register-account-form');
       await form.locator('[name="address"]').fill(who + '@localhost');
       await form.locator('[name="label"]').fill(who === 'alice' ? 'Alice development' : 'Bob development');
       await form.locator('button[type="submit"]').click();
       await until(async () => (await api('/api/v1/accounts')).items.some(a => a.address === who + '@localhost'), 'account created by browser ' + who);
-      accounts.push((await api('/api/v1/accounts')).items.find(a => a.address === who + '@localhost'));
+      const saved=(await api('/api/v1/accounts')).items.find(a=>a.address===who+'@localhost');
+      accounts.push(saved);
+      await alicePage.waitForURL(u=>u.searchParams.get('managedAccount')===saved.id);
+      await connectForm(alicePage,saved).waitFor({state:'visible'});
     }
     const [alice, bob] = accounts;
     await connect(alicePage, alice, 'alice-local-only');

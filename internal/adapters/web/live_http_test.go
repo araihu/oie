@@ -320,3 +320,34 @@ func TestNativeUnavailableSendRetainsOriginalAndOperationKey(t *testing.T) {
 		t.Fatalf("native draft recovery lost context: %d", response.StatusCode)
 	}
 }
+
+func TestNativeAccountRecoveryReturnsToItsSingleScreen(t *testing.T) {
+	fixture := &liveFixture{}
+	ui, client, csrf := liveUI(t, fixture)
+	values := url.Values{"csrf": {csrf}, "engineId": {testEngine}, "accountId": {testAccount}, "endpoint": {"127.0.0.1:5222"}, "formTarget": {"connect-" + testAccount}, "returnTo": {"/"}}
+	response, err := client.PostForm(ui.URL+"/ui/accounts/connect", values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	html := string(data)
+	if response.StatusCode != 422 || strings.Count(html, "data-connect-account") != 1 || !strings.Contains(html, `data-open-drawer="accounts"`) || !strings.Contains(html, `value="127.0.0.1:5222"`) {
+		t.Fatal("connection validation did not retain its detail screen")
+	}
+	fixture.mu.Lock()
+	fixture.engineUnavailable = true
+	fixture.mu.Unlock()
+	key := newOperationKey()
+	values = url.Values{"csrf": {csrf}, "engineId": {testEngine}, "operationKey": {key}, "address": {"carol@localhost"}, "label": {"Carol"}, "formTarget": {"register"}, "returnTo": {"/"}}
+	response, err = client.PostForm(ui.URL+"/ui/accounts/register", values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ = io.ReadAll(response.Body)
+	response.Body.Close()
+	html = string(data)
+	if response.StatusCode != 503 || !strings.Contains(html, `id="register-account-form"`) || strings.Contains(html, "data-connect-account") || !strings.Contains(html, key) || !strings.Contains(html, "carol@localhost") || !strings.Contains(html, `data-open-drawer="accounts"`) {
+		t.Fatal("unavailable registration lost its screen, values or logical operation key")
+	}
+}

@@ -6,7 +6,7 @@
  --font-body:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
  --font-title:var(--font-body);
  --color-primary:var(--oie-accent);--color-on-primary:var(--oie-on-accent);
- --color-primary-dark:var(--oie-accent);--color-on-primary-dark:#f1fff7;
+ --color-primary-dark:var(--oie-accent);--color-on-primary-dark:var(--oie-on-accent);
  --color-surface:var(--oie-panel);--color-surface-alt:var(--oie-raised);
  --color-on-surface:var(--oie-text);--color-on-surface-strong:var(--oie-text);
  --color-outline:var(--oie-border);--radius-radius:.65rem;
@@ -151,3 +151,26 @@ html{color-scheme:light}html.dark{color-scheme:dark}
 .oie-list-account{display:none;align-items:center;border-top:1px solid var(--oie-border);padding-right:12px}
 .oie-list-account>.oie-profile{flex:1;min-width:0}
 @media(max-width:1100px){.oie-list-account{display:flex}.oie-list-account+.oie-list-footer{display:none}}
+/* Account management is a list/detail flow: one connection form at a time. */
+.oie-account-drawer{width:min(440px,100vw);max-width:100vw;background:var(--oie-panel);color:var(--oie-text)}
+.oie-account-workspace{padding:14px 12px 24px;color:var(--oie-text)}
+.oie-account-intro{margin-bottom:22px}
+.oie-account-intro h2{font-size:20px;font-weight:650;line-height:1.3;margin:0 0 8px}
+.oie-account-intro p{font-size:13px;line-height:1.6;color:var(--oie-muted);margin:0}
+.oie-account-list{display:flex;flex-direction:column;margin-bottom:24px}
+.oie-account-summary{display:flex;align-items:center;gap:12px;min-width:0;padding:17px 4px;border-bottom:1px solid var(--oie-border);color:var(--oie-text);text-decoration:none}
+.oie-account-summary:hover{background:var(--oie-raised);color:var(--oie-text);text-decoration:none}
+.oie-account-summary .oie-profile-identity{gap:4px}
+.oie-account-summary .oie-profile-identity strong{font-size:14px}
+.oie-add-account{display:flex;justify-content:center;align-items:center;gap:8px;width:100%;font-size:13px}
+.oie-account-back{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--oie-muted);margin:0 0 24px;text-decoration:none}
+.oie-account-back:hover{color:var(--oie-text);text-decoration:none}
+.oie-account-detail-heading{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+.oie-account-detail-heading>div{min-width:0}
+.oie-account-detail-heading h2{font-size:19px;line-height:1.35;font-weight:650;margin:0 0 4px;overflow-wrap:anywhere}
+.oie-account-detail-heading p{font-size:13px;line-height:1.5;color:var(--oie-muted);margin:0;overflow-wrap:anywhere}
+.oie-account-connection{padding:12px 14px;margin-bottom:24px;border-radius:9px;background:var(--oie-raised);font-size:13px;line-height:1.5}
+.oie-account-workspace form{display:flex;flex-direction:column;gap:18px}
+.oie-account-workspace [data-disconnect-account]{margin-top:20px;padding-top:16px;border-top:1px solid var(--oie-border)}
+.oie-account-advanced{font-size:13px;margin:0}
+@media(max-width:720px){.oie-account-workspace{padding:12px 8px 20px}}

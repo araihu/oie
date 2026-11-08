@@ -1270,3 +1270,10 @@ beside the existing settings gear in the conversation footer. Remove the
 redundant header More menu and the navigation-profile settings shortcut.
 Switching inbox accounts leaves protocol sessions and pending ownership intact.
 See account-switcher.md for composition and verified scope.
+
+## Individual account management · 2026-11-08
+
+Agreed: account management must not stack every account's connection form.
+Start with an identity/status list; open one account at a time, with a return to
+the list. Add account is a separate screen. Compose public Goshtoso Drawer and
+Accordion components for the workflow and advanced connection settings.

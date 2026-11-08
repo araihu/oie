@@ -123,7 +123,11 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		result.Message = text.AccountSaved
-		result.Redirect = "/?open=accounts"
+		saved := response.JSON201
+		if saved == nil {
+			saved = response.JSON200
+		}
+		result.Redirect = accountDestination(r, saved.Id)
 	case "/ui/accounts/connect":
 		password := r.Form.Get("password")
 		if password == "" {
@@ -147,7 +151,7 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		result.Message = text.ConnectionRequested
-		result.Redirect = "/?open=accounts"
+		result.Redirect = accountDestination(r, r.Form.Get("accountId"))
 	case "/ui/accounts/disconnect":
 		response, err := s.client.DisconnectAccountWithResponse(ctx, r.Form.Get("accountId"))
 		if err != nil {
@@ -161,7 +165,7 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		result.Message = text.Disconnected
-		result.Redirect = "/?open=accounts"
+		result.Redirect = accountDestination(r, r.Form.Get("accountId"))
 	case "/ui/conversations/open":
 		key := r.Form.Get("operationKey")
 		if !validOperationKey(key) {
@@ -353,4 +357,19 @@ func isMutationPath(path string) bool {
 		return true
 	}
 	return false
+}
+
+// Account screens use the same canonical mutations; only their PRG destination differs.
+func accountDestination(r *http.Request, id string) string {
+	u, _ := url.Parse(safeReturn(r.Form.Get("returnTo")))
+	q := u.Query()
+	q.Set("open", "accounts")
+	q.Del("accountPage")
+	if id != "" {
+		q.Set("managedAccount", id)
+	} else {
+		q.Del("managedAccount")
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
 }
