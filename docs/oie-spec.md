@@ -1,10 +1,10 @@
-# Oie first specification
+# Oiê first specification
 
 Draft 1 · 2026-11-07 · Intended repository: `araihu/oie`
 
-Oie is a single-owner, multi-account chat application written in Go, with a Goshtoso web interface and protocol adapters behind a hexagonal application core. The alpha implements XMPP, runs with a local or hosted native Go engine, and optionally synchronizes independent local engines through a user-hostable service.
+Oiê is a single-owner, multi-account chat application written in Go, with a Goshtoso web interface and protocol adapters behind a hexagonal application core. The alpha implements XMPP, runs with a local or hosted native Go engine, and optionally synchronizes independent local engines through a user-hostable service.
 
-The experience should feel close to WhatsApp: a familiar conversation list, message timeline, composer, media cards, room details, and settings. The user's explicit Oie decisions take precedence over WhatsApp behavior. For unresolved user-facing choices, prefer WhatsApp-like behavior where it fits the selected protocols and deployment modes. Do not infer WhatsApp's internal architecture or copy every WhatsApp feature into scope.
+The experience should feel close to WhatsApp: a familiar conversation list, message timeline, composer, media cards, room details, and settings. The user's explicit Oiê decisions take precedence over WhatsApp behavior. For unresolved user-facing choices, prefer WhatsApp-like behavior where it fits the selected protocols and deployment modes. Do not infer WhatsApp's internal architecture or copy every WhatsApp feature into scope.
 
 ## 1. Decision status and scope
 
@@ -23,7 +23,7 @@ Sections 2–13 describe **AGREED** behavior unless a paragraph carries a recomm
 
 Alpha includes local standalone operation, hosted-engine operation, optional app/history sync, multi-account XMPP, reliable immediate and scheduled sends, retained searchable history, rooms, attachments, responsive web UI, PWA/offline behavior, and manual merge restore.
 
-Alpha is single-user: one Oie owner per instance. Multiple accounts and devices remain supported. Built-in application authentication, multi-user hosting, XMPP E2EE, calls, and other deferred features are listed in section 16. Protocol account credentials are still needed to connect existing XMPP accounts; this does not reopen the deferred application-login design.
+Alpha is single-user: one Oiê owner per instance. Multiple accounts and devices remain supported. Built-in application authentication, multi-user hosting, XMPP E2EE, calls, and other deferred features are listed in section 16. Protocol account credentials are still needed to connect existing XMPP accounts; this does not reopen the deferred application-login design.
 
 No specific XMPP client, SQLite driver, browser database, UUID library, Go toolchain version, or final library dependency set is selected by this draft.
 
@@ -96,7 +96,7 @@ The BFF uses application capabilities; protocol namespaces and stanza handling r
 
 **RECOMMENDED R04:** distinguish unsupported, supported, permission-denied, and temporarily unknown/unavailable states; revalidate at operation time. **OPEN O02:** the complete capability schema and minimum tested XMPP interoperability matrix.
 
-Account management retains priority in the account sidebar. A deeper capabilities page shows a comparison of Oie implementation, protocol support and discovered server support, followed by server/entity discovery details. Unknown evidence, unadvertised features, app-only features and peer/room-specific support remain distinct. Server advertisements never imply that Oie implements an operation or that a room permits it. This diagnostic report is a bounded session snapshot; reading it does not probe the protocol server.
+Account management retains priority in the account sidebar. A deeper capabilities page shows a comparison of Oiê implementation, protocol support and discovered server support, followed by server/entity discovery details. Unknown evidence, unadvertised features, app-only features and peer/room-specific support remain distinct. Server advertisements never imply that Oiê implements an operation or that a room permits it. This diagnostic report is a bounded session snapshot; reading it does not probe the protocol server.
 
 ### 3.2 Accounts and contacts
 
@@ -106,9 +106,9 @@ Recover available account, peer and room profile images from the protocol. Cache
 images locally and use initials when an image is absent or inaccessible. Room
 speaker nicknames alone do not establish a person's identity for image lookup.
 
-Use a profile control at the bottom of the navigation for account switching, following the supplied X account-switcher reference. Its popover lists account names/addresses, marks the active account, shows available unread counts, and offers adding an existing account and managing connections. Retain an All accounts inbox option. Switching the inbox account does not disconnect other protocol sessions, transfer drafts, or change pending-send ownership. Oie uses Disconnect for an XMPP session; built-in application login/logout remains backlogged. Account management starts with a compact account list and opens only one account’s connection details at a time. Adding an existing account is a separate screen; server/port overrides live under advanced connection settings. In the account-list drawer, Add account remains at the bottom while the account list scrolls independently above it.
+Use a profile control at the bottom of the navigation for account switching, following the supplied X account-switcher reference. Its popover lists account names/addresses, marks the active account, shows available unread counts, and offers adding an existing account and managing connections. Retain an All accounts inbox option. Switching the inbox account does not disconnect other protocol sessions, transfer drafts, or change pending-send ownership. Oiê uses Disconnect for an XMPP session; built-in application login/logout remains backlogged. Account management starts with a compact account list and opens only one account’s connection details at a time. Adding an existing account is a separate screen; server/port overrides live under advanced connection settings. In the account-list drawer, Add account remains at the bottom while the account list scrolls independently above it.
 
-An Oie contact can group multiple protocol identities. Link identity and Unlink identity are manual, reversible operations. Each account/protocol conversation retains its own timeline; linking does not merge histories or retarget pending sends.
+An Oiê contact can group multiple protocol identities. Link identity and Unlink identity are manual, reversible operations. Each account/protocol conversation retains its own timeline; linking does not merge histories or retarget pending sends.
 
 Support per-account contact add/remove and contact-request acceptance/decline where the protocol permits. Removing a contact preserves retained conversation history. Provider contact/presence subscriptions remain distinct from app-owned aliases and identity grouping.
 
@@ -136,7 +136,7 @@ Rejoin previously active rooms after reconnecting unless the user explicitly lef
 
 Application entities and revisions use **UUIDv7** identifiers, preserved through sync and backup/restore. Protocol identifiers remain separate, scoped external references. UTC is used internally; timezone conversion belongs to presentation.
 
-Persistent content revisions are immutable and have their own revision UUIDs and parent revision references. Message edit history consists of the versions Oie actually received/stored. A conversation references the stable logical message UUID and displays its derived current revision.
+Persistent content revisions are immutable and have their own revision UUIDs and parent revision references. Message edit history consists of the versions Oiê actually received/stored. A conversation references the stable logical message UUID and displays its derived current revision.
 
 Select current message revisions as follows:
 
@@ -218,15 +218,20 @@ Star or unstar a retained source message from the timeline or its image viewer.
 All images attached to that message share its star. This is app-owned metadata,
 independent of protocol support, conversation favorites, and message content edits.
 
+The message-actions chevron sits inside the upper-right corner of its own bubble,
+with space reserved so it does not cover the sender, timestamp or message content.
+It remains available through keyboard focus and touch, and the opened menu stays
+within the visible conversation area.
+
 Support quoted replies with referenced sender/excerpt and a stable message reference. This does not select separate threaded timelines.
 
-Allow the user to edit their own sent messages where supported and permitted, displaying **Edited**. This is a new protocol correction operation, not mutation of an in-flight original send. Preserve observed previous versions behind **View edit history**; Oie cannot recover versions it never obtained.
+Allow the user to edit their own sent messages where supported and permitted, displaying **Edited**. This is a new protocol correction operation, not mutation of an in-flight original send. Preserve observed previous versions behind **View edit history**; Oiê cannot recover versions it never obtained.
 
 Support emoji reactions where supported, using provider-normalized targets and restrictions.
 
 Support retraction of the user's own sent messages where supported, with a distinct **Retract message** action and a removed-message placeholder. Show real request/failure state; removal of other clients' copies cannot be guaranteed.
 
-Retain already-stored retracted messages, including incoming retractions, behind **Message retracted** and **Reveal original**. Retraction does not perform Oie history deletion.
+Retain already-stored retracted messages, including incoming retractions, behind **Message retracted** and **Reveal original**. Retraction does not perform Oiê history deletion.
 
 Allow manual forwarding across conversations/accounts using the destination account and its capabilities. Forward as a new outgoing message through that account's outbox. Use a generic **Forwarded** label where supported. Original sender/conversation attribution is omitted unless explicitly chosen. This does not select automatic cross-protocol relaying.
 
@@ -250,7 +255,7 @@ Needed public Margo API additions are authorized, provided existing behavior is 
 
 Persist history independently of protocol-server retention. Automatically backfill **all available authorized history**, serially and without overwhelming the provider. Serve retained history without downloading the full archive again whenever a conversation opens.
 
-Keep retrieved history until explicit user deletion, even after the provider expires it. Optional Oie history sync also transfers records no longer available from the provider. Oie cannot retrieve history that neither the provider nor a participating Oie store still possesses.
+Keep retrieved history until explicit user deletion, even after the provider expires it. Optional Oiê history sync also transfers records no longer available from the provider. Oiê cannot retrieve history that neither the provider nor a participating Oiê store still possesses.
 
 **RECOMMENDED R08:** a bounded, paced backfill queue with checkpoints, resumable pages, backoff, foreground/live-message priority, and explicit partial-history status. Scope serialization and limits deliberately rather than launching one unbounded worker per room.
 
@@ -293,7 +298,7 @@ Media-file sync is separate from history sync and **off by default**. When expli
 Offer these clearly labeled scopes:
 
 - **Delete on this device** — the default.
-- **Delete from all my synced Oie copies** — including the sync service.
+- **Delete from all my synced Oiê copies** — including the sync service.
 
 Deleting a message removes all its retained revisions and associated search results and message-derived Media/Files/Links entries within the chosen scope. Preserve entries belonging to other messages, even when they share a URL or file.
 
@@ -305,7 +310,7 @@ Neither history-deletion scope performs a protocol retraction or claims to erase
 
 For a hosted engine shared by multiple devices, device-local deletion excludes the content from that device without erasing another device's shared history. Exact physical purge and per-device storage mechanics remain **OPEN O10**. All-copy deletion reaches disconnected copies when they synchronize; no immediate removal from an unreachable device is implied.
 
-**RECOMMENDED R11:** retain content-free tombstones/exclusions with Oie identity and sufficient provider-ID mapping to reject re-import. Reconcile known deletion markers before exposing restored records. An isolated old backup cannot reveal a later deletion whose marker is absent from every reachable store; this is a recovery boundary to handle explicitly.
+**RECOMMENDED R11:** retain content-free tombstones/exclusions with Oiê identity and sufficient provider-ID mapping to reject re-import. Reconcile known deletion markers before exposing restored records. An isolated old backup cannot reveal a later deletion whose marker is absent from every reachable store; this is a recovery boundary to handle explicitly.
 
 ### 9.2 Sync scope
 
@@ -368,6 +373,8 @@ Separate devices notify independently even if another device is active. Activity
 
 ### 11.1 WhatsApp-like presentation
 
+**AGREED:** the public brand is **Oiê**, with uppercase O and a circumflex on ê. It is a friendly Portuguese greeting expressing warmth and proximity. Use the approved flat Noto-derived moon-face chat balloon in navigation, favicons and PWA icons, distributed through `araihu/assets`. Technical identifiers retain `oie`.
+
 Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screenshots. On wide screens, use navigation, a searchable/filterable conversation list, and the active conversation workspace. Include account identity, message bubbles, composer, media/link cards, room/contact details, and settings.
 
 **AGREED:** the default conversation wallpaper uses subtle outline doodles of a hammer, sickle, GNU mascot, Brazil outline, Christ the Redeemer, football, mobile phone, paper plane, speech balloon, stars and Go gopher. Keep the repeating artwork readable in light and dark themes without competing with message content.
@@ -388,31 +395,31 @@ Open at the first unread message, otherwise at latest, with **Jump to latest**. 
 
 **AGREED:** explore and reuse Goshtoso public components and examples before introducing custom primitives. If a dependency has a limitation, a generic change that belongs in the library can be developed upstream under the workflow below.
 
-The discovery inspected published **Goshtoso v0.6.1** and **Goshtoso App Shells v0.1.9**, plus the local Goshtoso application-patterns and chat examples. These are inspected candidates, not a committed Oie dependency set. App Shells v0.1.9 declares Goshtoso v0.4.6; its combined compatibility with v0.6.1 still needs a consumer integration check. Both inspected releases declare Go 1.27.3.
+The discovery inspected published **Goshtoso v0.6.1** and **Goshtoso App Shells v0.1.9**, plus the local Goshtoso application-patterns and chat examples. These are inspected candidates, not a committed Oiê dependency set. App Shells v0.1.9 declares Goshtoso v0.4.6; its combined compatibility with v0.6.1 still needs a consumer integration check. Both inspected releases declare Go 1.27.3.
 
-| Oie surface | Closest public surface | Decision |
+| Oiê surface | Closest public surface | Decision |
 | --- | --- | --- |
 | Overall frame, navigation, theme, HTMX fragment lifecycle | App Shells `consoleshell.Layout`, `Fragment`, appearance and navigation configs; core `appshell` where appropriate | **Compose**; validate a chat workspace's height/scroll containment through supported slots/hooks. |
 | Incoming/outgoing plain messages, grouped sender/avatar rows | `chatbubble.ChatBubble` with Side, Grouped, sender/avatar fields | **Reuse** for plain messages. |
 | Typing indicator | `chatbubble.TypingIndicator` | **Reuse**. |
 | Rich Markdown/media/reply/reaction content inside a bubble | `chatbubble.Config` currently has `Message string` and no public rich-body slot | **Gap G01**: generic rich-body/metadata composition extension. |
-| Composer | `textarea.Textarea`, `button`, `dropdown`/`actiongroup` | **Compose** with Oie send/draft/IME policies; `TextareaWithActions` exists but its fit is not assumed without inspecting its rendered contract. |
+| Composer | `textarea.Textarea`, `button`, `dropdown`/`actiongroup` | **Compose** with Oiê send/draft/IME policies; `TextareaWithActions` exists but its fit is not assumed without inspecting its rendered contract. |
 | Attachment selection | `fileinput.FileInput`, compact upload/drop-zone appearances and input attributes | **Compose** with application upload/staging service. |
 | Conversation rows and identity/status | `avatar`, `badge`, `link`, `panel`, public slots/attributes | **Compose**; account identity and unread policy are app data. |
 | Search and content categories | `search`, `tabs`, form controls and badges | **Compose**; index/query semantics remain engine-owned. |
 | Details/settings/confirmation surfaces | `drawer`, `modal`, `panel`, `dropdown`, `toggle`, `select`, `radio` | **Reuse/compose**. |
-| Media and link cards | `card.Config.Media`, Body and Footer slots | **Compose** with controlled images/native media content and Oie transfer actions. |
+| Media and link cards | `card.Config.Media`, Body and Footer slots | **Compose** with controlled images/native media content and Oiê transfer actions. |
 | Bounded scroll surfaces | `scrollregion.ScrollRegion` and shell layout hooks | **Compose**; follow-bottom and history anchoring remain product behavior. |
 | Loading, errors, empty views, toast feedback | `skeleton`, `spinner`, `alert`, `emptystate`, `toast` | **Reuse/compose** with localized domain status. |
-| Component language | `expressions.With`, `NewRenderer`, `LoadFS`, `WithExpressions` | **Reuse**; Oie owns product catalogs/locale negotiation. |
+| Component language | `expressions.With`, `NewRenderer`, `LoadFS`, `WithExpressions` | **Reuse**; Oiê owns product catalogs/locale negotiation. |
 | Shell document language and shell-owned labels | Inspected `consoleshell` emits fixed `lang="en"` and a literal skip-link label | **Gap G02**: generic language/label configuration if this shell is selected. |
 | Icons | Goshtoso bundled Heroicons and public `icon` API | **Reuse**; use iconpack only for a demonstrated missing icon set. |
 
-The local chat example demonstrates public bubble composition, composer inputs, per-recipient alignment, and OOB message updates. Its in-memory demo hub, cookies, WebSocket transport, and hardcoded demo copy are not Oie's engine or API design. The application-patterns example demonstrates public-component composition, full-page/fragment routes, local assets, and loading/error/empty states.
+The local chat example demonstrates public bubble composition, composer inputs, per-recipient alignment, and OOB message updates. Its in-memory demo hub, cookies, WebSocket transport, and hardcoded demo copy are not Oiê's engine or API design. The application-patterns example demonstrates public-component composition, full-page/fragment routes, local assets, and loading/error/empty states.
 
-Do not import `goshtoso/site` or dependency `internal/` packages, copy private component DOM/CSS, or adopt a demo's transport simply because it is illustrated there. The examples are usage evidence. Chat-specific layout composition and application state remain Oie-owned.
+Do not import `goshtoso/site` or dependency `internal/` packages, copy private component DOM/CSS, or adopt a demo's transport simply because it is illustrated there. The examples are usage evidence. Chat-specific layout composition and application state remain Oiê-owned.
 
-**RECOMMENDED R13:** extend bubbles with generic renderable content and metadata/action slots while preserving the existing text fallback and behavior. Do not put XMPP types, Oie outbox enums, or Oie message IDs in Goshtoso. A shell language/label change should similarly serve any consumer.
+**RECOMMENDED R13:** extend bubbles with generic renderable content and metadata/action slots while preserving the existing text fallback and behavior. Do not put XMPP types, Oiê outbox enums, or Oiê message IDs in Goshtoso. A shell language/label change should similarly serve any consumer.
 
 ### 11.3 Upstream dependency workflow
 
@@ -421,7 +428,7 @@ Do not import `goshtoso/site` or dependency `internal/` packages, copy private c
 1. Reuse/compose existing public APIs; identify a concrete remaining limitation.
 2. Make a generic, backward-compatible upstream change that makes sense for the library.
 3. Keep an open upstream PR for the change and follow that repository's contribution/worktree rules.
-4. During Oie development, pin its module dependency to the Go pseudo-version resolved from a **specific commit on that PR**.
+4. During Oiê development, pin its module dependency to the Go pseudo-version resolved from a **specific commit on that PR**.
 5. Update the pin deliberately when the upstream PR changes. A PR number or floating branch is not a reproducible Go module version.
 
 **RECOMMENDED R13:** keep the PR backed by a branch resolvable from the canonical module repository, and let Go resolve the version from its commit rather than constructing one manually. Go validates commit reachability and pseudo-version metadata. Record the PR URL, pinned commit, pseudo-version, and consumer verification together; replace the temporary pin with an appropriate release after upstream merge/release. Verify the published/pseudo-version consumer path rather than relying solely on sibling `replace` directives.
@@ -446,7 +453,7 @@ Device preferences remain meaningful with a hosted engine. Browser/site-data rem
 
 Internationalization is required from the start. Ship **English (`en`) and Brazilian Portuguese (`pt-BR`)**. Follow device/browser language unless explicitly overridden on that device; fall back to English when no supported language matches.
 
-Use and expand reusable Goshtoso expression support rather than hardcoding user-facing expressions. Oie owns product copy, locale selection, complete parameterized/plural messages, and locale-aware date/time/number/size formatting. Cover labels, statuses, errors, notifications, accessibility text, and offline UI.
+Use and expand reusable Goshtoso expression support rather than hardcoding user-facing expressions. Oiê owns product copy, locale selection, complete parameterized/plural messages, and locale-aware date/time/number/size formatting. Cover labels, statuses, errors, notifications, accessibility text, and offline UI.
 
 Do not mutate a process-global locale for a hosted engine's devices. Full-page rendering, HTMX fragments, SSE-driven rendering, and cached offline presentation need the same resolved device locale.
 
@@ -524,13 +531,13 @@ Provider restrictions remain authoritative. For example, correction/reply suppor
 
 ### 14.2 WhatsApp-aligned defaults
 
-| ID | Recommended user-facing behavior | Basis and Oie adaptation |
+| ID | Recommended user-facing behavior | Basis and Oiê adaptation |
 | --- | --- | --- |
-| **R16** | Offer conversation mute durations **8 hours, 1 week, Always**, with Unmute available. Store finite expiry as a UTC instant. | These choices are documented in [WhatsApp's mute help](https://faq.whatsapp.com/694350718331007/?cms_platform=iphone&locale=pa_IN). Oie keeps its agreed shared mute plus device override, account DND, and archive behavior. Do not silently add mention-based exceptions to the agreed mute policy. |
-| **R17** | Selecting/pasting/dropping an attachment opens a draft preview with filename/size, supported thumbnail/playback, optional caption, remove action, and explicit Send. Use an image/video viewer and native inline audio controls for supported content. Keep clear progress/retry/error affordances. | Inspired by the supplied screenshots and [WhatsApp's media-send flow](https://faq.whatsapp.com/453914586839706/?cms_platform=web&locale=en_US). This proposes UI composition, not WhatsApp's size limits, compression, camera capture, PDF editor, or a new transcoding requirement. Destination capabilities and Oie download policy govern behavior. |
-| **R18** | Use hover/context actions on desktop and long-press menus on touch. For an initial sent-text correction policy, use a **15-minute edit window** measured from confirmed send time, further restricted by provider rules. Show Edited and do not generate a fresh incoming-message alert merely for a correction. | [WhatsApp's editing help](https://faq.whatsapp.com/6614640168569481/?cms_platform=web&lang=id) documents the window, label, and lack of a new notification. The window is a proposal, not a previously agreed Oie limit. Oie deliberately preserves View edit history. Retraction limits remain provider-specific/open; do not invent a universal recall guarantee. |
-| **R19** | Keep pinned conversations ahead of ordinary chats, then sort ordinary chats by latest message activity. Show a manual-unread dot without inventing unread message counts. Clear the reminder on explicit Mark as read or when the current messages are actually read. Preserve scroll while paging/laying out media; use day separators and a transient highlight when navigating to a quoted/search result. | WhatsApp-like navigation and visual conventions, adapted as Oie proposals rather than claims about WhatsApp's internal model. Receipt/typing events alone should not promote a chat; archive placement follows the accepted rule. Exact reminder clearing and sort ties remain open. |
-| **R20** | Keep protocol credentials per engine and exclude them from ordinary app sync and backups by default; re-enter or explicitly import them on another local engine. Hosted UI clients need not hold the hosted engine's protocol credentials. | An Oie technical recommendation, not inferred from WhatsApp. Optional protected credential transfer/export, encryption, and secret-store choices remain open. This does not add built-in application auth to alpha. |
+| **R16** | Offer conversation mute durations **8 hours, 1 week, Always**, with Unmute available. Store finite expiry as a UTC instant. | These choices are documented in [WhatsApp's mute help](https://faq.whatsapp.com/694350718331007/?cms_platform=iphone&locale=pa_IN). Oiê keeps its agreed shared mute plus device override, account DND, and archive behavior. Do not silently add mention-based exceptions to the agreed mute policy. |
+| **R17** | Selecting/pasting/dropping an attachment opens a draft preview with filename/size, supported thumbnail/playback, optional caption, remove action, and explicit Send. Use an image/video viewer and native inline audio controls for supported content. Keep clear progress/retry/error affordances. | Inspired by the supplied screenshots and [WhatsApp's media-send flow](https://faq.whatsapp.com/453914586839706/?cms_platform=web&locale=en_US). This proposes UI composition, not WhatsApp's size limits, compression, camera capture, PDF editor, or a new transcoding requirement. Destination capabilities and Oiê download policy govern behavior. |
+| **R18** | Use hover/context actions on desktop and long-press menus on touch. For an initial sent-text correction policy, use a **15-minute edit window** measured from confirmed send time, further restricted by provider rules. Show Edited and do not generate a fresh incoming-message alert merely for a correction. | [WhatsApp's editing help](https://faq.whatsapp.com/6614640168569481/?cms_platform=web&lang=id) documents the window, label, and lack of a new notification. The window is a proposal, not a previously agreed Oiê limit. Oiê deliberately preserves View edit history. Retraction limits remain provider-specific/open; do not invent a universal recall guarantee. |
+| **R19** | Keep pinned conversations ahead of ordinary chats, then sort ordinary chats by latest message activity. Show a manual-unread dot without inventing unread message counts. Clear the reminder on explicit Mark as read or when the current messages are actually read. Preserve scroll while paging/laying out media; use day separators and a transient highlight when navigating to a quoted/search result. | WhatsApp-like navigation and visual conventions, adapted as Oiê proposals rather than claims about WhatsApp's internal model. Receipt/typing events alone should not promote a chat; archive placement follows the accepted rule. Exact reminder clearing and sort ties remain open. |
+| **R20** | Keep protocol credentials per engine and exclude them from ordinary app sync and backups by default; re-enter or explicitly import them on another local engine. Hosted UI clients need not hold the hosted engine's protocol credentials. | An Oiê technical recommendation, not inferred from WhatsApp. Optional protected credential transfer/export, encryption, and secret-store choices remain open. This does not add built-in application auth to alpha. |
 
 For remaining UI ambiguity, prefer the familiar WhatsApp flow using Goshtoso composition, and document any meaningful deviation. This defaulting rule does not override agreed device-local deletion, retained retracted originals, exposed edit history, original-text Copy, per-account settings, or explicit backlog.
 
@@ -580,7 +587,7 @@ Manual link stars/export, separate threads, automatic protocol relaying, multi-e
 | **B15** | Web Push and notifications while the app is closed. |
 | **B16** | XMPP end-to-end encryption, including keys/trust, encrypted history, and the hosted-engine endpoint model. |
 | **B17** | Multi-user hosted instances with isolated accounts/history/schedules/outbox. |
-| **B18** | Built-in Oie application authentication. No external authentication provider is selected in its place. |
+| **B18** | Built-in Oiê application authentication. No external authentication provider is selected in its place. |
 
 A separate native daemon is an accepted future option. Wails is a possible desktop host. Matrix, IRC, and Nostr are likely future protocol candidates. These do not require alpha daemon/native-shell implementations or implement all candidate protocols now.
 
@@ -590,7 +597,7 @@ A separate native daemon is an accepted future option. Wails is a possible deskt
 
 This sequence is **RECOMMENDED**, not a reduction of the agreed final alpha scope.
 
-1. **Contracts and dependency fit.** Establish the Oie module, dependency boundary checks, OpenAPI generation/lint, minimal engine/BFF roles, SQLite migrations, and a public-component consumer proof. Resolve G01/G02/Margo gaps through generic upstream PRs with pinned commit pseudo-versions as needed. Establish canonical identity and operation IDs before replication.
+1. **Contracts and dependency fit.** Establish the Oiê module, dependency boundary checks, OpenAPI generation/lint, minimal engine/BFF roles, SQLite migrations, and a public-component consumer proof. Resolve G01/G02/Margo gaps through generic upstream PRs with pinned commit pseudo-versions as needed. Establish canonical identity and operation IDs before replication.
 2. **Usable XMPP messaging.** Connect multiple existing accounts, ingest/store messages, show responsive conversation list/timeline/composer, and exercise transactional sends/retries/receipts with en/pt-BR and System/Light/Dark from the start.
 3. **History and message operations.** Implement serial resumable backfill, search/coverage, replies/reactions/corrections/revisions/retractions, read/unread and presence, schedules/cutoffs, contacts, rooms/discovery/invitations, and archive/mute behavior.
 4. **Media and shared content.** Add durable attachment staging, downloads/hashes/retention, forwarding, audio playback, link previews, and Media/Files/Links search with the accepted visibility filters.
@@ -631,7 +638,7 @@ These scenarios validate **AGREED** behavior; proposed mechanisms such as a part
 
 ## 18. Evidence and implementation references
 
-The discussion record is the decision history; this draft is the consolidated first specification. The formatting report contains the earlier executed public-API feasibility probe. UI discovery for this draft read source/examples; it did not implement or run Oie or create upstream PRs.
+The discussion record is the decision history; this draft is the consolidated first specification. The formatting report contains the earlier executed public-API feasibility probe. UI discovery for this draft read source/examples; it did not implement or run Oiê or create upstream PRs.
 
 - [Discussion record](unified-chat-discussion.md) and [Margo formatting feasibility](oie-formatting-feasibility.md).
 - [Goshtoso v0.6.1 chat bubble public configuration](https://github.com/araihu/goshtoso/blob/v0.6.1/components/chatbubble/types.go), [template](https://github.com/araihu/goshtoso/blob/v0.6.1/components/chatbubble/chatbubble.templ), [textarea](https://github.com/araihu/goshtoso/blob/v0.6.1/components/textarea/types.go), [file input](https://github.com/araihu/goshtoso/blob/v0.6.1/components/fileinput/types.go), and [card slots](https://github.com/araihu/goshtoso/blob/v0.6.1/components/card/types.go).
@@ -642,7 +649,7 @@ The discussion record is the decision history; this draft is the consolidated fi
 - [SQLite FTS5](https://sqlite.org/fts5.html), [transactional outbox pattern](https://microservices.io/patterns/data/transactional-outbox.html), [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen), and [vacuum](https://quobix.com/vacuum/).
 - [WhatsApp editing](https://faq.whatsapp.com/6614640168569481/?cms_platform=web&lang=id), [mute durations](https://faq.whatsapp.com/694350718331007/?cms_platform=iphone&locale=pa_IN), and [web media composition](https://faq.whatsapp.com/453914586839706/?cms_platform=web&locale=en_US). These support the specifically identified interface recommendations, not assumptions about WhatsApp's backend.
 
-The supplied screenshots remain the visual reference. Do not reuse their private contact names, phone numbers, or message content as Oie fixtures.
+The supplied screenshots remain the visual reference. Do not reuse their private contact names, phone numbers, or message content as Oiê fixtures.
 
 ### Received reply presentation increment
 

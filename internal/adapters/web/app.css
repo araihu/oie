@@ -25,8 +25,11 @@ html,body{margin:0;height:100%;font-family:var(--font-body);background:var(--oie
 .oie-main{padding:0;overflow:hidden;background:var(--oie-panel)}
 .oie-sidebar{display:block;width:208px;overflow:hidden;background:var(--oie-panel);border-color:var(--oie-border)}
 .oie-navigation{border:0;background:var(--oie-panel);color:var(--oie-text)}
-.oie-brand-mark{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:10px 10px 10px 2px;background:var(--oie-accent);color:var(--oie-on-accent);font-size:25px;font-weight:700;line-height:1;padding-bottom:4px}
-.oie-brand-name{font-size:19px;font-weight:700;letter-spacing:-.5px}
+.oie-brand{display:inline-flex;align-items:center}
+.oie-brand-logo{display:block;width:auto;height:36px;max-width:136px;object-fit:contain}
+.oie-brand-logo-dark{display:none}
+html.dark .oie-brand-logo-light{display:none}
+html.dark .oie-brand-logo-dark{display:block}
 .oie-profile{display:flex;align-items:center;gap:10px;padding:12px;font-size:13px}
 .oie-profile>span{flex:1;font-weight:600}
 .oie-icon{width:20px;height:20px;flex-shrink:0}
@@ -240,7 +243,14 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-star-message[data-star-pending=true]{opacity:.7}
 .oie-star-warning{position:fixed;z-index:60;left:12px;bottom:8px;max-width:340px;padding:8px;background:var(--oie-panel);border:1px solid var(--oie-border);color:var(--oie-muted);font-size:11px}
 
-.oie-message-menu{align-self:flex-start;flex-shrink:0}
+.oie-message-body{position:relative;min-width:0}
+.oie-message-body-compact{min-height:26px;padding-inline-end:22px}
+.oie-message-heading{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;min-height:26px;padding-inline-end:24px;margin-bottom:4px}
+.oie-message-heading strong{min-width:0;overflow-wrap:anywhere;font-size:14px;font-weight:600}
+.oie-message-heading time{font-size:12px;font-weight:400;opacity:.7;white-space:nowrap}
+.oie-message-menu-slot{position:absolute;inset-inline-end:-10px;top:-6px;z-index:3}
+.oie-message-menu-slot:focus-within,.oie-message-menu-slot:has([aria-expanded=true]){z-index:5}
+.oie-message-menu{flex-shrink:0}
 .oie-menu-chevron{min-width:26px;min-height:26px;width:26px;height:26px;padding:4px;border:0;opacity:0;color:var(--oie-muted)}
 .oie-message:hover .oie-message-menu .oie-menu-chevron,.oie-image-preview:hover .oie-image-menu .oie-menu-chevron,.oie-message-menu:focus-within .oie-menu-chevron,.oie-image-menu:focus-within .oie-menu-chevron{opacity:1}
 .oie-image-preview{position:relative;overflow:visible}

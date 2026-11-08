@@ -1,0 +1,76 @@
+{
+  "repository": "https://github.com/araihu/assets",
+  "revision": "342a1c87a1f3784521cd6efc58820a1bd44b84b7",
+  "candidateRelease": "v0.2.7",
+  "publishedRelease": false,
+  "catalogSha256": "72efbb3a9c6cadf03f255d16aaa4f0aa061e6113dc68ee75147037691fc52a18",
+  "product": "oie",
+  "displayName": "Oiê",
+  "files": [
+    {
+      "file": "apple-touch-icon-180.png",
+      "sourcePath": "platform/web/oie/apple-touch-icon-180.png",
+      "sha256": "6767428040dba8e8da27a4b8d8f59a757763451c70058b6e3bea653a3ce437ee"
+    },
+    {
+      "file": "favicon-16.png",
+      "sourcePath": "platform/web/oie/favicon-16.png",
+      "sha256": "eb28358d9eb8e45934e5a2f63a262a618938c606dc0aae5ffd5b5a25ec7aadf7"
+    },
+    {
+      "file": "favicon-32.png",
+      "sourcePath": "platform/web/oie/favicon-32.png",
+      "sha256": "60c2df4c96471f0365911a874431e91b05731e2f546d2506fdd7e6d59280e170"
+    },
+    {
+      "file": "favicon.svg",
+      "sourcePath": "platform/web/oie/favicon.svg",
+      "sha256": "71f947cc8459db0c7aed7e54e0ca65e10d86cea23c5e6998bb2b405f30e95169"
+    },
+    {
+      "file": "icon-192.png",
+      "sourcePath": "platform/web/oie/icon-192.png",
+      "sha256": "484058d522fb63d1cc0ff1db38cb14ab85412b6d9f21dd5e4c8f63998618bb29"
+    },
+    {
+      "file": "icon-512.png",
+      "sourcePath": "platform/web/oie/icon-512.png",
+      "sha256": "ec236fcbfc31f37655f1cc1aca8088e919268871b9078542f40e68e31638c337"
+    },
+    {
+      "file": "icon-maskable-192.png",
+      "sourcePath": "platform/web/oie/icon-maskable-192.png",
+      "sha256": "1218aa40b8a0f01fd186c0648e423d235da0713b99de4c4ca2d75fce808a2ae1"
+    },
+    {
+      "file": "icon-maskable-512.png",
+      "sourcePath": "platform/web/oie/icon-maskable-512.png",
+      "sha256": "f04989d17443b851ed2a549fc6e7997d2462e58c660f9df68281c0902d6929fe"
+    },
+    {
+      "file": "manifest-icons.json",
+      "sourcePath": "platform/web/oie/manifest-icons.json",
+      "sha256": "46522597d9c995b795ca75f7cb250b4fabb4eb9810d162c8cd1142b3c44f6bf6"
+    },
+    {
+      "file": "logo-light.svg",
+      "sourcePath": "brand/oie/logo/light-transparent-optical.svg",
+      "sha256": "eba6e0185dc788aa00a68f0964041b0af9663cbec03a54a457aedde5600265bc"
+    },
+    {
+      "file": "logo-dark.svg",
+      "sourcePath": "brand/oie/logo/dark-transparent-optical.svg",
+      "sha256": "bddb83c180ebcd41641569993c51956e8e264d2229b623a9ca5af77d92071f96"
+    },
+    {
+      "file": "logo-monochrome.svg",
+      "sourcePath": "brand/oie/logo/monochrome-transparent-optical.svg",
+      "sha256": "c7a50cc3b2789ea69032fb11c2757b6ecb4db4785fff2d62b2cf621ba13be6ff"
+    },
+    {
+      "file": "icon-monochrome.svg",
+      "sourcePath": "icons/brand/oie-icon-monochrome-transparent-optical.svg",
+      "sha256": "3d34bdc541bd124059dd7050f59e5c194ee32d4de603b3b93a72d7720a7a8d54"
+    }
+  ]
+}

@@ -30,7 +30,7 @@ func navigation(v view, id string) sidebar.Config {
  footer:=profile(v,id)
  if id=="mobile-navigation" {footer=nil}
 	return sidebar.Config{
-		Logo: brand(), LogoHref: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), DisableSkipLink: true, RootClass: "oie-navigation", FooterSlot: footer,
+		Logo: brand(v), LogoHref: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), DisableSkipLink: true, RootClass: "oie-navigation", FooterSlot: footer,
 		Items: []sidebar.Item{
 			{ID: "chats", Label: v.Text.Chats, Href: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidQueueList), Active: v.Section == "chats"},
 			{ID: "media", Label: v.Text.SharedMedia, Href: v.href("section", "media", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidRectangleGroup), Active: v.Section == "media"},
@@ -44,8 +44,12 @@ templ glyph(symbol icon.Symbol) {
 	@icon.Icon(icon.Config{SpriteURL: heroicons.SpriteURL, Symbol: symbol, Decorative: true, RootClass: "oie-icon"})
 }
 
-templ brand() {
-	<span class="oie-brand-mark" aria-hidden="true">o</span><span class="oie-brand-name">Oie</span>
+templ brand(v view) {
+<span class="oie-brand">
+<img class="oie-brand-logo oie-brand-logo-light" src={templ.URL(brandURL("logo-light.svg"))} alt="" aria-hidden="true" width="96" height="36"/>
+<img class="oie-brand-logo oie-brand-logo-dark" src={templ.URL(brandURL("logo-dark.svg"))} alt="" aria-hidden="true" width="96" height="36"/>
+<span class="sr-only">{v.Text.AppName}</span>
+</span>
 }
 
 templ page(v view) {
@@ -54,8 +58,13 @@ templ page(v view) {
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
-			<title>Oie</title>
-			<link rel="icon" href="data:,"/>
+			<title>{v.Text.AppName}</title>
+			<link rel="icon" type="image/svg+xml" href={templ.URL(brandURL("favicon.svg"))}/>
+<link rel="icon" type="image/png" sizes="32x32" href={templ.URL(brandURL("favicon-32.png"))}/>
+<link rel="icon" type="image/png" sizes="16x16" href={templ.URL(brandURL("favicon-16.png"))}/>
+<link rel="apple-touch-icon" sizes="180x180" href={templ.URL(brandURL("apple-touch-icon-180.png"))}/>
+<link rel="manifest" href={templ.SafeURL("/manifest.webmanifest?lang="+v.Locale)}/>
+<meta name="theme-color" content="#274c5e"/>
 			<script src="/ui/runtime.js"></script>
 <script src="/ui/theme.js"></script>
 <script src="/ui/formatting.js"></script>
@@ -93,7 +102,7 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 }
 </div>
 }
-			<h1 class="sr-only">Oie</h1>
+			<h1 class="sr-only">{v.Text.AppName}</h1>
 			@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: sidebar.Sidebar(navigation(v,"desktop")), Content: workspace(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
 			@settings(v)
 			@accounts(v)
@@ -320,11 +329,8 @@ if m.Attachment!=nil {
 if !m.IsOwn && !grouped {
 @profileAvatar(v,m.AccountId,v.messageAvatarAddress(m),avatar.Config{Name:m.Sender.DisplayName,Initials:initials(m.Sender.DisplayName),Size:avatar.SizeSM})
 }
-@chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),Message:m.OriginalText,MessageContent:messageBody(v,m),SenderName:m.Sender.DisplayName,Timestamp:m.CreatedAt.Format("15:04"),RootClass:"oie-bubble",Grouped:grouped})
+@chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),Message:m.OriginalText,MessageContent:messageBubbleBody(v,m,grouped),RootClass:"oie-bubble",Grouped:grouped})
 <span class="oie-message-star-indicator" data-message-star-indicator hidden?={!v.StarsKnown||!v.Stars[m.Id].Starred} role="img" aria-label={v.Text.StarMessage}>@glyph(heroicons.Icon16SolidStar)</span>
-<div data-message-menu-slot={m.Id}>
-@dropdown.Dropdown(dropdown.Config{ID:"message-menu-"+m.Id,Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,m.Id),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:messageActions(v,m.Id)})
-</div>
 </div>
 }
 
@@ -663,6 +669,20 @@ for _,account:=range v.AvatarAccounts {
 for identity,hash:=range v.Avatars {
 <div data-avatar-entry data-account-id={identity.Account} data-address={identity.Address} data-hash={hash}></div>
 }
+</div>
+}
+
+// The public rich-content slot owns the header and corner control together, so
+// positioning never depends on ChatBubble's private row or bubble selectors.
+templ messageBubbleBody(v view,m messageView,grouped bool){
+<div class={"oie-message-body",templ.KV("oie-message-body-compact",m.IsOwn||grouped)} data-message-bubble={m.Id}>
+<div class="oie-message-menu-slot" data-message-menu-slot={m.Id}>
+@dropdown.Dropdown(dropdown.Config{ID:"message-menu-"+m.Id,Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,m.Id),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:messageActions(v,m.Id)})
+</div>
+if !m.IsOwn && !grouped {
+<div class="oie-message-heading"><strong>{m.Sender.DisplayName}</strong><time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time></div>
+}
+@messageBody(v,m)
 </div>
 }
 

@@ -16,6 +16,7 @@ mock_pid=$!
 bin/oie --role bff --listen 127.0.0.1:8080 --engine-url http://127.0.0.1:18082 > /tmp/oie-web.log 2>&1 &
 web_pid=$!
 node -e 'let left=100;async function ready(){try{if((await fetch("http://127.0.0.1:8080/")).ok)return}catch{}if(--left===0)process.exit(1);setTimeout(ready,100)}ready()'
+OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/branding.cjs
 npm --prefix tests/browser test
 npm --prefix tests/browser run test:chat
 npm --prefix tests/browser run test:states

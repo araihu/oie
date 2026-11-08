@@ -126,6 +126,8 @@ type view struct {
 }
 
 type copy struct {
+	AppName                    string
+	AppDescription             string
 	CapabilityEditMessagesNote string
 	Edited                     string
 	ReplyMessage               string
@@ -384,6 +386,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.serveBrand(w, r) {
 		return
 	}
 	assets := map[string]struct {

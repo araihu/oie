@@ -1,7 +1,10 @@
-# Oie
+# Oiê
 
 A protocol-adaptable chat application in Go with a Goshtoso web interface.
 XMPP is the first protocol; local and hosted engines share the same API.
+
+The display name is Oiê. The shared identity, browser icons and distribution
+provenance are documented in [Branding](docs/branding.md).
 
 The alpha is single-owner, with multiple accounts and optional device sync.
 
@@ -124,7 +127,7 @@ bin/oiectl accounts get-account-connection --account-id ACCOUNT_UUID
 printf '%s\n' '{"accountId":"ACCOUNT_UUID","address":"bob@localhost"}' |
   bin/oiectl conversations open-conversation \
     --idempotency-key 019a5df0-0000-7000-8000-000000000005 --body-stdin
-printf '%s\n' '{"originalText":"Olá from Oie!"}' |
+printf '%s\n' '{"originalText":"Olá from Oiê!"}' |
   bin/oiectl messages send-message --conversation-id CONVERSATION_UUID \
     --idempotency-key 019a5df0-0000-7000-8000-000000000006 --body-stdin
 bin/oiectl messages list-messages --conversation-id CONVERSATION_UUID
@@ -197,7 +200,7 @@ generated with sqlc; golang-migrate applies embedded migrations on startup and
 preserves the earlier foundation database. One process owns each engine data
 directory. No sibling checkout or local module replacement is required.
 
-To run browser consumer checks against a running Oie:
+To run browser consumer checks against a running Oiê:
 
 ```sh
 npm --prefix tests/browser ci
