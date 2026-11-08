@@ -1,0 +1,6 @@
+Oiê document fixture, original UTF-8 text.
+
+<script>window.documentExecuted = true</script>
+<img src="https://files.example.test/should-not-load.png" onerror="window.documentExecuted=true">
+# Markdown stays plain text
+{"message":"Olá, mundo 😀", "safe":true}

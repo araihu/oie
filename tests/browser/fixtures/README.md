@@ -9,3 +9,11 @@ white rectangle. Its duration is about 1.385 seconds and its size is 1,502 bytes
 
 Browser tests use the committed clip to verify actual decoding and playback.
 They do not need FFmpeg, network media, or any external fixture service.
+
+`tiny-document.txt` and `tiny-document.pdf` are original fixtures covered by
+this repository's Apache License 2.0. The UTF-8 text includes literal HTML and
+Unicode to check escaping. The PDF is a handcrafted, two-page PDF 1.4 file
+with Helvetica titles and subtitles. Its cross-reference offsets and stream
+length are computed from the committed bytes. The PDF has no external
+resources, scripts or attachments. Neither file contains personal data or
+third-party content.
