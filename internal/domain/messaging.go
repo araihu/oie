@@ -29,4 +29,14 @@ type Message struct {
 	IsOwn                                     bool
 	SendState                                 string
 	ProviderID                                string
+	ArchiveScope, ArchiveID                   string
+	Historical                                bool
+}
+
+type HistoryStatus struct {
+	AccountID                       ID
+	State                           string
+	RetainedMessages, Conversations int
+	UpdatedAt                       time.Time
+	LastErrorCode                   string
 }

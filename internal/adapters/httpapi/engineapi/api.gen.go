@@ -164,13 +164,13 @@ func (e ConversationKind) Valid() bool {
 
 // Defines values for EngineApiVersion.
 const (
-	N020 EngineApiVersion = "0.2.0"
+	N030 EngineApiVersion = "0.3.0"
 )
 
 // Valid indicates whether the value is a known member of the EngineApiVersion enum.
 func (e EngineApiVersion) Valid() bool {
 	switch e {
-	case N020:
+	case N030:
 		return true
 	default:
 		return false
@@ -198,6 +198,7 @@ func (e EngineRole) Valid() bool {
 // Defines values for EventType.
 const (
 	AccountConnectionChanged EventType = "account.connection_changed"
+	AccountHistoryChanged    EventType = "account.history_changed"
 	AccountRegistered        EventType = "account.registered"
 	ConversationCreated      EventType = "conversation.created"
 	ConversationUpdated      EventType = "conversation.updated"
@@ -209,6 +210,8 @@ const (
 func (e EventType) Valid() bool {
 	switch e {
 	case AccountConnectionChanged:
+		return true
+	case AccountHistoryChanged:
 		return true
 	case AccountRegistered:
 		return true
@@ -234,6 +237,57 @@ const (
 func (e HealthStatus) Valid() bool {
 	switch e {
 	case Ready:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HistoryStatusLastErrorCode.
+const (
+	ArchiveFailed   HistoryStatusLastErrorCode = "archive_failed"
+	DiscoveryFailed HistoryStatusLastErrorCode = "discovery_failed"
+	UnstableArchive HistoryStatusLastErrorCode = "unstable_archive"
+)
+
+// Valid indicates whether the value is a known member of the HistoryStatusLastErrorCode enum.
+func (e HistoryStatusLastErrorCode) Valid() bool {
+	switch e {
+	case ArchiveFailed:
+		return true
+	case DiscoveryFailed:
+		return true
+	case UnstableArchive:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HistoryStatusState.
+const (
+	HistoryStatusStateComplete    HistoryStatusState = "complete"
+	HistoryStatusStateError       HistoryStatusState = "error"
+	HistoryStatusStateNotStarted  HistoryStatusState = "not_started"
+	HistoryStatusStatePartial     HistoryStatusState = "partial"
+	HistoryStatusStateSyncing     HistoryStatusState = "syncing"
+	HistoryStatusStateUnsupported HistoryStatusState = "unsupported"
+)
+
+// Valid indicates whether the value is a known member of the HistoryStatusState enum.
+func (e HistoryStatusState) Valid() bool {
+	switch e {
+	case HistoryStatusStateComplete:
+		return true
+	case HistoryStatusStateError:
+		return true
+	case HistoryStatusStateNotStarted:
+		return true
+	case HistoryStatusStatePartial:
+		return true
+	case HistoryStatusStateSyncing:
+		return true
+	case HistoryStatusStateUnsupported:
 		return true
 	default:
 		return false
@@ -475,7 +529,7 @@ type ConnectionLastErrorCode string
 // ConnectionState Runtime connection state.
 type ConnectionState string
 
-// Conversation One account-scoped conversation. This milestone creates direct conversations; rooms are not implemented.
+// Conversation One account-scoped conversation. Direct conversations support text sending; saved rooms and authorized room archives are recovered read-only in this increment.
 //
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","address":"bob@localhost","archived":false,"favorite":false,"id":"019a5df0-0000-7000-8000-000000000001","kind":"direct","lastMessage":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","title":"bob@localhost","unreadCount":0,"updatedAt":"2026-11-07T12:00:00Z"}
 type Conversation struct {
@@ -522,7 +576,7 @@ type ConversationPage struct {
 
 // Engine Persistent engine identity and event boundary.
 //
-// Example: {"apiVersion":"0.2.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
+// Example: {"apiVersion":"0.3.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
 type Engine struct {
 	ApiVersion EngineApiVersion `json:"apiVersion"`
 
@@ -554,10 +608,15 @@ type Event struct {
 	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","state":"not_connected","updatedAt":"2026-11-07T12:00:00Z"}
 	Connection *Connection `json:"connection,omitempty"`
 
-	// Conversation One account-scoped conversation. This milestone creates direct conversations; rooms are not implemented.
+	// Conversation One account-scoped conversation. Direct conversations support text sending; saved rooms and authorized room archives are recovered read-only in this increment.
 	//
 	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","address":"bob@localhost","archived":false,"favorite":false,"id":"019a5df0-0000-7000-8000-000000000001","kind":"direct","lastMessage":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","title":"bob@localhost","unreadCount":0,"updatedAt":"2026-11-07T12:00:00Z"}
 	Conversation *Conversation `json:"conversation,omitempty"`
+
+	// History Last history recovery pass; counts describe this engine's retained records, not total provider history.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversations":3,"retainedMessages":50,"state":"syncing","updatedAt":"2026-11-07T12:00:00Z"}
+	History *HistoryStatus `json:"history,omitempty"`
 
 	// Id Engine-scoped durable event cursor.
 	Id string `json:"id"`
@@ -584,6 +643,25 @@ type Health struct {
 // HealthStatus Example: ready
 type HealthStatus string
 
+// HistoryStatus Last history recovery pass; counts describe this engine's retained records, not total provider history.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversations":3,"retainedMessages":50,"state":"syncing","updatedAt":"2026-11-07T12:00:00Z"}
+type HistoryStatus struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	AccountId        ID                          `json:"accountId"`
+	Conversations    int                         `json:"conversations"`
+	LastErrorCode    *HistoryStatusLastErrorCode `json:"lastErrorCode,omitempty"`
+	RetainedMessages int                         `json:"retainedMessages"`
+	State            HistoryStatusState          `json:"state"`
+	UpdatedAt        time.Time                   `json:"updatedAt"`
+}
+
+// HistoryStatusLastErrorCode defines model for HistoryStatus.LastErrorCode.
+type HistoryStatusLastErrorCode string
+
+// HistoryStatusState defines model for HistoryStatus.State.
+type HistoryStatusState string
+
 // ID Canonical lowercase UUIDv7; IDs do not establish causal order.
 type ID = string
 
@@ -600,6 +678,9 @@ type Message struct {
 	// CreatedAt UTC timestamp.
 	CreatedAt time.Time `json:"createdAt"`
 
+	// Historical True for archive imports. Omitted means false. Clients must not treat these as new unread messages or fresh notifications.
+	Historical *bool `json:"historical,omitempty"`
+
 	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
 	Id    ID   `json:"id"`
 	IsOwn bool `json:"isOwn"`
@@ -613,7 +694,7 @@ type Message struct {
 	// SendState Durable transport evidence.
 	SendState MessageSendState `json:"sendState"`
 
-	// Sender Stable engine-local protocol identity for a sender.
+	// Sender Engine-local source identity. For recovered room messages, this is the room-scoped source with an observed speaker nickname, not a verified personal identity.
 	//
 	// Example: {"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}
 	Sender Sender `json:"sender"`
@@ -702,7 +783,7 @@ type SendMessage struct {
 	OriginalText string `json:"originalText"`
 }
 
-// Sender Stable engine-local protocol identity for a sender.
+// Sender Engine-local source identity. For recovered room messages, this is the room-scoped source with an observed speaker nickname, not a verified personal identity.
 //
 // Example: {"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}
 type Sender struct {
@@ -795,7 +876,7 @@ type OpenConversationParams struct {
 
 // ListMessagesParams defines parameters for ListMessages.
 type ListMessagesParams struct {
-	// Cursor Read records older than this nextCursor UUID.
+	// Cursor Read records chronologically older than this nextCursor message UUID (timestamp and UUID tie-break).
 	Cursor *ID `form:"cursor,omitempty" json:"cursor,omitempty"`
 
 	// Limit Maximum page size.
@@ -988,6 +1069,13 @@ type ClientInterface interface {
 	// Corresponds with PUT /api/v1/accounts/{accountId}/connection (the `ConfigureAccountConnection` operationId).
 	ConfigureAccountConnection(ctx context.Context, accountId AccountID, body ConfigureAccountConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetAccountHistory Read account history recovery progress
+	//
+	// Recovery starts on protocol connection. Saved room entries and authorized text archives are read serially, with persistent checkpoints and deduplication. Historical imports do not create sends or unread counts. Complete means the last authorized text recovery pass finished; it is not a full protocol-feature claim. Saved rooms are read-only in this increment. Provider permission failures remain partial coverage.
+	//
+	// Corresponds with GET /api/v1/accounts/{accountId}/history (the `GetAccountHistory` operationId).
+	GetAccountHistory(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListConversations List retained conversations
 	//
 	// Keyset pages ordered by descending engine activity. Search matches conversation address/title and latest text preview; this is not full message search.
@@ -1022,7 +1110,7 @@ type ClientInterface interface {
 
 	// ListMessages Read retained messages
 	//
-	// Returns newest-first pages. This milestone has live ingestion, not MAM history backfill.
+	// Returns retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages.
 	//
 	// Corresponds with GET /api/v1/conversations/{conversationId}/messages (the `ListMessages` operationId).
 	ListMessages(ctx context.Context, conversationId ConversationID, params *ListMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1273,6 +1361,23 @@ func (c *Client) ConfigureAccountConnection(ctx context.Context, accountId Accou
 	return c.Client.Do(req)
 }
 
+// GetAccountHistory Read account history recovery progress
+//
+// Recovery starts on protocol connection. Saved room entries and authorized text archives are read serially, with persistent checkpoints and deduplication. Historical imports do not create sends or unread counts. Complete means the last authorized text recovery pass finished; it is not a full protocol-feature claim. Saved rooms are read-only in this increment. Provider permission failures remain partial coverage.
+//
+// Corresponds with GET /api/v1/accounts/{accountId}/history (the `GetAccountHistory` operationId).
+func (c *Client) GetAccountHistory(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAccountHistoryRequest(c.Server, accountId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListConversations List retained conversations
 //
 // Keyset pages ordered by descending engine activity. Search matches conversation address/title and latest text preview; this is not full message search.
@@ -1347,7 +1452,7 @@ func (c *Client) GetConversation(ctx context.Context, conversationId Conversatio
 
 // ListMessages Read retained messages
 //
-// Returns newest-first pages. This milestone has live ingestion, not MAM history backfill.
+// Returns retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages.
 //
 // Corresponds with GET /api/v1/conversations/{conversationId}/messages (the `ListMessages` operationId).
 func (c *Client) ListMessages(ctx context.Context, conversationId ConversationID, params *ListMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -1826,6 +1931,40 @@ func NewConfigureAccountConnectionRequestWithBody(server string, accountId Accou
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetAccountHistoryRequest constructs an http.Request for the GetAccountHistory method
+func NewGetAccountHistoryRequest(server string, accountId AccountID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "accountId", accountId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/%s/history", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -2545,6 +2684,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /api/v1/accounts/{accountId}/connection (the `ConfigureAccountConnection` operationId).
 	ConfigureAccountConnectionWithResponse(ctx context.Context, accountId AccountID, body ConfigureAccountConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*ConfigureAccountConnectionResponse, error)
 
+	// GetAccountHistoryWithResponse Read account history recovery progress
+	//
+	// Recovery starts on protocol connection. Saved room entries and authorized text archives are read serially, with persistent checkpoints and deduplication. Historical imports do not create sends or unread counts. Complete means the last authorized text recovery pass finished; it is not a full protocol-feature claim. Saved rooms are read-only in this increment. Provider permission failures remain partial coverage.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/accounts/{accountId}/history (the `GetAccountHistory` operationId).
+	GetAccountHistoryWithResponse(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*GetAccountHistoryResponse, error)
+
 	// ListConversationsWithResponse List retained conversations
 	//
 	// Keyset pages ordered by descending engine activity. Search matches conversation address/title and latest text preview; this is not full message search.
@@ -2583,7 +2731,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListMessagesWithResponse Read retained messages
 	//
-	// Returns newest-first pages. This milestone has live ingestion, not MAM history backfill.
+	// Returns retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -3120,6 +3268,68 @@ func (r ConfigureAccountConnectionResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ConfigureAccountConnectionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetAccountHistoryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *HistoryStatus
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetAccountHistoryResponse) GetJSON200() *HistoryStatus {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetAccountHistoryResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetAccountHistoryResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetAccountHistoryResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAccountHistoryResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAccountHistoryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAccountHistoryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAccountHistoryResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -3951,6 +4161,21 @@ func (c *ClientWithResponses) ConfigureAccountConnectionWithResponse(ctx context
 	return ParseConfigureAccountConnectionResponse(rsp)
 }
 
+// GetAccountHistoryWithResponse Read account history recovery progress
+//
+// Recovery starts on protocol connection. Saved room entries and authorized text archives are read serially, with persistent checkpoints and deduplication. Historical imports do not create sends or unread counts. Complete means the last authorized text recovery pass finished; it is not a full protocol-feature claim. Saved rooms are read-only in this increment. Provider permission failures remain partial coverage.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/accounts/{accountId}/history (the `GetAccountHistory` operationId).
+func (c *ClientWithResponses) GetAccountHistoryWithResponse(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*GetAccountHistoryResponse, error) {
+	rsp, err := c.GetAccountHistory(ctx, accountId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAccountHistoryResponse(rsp)
+}
+
 // ListConversationsWithResponse List retained conversations
 //
 // Keyset pages ordered by descending engine activity. Search matches conversation address/title and latest text preview; this is not full message search.
@@ -4013,7 +4238,7 @@ func (c *ClientWithResponses) GetConversationWithResponse(ctx context.Context, c
 
 // ListMessagesWithResponse Read retained messages
 //
-// Returns newest-first pages. This milestone has live ingestion, not MAM history backfill.
+// Returns retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -4498,6 +4723,53 @@ func ParseConfigureAccountConnectionResponse(rsp *http.Response) (*ConfigureAcco
 			return nil, err
 		}
 		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAccountHistoryResponse parses an HTTP response from a GetAccountHistoryWithResponse call
+func ParseGetAccountHistoryResponse(rsp *http.Response) (*GetAccountHistoryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAccountHistoryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest HistoryStatus
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest Invalid
@@ -5065,6 +5337,9 @@ type ServerInterface interface {
 	// ConfigureAccountConnection Configure and connect an account
 	// (PUT /api/v1/accounts/{accountId}/connection)
 	ConfigureAccountConnection(w http.ResponseWriter, r *http.Request, accountId AccountID)
+	// GetAccountHistory Read account history recovery progress
+	// (GET /api/v1/accounts/{accountId}/history)
+	GetAccountHistory(w http.ResponseWriter, r *http.Request, accountId AccountID)
 	// ListConversations List retained conversations
 	// (GET /api/v1/conversations)
 	ListConversations(w http.ResponseWriter, r *http.Request, params ListConversationsParams)
@@ -5321,6 +5596,32 @@ func (siw *ServerInterfaceWrapper) ConfigureAccountConnection(w http.ResponseWri
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ConfigureAccountConnection(w, r, accountId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAccountHistory operation middleware
+func (siw *ServerInterfaceWrapper) GetAccountHistory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "accountId" -------------
+	var accountId AccountID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "accountId", r.PathValue("accountId"), &accountId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "accountId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAccountHistory(w, r, accountId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5934,6 +6235,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/accounts", wrapper.ListAccounts)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/accounts", wrapper.RegisterAccount)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/accounts/{accountId}", wrapper.GetAccount)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/accounts/{accountId}/history", wrapper.GetAccountHistory)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/accounts/{accountId}/capabilities", wrapper.GetAccountCapabilities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/operations/{operationId}", wrapper.GetOperation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/events", wrapper.StreamEvents)
@@ -6462,6 +6764,76 @@ type ConfigureAccountConnection503ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ConfigureAccountConnection503ApplicationProblemPlusJSONResponse) VisitConfigureAccountConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAccountHistoryRequestObject struct {
+	AccountId AccountID `json:"accountId"`
+}
+
+type GetAccountHistoryResponseObject interface {
+	VisitGetAccountHistoryResponse(w http.ResponseWriter) error
+}
+
+type GetAccountHistory200JSONResponse HistoryStatus
+
+func (response GetAccountHistory200JSONResponse) VisitGetAccountHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAccountHistory400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response GetAccountHistory400ApplicationProblemPlusJSONResponse) VisitGetAccountHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAccountHistory404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetAccountHistory404ApplicationProblemPlusJSONResponse) VisitGetAccountHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAccountHistory503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response GetAccountHistory503ApplicationProblemPlusJSONResponse) VisitGetAccountHistoryResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -7311,6 +7683,9 @@ type StrictServerInterface interface {
 	// ConfigureAccountConnection Configure and connect an account
 	// (PUT /api/v1/accounts/{accountId}/connection)
 	ConfigureAccountConnection(ctx context.Context, request ConfigureAccountConnectionRequestObject) (ConfigureAccountConnectionResponseObject, error)
+	// GetAccountHistory Read account history recovery progress
+	// (GET /api/v1/accounts/{accountId}/history)
+	GetAccountHistory(ctx context.Context, request GetAccountHistoryRequestObject) (GetAccountHistoryResponseObject, error)
 	// ListConversations List retained conversations
 	// (GET /api/v1/conversations)
 	ListConversations(ctx context.Context, request ListConversationsRequestObject) (ListConversationsResponseObject, error)
@@ -7574,6 +7949,32 @@ func (sh *strictHandler) ConfigureAccountConnection(w http.ResponseWriter, r *ht
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ConfigureAccountConnectionResponseObject); ok {
 		if err := validResponse.VisitConfigureAccountConnectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAccountHistory operation middleware
+func (sh *strictHandler) GetAccountHistory(w http.ResponseWriter, r *http.Request, accountId AccountID) {
+	var request GetAccountHistoryRequestObject
+
+	request.AccountId = accountId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAccountHistory(ctx, request.(GetAccountHistoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAccountHistory")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAccountHistoryResponseObject); ok {
+		if err := validResponse.VisitGetAccountHistoryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -7892,112 +8293,121 @@ func (sh *strictHandler) GetOperation(w http.ResponseWriter, r *http.Request, op
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"2w+3/zsA",
+	"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",
+	"cPbrd9f/NwA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -127,5 +127,11 @@
   "BackToAccounts": "All accounts",
   "AdvancedConnection": "Advanced connection settings",
   "AccountMissing": "Account not found",
-  "AddAccountHelp": "Add an existing XMPP account."
+  "AddAccountHelp": "Add an existing XMPP account.",
+  "HistorySyncing": "Recovering history",
+  "HistoryPartial": "Some history is unavailable",
+  "HistoryUnsupported": "The server does not provide accessible history",
+  "HistoryComplete": "History recovered",
+  "HistoryCount": "%d messages retained",
+  "RoomReadOnly": "Saved room: history is available for reading. Joining and sending to rooms are not available yet."
 }

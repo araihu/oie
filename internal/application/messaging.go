@@ -25,10 +25,12 @@ func (e StateConflict) Unwrap() error { return ErrStateConflict }
 
 type ConnectionInput struct{ Password, Endpoint string }
 type Incoming struct {
-	AccountID                         domain.ID
-	Address, ProviderID, OriginalText string
-	CreatedAt                         time.Time
-	IsOwn                             bool
+	AccountID                                 domain.ID
+	Address, ProviderID, OriginalText         string
+	CreatedAt                                 time.Time
+	IsOwn                                     bool
+	Historical                                bool
+	Kind, SenderName, ArchiveScope, ArchiveID string
 }
 type Rejected struct {
 	AccountID          domain.ID
@@ -243,6 +245,9 @@ func (e *Engine) SendMessage(ctx context.Context, key, conversationID domain.ID,
 	if err != nil {
 		return MessageResult{}, err
 	}
+	if c.Kind != "direct" {
+		return MessageResult{}, ErrProtocolUnavailable
+	}
 	a, err := e.Account(ctx, c.AccountID)
 	if err != nil {
 		return MessageResult{}, err
@@ -332,13 +337,22 @@ func (e *Engine) Receive(ctx context.Context, in Incoming) error {
 			return err
 		}
 	}
+	if in.Kind == "" {
+		in.Kind = "direct"
+	}
+	if in.Kind != "direct" && in.Kind != "room" {
+		return ErrInvalid
+	}
 	now := e.now().UTC()
 	created := in.CreatedAt.UTC()
 	if created.IsZero() {
 		created = now
 	}
-	c := domain.Conversation{ID: ids[0], RevisionID: ids[1], PeerID: ids[2], AccountID: a.ID, Kind: "direct", Address: address, Title: address, UpdatedAt: now}
-	m := domain.Message{ID: ids[3], RevisionID: ids[4], AccountID: a.ID, Sender: domain.Sender{DisplayName: address}, OriginalText: in.OriginalText, CreatedAt: created, IsOwn: in.IsOwn, SendState: "received", ProviderID: in.ProviderID}
+	c := domain.Conversation{ID: ids[0], RevisionID: ids[1], PeerID: ids[2], AccountID: a.ID, Kind: in.Kind, Address: address, Title: address, UpdatedAt: created}
+	m := domain.Message{ID: ids[3], RevisionID: ids[4], AccountID: a.ID, Sender: domain.Sender{DisplayName: address}, OriginalText: in.OriginalText, CreatedAt: created, IsOwn: in.IsOwn, SendState: "received", ProviderID: in.ProviderID, ArchiveScope: in.ArchiveScope, ArchiveID: in.ArchiveID, Historical: in.Historical}
+	if in.SenderName != "" {
+		m.Sender.DisplayName = in.SenderName
+	}
 	if in.IsOwn {
 		m.Sender.ID = a.ID
 		m.SendState = "submitted"

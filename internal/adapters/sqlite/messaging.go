@@ -99,7 +99,7 @@ func (s *Store) Conversations(ctx context.Context, in application.ConversationQu
 	return out, nil
 }
 func insertMessage(ctx context.Context, q *dbgen.Queries, m domain.Message) error {
-	if err := q.InsertMessage(ctx, dbgen.InsertMessageParams{ID: string(m.ID), RevisionID: string(m.RevisionID), AccountID: string(m.AccountID), ConversationID: string(m.ConversationID), ProviderID: m.ProviderID, IsOwn: number(m.IsOwn), State: m.SendState, Payload: jsonText(m)}); err != nil {
+	if err := q.InsertMessage(ctx, dbgen.InsertMessageParams{ID: string(m.ID), RevisionID: string(m.RevisionID), AccountID: string(m.AccountID), ConversationID: string(m.ConversationID), ProviderID: m.ProviderID, IsOwn: number(m.IsOwn), State: m.SendState, Payload: jsonText(m), CreatedAtMs: m.CreatedAt.UnixMilli()}); err != nil {
 		return err
 	}
 	if err := q.InsertMessageRevision(ctx, dbgen.InsertMessageRevisionParams{ID: string(m.RevisionID), EntityID: string(m.ID), Parents: "[]", Payload: jsonText(m), CreatedAt: stamp(m.CreatedAt)}); err != nil {
@@ -111,9 +111,14 @@ func insertMessage(ctx context.Context, q *dbgen.Queries, m domain.Message) erro
 func updateConversation(ctx context.Context, q *dbgen.Queries, c domain.Conversation, m domain.Message, revision domain.ID, at time.Time) error {
 	parents := jsonText([]domain.ID{c.RevisionID})
 	c.RevisionID = revision
-	c.LastMessage = m.OriginalText
-	c.UpdatedAt = at
-	if !m.IsOwn {
+	if m.Historical && c.LastMessage != "" && m.CreatedAt.Before(c.UpdatedAt) {
+		return nil
+	}
+	if c.LastMessage == "" || !m.CreatedAt.Before(c.UpdatedAt) {
+		c.LastMessage = m.OriginalText
+		c.UpdatedAt = m.CreatedAt
+	}
+	if !m.IsOwn && !m.Historical {
 		c.UnreadCount++
 	}
 	seq, err := change(ctx, q, "conversation.updated", c, at)
@@ -171,7 +176,7 @@ func (s *Store) Message(ctx context.Context, id domain.ID) (domain.Message, erro
 	return decodeMessage(row)
 }
 func (s *Store) Messages(ctx context.Context, id, cursor domain.ID, limit int) ([]domain.Message, error) {
-	rows, err := s.queries.ListMessages(ctx, dbgen.ListMessagesParams{ConversationID: string(id), Cursor: string(cursor), PageLimit: int64(limit)})
+	rows, err := s.queries.ListMessages(ctx, dbgen.ListMessagesParams{PageConversationID: string(id), PageCursor: string(cursor), PageLimit: int64(limit)})
 	if err != nil {
 		return nil, err
 	}
@@ -198,6 +203,15 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if err = q.AcquireWriteLock(ctx); err != nil {
 		return err
 	}
+	if m.ArchiveID != "" {
+		_, err = q.GetArchiveAlias(ctx, dbgen.GetArchiveAliasParams{AccountID: string(m.AccountID), Scope: m.ArchiveScope, ArchiveID: m.ArchiveID})
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+	}
 	row, err := q.FindConversation(ctx, dbgen.FindConversationParams{AccountID: string(c.AccountID), Address: c.Address})
 	if err == nil {
 		c, err = decodeConversation(row)
@@ -212,15 +226,22 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		m.Sender.ID = c.PeerID
 	}
 	if m.ProviderID != "" {
-		_, err = q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{AccountID: string(m.AccountID), ConversationID: string(c.ID), ProviderID: m.ProviderID, IsOwn: number(m.IsOwn)})
+		var existing dbgen.Message
+		existing, err = q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{AccountID: string(m.AccountID), ConversationID: string(c.ID), ProviderID: m.ProviderID, IsOwn: number(m.IsOwn)})
 		if err == nil {
-			return nil
+			if err = archiveAlias(ctx, q, m, existing.ID); err != nil {
+				return err
+			}
+			return tx.Commit()
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
 	}
 	if err = insertMessage(ctx, q, m); err != nil {
+		return err
+	}
+	if err = archiveAlias(ctx, q, m, string(m.ID)); err != nil {
 		return err
 	}
 	if err = updateConversation(ctx, q, c, m, revision, at); err != nil {

@@ -8,7 +8,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 const engine=id(1),account=id(2),chat=id(3);
 (async()=>{
  const state={messages:[],operations:new Map(),effects:0,cancelEffects:0,seq:0,connection:'not_connected',error:null};const streams=new Set();
- const conversation=()=>({id:chat,revisionId:id(4),accountId:account,kind:'direct',address:'bob@localhost',title:'Bob',lastMessage:state.messages.at(-1)?.originalText||'',updatedAt:'2026-11-07T20:00:00Z',unreadCount:0,archived:false,favorite:false});
+ const conversation=()=>({id:chat,revisionId:id(4),accountId:account,kind:state.showRoom?'room':'direct',address:state.showRoom?'saved@conference.localhost':'bob@localhost',title:state.showRoom?'Saved room':'Bob',lastMessage:state.messages.at(-1)?.originalText||'',updatedAt:'2026-11-07T20:00:00Z',unreadCount:0,archived:false,favorite:false});
  const accountData={id:account,revisionId:id(5),address:'alice@localhost',protocol:'xmpp',label:'Alice test',createdAt:'2026-11-07T18:00:00Z',connectionState:'not_connected'};
  const emit=(type,message)=>{state.seq++;const event={id:engine+':'+state.seq,type,occurredAt:new Date().toISOString(),message};for(const stream of streams)stream.write(`id: ${event.id}\nevent: ${type}\ndata: ${JSON.stringify(event)}\n\n`)};
  const api=http.createServer(async(req,res)=>{
@@ -18,6 +18,7 @@ const engine=id(1),account=id(2),chat=id(3);
   let raw='';for await(const chunk of req)raw+=chunk;let input={};try{if(raw)input=JSON.parse(raw)}catch{return problem(400,'invalid_request')}
   if(u.pathname==='/api/v1/engine')return write(200,{id:engine,role:'hosted',apiVersion:'0.2.0',eventCursor:engine+':'+state.seq});
   if(u.pathname==='/api/v1/accounts')return write(200,{items:[accountData]});
+  if(u.pathname==='/api/v1/accounts/'+account+'/history')return write(200,{accountId:account,state:state.showRoom?'partial':'syncing',retainedMessages:state.messages.length,conversations:1,updatedAt:new Date().toISOString()});
   if(u.pathname==='/api/v1/accounts/'+account+'/connection'){
    if(req.method==='PUT'){state.connection='error';state.error='authentication_failed';emit('account.connection_changed');return write(202,{accountId:account,state:'error',lastErrorCode:state.error,updatedAt:new Date().toISOString()})}
    return write(200,{accountId:account,state:state.connection,lastErrorCode:state.error||undefined,updatedAt:new Date().toISOString()});
@@ -75,6 +76,12 @@ const engine=id(1),account=id(2),chat=id(3);
   await until(async()=>await page.getByText('Authentication failed. Check the password.',{exact:true}).count()>0,'actual authentication error');assert.equal(await connect.locator('[name=password]').inputValue(),'');
   assert(!(await page.content()).includes('never-journal-this-secret'));assert(!(await page.evaluate(()=>JSON.stringify(localStorage))).includes('never-journal-this-secret'));
   findings.push('Authentication error remains visible; passwords are cleared and absent from markup/journals');
+  state.showRoom=true;await page.goto(base+'/?chat='+chat+'&account='+account+'&lang=en');
+  assert(await page.locator('#message-composer').isDisabled());assert(await page.locator('[data-room-readonly]').isVisible());
+  assert((await page.locator('#history-status').textContent()).includes('Some history is unavailable'));
+  const guarded=await page.evaluate(async()=>{const form=document.querySelector('#send-message-form');const values=new URLSearchParams(new FormData(form));values.set('originalText','forged room send');const response=await fetch(form.action,{method:'POST',headers:{Accept:'application/json'},body:values});return {status:response.status,body:await response.json()}});
+  assert.equal(guarded.status,409);assert.equal(guarded.body.code,'read_only');assert.equal(state.effects,1);
+  findings.push('Recovered room is read-only even for a forged valid-CSRF send; partial history is visible');state.showRoom=false;
   const denied=await browser.newContext({viewport:{width:390,height:844},locale:'pt-BR',timezoneId:'America/Sao_Paulo'});
   await denied.addInitScript(()=>{for(const name of ['getItem','setItem','removeItem'])Object.defineProperty(Storage.prototype,name,{configurable:true,value(){throw new DOMException('Denied','SecurityError')}})});
   const mobile=await denied.newPage();mobile.on('pageerror',e=>errors.push(e.message));await mobile.goto(base+'/?chat='+chat+'&lang=pt-BR&theme=dark');await mobile.locator('#message-composer').fill('Envio com armazenamento indisponível');await mobile.locator('[data-send-message]').click();await until(async()=>await mobile.locator('#message-composer').inputValue()==='','denied-storage send');assert.equal(state.effects,2);assert(await mobile.locator('.oie-storage-warning').isVisible());

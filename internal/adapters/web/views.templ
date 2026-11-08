@@ -82,12 +82,16 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 						@avatar.Avatar(avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeLG})
 						<h2>{ v.Selected.Title }</h2>
 						<p>{ v.accountLabel(v.Selected.AccountId) }</p>
+if v.Selected.Kind=="direct" {
 						<h3>{ v.Text.Participants }</h3>
 						<ul>
 							for _,name:=range participantNames(*v.Selected) {
 								<li>{ name }</li>
 							}
 						</ul>
+}else{
+<p>{v.Selected.Address}</p>
+}
 					</div>
 				}
 			}
@@ -188,6 +192,7 @@ templ workspace(v view) {
 				@filterLink(v, "favorites", v.Text.Favorites)
 				@filterLink(v, "groups", v.Text.Groups)
 			</nav>
+<div id="history-status" class="oie-history-status" role="status">@historyBanner(v)</div>
 <div class="oie-conversation-scroll" id="conversation-list">
 @conversationList(v)
 </div>
@@ -333,6 +338,9 @@ templ composer(v view){
 @textarea.Textarea(textarea.Config{ID:"message-composer",Name:"originalText",Value:v.field("originalText"),Rows:1,Placeholder:v.Text.Message,Disabled:!v.sendAllowed(),RootClass:"oie-composer-input",InputAttrs:templ.Attributes{"aria-label":v.Text.Message,"style":"resize:none;min-height:2.7rem;background:var(--oie-raised);border-color:var(--oie-border);border-radius:1.5rem;color:var(--oie-text)"}})
 @button.Button(button.WithType("submit"),button.WithRootClass("oie-icon-button oie-send"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Send,"data-send-message":"","disabled":!v.sendAllowed()})){@glyph(heroicons.Icon16SolidArrowUp)}
 </div>
+if v.Selected.Kind=="room" {
+<p class="oie-room-readonly" data-room-readonly>{v.Text.RoomReadOnly}</p>
+}
 <div class="oie-composer-feedback" data-form-feedback role="status" aria-live="polite"></div>
 </form>
 }
@@ -436,6 +444,7 @@ templ accountDetail(v view,a engineapi.Account){
 @avatar.Avatar(avatar.Config{Name:a.Label,Size:avatar.SizeLG})
 <div><h2>{a.Label}</h2><p>{a.Address}</p></div>
 </header>
+<p class="oie-history-status">{v.historyCaption(a.Id)}</p>
 <div class="oie-account-connection" id={"connection-status-"+a.Id}>@connectionStatus(v,a.Id)</div>
 @form.Form(form.Config{ID:"connect-"+a.Id,Action:"/ui/accounts/connect",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"connect","data-connect-account":""}}){
 @mutationFields(v,"connect-"+a.Id,newOperationKey())
@@ -498,6 +507,7 @@ templ liveCopy(v view){
 }
 templ liveRegions(v view){
 <div id="oie-live-regions" data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
+<div id="live-history-status">@historyBanner(v)</div>
 <div id="live-list">@conversationList(v)</div>
 <div id="live-timeline" data-version={v.timelineVersion()}>@timeline(v)</div>
 <div id="live-header" data-version={v.headerVersion()}>
@@ -544,7 +554,7 @@ for _,c:=range v.Chats {
 templ timeline(v view){
 <div class="oie-day-divider"><span>{v.Text.Today}</span></div>
 for index,m:=range v.Messages {
-@message(v,m,index>0&&v.Messages[index-1].Sender.Id==m.Sender.Id&&v.Messages[index-1].IsOwn==m.IsOwn&&v.Messages[index-1].Attachment==nil&&m.Attachment==nil)
+@message(v,m,index>0&&v.Messages[index-1].Sender.Id==m.Sender.Id&&v.Messages[index-1].Sender.DisplayName==m.Sender.DisplayName&&v.Messages[index-1].IsOwn==m.IsOwn&&v.Messages[index-1].Attachment==nil&&m.Attachment==nil)
 }
 }
 
@@ -555,4 +565,16 @@ templ nativeRecovery(v view){
 @textarea.Textarea(textarea.Config{ID:"native-retained-message",Name:"originalText",Label:v.Text.Message,Value:v.field("originalText"),ReadOnly:true,Rows:4})
 @button.Button(button.WithType("submit")){ {v.Text.RetrySubmission} }
 </form>
+}
+
+templ historyBanner(v view){
+if v.AccountFilter!="" {
+{v.historyCaption(v.AccountFilter)}
+}else{
+for _,a:=range v.Accounts {
+if h,ok:=v.Histories[a.Id];ok&&(h.State=="syncing"||h.State=="partial"||h.State=="error") {
+<p>{a.Label}: {v.historyCaption(a.Id)}</p>
+}
+}
+}
 }

@@ -126,10 +126,14 @@ func TestDevelopmentServerMessageExchange(t *testing.T) {
 		t.Fatal("connected adapter did not expose actual direct-text availability")
 	}
 	opened, err := client.OpenConversationWithResponse(ctx, &engineapi.OpenConversationParams{IdempotencyKey: string(id())}, engineapi.OpenConversationJSONRequestBody{AccountId: alice, Address: "bob@localhost"})
-	if err != nil || opened.JSON201 == nil {
+	if err != nil || (opened.JSON201 == nil && opened.JSON200 == nil) {
 		t.Fatalf("conversation: %v %#v", err, opened)
 	}
-	conversation := opened.JSON201.Id
+	openedConversation := opened.JSON201
+	if openedConversation == nil {
+		openedConversation = opened.JSON200
+	}
+	conversation := openedConversation.Id
 	send := func(key, text string) engineapi.Message {
 		t.Helper()
 		res, err := client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, engineapi.SendMessageJSONRequestBody{OriginalText: text})
@@ -163,11 +167,32 @@ func TestDevelopmentServerMessageExchange(t *testing.T) {
 		res, err := client.GetMessageWithResponse(ctx, sent.Id)
 		return err == nil && res.JSON200 != nil && res.JSON200.SendState == "submitted"
 	})
+	countBody := func(items []engineapi.Message, body string) int {
+		n := 0
+		for _, m := range items {
+			if m.OriginalText == body {
+				n++
+			}
+		}
+		return n
+	}
+	eventually(t, func() bool {
+		r, err := client.ListMessagesWithResponse(ctx, receivedConversation, nil)
+		return err == nil && r.JSON200 != nil && countBody(r.JSON200.Items, text) == 1
+	})
 	got, err := client.ListMessagesWithResponse(ctx, receivedConversation, nil)
-	if err != nil || got.JSON200 == nil || len(got.JSON200.Items) != 1 || got.JSON200.Items[0].OriginalText != text || got.JSON200.Items[0].IsOwn || got.JSON200.Items[0].SendState != "received" {
+	var received engineapi.Message
+	if got != nil && got.JSON200 != nil {
+		for _, m := range got.JSON200.Items {
+			if m.OriginalText == text {
+				received = m
+			}
+		}
+	}
+	if err != nil || got.JSON200 == nil || countBody(got.JSON200.Items, text) != 1 || received.IsOwn || received.SendState != "received" {
 		t.Fatalf("actual receive lost/duplicated/corrupted body: %v %#v", err, got)
 	}
-	if got.JSON200.Items[0].AccountId != bob || got.JSON200.Items[0].Sender.DisplayName != "alice@localhost" {
+	if received.AccountId != bob || received.Sender.DisplayName != "alice@localhost" {
 		t.Fatal("account/sender scope lost")
 	}
 	// A disconnected owner's send must persist and wait, not claim submission.
@@ -193,7 +218,7 @@ func TestDevelopmentServerMessageExchange(t *testing.T) {
 	})
 	eventually(t, func() bool {
 		r, err := client.ListMessagesWithResponse(ctx, receivedConversation, nil)
-		return err == nil && r.JSON200 != nil && len(r.JSON200.Items) == 2
+		return err == nil && r.JSON200 != nil && countBody(r.JSON200.Items, queued.OriginalText) == 1
 	})
 	blocked, err := client.CancelMessageWithResponse(ctx, queued.Id, &engineapi.CancelMessageParams{IdempotencyKey: string(id())}, engineapi.CancelMessageJSONRequestBody{ExpectedRevisionId: queued.RevisionId})
 	if err != nil || blocked.StatusCode() != 409 {
@@ -211,7 +236,7 @@ func TestDevelopmentServerMessageExchange(t *testing.T) {
 	})
 	eventually(t, func() bool {
 		r, err := client.ListMessagesWithResponse(ctx, receivedConversation, nil)
-		return err == nil && r.JSON200 != nil && len(r.JSON200.Items) == 3
+		return err == nil && r.JSON200 != nil && countBody(r.JSON200.Items, networkQueued.OriginalText) == 1
 	})
 	// A real server rejection is failure evidence, distinct from stream write success.
 	invalid, err := client.OpenConversationWithResponse(ctx, &engineapi.OpenConversationParams{IdempotencyKey: string(id())}, engineapi.OpenConversationJSONRequestBody{AccountId: alice, Address: "nonexistent-" + string(id()) + "@localhost"})
@@ -253,8 +278,19 @@ func TestDevelopmentServerMessageExchange(t *testing.T) {
 	}
 	// Stored history is independent from protocol server retention.
 	persisted, err := store.Messages(ctx, domain.ID(receivedConversation), "", 100)
-	if err != nil || len(persisted) != 3 {
-		t.Fatal("incoming message history not persisted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{text, queued.OriginalText, networkQueued.OriginalText} {
+		count := 0
+		for _, m := range persisted {
+			if m.OriginalText == want {
+				count++
+			}
+		}
+		if count != 1 {
+			t.Fatal("incoming history missing or duplicated")
+		}
 	}
 }
 

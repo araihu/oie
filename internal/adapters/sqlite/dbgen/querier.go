@@ -13,11 +13,16 @@ type Querier interface {
 	FindConversation(ctx context.Context, arg FindConversationParams) (Conversation, error)
 	FindProviderMessage(ctx context.Context, arg FindProviderMessageParams) (Message, error)
 	GetAccount(ctx context.Context, id string) (string, error)
+	GetArchiveAlias(ctx context.Context, arg GetArchiveAliasParams) (string, error)
+	GetArchiveCheckpoint(ctx context.Context, arg GetArchiveCheckpointParams) (string, error)
 	GetConversation(ctx context.Context, id string) (Conversation, error)
+	GetHistoryCounts(ctx context.Context, ownerID string) (GetHistoryCountsRow, error)
+	GetHistoryStatus(ctx context.Context, accountID string) (string, error)
 	GetMessage(ctx context.Context, id string) (Message, error)
 	GetOperation(ctx context.Context, id string) (Operation, error)
 	InsertAccount(ctx context.Context, arg InsertAccountParams) error
 	InsertAccountRevision(ctx context.Context, arg InsertAccountRevisionParams) error
+	InsertArchiveAlias(ctx context.Context, arg InsertArchiveAliasParams) error
 	InsertChange(ctx context.Context, arg InsertChangeParams) (int64, error)
 	InsertConversation(ctx context.Context, arg InsertConversationParams) error
 	InsertConversationRevision(ctx context.Context, arg InsertConversationRevisionParams) error
@@ -32,6 +37,8 @@ type Querier interface {
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
 	PendingMessages(ctx context.Context, nextAttemptAt string) ([]Message, error)
+	PutArchiveCheckpoint(ctx context.Context, arg PutArchiveCheckpointParams) error
+	PutHistoryStatus(ctx context.Context, arg PutHistoryStatusParams) error
 	SetOperationResult(ctx context.Context, arg SetOperationResultParams) error
 	Snapshot(ctx context.Context) (SnapshotRow, error)
 	UpdateConversation(ctx context.Context, arg UpdateConversationParams) error

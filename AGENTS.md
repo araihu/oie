@@ -10,4 +10,4 @@ Read docs/oie-spec.md before changing behavior. Keep agreed requirements, recomm
 - Keep user-facing expressions localized in English and Brazilian Portuguese from the start.
 - Use a managed worktree for feature implementation; preserve unrelated changes.
 - Run make check and relevant integration checks before presenting changes. Document unavailable checks precisely.
-- Keep implementation claims tied to verified scope. Foundation work alone is not live messaging. The current basic engine/live UI support direct text; do not claim MAM history backfill, media transfer, schedules, sync, PWA/offline queues, or backlog features until implemented and verified.
+- Keep implementation claims tied to verified scope. Foundation work alone is not live messaging. The current engine/live UI support direct text, serial authorized text archive recovery, and read-only saved rooms. Do not claim full room membership/sending, media transfer, schedules, sync, PWA/offline queues, or other backlog features until implemented and verified.

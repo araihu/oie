@@ -13,6 +13,19 @@ type Account struct {
 	CreatedAt  string
 }
 
+type ArchiveAlias struct {
+	AccountID string
+	Scope     string
+	ArchiveID string
+	MessageID string
+}
+
+type ArchiveCheckpoint struct {
+	AccountID string
+	Scope     string
+	AfterID   string
+}
+
 type Change struct {
 	Sequence   int64
 	Payload    string
@@ -46,6 +59,11 @@ type EngineIdentity struct {
 	ID        string
 }
 
+type HistoryStatus struct {
+	AccountID string
+	Payload   string
+}
+
 type Message struct {
 	ID             string
 	RevisionID     string
@@ -55,6 +73,7 @@ type Message struct {
 	IsOwn          int64
 	State          string
 	Payload        string
+	CreatedAtMs    int64
 }
 
 type MessageRevision struct {

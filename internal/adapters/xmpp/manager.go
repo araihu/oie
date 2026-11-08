@@ -34,27 +34,30 @@ type configuration struct {
 	Enabled            bool
 }
 type entry struct {
-	account domain.Account
-	config  configuration
-	cancel  context.CancelFunc
-	mu      sync.RWMutex
-	state   domain.Connection
-	session *mx.Session
-	raw     net.Conn
+	account   domain.Account
+	config    configuration
+	cancel    context.CancelFunc
+	mu        sync.RWMutex
+	state     domain.Connection
+	session   *mx.Session
+	raw       net.Conn
+	historyMu sync.Mutex
+	archive   *archiveQuery
 }
 type Manager struct {
-	dir     string
-	roots   *x509.CertPool
-	mu      sync.RWMutex
-	entries map[domain.ID]*entry
-	ctx     context.Context
-	cancel  context.CancelFunc
-	host    application.ProtocolHost
-	workers sync.WaitGroup
+	dir         string
+	roots       *x509.CertPool
+	mu          sync.RWMutex
+	entries     map[domain.ID]*entry
+	ctx         context.Context
+	cancel      context.CancelFunc
+	host        application.ProtocolHost
+	workers     sync.WaitGroup
+	historyGate chan struct{}
 }
 
 func New(dir string, roots *x509.CertPool) *Manager {
-	return &Manager{dir: dir, roots: roots, entries: make(map[domain.ID]*entry)}
+	return &Manager{dir: dir, roots: roots, entries: make(map[domain.ID]*entry), historyGate: make(chan struct{}, 1)}
 }
 func (m *Manager) NormalizeAddress(protocol, address string) (string, error) {
 	if protocol != "xmpp" {
@@ -281,10 +284,14 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 				return
 			}
 			if err = m.publish(ctx, e, "connected", ""); err == nil {
+				historyCtx, historyCancel := context.WithCancel(ctx)
+				m.workers.Add(1)
+				go func() { defer m.workers.Done(); m.historyLoop(historyCtx, e, session) }()
 				delay = time.Second
 				err = session.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
 					return m.handle(ctx, e, tokens, start)
 				}))
+				historyCancel()
 			}
 			_ = raw.Close()
 			e.mu.Lock()
@@ -430,7 +437,7 @@ type boundedTokens struct {
 
 func (b *boundedTokens) Token() (xml.Token, error) {
 	token, err := b.reader.Token()
-	if err != nil {
+	if err != nil && !(err == io.EOF && token != nil) {
 		return token, err
 	}
 	switch t := token.(type) {
@@ -456,13 +463,17 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 	case "message":
 		var msg struct {
 			stanza.Message
-			Body  string `xml:"jabber:client body"`
-			Delay struct {
+			Body    string         `xml:"jabber:client body"`
+			Archive *archiveResult `xml:"urn:xmpp:mam:2 result"`
+			Delay   struct {
 				Stamp string `xml:"stamp,attr"`
 			} `xml:"urn:xmpp:delay delay"`
 		}
 		if err := decoder.Decode(&msg); err != nil {
 			return err
+		}
+		if msg.Archive != nil {
+			return m.captureArchive(e, msg.Message, msg.Archive)
 		}
 		if msg.Type == stanza.ErrorMessage {
 			own, _ := jid.Parse(e.account.Address)

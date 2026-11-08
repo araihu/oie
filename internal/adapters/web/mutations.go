@@ -253,6 +253,9 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 	if conversation.JSON200 == nil {
 		return conversation.StatusCode(), problemResult(text, conversation.StatusCode(), conversation.Body)
 	}
+	if conversation.JSON200.Kind != "direct" {
+		return 409, mutationResult{Message: text.RoomReadOnly, Code: "read_only", Rejected: true}
+	}
 	if conversation.JSON200.AccountId != r.Form.Get("accountId") {
 		return 409, mutationResult{Message: text.OperationConflict}
 	}

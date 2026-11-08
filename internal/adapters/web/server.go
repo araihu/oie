@@ -6,6 +6,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -81,6 +82,7 @@ type view struct {
 	AccountUnread                                         map[string]int
 	AccountPage, ManagedAccount                           string
 	Connections                                           map[string]connectionView
+	Histories                                             map[string]engineapi.HistoryStatus
 	Next                                                  string
 	Unavailable, NotFound, Preview, ChatOpen              bool
 	Section, Filter, Query, ChatID, AccountFilter         string
@@ -92,33 +94,34 @@ type view struct {
 }
 
 type copy struct {
-	Accounts, EmptyTitle, EmptyBody, NotConnected, Conversations                       string
-	Unavailable, UnavailableBody, Retry, Local, Hosted                                 string
-	Skip, Languages, Appearance, System, Light                                         string
-	Dark, Next, English, Portuguese, NotFound                                          string
-	NotFoundBody, Chats, Favorites, Archived, SharedMedia                              string
-	SwitchAccount, ManageAccounts                                                      string
-	BackToAccounts, AdvancedConnection, AccountMissing, AddAccountHelp                 string
-	Settings, You, All, Unread, Groups                                                 string
-	SearchChats, NoResults, NoResultsBody, NewChat, More                               string
-	Preview, PreviewNote, Message, Send, Attach                                        string
-	SendingUnavailable, Back, Today, Navigation, Active                                string
-	OpenNavigation, Close, Details, Participants, MediaEmpty                           string
-	MediaBody, SelectChat, SelectChatBody, EngineState, AccountHelp                    string
-	PreviewOnly, ThemeHelp, LanguageHelp, NoChats, NoChatsBody                         string
-	AddAccount, AccountAddress, AccountLabel, AddressPlaceholder, LabelPlaceholder     string
-	RegisterAccount, Password, PasswordHelp, Endpoint, EndpointHelp                    string
-	Connect, Disconnect, Connected, Connecting, ConnectionError                        string
-	ConnectionUnknown, AuthFailed, TLSFailed, ConnectionFailed, ChooseAccount          string
-	AllAccounts, PeerAddress, StartConversation, AccountSaved, ConnectionRequested     string
-	Disconnected, Queued, Dispatching, Submitted, UnknownSend                          string
-	FailedSend, Cancelled, SubmittedHint, UnknownHint, CancelSend                      string
-	CancelConflict, CancelSuccess, MessageAccepted, PendingAcceptance, RetrySubmission string
-	Saving, InvalidForm, InvalidMessage, CSRFError, OperationConflict                  string
-	AccountExists, EngineChanged, LiveConnecting, LiveReady, LiveRetry                 string
-	NewMessages, QueueHelp, DraftStorageUnavailable, DraftLocked, MessageUnavailable   string
-	MediaUnavailable, NativeError, NewerHistory, ShowPassword, ChooseOption            string
-	ValidationFailed, Edit, Done                                                       string
+	Accounts, EmptyTitle, EmptyBody, NotConnected, Conversations                                    string
+	Unavailable, UnavailableBody, Retry, Local, Hosted                                              string
+	Skip, Languages, Appearance, System, Light                                                      string
+	Dark, Next, English, Portuguese, NotFound                                                       string
+	NotFoundBody, Chats, Favorites, Archived, SharedMedia                                           string
+	HistorySyncing, HistoryPartial, HistoryUnsupported, HistoryComplete, HistoryCount, RoomReadOnly string
+	SwitchAccount, ManageAccounts                                                                   string
+	BackToAccounts, AdvancedConnection, AccountMissing, AddAccountHelp                              string
+	Settings, You, All, Unread, Groups                                                              string
+	SearchChats, NoResults, NoResultsBody, NewChat, More                                            string
+	Preview, PreviewNote, Message, Send, Attach                                                     string
+	SendingUnavailable, Back, Today, Navigation, Active                                             string
+	OpenNavigation, Close, Details, Participants, MediaEmpty                                        string
+	MediaBody, SelectChat, SelectChatBody, EngineState, AccountHelp                                 string
+	PreviewOnly, ThemeHelp, LanguageHelp, NoChats, NoChatsBody                                      string
+	AddAccount, AccountAddress, AccountLabel, AddressPlaceholder, LabelPlaceholder                  string
+	RegisterAccount, Password, PasswordHelp, Endpoint, EndpointHelp                                 string
+	Connect, Disconnect, Connected, Connecting, ConnectionError                                     string
+	ConnectionUnknown, AuthFailed, TLSFailed, ConnectionFailed, ChooseAccount                       string
+	AllAccounts, PeerAddress, StartConversation, AccountSaved, ConnectionRequested                  string
+	Disconnected, Queued, Dispatching, Submitted, UnknownSend                                       string
+	FailedSend, Cancelled, SubmittedHint, UnknownHint, CancelSend                                   string
+	CancelConflict, CancelSuccess, MessageAccepted, PendingAcceptance, RetrySubmission              string
+	Saving, InvalidForm, InvalidMessage, CSRFError, OperationConflict                               string
+	AccountExists, EngineChanged, LiveConnecting, LiveReady, LiveRetry                              string
+	NewMessages, QueueHelp, DraftStorageUnavailable, DraftLocked, MessageUnavailable                string
+	MediaUnavailable, NativeError, NewerHistory, ShowPassword, ChooseOption                         string
+	ValidationFailed, Edit, Done                                                                    string
 }
 
 func loadCatalogs() (map[string]copy, error) {
@@ -200,7 +203,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, v)
 }
 func (s *Server) baseView(r *http.Request) view {
-	v := view{Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system"), Connections: map[string]connectionView{}, Values: map[string]string{}}
+	v := view{Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system"), Connections: map[string]connectionView{}, Histories: map[string]engineapi.HistoryStatus{}, Values: map[string]string{}}
 	v.Text = s.catalogs[v.Locale]
 	v.configureWorkspace(r)
 	return v
@@ -231,6 +234,12 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	v.Accounts = accounts.JSON200.Items
 	v.AccountUnread = s.accountUnread(ctx)
 	for _, a := range v.Accounts {
+		if !v.Preview {
+			h, err := s.client.GetAccountHistoryWithResponse(ctx, a.Id, editor)
+			if err == nil && h.JSON200 != nil {
+				v.Histories[a.Id] = *h.JSON200
+			}
+		}
 		connection, err := s.client.GetAccountConnectionWithResponse(ctx, a.Id, editor)
 		if err == nil && connection.JSON200 != nil {
 			v.Connections[a.Id] = connectionView{Known: true, Value: *connection.JSON200}
@@ -405,7 +414,7 @@ func (v view) accountVersion() string {
 	return out.String()
 }
 func (v view) sendAllowed() bool {
-	return !v.Preview && v.Selected != nil && v.account(v.Selected.AccountId).Address != "" && !v.Unavailable
+	return !v.Preview && v.Selected != nil && v.Selected.Kind == "direct" && v.account(v.Selected.AccountId).Address != "" && !v.Unavailable
 }
 func (v view) csrfFields() map[string]string {
 	return map[string]string{"csrf": v.CSRF, "engineId": v.EngineID, "returnTo": v.href()}
@@ -541,4 +550,25 @@ func (v view) activeAccountAddress() string {
 		return v.account(v.AccountFilter).Address
 	}
 	return v.Text.SwitchAccount
+}
+
+func (v view) historyCaption(id string) string {
+	h, ok := v.Histories[id]
+	if !ok {
+		return ""
+	}
+	label := ""
+	switch h.State {
+	case "syncing":
+		label = v.Text.HistorySyncing
+	case "partial", "error":
+		label = v.Text.HistoryPartial
+	case "unsupported":
+		label = v.Text.HistoryUnsupported
+	case "complete":
+		label = v.Text.HistoryComplete
+	default:
+		return ""
+	}
+	return label + " · " + fmt.Sprintf(v.Text.HistoryCount, h.RetainedMessages)
 }

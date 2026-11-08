@@ -19,7 +19,7 @@ AND (CAST(sqlc.arg(kind) AS TEXT)='' OR json_extract(payload,'$.Kind')=CAST(sqlc
 AND (CAST(sqlc.arg(query) AS TEXT)='' OR instr(lower(address || ' ' || json_extract(payload,'$.Title') || ' ' || json_extract(payload,'$.LastMessage')), lower(CAST(sqlc.arg(query) AS TEXT)))>0)
 ORDER BY activity_sequence DESC LIMIT sqlc.arg(page_limit);
 -- name: InsertMessage :exec
-INSERT INTO messages(id,revision_id,account_id,conversation_id,provider_id,is_own,state,payload) VALUES(?,?,?,?,?,?,?,?);
+INSERT INTO messages(id,revision_id,account_id,conversation_id,provider_id,is_own,state,payload,created_at_ms) VALUES(?,?,?,?,?,?,?,?,?);
 -- name: InsertMessageRevision :exec
 INSERT INTO message_revisions(id,entity_id,parents,payload,created_at) VALUES(?,?,?,?,?);
 -- name: GetMessage :one
@@ -27,7 +27,11 @@ SELECT * FROM messages WHERE id=?;
 -- name: FindProviderMessage :one
 SELECT * FROM messages WHERE account_id=? AND conversation_id=? AND provider_id=? AND is_own=?;
 -- name: ListMessages :many
-SELECT * FROM messages WHERE conversation_id=sqlc.arg(conversation_id) AND (CAST(sqlc.arg(cursor) AS TEXT)='' OR id<CAST(sqlc.arg(cursor) AS TEXT)) ORDER BY id DESC LIMIT sqlc.arg(page_limit);
+SELECT m.* FROM messages AS m WHERE m.conversation_id=sqlc.arg(page_conversation_id) AND (
+CAST(sqlc.arg(page_cursor) AS TEXT)='' OR
+m.created_at_ms<(SELECT x.created_at_ms FROM messages AS x WHERE x.id=CAST(sqlc.arg(page_cursor) AS TEXT) AND x.conversation_id=sqlc.arg(page_conversation_id)) OR
+(m.created_at_ms=(SELECT x.created_at_ms FROM messages AS x WHERE x.id=CAST(sqlc.arg(page_cursor) AS TEXT) AND x.conversation_id=sqlc.arg(page_conversation_id)) AND m.id<CAST(sqlc.arg(page_cursor) AS TEXT))
+) ORDER BY m.created_at_ms DESC,m.id DESC LIMIT sqlc.arg(page_limit);
 -- name: UpdateMessage :exec
 UPDATE messages SET revision_id=?,state=?,payload=? WHERE id=?;
 -- name: InsertOutbox :exec

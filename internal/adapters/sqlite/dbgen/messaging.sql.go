@@ -46,7 +46,7 @@ func (q *Queries) FindConversation(ctx context.Context, arg FindConversationPara
 }
 
 const findProviderMessage = `-- name: FindProviderMessage :one
-SELECT id, revision_id, account_id, conversation_id, provider_id, is_own, state, payload FROM messages WHERE account_id=? AND conversation_id=? AND provider_id=? AND is_own=?
+SELECT id, revision_id, account_id, conversation_id, provider_id, is_own, state, payload, created_at_ms FROM messages WHERE account_id=? AND conversation_id=? AND provider_id=? AND is_own=?
 `
 
 type FindProviderMessageParams struct {
@@ -73,6 +73,7 @@ func (q *Queries) FindProviderMessage(ctx context.Context, arg FindProviderMessa
 		&i.IsOwn,
 		&i.State,
 		&i.Payload,
+		&i.CreatedAtMs,
 	)
 	return i, err
 }
@@ -100,7 +101,7 @@ func (q *Queries) GetConversation(ctx context.Context, id string) (Conversation,
 }
 
 const getMessage = `-- name: GetMessage :one
-SELECT id, revision_id, account_id, conversation_id, provider_id, is_own, state, payload FROM messages WHERE id=?
+SELECT id, revision_id, account_id, conversation_id, provider_id, is_own, state, payload, created_at_ms FROM messages WHERE id=?
 `
 
 func (q *Queries) GetMessage(ctx context.Context, id string) (Message, error) {
@@ -115,6 +116,7 @@ func (q *Queries) GetMessage(ctx context.Context, id string) (Message, error) {
 		&i.IsOwn,
 		&i.State,
 		&i.Payload,
+		&i.CreatedAtMs,
 	)
 	return i, err
 }
@@ -170,7 +172,7 @@ func (q *Queries) InsertConversationRevision(ctx context.Context, arg InsertConv
 }
 
 const insertMessage = `-- name: InsertMessage :exec
-INSERT INTO messages(id,revision_id,account_id,conversation_id,provider_id,is_own,state,payload) VALUES(?,?,?,?,?,?,?,?)
+INSERT INTO messages(id,revision_id,account_id,conversation_id,provider_id,is_own,state,payload,created_at_ms) VALUES(?,?,?,?,?,?,?,?,?)
 `
 
 type InsertMessageParams struct {
@@ -182,6 +184,7 @@ type InsertMessageParams struct {
 	IsOwn          int64
 	State          string
 	Payload        string
+	CreatedAtMs    int64
 }
 
 func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) error {
@@ -194,6 +197,7 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) er
 		arg.IsOwn,
 		arg.State,
 		arg.Payload,
+		arg.CreatedAtMs,
 	)
 	return err
 }
@@ -236,7 +240,7 @@ func (q *Queries) InsertOutbox(ctx context.Context, arg InsertOutboxParams) erro
 }
 
 const interruptedMessages = `-- name: InterruptedMessages :many
-SELECT id, revision_id, account_id, conversation_id, provider_id, is_own, state, payload FROM messages WHERE state='dispatching'
+SELECT id, revision_id, account_id, conversation_id, provider_id, is_own, state, payload, created_at_ms FROM messages WHERE state='dispatching'
 `
 
 func (q *Queries) InterruptedMessages(ctx context.Context) ([]Message, error) {
@@ -257,6 +261,7 @@ func (q *Queries) InterruptedMessages(ctx context.Context) ([]Message, error) {
 			&i.IsOwn,
 			&i.State,
 			&i.Payload,
+			&i.CreatedAtMs,
 		); err != nil {
 			return nil, err
 		}
@@ -338,17 +343,21 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 }
 
 const listMessages = `-- name: ListMessages :many
-SELECT id, revision_id, account_id, conversation_id, provider_id, is_own, state, payload FROM messages WHERE conversation_id=?1 AND (CAST(?2 AS TEXT)='' OR id<CAST(?2 AS TEXT)) ORDER BY id DESC LIMIT ?3
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms FROM messages AS m WHERE m.conversation_id=?1 AND (
+CAST(?2 AS TEXT)='' OR
+m.created_at_ms<(SELECT x.created_at_ms FROM messages AS x WHERE x.id=CAST(?2 AS TEXT) AND x.conversation_id=?1) OR
+(m.created_at_ms=(SELECT x.created_at_ms FROM messages AS x WHERE x.id=CAST(?2 AS TEXT) AND x.conversation_id=?1) AND m.id<CAST(?2 AS TEXT))
+) ORDER BY m.created_at_ms DESC,m.id DESC LIMIT ?3
 `
 
 type ListMessagesParams struct {
-	ConversationID string
-	Cursor         string
-	PageLimit      int64
+	PageConversationID string
+	PageCursor         string
+	PageLimit          int64
 }
 
 func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error) {
-	rows, err := q.db.QueryContext(ctx, listMessages, arg.ConversationID, arg.Cursor, arg.PageLimit)
+	rows, err := q.db.QueryContext(ctx, listMessages, arg.PageConversationID, arg.PageCursor, arg.PageLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -365,6 +374,7 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]M
 			&i.IsOwn,
 			&i.State,
 			&i.Payload,
+			&i.CreatedAtMs,
 		); err != nil {
 			return nil, err
 		}
@@ -380,7 +390,7 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]M
 }
 
 const pendingMessages = `-- name: PendingMessages :many
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload FROM outbox o JOIN messages m ON o.message_id=m.id WHERE o.state='queued' AND o.next_attempt_at<=? ORDER BY o.next_attempt_at,m.id LIMIT 100
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms FROM outbox o JOIN messages m ON o.message_id=m.id WHERE o.state='queued' AND o.next_attempt_at<=? ORDER BY o.next_attempt_at,m.id LIMIT 100
 `
 
 func (q *Queries) PendingMessages(ctx context.Context, nextAttemptAt string) ([]Message, error) {
@@ -401,6 +411,7 @@ func (q *Queries) PendingMessages(ctx context.Context, nextAttemptAt string) ([]
 			&i.IsOwn,
 			&i.State,
 			&i.Payload,
+			&i.CreatedAtMs,
 		); err != nil {
 			return nil, err
 		}

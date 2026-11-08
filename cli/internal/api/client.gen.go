@@ -161,13 +161,13 @@ func (e ConversationKind) Valid() bool {
 
 // Defines values for EngineApiVersion.
 const (
-	N020 EngineApiVersion = "0.2.0"
+	N030 EngineApiVersion = "0.3.0"
 )
 
 // Valid indicates whether the value is a known member of the EngineApiVersion enum.
 func (e EngineApiVersion) Valid() bool {
 	switch e {
-	case N020:
+	case N030:
 		return true
 	default:
 		return false
@@ -201,6 +201,57 @@ const (
 func (e HealthStatus) Valid() bool {
 	switch e {
 	case Ready:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HistoryStatusLastErrorCode.
+const (
+	ArchiveFailed   HistoryStatusLastErrorCode = "archive_failed"
+	DiscoveryFailed HistoryStatusLastErrorCode = "discovery_failed"
+	UnstableArchive HistoryStatusLastErrorCode = "unstable_archive"
+)
+
+// Valid indicates whether the value is a known member of the HistoryStatusLastErrorCode enum.
+func (e HistoryStatusLastErrorCode) Valid() bool {
+	switch e {
+	case ArchiveFailed:
+		return true
+	case DiscoveryFailed:
+		return true
+	case UnstableArchive:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HistoryStatusState.
+const (
+	HistoryStatusStateComplete    HistoryStatusState = "complete"
+	HistoryStatusStateError       HistoryStatusState = "error"
+	HistoryStatusStateNotStarted  HistoryStatusState = "not_started"
+	HistoryStatusStatePartial     HistoryStatusState = "partial"
+	HistoryStatusStateSyncing     HistoryStatusState = "syncing"
+	HistoryStatusStateUnsupported HistoryStatusState = "unsupported"
+)
+
+// Valid indicates whether the value is a known member of the HistoryStatusState enum.
+func (e HistoryStatusState) Valid() bool {
+	switch e {
+	case HistoryStatusStateComplete:
+		return true
+	case HistoryStatusStateError:
+		return true
+	case HistoryStatusStateNotStarted:
+		return true
+	case HistoryStatusStatePartial:
+		return true
+	case HistoryStatusStateSyncing:
+		return true
+	case HistoryStatusStateUnsupported:
 		return true
 	default:
 		return false
@@ -442,7 +493,7 @@ type ConnectionLastErrorCode string
 // ConnectionState Runtime connection state.
 type ConnectionState string
 
-// Conversation One account-scoped conversation. This milestone creates direct conversations; rooms are not implemented.
+// Conversation One account-scoped conversation. Direct conversations support text sending; saved rooms and authorized room archives are recovered read-only in this increment.
 //
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","address":"bob@localhost","archived":false,"favorite":false,"id":"019a5df0-0000-7000-8000-000000000001","kind":"direct","lastMessage":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","title":"bob@localhost","unreadCount":0,"updatedAt":"2026-11-07T12:00:00Z"}
 type Conversation struct {
@@ -489,7 +540,7 @@ type ConversationPage struct {
 
 // Engine Persistent engine identity and event boundary.
 //
-// Example: {"apiVersion":"0.2.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
+// Example: {"apiVersion":"0.3.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
 type Engine struct {
 	ApiVersion EngineApiVersion `json:"apiVersion"`
 
@@ -518,6 +569,25 @@ type Health struct {
 // HealthStatus Example: ready
 type HealthStatus string
 
+// HistoryStatus Last history recovery pass; counts describe this engine's retained records, not total provider history.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversations":3,"retainedMessages":50,"state":"syncing","updatedAt":"2026-11-07T12:00:00Z"}
+type HistoryStatus struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	AccountId        ID                          `json:"accountId"`
+	Conversations    int                         `json:"conversations"`
+	LastErrorCode    *HistoryStatusLastErrorCode `json:"lastErrorCode,omitempty"`
+	RetainedMessages int                         `json:"retainedMessages"`
+	State            HistoryStatusState          `json:"state"`
+	UpdatedAt        time.Time                   `json:"updatedAt"`
+}
+
+// HistoryStatusLastErrorCode defines model for HistoryStatus.LastErrorCode.
+type HistoryStatusLastErrorCode string
+
+// HistoryStatusState defines model for HistoryStatus.State.
+type HistoryStatusState string
+
 // ID Canonical lowercase UUIDv7; IDs do not establish causal order.
 type ID = string
 
@@ -534,6 +604,9 @@ type Message struct {
 	// CreatedAt UTC timestamp.
 	CreatedAt time.Time `json:"createdAt"`
 
+	// Historical True for archive imports. Omitted means false. Clients must not treat these as new unread messages or fresh notifications.
+	Historical *bool `json:"historical,omitempty"`
+
 	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
 	Id    ID   `json:"id"`
 	IsOwn bool `json:"isOwn"`
@@ -547,7 +620,7 @@ type Message struct {
 	// SendState Durable transport evidence.
 	SendState MessageSendState `json:"sendState"`
 
-	// Sender Stable engine-local protocol identity for a sender.
+	// Sender Engine-local source identity. For recovered room messages, this is the room-scoped source with an observed speaker nickname, not a verified personal identity.
 	//
 	// Example: {"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}
 	Sender Sender `json:"sender"`
@@ -636,7 +709,7 @@ type SendMessage struct {
 	OriginalText string `json:"originalText"`
 }
 
-// Sender Stable engine-local protocol identity for a sender.
+// Sender Engine-local source identity. For recovered room messages, this is the room-scoped source with an observed speaker nickname, not a verified personal identity.
 //
 // Example: {"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}
 type Sender struct {
@@ -729,7 +802,7 @@ type OpenConversationParams struct {
 
 // ListMessagesParams defines parameters for ListMessages.
 type ListMessagesParams struct {
-	// Cursor Read records older than this nextCursor UUID.
+	// Cursor Read records chronologically older than this nextCursor message UUID (timestamp and UUID tie-break).
 	Cursor *ID `form:"cursor,omitempty" json:"cursor,omitempty"`
 
 	// Limit Maximum page size.
@@ -922,6 +995,13 @@ type ClientInterface interface {
 	// Corresponds with PUT /api/v1/accounts/{accountId}/connection (the `ConfigureAccountConnection` operationId).
 	ConfigureAccountConnection(ctx context.Context, accountId AccountID, body ConfigureAccountConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetAccountHistory Read account history recovery progress
+	//
+	// Recovery starts on protocol connection. Saved room entries and authorized text archives are read serially, with persistent checkpoints and deduplication. Historical imports do not create sends or unread counts. Complete means the last authorized text recovery pass finished; it is not a full protocol-feature claim. Saved rooms are read-only in this increment. Provider permission failures remain partial coverage.
+	//
+	// Corresponds with GET /api/v1/accounts/{accountId}/history (the `GetAccountHistory` operationId).
+	GetAccountHistory(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListConversations List retained conversations
 	//
 	// Keyset pages ordered by descending engine activity. Search matches conversation address/title and latest text preview; this is not full message search.
@@ -956,7 +1036,7 @@ type ClientInterface interface {
 
 	// ListMessages Read retained messages
 	//
-	// Returns newest-first pages. This milestone has live ingestion, not MAM history backfill.
+	// Returns retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages.
 	//
 	// Corresponds with GET /api/v1/conversations/{conversationId}/messages (the `ListMessages` operationId).
 	ListMessages(ctx context.Context, conversationId ConversationID, params *ListMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1207,6 +1287,23 @@ func (c *Client) ConfigureAccountConnection(ctx context.Context, accountId Accou
 	return c.Client.Do(req)
 }
 
+// GetAccountHistory Read account history recovery progress
+//
+// Recovery starts on protocol connection. Saved room entries and authorized text archives are read serially, with persistent checkpoints and deduplication. Historical imports do not create sends or unread counts. Complete means the last authorized text recovery pass finished; it is not a full protocol-feature claim. Saved rooms are read-only in this increment. Provider permission failures remain partial coverage.
+//
+// Corresponds with GET /api/v1/accounts/{accountId}/history (the `GetAccountHistory` operationId).
+func (c *Client) GetAccountHistory(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAccountHistoryRequest(c.Server, accountId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListConversations List retained conversations
 //
 // Keyset pages ordered by descending engine activity. Search matches conversation address/title and latest text preview; this is not full message search.
@@ -1281,7 +1378,7 @@ func (c *Client) GetConversation(ctx context.Context, conversationId Conversatio
 
 // ListMessages Read retained messages
 //
-// Returns newest-first pages. This milestone has live ingestion, not MAM history backfill.
+// Returns retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages.
 //
 // Corresponds with GET /api/v1/conversations/{conversationId}/messages (the `ListMessages` operationId).
 func (c *Client) ListMessages(ctx context.Context, conversationId ConversationID, params *ListMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -1760,6 +1857,40 @@ func NewConfigureAccountConnectionRequestWithBody(server string, accountId Accou
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetAccountHistoryRequest constructs an http.Request for the GetAccountHistory method
+func NewGetAccountHistoryRequest(server string, accountId AccountID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "accountId", accountId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/%s/history", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -2479,6 +2610,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /api/v1/accounts/{accountId}/connection (the `ConfigureAccountConnection` operationId).
 	ConfigureAccountConnectionWithResponse(ctx context.Context, accountId AccountID, body ConfigureAccountConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*ConfigureAccountConnectionResponse, error)
 
+	// GetAccountHistoryWithResponse Read account history recovery progress
+	//
+	// Recovery starts on protocol connection. Saved room entries and authorized text archives are read serially, with persistent checkpoints and deduplication. Historical imports do not create sends or unread counts. Complete means the last authorized text recovery pass finished; it is not a full protocol-feature claim. Saved rooms are read-only in this increment. Provider permission failures remain partial coverage.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/accounts/{accountId}/history (the `GetAccountHistory` operationId).
+	GetAccountHistoryWithResponse(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*GetAccountHistoryResponse, error)
+
 	// ListConversationsWithResponse List retained conversations
 	//
 	// Keyset pages ordered by descending engine activity. Search matches conversation address/title and latest text preview; this is not full message search.
@@ -2517,7 +2657,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListMessagesWithResponse Read retained messages
 	//
-	// Returns newest-first pages. This milestone has live ingestion, not MAM history backfill.
+	// Returns retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -3054,6 +3194,68 @@ func (r ConfigureAccountConnectionResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ConfigureAccountConnectionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetAccountHistoryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *HistoryStatus
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetAccountHistoryResponse) GetJSON200() *HistoryStatus {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetAccountHistoryResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetAccountHistoryResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetAccountHistoryResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAccountHistoryResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAccountHistoryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAccountHistoryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAccountHistoryResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -3885,6 +4087,21 @@ func (c *ClientWithResponses) ConfigureAccountConnectionWithResponse(ctx context
 	return ParseConfigureAccountConnectionResponse(rsp)
 }
 
+// GetAccountHistoryWithResponse Read account history recovery progress
+//
+// Recovery starts on protocol connection. Saved room entries and authorized text archives are read serially, with persistent checkpoints and deduplication. Historical imports do not create sends or unread counts. Complete means the last authorized text recovery pass finished; it is not a full protocol-feature claim. Saved rooms are read-only in this increment. Provider permission failures remain partial coverage.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/accounts/{accountId}/history (the `GetAccountHistory` operationId).
+func (c *ClientWithResponses) GetAccountHistoryWithResponse(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*GetAccountHistoryResponse, error) {
+	rsp, err := c.GetAccountHistory(ctx, accountId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAccountHistoryResponse(rsp)
+}
+
 // ListConversationsWithResponse List retained conversations
 //
 // Keyset pages ordered by descending engine activity. Search matches conversation address/title and latest text preview; this is not full message search.
@@ -3947,7 +4164,7 @@ func (c *ClientWithResponses) GetConversationWithResponse(ctx context.Context, c
 
 // ListMessagesWithResponse Read retained messages
 //
-// Returns newest-first pages. This milestone has live ingestion, not MAM history backfill.
+// Returns retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -4432,6 +4649,53 @@ func ParseConfigureAccountConnectionResponse(rsp *http.Response) (*ConfigureAcco
 			return nil, err
 		}
 		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAccountHistoryResponse parses an HTTP response from a GetAccountHistoryWithResponse call
+func ParseGetAccountHistoryResponse(rsp *http.Response) (*GetAccountHistoryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAccountHistoryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest HistoryStatus
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest Invalid
@@ -4981,109 +5245,118 @@ func ParseGetOperationResponse(rsp *http.Response) (*GetOperationResponse, error
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"w+3/DgA=",
+	"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",
+	"3wA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -1277,3 +1277,12 @@ Agreed: account management must not stack every account's connection form.
 Start with an identity/status list; open one account at a time, with a return to
 the list. Add account is a separate screen. Compose public Goshtoso Drawer and
 Accordion components for the workflow and advanced connection settings.
+
+## Existing conversations · 2026-11-08
+
+A real connected account revealed the missing startup history/room bootstrap.
+Implement serial, checkpointed authorized text archive recovery and saved-room
+restoration. This is an implementation increment of the agreed history policy;
+full room membership/sending is still not implemented. The UI must display
+progress/partial coverage and keep recovered rooms read-only. See the milestone
+three notes for the implemented scope and remaining work.

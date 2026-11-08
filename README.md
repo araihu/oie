@@ -22,8 +22,11 @@ The Goshtoso interface now uses the real engine: register/connect accounts, choo
 a sending account, start direct conversations, send/cancel queued messages, and
 receive live updates. Device drafts and unresolved acceptance keys survive refresh.
 The independent read-only mock remains available for presentation tests.
-Rooms/history backfill, media, schedules, sync, PWA/offline and backup/restore are
-later work. See [engine milestone notes](docs/milestone-two-engine.md) and
+Existing account text archives now recover serially with durable checkpoints,
+original timestamps, replay deduplication and progress through the API/UI. Saved
+rooms and their authorized archives appear in read-only mode. Room joining and
+sending, media, schedules, sync, PWA/offline and backup/restore remain later work.
+See [history recovery scope](docs/milestone-three-history.md). See [engine milestone notes](docs/milestone-two-engine.md) and
 [foundation notes](docs/milestone-one.md) for scope and invariants.
 
 ## Run

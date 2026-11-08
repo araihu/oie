@@ -137,6 +137,7 @@
         stopped = true; source?.close(); if (composer) composer.querySelector('[data-send-message]').disabled = true;
         announce(text('engineChanged')); return;
       }
+      const history=document.querySelector('#history-status'),newHistory=page.querySelector('#live-history-status');if(history&&newHistory&&history.innerHTML!==newHistory.innerHTML)mutateDOM(history,newHistory.innerHTML);
       const list = document.querySelector('#conversation-list');
       const nextList = page.querySelector('#live-list');
       if (list && nextList && list.innerHTML !== nextList.innerHTML) {
@@ -262,7 +263,7 @@
     source = new EventSource('/ui/events?cursor='+encodeURIComponent(cursor || ''));
     source.onopen = () => { announce(text('liveReady'));scheduleRefresh();retryPending(); };
     source.onerror = () => announce(text('liveRetry'));
-    for (const type of ['account.registered','account.connection_changed','conversation.created','conversation.updated','message.created','message.updated']) source.addEventListener(type,scheduleRefresh);
+    for (const type of ['account.registered','account.connection_changed','account.history_changed','conversation.created','conversation.updated','message.created','message.updated']) source.addEventListener(type,scheduleRefresh);
     source.addEventListener('oie.reset', event => {
       try {
         const reset=JSON.parse(event.data);

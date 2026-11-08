@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.2.0
+  version: 0.3.0
   description: Native engine API for account metadata, XMPP connections, direct text conversations, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
     are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.
@@ -22,7 +22,7 @@ tags:
 - name: Events
   description: Recoverable engine changes
 - name: Conversations
-  description: Account-scoped direct conversations
+  description: Account-scoped direct conversations and recovered read-only rooms
 - name: Messages
   description: Retained text messages and durable send intents
 paths:
@@ -61,7 +61,7 @@ paths:
               example:
                 id: 019a5df0-0000-7000-8000-000000000003
                 role: local
-                apiVersion: 0.2.0
+                apiVersion: 0.3.0
                 eventCursor: 019a5df0-0000-7000-8000-000000000003:1
         '503':
           $ref: '#/components/responses/Unavailable'
@@ -213,6 +213,37 @@ paths:
                 label: Personal
                 connectionState: not_connected
                 createdAt: '2026-11-07T12:00:00Z'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/accounts/{accountId}/history:
+    parameters:
+    - $ref: '#/components/parameters/AccountID'
+    get:
+      operationId: getAccountHistory
+      tags:
+      - Accounts
+      summary: Read account history recovery progress
+      description: Recovery starts on protocol connection. Saved room entries and authorized text archives are read serially,
+        with persistent checkpoints and deduplication. Historical imports do not create sends or unread counts.
+        Complete means the last authorized text recovery pass finished; it is not a full protocol-feature claim.
+        Saved rooms are read-only in this increment. Provider permission failures remain partial coverage.
+      responses:
+        '200':
+          description: Persistent recovery state and retained counts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryStatus'
+              example:
+                accountId: 019a5df0-0000-7000-8000-000000000001
+                state: not_started
+                retainedMessages: 0
+                conversations: 0
+                updatedAt: '2026-11-07T12:00:00Z'
         '400':
           $ref: '#/components/responses/Invalid'
         '404':
@@ -592,7 +623,7 @@ paths:
       tags:
       - Messages
       summary: Read retained messages
-      description: Returns newest-first pages. This milestone has live ingestion, not MAM history backfill.
+      description: Returns retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages.
       responses:
         '200':
           description: Current resource
@@ -611,7 +642,7 @@ paths:
       parameters:
       - name: cursor
         in: query
-        description: Read records older than this nextCursor UUID.
+        description: Read records chronologically older than this nextCursor message UUID (timestamp and UUID tie-break).
         schema:
           $ref: '#/components/schemas/ID'
       - name: limit
@@ -874,7 +905,7 @@ components:
       example:
         id: 019a5df0-0000-7000-8000-000000000003
         role: local
-        apiVersion: 0.2.0
+        apiVersion: 0.3.0
         eventCursor: 019a5df0-0000-7000-8000-000000000003:1
       additionalProperties: false
       required:
@@ -893,7 +924,7 @@ components:
         apiVersion:
           type: string
           enum:
-          - 0.2.0
+          - 0.3.0
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -1081,6 +1112,7 @@ components:
           enum:
           - account.registered
           - account.connection_changed
+          - account.history_changed
           - conversation.created
           - conversation.updated
           - message.created
@@ -1096,6 +1128,8 @@ components:
           $ref: '#/components/schemas/Message'
         connection:
           $ref: '#/components/schemas/Connection'
+        history:
+          $ref: '#/components/schemas/HistoryStatus'
     Problem:
       type: object
       example:
@@ -1164,6 +1198,35 @@ components:
         accountId: 019a5df0-0000-7000-8000-000000000001
         state: not_connected
         updatedAt: '2026-11-07T12:00:00Z'
+    HistoryStatus:
+      type: object
+      additionalProperties: false
+      description: Last history recovery pass; counts describe this engine's retained records, not total provider history.
+      required: [accountId, state, retainedMessages, conversations, updatedAt]
+      properties:
+        accountId:
+          $ref: '#/components/schemas/ID'
+        state:
+          type: string
+          enum: [not_started, syncing, complete, partial, unsupported, error]
+        retainedMessages:
+          type: integer
+          minimum: 0
+        conversations:
+          type: integer
+          minimum: 0
+        updatedAt:
+          type: string
+          format: date-time
+        lastErrorCode:
+          type: string
+          enum: [discovery_failed, archive_failed, unstable_archive]
+      example:
+        accountId: 019a5df0-0000-7000-8000-000000000001
+        state: syncing
+        retainedMessages: 50
+        conversations: 3
+        updatedAt: '2026-11-07T12:00:00Z'
     ConfigureConnection:
       type: object
       description: Desired enabled connection. Repeating unchanged configuration does not create another session.
@@ -1204,7 +1267,7 @@ components:
         address: bob@localhost
     Conversation:
       type: object
-      description: One account-scoped conversation. This milestone creates direct conversations; rooms are not implemented.
+      description: One account-scoped conversation. Direct conversations support text sending; saved rooms and authorized room archives are recovered read-only in this increment.
       additionalProperties: false
       required:
       - id
@@ -1282,7 +1345,7 @@ components:
         items: []
     Sender:
       type: object
-      description: Stable engine-local protocol identity for a sender.
+      description: Engine-local source identity. For recovered room messages, this is the room-scoped source with an observed speaker nickname, not a verified personal identity.
       additionalProperties: false
       required:
       - id
@@ -1332,6 +1395,9 @@ components:
           description: UTC timestamp.
         isOwn:
           type: boolean
+        historical:
+          type: boolean
+          description: True for archive imports. Omitted means false. Clients must not treat these as new unread messages or fresh notifications.
         sendState:
           type: string
           description: Durable transport evidence.

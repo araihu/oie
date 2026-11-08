@@ -174,3 +174,6 @@ html{color-scheme:light}html.dark{color-scheme:dark}
 .oie-account-workspace [data-disconnect-account]{margin-top:20px;padding-top:16px;border-top:1px solid var(--oie-border)}
 .oie-account-advanced{font-size:13px;margin:0}
 @media(max-width:720px){.oie-account-workspace{padding:12px 8px 20px}}
+.oie-history-status{font-size:11px;line-height:1.5;color:var(--oie-muted);padding:0 16px 10px;overflow-wrap:anywhere}
+.oie-history-status:empty{display:none}.oie-history-status p{margin:0 0 3px}
+.oie-room-readonly{margin:0;padding:0 18px 12px;font-size:12px;line-height:1.5;color:var(--oie-muted)}

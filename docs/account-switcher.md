@@ -99,3 +99,6 @@ opened and scanned the account list, single-account details and add screen at
 violations. It exercised the advanced-settings disclosure and return-to-list
 navigation. Adversarial browser checks and the real Prosody registration,
 connection, send/receive and reconnect workflow passed with the revised screens.
+
+History recovery and its progress display are a subsequent increment; see
+[milestone three](milestone-three-history.md) for the current archive/room scope.

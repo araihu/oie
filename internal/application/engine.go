@@ -52,6 +52,7 @@ type Event struct {
 	Conversation *domain.Conversation
 	Message      *domain.Message
 	Connection   *domain.Connection
+	History      *domain.HistoryStatus
 	Type         string
 	OccurredAt   time.Time
 }

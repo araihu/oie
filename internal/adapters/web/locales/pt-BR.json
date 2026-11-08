@@ -127,5 +127,11 @@
   "BackToAccounts": "Todas as contas",
   "AdvancedConnection": "Configurações avançadas",
   "AccountMissing": "Conta não encontrada",
-  "AddAccountHelp": "Adicione uma conta XMPP que você já possui."
+  "AddAccountHelp": "Adicione uma conta XMPP que você já possui.",
+  "HistorySyncing": "Recuperando histórico",
+  "HistoryPartial": "Parte do histórico está indisponível",
+  "HistoryUnsupported": "O servidor não disponibiliza histórico acessível",
+  "HistoryComplete": "Histórico recuperado",
+  "HistoryCount": "%d mensagens guardadas",
+  "RoomReadOnly": "Sala salva: o histórico pode ser consultado. Entrar e enviar mensagens para salas ainda não estão disponíveis."
 }

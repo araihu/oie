@@ -2,6 +2,8 @@
 
 The chat interface now consumes the canonical generated engine client. The
 independent mock remains a development fixture; it does not back the live preview.
+Existing-account history recovery and read-only room scope are described in
+[milestone three](milestone-three-history.md).
 See [engine behavior and limits](milestone-two-engine.md) and
 [UI mutation invariants](live-ui-integration.md).
 

@@ -20,7 +20,12 @@ func conversation(c domain.Conversation) engineapi.Conversation {
 	return engineapi.Conversation{Id: string(c.ID), RevisionId: string(c.RevisionID), AccountId: string(c.AccountID), Kind: engineapi.ConversationKind(c.Kind), Address: c.Address, Title: c.Title, LastMessage: c.LastMessage, UpdatedAt: c.UpdatedAt, UnreadCount: c.UnreadCount, Archived: c.Archived, Favorite: c.Favorite}
 }
 func message(m domain.Message) engineapi.Message {
-	return engineapi.Message{Id: string(m.ID), RevisionId: string(m.RevisionID), AccountId: string(m.AccountID), ConversationId: string(m.ConversationID), Sender: engineapi.Sender{Id: string(m.Sender.ID), DisplayName: m.Sender.DisplayName}, OriginalText: m.OriginalText, CreatedAt: m.CreatedAt, IsOwn: m.IsOwn, SendState: engineapi.MessageSendState(m.SendState)}
+	out := engineapi.Message{Id: string(m.ID), RevisionId: string(m.RevisionID), AccountId: string(m.AccountID), ConversationId: string(m.ConversationID), Sender: engineapi.Sender{Id: string(m.Sender.ID), DisplayName: m.Sender.DisplayName}, OriginalText: m.OriginalText, CreatedAt: m.CreatedAt, IsOwn: m.IsOwn, SendState: engineapi.MessageSendState(m.SendState)}
+	if m.Historical {
+		v := true
+		out.Historical = &v
+	}
+	return out
 }
 func (s *Server) currentAccount(ctx context.Context, a domain.Account) engineapi.Account {
 	out := account(a)
@@ -197,5 +202,25 @@ func event(e application.Event, engineID domain.ID) engineapi.Event {
 		v := connection(*e.Connection)
 		out.Connection = &v
 	}
+	if e.History != nil {
+		v := history(*e.History)
+		out.History = &v
+	}
 	return out
+}
+
+func history(h domain.HistoryStatus) engineapi.HistoryStatus {
+	out := engineapi.HistoryStatus{AccountId: string(h.AccountID), State: engineapi.HistoryStatusState(h.State), RetainedMessages: h.RetainedMessages, Conversations: h.Conversations, UpdatedAt: h.UpdatedAt}
+	if h.LastErrorCode != "" {
+		code := engineapi.HistoryStatusLastErrorCode(h.LastErrorCode)
+		out.LastErrorCode = &code
+	}
+	return out
+}
+func (s *Server) GetAccountHistory(ctx context.Context, r engineapi.GetAccountHistoryRequestObject) (engineapi.GetAccountHistoryResponseObject, error) {
+	h, err := s.engine.History(ctx, domain.ID(r.AccountId))
+	if err != nil {
+		return nil, err
+	}
+	return engineapi.GetAccountHistory200JSONResponse(history(h)), nil
 }
