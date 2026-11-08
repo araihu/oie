@@ -195,7 +195,9 @@ func (m *Manager) readHistoryIQ(ctx context.Context, e *entry, s *mx.Session, sc
 		stanza.IQ
 		Inner string `xml:",innerxml"`
 		Error struct {
-			NotFound *struct{} `xml:"urn:ietf:params:xml:ns:xmpp-stanzas item-not-found"`
+			NotFound     *struct{} `xml:"urn:ietf:params:xml:ns:xmpp-stanzas item-not-found"`
+			Forbidden    *struct{} `xml:"urn:ietf:params:xml:ns:xmpp-stanzas forbidden"`
+			Unauthorized *struct{} `xml:"urn:ietf:params:xml:ns:xmpp-stanzas not-authorized"`
 		} `xml:"error"`
 	}
 	// NewTokenDecoder cannot preserve innerxml from an external TokenReader.
@@ -225,6 +227,9 @@ func (m *Manager) readHistoryIQ(ctx context.Context, e *entry, s *mx.Session, sc
 		return "", errArchive
 	}
 	if result.Type == stanza.ErrorIQ {
+		if result.Error.Forbidden != nil || result.Error.Unauthorized != nil {
+			return "", errDetailPermission
+		}
 		if result.Error.NotFound != nil {
 			return "", errArchiveCursor
 		}

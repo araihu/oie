@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.8.0",
+    "version": "0.9.0",
     "description": "Native engine API for account metadata, XMPP connections, direct text conversations, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.",
     "contact": {
       "name": "Arai Hû",
@@ -606,7 +606,7 @@
                 "example": {
                   "id": "019a5df0-0000-7000-8000-000000000003",
                   "role": "local",
-                  "apiVersion": "0.8.0",
+                  "apiVersion": "0.9.0",
                   "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
                 }
               }
@@ -1475,6 +1475,39 @@
         }
       }
     },
+    "/api/v1/conversations/{conversationId}/details": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationID"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Conversations"
+        ],
+        "operationId": "getConversationDetails",
+        "summary": "Read scoped conversation details",
+        "description": "Read the current account connection and session-local conversation metadata. Returns immediately; a connected adapter may schedule a deduplicated, serialized discovery refresh no more often than once per sixty seconds. This never joins a room, requests a subscription, probes a peer or sends a message. Occupant discovery is a bounded snapshot, never a complete member roster. Missing presence remains unknown. Disconnect clears observations.",
+        "responses": {
+          "200": {
+            "description": "Available metadata and explicit field availability for this conversation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
     "/api/v1/conversations/{conversationId}": {
       "parameters": [
         {
@@ -2163,7 +2196,7 @@
         "example": {
           "id": "019a5df0-0000-7000-8000-000000000003",
           "role": "local",
-          "apiVersion": "0.8.0",
+          "apiVersion": "0.9.0",
           "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
         },
         "additionalProperties": false,
@@ -2187,7 +2220,7 @@
           "apiVersion": {
             "type": "string",
             "enum": [
-              "0.8.0"
+              "0.9.0"
             ]
           },
           "eventCursor": {
@@ -3169,6 +3202,236 @@
           "unreadCount": 0,
           "archived": false,
           "favorite": false
+        }
+      },
+      "DetailState": {
+        "type": "string",
+        "description": "Observation state; unavailable or missing information never means an empty room or an offline person.",
+        "enum": [
+          "unknown",
+          "pending",
+          "known",
+          "partial",
+          "forbidden",
+          "unavailable",
+          "not_connected",
+          "unsupported"
+        ]
+      },
+      "PresenceObservation": {
+        "type": "object",
+        "description": "Observed presence from authorized traffic, without active probes or inferred offline state.",
+        "additionalProperties": false,
+        "required": [
+          "state"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "available",
+              "away",
+              "busy",
+              "extended_away",
+              "chat",
+              "unavailable"
+            ]
+          },
+          "statusText": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC time this presence was observed, absent for unknown presence."
+          }
+        }
+      },
+      "ConversationParticipant": {
+        "type": "object",
+        "description": "A scoped peer or room-occupant observation; its identifier is not a verified personal identity.",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "displayName",
+          "source",
+          "presence"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 1024,
+            "description": "Opaque identifier scoped to this account and conversation. Never use a nickname as a profile identity."
+          },
+          "displayName": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "discovery",
+              "presence"
+            ]
+          },
+          "presence": {
+            "$ref": "#/components/schemas/PresenceObservation"
+          }
+        }
+      },
+      "ConversationParticipants": {
+        "type": "object",
+        "description": "Bounded peer or visible-occupant snapshot; no persistent membership roster or completeness guarantee.",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "state",
+          "items",
+          "truncated"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "peer",
+              "occupants"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/DetailState"
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/ConversationParticipant"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ConversationDetails": {
+        "type": "object",
+        "description": "Session-local conversation observations combined with the owning account connection, without changing retained conversation content.",
+        "example": {
+          "conversationId": "019a5df0-0000-7000-8000-000000000001",
+          "accountId": "019a5df0-0000-7000-8000-000000000002",
+          "kind": "room",
+          "address": "room@conference.example.test",
+          "state": "pending",
+          "accountConnection": {
+            "accountId": "019a5df0-0000-7000-8000-000000000002",
+            "state": "connected",
+            "updatedAt": "2026-11-08T12:00:00Z"
+          },
+          "roomSession": "not_joined",
+          "features": [],
+          "participants": {
+            "scope": "occupants",
+            "state": "pending",
+            "items": [],
+            "truncated": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "accountId",
+          "kind",
+          "address",
+          "state",
+          "accountConnection",
+          "features",
+          "participants"
+        ],
+        "properties": {
+          "conversationId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "room"
+            ],
+            "example": "room"
+          },
+          "address": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/DetailState"
+          },
+          "accountConnection": {
+            "$ref": "#/components/schemas/Connection"
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "topic": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "occupantCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647,
+            "description": "Server-reported occupancy, independent of visibility or returned list length."
+          },
+          "roomSession": {
+            "type": "string",
+            "enum": [
+              "not_joined",
+              "unknown"
+            ]
+          },
+          "features": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+              "type": "string",
+              "enum": [
+                "public",
+                "hidden",
+                "members_only",
+                "open",
+                "persistent",
+                "temporary",
+                "moderated",
+                "unmoderated",
+                "password_protected",
+                "unsecured",
+                "anonymous",
+                "non_anonymous"
+              ]
+            }
+          },
+          "participants": {
+            "$ref": "#/components/schemas/ConversationParticipants"
+          },
+          "peerPresence": {
+            "$ref": "#/components/schemas/PresenceObservation"
+          }
         }
       },
       "ConversationPage": {

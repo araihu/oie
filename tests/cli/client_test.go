@@ -126,6 +126,11 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err != nil || json.Unmarshal(output, &window) != nil || window.TargetId != message.Id || len(window.Items) != 1 || window.HasOlder || window.HasNewer {
 		t.Fatalf("CLI bounded source context: %v %s", err, output)
 	}
+	output, err = run("", "conversations", "get-conversation-details", "--conversation-id", conversation.Id)
+	var details engineapi.ConversationDetails
+	if err != nil || json.Unmarshal(output, &details) != nil || details.ConversationId != conversation.Id || details.AccountId != account.Id || details.State != "not_connected" {
+		t.Fatalf("CLI scoped details: %v %s", err, output)
+	}
 	// Star metadata is independent of the already-cancelled message and uses an
 	// explicit null precondition on the first write through the generated CLI.
 	starKey, _ := ids()

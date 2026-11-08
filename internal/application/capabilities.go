@@ -22,7 +22,7 @@ func implementedFeatures() []domain.CapabilityFeature {
 		{"send_replies", "unsupported", "peer"}, {"edit_messages", "unsupported", "peer"},
 		{"retract_messages", "unsupported", "peer"}, {"reactions", "unsupported", "peer"},
 		{"read_receipts", "unsupported", "peer"}, {"typing", "unsupported", "peer"},
-		{"presence", "unsupported", "account"}, {"profile_images", "partial", "peer"},
+		{"presence", "partial", "peer"}, {"profile_images", "partial", "peer"},
 		{"formatting", "partial", "peer"}, {"e2ee", "unsupported", "peer"},
 		{"message_stars", "supported", "local"}, {"schedules", "unsupported", "local"},
 		{"sync", "unsupported", "local"},

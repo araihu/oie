@@ -47,6 +47,9 @@ type entry struct {
 	sidScopes        map[string]bool
 	discovery        domain.CapabilityDiscovery
 	discoveryPartial bool
+	detailsWake      chan struct{}
+	details          map[domain.ID]*detailSlot
+	peerPresence     map[string]map[string]peerResource
 	avatarWake       chan struct{}
 	avatarMu         sync.Mutex
 	avatarTargets    map[string]string
@@ -195,7 +198,7 @@ func (m *Manager) replace(a domain.Account, cfg configuration) *entry {
 		state = "connecting"
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
-	e := &entry{avatarWake: make(chan struct{}, 1), avatarTargets: map[string]string{}, avatarDirty: map[string]string{}, account: a, config: cfg, cancel: cancel, state: domain.Connection{AccountID: a.ID, State: state, UpdatedAt: time.Now().UTC()}}
+	e := &entry{detailsWake: make(chan struct{}, 1), avatarWake: make(chan struct{}, 1), avatarTargets: map[string]string{}, avatarDirty: map[string]string{}, account: a, config: cfg, cancel: cancel, state: domain.Connection{AccountID: a.ID, State: state, UpdatedAt: time.Now().UTC()}}
 	m.entries[a.ID] = e
 	m.workers.Add(1)
 	go func() {
@@ -275,9 +278,13 @@ func (m *Manager) publish(ctx context.Context, e *entry, state, code string) err
 	if state != "connected" {
 		e.discovery = domain.CapabilityDiscovery{State: "not_connected", Services: []domain.DiscoveredService{}}
 		e.discoveryPartial = false
+		e.details = nil
+		e.peerPresence = nil
 	} else {
 		e.discovery = domain.CapabilityDiscovery{State: "pending", Services: []domain.DiscoveredService{}}
 		e.discoveryPartial = false
+		e.details = nil
+		e.peerPresence = nil
 	}
 	snapshot := e.state
 	e.mu.Unlock()
@@ -301,10 +308,11 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			}
 			if err = m.publish(ctx, e, "connected", ""); err == nil {
 				historyCtx, historyCancel := context.WithCancel(ctx)
-				m.workers.Add(3)
+				m.workers.Add(4)
 				go func() { defer m.workers.Done(); m.historyLoop(historyCtx, e, session) }()
 				go func() { defer m.workers.Done(); m.avatarLoop(historyCtx, e, session) }()
 				go func() { defer m.workers.Done(); m.discoverCapabilities(historyCtx, e, session) }()
+				go func() { defer m.workers.Done(); m.detailsLoop(historyCtx, e, session) }()
 				delay = time.Second
 				err = session.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
 					return m.handle(ctx, e, tokens, start)
@@ -535,15 +543,11 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		}
 		return err
 	case "presence":
-		var presence struct {
-			stanza.Presence
-			Update *struct {
-				Photo *string `xml:"photo"`
-			} `xml:"vcard-temp:x:update x"`
-		}
+		var presence incomingPresence
 		if err := decoder.Decode(&presence); err != nil {
 			return err
 		}
+		capturePeerPresence(e, presence)
 		if presence.Update != nil && presence.Update.Photo != nil {
 			hash := strings.TrimSpace(*presence.Update.Photo)
 			if hash == "" || validSHA1(hash) {
