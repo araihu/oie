@@ -48,11 +48,12 @@ function thumbnail(color){
  const set=(a,address,hash)=>state.avatars.set(JSON.stringify([a,address]),hash);
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
+  const noScripts=await browser.newContext({javaScriptEnabled:false,viewport:{width:1440,height:900}});const initial=await noScripts.newPage();await initial.goto(`${base}/?account=${account}&chat=${direct}&lang=en`);assert.equal(await initial.locator('[data-avatar-account] img').count(),0);assert(await initial.locator('#chat-header [data-avatar-initials]').isVisible());await noScripts.close();findings.push('Before Alpine, initials-only avatars contain no rendered image element or broken-image outline');
   const context=await browser.newContext({viewport:{width:1440,height:900},locale:'en'}),page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
   await page.goto(`${base}/?account=${account}&chat=${direct}&lang=en&theme=dark`);
   await until(()=>streams.size>0,'SSE connection');
   const own=`[data-avatar-account="${account}"][data-avatar-address="alice@fixture"]`,peer=`#chat-header [data-avatar-address="bob@fixture"] img`;
-  assert.equal(await page.locator(peer).getAttribute('src'),null);
+  assert.equal(await page.locator(peer).count(),0);assert.equal(await page.locator('[data-avatar-account] img:visible').count(),0);
   const draft='Keep this draft while profile photos arrive';await page.locator('#message-composer').fill(draft);
   await page.locator('[data-account-switcher]:visible').click();const choice=page.locator(`[data-switch-account="${other}"]:visible`);await choice.focus();
   await page.evaluate(()=>{window.avatarFocus=document.activeElement;window.avatarRow=document.querySelector('[data-message-id]');const timeline=document.querySelector('#message-timeline');timeline.scrollTop=200;window.avatarScroll=timeline.scrollTop});
@@ -66,9 +67,9 @@ function thumbnail(color){
   findings.push('Late metadata updates own profile, open account menu, list/header and direct-message photos; menu focus, row identity, scroll and draft survive');
   state.fail=true;emit();await new Promise(r=>setTimeout(r,500));assert.equal(await page.locator(peer).getAttribute('src'),'/ui/avatars/'+hashes[0]);state.fail=false;
   findings.push('A failed metadata request retains the current browser photo');
-  set(account,'bob@fixture','');emit();await until(async()=>await page.locator(peer).getAttribute('src')===null,'explicit photo removal');
+  set(account,'bob@fixture','');emit();await until(async()=>await page.locator(peer).count()===0,'explicit photo removal');assert(await page.locator('#chat-header [data-avatar-initials]').isVisible());
   assert(await page.evaluate(()=>document.activeElement===window.avatarFocus));assert.equal(await page.locator('#message-composer').inputValue(),draft);
-  findings.push('An explicit empty image hash restores initials without closing the focused popover');
+  findings.push('An explicit empty image hash removes the image node and restores clean initials without closing the focused popover');
   set(account,'bob@fixture',bad);emit();await until(async()=>await page.locator(peer).evaluate(img=>img.getAttribute('src')?.endsWith('f'.repeat(64))&&img.complete&&img.naturalWidth===0),'missing photo request');
   await until(async()=>await page.locator(peer).evaluate(img=>getComputedStyle(img).display==='none'),'failed-image initials fallback');
   findings.push('Unavailable image falls back to initials');
@@ -80,7 +81,7 @@ function thumbnail(color){
   await page.goto(`${base}/?account=${account}&chat=${room}&lang=pt-BR&theme=dark`);
   await until(async()=>await page.locator('#chat-header img').evaluate(img=>img.naturalWidth===8),'room photo');
   assert.equal(await page.locator('#chat-header img').getAttribute('src'),'/ui/avatars/'+hashes[1]);
-  const participantSources=await page.locator('#message-timeline [data-avatar-account] img').evaluateAll(images=>images.map(img=>img.getAttribute('src')));assert(participantSources.length>0);assert(participantSources.every(src=>src===null));
+  const participantSources=await page.locator('#message-timeline [data-avatar-account] img').evaluateAll(images=>images.map(img=>img.getAttribute('src')));assert.equal(participantSources.length,0);const initials=page.locator('#message-timeline [data-avatar-initials]');assert(await initials.count()>0);assert(await initials.first().isVisible());
   await page.locator('#chat-header button[title="Detalhes da conversa"]').click().catch(async()=>{await page.locator('#chat-header .oie-icon-button').first().click()});
   await until(async()=>await page.locator('.oie-details img').getAttribute('src')==='/ui/avatars/'+hashes[1],'details photo');await page.locator('.oie-details').waitFor({state:'visible'});await page.waitForTimeout(250);
   findings.push('Room photo appears in list, header and details; a sender matching the room address still receives initials');

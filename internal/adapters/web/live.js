@@ -218,7 +218,7 @@
           if (next) {badge.textContent = next.textContent;badge.hidden = next.hidden;badge.setAttribute('aria-label',next.getAttribute('aria-label'));}
         }
       }
-      applyAvatars();localizeTimes();
+      applyAvatars();document.dispatchEvent(new CustomEvent("oie:previews-refresh",{detail:page}));localizeTimes();
     } catch { announce(text('liveRetry')); }
     finally {
       clearTimeout(timeout); refreshing = false;
@@ -286,7 +286,7 @@
     source = new EventSource('/ui/events?cursor='+encodeURIComponent(cursor || ''));
     source.onopen = () => { announce(text('liveReady'));scheduleRefresh();retryPending(); };
     source.onerror = () => announce(text('liveRetry'));
-    for (const type of ['profile.avatar_changed','account.registered','account.connection_changed','account.history_changed','conversation.created','conversation.updated','message.created','message.updated']) source.addEventListener(type,scheduleRefresh);
+    for (const type of ['message.preview_changed','profile.avatar_changed','account.registered','account.connection_changed','account.history_changed','conversation.created','conversation.updated','message.created','message.updated']) source.addEventListener(type,scheduleRefresh);
     source.addEventListener('oie.reset', event => {
       try {
         const reset=JSON.parse(event.data);

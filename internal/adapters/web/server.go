@@ -91,39 +91,41 @@ type view struct {
 	Chats                                                 []engineapi.Conversation
 	Selected                                              *engineapi.Conversation
 	Messages                                              []messageView
+	MessagePreviews                                       map[string][]engineapi.MessagePreview
 	EngineID, EventCursor, CSRF, ErrorMessage, FormTarget string
 	Values                                                map[string]string
 }
 
 type copy struct {
-	Accounts, EmptyTitle, EmptyBody, NotConnected, Conversations                                    string
-	Unavailable, UnavailableBody, Retry, Local, Hosted                                              string
-	Skip, Languages, Appearance, System, Light                                                      string
-	Dark, Next, English, Portuguese, NotFound                                                       string
-	NotFoundBody, Chats, Favorites, Archived, SharedMedia                                           string
-	HistorySyncing, HistoryPartial, HistoryUnsupported, HistoryComplete, HistoryCount, RoomReadOnly string
-	SwitchAccount, ManageAccounts                                                                   string
-	BackToAccounts, AdvancedConnection, AccountMissing, AddAccountHelp                              string
-	Settings, You, All, Unread, Groups                                                              string
-	SearchChats, NoResults, NoResultsBody, NewChat, More                                            string
-	Preview, PreviewNote, Message, Send, Attach                                                     string
-	SendingUnavailable, Back, Today, Navigation, Active                                             string
-	OpenNavigation, Close, Details, Participants, MediaEmpty                                        string
-	MediaBody, SelectChat, SelectChatBody, EngineState, AccountHelp                                 string
-	PreviewOnly, ThemeHelp, LanguageHelp, NoChats, NoChatsBody                                      string
-	AddAccount, AccountAddress, AccountLabel, AddressPlaceholder, LabelPlaceholder                  string
-	RegisterAccount, Password, PasswordHelp, Endpoint, EndpointHelp                                 string
-	Connect, Disconnect, Connected, Connecting, ConnectionError                                     string
-	ConnectionUnknown, AuthFailed, TLSFailed, ConnectionFailed, ChooseAccount                       string
-	AllAccounts, PeerAddress, StartConversation, AccountSaved, ConnectionRequested                  string
-	Disconnected, Queued, Dispatching, Submitted, UnknownSend                                       string
-	FailedSend, Cancelled, SubmittedHint, UnknownHint, CancelSend                                   string
-	CancelConflict, CancelSuccess, MessageAccepted, PendingAcceptance, RetrySubmission              string
-	Saving, InvalidForm, InvalidMessage, CSRFError, OperationConflict                               string
-	AccountExists, EngineChanged, LiveConnecting, LiveReady, LiveRetry                              string
-	NewMessages, QueueHelp, DraftStorageUnavailable, DraftLocked, MessageUnavailable                string
-	MediaUnavailable, NativeError, NewerHistory, ShowPassword, ChooseOption                         string
-	ValidationFailed, Edit, Done                                                                    string
+	Accounts, EmptyTitle, EmptyBody, NotConnected, Conversations                                                                                                                        string
+	Unavailable, UnavailableBody, Retry, Local, Hosted                                                                                                                                  string
+	Skip, Languages, Appearance, System, Light                                                                                                                                          string
+	Dark, Next, English, Portuguese, NotFound                                                                                                                                           string
+	NotFoundBody, Chats, Favorites, Archived, SharedMedia                                                                                                                               string
+	HistorySyncing, HistoryPartial, HistoryUnsupported, HistoryComplete, HistoryCount, RoomReadOnly                                                                                     string
+	SwitchAccount, ManageAccounts                                                                                                                                                       string
+	BackToAccounts, AdvancedConnection, AccountMissing, AddAccountHelp                                                                                                                  string
+	Settings, You, All, Unread, Groups                                                                                                                                                  string
+	SearchChats, NoResults, NoResultsBody, NewChat, More                                                                                                                                string
+	Preview, PreviewNote, Message, Send, Attach                                                                                                                                         string
+	SendingUnavailable, Back, Today, Navigation, Active                                                                                                                                 string
+	OpenNavigation, Close, Details, Participants, MediaEmpty                                                                                                                            string
+	MediaBody, SelectChat, SelectChatBody, EngineState, AccountHelp                                                                                                                     string
+	PreviewOnly, ThemeHelp, LanguageHelp, NoChats, NoChatsBody                                                                                                                          string
+	AddAccount, AccountAddress, AccountLabel, AddressPlaceholder, LabelPlaceholder                                                                                                      string
+	RegisterAccount, Password, PasswordHelp, Endpoint, EndpointHelp                                                                                                                     string
+	Connect, Disconnect, Connected, Connecting, ConnectionError                                                                                                                         string
+	ConnectionUnknown, AuthFailed, TLSFailed, ConnectionFailed, ChooseAccount                                                                                                           string
+	AllAccounts, PeerAddress, StartConversation, AccountSaved, ConnectionRequested                                                                                                      string
+	Disconnected, Queued, Dispatching, Submitted, UnknownSend                                                                                                                           string
+	FailedSend, Cancelled, SubmittedHint, UnknownHint, CancelSend                                                                                                                       string
+	CancelConflict, CancelSuccess, MessageAccepted, PendingAcceptance, RetrySubmission                                                                                                  string
+	Saving, InvalidForm, InvalidMessage, CSRFError, OperationConflict                                                                                                                   string
+	AccountExists, EngineChanged, LiveConnecting, LiveReady, LiveRetry                                                                                                                  string
+	NewMessages, QueueHelp, DraftStorageUnavailable, DraftLocked, MessageUnavailable                                                                                                    string
+	MediaUnavailable, NativeError, NewerHistory, ShowPassword, ChooseOption                                                                                                             string
+	PreviewLoading, PreviewUnavailable, LoadImage, LoadingImage, OpenImage, ImageView, ImageDownloadFailed, ImageTooLarge, ImageBlocked, ImageUnsupported, ImageNotFound, ImageComputed string
+	ValidationFailed, Edit, Done                                                                                                                                                        string
 }
 
 func loadCatalogs() (map[string]copy, error) {
@@ -143,6 +145,9 @@ func loadCatalogs() (map[string]copy, error) {
 	}
 	return out, nil
 }
+
+//go:embed previews.js
+var previewsScript []byte
 
 //go:embed live.js
 var liveScript []byte
@@ -165,12 +170,16 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mime string
 		body []byte
 	}{
-		"/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
+		"/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
 	}
 	if asset, ok := assets[r.URL.Path]; ok {
 		w.Header().Set("Content-Type", asset.mime)
 		w.Header().Set("Cache-Control", "no-store")
 		_, _ = w.Write(asset.body)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/ui/media/") {
+		s.mediaImage(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/ui/avatars/") {
@@ -209,7 +218,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, v)
 }
 func (s *Server) baseView(r *http.Request) view {
-	v := view{Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system"), Avatars: map[avatarIdentity]string{}, Connections: map[string]connectionView{}, Histories: map[string]engineapi.HistoryStatus{}, Values: map[string]string{}}
+	v := view{Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system"), Avatars: map[avatarIdentity]string{}, Connections: map[string]connectionView{}, Histories: map[string]engineapi.HistoryStatus{}, Values: map[string]string{}, MessagePreviews: map[string][]engineapi.MessagePreview{}}
 	v.Text = s.catalogs[v.Locale]
 	v.configureWorkspace(r)
 	return v
@@ -335,6 +344,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	for _, m := range items {
 		v.Messages = append(v.Messages, messageView{Message: m, Attachment: extras[m.Id]})
 	}
+	s.loadMessagePreviews(ctx, v)
 }
 func (v view) account(id string) engineapi.Account {
 	for _, a := range v.Accounts {

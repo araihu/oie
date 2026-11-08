@@ -59,15 +59,16 @@ func validCSRF(r *http.Request) bool {
 }
 
 type mutationResult struct {
-	OK        bool   `json:"ok"`
-	Message   string `json:"message"`
-	Code      string `json:"code,omitempty"`
-	Redirect  string `json:"redirect,omitempty"`
-	MessageID string `json:"messageId,omitempty"`
-	State     string `json:"state,omitempty"`
-	Accepted  bool   `json:"accepted,omitempty"`
-	Rejected  bool   `json:"rejected,omitempty"`
-	NextKey   string `json:"nextKey,omitempty"`
+	Preview   *engineapi.MessagePreview `json:"preview,omitempty"`
+	OK        bool                      `json:"ok"`
+	Message   string                    `json:"message"`
+	Code      string                    `json:"code,omitempty"`
+	Redirect  string                    `json:"redirect,omitempty"`
+	MessageID string                    `json:"messageId,omitempty"`
+	State     string                    `json:"state,omitempty"`
+	Accepted  bool                      `json:"accepted,omitempty"`
+	Rejected  bool                      `json:"rejected,omitempty"`
+	NextKey   string                    `json:"nextKey,omitempty"`
 }
 
 func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +91,11 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	engine, err := s.client.GetEngineWithResponse(ctx)
 	if err != nil || engine.JSON200 == nil {
-		s.mutationResponse(w, r, 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"})
+		message := text.PendingAcceptance
+		if r.URL.Path == "/ui/previews/download" {
+			message = text.ImageDownloadFailed
+		}
+		s.mutationResponse(w, r, 503, mutationResult{Message: message, Code: "unavailable"})
 		return
 	}
 	if engine.HTTPResponse.Header.Get("X-Oie-Mock") == "true" {
@@ -104,6 +109,8 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 	result := mutationResult{OK: true, NextKey: newOperationKey()}
 	status := 200
 	switch r.URL.Path {
+	case "/ui/previews/download":
+		status, result = s.downloadPreview(ctx, r, text)
 	case "/ui/accounts/register":
 		key := r.Form.Get("operationKey")
 		if !validOperationKey(key) {
@@ -356,7 +363,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 
 func isMutationPath(path string) bool {
 	switch path {
-	case "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/cancel":
+	case "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/cancel":
 		return true
 	}
 	return false
@@ -375,4 +382,29 @@ func accountDestination(r *http.Request, id string) string {
 	}
 	u.RawQuery = q.Encode()
 	return u.String()
+}
+
+// Download is a resource-scoped ensure operation, so a lost response is safe to
+// retry without inventing a message send or another remote download intent.
+func (s *Server) downloadPreview(ctx context.Context, r *http.Request, text copy) (int, mutationResult) {
+	id := r.Form.Get("previewId")
+	if !validOperationKey(id) {
+		return 422, mutationResult{Message: text.InvalidForm, Rejected: true}
+	}
+	response, err := s.client.DownloadPreviewImageWithResponse(ctx, id)
+	if err != nil {
+		return 503, mutationResult{Message: text.ImageDownloadFailed}
+	}
+	p := response.JSON200
+	if p == nil {
+		p = response.JSON202
+	}
+	if p == nil {
+		var problem struct {
+			Code string `json:"code"`
+		}
+		_ = json.Unmarshal(response.Body, &problem)
+		return response.StatusCode(), mutationResult{Message: (view{Text: text}).previewFailure(problem.Code), Code: problem.Code}
+	}
+	return response.StatusCode(), mutationResult{OK: true, Preview: p, Message: (view{Text: text}).previewStatus(*p)}
 }

@@ -133,5 +133,17 @@
   "HistoryUnsupported": "O servidor não disponibiliza histórico acessível",
   "HistoryComplete": "Histórico recuperado",
   "HistoryCount": "%d mensagens guardadas",
-  "RoomReadOnly": "Sala salva: o histórico pode ser consultado. Entrar e enviar mensagens para salas ainda não estão disponíveis."
+  "RoomReadOnly": "Sala salva: o histórico pode ser consultado. Entrar e enviar mensagens para salas ainda não estão disponíveis.",
+  "PreviewLoading": "Carregando prévia do link…",
+  "PreviewUnavailable": "Prévia indisponível. Abra o link para ver esta página.",
+  "LoadImage": "Carregar imagem",
+  "LoadingImage": "Baixando imagem…",
+  "OpenImage": "Ampliar imagem",
+  "ImageView": "Imagem",
+  "ImageDownloadFailed": "Não foi possível baixar a imagem. Tente novamente.",
+  "ImageTooLarge": "Esta imagem excede o limite de download de 32 MiB.",
+  "ImageBlocked": "Este endereço de imagem não pode ser baixado.",
+  "ImageUnsupported": "Este formato de imagem não é compatível.",
+  "ImageNotFound": "Esta imagem não está mais disponível.",
+  "ImageComputed": "Identificação do arquivo calculada após o download."
 }

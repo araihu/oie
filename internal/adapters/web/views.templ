@@ -57,6 +57,7 @@ templ page(v view) {
 			<script src="/ui/theme.js"></script>
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href="/ui/app.css"/>
+<script src="/ui/previews.js" defer></script>
 <script src="/ui/live.js" defer></script>
 <meta name="oie-csrf" content={v.CSRF}/>
 		</head>
@@ -77,6 +78,7 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 			@settings(v)
 			@accounts(v)
 @newConversation(v)
+@imageViewer(v)
 			if v.Selected != nil {
 				@drawer.Drawer(drawer.Config{ID: "details", Title: v.Text.Details}) {
 					<div class="oie-details">
@@ -309,6 +311,11 @@ if !m.IsOwn && !grouped {
 @chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),Message:m.OriginalText,SenderName:m.Sender.DisplayName,Timestamp:m.CreatedAt.Format("15:04"),RootClass:"oie-bubble",Grouped:grouped})
 </div>
 }
+<div class="oie-message-previews" data-message-previews={m.Id}>
+for _,p:=range v.MessagePreviews[m.Id] {
+@messagePreview(v,p)
+}
+</div>
 if m.IsOwn {
 <div class="oie-message-meta"><time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
 <span data-message-status title={statusHint(v,m.SendState)}>{v.stateLabel(m.SendState)}</span>
@@ -509,6 +516,7 @@ if len(v.Accounts)==0 {
 }
 }
 templ liveCopy(v view){
+<div id="oie-preview-copy" hidden data-loading={v.Text.LoadingImage} data-image={v.Text.ImageView} data-failed={v.Text.ImageDownloadFailed}></div>
 <div id="oie-live-copy" hidden data-saving={v.Text.Saving} data-invalid-message={v.Text.InvalidMessage} data-pending={v.Text.PendingAcceptance} data-storage-unavailable={v.Text.DraftStorageUnavailable} data-locked={v.Text.DraftLocked} data-retry={v.Text.RetrySubmission} data-send={v.Text.Send} data-live-ready={v.Text.LiveReady} data-live-retry={v.Text.LiveRetry} data-live-connecting={v.Text.LiveConnecting} data-new-messages={v.Text.NewMessages} data-engine-changed={v.Text.EngineChanged} data-today={v.Text.Today}></div>
 }
 templ liveRegions(v view){
@@ -589,9 +597,13 @@ if h,ok:=v.Histories[a.Id];ok&&(h.State=="syncing"||h.State=="partial"||h.State=
 // The scope belongs to Oie. Avatar's public SrcExpr consumes a fixed expression;
 // opaque addresses are escaped HTML data, never JavaScript source.
 templ profileAvatar(v view,account,address string,cfg avatar.Config){
-{{ cfg.Src=v.avatarSource(account,address);cfg.SrcExpr="oieAvatarSrc || null" }}
+{{
+ cfg.Src=v.avatarSource(account,address);cfg.SrcExpr="oieAvatarSrc"
+ fallback:=cfg;fallback.Src="";fallback.SrcExpr=""
+}}
 <div class="oie-avatar-scope" data-avatar-account={account} data-avatar-address={address} data-avatar-src={cfg.Src} x-data="{oieAvatarSrc: $el.dataset.avatarSrc}">
-@avatar.Avatar(cfg)
+<div class="oie-avatar-initials" data-avatar-initials x-show="!oieAvatarSrc">@avatar.Avatar(fallback)</div>
+<template x-if="oieAvatarSrc">@avatar.Avatar(cfg)</template>
 </div>
 }
 

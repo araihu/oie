@@ -133,5 +133,17 @@
   "HistoryUnsupported": "The server does not provide accessible history",
   "HistoryComplete": "History recovered",
   "HistoryCount": "%d messages retained",
-  "RoomReadOnly": "Saved room: history is available for reading. Joining and sending to rooms are not available yet."
+  "RoomReadOnly": "Saved room: history is available for reading. Joining and sending to rooms are not available yet.",
+  "PreviewLoading": "Loading link preview…",
+  "PreviewUnavailable": "Preview unavailable. Open the link to view this page.",
+  "LoadImage": "Load image",
+  "LoadingImage": "Downloading image…",
+  "OpenImage": "Expand image",
+  "ImageView": "Image",
+  "ImageDownloadFailed": "The image could not be downloaded. Try again.",
+  "ImageTooLarge": "This image exceeds the 32 MiB download limit.",
+  "ImageBlocked": "This image address cannot be downloaded.",
+  "ImageUnsupported": "This image format is not supported.",
+  "ImageNotFound": "This image is no longer available.",
+  "ImageComputed": "File fingerprint computed after download."
 }

@@ -166,7 +166,7 @@ func TestAvatarMetadataPaginationIdentityAndFallback(t *testing.T) {
 	if err := profileAvatar(v, testAccount, opaque, avatar.Config{Name: "Room"}).Render(context.Background(), &rendered); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(rendered.String(), opaque) || !strings.Contains(rendered.String(), `oieAvatarSrc || null`) {
+	if strings.Contains(rendered.String(), opaque) || !strings.Contains(rendered.String(), `x-if="oieAvatarSrc"`) {
 		t.Fatal("opaque address entered executable expression or public reactive Avatar was lost")
 	}
 	v.Selected = &engineapi.Conversation{Kind: engineapi.ConversationKindRoom, Address: opaque, AccountId: testAccount}
