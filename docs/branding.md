@@ -88,3 +88,20 @@ separate pending browser test changes were left untouched.
 
 Assets PR 42 passed its complete CI and CodeQL checks. Version v0.2.7 remains a
 candidate until its release is published.
+
+## Primary color validation on 2026-11-08
+
+The icon-blue palette is integrated in commit 38e81c4 and running in the live
+preview. Native `make check` passed both in the isolated theme worktree and in
+the main-session checkout. The existing brand fixture passed all 16 combinations
+of width, theme, color mode and language with zero axe violations. The existing
+message/star/browser fixture also passed with the blue outgoing-message colors.
+Read-only observations of the live engine at desktop/dark and mobile/light
+confirmed the primary CSS token, browser theme metadata and manifest all use
+`#6092ab`, with loaded logos/icons and no page errors. Only the BFF was restarted;
+the engine identity and account sessions were retained.
+
+The local `make ci-check` attempt was bounded to 180 seconds and exited 124.
+Dagger reported successful contract lint, golangci-lint with zero findings,
+generated-file checks and vet before the deadline during Go tests. This attempt
+does not establish a completed Dagger result. Native checks completed separately.
