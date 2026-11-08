@@ -408,7 +408,7 @@ templ settings(v view) {
 }
 
 templ accounts(v view){
-@drawer.Drawer(drawer.Config{ID:"accounts",Title:v.Text.Accounts,PanelClass:"oie-account-drawer"}){
+@drawer.Drawer(drawer.Config{ID:"accounts",Title:v.Text.Accounts,PanelClass:v.accountDrawerClass()}){
 <div class="oie-account-workspace">
 switch v.accountScreen() {
 case "add":
@@ -421,6 +421,8 @@ case "add":
 @button.Button(button.WithType("submit")){ {v.Text.RegisterAccount} }
 <div data-form-feedback role="status" aria-live="polite"></div>
 }
+case "capabilities":
+@accountCapabilities(v)
 case "detail":
 @accountBack(v)
 if a:=v.account(v.managedAccountID());a.Address!="" {
@@ -481,6 +483,7 @@ templ accountDetail(v view,a engineapi.Account){
 <div data-form-feedback role="status" aria-live="polite"></div>
 }
 <div id={"disconnect-action-"+a.Id}>@disconnectAction(v,a.Id)</div>
+@link.Link(v.capabilitiesHref(a.Id),link.WithRootClass("oie-capabilities-link"),link.WithAttrs(templ.Attributes{"data-account-capabilities":a.Id})){<span><strong>{v.Text.Capabilities}</strong><small>{v.Text.CapabilitiesIntro}</small></span>@glyph(heroicons.Icon16SolidChevronRight)}
 </section>
 }
 templ connectionEndpoint(v view,id string){
@@ -558,6 +561,9 @@ if a:=v.account(v.managedAccountID());a.Address!="" {
 }
 </div>
 <div id="live-account-overview">@accountOverview(v)</div>
+if v.accountScreen()=="capabilities" {
+<div id="live-account-capabilities">@capabilityContent(v)</div>
+}
 <div id="live-account-menu">@accountMenu(v)</div>
 <div id="live-newchat-account">@selectfield.Select(selectfield.Config{ID:"sending-account",Name:"accountId",Label:v.Text.ChooseAccount,Options:accountOptions(v,false),Required:true})</div>
 </div>

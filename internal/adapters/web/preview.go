@@ -93,6 +93,9 @@ func (v view) accountScreen() string {
 	if strings.HasPrefix(v.FormTarget, "connect-") || strings.HasPrefix(v.FormTarget, "disconnect-") {
 		return "detail"
 	}
+	if v.AccountPage == "capabilities" {
+		return "capabilities"
+	}
 	if v.AccountPage == "add" {
 		return "add"
 	}

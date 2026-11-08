@@ -96,6 +96,7 @@ type view struct {
 	Accounts                                              []engineapi.Account
 	AccountUnread                                         map[string]int
 	AccountPage, ManagedAccount                           string
+	CapabilityEvidence                                    *engineapi.Capabilities
 	Connections                                           map[string]connectionView
 	Histories                                             map[string]engineapi.HistoryStatus
 	Next                                                  string
@@ -115,6 +116,73 @@ type view struct {
 }
 
 type copy struct {
+	CapabilityPartialDetails                                                                                                                                             string
+	Capabilities                                                                                                                                                         string
+	CapabilitiesIntro                                                                                                                                                    string
+	BackToAccount                                                                                                                                                        string
+	CapabilityFeature                                                                                                                                                    string
+	CapabilityApp                                                                                                                                                        string
+	CapabilityProtocol                                                                                                                                                   string
+	CapabilityServer                                                                                                                                                     string
+	CapabilityScope                                                                                                                                                      string
+	CapabilitySupported                                                                                                                                                  string
+	CapabilityPartial                                                                                                                                                    string
+	CapabilityUnsupported                                                                                                                                                string
+	CapabilityNotImplemented                                                                                                                                             string
+	CapabilityNotRequired                                                                                                                                                string
+	CapabilityScopeDependent                                                                                                                                             string
+	CapabilityNotAdvertised                                                                                                                                              string
+	CapabilityUnknown                                                                                                                                                    string
+	CapabilityScopeLocal                                                                                                                                                 string
+	CapabilityScopeAccount                                                                                                                                               string
+	CapabilityScopeServer                                                                                                                                                string
+	CapabilityScopeService                                                                                                                                               string
+	CapabilityScopePeer                                                                                                                                                  string
+	CapabilityScopeRoom                                                                                                                                                  string
+	CapabilityNotConnected                                                                                                                                               string
+	CapabilityDiscoveryPending                                                                                                                                           string
+	CapabilityDiscoveryComplete                                                                                                                                          string
+	CapabilityDiscoveryPartial                                                                                                                                           string
+	CapabilityDiscoveryFailed                                                                                                                                            string
+	CapabilityDiscoveryKnown                                                                                                                                             string
+	CapabilityChecked                                                                                                                                                    string
+	CapabilityEvidenceHelp                                                                                                                                               string
+	CapabilityReadUnavailable                                                                                                                                            string
+	CapabilityRefresh                                                                                                                                                    string
+	CapabilityServices                                                                                                                                                   string
+	CapabilityServicesHelp                                                                                                                                               string
+	CapabilityNoServices                                                                                                                                                 string
+	CapabilityIdentities                                                                                                                                                 string
+	CapabilityNamespaces                                                                                                                                                 string
+	CapabilityNoNamespaces                                                                                                                                               string
+	CapabilityDirectText                                                                                                                                                 string
+	CapabilityAccountHistory                                                                                                                                             string
+	CapabilitySavedRooms                                                                                                                                                 string
+	CapabilityRoomHistory                                                                                                                                                string
+	CapabilityRoomDiscovery                                                                                                                                              string
+	CapabilityRoomMessaging                                                                                                                                              string
+	CapabilityFileUpload                                                                                                                                                 string
+	CapabilityImagePreviews                                                                                                                                              string
+	CapabilityLinkPreviews                                                                                                                                               string
+	CapabilityReceivedReplies                                                                                                                                            string
+	CapabilitySendReplies                                                                                                                                                string
+	CapabilityEditMessages                                                                                                                                               string
+	CapabilityRetractMessages                                                                                                                                            string
+	CapabilityReactions                                                                                                                                                  string
+	CapabilityReadReceipts                                                                                                                                               string
+	CapabilityTyping                                                                                                                                                     string
+	CapabilityPresence                                                                                                                                                   string
+	CapabilityProfileImages                                                                                                                                              string
+	CapabilityFormatting                                                                                                                                                 string
+	CapabilityE2EE                                                                                                                                                       string
+	CapabilityStars                                                                                                                                                      string
+	CapabilitySchedules                                                                                                                                                  string
+	CapabilitySync                                                                                                                                                       string
+	CapabilitySavedRoomsNote                                                                                                                                             string
+	CapabilityProfileImagesNote                                                                                                                                          string
+	CapabilityFormattingNote                                                                                                                                             string
+	CapabilityReceivedRepliesNote                                                                                                                                        string
+	CapabilityLocalNote                                                                                                                                                  string
 	Accounts, EmptyTitle, EmptyBody, NotConnected, Conversations                                                                                                         string
 	Unavailable, UnavailableBody, Retry, Local, Hosted                                                                                                                   string
 	Skip, Languages, Appearance, System, Light                                                                                                                           string
@@ -289,6 +357,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 			v.Connections[a.Id] = connectionView{Known: true, Value: *connection.JSON200}
 		}
 	}
+	s.loadCapabilities(ctx, v)
 	params := &engineapi.ListConversationsParams{Limit: &limit}
 	archived := v.Section == "archived"
 	params.Archived = &archived

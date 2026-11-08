@@ -1,0 +1,113 @@
+package web
+
+import (
+ "github.com/araihu/goshtoso/components/accordion"
+ "github.com/araihu/goshtoso/components/emptystate"
+ "github.com/araihu/goshtoso/components/link"
+ "github.com/araihu/goshtoso/components/panel"
+ "github.com/araihu/goshtoso/components/table"
+ "github.com/araihu/goshtoso/components/icon/heroicons"
+ "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+)
+
+templ accountCapabilities(v view){
+@link.Link(v.capabilityBackHref(),link.WithRootClass("oie-account-back"),link.WithAttrs(templ.Attributes{"data-capabilities-back":""})){@glyph(heroicons.Icon16SolidChevronLeft)<span>{v.Text.BackToAccount}</span>}
+if a:=v.account(v.managedAccountID());a.Address!="" {
+<header class="oie-account-intro"><h2 id="account-capabilities-title" tabindex="-1" data-account-capabilities-title>{v.Text.Capabilities}</h2><p><strong>{a.Label}</strong> · {a.Address}</p><p>{v.Text.CapabilitiesIntro}</p></header>
+<div id="account-capabilities-content">@capabilityContent(v)</div>
+}else if v.Unavailable {
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.Unavailable,Description:v.Text.UnavailableBody})
+@link.Link(v.capabilitiesHref(v.managedAccountID())){ {v.Text.Retry} }
+}else{
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.AccountMissing,Description:v.Text.AccountHelp})
+}
+}
+templ capabilityContent(v view){
+<div id="account-capability-summary" role="status">@capabilitySummary(v)</div>
+<div id="account-capability-matrix">
+if v.CapabilityEvidence!=nil {
+@table.Table(table.Config{ID:"account-capabilities-table",Caption:v.Text.Capabilities,RootClass:"oie-capabilities-table",Mobile:&table.MobileConfig{PrimaryColumn:"feature"},Columns:[]table.Column{{Key:"feature",Label:v.Text.CapabilityFeature},{Key:"app",Label:v.Text.CapabilityApp},{Key:"protocol",Label:v.Text.CapabilityProtocol},{Key:"server",Label:v.Text.CapabilityServer},{Key:"scope",Label:v.Text.CapabilityScope}},Rows:v.capabilityRows()})
+}
+</div>
+<div id="account-discovery-services">@discoveryServices(v)</div>
+}
+templ capabilitySummary(v view){
+if c:=v.CapabilityEvidence;c!=nil {
+<p data-discovery-state={string(c.Discovery.State)}>{v.discoveryLabel(string(c.Discovery.State))}
+if c.Discovery.CheckedAt!=nil {
+<span> · {v.Text.CapabilityChecked} <time data-capability-date datetime={c.Discovery.CheckedAt.Format("2006-01-02T15:04:05Z07:00")}>{c.Discovery.CheckedAt.Format("2006-01-02 15:04")}</time></span>
+}
+</p>
+<p class="oie-capability-help">{v.Text.CapabilityEvidenceHelp}</p>
+}else{
+<p>{v.Text.CapabilityReadUnavailable}</p>
+}
+@link.Link(v.capabilitiesHref(v.managedAccountID()),link.WithAttrs(templ.Attributes{"data-capabilities-refresh":""})){
+if v.CapabilityEvidence==nil {
+{v.Text.Retry}
+}else{
+{v.Text.CapabilityRefresh}
+}
+}
+}
+templ capabilityName(v view,f engineapi.CapabilityFeature){
+<div data-capability-id={string(f.Id)}><strong>{v.capabilityLabel(string(f.Id))}</strong>
+if note:=v.capabilityNote(string(f.Id));note!="" {
+<small class="oie-capability-note">{note}</small>
+}
+</div>
+}
+templ capabilitySupport(v view,state engineapi.SupportState,column string){
+<span data-support-column={column} data-support-state={string(state)}>{v.supportLabel(state,column)}</span>
+}
+templ discoveryServices(v view){
+if c:=v.CapabilityEvidence;c!=nil {
+@panel.Panel(panel.Config{RootClass:"oie-discovery-panel",Header:discoveryHeading(v)}){
+if len(c.Discovery.Services)>0 {
+@accordion.Accordion(accordion.AccordionConfig{ID:"account-discovery",RootClass:"oie-discovery-list",AllowMultiple:true,Items:v.discoveryItems()})
+}else{
+<p>{v.Text.CapabilityNoServices}</p>
+}
+}
+}
+}
+templ discoveryHeading(v view){
+<h3>{v.Text.CapabilityServices}</h3><p>{v.Text.CapabilityServicesHelp}</p>
+}
+templ discoveryService(v view,service engineapi.DiscoveredService){
+<div class="oie-discovery-detail" data-discovery-address={service.Address}>
+if service.Truncated {
+<p data-discovery-truncated>{v.Text.CapabilityPartialDetails}</p>
+}
+<p>{v.scopeLabel(string(service.Scope))} ·
+if service.State=="failed" {
+{v.Text.CapabilityDiscoveryFailed}
+}else{
+{v.Text.CapabilityDiscoveryKnown}
+}
+</p>
+if len(service.Identities)>0 {
+<h4>{v.Text.CapabilityIdentities}</h4><ul>
+for _,identity:=range service.Identities {
+<li>{identity.Category} / {identity.Type}
+if identity.Name!=nil {
+<span> · {*identity.Name}</span>
+}
+</li>
+}
+</ul>
+}
+<h4>{v.Text.CapabilityNamespaces}</h4>
+if len(service.Features)>0 {
+<ul>
+for _,feature:=range service.Features {
+<li><code>{feature}</code></li>
+}
+</ul>
+}else if service.State=="known"&&!service.Truncated {
+<p>{v.Text.CapabilityNoNamespaces}</p>
+}else{
+<p>{v.Text.CapabilityUnknown}</p>
+}
+</div>
+}

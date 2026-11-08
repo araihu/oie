@@ -115,7 +115,7 @@
     const locale=document.documentElement.lang || undefined;
     const clock=new Intl.DateTimeFormat(locale,{hour:'2-digit',minute:'2-digit'});
     for (const time of document.querySelectorAll('time[datetime]:not([data-day])')) {
-      const date=new Date(time.dateTime);if(!Number.isNaN(date.getTime()))time.textContent=time.matches('[data-viewer-date]')?new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(date):clock.format(date);
+      const date=new Date(time.dateTime);if(!Number.isNaN(date.getTime()))time.textContent=time.matches('[data-viewer-date],[data-capability-date]')?new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(date):clock.format(date);
     }
     const timeline=document.querySelector('#message-timeline');if(!timeline)return;
     for(const divider of timeline.querySelectorAll('.oie-day-divider'))divider.remove();
@@ -222,6 +222,25 @@
           if(oldAction&&newAction&&oldAction.innerHTML!==newAction.innerHTML&&!oldAction.contains(document.activeElement))mutateDOM(oldAction,newAction.innerHTML);
         }
       }
+      const accountScroll=document.getElementById('accounts-body')?.scrollTop;
+      // Read-only evidence refreshes independently from connection forms and drawer navigation.
+      for(const id of ['account-capability-summary','account-capability-matrix']) {
+        const existing=document.getElementById(id),fresh=page.querySelector('#live-account-capabilities #'+id);
+        if(existing&&fresh&&existing.innerHTML!==fresh.innerHTML&&!existing.contains(document.activeElement)){
+          const scroll=document.getElementById('accounts-body')?.scrollTop;
+          mutateDOM(existing,fresh.innerHTML);
+          if(scroll!==undefined)document.getElementById('accounts-body').scrollTop=scroll;
+        }
+      }
+      const discovery=document.getElementById('account-discovery-services'),nextDiscovery=page.querySelector('#live-account-capabilities #account-discovery-services');
+      if(discovery&&nextDiscovery){
+        const details=[...discovery.querySelectorAll('[data-discovery-address]')],freshDetails=[...nextDiscovery.querySelectorAll('[data-discovery-address]')];
+        if(details.length>0&&details.length===freshDetails.length&&details.every((detail,index)=>detail.dataset.discoveryAddress===freshDetails[index].dataset.discoveryAddress)){
+          // Updating app-owned content leaves the public accordion's expansion and focus intact.
+          for(let index=0;index<details.length;index++)if(details[index].innerHTML!==freshDetails[index].innerHTML&&!details[index].contains(document.activeElement))mutateDOM(details[index],freshDetails[index].innerHTML);
+        }else if(discovery.innerHTML!==nextDiscovery.innerHTML&&!discovery.contains(document.activeElement))mutateDOM(discovery,nextDiscovery.innerHTML);
+      }
+      if(accountScroll!==undefined)document.getElementById('accounts-body').scrollTop=accountScroll;
       const overview=document.querySelector('#account-overview'),nextOverview=page.querySelector('#live-account-overview');
       if(overview&&nextOverview&&overview.innerHTML!==nextOverview.innerHTML&&!overview.contains(document.activeElement))mutateDOM(overview,nextOverview.innerHTML);
 
@@ -324,7 +343,14 @@
   addEventListener('online', () => {scheduleRefresh();retryPending();});
   const open = new URLSearchParams(location.search).get('open') || body.dataset.openDrawer;
   if (open === 'accounts' || open === 'newchat') {
-    const show = () => dispatchEvent(new CustomEvent('drawer:open',{detail:{id:open}}));
+    const show = () => {
+      dispatchEvent(new CustomEvent('drawer:open',{detail:{id:open}}));
+      if(open==='accounts')setTimeout(()=>{
+        const query=new URLSearchParams(location.search);
+        const target=query.get('accountPage')==='capabilities'?document.querySelector('[data-account-capabilities-title]'):query.get('accountFocus')==='capabilities'?document.querySelector('[data-account-capabilities]'):null;
+        target?.focus({preventScroll:true});
+      },230);
+    };
     if (window.Alpine) setTimeout(show,0); else document.addEventListener('alpine:initialized',show,{once:true});
   }
   const nativeError=document.querySelector('[data-native-error]');if(nativeError)nativeError.focus();
