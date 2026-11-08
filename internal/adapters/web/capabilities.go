@@ -13,6 +13,9 @@ func (v view) accountDrawerClass() string {
 	if v.accountScreen() == "capabilities" {
 		return "oie-account-drawer oie-capabilities-drawer"
 	}
+	if v.accountScreen() == "list" {
+		return "oie-account-drawer oie-account-list-drawer"
+	}
 	return "oie-account-drawer"
 }
 func (v view) capabilitiesHref(id string) string {

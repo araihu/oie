@@ -242,7 +242,11 @@
       }
       if(accountScroll!==undefined)document.getElementById('accounts-body').scrollTop=accountScroll;
       const overview=document.querySelector('#account-overview'),nextOverview=page.querySelector('#live-account-overview');
-      if(overview&&nextOverview&&overview.innerHTML!==nextOverview.innerHTML&&!overview.contains(document.activeElement))mutateDOM(overview,nextOverview.innerHTML);
+      if(overview&&nextOverview&&overview.innerHTML!==nextOverview.innerHTML&&!overview.contains(document.activeElement)){
+        const scroll=overview.scrollTop;
+        mutateDOM(overview,nextOverview.innerHTML);
+        overview.scrollTop=scroll;
+      }
 
       if (accountsVersion !== regions.dataset.accountsVersion && !document.querySelector('#new-conversation-form')?.contains(document.activeElement)) {
         mutateDOM(document.querySelector('#newchat-account-select'), page.querySelector('#live-newchat-account')?.innerHTML || '');

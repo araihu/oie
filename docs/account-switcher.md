@@ -102,3 +102,9 @@ connection, send/receive and reconnect workflow passed with the revised screens.
 
 History recovery and its progress display are a subsequent increment; see
 [milestone three](milestone-three-history.md) for the current archive/room scope.
+
+## Fixed drawer action
+
+The account-list page keeps Add account at the bottom of the drawer. Its list scrolls independently above the action, including during live updates. Account detail, add and capabilities pages retain their own scrolling layout.
+
+`tests/browser/account-drawer.cjs` verifies three and 35 fixture accounts across 390, 818 and 1440 px, light/dark, English/pt-BR. It checks wheel scrolling, last-row clearance, stable footer position, live scroll/focus preservation, keyboard access to Add account and accessibility. Native `make check` passes. The bounded Dagger check attempt timed out after 45 seconds with exit 124; full Dagger completion remains unverified.
