@@ -4,7 +4,7 @@ window.OieRuntime.register('emoji-picker', life => {
  if(!root||!input||!form)return;
  const content=root.querySelector('[data-emoji-content]'),trigger=root.querySelector('[data-emoji-trigger]'),search=root.querySelector('#emoji-search'),grid=root.querySelector('#emoji-grid'),scroll=root.querySelector('[data-emoji-scroll]'),status=root.querySelector('[data-emoji-status]'),retry=root.querySelector('[data-emoji-retry]'),cell=root.querySelector('[data-emoji-button]'),choice=root.querySelector('[data-emoji-choice]'),sectionTemplate=root.querySelector('[data-emoji-section-template]'),jumps=[...root.querySelectorAll('[data-emoji-jump]')];
  const memory=window.OieRuntime.memory,cacheKey='emoji-catalog-v2:'+content.dataset.emojiUrl,recentKey='oie.emoji-recent.v1',fold=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase(document.documentElement.lang).trim();
- let catalog=memory.get(cacheKey),loading=false,sections=new Map(),scrollFrame=false,selection={start:input.selectionStart||0,end:input.selectionEnd||0},recent=[];
+ let catalog=memory.get(cacheKey),loading=false,sections=new Map(),scrollFrame=false,variantGeometry=null,selection={start:input.selectionStart||0,end:input.selectionEnd||0},recent=[];
  try{recent=JSON.parse(localStorage.getItem(recentKey)||'[]')}catch{recent=memory.get(recentKey)||[]}
  if(!Array.isArray(recent))recent=[];recent=recent.filter(value=>typeof value==='string').slice(0,24);
  const writable=()=>input.isConnected&&!input.disabled&&!input.readOnly&&form.dataset.busy!=='true'&&form.dataset.composeAllowed==='true';
@@ -46,7 +46,7 @@ window.OieRuntime.register('emoji-picker', life => {
    if(!items.length){const empty=document.createElement('p');empty.textContent=content.dataset.emojiNoRecent;section.append(empty)}
    sections.set(key,section);fragment.append(section);
   }
-  mutate(()=>{clear(grid);grid.append(fragment);window.Alpine?.initTree(grid)});
+  stopVariantGeometry();mutate(()=>{clear(grid);grid.append(fragment);window.Alpine?.initTree(grid)});
   scroll.scrollTop=0;status.textContent=candidates.length?'':content.dataset.emojiEmpty;retry.hidden=true;updateFooter();
  }
  function prepare(data){
@@ -74,13 +74,37 @@ window.OieRuntime.register('emoji-picker', life => {
   }catch{if(!life.signal.aborted){status.textContent=content.dataset.emojiFailed;retry.hidden=false}}
   finally{clearTimeout(timeout);loading=false}
  }
- function closeVariants(){for(const button of root.querySelectorAll('[data-emoji-variants-trigger][aria-expanded="true"]'))button.click()}
+ // The public popover owns positioning and collision handling. Center its
+ // app-owned strip with CSS translation and keep the decorative tip on the
+ // originating emoji. Its content reserves space for the tip inside overflow.
+ function stopVariantGeometry(){if(variantGeometry){variantGeometry.observer.disconnect();variantGeometry=null}}
+ function positionVariant(){
+  const value=variantGeometry;if(!value||!value.panel.isConnected||value.toggle.getAttribute('aria-expanded')!=='true')return;
+  const {panel,toggle}=value,anchor=toggle.closest('[data-emoji-family]').querySelector(':scope>[data-emoji-pick]').getBoundingClientRect(),rect=panel.getBoundingClientRect();if(!rect.width)return;
+  const viewport=window.visualViewport,left=(viewport?.offsetLeft||0)+8,right=(viewport?.offsetLeft||0)+(viewport?.width||document.documentElement.clientWidth)-8;
+  const previous=parseFloat(panel.style.getPropertyValue('--oie-emoji-shift-x'))||0,width=panel.offsetWidth,desired=Math.max(left,Math.min(anchor.left+anchor.width/2-width/2,right-width)),shift=Math.round((desired-(rect.left-previous))*10)/10;
+  if(Math.abs(shift-previous)>.2)panel.style.setProperty('--oie-emoji-shift-x',shift+'px');
+  const previousY=parseFloat(panel.style.getPropertyValue('--oie-emoji-shift-y'))||0,baseTop=rect.top-previousY,height=panel.offsetHeight,side=baseTop+height/2<anchor.top+anchor.height/2?'top':'bottom',top=(viewport?.offsetTop||0)+8,bottom=(viewport?.offsetTop||0)+(viewport?.height||innerHeight)-8;
+  const desiredY=Math.max(top,Math.min(side==='top'?anchor.top-height-2:anchor.bottom+2,bottom-height)),shiftY=Math.round((desiredY-baseTop)*10)/10;
+  if(Math.abs(shiftY-previousY)>.2)panel.style.setProperty('--oie-emoji-shift-y',shiftY+'px');if(panel.dataset.emojiSide!==side)panel.dataset.emojiSide=side;
+  const bubble=panel.querySelector('.oie-emoji-variants-bubble').getBoundingClientRect(),tip=Math.max(13,Math.min(anchor.left+anchor.width/2-bubble.left,bubble.width-13));
+  const next=Math.round(tip*10)/10+'px';if(panel.style.getPropertyValue('--oie-emoji-tip-x')!==next)panel.style.setProperty('--oie-emoji-tip-x',next);
+ }
+ function watchVariantGeometry(toggle){
+  stopVariantGeometry();const panel=toggle.closest('[data-emoji-family]').querySelector('.oie-emoji-variants-panel');
+  const observer=new MutationObserver(()=>{if(toggle.getAttribute('aria-expanded')!=='true'){stopVariantGeometry();return}life.raf(positionVariant)});
+  variantGeometry={toggle,panel,observer};observer.observe(panel,{attributes:true,attributeFilter:['style','class']});observer.observe(toggle,{attributes:true,attributeFilter:['aria-expanded']});life.raf(positionVariant);
+ }
+ life.cleanup(stopVariantGeometry);
+ function closeVariants(){for(const button of root.querySelectorAll('[data-emoji-variants-trigger][aria-expanded="true"]'))button.click();stopVariantGeometry()}
+
  function sync(){const disabled=!writable();if(disabled){closeVariants();if(trigger.getAttribute('aria-expanded')==='true')trigger.click()}trigger.disabled=disabled}
  const observer=new MutationObserver(sync);observer.observe(input,{attributes:true,attributeFilter:['readonly','disabled']});observer.observe(form,{attributes:true,attributeFilter:['data-busy','data-compose-allowed']});life.cleanup(()=>observer.disconnect());sync();
  function focusWhenOpen(toggle,target,attempt=0){life.raf(()=>{if(toggle.getAttribute('aria-expanded')!=='true'||document.activeElement===target)return;const active=document.activeElement;if(active!==toggle&&active!==document.body&&!(target===search&&active===input))return;if(target?.getClientRects().length){target.focus({preventScroll:true});if(document.activeElement===target)return}if(attempt<12)focusWhenOpen(toggle,target,attempt+1)})}
  function populateVariants(toggle){
   const wrapper=toggle.closest('[data-emoji-family]'),variants=wrapper?.querySelector('[data-emoji-variants]'),family=catalog?.families.get(wrapper?.dataset.emojiFamily);if(!variants||!family)return;
-  if(!variants.childElementCount){const fragment=document.createDocumentFragment();for(const item of family.variants){const button=cell.content.firstElementChild.cloneNode(true);setButton(button,item);button.dataset.emojiVariant='';fragment.append(button)}mutate(()=>{variants.append(fragment);for(const node of variants.children)window.Alpine?.initTree(node)})}
+  if(!variants.childElementCount){const fragment=document.createDocumentFragment();for(const item of family.variants){const button=cell.content.firstElementChild.cloneNode(true);setButton(button,item);button.dataset.emojiVariant='';button.setAttribute('aria-pressed',String(item.glyph===wrapper.querySelector(':scope>[data-emoji-pick]').dataset.emojiPick));fragment.append(button)}mutate(()=>{variants.append(fragment);for(const node of variants.children)window.Alpine?.initTree(node)})}
+  if(toggle.getAttribute('aria-expanded')==='true')watchVariantGeometry(toggle);
   focusWhenOpen(toggle,variants.querySelector('[data-emoji-pick]'));
  }
  life.on(trigger,'click',()=>{if(!writable())return;life.raf(()=>{if(trigger.getAttribute('aria-expanded')==='true'){load();focusWhenOpen(trigger,search)}})});
@@ -99,7 +123,7 @@ window.OieRuntime.register('emoji-picker', life => {
  life.on(root,'keydown',event=>{
   const toggle=event.target.closest('[data-emoji-variants-trigger]');if(toggle&&['Enter',' ','ArrowDown'].includes(event.key)){populateVariants(toggle);return}
   const region=event.target.closest('[data-emoji-variants],.oie-emoji-grid');if(!region)return;
-  const buttons=[...region.querySelectorAll('[data-emoji-pick]')].filter(button=>button.closest('[data-emoji-variants],.oie-emoji-grid')===region),index=buttons.indexOf(event.target),columns=region.matches('[data-emoji-variants]')?6:8,delta={ArrowLeft:-1,ArrowRight:1,ArrowUp:-columns,ArrowDown:columns}[event.key];
+  const buttons=[...region.querySelectorAll('[data-emoji-pick]')].filter(button=>button.closest('[data-emoji-variants],.oie-emoji-grid')===region),index=buttons.indexOf(event.target),columns=region.matches('[data-emoji-variants]')?1:8,delta={ArrowLeft:-1,ArrowRight:1,ArrowUp:-columns,ArrowDown:columns}[event.key];
   if(index<0||delta===undefined)return;event.preventDefault();buttons[Math.max(0,Math.min(buttons.length-1,index+delta))]?.focus();
  });
 });

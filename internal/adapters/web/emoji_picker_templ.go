@@ -313,7 +313,7 @@ func emojiContent(v view) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = popover.Popover(popover.Config{Trigger: emojiVariantsTrigger(v), Content: emojiVariantsContent(v), Placement: popover.PlacementBottomStart, Role: "dialog", Label: v.Text.EmojiVariants, RootClass: "oie-emoji-variants", PanelClass: "oie-emoji-variants-panel"}).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = popover.Popover(popover.Config{Trigger: emojiVariantsTrigger(v), Content: emojiVariantsContent(v), Placement: popover.PlacementTopStart, Role: "dialog", Label: v.Text.EmojiVariants, RootClass: "oie-emoji-variants", PanelClass: "oie-emoji-variants-panel"}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -385,33 +385,20 @@ func emojiVariantsContent(v view) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<div class=\"oie-emoji-variants-content\"><strong>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<div class=\"oie-emoji-variants-content\"><div class=\"oie-emoji-variants-bubble rounded-radius shadow-md\"><div data-emoji-variants class=\"oie-emoji-grid\" role=\"group\" aria-label=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var20 string
-		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.EmojiVariants)
+		templ_7745c5c3_Var20, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.EmojiVariants).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/emoji_picker.templ`, Line: 54, Col: 29}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/emoji_picker.templ`, Line: 54, Col: 157}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</strong><div data-emoji-variants class=\"oie-emoji-grid\" role=\"group\" aria-label=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var21 string
-		templ_7745c5c3_Var21, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.EmojiVariants).Resolve(ctx)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/emoji_picker.templ`, Line: 55, Col: 93}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\"></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\"></div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

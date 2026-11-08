@@ -39,7 +39,7 @@ for index,label:=range emojiCategoryLabels(v) {
 <template data-emoji-choice>
 <span class="oie-emoji-choice" data-emoji-family>
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-emoji-cell"),button.WithAttrs(templ.Attributes{"data-emoji-pick":""})){}
-@popover.Popover(popover.Config{Trigger:emojiVariantsTrigger(v),Content:emojiVariantsContent(v),Placement:popover.PlacementBottomStart,Role:"dialog",Label:v.Text.EmojiVariants,RootClass:"oie-emoji-variants",PanelClass:"oie-emoji-variants-panel"})
+@popover.Popover(popover.Config{Trigger:emojiVariantsTrigger(v),Content:emojiVariantsContent(v),Placement:popover.PlacementTopStart,Role:"dialog",Label:v.Text.EmojiVariants,RootClass:"oie-emoji-variants",PanelClass:"oie-emoji-variants-panel"})
 </span>
 </template>
 </div>
@@ -51,7 +51,6 @@ templ emojiVariantsTrigger(v view) {
 
 templ emojiVariantsContent(v view) {
 <div class="oie-emoji-variants-content">
-<strong>{v.Text.EmojiVariants}</strong>
-<div data-emoji-variants class="oie-emoji-grid" role="group" aria-label={v.Text.EmojiVariants}></div>
+<div class="oie-emoji-variants-bubble rounded-radius shadow-md"><div data-emoji-variants class="oie-emoji-grid" role="group" aria-label={v.Text.EmojiVariants}></div></div>
 </div>
 }
