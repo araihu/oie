@@ -403,8 +403,14 @@ func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p doma
 func (e *Engine) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	done := make(chan error, 3)
+	done := make(chan error, 4)
 	workers := 2
+	if _, ok := e.repo.(RoomIntentRepository); ok {
+		if _, ok := e.protocols.(RoomProtocol); ok {
+			workers++
+			go func() { done <- e.runRooms(ctx) }()
+		}
+	}
 	go func() { done <- e.runOutbox(ctx) }()
 	go func() { done <- e.runSharedContent(ctx) }()
 	if e.previewFetcher != nil && e.mediaFiles != nil {

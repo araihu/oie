@@ -79,6 +79,19 @@ func recordReplyMetadata(ctx context.Context, q *dbgen.Queries, id string, in do
 }
 
 func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) error {
+	if m.OutboundReply != nil {
+		domain.ProjectOutboundReply(m)
+		target, err := q.GetMessage(ctx, string(m.OutboundReply.TargetID))
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		m.Reply.Available = target.AccountID == string(m.AccountID) && target.ConversationID == string(m.ConversationID)
+		return nil
+	}
+
 	payload, err := q.GetMessageReply(ctx, dbgen.GetMessageReplyParams{MessageID: string(m.ID), BodyHash: bodyHash(m.OriginalText)})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
@@ -166,4 +179,16 @@ func (s *Store) MessageContext(ctx context.Context, conversation, target domain.
 	}
 	window.Items, err = s.hydrateReplies(ctx, window.Items)
 	return window, err
+}
+
+func hydrateReferences(ctx context.Context, q *dbgen.Queries, m *domain.Message) error {
+	rows, err := q.GetMessageReferences(ctx, dbgen.GetMessageReferencesParams{MessageID: string(m.ID), SourceHash: bodyHash(m.OriginalText)})
+	if err != nil {
+		return err
+	}
+	m.References = nil
+	for _, row := range rows {
+		m.References = append(m.References, domain.MessageReference{Scope: row.Scope, ID: row.RemoteID, Author: row.Author})
+	}
+	return nil
 }

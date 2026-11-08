@@ -182,6 +182,18 @@ type Revision struct {
 	CreatedAt string
 }
 
+type RoomIntent struct {
+	ConversationID         string
+	AccountID              string
+	ID                     string
+	RevisionID             string
+	Nickname               string
+	Active                 int64
+	LastErrorCode          string
+	ObservationFingerprint string
+	UpdatedAt              string
+}
+
 type SharedContent struct {
 	ID         string
 	RevisionID string

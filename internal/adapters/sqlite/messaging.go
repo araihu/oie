@@ -21,6 +21,7 @@ func decodeConversation(row dbgen.Conversation) (domain.Conversation, error) {
 func decodeMessage(row dbgen.Message) (domain.Message, error) {
 	var m domain.Message
 	err := json.Unmarshal([]byte(row.Payload), &m)
+	domain.ProjectOutboundReply(&m)
 	return m, err
 }
 func number(v bool) int64 {
@@ -147,6 +148,9 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 	if receipt != nil {
 		var m domain.Message
 		err = json.Unmarshal([]byte(receipt.Result), &m)
+		if err == nil {
+			err = hydrateReply(ctx, q, &m)
+		}
 		return application.MessageResult{Message: m, Replayed: true}, err
 	}
 	row, err := q.GetConversation(ctx, string(in.Message.ConversationID))
@@ -157,6 +161,48 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 	if err != nil {
 		return application.MessageResult{}, err
 	}
+	if c.Kind == "room" {
+		intent, err := q.GetRoomIntent(ctx, string(c.ID))
+		if errors.Is(err, sql.ErrNoRows) {
+			return application.MessageResult{}, application.ErrRoomNotJoined
+		}
+		if err != nil {
+			return application.MessageResult{}, err
+		}
+		if intent.Active != 1 {
+			return application.MessageResult{}, application.ErrRoomNotJoined
+		}
+	}
+	if plan := in.Message.OutboundReply; plan != nil {
+		target, err := q.GetMessage(ctx, string(plan.TargetID))
+		if err != nil {
+			return application.MessageResult{}, notFound(err)
+		}
+		source, err := decodeMessage(target)
+		if err != nil {
+			return application.MessageResult{}, err
+		}
+		if source.AccountID != in.Message.AccountID || source.ConversationID != in.Message.ConversationID || bodyHash(source.OriginalText) != plan.TargetBodyHash {
+			return application.MessageResult{}, application.ErrStateConflict
+		}
+		if plan.Reference != nil {
+			if err = hydrateReferences(ctx, q, &source); err != nil {
+				return application.MessageResult{}, err
+			}
+			found := false
+			for _, ref := range source.References {
+				if ref == *plan.Reference {
+					found = true
+					break
+				}
+			}
+			if !found {
+				plan.Reference = nil
+				in.Message.ReplyReference = nil
+			}
+		}
+
+	}
 	if err = insertMessage(ctx, q, in.Message); err != nil {
 		return application.MessageResult{}, err
 	}
@@ -166,6 +212,13 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 	if err = updateConversation(ctx, q, c, in.Message, in.ConversationRevisionID, in.Message.CreatedAt); err != nil {
 		return application.MessageResult{}, err
 	}
+	if err = hydrateReply(ctx, q, &in.Message); err != nil {
+		return application.MessageResult{}, err
+	}
+	if err = q.SetOperationResult(ctx, dbgen.SetOperationResultParams{ResourceID: string(in.Message.ID), Result: jsonText(in.Message), ID: string(in.Operation.ID)}); err != nil {
+		return application.MessageResult{}, err
+	}
+
 	if err = tx.Commit(); err != nil {
 		return application.MessageResult{}, err
 	}
@@ -181,6 +234,9 @@ func (s *Store) Message(ctx context.Context, id domain.ID) (domain.Message, erro
 	m, err := decodeMessage(row)
 	if err == nil {
 		err = hydrateReply(ctx, s.queries, &m)
+		if err == nil {
+			err = hydrateReferences(ctx, s.queries, &m)
+		}
 	}
 	return m, err
 }
@@ -300,6 +356,9 @@ func updateMessage(ctx context.Context, q *dbgen.Queries, m domain.Message, stat
 	if err := q.UpdateOutbox(ctx, dbgen.UpdateOutboxParams{State: state, NextAttemptAt: stamp(next), AttemptIncrement: increment, MessageID: string(m.ID)}); err != nil {
 		return m, err
 	}
+	if err := hydrateReply(ctx, q, &m); err != nil {
+		return m, err
+	}
 	_, err := change(ctx, q, "message.updated", m, at)
 	return m, err
 }
@@ -316,6 +375,9 @@ func (s *Store) CancelMessage(ctx context.Context, in application.CancelMutation
 	if receipt != nil {
 		var m domain.Message
 		err = json.Unmarshal([]byte(receipt.Result), &m)
+		if err == nil {
+			err = hydrateReply(ctx, q, &m)
+		}
 		return application.MessageResult{Message: m, Replayed: true}, err
 	}
 	row, err := q.GetMessage(ctx, string(in.MessageID))

@@ -61,6 +61,51 @@ func (q *Queries) FindReplyTargets(ctx context.Context, arg FindReplyTargetsPara
 	return items, nil
 }
 
+const getMessageReferences = `-- name: GetMessageReferences :many
+SELECT r.scope,r.remote_id,r.author FROM message_references r JOIN messages source ON source.id=r.message_id
+WHERE r.message_id=?1 AND r.source_hash=?2
+AND NOT EXISTS (
+ SELECT 1 FROM message_references conflict JOIN messages other ON other.id=conflict.message_id
+ WHERE other.account_id=source.account_id AND other.conversation_id=source.conversation_id
+ AND conflict.scope=r.scope AND conflict.remote_id=r.remote_id AND conflict.message_id<>r.message_id
+)
+ORDER BY r.scope,r.remote_id,r.author LIMIT 8
+`
+
+type GetMessageReferencesParams struct {
+	MessageID  string
+	SourceHash string
+}
+
+type GetMessageReferencesRow struct {
+	Scope    string
+	RemoteID string
+	Author   string
+}
+
+func (q *Queries) GetMessageReferences(ctx context.Context, arg GetMessageReferencesParams) ([]GetMessageReferencesRow, error) {
+	rows, err := q.db.QueryContext(ctx, getMessageReferences, arg.MessageID, arg.SourceHash)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMessageReferencesRow{}
+	for rows.Next() {
+		var i GetMessageReferencesRow
+		if err := rows.Scan(&i.Scope, &i.RemoteID, &i.Author); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getMessageReply = `-- name: GetMessageReply :one
 SELECT payload FROM message_replies WHERE message_id=? AND body_hash=?
 `

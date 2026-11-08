@@ -53,6 +53,7 @@ type Event struct {
 	Message      *domain.Message
 	Connection   *domain.Connection
 	History      *domain.HistoryStatus
+	RoomSession  *domain.RoomSession
 	Avatar       *domain.Avatar
 	Preview      *domain.MessagePreview
 	Star         *domain.MessageStar

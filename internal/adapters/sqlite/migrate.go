@@ -21,8 +21,8 @@ func migrateDatabase(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&legacy); err != nil {
 		return err
 	}
-	if legacy > 8 {
-		return fmt.Errorf("database schema %d is newer than supported version 8", legacy)
+	if legacy > 9 {
+		return fmt.Errorf("database schema %d is newer than supported version 9", legacy)
 	}
 	driver, err := migratesqlite.WithInstance(db, &migratesqlite.Config{})
 	if err != nil {
@@ -44,8 +44,8 @@ func migrateDatabase(ctx context.Context, db *sql.DB) error {
 	if dirty {
 		return fmt.Errorf("database migration %d is dirty; repair explicitly before starting", version)
 	}
-	if err == nil && version > 8 {
-		return fmt.Errorf("database migration %d is newer than supported version 8", version)
+	if err == nil && version > 9 {
+		return fmt.Errorf("database migration %d is newer than supported version 9", version)
 	}
 	if errors.Is(err, migrate.ErrNilVersion) && legacy == 1 {
 		if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('accounts','revisions','operations','changes','engine_identity')").Scan(&tables); err != nil {

@@ -25,9 +25,11 @@ type Querier interface {
 	GetMediaFile(ctx context.Context, hash string) (MediaFile, error)
 	GetMessage(ctx context.Context, id string) (Message, error)
 	GetMessagePreview(ctx context.Context, id string) (MessagePreview, error)
+	GetMessageReferences(ctx context.Context, arg GetMessageReferencesParams) ([]GetMessageReferencesRow, error)
 	GetMessageReply(ctx context.Context, arg GetMessageReplyParams) (string, error)
 	GetMessageStar(ctx context.Context, id string) (GetMessageStarRow, error)
 	GetOperation(ctx context.Context, id string) (Operation, error)
+	GetRoomIntent(ctx context.Context, conversationID string) (RoomIntent, error)
 	InsertAccount(ctx context.Context, arg InsertAccountParams) error
 	InsertAccountRevision(ctx context.Context, arg InsertAccountRevisionParams) error
 	InsertArchiveAlias(ctx context.Context, arg InsertArchiveAliasParams) error
@@ -57,6 +59,7 @@ type Querier interface {
 	ListConversationMessageStars(ctx context.Context, arg ListConversationMessageStarsParams) ([]ListConversationMessageStarsRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
+	ListRoomIntents(ctx context.Context) ([]RoomIntent, error)
 	ListSharedContent(ctx context.Context, arg ListSharedContentParams) ([]ListSharedContentRow, error)
 	ListStarredMessages(ctx context.Context, arg ListStarredMessagesParams) ([]ListStarredMessagesRow, error)
 	MarkSharedContentIndexed(ctx context.Context, arg MarkSharedContentIndexedParams) error
@@ -67,9 +70,11 @@ type Querier interface {
 	PutArchiveCheckpoint(ctx context.Context, arg PutArchiveCheckpointParams) error
 	PutHistoryStatus(ctx context.Context, arg PutHistoryStatusParams) error
 	PutMessageStar(ctx context.Context, arg PutMessageStarParams) error
+	PutRoomIntent(ctx context.Context, arg PutRoomIntentParams) error
 	PutSharedContent(ctx context.Context, arg PutSharedContentParams) error
 	ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error
 	SetOperationResult(ctx context.Context, arg SetOperationResultParams) error
+	SetRoomObservation(ctx context.Context, arg SetRoomObservationParams) error
 	SharedContentCandidates(ctx context.Context, arg SharedContentCandidatesParams) ([]Message, error)
 	SharedContentIndexStatus(ctx context.Context, arg SharedContentIndexStatusParams) (SharedContentIndexStatusRow, error)
 	Snapshot(ctx context.Context) (SnapshotRow, error)

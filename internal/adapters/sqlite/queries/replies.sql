@@ -24,3 +24,13 @@ ORDER BY m.created_at_ms DESC,m.id DESC LIMIT sqlc.arg(page_limit);
 SELECT m.* FROM messages m WHERE m.conversation_id=sqlc.arg(conversation_id)
 AND (m.created_at_ms,m.id)>(SELECT t.created_at_ms,t.id FROM messages t WHERE t.id=sqlc.arg(target_id) AND t.conversation_id=sqlc.arg(conversation_id))
 ORDER BY m.created_at_ms,m.id LIMIT sqlc.arg(page_limit);
+
+-- name: GetMessageReferences :many
+SELECT r.scope,r.remote_id,r.author FROM message_references r JOIN messages source ON source.id=r.message_id
+WHERE r.message_id=sqlc.arg(message_id) AND r.source_hash=sqlc.arg(source_hash)
+AND NOT EXISTS (
+ SELECT 1 FROM message_references conflict JOIN messages other ON other.id=conflict.message_id
+ WHERE other.account_id=source.account_id AND other.conversation_id=source.conversation_id
+ AND conflict.scope=r.scope AND conflict.remote_id=r.remote_id AND conflict.message_id<>r.message_id
+)
+ORDER BY r.scope,r.remote_id,r.author LIMIT 8;

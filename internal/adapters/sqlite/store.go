@@ -234,6 +234,9 @@ func (s *Store) Events(ctx context.Context, after int64, limit int) ([]applicati
 		case "account.history_changed":
 			e.History = &domain.HistoryStatus{}
 			target = e.History
+		case "conversation.room_session_changed":
+			e.RoomSession = &domain.RoomSession{}
+			target = e.RoomSession
 		case "account.connection_changed":
 			e.Connection = &domain.Connection{}
 			target = e.Connection

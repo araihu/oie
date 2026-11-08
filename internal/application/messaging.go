@@ -33,16 +33,21 @@ type Incoming struct {
 	Kind, SenderName, ArchiveScope, ArchiveID string
 	References                                []domain.MessageReference
 	Reply                                     *domain.ReplyReference
+	CanonicalID                               domain.ID
 }
 type Rejected struct {
 	AccountID          domain.ID
 	MessageID, Address string
 	FromServer         bool
+	FromParticipant    bool
 }
 
 type Outgoing struct {
 	ID                    domain.ID
 	Address, OriginalText string
+	Kind                  string
+	RoomIntentRevisionID  domain.ID
+	Reply                 *domain.ReplyReference
 }
 
 // Outcomes distinguish definitely unsent failures from ambiguous external effects.
@@ -240,23 +245,63 @@ func (e *Engine) Conversations(ctx context.Context, cursor string, q Conversatio
 	return repo.Conversations(ctx, q)
 }
 func (e *Engine) SendMessage(ctx context.Context, key, conversationID domain.ID, text string) (MessageResult, error) {
-	if !validID(key) || !validMessage(text) {
+	return e.SendMessageWithReply(ctx, key, conversationID, text, "")
+}
+func (e *Engine) SendMessageWithReply(ctx context.Context, key, conversationID domain.ID, text string, replyTo domain.ID) (MessageResult, error) {
+	if !validID(key) || !validID(conversationID) || !validMessage(text) || (replyTo != "" && !validID(replyTo)) {
 		return MessageResult{}, ErrInvalid
+	}
+	parts := []string{string(conversationID), text}
+	if replyTo != "" {
+		parts = append(parts, string(replyTo))
+	}
+	requestFingerprint := fingerprint("send_message", parts)
+	repo, err := e.messaging()
+	if err != nil {
+		return MessageResult{}, err
+	}
+	if replay, ok := e.repo.(MessageReplayRepository); ok {
+		m, err := replay.ReplayAcceptedMessage(ctx, key, requestFingerprint)
+		if err != nil {
+			return MessageResult{}, err
+		}
+		if m != nil {
+			return MessageResult{Message: *m, Replayed: true}, nil
+		}
 	}
 	c, err := e.Conversation(ctx, conversationID)
 	if err != nil {
 		return MessageResult{}, err
 	}
-	if c.Kind != "direct" {
+	if c.Kind != "direct" && c.Kind != "room" {
 		return MessageResult{}, ErrProtocolUnavailable
+	}
+	if c.Kind == "room" {
+		if _, ok := e.protocols.(RoomProtocol); !ok {
+			return MessageResult{}, ErrProtocolUnavailable
+		}
+		intent, err := e.roomIntent(ctx, c.ID)
+		if err != nil {
+			return MessageResult{}, err
+		}
+		if !intent.Active {
+			return MessageResult{}, ErrRoomNotJoined
+		}
 	}
 	a, err := e.Account(ctx, c.AccountID)
 	if err != nil {
 		return MessageResult{}, err
 	}
-	repo, err := e.messaging()
-	if err != nil {
-		return MessageResult{}, err
+	var plan *domain.OutboundReply
+	if replyTo != "" {
+		target, err := repo.Message(ctx, replyTo)
+		if err != nil {
+			return MessageResult{}, err
+		}
+		if target.AccountID != c.AccountID || target.ConversationID != c.ID {
+			return MessageResult{}, ErrInvalid
+		}
+		plan = outboundReply(a, c, target, text, e.protocols)
 	}
 	id, err := e.newID()
 	if err != nil {
@@ -271,16 +316,25 @@ func (e *Engine) SendMessage(ctx context.Context, key, conversationID domain.ID,
 		return MessageResult{}, err
 	}
 	now := e.now().UTC()
-	m := domain.Message{ID: id, RevisionID: rev, AccountID: c.AccountID, ConversationID: c.ID, Sender: domain.Sender{ID: a.ID, DisplayName: a.Address}, OriginalText: text, CreatedAt: now, IsOwn: true, SendState: "queued", ProviderID: string(id)}
-	if refs, ok := e.protocols.(OutgoingReferenceProvider); ok {
-		m.References = refs.OutgoingReferences(a, Outgoing{ID: id, Address: c.Address, OriginalText: text})
+	m := domain.Message{ID: id, RevisionID: rev, AccountID: c.AccountID, ConversationID: c.ID, Sender: domain.Sender{ID: a.ID, DisplayName: a.Address}, OriginalText: text, CreatedAt: now, IsOwn: true, SendState: "queued", ProviderID: string(id), OutboundReply: plan}
+	if plan != nil {
+		m.OriginalText = quotedReplyBody(plan)
+		m.Reply = &domain.MessageReply{MessageID: plan.TargetID, Available: true, SenderName: plan.SenderName, Excerpt: plan.Excerpt, BodyText: plan.BodyText}
+		if plan.Reference != nil {
+			m.ReplyReference = &domain.ReplyReference{Target: *plan.Reference, Fallback: append([]domain.TextRange(nil), plan.Fallback...)}
+		}
 	}
-	result, err := repo.AcceptMessage(ctx, MessageMutation{Operation: Operation{ID: key, ResourceID: id, CreatedAt: now, Kind: "send_message"}, Fingerprint: fingerprint("send_message", []string{string(c.ID), text}), Message: m, ConversationRevisionID: cr})
+	outgoing := outgoingMessage(m, c)
+	if refs, ok := e.protocols.(OutgoingReferenceProvider); ok {
+		m.References = refs.OutgoingReferences(a, outgoing)
+	}
+	result, err := repo.AcceptMessage(ctx, MessageMutation{Operation: Operation{ID: key, ResourceID: id, CreatedAt: now, Kind: "send_message"}, Fingerprint: requestFingerprint, Message: m, ConversationRevisionID: cr})
 	if err == nil {
 		e.wake()
 	}
 	return result, err
 }
+
 func (e *Engine) Message(ctx context.Context, id domain.ID) (domain.Message, error) {
 	if !validID(id) {
 		return domain.Message{}, ErrInvalid
@@ -334,6 +388,21 @@ func (e *Engine) Receive(ctx context.Context, in Incoming) error {
 	r, err := e.messaging()
 	if err != nil {
 		return err
+	}
+	if in.CanonicalID != "" && validID(in.CanonicalID) {
+		existing, lookupErr := r.Message(ctx, in.CanonicalID)
+		if lookupErr != nil && !errors.Is(lookupErr, ErrNotFound) {
+			return lookupErr
+		}
+		if lookupErr == nil && existing.IsOwn && existing.AccountID == a.ID && existing.OriginalText == in.OriginalText {
+			chat, err := r.Conversation(ctx, existing.ConversationID)
+			if err != nil {
+				return err
+			}
+			if chat.Address == address && chat.Kind == in.Kind {
+				in.ProviderID = string(existing.ID)
+			}
+		}
 	}
 	ids := make([]domain.ID, 6)
 	for i := range ids {
@@ -427,12 +496,32 @@ func (e *Engine) runOutbox(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
+				var roomRevision domain.ID
+				if c.Kind == "room" {
+					session, err := e.RoomSession(ctx, c.ID)
+					if err != nil {
+						return err
+					}
+					if !session.Active || session.State != "joined" {
+						continue
+					}
+					roomRevision = session.IntentRevisionID
+				}
 				rev, err := e.newID()
 				if err != nil {
 					return err
 				}
 				now := e.now().UTC()
-				claimed, err := r.TransitionMessage(ctx, m.ID, "queued", "dispatching", rev, now, now)
+				var claimed domain.Message
+				if c.Kind == "room" {
+					claimer, ok := e.repo.(RoomMessageClaimer)
+					if !ok {
+						return ErrProtocolUnavailable
+					}
+					claimed, err = claimer.ClaimRoomMessage(ctx, m.ID, roomRevision, rev, now)
+				} else {
+					claimed, err = r.TransitionMessage(ctx, m.ID, "queued", "dispatching", rev, now, now)
+				}
 				if errors.Is(err, ErrStateConflict) {
 					continue
 				}
@@ -440,7 +529,9 @@ func (e *Engine) runOutbox(ctx context.Context) error {
 					return err
 				}
 				sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-				outcome := e.protocols.Send(sendCtx, a, Outgoing{ID: claimed.ID, Address: c.Address, OriginalText: claimed.OriginalText})
+				outgoing := outgoingMessage(claimed, c)
+				outgoing.RoomIntentRevisionID = roomRevision
+				outcome := e.protocols.Send(sendCtx, a, outgoing)
 				cancel()
 				stateName := outcome
 				if outcome == NotSent {
@@ -491,6 +582,9 @@ func (e *Engine) Reject(ctx context.Context, in Rejected) error {
 	c, err := e.Conversation(ctx, m.ConversationID)
 	if err != nil {
 		return err
+	}
+	if c.Kind == "room" && in.FromParticipant {
+		return nil
 	}
 	if !in.FromServer && c.Address != in.Address {
 		return nil

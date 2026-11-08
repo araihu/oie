@@ -60,3 +60,24 @@ func DisplayBody(m Message) string {
 	}
 	return m.OriginalText
 }
+
+// OutboundReply is the immutable, server-created send plan. It survives outbox
+// retries without trusting later browser quotes or reselecting a provider ID.
+type OutboundReply struct {
+	TargetRevisionID              ID
+	TargetBodyHash                string
+	TargetID                      ID
+	SenderName, Excerpt, BodyText string
+	Reference                     *MessageReference
+	Fallback                      []TextRange
+}
+
+// ProjectOutboundReply restores authored body and frozen quote from durable
+// payloads. Availability is established separately against retained source data.
+func ProjectOutboundReply(m *Message) {
+	if m.OutboundReply == nil {
+		return
+	}
+	p := m.OutboundReply
+	m.Reply = &MessageReply{MessageID: p.TargetID, SenderName: p.SenderName, Excerpt: p.Excerpt, BodyText: p.BodyText}
+}
