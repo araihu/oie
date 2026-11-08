@@ -55,6 +55,7 @@ the complete real-engine browser workflow passes locally.
 
 Full `make ci` completion remains unverified on this host. Dagger v0.21.9 clients
 intermittently stop receiving completed API results and fail their engine
-healthcheck. This occurred with the shared Unix socket, an independent SSH
-forward and the Docker connection. No green full-pipeline result is claimed.
+healthcheck. An independent SSH forward did not resolve the stalls. A Docker
+connection attempt also did not produce a completed run. No green full-pipeline
+result is claimed.
 The live-preview engine and its data were not used by the Dagger tests.
