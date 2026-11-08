@@ -1,0 +1,15 @@
+# Searchable emoji selector
+
+The composer has a local emoji selector built from Goshtoso's public Popover, Button and TextInput components. No dependency upgrade or protocol operation is needed. Unicode emoji are ordinary message text. Stickers and GIF discovery/sending are explicitly backlogged as B19 and B20 in the spec.
+
+Opening the selector loads the current locale's embedded catalog. Names, keywords and interface labels support English and Brazilian Portuguese. Search ignores case and accents, also accepts an emoji itself, and requires every search term to match. Categories and a device-specific list of up to 24 recent choices help browsing. Recent choices fall back to tab memory if browser storage is unavailable.
+
+Picking an emoji replaces the textarea's selection or inserts at its cursor. It updates the existing draft journal through the input event and returns focus to the composer. It does not submit the form, change the operation key, discard a reply target, or require a protocol capability. The selector is disabled while the composer is disabled, read-only or handling a send. HTMX route cleanup removes its listeners and aborts pending catalog reads.
+
+Keyboard users can open with Enter or Arrow Down, search, move into results with Arrow Down, navigate emoji buttons with arrow keys, select with Enter, and dismiss with Escape. The panel uses Goshtoso's viewport-aware placement and the browser's emoji font. Names are accessible labels, not HTML from the catalog. Results render in batches rather than adding thousands of buttons at once.
+
+The catalog contains Unicode 17.0 and CLDR 48 data with the retained Unicode-3.0 license. See [the data generation instructions](../tools/emoji/README.md). No external service receives search terms, and the app does not download an emoji font or image set.
+
+Validation includes the isolated `tests/browser/emoji-picker.cjs` fixture, which checks lazy loading, cursor/selection replacement, composed sequences, keyboard actions, draft isolation through HTMX, pending-send locks, Portuguese search, mobile placement, denied storage, catalog retry and absence of sends. The accessibility scan covers the picker itself. The existing empty fixture timeline has an unrelated `aria-prohibited-attr` warning and is outside that scan.
+
+Verified on 2026-11-08 with `make check`, Dagger `make ci-check` including golangci-lint and race tests, the emoji browser fixture, and the existing reply-composer browser regression. The first reply regression attempt hit its immediate keyboard-focus assertion under concurrent checks; the unchanged baseline and the feature rerun both passed. The full Dagger browser/XMPP pipeline was not run for this frontend increment.
