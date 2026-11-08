@@ -126,7 +126,7 @@ Support, subject to protocol support and permissions:
 - A room-details panel with name, topic, and the available participant list.
 - Name/topic editing where permitted.
 
-Do not imply that an available participant list is a complete persistent membership roster.
+Do not imply that an available participant list is a complete persistent membership roster. Conversation details show available room metadata, visible occupants and connection/presence observations with their scope. The owning account connection is separate from room-session and participant presence. Missing observations remain unknown. Reading details does not automatically join a room or request presence subscriptions.
 
 Rejoin previously active rooms after reconnecting unless the user explicitly left or access was revoked. Preserve explicit leave decisions across restart. Leaving a room does not delete stored history. Kicking, banning, and role-management controls are backlogged; incoming removal/permission changes still need truthful handling.
 

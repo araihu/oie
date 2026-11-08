@@ -83,3 +83,8 @@ scoped matrix and return to management. Full Dagger completion is tracked
 separately from these checks.
 The capabilities run again timed out at 180 seconds with exit 124 before
 returning Dagger stage results. No green full-pipeline result is claimed.
+
+The conversation-details increment adds `conversation-details.cjs` to the browser
+stage. Native checks/races, Prosody no-join metadata integration, sixteen browser
+variants and the real-engine browser workflow pass. The bounded full Dagger
+attempt timed out after 180 seconds with exit 124 before returning stage results.
