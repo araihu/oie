@@ -248,6 +248,8 @@ Forwarding media retrieves the full file if necessary and uploads through the de
 
 Use `araihu/margo` with its current syntax/parsing behavior for this alpha subset: bold, italic, strikethrough, inline code, fenced/preformatted code, links, lists, and blockquotes. WhatsApp is a feature/presentation reference; it does not replace Margo's delimiter grammar.
 
+**AGREED:** in chat, each quoted line needs its own `>` prefix. An unprefixed response immediately after a quote renders outside it, including an emoji-only response. Reducing the number of prefixes reduces the nesting depth. Use an opt-in public Margo chat option for this exception; preserve Margo's default document and chat parsing behavior. Code remains literal, and presentation never changes the original message or its copy source.
+
 Attempt Markdown rendering by default, with an option to disable it and a readable fallback on rendering failure. Preserve the original message source separately from rendered output.
 
 Adapters translate semantic formatting to supported provider representations, falling back readably for unsupported features. Formatting support is not uniformly a server capability.

@@ -11,7 +11,7 @@ import (
 )
 
 func formattedMessage(ctx context.Context, original string) templ.Component {
-	content, err := margo.RenderChat(ctx, original)
+	content, err := margo.RenderChatWithOptions(ctx, original, margo.ChatOptions{ExplicitBlockquotes: true})
 	if err != nil {
 		return nil
 	}

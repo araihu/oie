@@ -23,6 +23,8 @@ github.com/araihu/goshtoso v0.6.2-0.20261108232401-14f588cfc5a5 h1:WjA23q3evJoTr
 github.com/araihu/goshtoso v0.6.2-0.20261108232401-14f588cfc5a5/go.mod h1:H/vLd+4wvpzNIjDnW81Sk44+4670WIe7x6DUE57Kg/8=
 github.com/araihu/margo v0.0.36-0.20261108131344-c6676eea4fe0 h1:GNXQRDJfMeiFmqM6yKB/4VwinRbvn6+kOybyThl0Cmw=
 github.com/araihu/margo v0.0.36-0.20261108131344-c6676eea4fe0/go.mod h1:Cvt4KcHzu/OLH9Dy8XvdiqlOneGffUw1CaK7A9f2bd0=
+github.com/araihu/margo v0.0.36-0.20261108235149-ff44a5fe5052 h1:aA/5OmFLV8sNmlMbRWMIzNd6RJAc8nCePSWPSwGI/jA=
+github.com/araihu/margo v0.0.36-0.20261108235149-ff44a5fe5052/go.mod h1:Cvt4KcHzu/OLH9Dy8XvdiqlOneGffUw1CaK7A9f2bd0=
 github.com/bmatcuk/doublestar v1.1.1/go.mod h1:UD6OnuiIn0yFxxA2le/rnRU1G4RaI4UvFv1sNto9p6w=
 github.com/chromedp/cdproto v0.0.0-20250724212937-08a3db8b4327 h1:UQ4AU+BGti3Sy/aLU8KVseYKNALcX9UXY6DfpwQ6J8E=
 github.com/chromedp/cdproto v0.0.0-20250724212937-08a3db8b4327/go.mod h1:NItd7aLkcfOA/dcMXvl8p1u+lQqioRMq/SqDp71Pb/k=

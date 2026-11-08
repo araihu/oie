@@ -9,7 +9,57 @@ import (
 
 	"github.com/araihu/margo"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"golang.org/x/net/html"
 )
+
+func TestChatQuotesRequireAnExplicitPrefixOnEveryLine(t *testing.T) {
+	for _, tc := range []struct {
+		name, source string
+		textByDepth  map[int]string
+	}{
+		{"emoji reply", "> quoted source\n🙌🙌😀", map[int]string{0: "🙌🙌😀", 1: "quoted source"}},
+		{"CRLF", "> quoted source\r\n🙌🙌😀\r\n", map[int]string{0: "🙌🙌😀", 1: "quoted source"}},
+		{"explicit nesting", ">> inner\n> outer\nOwn **response**", map[int]string{0: "Own response", 1: "outer", 2: "inner"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			component := formattedMessage(context.Background(), tc.source)
+			if component == nil {
+				t.Fatal("chat formatting failed")
+			}
+			var output bytes.Buffer
+			if err := component.Render(context.Background(), &output); err != nil {
+				t.Fatal(err)
+			}
+			root, err := html.Parse(strings.NewReader(output.String()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			texts := map[int]string{}
+			var walk func(*html.Node, int)
+			walk = func(node *html.Node, depth int) {
+				if node.Type == html.ElementNode && node.Data == "blockquote" {
+					depth++
+				}
+				if node.Type == html.TextNode {
+					texts[depth] += node.Data
+				}
+				for child := node.FirstChild; child != nil; child = child.NextSibling {
+					walk(child, depth)
+				}
+			}
+			walk(root, 0)
+			for depth, expected := range tc.textByDepth {
+				if strings.TrimSpace(texts[depth]) != expected {
+					t.Errorf("quote depth %d: got %q want %q", depth, texts[depth], expected)
+				}
+			}
+			var copied string
+			if err := json.Unmarshal([]byte(originalMessageJSON(tc.source)), &copied); err != nil || copied != tc.source {
+				t.Fatal("quote presentation changed the original copy source", err)
+			}
+		})
+	}
+}
 
 func TestMessageFormattingKeepsOriginalAndSafeChatProjection(t *testing.T) {
 	original := ">> kDE: O documentário\n>> **bold**\n> Lembrando...\n\n![image](https://example.test/image.png) [bad](javascript:alert%281%29)\n\n<script>alert(1)</script>\n"
