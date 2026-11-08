@@ -1,11 +1,13 @@
 # Local CI loop
 
-The account-avatar connection indicator passes final native `make check` and
-its isolated browser fixture across four viewport/locale/theme variants. A
-read-only live preview check also passes with no mutations or page errors.
-Dagger `make ci-check` passed the initial markup version. The final repeat passed
-its container `make check`, then ended with SIGTERM, exit 143, during race tests.
-Completion of the full final-snapshot Dagger run remains unverified.
+The account-avatar indicator and state-aware account controls pass native
+`make check` and Dagger `make ci-check`, including lint, generation, race tests
+and builds. The account-status browser fixture covers four viewport/locale/theme
+variants, live state transitions and preservation of unfinished connection fields.
+The affected avatar, live-chat and capabilities browser fixtures also pass.
+A read-only live account-detail check passes with no mutations or page errors.
+The development XMPP/browser integration was not rerun for this UI change; its
+connected-state selector was updated to the avatar indicator.
 
 The message-action corner fix passes native `make check`, Dagger `make ci-check`
 and the 42-case browser layout/action matrix. Its exact upstream dependency is
