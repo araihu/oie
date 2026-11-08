@@ -404,6 +404,8 @@ Theme follows the system by default with per-device Light/Dark overrides.
 
 Desktop composer defaults: Enter sends, Shift+Enter inserts a newline, with a per-device Enter-to-send setting. On mobile, Enter inserts a newline and the Send button sends. Preserve IME composition.
 
+**AGREED:** the composer has an emoji selector with search. Emoji selection inserts Unicode text into the current draft and does not send it. Search matches names, keywords and aliases in all supported app languages regardless of the interface language, including equivalent results for `thumbs up` and `joinha`. Accessible names follow the interface language. Group skin-tone variants under a compact, rounded horizontal subpicker preferably above the originating emoji, with a pointer and no visible title. Use a rounded background on emoji hover, without underlining. The reference guides shape and interaction; preserve the active theme colors, radius, borders and shadows. Browse one continuous list with category headers. Footer category icons navigate to those headers rather than filter the list; search always covers the complete catalog. Keep the selector at the same responsive size across categories, including empty Recent lists and empty search results. Stickers and GIF discovery/sending are deferred.
+
 The composer grows and shrinks with wrapped or multiline text, including restored drafts, up to the smaller of 12rem or 30% of the dynamic viewport height. Beyond that limit, scroll inside the textarea. Keep composer actions aligned to its bottom edge.
 
 Open at the first unread message, otherwise at latest, with **Jump to latest**. Incoming messages auto-scroll only if the user is already at the bottom; otherwise preserve position and show **New messages**. Explicit search/reply navigation targets its selected message.
@@ -605,6 +607,8 @@ Manual link stars/export, separate threads, automatic protocol relaying, multi-e
 | **B16** | XMPP end-to-end encryption, including keys/trust, encrypted history, and the hosted-engine endpoint model. |
 | **B17** | Multi-user hosted instances with isolated accounts/history/schedules/outbox. |
 | **B18** | Built-in Oiê application authentication. No external authentication provider is selected in its place. |
+| **B19** | Sticker selection, packs and sending. |
+| **B20** | GIF search, selection and sending. Existing ordinary media behavior does not imply a GIF discovery service. |
 
 A separate native daemon is an accepted future option. Wails is a possible desktop host. Matrix, IRC, and Nostr are likely future protocol candidates. These do not require alpha daemon/native-shell implementations or implement all candidate protocols now.
 

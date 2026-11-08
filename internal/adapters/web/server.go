@@ -154,6 +154,27 @@ type copy struct {
 	DocumentFit                string
 	DocumentZoomIn             string
 	DocumentZoomOut            string
+	EmojiNoRecent              string
+	EmojiVariants              string
+	EmojiVariantsFor           string
+	EmojiPicker                string
+	EmojiSearch                string
+	EmojiCategories            string
+	EmojiAll                   string
+	EmojiRecent                string
+	EmojiMore                  string
+	EmojiLoading               string
+	EmojiEmpty                 string
+	EmojiFailed                string
+	EmojiSmileys               string
+	EmojiPeople                string
+	EmojiAnimals               string
+	EmojiFood                  string
+	EmojiTravel                string
+	EmojiActivities            string
+	EmojiObjects               string
+	EmojiSymbols               string
+	EmojiFlags                 string
 	RefreshPreview             string
 	RefreshPreviewFailed       string
 	SharedLoadingOlder         string
@@ -443,6 +464,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if serveEmojiAsset(w, r) {
 		return
 	}
 	if s.serveBrand(w, r) {
