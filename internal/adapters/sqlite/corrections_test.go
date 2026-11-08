@@ -2,6 +2,8 @@ package sqlite
 
 import (
 	"errors"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -197,5 +199,43 @@ func TestReplyReferenceAliasesCannotHideAConflictingThirdTarget(t *testing.T) {
 	}
 	if _, err = e.Message(t.Context(), migrationID()); !errors.Is(err, application.ErrNotFound) {
 		t.Fatal("missing source lost notfound", err)
+	}
+}
+
+// Reference hydration runs for every visible message during archive replay.
+// Check the planner rather than a timing limit so unrelated retained history
+// cannot turn each canonical lookup into a full reference scan.
+func TestCanonicalReferencesUseIndexedSourceLookups(t *testing.T) {
+	s, _, _ := outboxFixture(t)
+	source, err := os.ReadFile("queries/corrections.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, query, ok := strings.Cut(string(source), "-- name: ListCanonicalMessageReferences :many")
+	if !ok {
+		t.Fatal("reference query missing")
+	}
+	query = strings.ReplaceAll(query, "sqlc.arg(canonical_id)", "?1")
+	rows, err := s.db.QueryContext(t.Context(), "EXPLAIN QUERY PLAN "+query, string(migrationID()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	details := ""
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		if err = rows.Scan(&id, &parent, &unused, &detail); err != nil {
+			t.Fatal(err)
+		}
+		details += detail + "\n"
+	}
+	if err = rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range []string{"r", "conflict", "tainted"} {
+		if strings.Contains(details, "SCAN "+source+" ") || !strings.Contains(details, "SEARCH "+source+" USING") {
+			t.Fatalf("reference source %s must use indexed lookups:\n%s", source, details)
+		}
 	}
 }

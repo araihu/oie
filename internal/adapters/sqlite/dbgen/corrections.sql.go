@@ -200,16 +200,17 @@ const listCanonicalMessageReferences = `-- name: ListCanonicalMessageReferences 
 SELECT r.scope,r.remote_id,r.author,r.source_hash,m.payload AS message_payload
 FROM message_references r JOIN messages m ON m.id=r.message_id
 LEFT JOIN message_canonical_aliases a ON a.alias_id=m.id
-WHERE coalesce(a.canonical_id,m.id)=?1
+WHERE (r.message_id=?1 OR r.message_id IN
+ (SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=?1))
 AND NOT EXISTS(
- SELECT 1 FROM message_references conflict JOIN messages other ON other.id=conflict.message_id
+ SELECT 1 FROM message_references conflict INDEXED BY message_references_lookup CROSS JOIN messages other ON other.id=conflict.message_id
  LEFT JOIN message_canonical_aliases other_alias ON other_alias.alias_id=other.id
  WHERE other.account_id=m.account_id AND other.conversation_id=m.conversation_id
  AND conflict.scope=r.scope AND conflict.remote_id=r.remote_id
  AND coalesce(other_alias.canonical_id,other.id)<>?1
 )
 AND NOT EXISTS (
- SELECT 1 FROM message_references tainted JOIN messages observed ON observed.id=tainted.message_id
+ SELECT 1 FROM message_references tainted INDEXED BY message_references_lookup CROSS JOIN messages observed ON observed.id=tainted.message_id
  WHERE observed.account_id=m.account_id AND observed.conversation_id=m.conversation_id
  AND tainted.scope=r.scope AND tainted.remote_id=r.remote_id
  AND tainted.source_hash<>oie_source_hash(json_extract(observed.payload,'$.OriginalText'))
