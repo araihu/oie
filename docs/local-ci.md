@@ -1,5 +1,13 @@
 # Local CI loop
 
+The video playback increment passes native `make check`, backend/BFF race tests,
+real native WebM playback/lifecycle checks and the 16-case shared-content browser
+regression. Isolated committed-source web/API tests also pass. Dagger passed the
+initial engine/player implementation; the final repeat ended with exit 143
+while connecting to the runner, so final-snapshot Dagger completion remains
+unverified. See [video playback](video-playback.md) for the measured scope,
+codec and streaming-retention limits, and live data preservation.
+
 The searchable shared-content account filter passes final native `make check`,
 Dagger `make ci-check` and the shared-content browser fixture with 16 accessible
 viewport/theme/locale variants. Selection follows the URL through fragment

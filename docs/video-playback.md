@@ -52,3 +52,30 @@ resume across process restarts, video-file sync and persistent video transfer
 management require a later retention increment. Existing image download and
 hash behavior is unchanged. No send, room join, message revision or outbox
 mutation occurs during playback.
+
+## Verified scope
+
+Native `make check`, backend and BFF race tests, and the native-video browser
+fixture pass. The browser fixture decodes an original 1502-byte VP8/WebM clip,
+checks real playback, pause, seeking, keyboard control and exact Range bytes,
+and preserves playback through gallery, conversation and scoped-drawer refreshes.
+It covers explicit retries, offline recovery, unsupported content, focus/drafts,
+reference removal and cleanup on navigation or drawer close. The shared-content
+regression passes all 16 responsive/theme/locale accessibility variants.
+
+The committed source also passes isolated web/API package tests independently
+of concurrent working-tree changes. A read-only live check finds three mounted
+players with no source, autoplay, video-body requests or mutations before Play.
+The compact controls fit at 390 and 1290 pixels. No real provider video was
+retrieved during validation. Actual MP4 codec support was not claimed from the
+VP8 test; unsupported formats retain the original link and explicit retry.
+
+The live engine advertises API 0.13.0. Its existing data directory remains in
+place with clean migration version 10; retained messages increased from 5746
+to 5754 while the live account received traffic. No migration was required.
+
+Dagger `make ci-check` passed the engine/player increment before the final
+runtime-version alignment and compact-control adjustment. The final repeat
+was terminated with exit 143 while connecting to the runner. Completion of the
+final-snapshot Dagger run remains unverified. Full development XMPP messaging
+integration was not rerun for this receive-side media feature.
