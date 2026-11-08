@@ -130,6 +130,35 @@ func TestDevelopmentServerMessageExchange(t *testing.T) {
 	if err != nil || cap.JSON200 == nil || cap.JSON200.DirectText == nil || !*cap.JSON200.DirectText {
 		t.Fatal("connected adapter did not expose actual direct-text availability")
 	}
+	// The account matrix reads session-local discovery; it never enables missing app operations.
+	eventually(t, func() bool {
+		evidence, err := client.GetAccountCapabilitiesWithResponse(ctx, alice)
+		if err != nil || evidence.JSON200 == nil {
+			return false
+		}
+		state := evidence.JSON200.Discovery.State
+		return (state == "complete" || state == "partial") && len(evidence.JSON200.Discovery.Services) >= 2
+	})
+	discovered, err := client.GetAccountCapabilitiesWithResponse(ctx, alice)
+	if err != nil || discovered.JSON200 == nil {
+		t.Fatal("discovery projection", err)
+	}
+	accountSeen, serverSeen := false, false
+	for _, service := range discovered.JSON200.Discovery.Services {
+		accountSeen = accountSeen || (service.Scope == "account" && service.Address == "alice@localhost" && service.State == "known")
+		serverSeen = serverSeen || (service.Scope == "server" && service.Address == "localhost" && service.State == "known")
+	}
+	if !accountSeen || !serverSeen {
+		t.Fatal("actual server/account discovery absent")
+	}
+	for _, row := range discovered.JSON200.Features {
+		if row.Id == "file_upload" && row.AppSupport != "unsupported" {
+			t.Fatal("discovery enabled unimplemented upload")
+		}
+		if row.Id == "reactions" && row.ServerSupport != "scope_dependent" {
+			t.Fatal("peer feature classified as server flag")
+		}
+	}
 	opened, err := client.OpenConversationWithResponse(ctx, &engineapi.OpenConversationParams{IdempotencyKey: string(id())}, engineapi.OpenConversationJSONRequestBody{AccountId: alice, Address: "bob@localhost"})
 	if err != nil || (opened.JSON201 == nil && opened.JSON200 == nil) {
 		t.Fatalf("conversation: %v %#v", err, opened)
@@ -243,6 +272,10 @@ func TestDevelopmentServerMessageExchange(t *testing.T) {
 	if err != nil || disabled.JSON200 == nil || disabled.JSON200.State != "not_connected" {
 		t.Fatal("disconnect failed")
 	}
+	cleared, err := client.GetAccountCapabilitiesWithResponse(ctx, alice)
+	if err != nil || cleared.JSON200 == nil || cleared.JSON200.Discovery.State != "not_connected" || len(cleared.JSON200.Discovery.Services) != 0 {
+		t.Fatal("disconnect exposed old session evidence", err)
+	}
 	queued := send(string(id()), "Queued until reconnect "+string(id()))
 	time.Sleep(100 * time.Millisecond)
 	current, err := client.GetMessageWithResponse(ctx, queued.Id)
@@ -290,8 +323,17 @@ func TestDevelopmentServerMessageExchange(t *testing.T) {
 	if err != nil || bad.JSON202 == nil {
 		t.Fatal("bad-recipient send not accepted")
 	}
+	lastRejectionState := ""
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Log("provider rejection final state:", lastRejectionState)
+		}
+	})
 	eventually(t, func() bool {
 		r, err := client.GetMessageWithResponse(ctx, bad.JSON202.Id)
+		if err == nil && r.JSON200 != nil {
+			lastRejectionState = string(r.JSON200.SendState)
+		}
 		return err == nil && r.JSON200 != nil && r.JSON200.SendState == "failed"
 	})
 	// Incorrect authentication must produce a stable non-secret error.

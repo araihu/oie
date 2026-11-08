@@ -14,7 +14,6 @@ import (
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	mx "mellium.im/xmpp"
-	"mellium.im/xmpp/disco"
 	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/stanza"
 )
@@ -237,17 +236,12 @@ func (m *Manager) readHistoryIQ(ctx context.Context, e *entry, s *mx.Session, sc
 	return result.Inner, nil
 }
 func (m *Manager) supportsArchive(ctx context.Context, e *entry, s *mx.Session, scope string) (bool, error) {
-	if err := m.acquireHistory(ctx); err != nil {
-		return false, err
+	info, err := m.queryInfo(ctx, e, s, scope)
+	kind := "room"
+	if scope == e.account.Address {
+		kind = "account"
 	}
-	defer func() { <-m.historyGate }()
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	to, err := jid.Parse(scope)
-	if err != nil {
-		return false, err
-	}
-	info, err := disco.GetInfo(ctx, "", to, s)
+	recordDiscovery(e, s, discovered(kind, scope, info, err))
 	if err != nil {
 		return false, err
 	}

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.7.0
+  version: 0.8.0
   description: Native engine API for account metadata, XMPP connections, direct text conversations, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
     are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.
@@ -403,7 +403,7 @@ paths:
               example:
                 id: 019a5df0-0000-7000-8000-000000000003
                 role: local
-                apiVersion: 0.7.0
+                apiVersion: 0.8.0
                 eventCursor: 019a5df0-0000-7000-8000-000000000003:1
         '503':
           $ref: '#/components/responses/Unavailable'
@@ -672,7 +672,12 @@ paths:
       - Accounts
       operationId: getAccountCapabilities
       summary: Read account capability evidence
-      description: Protocol capabilities remain unknown until an adapter connects and discovers them.
+      description: >-
+        Read application implementation, protocol support and cached server discovery
+        evidence separately. This query never contacts the protocol server. Evidence is
+        scoped, bounded and cleared when a connection ends. An absent advertisement
+        does not prove that a client-level feature is unsupported. Discovery runs once
+        per connection; room evidence is also collected during history recovery.
       responses:
         '200':
           description: Current account capability evidence
@@ -684,6 +689,10 @@ paths:
                 accountId: 019a5df0-0000-7000-8000-000000000001
                 state: unknown
                 reason: not_connected
+                features: []
+                discovery:
+                  state: not_connected
+                  services: []
         '400':
           $ref: '#/components/responses/Invalid'
         '404':
@@ -1410,7 +1419,7 @@ components:
       example:
         id: 019a5df0-0000-7000-8000-000000000003
         role: local
-        apiVersion: 0.7.0
+        apiVersion: 0.8.0
         eventCursor: 019a5df0-0000-7000-8000-000000000003:1
       additionalProperties: false
       required:
@@ -1429,7 +1438,7 @@ components:
         apiVersion:
           type: string
           enum:
-          - 0.7.0
+          - 0.8.0
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -1525,16 +1534,22 @@ components:
           $ref: '#/components/schemas/ID'
     Capabilities:
       type: object
-      description: Protocol feature evidence scoped to one account.
+      description: Implementation and discovered feature evidence scoped to one account.
       example:
         accountId: 019a5df0-0000-7000-8000-000000000001
         state: unknown
         reason: not_connected
+        features: []
+        discovery:
+          state: not_connected
+          services: []
       additionalProperties: false
       required:
       - accountId
       - state
       - reason
+      - features
+      - discovery
       properties:
         accountId:
           $ref: '#/components/schemas/ID'
@@ -1548,10 +1563,111 @@ components:
           enum:
           - not_connected
           - adapter_connected
+        features:
+          type: array
+          maxItems: 64
+          items:
+            $ref: '#/components/schemas/CapabilityFeature'
+          description: Stable app feature rows. These diagnostics never authorize an operation.
+        discovery:
+          $ref: '#/components/schemas/CapabilityDiscovery'
         directText:
           type: boolean
           description: True only while the basic direct-text adapter is connected. No other optional protocol support
             is implied.
+    SupportState:
+      type: string
+      enum: [supported, partial, unsupported, unknown, not_required, scope_dependent, not_advertised]
+      description: >-
+        App unsupported means not implemented. Protocol supported means defined by
+        that protocol, independently of Oie implementation. Server supported means
+        observed advertised evidence. not_advertised means the relevant successful
+        query omitted that feature, not a definitive operational denial.
+        scope_dependent needs peer or room evidence. Unknown is never treated as false.
+    CapabilityFeature:
+      description: One feature compared across Oie implementation, protocol definition and scoped server evidence.
+      type: object
+      additionalProperties: false
+      required: [id, appSupport, protocolSupport, serverSupport, scope]
+      properties:
+        id:
+          type: string
+          enum: [direct_text, account_history, saved_rooms, room_history, room_discovery, room_messaging, file_upload, image_previews, link_previews, received_replies, send_replies, edit_messages, retract_messages, reactions, read_receipts, typing, presence, profile_images, formatting, e2ee, message_stars, schedules, sync]
+        appSupport:
+          $ref: '#/components/schemas/SupportState'
+        protocolSupport:
+          $ref: '#/components/schemas/SupportState'
+        serverSupport:
+          $ref: '#/components/schemas/SupportState'
+        scope:
+          type: string
+          enum: [local, account, server, service, peer, room]
+    CapabilityDiscovery:
+      description: Session-local discovery status and the bounded entity observations collected so far.
+      type: object
+      additionalProperties: false
+      required: [state, services]
+      properties:
+        state:
+          type: string
+          enum: [not_connected, pending, complete, partial, failed]
+        checkedAt:
+          type: string
+          format: date-time
+          description: UTC observation time, absent before an attempt completes.
+        services:
+          type: array
+          maxItems: 32
+          items:
+            $ref: '#/components/schemas/DiscoveredService'
+          description: >-
+            Bounded discovered entities, not a complete server inventory. Service
+            discovery skips item nodes and foreign account domains. Room evidence
+            comes only from authorized saved-room history discovery. No room join.
+    DiscoveredService:
+      description: A validated entity response with advertised namespaces, identities and observation state.
+      type: object
+      additionalProperties: false
+      required: [address, scope, state, features, identities, truncated]
+      properties:
+        address:
+          type: string
+          maxLength: 1024
+        scope:
+          type: string
+          enum: [account, server, service, room]
+        state:
+          type: string
+          enum: [known, failed]
+        features:
+          type: array
+          maxItems: 256
+          items:
+            type: string
+            maxLength: 1024
+        identities:
+          type: array
+          maxItems: 16
+          items:
+            type: object
+            additionalProperties: false
+            required: [category, type]
+            properties:
+              category:
+                type: string
+                maxLength: 300
+              type:
+                type: string
+                maxLength: 300
+              name:
+                type: string
+                maxLength: 300
+        truncated:
+          type: boolean
+          description: Bounded or invalid evidence was omitted; absent features remain unknown.
+        errorCode:
+          type: string
+          enum: [discovery_failed]
     Operation:
       type: object
       description: Durable receipt used to reconcile repeated mutations.

@@ -124,7 +124,7 @@ func (s *Server) GetEngine(ctx context.Context, _ engineapi.GetEngineRequestObje
 	}
 	return engineapi.GetEngine200JSONResponse{
 		Id: string(state.ID), Role: engineapi.EngineRole(state.Role),
-		ApiVersion: "0.7.0", EventCursor: cursor(state.ID, state.Sequence),
+		ApiVersion: "0.8.0", EventCursor: cursor(state.ID, state.Sequence),
 	}, nil
 }
 
@@ -185,25 +185,6 @@ func (s *Server) ListAccounts(ctx context.Context, r engineapi.ListAccountsReque
 		page.Items = append(page.Items, s.currentAccount(ctx, a))
 	}
 	return engineapi.ListAccounts200JSONResponse(page), nil
-}
-
-func (s *Server) GetAccountCapabilities(ctx context.Context, r engineapi.GetAccountCapabilitiesRequestObject) (engineapi.GetAccountCapabilitiesResponseObject, error) {
-	a, err := s.engine.Account(ctx, domain.ID(r.AccountId))
-	if err != nil {
-		return nil, err
-	}
-	state, err := s.engine.Connection(ctx, a.ID)
-	if err != nil {
-		return nil, err
-	}
-	result := engineapi.Capabilities{AccountId: string(a.ID), State: "unknown", Reason: "not_connected"}
-	if state.State == "connected" {
-		supported := true
-		result.State = "known"
-		result.Reason = "adapter_connected"
-		result.DirectText = &supported
-	}
-	return engineapi.GetAccountCapabilities200JSONResponse(result), nil
 }
 
 func (s *Server) GetOperation(ctx context.Context, r engineapi.GetOperationRequestObject) (engineapi.GetOperationResponseObject, error) {

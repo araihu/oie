@@ -35,20 +35,22 @@ type configuration struct {
 	Enabled            bool
 }
 type entry struct {
-	account       domain.Account
-	config        configuration
-	cancel        context.CancelFunc
-	mu            sync.RWMutex
-	state         domain.Connection
-	session       *mx.Session
-	raw           net.Conn
-	historyMu     sync.Mutex
-	archive       *archiveQuery
-	sidScopes     map[string]bool
-	avatarWake    chan struct{}
-	avatarMu      sync.Mutex
-	avatarTargets map[string]string
-	avatarDirty   map[string]string
+	account          domain.Account
+	config           configuration
+	cancel           context.CancelFunc
+	mu               sync.RWMutex
+	state            domain.Connection
+	session          *mx.Session
+	raw              net.Conn
+	historyMu        sync.Mutex
+	archive          *archiveQuery
+	sidScopes        map[string]bool
+	discovery        domain.CapabilityDiscovery
+	discoveryPartial bool
+	avatarWake       chan struct{}
+	avatarMu         sync.Mutex
+	avatarTargets    map[string]string
+	avatarDirty      map[string]string
 }
 type Manager struct {
 	dir         string
@@ -270,6 +272,13 @@ func (m *Manager) publish(ctx context.Context, e *entry, state, code string) err
 	}
 	e.mu.Lock()
 	e.state = domain.Connection{AccountID: e.account.ID, State: state, LastErrorCode: code, UpdatedAt: time.Now().UTC()}
+	if state != "connected" {
+		e.discovery = domain.CapabilityDiscovery{State: "not_connected", Services: []domain.DiscoveredService{}}
+		e.discoveryPartial = false
+	} else {
+		e.discovery = domain.CapabilityDiscovery{State: "pending", Services: []domain.DiscoveredService{}}
+		e.discoveryPartial = false
+	}
 	snapshot := e.state
 	e.mu.Unlock()
 	return m.host.ConnectionChanged(ctx, snapshot)
@@ -292,9 +301,10 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			}
 			if err = m.publish(ctx, e, "connected", ""); err == nil {
 				historyCtx, historyCancel := context.WithCancel(ctx)
-				m.workers.Add(2)
+				m.workers.Add(3)
 				go func() { defer m.workers.Done(); m.historyLoop(historyCtx, e, session) }()
 				go func() { defer m.workers.Done(); m.avatarLoop(historyCtx, e, session) }()
+				go func() { defer m.workers.Done(); m.discoverCapabilities(historyCtx, e, session) }()
 				delay = time.Second
 				err = session.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
 					return m.handle(ctx, e, tokens, start)

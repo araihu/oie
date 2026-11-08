@@ -57,6 +57,13 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err := json.Unmarshal(output, &account); err != nil {
 		t.Fatalf("JSON: %v %s", err, output)
 	}
+	registration := append([]byte(nil), output...)
+	output, err = run("", "accounts", "get-account-capabilities", "--account-id", account.Id)
+	var capabilities engineapi.Capabilities
+	if err != nil || json.Unmarshal(output, &capabilities) != nil || capabilities.Discovery.State != "not_connected" || len(capabilities.Features) == 0 || len(capabilities.Discovery.Services) != 0 {
+		t.Fatalf("CLI capability diagnostics: %v %s", err, output)
+	}
+	output = registration
 	replay, err := run(body, "accounts", "register-account", "--idempotency-key", string(key), "--body-stdin")
 	if err != nil || !bytes.Equal(output, replay) {
 		t.Fatalf("CLI replay changed receipt: %v %s", err, replay)
