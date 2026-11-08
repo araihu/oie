@@ -6,6 +6,7 @@ XMPP is the first protocol; local and hosted engines share the same API.
 The alpha is single-owner, with multiple accounts and optional device sync.
 
 - [Live browser setup and development accounts](docs/live-preview.md)
+- [Local CI loop](docs/local-ci.md)
 - [First specification](docs/oie-spec.md)
 - [Decision history](docs/unified-chat-discussion.md)
 - [Formatting feasibility](docs/oie-formatting-feasibility.md)
@@ -25,7 +26,8 @@ The independent read-only mock remains available for presentation tests.
 Existing account text archives now recover serially with durable checkpoints,
 original timestamps, replay deduplication and progress through the API/UI. Saved
 rooms and their authorized archives appear in read-only mode. Room joining and
-sending, media, schedules, sync, PWA/offline and backup/restore remain later work.
+sending, attachment uploads, schedules, sync, PWA/offline and backup/restore remain
+later work.
 See [history recovery scope](docs/milestone-three-history.md). See [engine milestone notes](docs/milestone-two-engine.md) and
 [foundation notes](docs/milestone-one.md) for scope and invariants.
 
@@ -33,6 +35,14 @@ Published account, peer and saved-room profile images now load into a local
 thumbnail cache and appear in the interface. Missing or inaccessible images keep
 initials. Anonymous room speakers retain initials until their identity can be
 verified. See [profile image scope](docs/profile-images.md).
+
+Incoming image links and social cards now have retained previews. Nearby images
+download automatically by default, with a per-device override. Expansion uses the
+retained original; Image info provides its source URL and file details. Standalone
+image URLs appear only as the image. Messages render Markdown by default through
+Margo, with a device override and an action to copy the original plain text. See
+[preview scope](docs/message-previews.md) and the agreed
+[future viewer actions](docs/image-viewer-discussion.md).
 
 ## Run
 

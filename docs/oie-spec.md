@@ -262,7 +262,7 @@ Search matches the latest message revision by default. **Include edit history** 
 
 Allow media sharing when effective protocol/server capabilities permit. Expose known upload limits and meaningful transfer errors through the uniform API.
 
-Default incoming behavior is **small previews automatically, full files on demand**, configurable per device. Do not fetch a full file merely to generate a thumbnail against that policy.
+Incoming images **download automatically as they enter view** by default, configurable per device. Turning automatic image downloads off keeps supplied small previews automatic and full originals on demand; in that mode, do not download an original merely to generate a thumbnail. Other file types keep small previews automatic and full files on demand.
 
 Downloaded-file retention is configurable per device and defaults to **retain until explicit deletion**. The PWA's evictable message cache is a separate policy; it does not silently authorize downloaded-original eviction.
 
