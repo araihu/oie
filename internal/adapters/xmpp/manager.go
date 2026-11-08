@@ -44,6 +44,7 @@ type entry struct {
 	raw           net.Conn
 	historyMu     sync.Mutex
 	archive       *archiveQuery
+	sidScopes     map[string]bool
 	avatarWake    chan struct{}
 	avatarMu      sync.Mutex
 	avatarTargets map[string]string
@@ -470,6 +471,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 	case "message":
 		var msg struct {
 			stanza.Message
+			replyMetadata
 			Body        string         `xml:"jabber:client body"`
 			Archive     *archiveResult `xml:"urn:xmpp:mam:2 result"`
 			AvatarEvent *struct {
@@ -510,7 +512,11 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		if delayed, err := time.Parse(time.RFC3339Nano, msg.Delay.Stamp); err == nil {
 			created = delayed.UTC()
 		}
-		err := m.host.Receive(ctx, application.Incoming{AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID, OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address})
+		refs, reply := decodeReplyMetadata(msg.replyMetadata, msg.Body, msg.From, e.account.Address, msg.From.Bare().String(), false, false)
+		if len(msg.Origins) == 0 && usableID(msg.ID) {
+			refs = append(refs, domain.MessageReference{Scope: "sender:" + msg.From.Bare().String(), ID: msg.ID, Author: msg.From.Bare().String()})
+		}
+		err := m.host.Receive(ctx, application.Incoming{AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID, OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address, References: refs, Reply: reply})
 		if errors.Is(err, application.ErrInvalid) {
 			return nil
 		}

@@ -114,6 +114,11 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err != nil || !bytes.Contains(output, []byte(`"sendState": "cancelled"`)) {
 		t.Fatalf("CLI retained timeline: %v %s", err, output)
 	}
+	output, err = run("", "messages", "get-message-context", "--conversation-id", conversation.Id, "--message-id", message.Id, "--limit", "1")
+	var window engineapi.MessageContext
+	if err != nil || json.Unmarshal(output, &window) != nil || window.TargetId != message.Id || len(window.Items) != 1 || window.HasOlder || window.HasNewer {
+		t.Fatalf("CLI bounded source context: %v %s", err, output)
+	}
 	// Star metadata is independent of the already-cancelled message and uses an
 	// explicit null precondition on the first write through the generated CLI.
 	starKey, _ := ids()

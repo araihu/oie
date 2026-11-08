@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.6.0",
+    "version": "0.7.0",
     "description": "Native engine API for account metadata, XMPP connections, direct text conversations, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.",
     "contact": {
       "name": "Arai Hû",
@@ -46,6 +46,58 @@
     }
   ],
   "paths": {
+    "/api/v1/conversations/{conversationId}/messages/{messageId}/context": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationID"
+        },
+        {
+          "$ref": "#/components/parameters/MessageID"
+        }
+      ],
+      "get": {
+        "operationId": "getMessageContext",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Read a bounded timeline around a retained message",
+        "description": "Reads the target and nearest retained neighbors from the same conversation, newest first by original UTC timestamp at millisecond precision and UUID tie-break. Includes the target even with limit 1. Only local retained data is read; no provider archive queries or read receipts are triggered. Foreign or unavailable source messages return not_found. Clients should offer return to latest when hasNewer is true.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum window size, including the target.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Retained context window including the target",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageContext"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/messages/{messageId}/star": {
       "parameters": [
         {
@@ -554,7 +606,7 @@
                 "example": {
                   "id": "019a5df0-0000-7000-8000-000000000003",
                   "role": "local",
-                  "apiVersion": "0.6.0",
+                  "apiVersion": "0.7.0",
                   "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
                 }
               }
@@ -2106,7 +2158,7 @@
         "example": {
           "id": "019a5df0-0000-7000-8000-000000000003",
           "role": "local",
-          "apiVersion": "0.6.0",
+          "apiVersion": "0.7.0",
           "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
         },
         "additionalProperties": false,
@@ -2130,7 +2182,7 @@
           "apiVersion": {
             "type": "string",
             "enum": [
-              "0.6.0"
+              "0.7.0"
             ]
           },
           "eventCursor": {
@@ -2953,6 +3005,103 @@
           "displayName": "bob@localhost"
         }
       },
+      "MessageReply": {
+        "type": "object",
+        "description": "A protocol-identified reply projection. It never infers identity from quoted text. Available means exactly one retained target in the same account and conversation matches the validated protocol reference. Unavailable references may retain a bounded compatibility excerpt, but cannot be navigated.",
+        "additionalProperties": false,
+        "required": [
+          "available",
+          "bodyText",
+          "excerpt"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "example": true,
+            "description": "Whether a unique retained original is available for navigation."
+          },
+          "messageId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "senderName": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Observed original sender display name, not proof of a real-world identity.",
+            "example": "Bob"
+          },
+          "excerpt": {
+            "type": "string",
+            "maxLength": 512,
+            "description": "Plain bounded original body or protocol-marked fallback excerpt. Never provider HTML.",
+            "example": "We should bake a cake."
+          },
+          "bodyText": {
+            "type": "string",
+            "description": "Display body after valid protocol-marked Unicode fallback ranges are moved to the quote card. originalText remains unchanged for copying. Malformed or unrecognized fallback ranges remain in the body.",
+            "example": "Great idea!"
+          }
+        },
+        "example": {
+          "available": true,
+          "messageId": "019a5df0-0000-7000-8000-000000000001",
+          "senderName": "Bob",
+          "excerpt": "We should bake a cake.",
+          "bodyText": "Great idea!"
+        }
+      },
+      "MessageContext": {
+        "type": "object",
+        "description": "Bounded retained timeline window. Neighbor availability is relative to the returned extremes.",
+        "additionalProperties": false,
+        "required": [
+          "targetId",
+          "items",
+          "hasOlder",
+          "hasNewer"
+        ],
+        "properties": {
+          "targetId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            }
+          },
+          "hasOlder": {
+            "type": "boolean",
+            "example": false
+          },
+          "hasNewer": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "example": {
+          "targetId": "019a5df0-0000-7000-8000-000000000001",
+          "items": [
+            {
+              "id": "019a5df0-0000-7000-8000-000000000001",
+              "revisionId": "019a5df0-0000-7000-8000-000000000001",
+              "accountId": "019a5df0-0000-7000-8000-000000000001",
+              "conversationId": "019a5df0-0000-7000-8000-000000000001",
+              "sender": {
+                "id": "019a5df0-0000-7000-8000-000000000001",
+                "displayName": "bob@localhost"
+              },
+              "originalText": "Hello from Oie!",
+              "createdAt": "2026-11-07T12:00:00Z",
+              "isOwn": false,
+              "sendState": "received"
+            }
+          ],
+          "hasOlder": false,
+          "hasNewer": true
+        }
+      },
       "Message": {
         "type": "object",
         "description": "Retained original text and actual send evidence. submitted means the stanza was written to the authenticated stream; it does not prove provider acceptance, recipient delivery, or read state. unknown is not automatically resent.",
@@ -2983,6 +3132,9 @@
           },
           "sender": {
             "$ref": "#/components/schemas/Sender"
+          },
+          "reply": {
+            "$ref": "#/components/schemas/MessageReply"
           },
           "originalText": {
             "type": "string",

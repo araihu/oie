@@ -25,6 +25,15 @@ func message(m domain.Message) engineapi.Message {
 		v := true
 		out.Historical = &v
 	}
+	if m.Reply != nil {
+		r := m.Reply
+		out.Reply = &engineapi.MessageReply{Available: r.Available, Excerpt: r.Excerpt, BodyText: r.BodyText}
+		if r.Available {
+			id, name := string(r.MessageID), r.SenderName
+			out.Reply.MessageId = &id
+			out.Reply.SenderName = &name
+		}
+	}
 	return out
 }
 func (s *Server) currentAccount(ctx context.Context, a domain.Account) engineapi.Account {

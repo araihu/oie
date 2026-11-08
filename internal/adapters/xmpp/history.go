@@ -27,6 +27,7 @@ var errUnstable = errors.New("archive not stable")
 
 type archiveMessage struct {
 	stanza.Message
+	replyMetadata
 	Body  string `xml:"jabber:client body"`
 	Users []struct {
 		Items []struct {
@@ -46,6 +47,7 @@ type archiveResult struct {
 }
 type archiveQuery struct {
 	ID, Scope   string
+	SIDVerified bool
 	Messages    []application.Incoming
 	Bytes, Seen int
 	Err         error
@@ -74,7 +76,7 @@ func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResul
 	if q.Err != nil {
 		return nil
 	}
-	in, ok, err := archivedIncoming(e.account, q.Scope, r)
+	in, ok, err := archivedIncoming(e.account, q.Scope, r, q.SIDVerified)
 	if err != nil {
 		q.Err = err
 		return nil
@@ -90,7 +92,7 @@ func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResul
 	q.Messages = append(q.Messages, in)
 	return nil
 }
-func archivedIncoming(account domain.Account, scope string, r *archiveResult) (application.Incoming, bool, error) {
+func archivedIncoming(account domain.Account, scope string, r *archiveResult, trusted ...bool) (application.Incoming, bool, error) {
 	msg := r.Forwarded.Message
 	if msg == nil || strings.TrimSpace(msg.Body) == "" {
 		return application.Incoming{}, false, nil
@@ -142,6 +144,11 @@ func archivedIncoming(account domain.Account, scope string, r *archiveResult) (a
 		if err != nil || peer.Localpart() == "" {
 			return in, false, errArchive
 		}
+	}
+	verified := len(trusted) == 1 && trusted[0] && scope == msg.From.Bare().String()
+	in.References, in.Reply = decodeReplyMetadata(msg.replyMetadata, msg.Body, msg.From, account.Address, in.Address, in.Kind == "room", verified)
+	if in.Kind == "direct" && len(msg.Origins) == 0 && usableID(msg.ID) {
+		in.References = append(in.References, domain.MessageReference{Scope: "sender:" + msg.From.Bare().String(), ID: msg.ID, Author: msg.From.Bare().String()})
 	}
 	if in.ProviderID == "" {
 		h := sha256.Sum256([]byte(scope + "\x00" + r.ID))
@@ -229,7 +236,7 @@ func (m *Manager) readHistoryIQ(ctx context.Context, e *entry, s *mx.Session, sc
 	}
 	return result.Inner, nil
 }
-func (m *Manager) supportsArchive(ctx context.Context, s *mx.Session, scope string) (bool, error) {
+func (m *Manager) supportsArchive(ctx context.Context, e *entry, s *mx.Session, scope string) (bool, error) {
 	if err := m.acquireHistory(ctx); err != nil {
 		return false, err
 	}
@@ -244,12 +251,18 @@ func (m *Manager) supportsArchive(ctx context.Context, s *mx.Session, scope stri
 	if err != nil {
 		return false, err
 	}
+	mam, sid := false, false
 	for _, feature := range info.Features {
-		if feature.Var == mamNS {
-			return true, nil
-		}
+		mam = mam || feature.Var == mamNS
+		sid = sid || feature.Var == sidNS
 	}
-	return false, nil
+	e.historyMu.Lock()
+	if e.sidScopes == nil {
+		e.sidScopes = map[string]bool{}
+	}
+	e.sidScopes[scope] = sid
+	e.historyMu.Unlock()
+	return mam, nil
 }
 
 type savedRoom struct{ Address, Title string }
@@ -341,7 +354,7 @@ func (m *Manager) recoverHistory(ctx context.Context, e *entry, s *mx.Session) {
 		if ctx.Err() != nil {
 			return
 		}
-		supported, err := m.supportsArchive(ctx, s, scope)
+		supported, err := m.supportsArchive(ctx, e, s, scope)
 		if err != nil {
 			partial = true
 			discoveryFailed = true
@@ -392,6 +405,7 @@ func (m *Manager) recoverArchive(ctx context.Context, host application.HistoryHo
 			return errArchive
 		}
 		e.historyMu.Lock()
+		query.SIDVerified = e.sidScopes[scope]
 		e.archive = query
 		e.historyMu.Unlock()
 		set := `<max>50</max>`

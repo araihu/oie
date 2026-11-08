@@ -112,6 +112,20 @@ type MessagePreview struct {
 	Payload        string
 }
 
+type MessageReference struct {
+	MessageID  string
+	Scope      string
+	RemoteID   string
+	Author     string
+	SourceHash string
+}
+
+type MessageReply struct {
+	MessageID string
+	BodyHash  string
+	Payload   string
+}
+
 type MessageRevision struct {
 	ID        string
 	EntityID  string

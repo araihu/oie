@@ -105,6 +105,9 @@ func insertMessage(ctx context.Context, q *dbgen.Queries, m domain.Message) erro
 	if err := q.InsertMessageRevision(ctx, dbgen.InsertMessageRevisionParams{ID: string(m.RevisionID), EntityID: string(m.ID), Parents: "[]", Payload: jsonText(m), CreatedAt: stamp(m.CreatedAt)}); err != nil {
 		return err
 	}
+	if err := recordReplyMetadata(ctx, q, string(m.ID), m, false); err != nil {
+		return err
+	}
 	_, err := change(ctx, q, "message.created", m, m.CreatedAt)
 	return err
 }
@@ -166,6 +169,8 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 	if err = tx.Commit(); err != nil {
 		return application.MessageResult{}, err
 	}
+	in.Message.References = nil
+	in.Message.ReplyReference = nil
 	return application.MessageResult{Message: in.Message}, nil
 }
 func (s *Store) Message(ctx context.Context, id domain.ID) (domain.Message, error) {
@@ -173,14 +178,22 @@ func (s *Store) Message(ctx context.Context, id domain.ID) (domain.Message, erro
 	if err != nil {
 		return domain.Message{}, notFound(err)
 	}
-	return decodeMessage(row)
+	m, err := decodeMessage(row)
+	if err == nil {
+		err = hydrateReply(ctx, s.queries, &m)
+	}
+	return m, err
 }
 func (s *Store) Messages(ctx context.Context, id, cursor domain.ID, limit int) ([]domain.Message, error) {
 	rows, err := s.queries.ListMessages(ctx, dbgen.ListMessagesParams{PageConversationID: string(id), PageCursor: string(cursor), PageLimit: int64(limit)})
 	if err != nil {
 		return nil, err
 	}
-	return decodeMessages(rows)
+	items, err := decodeMessages(rows)
+	if err != nil {
+		return nil, err
+	}
+	return s.hydrateReplies(ctx, items)
 }
 func decodeMessages(rows []dbgen.Message) ([]domain.Message, error) {
 	out := make([]domain.Message, 0, len(rows))
@@ -207,7 +220,21 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		var existingID string
 		existingID, err = q.GetArchiveAlias(ctx, dbgen.GetArchiveAliasParams{AccountID: string(m.AccountID), Scope: m.ArchiveScope, ArchiveID: m.ArchiveID})
 		if err == nil {
+			retained, err := q.GetMessage(ctx, existingID)
+			if err != nil {
+				return err
+			}
+			chat, err := q.GetConversation(ctx, retained.ConversationID)
+			if err != nil {
+				return err
+			}
+			if chat.AccountID != string(c.AccountID) || chat.Address != c.Address {
+				return application.ErrInvalid
+			}
 			if err = s.reconcileArchivedAuthor(ctx, q, existingID, c, m, revision); err != nil {
+				return err
+			}
+			if err = recordReplyMetadata(ctx, q, existingID, m, true); err != nil {
 				return err
 			}
 			return tx.Commit()
@@ -234,6 +261,9 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		existing, err = q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{AccountID: string(m.AccountID), ConversationID: string(c.ID), ProviderID: m.ProviderID, IsOwn: number(m.IsOwn)})
 		if err == nil {
 			if err = archiveAlias(ctx, q, m, existing.ID); err != nil {
+				return err
+			}
+			if err = recordReplyMetadata(ctx, q, existing.ID, m, true); err != nil {
 				return err
 			}
 			return tx.Commit()

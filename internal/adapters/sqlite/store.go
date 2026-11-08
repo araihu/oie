@@ -249,6 +249,11 @@ func (s *Store) Events(ctx context.Context, after int64, limit int) ([]applicati
 		if err = json.Unmarshal([]byte(row.Payload), target); err != nil {
 			return nil, err
 		}
+		if e.Message != nil {
+			if err = hydrateReply(ctx, s.queries, e.Message); err != nil {
+				return nil, err
+			}
+		}
 		out = append(out, e)
 	}
 	return out, nil

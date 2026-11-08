@@ -112,7 +112,7 @@ func (e *Engine) ConversationPreviews(ctx context.Context, conversation domain.I
 	}
 	out := []domain.MessagePreview{}
 	for _, m := range messages {
-		for _, address := range previewURLs(m.OriginalText) {
+		for _, address := range previewURLs(domain.DisplayBody(m)) {
 			id, err := e.newID()
 			if err != nil {
 				return nil, err

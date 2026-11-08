@@ -120,6 +120,9 @@ func (s *Store) StarredMessages(ctx context.Context, in application.StarQuery) (
 				return nil, err
 			}
 		}
+		if err = hydrateReply(ctx, s.queries, &item.Message); err != nil {
+			return nil, err
+		}
 		out = append(out, item)
 	}
 	return out, nil

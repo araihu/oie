@@ -58,8 +58,24 @@ func TestExistingHistoryAndSavedRoomRecovery(t *testing.T) {
 	defer func() { _ = bobRaw.Close() }()
 	body := "History before Oie registration " + string(id())
 	received := make(chan bool, 1)
+	replyReceived := make(chan bool, 1)
+	originID := string(id())
+	replyBody := "> archived 🍰\narchived answer " + string(id())
 	go func() {
-		_ = alice.Serve(mx.HandlerFunc(func(xmlstream.TokenReadEncoder, *xml.StartElement) error { return nil }))
+		_ = alice.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
+			if start.Name.Local == "message" {
+				var m struct {
+					Body string `xml:"body"`
+				}
+				if xml.NewTokenDecoder(xmlstream.MultiReader(xmlstream.Token(*start), tokens)).Decode(&m) == nil && m.Body == replyBody {
+					select {
+					case replyReceived <- true:
+					default:
+					}
+				}
+			}
+			return nil
+		}))
 	}()
 	go func() {
 		_ = bob.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
@@ -80,17 +96,58 @@ func TestExistingHistoryAndSavedRoomRecovery(t *testing.T) {
 	if err = bob.Send(ctx, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(nil)); err != nil {
 		t.Fatal(err)
 	}
+	if err = alice.Send(ctx, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(nil)); err != nil {
+		t.Fatal(err)
+	}
 	to, _ := jid.Parse("bob@localhost")
 	if err = alice.Encode(ctx, struct {
 		stanza.Message
 		Body string `xml:"body"`
-	}{stanza.Message{To: to, Type: stanza.ChatMessage, ID: string(id())}, body}); err != nil {
+	}{stanza.Message{To: to, Type: stanza.ChatMessage, ID: originID}, body}); err != nil {
 		t.Fatal(err)
 	}
 	select {
 	case <-received:
 	case <-ctx.Done():
 		t.Fatal("fixture recipient did not receive seed")
+	}
+	from, _ := jid.Parse("alice@localhost")
+	if err = bob.Encode(ctx, struct {
+		stanza.Message
+		Body  string `xml:"body"`
+		Reply struct {
+			ID string `xml:"id,attr"`
+			To string `xml:"to,attr"`
+		} `xml:"urn:xmpp:reply:0 reply"`
+		Fallback struct {
+			For  string `xml:"for,attr"`
+			Body struct {
+				Start int `xml:"start,attr"`
+				End   int `xml:"end,attr"`
+			} `xml:"body"`
+		} `xml:"urn:xmpp:fallback:0 fallback"`
+	}{Message: stanza.Message{To: from, Type: stanza.ChatMessage, ID: string(id())}, Body: replyBody,
+		Reply: struct {
+			ID string `xml:"id,attr"`
+			To string `xml:"to,attr"`
+		}{originID, "alice@localhost"},
+		Fallback: struct {
+			For  string `xml:"for,attr"`
+			Body struct {
+				Start int `xml:"start,attr"`
+				End   int `xml:"end,attr"`
+			} `xml:"body"`
+		}{For: "urn:xmpp:reply:0", Body: struct {
+			Start int `xml:"start,attr"`
+			End   int `xml:"end,attr"`
+		}{0, 13}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-replyReceived:
+	case <-ctx.Done():
+		t.Fatal("fixture reply not received")
 	}
 	room := "history-" + string(id()) + "@conference.localhost"
 	owner, _ := jid.Parse("alice@localhost")
@@ -170,6 +227,24 @@ func TestExistingHistoryAndSavedRoomRecovery(t *testing.T) {
 				t.Fatal("wrong historical send evidence")
 			}
 		}
+	}
+	var originalID domain.ID
+	for _, m := range messages {
+		if m.OriginalText == body {
+			originalID = m.ID
+		}
+	}
+	replyFound := false
+	for _, m := range messages {
+		if m.OriginalText == replyBody {
+			replyFound = true
+			if m.Reply == nil || !m.Reply.Available || m.Reply.MessageID != originalID || m.Reply.BodyText != strings.TrimPrefix(replyBody, "> archived 🍰\n") || m.Reply.Excerpt != body {
+				t.Fatal("archive reply lost original reference or Unicode body")
+			}
+		}
+	}
+	if !replyFound {
+		t.Fatal("archive reply missing")
 	}
 	if count != 1 {
 		t.Fatalf("archive seed count=%d", count)

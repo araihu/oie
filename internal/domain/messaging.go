@@ -31,6 +31,9 @@ type Message struct {
 	ProviderID                                string
 	ArchiveScope, ArchiveID                   string
 	Historical                                bool
+	References                                []MessageReference `json:"-"`
+	ReplyReference                            *ReplyReference    `json:"-"`
+	Reply                                     *MessageReply      `json:"-"`
 }
 
 type HistoryStatus struct {

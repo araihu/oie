@@ -14,6 +14,7 @@ type Querier interface {
 	FindConversation(ctx context.Context, arg FindConversationParams) (Conversation, error)
 	FindMessagePreview(ctx context.Context, arg FindMessagePreviewParams) (MessagePreview, error)
 	FindProviderMessage(ctx context.Context, arg FindProviderMessageParams) (Message, error)
+	FindReplyTargets(ctx context.Context, arg FindReplyTargetsParams) ([]FindReplyTargetsRow, error)
 	GetAccount(ctx context.Context, id string) (string, error)
 	GetArchiveAlias(ctx context.Context, arg GetArchiveAliasParams) (string, error)
 	GetArchiveCheckpoint(ctx context.Context, arg GetArchiveCheckpointParams) (string, error)
@@ -23,6 +24,7 @@ type Querier interface {
 	GetMediaFile(ctx context.Context, hash string) (MediaFile, error)
 	GetMessage(ctx context.Context, id string) (Message, error)
 	GetMessagePreview(ctx context.Context, id string) (MessagePreview, error)
+	GetMessageReply(ctx context.Context, arg GetMessageReplyParams) (string, error)
 	GetMessageStar(ctx context.Context, id string) (GetMessageStarRow, error)
 	GetOperation(ctx context.Context, id string) (Operation, error)
 	InsertAccount(ctx context.Context, arg InsertAccountParams) error
@@ -37,6 +39,8 @@ type Querier interface {
 	InsertMediaFile(ctx context.Context, arg InsertMediaFileParams) error
 	InsertMessage(ctx context.Context, arg InsertMessageParams) error
 	InsertMessagePreview(ctx context.Context, arg InsertMessagePreviewParams) (int64, error)
+	InsertMessageReference(ctx context.Context, arg InsertMessageReferenceParams) (int64, error)
+	InsertMessageReply(ctx context.Context, arg InsertMessageReplyParams) (int64, error)
 	InsertMessageRevision(ctx context.Context, arg InsertMessageRevisionParams) error
 	InsertMessageStarRevision(ctx context.Context, arg InsertMessageStarRevisionParams) error
 	InsertOperation(ctx context.Context, arg InsertOperationParams) (int64, error)
@@ -52,6 +56,8 @@ type Querier interface {
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
 	ListStarredMessages(ctx context.Context, arg ListStarredMessagesParams) ([]ListStarredMessagesRow, error)
+	MessagesAfterTarget(ctx context.Context, arg MessagesAfterTargetParams) ([]Message, error)
+	MessagesAtOrBeforeTarget(ctx context.Context, arg MessagesAtOrBeforeTargetParams) ([]Message, error)
 	PendingMessages(ctx context.Context, nextAttemptAt string) ([]Message, error)
 	PreviewJobs(ctx context.Context, arg PreviewJobsParams) ([]MessagePreview, error)
 	PutArchiveCheckpoint(ctx context.Context, arg PutArchiveCheckpointParams) error

@@ -31,6 +31,8 @@ type Incoming struct {
 	IsOwn                                     bool
 	Historical                                bool
 	Kind, SenderName, ArchiveScope, ArchiveID string
+	References                                []domain.MessageReference
+	Reply                                     *domain.ReplyReference
 }
 type Rejected struct {
 	AccountID          domain.ID
@@ -270,6 +272,9 @@ func (e *Engine) SendMessage(ctx context.Context, key, conversationID domain.ID,
 	}
 	now := e.now().UTC()
 	m := domain.Message{ID: id, RevisionID: rev, AccountID: c.AccountID, ConversationID: c.ID, Sender: domain.Sender{ID: a.ID, DisplayName: a.Address}, OriginalText: text, CreatedAt: now, IsOwn: true, SendState: "queued", ProviderID: string(id)}
+	if refs, ok := e.protocols.(OutgoingReferenceProvider); ok {
+		m.References = refs.OutgoingReferences(a, Outgoing{ID: id, Address: c.Address, OriginalText: text})
+	}
 	result, err := repo.AcceptMessage(ctx, MessageMutation{Operation: Operation{ID: key, ResourceID: id, CreatedAt: now, Kind: "send_message"}, Fingerprint: fingerprint("send_message", []string{string(c.ID), text}), Message: m, ConversationRevisionID: cr})
 	if err == nil {
 		e.wake()
@@ -349,7 +354,7 @@ func (e *Engine) Receive(ctx context.Context, in Incoming) error {
 		created = now
 	}
 	c := domain.Conversation{ID: ids[0], RevisionID: ids[1], PeerID: ids[2], AccountID: a.ID, Kind: in.Kind, Address: address, Title: address, UpdatedAt: created}
-	m := domain.Message{ID: ids[3], RevisionID: ids[4], AccountID: a.ID, Sender: domain.Sender{DisplayName: address}, OriginalText: in.OriginalText, CreatedAt: created, IsOwn: in.IsOwn, SendState: "received", ProviderID: in.ProviderID, ArchiveScope: in.ArchiveScope, ArchiveID: in.ArchiveID, Historical: in.Historical}
+	m := domain.Message{ID: ids[3], RevisionID: ids[4], AccountID: a.ID, Sender: domain.Sender{DisplayName: address}, OriginalText: in.OriginalText, CreatedAt: created, IsOwn: in.IsOwn, SendState: "received", ProviderID: in.ProviderID, ArchiveScope: in.ArchiveScope, ArchiveID: in.ArchiveID, Historical: in.Historical, References: in.References, ReplyReference: in.Reply}
 	if in.SenderName != "" {
 		m.Sender.DisplayName = in.SenderName
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/json"
+	"encoding/xml"
 	"io"
 	"net"
 	"net/http/httptest"
@@ -21,6 +22,10 @@ import (
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	"github.com/google/uuid"
+	"mellium.im/xmlstream"
+	mx "mellium.im/xmpp"
+	"mellium.im/xmpp/jid"
+	"mellium.im/xmpp/stanza"
 )
 
 func id() domain.ID {
@@ -195,6 +200,44 @@ func TestDevelopmentServerMessageExchange(t *testing.T) {
 	if received.AccountId != bob || received.Sender.DisplayName != "alice@localhost" {
 		t.Fatal("account/sender scope lost")
 	}
+	// Receive a real protocol reply to the engine's outgoing stanza ID.
+	replySession, replyRaw := seedSession(t, ctx, "bob@localhost", "bob-local-only", roots)
+	defer func() { _ = replyRaw.Close() }()
+	go func() {
+		_ = replySession.Serve(mx.HandlerFunc(func(xmlstream.TokenReadEncoder, *xml.StartElement) error { return nil }))
+	}()
+	toAlice, _ := jid.Parse("alice@localhost")
+	replyText := "live reply 🍰 " + string(id())
+	if err = replySession.Encode(ctx, struct {
+		stanza.Message
+		Body  string `xml:"body"`
+		Reply struct {
+			ID string `xml:"id,attr"`
+			To string `xml:"to,attr"`
+		} `xml:"urn:xmpp:reply:0 reply"`
+	}{stanza.Message{To: toAlice, Type: stanza.ChatMessage, ID: string(id())}, replyText, struct {
+		ID string `xml:"id,attr"`
+		To string `xml:"to,attr"`
+	}{sent.Id, "alice@localhost"}}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, func() bool {
+		page, err := client.ListMessagesWithResponse(ctx, conversation, nil)
+		if err != nil || page.JSON200 == nil {
+			return false
+		}
+		for _, m := range page.JSON200.Items {
+			if m.OriginalText == replyText {
+				return m.Reply != nil && m.Reply.Available && m.Reply.MessageId != nil && *m.Reply.MessageId == sent.Id && m.Reply.Excerpt == text && m.Reply.BodyText == replyText
+			}
+		}
+		return false
+	})
+	window, err := client.GetMessageContextWithResponse(ctx, conversation, sent.Id, nil)
+	if err != nil || window.JSON200 == nil || window.JSON200.TargetId != sent.Id {
+		t.Fatal("live original context unavailable", err)
+	}
+	_ = replyRaw.Close()
 	// A disconnected owner's send must persist and wait, not claim submission.
 	disabled, err := client.DisconnectAccountWithResponse(ctx, alice)
 	if err != nil || disabled.JSON200 == nil || disabled.JSON200.State != "not_connected" {
