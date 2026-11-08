@@ -32,6 +32,10 @@ func imagePresentation(original string, previews []engineapi.MessagePreview) str
 			images[p.Url] = true
 		}
 	}
+	return referencePresentation(original, images)
+}
+
+func referencePresentation(original string, images map[string]bool) string {
 	if len(images) == 0 {
 		return original
 	}
