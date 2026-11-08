@@ -607,3 +607,30 @@ func TestRoomIntentMigrationRoundTripKeepsFrozenReplyAndOutbox(t *testing.T) {
 		t.Fatal("room without explicit intent claimed retained queue", err)
 	}
 }
+
+func TestDisconnectedRoomKeepsQueueIntentWithoutClaimingJoining(t *testing.T) {
+	s, e, c := outboxFixture(t)
+	p := &outboundProtocol{}
+	e.SetProtocols(p)
+	room := outboundRoom(t, s, c.AccountID, "room@rooms.localhost")
+	intent, err := e.JoinRoom(t.Context(), migrationID(), room.ID, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.sessions = map[domain.ID]domain.RoomSession{room.ID: {AccountID: c.AccountID, ConversationID: room.ID, State: "not_joined", LastErrorCode: "not_connected", UpdatedAt: time.Now().UTC()}}
+	observed, err := e.RoomSession(t.Context(), room.ID)
+	if err != nil || !observed.Active || observed.State != "not_joined" || observed.LastErrorCode != "not_connected" || observed.IntentRevisionID != intent.Session.IntentRevisionID {
+		t.Fatal("offline active intent was presented as joining", observed, err)
+	}
+	if _, err = e.SendMessage(t.Context(), migrationID(), room.ID, "queue offline"); err != nil {
+		t.Fatal("offline active intent lost queue permission", err)
+	}
+	revoked := domain.RoomSession{AccountID: c.AccountID, ConversationID: room.ID, IntentRevisionID: intent.Session.IntentRevisionID, State: "failed", LastErrorCode: "forbidden", Revoked: true, UpdatedAt: time.Now().UTC()}
+	if err = e.RoomSessionChanged(t.Context(), revoked); err != nil {
+		t.Fatal(err)
+	}
+	terminal, err := e.RoomSession(t.Context(), room.ID)
+	if err != nil || terminal.Active || terminal.State != "failed" || terminal.LastErrorCode != "forbidden" {
+		t.Fatal("disconnect erased durable revocation", terminal, err)
+	}
+}
