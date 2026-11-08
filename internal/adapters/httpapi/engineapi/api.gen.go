@@ -164,13 +164,13 @@ func (e ConversationKind) Valid() bool {
 
 // Defines values for EngineApiVersion.
 const (
-	N040 EngineApiVersion = "0.4.0"
+	N050 EngineApiVersion = "0.5.0"
 )
 
 // Valid indicates whether the value is a known member of the EngineApiVersion enum.
 func (e EngineApiVersion) Valid() bool {
 	switch e {
-	case N040:
+	case N050:
 		return true
 	default:
 		return false
@@ -203,6 +203,7 @@ const (
 	ConversationCreated      EventType = "conversation.created"
 	ConversationUpdated      EventType = "conversation.updated"
 	MessageCreated           EventType = "message.created"
+	MessagePreviewChanged    EventType = "message.preview_changed"
 	MessageUpdated           EventType = "message.updated"
 	ProfileAvatarChanged     EventType = "profile.avatar_changed"
 )
@@ -222,6 +223,8 @@ func (e EventType) Valid() bool {
 		return true
 	case MessageCreated:
 		return true
+	case MessagePreviewChanged:
+		return true
 	case MessageUpdated:
 		return true
 	case ProfileAvatarChanged:
@@ -233,13 +236,13 @@ func (e EventType) Valid() bool {
 
 // Defines values for HealthStatus.
 const (
-	Ready HealthStatus = "ready"
+	HealthStatusReady HealthStatus = "ready"
 )
 
 // Valid indicates whether the value is a known member of the HealthStatus enum.
 func (e HealthStatus) Valid() bool {
 	switch e {
-	case Ready:
+	case HealthStatusReady:
 		return true
 	default:
 		return false
@@ -324,6 +327,108 @@ func (e MessageSendState) Valid() bool {
 	case MessageSendStateSubmitted:
 		return true
 	case MessageSendStateUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessagePreviewDownloadState.
+const (
+	MessagePreviewDownloadStateDownloading   MessagePreviewDownloadState = "downloading"
+	MessagePreviewDownloadStateFailed        MessagePreviewDownloadState = "failed"
+	MessagePreviewDownloadStateNotDownloaded MessagePreviewDownloadState = "not_downloaded"
+	MessagePreviewDownloadStateQueued        MessagePreviewDownloadState = "queued"
+	MessagePreviewDownloadStateReady         MessagePreviewDownloadState = "ready"
+)
+
+// Valid indicates whether the value is a known member of the MessagePreviewDownloadState enum.
+func (e MessagePreviewDownloadState) Valid() bool {
+	switch e {
+	case MessagePreviewDownloadStateDownloading:
+		return true
+	case MessagePreviewDownloadStateFailed:
+		return true
+	case MessagePreviewDownloadStateNotDownloaded:
+		return true
+	case MessagePreviewDownloadStateQueued:
+		return true
+	case MessagePreviewDownloadStateReady:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessagePreviewFileMimeType.
+const (
+	Imagegif  MessagePreviewFileMimeType = "image/gif"
+	Imagejpeg MessagePreviewFileMimeType = "image/jpeg"
+	Imagepng  MessagePreviewFileMimeType = "image/png"
+)
+
+// Valid indicates whether the value is a known member of the MessagePreviewFileMimeType enum.
+func (e MessagePreviewFileMimeType) Valid() bool {
+	switch e {
+	case Imagegif:
+		return true
+	case Imagejpeg:
+		return true
+	case Imagepng:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessagePreviewIntegrity.
+const (
+	ComputedOnly MessagePreviewIntegrity = "computed_only"
+)
+
+// Valid indicates whether the value is a known member of the MessagePreviewIntegrity enum.
+func (e MessagePreviewIntegrity) Valid() bool {
+	switch e {
+	case ComputedOnly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessagePreviewKind.
+const (
+	Image MessagePreviewKind = "image"
+	Link  MessagePreviewKind = "link"
+)
+
+// Valid indicates whether the value is a known member of the MessagePreviewKind enum.
+func (e MessagePreviewKind) Valid() bool {
+	switch e {
+	case Image:
+		return true
+	case Link:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessagePreviewState.
+const (
+	MessagePreviewStateQueued      MessagePreviewState = "queued"
+	MessagePreviewStateReady       MessagePreviewState = "ready"
+	MessagePreviewStateUnavailable MessagePreviewState = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the MessagePreviewState enum.
+func (e MessagePreviewState) Valid() bool {
+	switch e {
+	case MessagePreviewStateQueued:
+		return true
+	case MessagePreviewStateReady:
+		return true
+	case MessagePreviewStateUnavailable:
 		return true
 	default:
 		return false
@@ -610,7 +715,7 @@ type ConversationPage struct {
 
 // Engine Persistent engine identity and event boundary.
 //
-// Example: {"apiVersion":"0.4.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
+// Example: {"apiVersion":"0.5.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
 type Engine struct {
 	ApiVersion EngineApiVersion `json:"apiVersion"`
 
@@ -665,7 +770,12 @@ type Event struct {
 	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000001","isOwn":false,"originalText":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","sendState":"received","sender":{"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}}
 	Message    *Message  `json:"message,omitempty"`
 	OccurredAt time.Time `json:"occurredAt"`
-	Type       EventType `json:"type"`
+
+	// Preview Source-linked cached metadata. Entity UUID remains stable as enrichment/download revisions change. An absent imageHash means no local thumbnail is available. Image references without a thumbnail require explicit original download before preview/expansion.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","downloadState":"not_downloaded","id":"019a5df0-0000-7000-8000-000000000001","kind":"link","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":"019a5df0-0000-7000-8000-000000000001","siteName":"Example","state":"ready","title":"Shared article","updatedAt":"2026-11-08T12:00:00Z","url":"https://example.com/article"}
+	Preview *MessagePreview `json:"preview,omitempty"`
+	Type    EventType       `json:"type"`
 }
 
 // EventType defines model for Event.Type.
@@ -752,6 +862,71 @@ type MessagePage struct {
 	NextCursor *ID `json:"nextCursor,omitempty"`
 }
 
+// MessagePreview Source-linked cached metadata. Entity UUID remains stable as enrichment/download revisions change. An absent imageHash means no local thumbnail is available. Image references without a thumbnail require explicit original download before preview/expansion.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","downloadState":"not_downloaded","id":"019a5df0-0000-7000-8000-000000000001","kind":"link","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":"019a5df0-0000-7000-8000-000000000001","siteName":"Example","state":"ready","title":"Shared article","updatedAt":"2026-11-08T12:00:00Z","url":"https://example.com/article"}
+type MessagePreview struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	AccountId ID `json:"accountId"`
+
+	// ConversationId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	ConversationId ID `json:"conversationId"`
+
+	// Description Plain page description.
+	Description   *string                     `json:"description,omitempty"`
+	DownloadState MessagePreviewDownloadState `json:"downloadState"`
+
+	// FileHash Retained original image digest, computed after complete download.
+	FileHash     *string                     `json:"fileHash,omitempty"`
+	FileMimeType *MessagePreviewFileMimeType `json:"fileMimeType,omitempty"`
+	FileSize     *int64                      `json:"fileSize,omitempty"`
+
+	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
+	Id ID `json:"id"`
+
+	// ImageHash Local normalized PNG thumbnail digest.
+	ImageHash *string `json:"imageHash,omitempty"`
+
+	// Integrity No expected sender digest was supplied for this URL reference.
+	Integrity *MessagePreviewIntegrity `json:"integrity,omitempty"`
+	Kind      MessagePreviewKind       `json:"kind"`
+
+	// LastErrorCode Stable failure code for localization, without provider error details.
+	LastErrorCode *string `json:"lastErrorCode,omitempty"`
+
+	// MessageId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	MessageId ID `json:"messageId"`
+
+	// RevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	RevisionId ID `json:"revisionId"`
+
+	// SiteName Plain publisher name or hostname.
+	SiteName *string             `json:"siteName,omitempty"`
+	State    MessagePreviewState `json:"state"`
+
+	// Title Plain page title or image filename.
+	Title     *string   `json:"title,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt"`
+
+	// Url Original public HTTP or HTTPS message URL. Never use this as a browser image source.
+	Url string `json:"url"`
+}
+
+// MessagePreviewDownloadState defines model for MessagePreview.DownloadState.
+type MessagePreviewDownloadState string
+
+// MessagePreviewFileMimeType defines model for MessagePreview.FileMimeType.
+type MessagePreviewFileMimeType string
+
+// MessagePreviewIntegrity No expected sender digest was supplied for this URL reference.
+type MessagePreviewIntegrity string
+
+// MessagePreviewKind defines model for MessagePreview.Kind.
+type MessagePreviewKind string
+
+// MessagePreviewState defines model for MessagePreview.State.
+type MessagePreviewState string
+
 // OpenConversation Open or find a direct conversation in a registered account.
 //
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","address":"bob@localhost"}
@@ -783,6 +958,13 @@ type OperationKind string
 
 // OperationStatus defines model for Operation.Status.
 type OperationStatus string
+
+// PreviewPage At most three preview references for each selected retained message, up to three hundred items.
+//
+// Example: {"items":[{"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","downloadState":"not_downloaded","id":"019a5df0-0000-7000-8000-000000000001","kind":"link","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":"019a5df0-0000-7000-8000-000000000001","siteName":"Example","state":"ready","title":"Shared article","updatedAt":"2026-11-08T12:00:00Z","url":"https://example.com/article"}]}
+type PreviewPage struct {
+	Items []MessagePreview `json:"items"`
+}
 
 // Problem Stable codes for presentation-owned localization; no raw storage errors or credentials.
 //
@@ -943,10 +1125,22 @@ type SendMessageParams struct {
 	IdempotencyKey ID `json:"Idempotency-Key"`
 }
 
+// ListConversationPreviewsParams defines parameters for ListConversationPreviews.
+type ListConversationPreviewsParams struct {
+	// MessageId Message UUIDs from this conversation, up to one hundred. Omit for the latest fifty messages.
+	MessageId *[]ID `form:"messageId,omitempty" json:"messageId,omitempty"`
+}
+
 // StreamEventsParams defines parameters for StreamEvents.
 type StreamEventsParams struct {
 	// LastEventID Previously applied engine-scoped cursor.
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
+}
+
+// GetMediaImageParams defines parameters for GetMediaImage.
+type GetMediaImageParams struct {
+	// IfNoneMatch Previously returned image ETag.
+	IfNoneMatch *string `json:"If-None-Match,omitempty"`
 }
 
 // CancelMessageParams defines parameters for CancelMessage.
@@ -1201,6 +1395,13 @@ type ClientInterface interface {
 	// Corresponds with POST /api/v1/conversations/{conversationId}/messages (the `SendMessage` operationId).
 	SendMessage(ctx context.Context, conversationId ConversationID, params *SendMessageParams, body SendMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListConversationPreviews Read cached message link and image previews
+	//
+	// Returns at most three URL previews per retained message. Without messageId, uses the latest fifty messages. Cache misses queue bounded background page metadata enrichment. Original images are fetched only by the explicit download operation. Message text and revisions are unchanged.
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId}/previews (the `ListConversationPreviews` operationId).
+	ListConversationPreviews(ctx context.Context, conversationId ID, params *ListConversationPreviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetEngine Read the persistent engine identity
 	//
 	// Read eventCursor before fetching snapshots to replay changes during the snapshot.
@@ -1226,6 +1427,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/health (the `GetHealth` operationId).
 	GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetMediaImage Read a retained preview or original image
+	//
+	// Serves only local hash-verified PNG, JPEG or GIF bytes, without fetching the provider. Thumbnails are normalized static PNGs; originals retain their validated media type. No remote redirects.
+	//
+	// Corresponds with GET /api/v1/media/{hash} (the `GetMediaImage` operationId).
+	GetMediaImage(ctx context.Context, hash string, params *GetMediaImageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetMessage Read a retained message
 	//
@@ -1258,6 +1466,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/operations/{operationId} (the `GetOperation` operationId).
 	GetOperation(ctx context.Context, operationId ID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetMessagePreview Read a message preview
+	//
+	// Reads cached metadata and original image download state. Does not initiate a download.
+	//
+	// Corresponds with GET /api/v1/previews/{previewId} (the `GetMessagePreview` operationId).
+	GetMessagePreview(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DownloadPreviewImage Retain the original image for a preview
+	//
+	// Explicitly requests the original for a kind=image reference. This ensure operation is safe to retry: concurrent requests share queued work and an already retained file is reused. Failed downloads can be retried. Only validated PNG, JPEG and GIF images up to 32 MiB and bounded pixel dimensions are retained. The local SHA-256 fingerprint is computed-only, not evidence of sender-provided integrity. Link cards do not support this operation.
+	//
+	// Corresponds with POST /api/v1/previews/{previewId}/download (the `DownloadPreviewImage` operationId).
+	DownloadPreviewImage(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 // ListAccounts List registered account metadata
@@ -1607,6 +1829,23 @@ func (c *Client) SendMessage(ctx context.Context, conversationId ConversationID,
 	return c.Client.Do(req)
 }
 
+// ListConversationPreviews Read cached message link and image previews
+//
+// Returns at most three URL previews per retained message. Without messageId, uses the latest fifty messages. Cache misses queue bounded background page metadata enrichment. Original images are fetched only by the explicit download operation. Message text and revisions are unchanged.
+//
+// Corresponds with GET /api/v1/conversations/{conversationId}/previews (the `ListConversationPreviews` operationId).
+func (c *Client) ListConversationPreviews(ctx context.Context, conversationId ID, params *ListConversationPreviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListConversationPreviewsRequest(c.Server, conversationId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetEngine Read the persistent engine identity
 //
 // Read eventCursor before fetching snapshots to replay changes during the snapshot.
@@ -1653,6 +1892,23 @@ func (c *Client) StreamEvents(ctx context.Context, params *StreamEventsParams, r
 // Corresponds with GET /api/v1/health (the `GetHealth` operationId).
 func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetHealthRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetMediaImage Read a retained preview or original image
+//
+// Serves only local hash-verified PNG, JPEG or GIF bytes, without fetching the provider. Thumbnails are normalized static PNGs; originals retain their validated media type. No remote redirects.
+//
+// Corresponds with GET /api/v1/media/{hash} (the `GetMediaImage` operationId).
+func (c *Client) GetMediaImage(ctx context.Context, hash string, params *GetMediaImageParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMediaImageRequest(c.Server, hash, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1725,6 +1981,40 @@ func (c *Client) CancelMessage(ctx context.Context, messageId MessageID, params 
 // Corresponds with GET /api/v1/operations/{operationId} (the `GetOperation` operationId).
 func (c *Client) GetOperation(ctx context.Context, operationId ID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetOperationRequest(c.Server, operationId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetMessagePreview Read a message preview
+//
+// Reads cached metadata and original image download state. Does not initiate a download.
+//
+// Corresponds with GET /api/v1/previews/{previewId} (the `GetMessagePreview` operationId).
+func (c *Client) GetMessagePreview(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMessagePreviewRequest(c.Server, previewId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DownloadPreviewImage Retain the original image for a preview
+//
+// Explicitly requests the original for a kind=image reference. This ensure operation is safe to retry: concurrent requests share queued work and an already retained file is reused. Failed downloads can be retried. Only validated PNG, JPEG and GIF images up to 32 MiB and bounded pixel dimensions are retained. The local SHA-256 fingerprint is computed-only, not evidence of sender-provided integrity. Link cards do not support this operation.
+//
+// Corresponds with POST /api/v1/previews/{previewId}/download (the `DownloadPreviewImage` operationId).
+func (c *Client) DownloadPreviewImage(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDownloadPreviewImageRequest(c.Server, previewId)
 	if err != nil {
 		return nil, err
 	}
@@ -2551,6 +2841,67 @@ func NewSendMessageRequestWithBody(server string, conversationId ConversationID,
 	return req, nil
 }
 
+// NewListConversationPreviewsRequest constructs an http.Request for the ListConversationPreviews method
+func NewListConversationPreviewsRequest(server string, conversationId ID, params *ListConversationPreviewsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/conversations/%s/previews", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.MessageId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "messageId", *params.MessageId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetEngineRequest constructs an http.Request for the GetEngine method
 func NewGetEngineRequest(server string) (*http.Request, error) {
 	var err error
@@ -2642,6 +2993,55 @@ func NewGetHealthRequest(server string) (*http.Request, error) {
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetMediaImageRequest constructs an http.Request for the GetMediaImage method
+func NewGetMediaImageRequest(server string, hash string, params *GetMediaImageParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "hash", hash, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/media/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IfNoneMatch != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "If-None-Match", *params.IfNoneMatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("If-None-Match", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -2768,6 +3168,74 @@ func NewGetOperationRequest(server string, operationId ID) (*http.Request, error
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetMessagePreviewRequest constructs an http.Request for the GetMessagePreview method
+func NewGetMessagePreviewRequest(server string, previewId ID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "previewId", previewId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/previews/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDownloadPreviewImageRequest constructs an http.Request for the DownloadPreviewImage method
+func NewDownloadPreviewImageRequest(server string, previewId ID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "previewId", previewId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/previews/%s/download", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2998,6 +3466,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/v1/conversations/{conversationId}/messages (the `SendMessage` operationId).
 	SendMessageWithResponse(ctx context.Context, conversationId ConversationID, params *SendMessageParams, body SendMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*SendMessageResponse, error)
 
+	// ListConversationPreviewsWithResponse Read cached message link and image previews
+	//
+	// Returns at most three URL previews per retained message. Without messageId, uses the latest fifty messages. Cache misses queue bounded background page metadata enrichment. Original images are fetched only by the explicit download operation. Message text and revisions are unchanged.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId}/previews (the `ListConversationPreviews` operationId).
+	ListConversationPreviewsWithResponse(ctx context.Context, conversationId ID, params *ListConversationPreviewsParams, reqEditors ...RequestEditorFn) (*ListConversationPreviewsResponse, error)
+
 	// GetEngineWithResponse Read the persistent engine identity
 	//
 	// Read eventCursor before fetching snapshots to replay changes during the snapshot.
@@ -3029,6 +3506,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/health (the `GetHealth` operationId).
 	GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error)
+
+	// GetMediaImageWithResponse Read a retained preview or original image
+	//
+	// Serves only local hash-verified PNG, JPEG or GIF bytes, without fetching the provider. Thumbnails are normalized static PNGs; originals retain their validated media type. No remote redirects.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/media/{hash} (the `GetMediaImage` operationId).
+	GetMediaImageWithResponse(ctx context.Context, hash string, params *GetMediaImageParams, reqEditors ...RequestEditorFn) (*GetMediaImageResponse, error)
 
 	// GetMessageWithResponse Read a retained message
 	//
@@ -3065,6 +3551,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/operations/{operationId} (the `GetOperation` operationId).
 	GetOperationWithResponse(ctx context.Context, operationId ID, reqEditors ...RequestEditorFn) (*GetOperationResponse, error)
+
+	// GetMessagePreviewWithResponse Read a message preview
+	//
+	// Reads cached metadata and original image download state. Does not initiate a download.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/previews/{previewId} (the `GetMessagePreview` operationId).
+	GetMessagePreviewWithResponse(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*GetMessagePreviewResponse, error)
+
+	// DownloadPreviewImageWithResponse Retain the original image for a preview
+	//
+	// Explicitly requests the original for a kind=image reference. This ensure operation is safe to retry: concurrent requests share queued work and an already retained file is reused. Failed downloads can be retried. Only validated PNG, JPEG and GIF images up to 32 MiB and bounded pixel dimensions are retained. The local SHA-256 fingerprint is computed-only, not evidence of sender-provided integrity. Link cards do not support this operation.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/previews/{previewId}/download (the `DownloadPreviewImage` operationId).
+	DownloadPreviewImageWithResponse(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*DownloadPreviewImageResponse, error)
 }
 
 type ListAccountsResponse struct {
@@ -4041,6 +4545,68 @@ func (r SendMessageResponse) ContentType() string {
 	return ""
 }
 
+type ListConversationPreviewsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PreviewPage
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListConversationPreviewsResponse) GetJSON200() *PreviewPage {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListConversationPreviewsResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListConversationPreviewsResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r ListConversationPreviewsResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListConversationPreviewsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListConversationPreviewsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListConversationPreviewsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListConversationPreviewsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetEngineResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -4186,6 +4752,69 @@ func (r GetHealthResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetHealthResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetMediaImageResponse200Headers the declared response headers of an HTTP 200 response for GetMediaImage
+type GetMediaImageResponse200Headers struct {
+	CacheControl *string
+	ETag         *string
+}
+
+type GetMediaImageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetMediaImageResponse200Headers
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetMediaImageResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetMediaImageResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetMediaImageResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetMediaImageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMediaImageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMediaImageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetMediaImageResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -4379,6 +5008,137 @@ func (r GetOperationResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetOperationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetMessagePreviewResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MessagePreview
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetMessagePreviewResponse) GetJSON200() *MessagePreview {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetMessagePreviewResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetMessagePreviewResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetMessagePreviewResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetMessagePreviewResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMessagePreviewResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMessagePreviewResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetMessagePreviewResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DownloadPreviewImageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MessagePreview
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *MessagePreview
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DownloadPreviewImageResponse) GetJSON200() *MessagePreview {
+	return r.JSON200
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r DownloadPreviewImageResponse) GetJSON202() *MessagePreview {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r DownloadPreviewImageResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r DownloadPreviewImageResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r DownloadPreviewImageResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r DownloadPreviewImageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DownloadPreviewImageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DownloadPreviewImageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DownloadPreviewImageResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -4678,6 +5438,21 @@ func (c *ClientWithResponses) SendMessageWithResponse(ctx context.Context, conve
 	return ParseSendMessageResponse(rsp)
 }
 
+// ListConversationPreviewsWithResponse Read cached message link and image previews
+//
+// Returns at most three URL previews per retained message. Without messageId, uses the latest fifty messages. Cache misses queue bounded background page metadata enrichment. Original images are fetched only by the explicit download operation. Message text and revisions are unchanged.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/conversations/{conversationId}/previews (the `ListConversationPreviews` operationId).
+func (c *ClientWithResponses) ListConversationPreviewsWithResponse(ctx context.Context, conversationId ID, params *ListConversationPreviewsParams, reqEditors ...RequestEditorFn) (*ListConversationPreviewsResponse, error) {
+	rsp, err := c.ListConversationPreviews(ctx, conversationId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListConversationPreviewsResponse(rsp)
+}
+
 // GetEngineWithResponse Read the persistent engine identity
 //
 // Read eventCursor before fetching snapshots to replay changes during the snapshot.
@@ -4726,6 +5501,21 @@ func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEdit
 		return nil, err
 	}
 	return ParseGetHealthResponse(rsp)
+}
+
+// GetMediaImageWithResponse Read a retained preview or original image
+//
+// Serves only local hash-verified PNG, JPEG or GIF bytes, without fetching the provider. Thumbnails are normalized static PNGs; originals retain their validated media type. No remote redirects.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/media/{hash} (the `GetMediaImage` operationId).
+func (c *ClientWithResponses) GetMediaImageWithResponse(ctx context.Context, hash string, params *GetMediaImageParams, reqEditors ...RequestEditorFn) (*GetMediaImageResponse, error) {
+	rsp, err := c.GetMediaImage(ctx, hash, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMediaImageResponse(rsp)
 }
 
 // GetMessageWithResponse Read a retained message
@@ -4786,6 +5576,36 @@ func (c *ClientWithResponses) GetOperationWithResponse(ctx context.Context, oper
 		return nil, err
 	}
 	return ParseGetOperationResponse(rsp)
+}
+
+// GetMessagePreviewWithResponse Read a message preview
+//
+// Reads cached metadata and original image download state. Does not initiate a download.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/previews/{previewId} (the `GetMessagePreview` operationId).
+func (c *ClientWithResponses) GetMessagePreviewWithResponse(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*GetMessagePreviewResponse, error) {
+	rsp, err := c.GetMessagePreview(ctx, previewId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMessagePreviewResponse(rsp)
+}
+
+// DownloadPreviewImageWithResponse Retain the original image for a preview
+//
+// Explicitly requests the original for a kind=image reference. This ensure operation is safe to retry: concurrent requests share queued work and an already retained file is reused. Failed downloads can be retried. Only validated PNG, JPEG and GIF images up to 32 MiB and bounded pixel dimensions are retained. The local SHA-256 fingerprint is computed-only, not evidence of sender-provided integrity. Link cards do not support this operation.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/previews/{previewId}/download (the `DownloadPreviewImage` operationId).
+func (c *ClientWithResponses) DownloadPreviewImageWithResponse(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*DownloadPreviewImageResponse, error) {
+	rsp, err := c.DownloadPreviewImage(ctx, previewId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDownloadPreviewImageResponse(rsp)
 }
 
 // ParseListAccountsResponse parses an HTTP response from a ListAccountsWithResponse call
@@ -5567,6 +6387,53 @@ func ParseSendMessageResponse(rsp *http.Response) (*SendMessageResponse, error) 
 	return response, nil
 }
 
+// ParseListConversationPreviewsResponse parses an HTTP response from a ListConversationPreviewsWithResponse call
+func ParseListConversationPreviewsResponse(rsp *http.Response) (*ListConversationPreviewsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListConversationPreviewsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PreviewPage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetEngineResponse parses an HTTP response from a GetEngineWithResponse call
 func ParseGetEngineResponse(rsp *http.Response) (*GetEngineResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -5668,6 +6535,69 @@ func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
 		}
 		response.ApplicationproblemJSON503 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseGetMediaImageResponse parses an HTTP response from a GetMediaImageWithResponse call
+func ParseGetMediaImageResponse(rsp *http.Response) (*GetMediaImageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMediaImageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 304:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetMediaImageResponse200Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = &value
+		}
+		response.Headers200 = &headers
 	}
 
 	return response, nil
@@ -5821,6 +6751,107 @@ func ParseGetOperationResponse(rsp *http.Response) (*GetOperationResponse, error
 	return response, nil
 }
 
+// ParseGetMessagePreviewResponse parses an HTTP response from a GetMessagePreviewWithResponse call
+func ParseGetMessagePreviewResponse(rsp *http.Response) (*GetMessagePreviewResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMessagePreviewResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MessagePreview
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDownloadPreviewImageResponse parses an HTTP response from a DownloadPreviewImageWithResponse call
+func ParseDownloadPreviewImageResponse(rsp *http.Response) (*DownloadPreviewImageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DownloadPreviewImageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MessagePreview
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest MessagePreview
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// ListAccounts List registered account metadata
@@ -5868,6 +6899,9 @@ type ServerInterface interface {
 	// SendMessage Accept an immediate text message
 	// (POST /api/v1/conversations/{conversationId}/messages)
 	SendMessage(w http.ResponseWriter, r *http.Request, conversationId ConversationID, params SendMessageParams)
+	// ListConversationPreviews Read cached message link and image previews
+	// (GET /api/v1/conversations/{conversationId}/previews)
+	ListConversationPreviews(w http.ResponseWriter, r *http.Request, conversationId ID, params ListConversationPreviewsParams)
 	// GetEngine Read the persistent engine identity
 	// (GET /api/v1/engine)
 	GetEngine(w http.ResponseWriter, r *http.Request)
@@ -5877,6 +6911,9 @@ type ServerInterface interface {
 	// GetHealth Check engine readiness
 	// (GET /api/v1/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// GetMediaImage Read a retained preview or original image
+	// (GET /api/v1/media/{hash})
+	GetMediaImage(w http.ResponseWriter, r *http.Request, hash string, params GetMediaImageParams)
 	// GetMessage Read a retained message
 	// (GET /api/v1/messages/{messageId})
 	GetMessage(w http.ResponseWriter, r *http.Request, messageId MessageID)
@@ -5886,6 +6923,12 @@ type ServerInterface interface {
 	// GetOperation Reconcile a mutation after an ambiguous response
 	// (GET /api/v1/operations/{operationId})
 	GetOperation(w http.ResponseWriter, r *http.Request, operationId ID)
+	// GetMessagePreview Read a message preview
+	// (GET /api/v1/previews/{previewId})
+	GetMessagePreview(w http.ResponseWriter, r *http.Request, previewId ID)
+	// DownloadPreviewImage Retain the original image for a preview
+	// (POST /api/v1/previews/{previewId}/download)
+	DownloadPreviewImage(w http.ResponseWriter, r *http.Request, previewId ID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -6553,6 +7596,48 @@ func (siw *ServerInterfaceWrapper) SendMessage(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ListConversationPreviews operation middleware
+func (siw *ServerInterfaceWrapper) ListConversationPreviews(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", r.PathValue("conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListConversationPreviewsParams
+
+	// ------------- Optional query parameter "messageId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "messageId", r.URL.Query(), &params.MessageId, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "messageId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "messageId", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListConversationPreviews(w, r, conversationId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetEngine operation middleware
 func (siw *ServerInterfaceWrapper) GetEngine(w http.ResponseWriter, r *http.Request) {
 
@@ -6613,6 +7698,56 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMediaImage operation middleware
+func (siw *ServerInterfaceWrapper) GetMediaImage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "hash" -------------
+	var hash string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "hash", r.PathValue("hash"), &hash, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hash", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetMediaImageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMediaImage(w, r, hash, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6719,6 +7854,58 @@ func (siw *ServerInterfaceWrapper) GetOperation(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetOperation(w, r, operationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMessagePreview operation middleware
+func (siw *ServerInterfaceWrapper) GetMessagePreview(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "previewId" -------------
+	var previewId ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "previewId", r.PathValue("previewId"), &previewId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "previewId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMessagePreview(w, r, previewId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DownloadPreviewImage operation middleware
+func (siw *ServerInterfaceWrapper) DownloadPreviewImage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "previewId" -------------
+	var previewId ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "previewId", r.PathValue("previewId"), &previewId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "previewId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DownloadPreviewImage(w, r, previewId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6848,6 +8035,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/conversations/{conversationId}/previews", wrapper.ListConversationPreviews)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/previews/{previewId}", wrapper.GetMessagePreview)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/previews/{previewId}/download", wrapper.DownloadPreviewImage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/media/{hash}", wrapper.GetMediaImage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/health", wrapper.GetHealth)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/engine", wrapper.GetEngine)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/accounts", wrapper.ListAccounts)
@@ -8047,6 +9238,77 @@ func (response SendMessage503ApplicationProblemPlusJSONResponse) VisitSendMessag
 	return err
 }
 
+type ListConversationPreviewsRequestObject struct {
+	ConversationId ID `json:"conversationId"`
+	Params         ListConversationPreviewsParams
+}
+
+type ListConversationPreviewsResponseObject interface {
+	VisitListConversationPreviewsResponse(w http.ResponseWriter) error
+}
+
+type ListConversationPreviews200JSONResponse PreviewPage
+
+func (response ListConversationPreviews200JSONResponse) VisitListConversationPreviewsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConversationPreviews400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response ListConversationPreviews400ApplicationProblemPlusJSONResponse) VisitListConversationPreviewsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConversationPreviews404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListConversationPreviews404ApplicationProblemPlusJSONResponse) VisitListConversationPreviewsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConversationPreviews503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response ListConversationPreviews503ApplicationProblemPlusJSONResponse) VisitListConversationPreviewsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetEngineRequestObject struct {
 }
 
@@ -8209,6 +9471,157 @@ type GetHealth503ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetHealth503ApplicationProblemPlusJSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMediaImageRequestObject struct {
+	Hash   string `json:"hash"`
+	Params GetMediaImageParams
+}
+
+type GetMediaImageResponseObject interface {
+	VisitGetMediaImageResponse(w http.ResponseWriter) error
+}
+
+type GetMediaImage200ResponseHeaders struct {
+	CacheControl *string
+	ETag         *string
+}
+
+type GetMediaImage200ImagegifResponse struct {
+	Body          io.Reader
+	Headers       GetMediaImage200ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetMediaImage200ImagegifResponse) VisitGetMediaImageResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "image/gif")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetMediaImage200ImagejpegResponse struct {
+	Body          io.Reader
+	Headers       GetMediaImage200ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetMediaImage200ImagejpegResponse) VisitGetMediaImageResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "image/jpeg")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetMediaImage200ImagepngResponse struct {
+	Body          io.Reader
+	Headers       GetMediaImage200ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetMediaImage200ImagepngResponse) VisitGetMediaImageResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "image/png")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetMediaImage304Response struct {
+}
+
+func (response GetMediaImage304Response) VisitGetMediaImageResponse(w http.ResponseWriter) error {
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetMediaImage400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response GetMediaImage400ApplicationProblemPlusJSONResponse) VisitGetMediaImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMediaImage404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetMediaImage404ApplicationProblemPlusJSONResponse) VisitGetMediaImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMediaImage503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response GetMediaImage503ApplicationProblemPlusJSONResponse) VisitGetMediaImageResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -8448,6 +9861,160 @@ func (response GetOperation503ApplicationProblemPlusJSONResponse) VisitGetOperat
 	return err
 }
 
+type GetMessagePreviewRequestObject struct {
+	PreviewId ID `json:"previewId"`
+}
+
+type GetMessagePreviewResponseObject interface {
+	VisitGetMessagePreviewResponse(w http.ResponseWriter) error
+}
+
+type GetMessagePreview200JSONResponse MessagePreview
+
+func (response GetMessagePreview200JSONResponse) VisitGetMessagePreviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessagePreview400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessagePreview400ApplicationProblemPlusJSONResponse) VisitGetMessagePreviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessagePreview404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessagePreview404ApplicationProblemPlusJSONResponse) VisitGetMessagePreviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessagePreview503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessagePreview503ApplicationProblemPlusJSONResponse) VisitGetMessagePreviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DownloadPreviewImageRequestObject struct {
+	PreviewId ID `json:"previewId"`
+}
+
+type DownloadPreviewImageResponseObject interface {
+	VisitDownloadPreviewImageResponse(w http.ResponseWriter) error
+}
+
+type DownloadPreviewImage200JSONResponse MessagePreview
+
+func (response DownloadPreviewImage200JSONResponse) VisitDownloadPreviewImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DownloadPreviewImage202JSONResponse MessagePreview
+
+func (response DownloadPreviewImage202JSONResponse) VisitDownloadPreviewImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DownloadPreviewImage400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response DownloadPreviewImage400ApplicationProblemPlusJSONResponse) VisitDownloadPreviewImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DownloadPreviewImage404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DownloadPreviewImage404ApplicationProblemPlusJSONResponse) VisitDownloadPreviewImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DownloadPreviewImage503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response DownloadPreviewImage503ApplicationProblemPlusJSONResponse) VisitDownloadPreviewImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// ListAccounts List registered account metadata
@@ -8495,6 +10062,9 @@ type StrictServerInterface interface {
 	// SendMessage Accept an immediate text message
 	// (POST /api/v1/conversations/{conversationId}/messages)
 	SendMessage(ctx context.Context, request SendMessageRequestObject) (SendMessageResponseObject, error)
+	// ListConversationPreviews Read cached message link and image previews
+	// (GET /api/v1/conversations/{conversationId}/previews)
+	ListConversationPreviews(ctx context.Context, request ListConversationPreviewsRequestObject) (ListConversationPreviewsResponseObject, error)
 	// GetEngine Read the persistent engine identity
 	// (GET /api/v1/engine)
 	GetEngine(ctx context.Context, request GetEngineRequestObject) (GetEngineResponseObject, error)
@@ -8504,6 +10074,9 @@ type StrictServerInterface interface {
 	// GetHealth Check engine readiness
 	// (GET /api/v1/health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
+	// GetMediaImage Read a retained preview or original image
+	// (GET /api/v1/media/{hash})
+	GetMediaImage(ctx context.Context, request GetMediaImageRequestObject) (GetMediaImageResponseObject, error)
 	// GetMessage Read a retained message
 	// (GET /api/v1/messages/{messageId})
 	GetMessage(ctx context.Context, request GetMessageRequestObject) (GetMessageResponseObject, error)
@@ -8513,6 +10086,12 @@ type StrictServerInterface interface {
 	// GetOperation Reconcile a mutation after an ambiguous response
 	// (GET /api/v1/operations/{operationId})
 	GetOperation(ctx context.Context, request GetOperationRequestObject) (GetOperationResponseObject, error)
+	// GetMessagePreview Read a message preview
+	// (GET /api/v1/previews/{previewId})
+	GetMessagePreview(ctx context.Context, request GetMessagePreviewRequestObject) (GetMessagePreviewResponseObject, error)
+	// DownloadPreviewImage Retain the original image for a preview
+	// (POST /api/v1/previews/{previewId}/download)
+	DownloadPreviewImage(ctx context.Context, request DownloadPreviewImageRequestObject) (DownloadPreviewImageResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -8976,6 +10555,33 @@ func (sh *strictHandler) SendMessage(w http.ResponseWriter, r *http.Request, con
 	}
 }
 
+// ListConversationPreviews operation middleware
+func (sh *strictHandler) ListConversationPreviews(w http.ResponseWriter, r *http.Request, conversationId ID, params ListConversationPreviewsParams) {
+	var request ListConversationPreviewsRequestObject
+
+	request.ConversationId = conversationId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListConversationPreviews(ctx, request.(ListConversationPreviewsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListConversationPreviews")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListConversationPreviewsResponseObject); ok {
+		if err := validResponse.VisitListConversationPreviewsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetEngine operation middleware
 func (sh *strictHandler) GetEngine(w http.ResponseWriter, r *http.Request) {
 	var request GetEngineRequestObject
@@ -9043,6 +10649,33 @@ func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetHealthResponseObject); ok {
 		if err := validResponse.VisitGetHealthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMediaImage operation middleware
+func (sh *strictHandler) GetMediaImage(w http.ResponseWriter, r *http.Request, hash string, params GetMediaImageParams) {
+	var request GetMediaImageRequestObject
+
+	request.Hash = hash
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMediaImage(ctx, request.(GetMediaImageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMediaImage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMediaImageResponseObject); ok {
+		if err := validResponse.VisitGetMediaImageResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -9136,137 +10769,213 @@ func (sh *strictHandler) GetOperation(w http.ResponseWriter, r *http.Request, op
 	}
 }
 
+// GetMessagePreview operation middleware
+func (sh *strictHandler) GetMessagePreview(w http.ResponseWriter, r *http.Request, previewId ID) {
+	var request GetMessagePreviewRequestObject
+
+	request.PreviewId = previewId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMessagePreview(ctx, request.(GetMessagePreviewRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMessagePreview")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMessagePreviewResponseObject); ok {
+		if err := validResponse.VisitGetMessagePreviewResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DownloadPreviewImage operation middleware
+func (sh *strictHandler) DownloadPreviewImage(w http.ResponseWriter, r *http.Request, previewId ID) {
+	var request DownloadPreviewImageRequestObject
+
+	request.PreviewId = previewId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DownloadPreviewImage(ctx, request.(DownloadPreviewImageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DownloadPreviewImage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DownloadPreviewImageResponseObject); ok {
+		if err := validResponse.VisitDownloadPreviewImageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

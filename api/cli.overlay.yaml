@@ -9,3 +9,6 @@ actions:
   - target: $.paths['/api/v1/avatars/{hash}'].get
     update:
       x-cli-ignore: true
+  - target: $.paths['/api/v1/media/{hash}'].get
+    update:
+      x-cli-ignore: true

@@ -31,12 +31,16 @@ func New() (*cobra.Command, error) {
 		"GetConversation":            build12,
 		"ListMessages":               build13,
 		"SendMessage":                build14,
-		"GetEngine":                  build15,
-		"StreamEvents":               build16,
-		"GetHealth":                  build17,
-		"GetMessage":                 build18,
-		"CancelMessage":              build19,
-		"GetOperation":               build20,
+		"ListConversationPreviews":   build15,
+		"GetEngine":                  build16,
+		"StreamEvents":               build17,
+		"GetHealth":                  build18,
+		"GetMediaImage":              build19,
+		"GetMessage":                 build20,
+		"CancelMessage":              build21,
+		"GetOperation":               build22,
+		"GetMessagePreview":          build23,
+		"DownloadPreviewImage":       build24,
 	})
 }
 func build0(server string, input cliruntime.Input) (*http.Request, error) {
@@ -191,26 +195,48 @@ func build14(server string, input cliruntime.Input) (*http.Request, error) {
 	return api.NewSendMessageRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
 func build15(server string, input cliruntime.Input) (*http.Request, error) {
-	return api.NewGetEngineRequest(server)
+	var path0 api.ID
+	if err := input.Decode("path", "conversationId", &path0); err != nil {
+		return nil, err
+	}
+	var params api.ListConversationPreviewsParams
+	if err := input.Decode("query", "messageId", &params.MessageId); err != nil {
+		return nil, err
+	}
+	return api.NewListConversationPreviewsRequest(server, path0, &params)
 }
 func build16(server string, input cliruntime.Input) (*http.Request, error) {
+	return api.NewGetEngineRequest(server)
+}
+func build17(server string, input cliruntime.Input) (*http.Request, error) {
 	var params api.StreamEventsParams
 	if err := input.Decode("header", "Last-Event-ID", &params.LastEventID); err != nil {
 		return nil, err
 	}
 	return api.NewStreamEventsRequest(server, &params)
 }
-func build17(server string, input cliruntime.Input) (*http.Request, error) {
+func build18(server string, input cliruntime.Input) (*http.Request, error) {
 	return api.NewGetHealthRequest(server)
 }
-func build18(server string, input cliruntime.Input) (*http.Request, error) {
+func build19(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 string
+	if err := input.Decode("path", "hash", &path0); err != nil {
+		return nil, err
+	}
+	var params api.GetMediaImageParams
+	if err := input.Decode("header", "If-None-Match", &params.IfNoneMatch); err != nil {
+		return nil, err
+	}
+	return api.NewGetMediaImageRequest(server, path0, &params)
+}
+func build20(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetMessageRequest(server, path0)
 }
-func build19(server string, input cliruntime.Input) (*http.Request, error) {
+func build21(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
@@ -221,10 +247,24 @@ func build19(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewCancelMessageRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build20(server string, input cliruntime.Input) (*http.Request, error) {
+func build22(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "operationId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetOperationRequest(server, path0)
+}
+func build23(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.ID
+	if err := input.Decode("path", "previewId", &path0); err != nil {
+		return nil, err
+	}
+	return api.NewGetMessagePreviewRequest(server, path0)
+}
+func build24(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.ID
+	if err := input.Decode("path", "previewId", &path0); err != nil {
+		return nil, err
+	}
+	return api.NewDownloadPreviewImageRequest(server, path0)
 }

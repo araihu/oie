@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.4.0
+  version: 0.5.0
   description: Native engine API for account metadata, XMPP connections, direct text conversations, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
     are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.
@@ -25,7 +25,170 @@ tags:
   description: Account-scoped direct conversations and recovered read-only rooms
 - name: Messages
   description: Retained text messages and durable send intents
+- name: Previews
+  description: Cached structured link cards and explicitly downloaded images
 paths:
+  /api/v1/conversations/{conversationId}/previews:
+    get:
+      tags:
+      - Previews
+      operationId: listConversationPreviews
+      summary: Read cached message link and image previews
+      description: Returns at most three URL previews per retained message. Without messageId, uses the latest fifty
+        messages. Cache misses queue bounded background page metadata enrichment. Original images are fetched only
+        by the explicit download operation. Message text and revisions are unchanged.
+      parameters:
+      - name: conversationId
+        in: path
+        required: true
+        description: Stable entity UUID.
+        schema: &id001
+          $ref: '#/components/schemas/ID'
+      - name: messageId
+        in: query
+        required: false
+        description: Message UUIDs from this conversation, up to one hundred. Omit for the latest fifty messages.
+        style: form
+        explode: true
+        schema:
+          type: array
+          maxItems: 100
+          minItems: 1
+          uniqueItems: true
+          example:
+          - 019a5df0-0000-7000-8000-000000000001
+          items: *id001
+      responses:
+        '200':
+          description: Cached structured previews, including queued or unavailable metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreviewPage'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/previews/{previewId}:
+    get:
+      tags:
+      - Previews
+      operationId: getMessagePreview
+      summary: Read a message preview
+      description: Reads cached metadata and original image download state. Does not initiate a download.
+      parameters:
+      - name: previewId
+        in: path
+        required: true
+        description: Stable entity UUID.
+        schema: *id001
+      responses:
+        '200':
+          description: Current preview state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessagePreview'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/previews/{previewId}/download:
+    post:
+      tags:
+      - Previews
+      operationId: downloadPreviewImage
+      summary: Retain the original image for a preview
+      description: 'Explicitly requests the original for a kind=image reference. This ensure operation is safe to
+        retry: concurrent requests share queued work and an already retained file is reused. Failed downloads can
+        be retried. Only validated PNG, JPEG and GIF images up to 32 MiB and bounded pixel dimensions are retained.
+        The local SHA-256 fingerprint is computed-only, not evidence of sender-provided integrity. Link cards do not
+        support this operation.'
+      parameters:
+      - name: previewId
+        in: path
+        required: true
+        description: Stable entity UUID.
+        schema: *id001
+      responses:
+        '200':
+          description: Original already retained
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessagePreview'
+        '202':
+          description: Download queued or in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessagePreview'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/media/{hash}:
+    get:
+      tags:
+      - Previews
+      operationId: getMediaImage
+      summary: Read a retained preview or original image
+      description: Serves only local hash-verified PNG, JPEG or GIF bytes, without fetching the provider. Thumbnails
+        are normalized static PNGs; originals retain their validated media type. No remote redirects.
+      parameters:
+      - name: hash
+        in: path
+        required: true
+        description: Lowercase SHA-256 digest of the retained file.
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+      - name: If-None-Match
+        in: header
+        required: false
+        description: Previously returned image ETag.
+        schema:
+          type: string
+          maxLength: 1024
+      responses:
+        '200':
+          description: Retained image bytes. Content-Type identifies PNG, JPEG or GIF.
+          headers:
+            ETag:
+              description: Quoted content digest.
+              schema:
+                type: string
+            Cache-Control:
+              description: Private immutable cache policy.
+              schema:
+                type: string
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/gif:
+              schema:
+                type: string
+                format: binary
+        '304':
+          description: Matching ETag; no response body.
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /api/v1/health:
     get:
       tags:
@@ -61,7 +224,7 @@ paths:
               example:
                 id: 019a5df0-0000-7000-8000-000000000003
                 role: local
-                apiVersion: 0.4.0
+                apiVersion: 0.5.0
                 eventCursor: 019a5df0-0000-7000-8000-000000000003:1
         '503':
           $ref: '#/components/responses/Unavailable'
@@ -977,7 +1140,7 @@ components:
       example:
         id: 019a5df0-0000-7000-8000-000000000003
         role: local
-        apiVersion: 0.4.0
+        apiVersion: 0.5.0
         eventCursor: 019a5df0-0000-7000-8000-000000000003:1
       additionalProperties: false
       required:
@@ -996,7 +1159,7 @@ components:
         apiVersion:
           type: string
           enum:
-          - 0.4.0
+          - 0.5.0
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -1186,6 +1349,7 @@ components:
           - account.connection_changed
           - account.history_changed
           - profile.avatar_changed
+          - message.preview_changed
           - conversation.created
           - conversation.updated
           - message.created
@@ -1205,6 +1369,8 @@ components:
           $ref: '#/components/schemas/HistoryStatus'
         avatar:
           $ref: '#/components/schemas/Avatar'
+        preview:
+          $ref: '#/components/schemas/MessagePreview'
     Problem:
       type: object
       example:
@@ -1273,6 +1439,125 @@ components:
         accountId: 019a5df0-0000-7000-8000-000000000001
         state: not_connected
         updatedAt: '2026-11-07T12:00:00Z'
+    MessagePreview:
+      type: object
+      description: Source-linked cached metadata. Entity UUID remains stable as enrichment/download revisions change.
+        An absent imageHash means no local thumbnail is available. Image references without a thumbnail require explicit
+        original download before preview/expansion.
+      additionalProperties: false
+      required:
+      - id
+      - revisionId
+      - accountId
+      - conversationId
+      - messageId
+      - url
+      - kind
+      - state
+      - downloadState
+      - updatedAt
+      properties:
+        id: &id001
+          $ref: '#/components/schemas/ID'
+        revisionId: *id001
+        accountId: *id001
+        conversationId: *id001
+        messageId: *id001
+        url:
+          type: string
+          format: uri
+          maxLength: 4096
+          description: Original public HTTP or HTTPS message URL. Never use this as a browser image source.
+        kind:
+          type: string
+          enum:
+          - link
+          - image
+        state:
+          type: string
+          enum:
+          - queued
+          - ready
+          - unavailable
+        downloadState:
+          type: string
+          enum:
+          - not_downloaded
+          - queued
+          - downloading
+          - ready
+          - failed
+        updatedAt:
+          type: string
+          format: date-time
+        title:
+          type: string
+          maxLength: 300
+          description: Plain page title or image filename.
+        description:
+          type: string
+          maxLength: 1000
+          description: Plain page description.
+        siteName:
+          type: string
+          maxLength: 200
+          description: Plain publisher name or hostname.
+        lastErrorCode:
+          type: string
+          maxLength: 40
+          description: Stable failure code for localization, without provider error details.
+        imageHash:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          description: Local normalized PNG thumbnail digest.
+        fileHash:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          description: Retained original image digest, computed after complete download.
+        fileMimeType:
+          type: string
+          enum:
+          - image/png
+          - image/jpeg
+          - image/gif
+        fileSize:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 33554432
+        integrity:
+          type: string
+          enum:
+          - computed_only
+          description: No expected sender digest was supplied for this URL reference.
+      example: &id002
+        id: 019a5df0-0000-7000-8000-000000000001
+        revisionId: 019a5df0-0000-7000-8000-000000000001
+        accountId: 019a5df0-0000-7000-8000-000000000001
+        conversationId: 019a5df0-0000-7000-8000-000000000001
+        messageId: 019a5df0-0000-7000-8000-000000000001
+        url: https://example.com/article
+        kind: link
+        state: ready
+        downloadState: not_downloaded
+        title: Shared article
+        siteName: Example
+        updatedAt: '2026-11-08T12:00:00Z'
+    PreviewPage:
+      type: object
+      description: At most three preview references for each selected retained message, up to three hundred items.
+      additionalProperties: false
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          maxItems: 300
+          items:
+            $ref: '#/components/schemas/MessagePreview'
+      example:
+        items:
+        - *id002
     Avatar:
       type: object
       additionalProperties: false

@@ -161,13 +161,13 @@ func (e ConversationKind) Valid() bool {
 
 // Defines values for EngineApiVersion.
 const (
-	N040 EngineApiVersion = "0.4.0"
+	N050 EngineApiVersion = "0.5.0"
 )
 
 // Valid indicates whether the value is a known member of the EngineApiVersion enum.
 func (e EngineApiVersion) Valid() bool {
 	switch e {
-	case N040:
+	case N050:
 		return true
 	default:
 		return false
@@ -194,13 +194,13 @@ func (e EngineRole) Valid() bool {
 
 // Defines values for HealthStatus.
 const (
-	Ready HealthStatus = "ready"
+	HealthStatusReady HealthStatus = "ready"
 )
 
 // Valid indicates whether the value is a known member of the HealthStatus enum.
 func (e HealthStatus) Valid() bool {
 	switch e {
-	case Ready:
+	case HealthStatusReady:
 		return true
 	default:
 		return false
@@ -285,6 +285,108 @@ func (e MessageSendState) Valid() bool {
 	case MessageSendStateSubmitted:
 		return true
 	case MessageSendStateUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessagePreviewDownloadState.
+const (
+	MessagePreviewDownloadStateDownloading   MessagePreviewDownloadState = "downloading"
+	MessagePreviewDownloadStateFailed        MessagePreviewDownloadState = "failed"
+	MessagePreviewDownloadStateNotDownloaded MessagePreviewDownloadState = "not_downloaded"
+	MessagePreviewDownloadStateQueued        MessagePreviewDownloadState = "queued"
+	MessagePreviewDownloadStateReady         MessagePreviewDownloadState = "ready"
+)
+
+// Valid indicates whether the value is a known member of the MessagePreviewDownloadState enum.
+func (e MessagePreviewDownloadState) Valid() bool {
+	switch e {
+	case MessagePreviewDownloadStateDownloading:
+		return true
+	case MessagePreviewDownloadStateFailed:
+		return true
+	case MessagePreviewDownloadStateNotDownloaded:
+		return true
+	case MessagePreviewDownloadStateQueued:
+		return true
+	case MessagePreviewDownloadStateReady:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessagePreviewFileMimeType.
+const (
+	Imagegif  MessagePreviewFileMimeType = "image/gif"
+	Imagejpeg MessagePreviewFileMimeType = "image/jpeg"
+	Imagepng  MessagePreviewFileMimeType = "image/png"
+)
+
+// Valid indicates whether the value is a known member of the MessagePreviewFileMimeType enum.
+func (e MessagePreviewFileMimeType) Valid() bool {
+	switch e {
+	case Imagegif:
+		return true
+	case Imagejpeg:
+		return true
+	case Imagepng:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessagePreviewIntegrity.
+const (
+	ComputedOnly MessagePreviewIntegrity = "computed_only"
+)
+
+// Valid indicates whether the value is a known member of the MessagePreviewIntegrity enum.
+func (e MessagePreviewIntegrity) Valid() bool {
+	switch e {
+	case ComputedOnly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessagePreviewKind.
+const (
+	Image MessagePreviewKind = "image"
+	Link  MessagePreviewKind = "link"
+)
+
+// Valid indicates whether the value is a known member of the MessagePreviewKind enum.
+func (e MessagePreviewKind) Valid() bool {
+	switch e {
+	case Image:
+		return true
+	case Link:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessagePreviewState.
+const (
+	MessagePreviewStateQueued      MessagePreviewState = "queued"
+	MessagePreviewStateReady       MessagePreviewState = "ready"
+	MessagePreviewStateUnavailable MessagePreviewState = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the MessagePreviewState enum.
+func (e MessagePreviewState) Valid() bool {
+	switch e {
+	case MessagePreviewStateQueued:
+		return true
+	case MessagePreviewStateReady:
+		return true
+	case MessagePreviewStateUnavailable:
 		return true
 	default:
 		return false
@@ -571,7 +673,7 @@ type ConversationPage struct {
 
 // Engine Persistent engine identity and event boundary.
 //
-// Example: {"apiVersion":"0.4.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
+// Example: {"apiVersion":"0.5.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
 type Engine struct {
 	ApiVersion EngineApiVersion `json:"apiVersion"`
 
@@ -670,6 +772,71 @@ type MessagePage struct {
 	NextCursor *ID `json:"nextCursor,omitempty"`
 }
 
+// MessagePreview Source-linked cached metadata. Entity UUID remains stable as enrichment/download revisions change. An absent imageHash means no local thumbnail is available. Image references without a thumbnail require explicit original download before preview/expansion.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","downloadState":"not_downloaded","id":"019a5df0-0000-7000-8000-000000000001","kind":"link","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":"019a5df0-0000-7000-8000-000000000001","siteName":"Example","state":"ready","title":"Shared article","updatedAt":"2026-11-08T12:00:00Z","url":"https://example.com/article"}
+type MessagePreview struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	AccountId ID `json:"accountId"`
+
+	// ConversationId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	ConversationId ID `json:"conversationId"`
+
+	// Description Plain page description.
+	Description   *string                     `json:"description,omitempty"`
+	DownloadState MessagePreviewDownloadState `json:"downloadState"`
+
+	// FileHash Retained original image digest, computed after complete download.
+	FileHash     *string                     `json:"fileHash,omitempty"`
+	FileMimeType *MessagePreviewFileMimeType `json:"fileMimeType,omitempty"`
+	FileSize     *int64                      `json:"fileSize,omitempty"`
+
+	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
+	Id ID `json:"id"`
+
+	// ImageHash Local normalized PNG thumbnail digest.
+	ImageHash *string `json:"imageHash,omitempty"`
+
+	// Integrity No expected sender digest was supplied for this URL reference.
+	Integrity *MessagePreviewIntegrity `json:"integrity,omitempty"`
+	Kind      MessagePreviewKind       `json:"kind"`
+
+	// LastErrorCode Stable failure code for localization, without provider error details.
+	LastErrorCode *string `json:"lastErrorCode,omitempty"`
+
+	// MessageId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	MessageId ID `json:"messageId"`
+
+	// RevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	RevisionId ID `json:"revisionId"`
+
+	// SiteName Plain publisher name or hostname.
+	SiteName *string             `json:"siteName,omitempty"`
+	State    MessagePreviewState `json:"state"`
+
+	// Title Plain page title or image filename.
+	Title     *string   `json:"title,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt"`
+
+	// Url Original public HTTP or HTTPS message URL. Never use this as a browser image source.
+	Url string `json:"url"`
+}
+
+// MessagePreviewDownloadState defines model for MessagePreview.DownloadState.
+type MessagePreviewDownloadState string
+
+// MessagePreviewFileMimeType defines model for MessagePreview.FileMimeType.
+type MessagePreviewFileMimeType string
+
+// MessagePreviewIntegrity No expected sender digest was supplied for this URL reference.
+type MessagePreviewIntegrity string
+
+// MessagePreviewKind defines model for MessagePreview.Kind.
+type MessagePreviewKind string
+
+// MessagePreviewState defines model for MessagePreview.State.
+type MessagePreviewState string
+
 // OpenConversation Open or find a direct conversation in a registered account.
 //
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","address":"bob@localhost"}
@@ -701,6 +868,11 @@ type OperationKind string
 
 // OperationStatus defines model for Operation.Status.
 type OperationStatus string
+
+// PreviewPage At most three preview references for each selected retained message, up to three hundred items.
+type PreviewPage struct {
+	Items []MessagePreview `json:"items"`
+}
 
 // Problem Stable codes for presentation-owned localization; no raw storage errors or credentials.
 //
@@ -861,10 +1033,22 @@ type SendMessageParams struct {
 	IdempotencyKey ID `json:"Idempotency-Key"`
 }
 
+// ListConversationPreviewsParams defines parameters for ListConversationPreviews.
+type ListConversationPreviewsParams struct {
+	// MessageId Message UUIDs from this conversation, up to one hundred. Omit for the latest fifty messages.
+	MessageId *[]ID `form:"messageId,omitempty" json:"messageId,omitempty"`
+}
+
 // StreamEventsParams defines parameters for StreamEvents.
 type StreamEventsParams struct {
 	// LastEventID Previously applied engine-scoped cursor.
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
+}
+
+// GetMediaImageParams defines parameters for GetMediaImage.
+type GetMediaImageParams struct {
+	// IfNoneMatch Previously returned image ETag.
+	IfNoneMatch *string `json:"If-None-Match,omitempty"`
 }
 
 // CancelMessageParams defines parameters for CancelMessage.
@@ -1119,6 +1303,13 @@ type ClientInterface interface {
 	// Corresponds with POST /api/v1/conversations/{conversationId}/messages (the `SendMessage` operationId).
 	SendMessage(ctx context.Context, conversationId ConversationID, params *SendMessageParams, body SendMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListConversationPreviews Read cached message link and image previews
+	//
+	// Returns at most three URL previews per retained message. Without messageId, uses the latest fifty messages. Cache misses queue bounded background page metadata enrichment. Original images are fetched only by the explicit download operation. Message text and revisions are unchanged.
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId}/previews (the `ListConversationPreviews` operationId).
+	ListConversationPreviews(ctx context.Context, conversationId ID, params *ListConversationPreviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetEngine Read the persistent engine identity
 	//
 	// Read eventCursor before fetching snapshots to replay changes during the snapshot.
@@ -1144,6 +1335,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/health (the `GetHealth` operationId).
 	GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetMediaImage Read a retained preview or original image
+	//
+	// Serves only local hash-verified PNG, JPEG or GIF bytes, without fetching the provider. Thumbnails are normalized static PNGs; originals retain their validated media type. No remote redirects.
+	//
+	// Corresponds with GET /api/v1/media/{hash} (the `GetMediaImage` operationId).
+	GetMediaImage(ctx context.Context, hash string, params *GetMediaImageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetMessage Read a retained message
 	//
@@ -1176,6 +1374,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/operations/{operationId} (the `GetOperation` operationId).
 	GetOperation(ctx context.Context, operationId ID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetMessagePreview Read a message preview
+	//
+	// Reads cached metadata and original image download state. Does not initiate a download.
+	//
+	// Corresponds with GET /api/v1/previews/{previewId} (the `GetMessagePreview` operationId).
+	GetMessagePreview(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DownloadPreviewImage Retain the original image for a preview
+	//
+	// Explicitly requests the original for a kind=image reference. This ensure operation is safe to retry: concurrent requests share queued work and an already retained file is reused. Failed downloads can be retried. Only validated PNG, JPEG and GIF images up to 32 MiB and bounded pixel dimensions are retained. The local SHA-256 fingerprint is computed-only, not evidence of sender-provided integrity. Link cards do not support this operation.
+	//
+	// Corresponds with POST /api/v1/previews/{previewId}/download (the `DownloadPreviewImage` operationId).
+	DownloadPreviewImage(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 // ListAccounts List registered account metadata
@@ -1525,6 +1737,23 @@ func (c *Client) SendMessage(ctx context.Context, conversationId ConversationID,
 	return c.Client.Do(req)
 }
 
+// ListConversationPreviews Read cached message link and image previews
+//
+// Returns at most three URL previews per retained message. Without messageId, uses the latest fifty messages. Cache misses queue bounded background page metadata enrichment. Original images are fetched only by the explicit download operation. Message text and revisions are unchanged.
+//
+// Corresponds with GET /api/v1/conversations/{conversationId}/previews (the `ListConversationPreviews` operationId).
+func (c *Client) ListConversationPreviews(ctx context.Context, conversationId ID, params *ListConversationPreviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListConversationPreviewsRequest(c.Server, conversationId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetEngine Read the persistent engine identity
 //
 // Read eventCursor before fetching snapshots to replay changes during the snapshot.
@@ -1571,6 +1800,23 @@ func (c *Client) StreamEvents(ctx context.Context, params *StreamEventsParams, r
 // Corresponds with GET /api/v1/health (the `GetHealth` operationId).
 func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetHealthRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetMediaImage Read a retained preview or original image
+//
+// Serves only local hash-verified PNG, JPEG or GIF bytes, without fetching the provider. Thumbnails are normalized static PNGs; originals retain their validated media type. No remote redirects.
+//
+// Corresponds with GET /api/v1/media/{hash} (the `GetMediaImage` operationId).
+func (c *Client) GetMediaImage(ctx context.Context, hash string, params *GetMediaImageParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMediaImageRequest(c.Server, hash, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1643,6 +1889,40 @@ func (c *Client) CancelMessage(ctx context.Context, messageId MessageID, params 
 // Corresponds with GET /api/v1/operations/{operationId} (the `GetOperation` operationId).
 func (c *Client) GetOperation(ctx context.Context, operationId ID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetOperationRequest(c.Server, operationId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetMessagePreview Read a message preview
+//
+// Reads cached metadata and original image download state. Does not initiate a download.
+//
+// Corresponds with GET /api/v1/previews/{previewId} (the `GetMessagePreview` operationId).
+func (c *Client) GetMessagePreview(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMessagePreviewRequest(c.Server, previewId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DownloadPreviewImage Retain the original image for a preview
+//
+// Explicitly requests the original for a kind=image reference. This ensure operation is safe to retry: concurrent requests share queued work and an already retained file is reused. Failed downloads can be retried. Only validated PNG, JPEG and GIF images up to 32 MiB and bounded pixel dimensions are retained. The local SHA-256 fingerprint is computed-only, not evidence of sender-provided integrity. Link cards do not support this operation.
+//
+// Corresponds with POST /api/v1/previews/{previewId}/download (the `DownloadPreviewImage` operationId).
+func (c *Client) DownloadPreviewImage(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDownloadPreviewImageRequest(c.Server, previewId)
 	if err != nil {
 		return nil, err
 	}
@@ -2469,6 +2749,67 @@ func NewSendMessageRequestWithBody(server string, conversationId ConversationID,
 	return req, nil
 }
 
+// NewListConversationPreviewsRequest constructs an http.Request for the ListConversationPreviews method
+func NewListConversationPreviewsRequest(server string, conversationId ID, params *ListConversationPreviewsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/conversations/%s/previews", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.MessageId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "messageId", *params.MessageId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetEngineRequest constructs an http.Request for the GetEngine method
 func NewGetEngineRequest(server string) (*http.Request, error) {
 	var err error
@@ -2560,6 +2901,55 @@ func NewGetHealthRequest(server string) (*http.Request, error) {
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetMediaImageRequest constructs an http.Request for the GetMediaImage method
+func NewGetMediaImageRequest(server string, hash string, params *GetMediaImageParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "hash", hash, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/media/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IfNoneMatch != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "If-None-Match", *params.IfNoneMatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("If-None-Match", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -2686,6 +3076,74 @@ func NewGetOperationRequest(server string, operationId ID) (*http.Request, error
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetMessagePreviewRequest constructs an http.Request for the GetMessagePreview method
+func NewGetMessagePreviewRequest(server string, previewId ID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "previewId", previewId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/previews/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDownloadPreviewImageRequest constructs an http.Request for the DownloadPreviewImage method
+func NewDownloadPreviewImageRequest(server string, previewId ID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "previewId", previewId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/previews/%s/download", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2916,6 +3374,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/v1/conversations/{conversationId}/messages (the `SendMessage` operationId).
 	SendMessageWithResponse(ctx context.Context, conversationId ConversationID, params *SendMessageParams, body SendMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*SendMessageResponse, error)
 
+	// ListConversationPreviewsWithResponse Read cached message link and image previews
+	//
+	// Returns at most three URL previews per retained message. Without messageId, uses the latest fifty messages. Cache misses queue bounded background page metadata enrichment. Original images are fetched only by the explicit download operation. Message text and revisions are unchanged.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId}/previews (the `ListConversationPreviews` operationId).
+	ListConversationPreviewsWithResponse(ctx context.Context, conversationId ID, params *ListConversationPreviewsParams, reqEditors ...RequestEditorFn) (*ListConversationPreviewsResponse, error)
+
 	// GetEngineWithResponse Read the persistent engine identity
 	//
 	// Read eventCursor before fetching snapshots to replay changes during the snapshot.
@@ -2947,6 +3414,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/health (the `GetHealth` operationId).
 	GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error)
+
+	// GetMediaImageWithResponse Read a retained preview or original image
+	//
+	// Serves only local hash-verified PNG, JPEG or GIF bytes, without fetching the provider. Thumbnails are normalized static PNGs; originals retain their validated media type. No remote redirects.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/media/{hash} (the `GetMediaImage` operationId).
+	GetMediaImageWithResponse(ctx context.Context, hash string, params *GetMediaImageParams, reqEditors ...RequestEditorFn) (*GetMediaImageResponse, error)
 
 	// GetMessageWithResponse Read a retained message
 	//
@@ -2983,6 +3459,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/operations/{operationId} (the `GetOperation` operationId).
 	GetOperationWithResponse(ctx context.Context, operationId ID, reqEditors ...RequestEditorFn) (*GetOperationResponse, error)
+
+	// GetMessagePreviewWithResponse Read a message preview
+	//
+	// Reads cached metadata and original image download state. Does not initiate a download.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/previews/{previewId} (the `GetMessagePreview` operationId).
+	GetMessagePreviewWithResponse(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*GetMessagePreviewResponse, error)
+
+	// DownloadPreviewImageWithResponse Retain the original image for a preview
+	//
+	// Explicitly requests the original for a kind=image reference. This ensure operation is safe to retry: concurrent requests share queued work and an already retained file is reused. Failed downloads can be retried. Only validated PNG, JPEG and GIF images up to 32 MiB and bounded pixel dimensions are retained. The local SHA-256 fingerprint is computed-only, not evidence of sender-provided integrity. Link cards do not support this operation.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/previews/{previewId}/download (the `DownloadPreviewImage` operationId).
+	DownloadPreviewImageWithResponse(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*DownloadPreviewImageResponse, error)
 }
 
 type ListAccountsResponse struct {
@@ -3959,6 +4453,68 @@ func (r SendMessageResponse) ContentType() string {
 	return ""
 }
 
+type ListConversationPreviewsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PreviewPage
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListConversationPreviewsResponse) GetJSON200() *PreviewPage {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListConversationPreviewsResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListConversationPreviewsResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r ListConversationPreviewsResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListConversationPreviewsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListConversationPreviewsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListConversationPreviewsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListConversationPreviewsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetEngineResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -4104,6 +4660,69 @@ func (r GetHealthResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetHealthResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetMediaImageResponse200Headers the declared response headers of an HTTP 200 response for GetMediaImage
+type GetMediaImageResponse200Headers struct {
+	CacheControl *string
+	ETag         *string
+}
+
+type GetMediaImageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetMediaImageResponse200Headers
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetMediaImageResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetMediaImageResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetMediaImageResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetMediaImageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMediaImageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMediaImageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetMediaImageResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -4297,6 +4916,137 @@ func (r GetOperationResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetOperationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetMessagePreviewResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MessagePreview
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetMessagePreviewResponse) GetJSON200() *MessagePreview {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetMessagePreviewResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetMessagePreviewResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetMessagePreviewResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetMessagePreviewResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMessagePreviewResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMessagePreviewResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetMessagePreviewResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DownloadPreviewImageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MessagePreview
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *MessagePreview
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DownloadPreviewImageResponse) GetJSON200() *MessagePreview {
+	return r.JSON200
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r DownloadPreviewImageResponse) GetJSON202() *MessagePreview {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r DownloadPreviewImageResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r DownloadPreviewImageResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r DownloadPreviewImageResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r DownloadPreviewImageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DownloadPreviewImageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DownloadPreviewImageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DownloadPreviewImageResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -4596,6 +5346,21 @@ func (c *ClientWithResponses) SendMessageWithResponse(ctx context.Context, conve
 	return ParseSendMessageResponse(rsp)
 }
 
+// ListConversationPreviewsWithResponse Read cached message link and image previews
+//
+// Returns at most three URL previews per retained message. Without messageId, uses the latest fifty messages. Cache misses queue bounded background page metadata enrichment. Original images are fetched only by the explicit download operation. Message text and revisions are unchanged.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/conversations/{conversationId}/previews (the `ListConversationPreviews` operationId).
+func (c *ClientWithResponses) ListConversationPreviewsWithResponse(ctx context.Context, conversationId ID, params *ListConversationPreviewsParams, reqEditors ...RequestEditorFn) (*ListConversationPreviewsResponse, error) {
+	rsp, err := c.ListConversationPreviews(ctx, conversationId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListConversationPreviewsResponse(rsp)
+}
+
 // GetEngineWithResponse Read the persistent engine identity
 //
 // Read eventCursor before fetching snapshots to replay changes during the snapshot.
@@ -4644,6 +5409,21 @@ func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEdit
 		return nil, err
 	}
 	return ParseGetHealthResponse(rsp)
+}
+
+// GetMediaImageWithResponse Read a retained preview or original image
+//
+// Serves only local hash-verified PNG, JPEG or GIF bytes, without fetching the provider. Thumbnails are normalized static PNGs; originals retain their validated media type. No remote redirects.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/media/{hash} (the `GetMediaImage` operationId).
+func (c *ClientWithResponses) GetMediaImageWithResponse(ctx context.Context, hash string, params *GetMediaImageParams, reqEditors ...RequestEditorFn) (*GetMediaImageResponse, error) {
+	rsp, err := c.GetMediaImage(ctx, hash, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMediaImageResponse(rsp)
 }
 
 // GetMessageWithResponse Read a retained message
@@ -4704,6 +5484,36 @@ func (c *ClientWithResponses) GetOperationWithResponse(ctx context.Context, oper
 		return nil, err
 	}
 	return ParseGetOperationResponse(rsp)
+}
+
+// GetMessagePreviewWithResponse Read a message preview
+//
+// Reads cached metadata and original image download state. Does not initiate a download.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/previews/{previewId} (the `GetMessagePreview` operationId).
+func (c *ClientWithResponses) GetMessagePreviewWithResponse(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*GetMessagePreviewResponse, error) {
+	rsp, err := c.GetMessagePreview(ctx, previewId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMessagePreviewResponse(rsp)
+}
+
+// DownloadPreviewImageWithResponse Retain the original image for a preview
+//
+// Explicitly requests the original for a kind=image reference. This ensure operation is safe to retry: concurrent requests share queued work and an already retained file is reused. Failed downloads can be retried. Only validated PNG, JPEG and GIF images up to 32 MiB and bounded pixel dimensions are retained. The local SHA-256 fingerprint is computed-only, not evidence of sender-provided integrity. Link cards do not support this operation.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/previews/{previewId}/download (the `DownloadPreviewImage` operationId).
+func (c *ClientWithResponses) DownloadPreviewImageWithResponse(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*DownloadPreviewImageResponse, error) {
+	rsp, err := c.DownloadPreviewImage(ctx, previewId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDownloadPreviewImageResponse(rsp)
 }
 
 // ParseListAccountsResponse parses an HTTP response from a ListAccountsWithResponse call
@@ -5485,6 +6295,53 @@ func ParseSendMessageResponse(rsp *http.Response) (*SendMessageResponse, error) 
 	return response, nil
 }
 
+// ParseListConversationPreviewsResponse parses an HTTP response from a ListConversationPreviewsWithResponse call
+func ParseListConversationPreviewsResponse(rsp *http.Response) (*ListConversationPreviewsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListConversationPreviewsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PreviewPage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetEngineResponse parses an HTTP response from a GetEngineWithResponse call
 func ParseGetEngineResponse(rsp *http.Response) (*GetEngineResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -5586,6 +6443,69 @@ func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
 		}
 		response.ApplicationproblemJSON503 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseGetMediaImageResponse parses an HTTP response from a GetMediaImageWithResponse call
+func ParseGetMediaImageResponse(rsp *http.Response) (*GetMediaImageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMediaImageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 304:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetMediaImageResponse200Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = &value
+		}
+		response.Headers200 = &headers
 	}
 
 	return response, nil
@@ -5739,134 +6659,259 @@ func ParseGetOperationResponse(rsp *http.Response) (*GetOperationResponse, error
 	return response, nil
 }
 
+// ParseGetMessagePreviewResponse parses an HTTP response from a GetMessagePreviewWithResponse call
+func ParseGetMessagePreviewResponse(rsp *http.Response) (*GetMessagePreviewResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMessagePreviewResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MessagePreview
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDownloadPreviewImageResponse parses an HTTP response from a DownloadPreviewImageWithResponse call
+func ParseDownloadPreviewImageResponse(rsp *http.Response) (*DownloadPreviewImageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DownloadPreviewImageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MessagePreview
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest MessagePreview
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"csJdhji655hR6CIaOHD2m3c3/zsA",
+	"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",
+	"rDJySGwZovzyAiGgccUeAu3dfLz5fwMA",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
