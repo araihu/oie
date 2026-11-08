@@ -14,6 +14,8 @@ The Dagger Shell definitions and runner are under `tools/ci`. Build tools remain
 outside the root application module. Images are pinned by digest. Go modules,
 Go compilation, golangci-lint results, npm packages and Playwright browsers have
 persistent engine caches.
+The runner prints plain stage progress so cache/session failures and test output
+remain visible during the local loop.
 `make check` includes golangci-lint v2.13.1 pinned in the tools module.
 Its standard linters include errcheck, govet, ineffassign, staticcheck and unused.
 The first run populates those caches; later runs reuse them.
