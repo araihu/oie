@@ -62,6 +62,7 @@ templ page(v view) {
 		</head>
 		<body data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-mock={strconv.FormatBool(v.Preview)}>
 @liveCopy(v)
+@avatarData(v)
 <div class="oie-live-status" data-live-status role="status" aria-live="polite"></div>
 if v.ErrorMessage!="" {
 <div class="oie-native-error" role="alert" tabindex="-1" data-native-error>
@@ -79,7 +80,7 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 			if v.Selected != nil {
 				@drawer.Drawer(drawer.Config{ID: "details", Title: v.Text.Details}) {
 					<div class="oie-details">
-						@avatar.Avatar(avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeLG})
+						@profileAvatar(v,v.Selected.AccountId,v.Selected.Address,avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeLG})
 						<h2>{ v.Selected.Title }</h2>
 						<p>{ v.accountLabel(v.Selected.AccountId) }</p>
 if v.Selected.Kind=="direct" {
@@ -107,7 +108,7 @@ templ profile(v view,id string) {
 
 templ accountTrigger(v view){
 @button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-profile-trigger"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.SwitchAccount,"data-account-switcher":""})){
-@avatar.Avatar(avatar.Config{Name:v.activeAccountName(),Size:avatar.SizeXS})
+@profileAvatar(v,v.AccountFilter,v.account(v.AccountFilter).Address,avatar.Config{Name:v.activeAccountName(),Size:avatar.SizeXS})
 <span class="oie-profile-identity"><strong>{v.activeAccountName()}</strong><small>{v.activeAccountAddress()}</small></span>
 @glyph(heroicons.Icon16SolidEllipsisHorizontal)
 }
@@ -125,7 +126,7 @@ if v.AccountFilter=="" {
 }
 for _,a:=range v.Accounts {
 @link.Link(v.href("account",a.Id,"chat",""),link.WithRootClass("oie-account-choice"),link.WithAttrs(templ.Attributes{"data-switch-account":a.Id,"aria-current":strconv.FormatBool(v.AccountFilter==a.Id)})){
-@avatar.Avatar(avatar.Config{Name:a.Label,Size:avatar.SizeXS})
+@profileAvatar(v,a.Id,a.Address,avatar.Config{Name:a.Label,Size:avatar.SizeXS})
 <span class="oie-profile-identity"><strong>{a.Label}</strong><small>{a.Address}</small><small>{v.connectionLabel(a.Id)}</small></span>
 <span class="oie-account-indicators">
 if v.AccountFilter==a.Id {
@@ -263,7 +264,7 @@ templ filterLink(v view, key, label string) {
 templ conversationRow(v view, c engineapi.Conversation) {
 	<li>
 		@link.Link(v.href("chat", c.Id), link.WithRootClass("oie-chat-link"), link.WithAttrs(templ.Attributes{"data-conversation-id": c.Id, "aria-current": strconv.FormatBool(v.Selected != nil && v.Selected.Id == c.Id)})) {
-			@avatar.Avatar(avatar.Config{Name: c.Title, Initials: chatInitials(c), Size: avatar.SizeSM, RootClass: "oie-chat-avatar"})
+			@profileAvatar(v,c.AccountId,c.Address,avatar.Config{Name: c.Title, Initials: chatInitials(c), Size: avatar.SizeSM, RootClass: "oie-chat-avatar"})
 			<div class="oie-row-content">
 				<div class="oie-row-top"><strong>{ c.Title }</strong><time datetime={ c.UpdatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ c.UpdatedAt.Format("15:04") }</time></div>
 				<div class="oie-row-bottom">
@@ -287,7 +288,7 @@ templ chatHeader(v view) {
 		@link.Link(v.href("chat", ""), link.WithRootClass("oie-back-button"), link.WithAttrs(templ.Attributes{"aria-label": v.Text.Back})) {
 			@glyph(heroicons.Icon16SolidChevronLeft)
 		}
-		@avatar.Avatar(avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeXS})
+		@profileAvatar(v,v.Selected.AccountId,v.Selected.Address,avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeXS})
 		<div class="oie-chat-identity"><h2>{ v.Selected.Title }</h2><p>{v.accountLabel(v.Selected.AccountId)} · {v.connectionLabel(v.Selected.AccountId)}</p></div>
 		@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Details, "title": v.Text.Details}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'details'})"})) {
 			@glyph(heroicons.Icon16SolidInformationCircle)
@@ -301,7 +302,12 @@ templ message(v view,m messageView,grouped bool){
 if m.Attachment!=nil {
 <div class="oie-media-message">@card.Card(card.Config{Image:m.Attachment.PreviewUrl,ImageAlt:m.Attachment.Title,Title:m.Attachment.Title,Description:m.Attachment.Description,Density:card.DensityCompact,RootClass:"oie-media-card"})</div>
 }else{
-@chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),Message:m.OriginalText,SenderName:m.Sender.DisplayName,Timestamp:m.CreatedAt.Format("15:04"),ShowAvatar:!m.IsOwn,AvatarInitials:initials(m.Sender.DisplayName),RootClass:"oie-bubble",Grouped:grouped})
+<div class="oie-message-content">
+if !m.IsOwn && !grouped {
+@profileAvatar(v,m.AccountId,v.messageAvatarAddress(m),avatar.Config{Name:m.Sender.DisplayName,Initials:initials(m.Sender.DisplayName),Size:avatar.SizeSM})
+}
+@chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),Message:m.OriginalText,SenderName:m.Sender.DisplayName,Timestamp:m.CreatedAt.Format("15:04"),RootClass:"oie-bubble",Grouped:grouped})
+</div>
 }
 if m.IsOwn {
 <div class="oie-message-meta"><time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
@@ -427,7 +433,7 @@ if v.Unavailable {
 <nav class="oie-account-list" aria-label={v.Text.ManageAccounts}>
 for _,a:=range v.Accounts {
 @link.Link(v.accountsHref(a.Id),link.WithRootClass("oie-account-summary"),link.WithAttrs(templ.Attributes{"data-manage-account":a.Id})){
-@avatar.Avatar(avatar.Config{Name:a.Label,Size:avatar.SizeSM})
+@profileAvatar(v,a.Id,a.Address,avatar.Config{Name:a.Label,Size:avatar.SizeSM})
 <span class="oie-profile-identity"><strong>{a.Label}</strong><small>{a.Address}</small><small>{v.connectionLabel(a.Id)}</small></span>
 @glyph(heroicons.Icon16SolidChevronRight)
 }
@@ -441,7 +447,7 @@ templ mutationFields(v view,target,key string){
 templ accountDetail(v view,a engineapi.Account){
 <section class="oie-account-detail" data-account-id={a.Id}>
 <header class="oie-account-detail-heading">
-@avatar.Avatar(avatar.Config{Name:a.Label,Size:avatar.SizeLG})
+@profileAvatar(v,a.Id,a.Address,avatar.Config{Name:a.Label,Size:avatar.SizeLG})
 <div><h2>{a.Label}</h2><p>{a.Address}</p></div>
 </header>
 <p class="oie-history-status">{v.historyCaption(a.Id)}</p>
@@ -507,6 +513,7 @@ templ liveCopy(v view){
 }
 templ liveRegions(v view){
 <div id="oie-live-regions" data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
+@avatarData(v)
 <div id="live-history-status">@historyBanner(v)</div>
 <div id="live-list">@conversationList(v)</div>
 <div id="live-timeline" data-version={v.timelineVersion()}>@timeline(v)</div>
@@ -577,4 +584,24 @@ if h,ok:=v.Histories[a.Id];ok&&(h.State=="syncing"||h.State=="partial"||h.State=
 }
 }
 }
+}
+
+// The scope belongs to Oie. Avatar's public SrcExpr consumes a fixed expression;
+// opaque addresses are escaped HTML data, never JavaScript source.
+templ profileAvatar(v view,account,address string,cfg avatar.Config){
+{{ cfg.Src=v.avatarSource(account,address);cfg.SrcExpr="oieAvatarSrc || null" }}
+<div class="oie-avatar-scope" data-avatar-account={account} data-avatar-address={address} data-avatar-src={cfg.Src} x-data="{oieAvatarSrc: $el.dataset.avatarSrc}">
+@avatar.Avatar(cfg)
+</div>
+}
+
+templ avatarData(v view){
+<div id="oie-avatar-data" hidden>
+for _,account:=range v.AvatarAccounts {
+<div data-avatar-loaded-account={account}></div>
+}
+for identity,hash:=range v.Avatars {
+<div data-avatar-entry data-account-id={identity.Account} data-address={identity.Address} data-hash={hash}></div>
+}
+</div>
 }

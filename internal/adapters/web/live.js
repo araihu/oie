@@ -10,6 +10,28 @@
   let pendingRequests = 0, refreshTimer, refreshing = false, refreshAgain = false;
   let source, stopped = false, forceBottom = false, storageDenied = false;
   let accountsVersion = [...document.querySelectorAll('#account-blocks>[data-account-id]')].map(e => e.dataset.accountId+';').join('');
+  // Exact account/address tuples avoid nickname guesses and cross-account leaks.
+  const avatarSources = new Map();
+  const avatarKey = (account,address) => JSON.stringify([account,address]);
+  function readAvatars(root) {
+    const data = root.querySelector('#oie-avatar-data');
+    if (!data) return;
+    const loaded = new Set([...data.querySelectorAll('[data-avatar-loaded-account]')].map(el=>el.dataset.avatarLoadedAccount));
+    for (const key of avatarSources.keys()) if (loaded.has(JSON.parse(key)[0])) avatarSources.delete(key);
+    for (const entry of data.querySelectorAll('[data-avatar-entry]')) {
+      const {accountId,address,hash} = entry.dataset;
+      if (loaded.has(accountId) && /^[0-9a-f]{64}$/.test(hash)) avatarSources.set(avatarKey(accountId,address),'/ui/avatars/'+hash);
+    }
+  }
+  function applyAvatars() {
+    for (const scope of document.querySelectorAll('[data-avatar-account]')) {
+      const src = avatarSources.get(avatarKey(scope.dataset.avatarAccount,scope.dataset.avatarAddress)) || '';
+      scope.dataset.avatarSrc = src;
+      if (window.Alpine?.$data) window.Alpine.$data(scope).oieAvatarSrc = src;
+    }
+  }
+  readAvatars(document);
+  document.addEventListener('alpine:initialized',applyAvatars);
   const inMemory = new Map();
   const composer = document.querySelector('#send-message-form');
   const input = document.querySelector('#message-composer');
@@ -137,12 +159,13 @@
         stopped = true; source?.close(); if (composer) composer.querySelector('[data-send-message]').disabled = true;
         announce(text('engineChanged')); return;
       }
+      readAvatars(page);
       const history=document.querySelector('#history-status'),newHistory=page.querySelector('#live-history-status');if(history&&newHistory&&history.innerHTML!==newHistory.innerHTML)mutateDOM(history,newHistory.innerHTML);
       const list = document.querySelector('#conversation-list');
       const nextList = page.querySelector('#live-list');
       if (list && nextList && list.innerHTML !== nextList.innerHTML) {
         const scroll = list.scrollTop;
-        const focused = document.activeElement?.closest('[data-conversation-id]')?.dataset.conversationId;
+        const focused = list.contains(document.activeElement) ? document.activeElement?.closest('[data-conversation-id]')?.dataset.conversationId : '';
         mutateDOM(list,nextList.innerHTML); list.scrollTop = scroll;
         if (focused) list.querySelector(`[data-conversation-id="${CSS.escape(focused)}"]`)?.focus({preventScroll:true});
       }
@@ -195,7 +218,7 @@
           if (next) {badge.textContent = next.textContent;badge.hidden = next.hidden;badge.setAttribute('aria-label',next.getAttribute('aria-label'));}
         }
       }
-      localizeTimes();
+      applyAvatars();localizeTimes();
     } catch { announce(text('liveRetry')); }
     finally {
       clearTimeout(timeout); refreshing = false;
@@ -263,7 +286,7 @@
     source = new EventSource('/ui/events?cursor='+encodeURIComponent(cursor || ''));
     source.onopen = () => { announce(text('liveReady'));scheduleRefresh();retryPending(); };
     source.onerror = () => announce(text('liveRetry'));
-    for (const type of ['account.registered','account.connection_changed','account.history_changed','conversation.created','conversation.updated','message.created','message.updated']) source.addEventListener(type,scheduleRefresh);
+    for (const type of ['profile.avatar_changed','account.registered','account.connection_changed','account.history_changed','conversation.created','conversation.updated','message.created','message.updated']) source.addEventListener(type,scheduleRefresh);
     source.addEventListener('oie.reset', event => {
       try {
         const reset=JSON.parse(event.data);

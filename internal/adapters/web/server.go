@@ -48,7 +48,7 @@ func New(engineURL string) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	client, err := engineapi.NewClientWithResponses(engineURL, engineapi.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
+	client, err := engineapi.NewClientWithResponses(engineURL, engineapi.WithHTTPClient(&http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}))
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +78,8 @@ type connectionView struct {
 type view struct {
 	Locale, Theme, Role                                   string
 	Text                                                  copy
+	Avatars                                               map[avatarIdentity]string
+	AvatarAccounts                                        []string
 	Accounts                                              []engineapi.Account
 	AccountUnread                                         map[string]int
 	AccountPage, ManagedAccount                           string
@@ -171,6 +173,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(asset.body)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/ui/avatars/") {
+		s.avatarImage(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/events" {
 		s.events(w, r)
 		return
@@ -203,7 +209,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, v)
 }
 func (s *Server) baseView(r *http.Request) view {
-	v := view{Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system"), Connections: map[string]connectionView{}, Histories: map[string]engineapi.HistoryStatus{}, Values: map[string]string{}}
+	v := view{Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system"), Avatars: map[avatarIdentity]string{}, Connections: map[string]connectionView{}, Histories: map[string]engineapi.HistoryStatus{}, Values: map[string]string{}}
 	v.Text = s.catalogs[v.Locale]
 	v.configureWorkspace(r)
 	return v
@@ -234,6 +240,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	v.Accounts = accounts.JSON200.Items
 	v.AccountUnread = s.accountUnread(ctx)
 	for _, a := range v.Accounts {
+		s.loadAvatars(ctx, v, a.Id)
 		if !v.Preview {
 			h, err := s.client.GetAccountHistoryWithResponse(ctx, a.Id, editor)
 			if err == nil && h.JSON200 != nil {

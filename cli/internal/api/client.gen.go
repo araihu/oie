@@ -161,13 +161,13 @@ func (e ConversationKind) Valid() bool {
 
 // Defines values for EngineApiVersion.
 const (
-	N030 EngineApiVersion = "0.3.0"
+	N040 EngineApiVersion = "0.4.0"
 )
 
 // Valid indicates whether the value is a known member of the EngineApiVersion enum.
 func (e EngineApiVersion) Valid() bool {
 	switch e {
-	case N030:
+	case N040:
 		return true
 	default:
 		return false
@@ -432,6 +432,37 @@ type AccountPage struct {
 	NextCursor *ID `json:"nextCursor,omitempty"`
 }
 
+// Avatar Retained profile image projection, scoped to an account and canonical protocol address. Empty imageHash means the provider explicitly returned no image. Provider errors keep the last known image.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000003","address":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001","imageHash":"","revisionId":"019a5df0-0000-7000-8000-000000000002","updatedAt":"2026-11-07T12:00:00Z"}
+type Avatar struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	AccountId ID `json:"accountId"`
+
+	// Address Canonical account or conversation address; callers treat it as an opaque identity key.
+	Address string `json:"address"`
+
+	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
+	Id ID `json:"id"`
+
+	// ImageHash Empty for no image, otherwise SHA-256 of the normalized PNG; use getAvatarImage to retrieve it.
+	ImageHash string `json:"imageHash"`
+
+	// RevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	RevisionId ID        `json:"revisionId"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+}
+
+// AvatarPage Account-scoped profile metadata page.
+//
+// Example: {"items":[]}
+type AvatarPage struct {
+	Items []Avatar `json:"items"`
+
+	// NextCursor Canonical lowercase UUIDv7; IDs do not establish causal order.
+	NextCursor *ID `json:"nextCursor,omitempty"`
+}
+
 // CancelMessage Cancel only while queued and before dispatch starts. A conflict returns currentMessage with actual state.
 //
 // Example: {"expectedRevisionId":"019a5df0-0000-7000-8000-000000000001"}
@@ -540,7 +571,7 @@ type ConversationPage struct {
 
 // Engine Persistent engine identity and event boundary.
 //
-// Example: {"apiVersion":"0.3.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
+// Example: {"apiVersion":"0.4.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
 type Engine struct {
 	ApiVersion EngineApiVersion `json:"apiVersion"`
 
@@ -764,6 +795,21 @@ type RegisterAccountParams struct {
 	IdempotencyKey ID `json:"Idempotency-Key"`
 }
 
+// ListAccountAvatarsParams defines parameters for ListAccountAvatars.
+type ListAccountAvatarsParams struct {
+	// After Continue after this avatar record UUID.
+	After *ID `form:"after,omitempty" json:"after,omitempty"`
+
+	// Limit Maximum page size.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetAvatarImageParams defines parameters for GetAvatarImage.
+type GetAvatarImageParams struct {
+	// IfNoneMatch Previously received content ETag.
+	IfNoneMatch *string `json:"If-None-Match,omitempty"`
+}
+
 // ListConversationsParams defines parameters for ListConversations.
 type ListConversationsParams struct {
 	// Cursor Opaque nextCursor from the preceding page.
@@ -956,6 +1002,13 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/accounts/{accountId} (the `GetAccount` operationId).
 	GetAccount(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListAccountAvatars Read retained profile image metadata
+	//
+	// Account-scoped user and conversation profile images retrieved through the protocol. Initials remain the fallback for absent or inaccessible images. Image bytes live outside SQLite and contain only normalized PNG thumbnails.
+	//
+	// Corresponds with GET /api/v1/accounts/{accountId}/avatars (the `ListAccountAvatars` operationId).
+	ListAccountAvatars(ctx context.Context, accountId AccountID, params *ListAccountAvatarsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetAccountCapabilities Read account capability evidence
 	//
 	// Protocol capabilities remain unknown until an adapter connects and discovers them.
@@ -1001,6 +1054,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/accounts/{accountId}/history (the `GetAccountHistory` operationId).
 	GetAccountHistory(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAvatarImage Read a cached profile thumbnail
+	//
+	// Returns only a locally retained, decoded and normalized image; never redirects to provider URLs. Hash-addressed images can be cached privately and immutably.
+	//
+	// Corresponds with GET /api/v1/avatars/{hash} (the `GetAvatarImage` operationId).
+	GetAvatarImage(ctx context.Context, hash string, params *GetAvatarImageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListConversations List retained conversations
 	//
@@ -1198,6 +1258,23 @@ func (c *Client) GetAccount(ctx context.Context, accountId AccountID, reqEditors
 	return c.Client.Do(req)
 }
 
+// ListAccountAvatars Read retained profile image metadata
+//
+// Account-scoped user and conversation profile images retrieved through the protocol. Initials remain the fallback for absent or inaccessible images. Image bytes live outside SQLite and contain only normalized PNG thumbnails.
+//
+// Corresponds with GET /api/v1/accounts/{accountId}/avatars (the `ListAccountAvatars` operationId).
+func (c *Client) ListAccountAvatars(ctx context.Context, accountId AccountID, params *ListAccountAvatarsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAccountAvatarsRequest(c.Server, accountId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetAccountCapabilities Read account capability evidence
 //
 // Protocol capabilities remain unknown until an adapter connects and discovers them.
@@ -1294,6 +1371,23 @@ func (c *Client) ConfigureAccountConnection(ctx context.Context, accountId Accou
 // Corresponds with GET /api/v1/accounts/{accountId}/history (the `GetAccountHistory` operationId).
 func (c *Client) GetAccountHistory(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAccountHistoryRequest(c.Server, accountId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetAvatarImage Read a cached profile thumbnail
+//
+// Returns only a locally retained, decoded and normalized image; never redirects to provider URLs. Hash-addressed images can be cached privately and immutably.
+//
+// Corresponds with GET /api/v1/avatars/{hash} (the `GetAvatarImage` operationId).
+func (c *Client) GetAvatarImage(ctx context.Context, hash string, params *GetAvatarImageParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAvatarImageRequest(c.Server, hash, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1712,6 +1806,79 @@ func NewGetAccountRequest(server string, accountId AccountID) (*http.Request, er
 	return req, nil
 }
 
+// NewListAccountAvatarsRequest constructs an http.Request for the ListAccountAvatars method
+func NewListAccountAvatarsRequest(server string, accountId AccountID, params *ListAccountAvatarsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "accountId", accountId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/%s/avatars", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.After != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "after", *params.After, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetAccountCapabilitiesRequest constructs an http.Request for the GetAccountCapabilities method
 func NewGetAccountCapabilitiesRequest(server string, accountId AccountID) (*http.Request, error) {
 	var err error
@@ -1890,6 +2057,55 @@ func NewGetAccountHistoryRequest(server string, accountId AccountID) (*http.Requ
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAvatarImageRequest constructs an http.Request for the GetAvatarImage method
+func NewGetAvatarImageRequest(server string, hash string, params *GetAvatarImageParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "hash", hash, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/avatars/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IfNoneMatch != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "If-None-Match", *params.IfNoneMatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("If-None-Match", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -2565,6 +2781,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/accounts/{accountId} (the `GetAccount` operationId).
 	GetAccountWithResponse(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*GetAccountResponse, error)
 
+	// ListAccountAvatarsWithResponse Read retained profile image metadata
+	//
+	// Account-scoped user and conversation profile images retrieved through the protocol. Initials remain the fallback for absent or inaccessible images. Image bytes live outside SQLite and contain only normalized PNG thumbnails.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/accounts/{accountId}/avatars (the `ListAccountAvatars` operationId).
+	ListAccountAvatarsWithResponse(ctx context.Context, accountId AccountID, params *ListAccountAvatarsParams, reqEditors ...RequestEditorFn) (*ListAccountAvatarsResponse, error)
+
 	// GetAccountCapabilitiesWithResponse Read account capability evidence
 	//
 	// Protocol capabilities remain unknown until an adapter connects and discovers them.
@@ -2618,6 +2843,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/accounts/{accountId}/history (the `GetAccountHistory` operationId).
 	GetAccountHistoryWithResponse(ctx context.Context, accountId AccountID, reqEditors ...RequestEditorFn) (*GetAccountHistoryResponse, error)
+
+	// GetAvatarImageWithResponse Read a cached profile thumbnail
+	//
+	// Returns only a locally retained, decoded and normalized image; never redirects to provider URLs. Hash-addressed images can be cached privately and immutably.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/avatars/{hash} (the `GetAvatarImage` operationId).
+	GetAvatarImageWithResponse(ctx context.Context, hash string, params *GetAvatarImageParams, reqEditors ...RequestEditorFn) (*GetAvatarImageResponse, error)
 
 	// ListConversationsWithResponse List retained conversations
 	//
@@ -2952,6 +3186,68 @@ func (r GetAccountResponse) ContentType() string {
 	return ""
 }
 
+type ListAccountAvatarsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AvatarPage
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListAccountAvatarsResponse) GetJSON200() *AvatarPage {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListAccountAvatarsResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListAccountAvatarsResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r ListAccountAvatarsResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListAccountAvatarsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAccountAvatarsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAccountAvatarsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAccountAvatarsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetAccountCapabilitiesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -3256,6 +3552,69 @@ func (r GetAccountHistoryResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetAccountHistoryResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetAvatarImageResponse200Headers the declared response headers of an HTTP 200 response for GetAvatarImage
+type GetAvatarImageResponse200Headers struct {
+	CacheControl *string
+	ETag         *string
+}
+
+type GetAvatarImageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetAvatarImageResponse200Headers
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetAvatarImageResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetAvatarImageResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetAvatarImageResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAvatarImageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAvatarImageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAvatarImageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAvatarImageResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -4012,6 +4371,21 @@ func (c *ClientWithResponses) GetAccountWithResponse(ctx context.Context, accoun
 	return ParseGetAccountResponse(rsp)
 }
 
+// ListAccountAvatarsWithResponse Read retained profile image metadata
+//
+// Account-scoped user and conversation profile images retrieved through the protocol. Initials remain the fallback for absent or inaccessible images. Image bytes live outside SQLite and contain only normalized PNG thumbnails.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/accounts/{accountId}/avatars (the `ListAccountAvatars` operationId).
+func (c *ClientWithResponses) ListAccountAvatarsWithResponse(ctx context.Context, accountId AccountID, params *ListAccountAvatarsParams, reqEditors ...RequestEditorFn) (*ListAccountAvatarsResponse, error) {
+	rsp, err := c.ListAccountAvatars(ctx, accountId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAccountAvatarsResponse(rsp)
+}
+
 // GetAccountCapabilitiesWithResponse Read account capability evidence
 //
 // Protocol capabilities remain unknown until an adapter connects and discovers them.
@@ -4100,6 +4474,21 @@ func (c *ClientWithResponses) GetAccountHistoryWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseGetAccountHistoryResponse(rsp)
+}
+
+// GetAvatarImageWithResponse Read a cached profile thumbnail
+//
+// Returns only a locally retained, decoded and normalized image; never redirects to provider URLs. Hash-addressed images can be cached privately and immutably.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/avatars/{hash} (the `GetAvatarImage` operationId).
+func (c *ClientWithResponses) GetAvatarImageWithResponse(ctx context.Context, hash string, params *GetAvatarImageParams, reqEditors ...RequestEditorFn) (*GetAvatarImageResponse, error) {
+	rsp, err := c.GetAvatarImage(ctx, hash, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAvatarImageResponse(rsp)
 }
 
 // ListConversationsWithResponse List retained conversations
@@ -4488,6 +4877,53 @@ func ParseGetAccountResponse(rsp *http.Response) (*GetAccountResponse, error) {
 	return response, nil
 }
 
+// ParseListAccountAvatarsResponse parses an HTTP response from a ListAccountAvatarsWithResponse call
+func ParseListAccountAvatarsResponse(rsp *http.Response) (*ListAccountAvatarsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAccountAvatarsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AvatarPage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetAccountCapabilitiesResponse parses an HTTP response from a GetAccountCapabilitiesWithResponse call
 func ParseGetAccountCapabilitiesResponse(rsp *http.Response) (*GetAccountCapabilitiesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -4718,6 +5154,69 @@ func ParseGetAccountHistoryResponse(rsp *http.Response) (*GetAccountHistoryRespo
 		}
 		response.ApplicationproblemJSON503 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseGetAvatarImageResponse parses an HTTP response from a GetAvatarImageWithResponse call
+func ParseGetAvatarImageResponse(rsp *http.Response) (*GetAvatarImageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAvatarImageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 304:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetAvatarImageResponse200Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = &value
+		}
+		response.Headers200 = &headers
 	}
 
 	return response, nil
@@ -5245,118 +5744,129 @@ func ParseGetOperationResponse(rsp *http.Response) (*GetOperationResponse, error
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"3wA=",
+	"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",
+	"csJdhji655hR6CIaOHD2m3c3/zsA",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -10,6 +10,7 @@ import (
 
 type Querier interface {
 	AcquireWriteLock(ctx context.Context) error
+	FindAvatar(ctx context.Context, arg FindAvatarParams) (Avatar, error)
 	FindConversation(ctx context.Context, arg FindConversationParams) (Conversation, error)
 	FindProviderMessage(ctx context.Context, arg FindProviderMessageParams) (Message, error)
 	GetAccount(ctx context.Context, id string) (string, error)
@@ -23,6 +24,8 @@ type Querier interface {
 	InsertAccount(ctx context.Context, arg InsertAccountParams) error
 	InsertAccountRevision(ctx context.Context, arg InsertAccountRevisionParams) error
 	InsertArchiveAlias(ctx context.Context, arg InsertArchiveAliasParams) error
+	InsertAvatar(ctx context.Context, arg InsertAvatarParams) error
+	InsertAvatarRevision(ctx context.Context, arg InsertAvatarRevisionParams) error
 	InsertChange(ctx context.Context, arg InsertChangeParams) (int64, error)
 	InsertConversation(ctx context.Context, arg InsertConversationParams) error
 	InsertConversationRevision(ctx context.Context, arg InsertConversationRevisionParams) error
@@ -33,6 +36,8 @@ type Querier interface {
 	InsertOutbox(ctx context.Context, arg InsertOutboxParams) error
 	InterruptedMessages(ctx context.Context) ([]Message, error)
 	ListAccounts(ctx context.Context, arg ListAccountsParams) ([]string, error)
+	ListAvatarTargets(ctx context.Context, ownerID string) ([]ListAvatarTargetsRow, error)
+	ListAvatars(ctx context.Context, arg ListAvatarsParams) ([]Avatar, error)
 	ListChanges(ctx context.Context, arg ListChangesParams) ([]Change, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
@@ -41,6 +46,7 @@ type Querier interface {
 	PutHistoryStatus(ctx context.Context, arg PutHistoryStatusParams) error
 	SetOperationResult(ctx context.Context, arg SetOperationResultParams) error
 	Snapshot(ctx context.Context) (SnapshotRow, error)
+	UpdateAvatar(ctx context.Context, arg UpdateAvatarParams) error
 	UpdateConversation(ctx context.Context, arg UpdateConversationParams) error
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) error
 	UpdateOutbox(ctx context.Context, arg UpdateOutboxParams) error

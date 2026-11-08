@@ -68,6 +68,7 @@ jobs:
           npm --prefix tests/browser run test:states
           npm --prefix tests/browser run test:accounts
       - run: OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/live-chat.cjs
+      - run: OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/avatars.cjs
       - if: always()
         uses: actions/upload-artifact@v4
         with:

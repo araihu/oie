@@ -6,3 +6,6 @@ actions:
   - target: $.paths['/api/v1/events'].get
     update:
       x-cli-ignore: true
+  - target: $.paths['/api/v1/avatars/{hash}'].get
+    update:
+      x-cli-ignore: true

@@ -19,22 +19,24 @@ func New() (*cobra.Command, error) {
 		"ListAccounts":               build0,
 		"RegisterAccount":            build1,
 		"GetAccount":                 build2,
-		"GetAccountCapabilities":     build3,
-		"DisconnectAccount":          build4,
-		"GetAccountConnection":       build5,
-		"ConfigureAccountConnection": build6,
-		"GetAccountHistory":          build7,
-		"ListConversations":          build8,
-		"OpenConversation":           build9,
-		"GetConversation":            build10,
-		"ListMessages":               build11,
-		"SendMessage":                build12,
-		"GetEngine":                  build13,
-		"StreamEvents":               build14,
-		"GetHealth":                  build15,
-		"GetMessage":                 build16,
-		"CancelMessage":              build17,
-		"GetOperation":               build18,
+		"ListAccountAvatars":         build3,
+		"GetAccountCapabilities":     build4,
+		"DisconnectAccount":          build5,
+		"GetAccountConnection":       build6,
+		"ConfigureAccountConnection": build7,
+		"GetAccountHistory":          build8,
+		"GetAvatarImage":             build9,
+		"ListConversations":          build10,
+		"OpenConversation":           build11,
+		"GetConversation":            build12,
+		"ListMessages":               build13,
+		"SendMessage":                build14,
+		"GetEngine":                  build15,
+		"StreamEvents":               build16,
+		"GetHealth":                  build17,
+		"GetMessage":                 build18,
+		"CancelMessage":              build19,
+		"GetOperation":               build20,
 	})
 }
 func build0(server string, input cliruntime.Input) (*http.Request, error) {
@@ -66,37 +68,62 @@ func build3(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("path", "accountId", &path0); err != nil {
 		return nil, err
 	}
-	return api.NewGetAccountCapabilitiesRequest(server, path0)
+	var params api.ListAccountAvatarsParams
+	if err := input.Decode("query", "after", &params.After); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "limit", &params.Limit); err != nil {
+		return nil, err
+	}
+	return api.NewListAccountAvatarsRequest(server, path0, &params)
 }
 func build4(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.AccountID
 	if err := input.Decode("path", "accountId", &path0); err != nil {
 		return nil, err
 	}
-	return api.NewDisconnectAccountRequest(server, path0)
+	return api.NewGetAccountCapabilitiesRequest(server, path0)
 }
 func build5(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.AccountID
 	if err := input.Decode("path", "accountId", &path0); err != nil {
 		return nil, err
 	}
-	return api.NewGetAccountConnectionRequest(server, path0)
+	return api.NewDisconnectAccountRequest(server, path0)
 }
 func build6(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.AccountID
 	if err := input.Decode("path", "accountId", &path0); err != nil {
 		return nil, err
 	}
-	return api.NewConfigureAccountConnectionRequestWithBody(server, path0, input.ContentType, bytes.NewReader(input.Body))
+	return api.NewGetAccountConnectionRequest(server, path0)
 }
 func build7(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.AccountID
 	if err := input.Decode("path", "accountId", &path0); err != nil {
 		return nil, err
 	}
-	return api.NewGetAccountHistoryRequest(server, path0)
+	return api.NewConfigureAccountConnectionRequestWithBody(server, path0, input.ContentType, bytes.NewReader(input.Body))
 }
 func build8(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.AccountID
+	if err := input.Decode("path", "accountId", &path0); err != nil {
+		return nil, err
+	}
+	return api.NewGetAccountHistoryRequest(server, path0)
+}
+func build9(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 string
+	if err := input.Decode("path", "hash", &path0); err != nil {
+		return nil, err
+	}
+	var params api.GetAvatarImageParams
+	if err := input.Decode("header", "If-None-Match", &params.IfNoneMatch); err != nil {
+		return nil, err
+	}
+	return api.NewGetAvatarImageRequest(server, path0, &params)
+}
+func build10(server string, input cliruntime.Input) (*http.Request, error) {
 	var params api.ListConversationsParams
 	if err := input.Decode("query", "cursor", &params.Cursor); err != nil {
 		return nil, err
@@ -124,21 +151,21 @@ func build8(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewListConversationsRequest(server, &params)
 }
-func build9(server string, input cliruntime.Input) (*http.Request, error) {
+func build11(server string, input cliruntime.Input) (*http.Request, error) {
 	var params api.OpenConversationParams
 	if err := input.Decode("header", "Idempotency-Key", &params.IdempotencyKey); err != nil {
 		return nil, err
 	}
 	return api.NewOpenConversationRequestWithBody(server, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build10(server string, input cliruntime.Input) (*http.Request, error) {
+func build12(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetConversationRequest(server, path0)
 }
-func build11(server string, input cliruntime.Input) (*http.Request, error) {
+func build13(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
@@ -152,7 +179,7 @@ func build11(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewListMessagesRequest(server, path0, &params)
 }
-func build12(server string, input cliruntime.Input) (*http.Request, error) {
+func build14(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
@@ -163,27 +190,27 @@ func build12(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewSendMessageRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build13(server string, input cliruntime.Input) (*http.Request, error) {
+func build15(server string, input cliruntime.Input) (*http.Request, error) {
 	return api.NewGetEngineRequest(server)
 }
-func build14(server string, input cliruntime.Input) (*http.Request, error) {
+func build16(server string, input cliruntime.Input) (*http.Request, error) {
 	var params api.StreamEventsParams
 	if err := input.Decode("header", "Last-Event-ID", &params.LastEventID); err != nil {
 		return nil, err
 	}
 	return api.NewStreamEventsRequest(server, &params)
 }
-func build15(server string, input cliruntime.Input) (*http.Request, error) {
+func build17(server string, input cliruntime.Input) (*http.Request, error) {
 	return api.NewGetHealthRequest(server)
 }
-func build16(server string, input cliruntime.Input) (*http.Request, error) {
+func build18(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetMessageRequest(server, path0)
 }
-func build17(server string, input cliruntime.Input) (*http.Request, error) {
+func build19(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
@@ -194,7 +221,7 @@ func build17(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewCancelMessageRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build18(server string, input cliruntime.Input) (*http.Request, error) {
+func build20(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "operationId", &path0); err != nil {
 		return nil, err

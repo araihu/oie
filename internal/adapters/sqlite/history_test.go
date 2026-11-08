@@ -137,10 +137,10 @@ func TestHistoryMigrationDownUpPreservesExistingMessagesAndOutbox(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = runner.Steps(-1); err != nil {
+	if err = runner.Migrate(2); err != nil {
 		t.Fatal(err)
 	}
-	if err = runner.Steps(1); err != nil {
+	if err = runner.Migrate(4); err != nil {
 		t.Fatal(err)
 	}
 	messages, err := store.Messages(t.Context(), c.ID, "", 100)

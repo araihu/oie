@@ -202,6 +202,10 @@ func event(e application.Event, engineID domain.ID) engineapi.Event {
 		v := connection(*e.Connection)
 		out.Connection = &v
 	}
+	if e.Avatar != nil {
+		v := avatar(*e.Avatar)
+		out.Avatar = &v
+	}
 	if e.History != nil {
 		v := history(*e.History)
 		out.History = &v

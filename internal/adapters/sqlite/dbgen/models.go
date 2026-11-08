@@ -26,6 +26,22 @@ type ArchiveCheckpoint struct {
 	AfterID   string
 }
 
+type Avatar struct {
+	ID         string
+	RevisionID string
+	AccountID  string
+	Address    string
+	Payload    string
+}
+
+type AvatarRevision struct {
+	ID        string
+	EntityID  string
+	Parents   string
+	Payload   string
+	CreatedAt string
+}
+
 type Change struct {
 	Sequence   int64
 	Payload    string

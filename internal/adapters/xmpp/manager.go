@@ -24,6 +24,7 @@ import (
 	"mellium.im/xmlstream"
 	mx "mellium.im/xmpp"
 	"mellium.im/xmpp/dial"
+	"mellium.im/xmpp/disco"
 	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/stanza"
 )
@@ -34,15 +35,19 @@ type configuration struct {
 	Enabled            bool
 }
 type entry struct {
-	account   domain.Account
-	config    configuration
-	cancel    context.CancelFunc
-	mu        sync.RWMutex
-	state     domain.Connection
-	session   *mx.Session
-	raw       net.Conn
-	historyMu sync.Mutex
-	archive   *archiveQuery
+	account       domain.Account
+	config        configuration
+	cancel        context.CancelFunc
+	mu            sync.RWMutex
+	state         domain.Connection
+	session       *mx.Session
+	raw           net.Conn
+	historyMu     sync.Mutex
+	archive       *archiveQuery
+	avatarWake    chan struct{}
+	avatarMu      sync.Mutex
+	avatarTargets map[string]string
+	avatarDirty   map[string]string
 }
 type Manager struct {
 	dir         string
@@ -54,10 +59,11 @@ type Manager struct {
 	host        application.ProtocolHost
 	workers     sync.WaitGroup
 	historyGate chan struct{}
+	avatarGate  chan struct{}
 }
 
 func New(dir string, roots *x509.CertPool) *Manager {
-	return &Manager{dir: dir, roots: roots, entries: make(map[domain.ID]*entry), historyGate: make(chan struct{}, 1)}
+	return &Manager{dir: dir, roots: roots, entries: make(map[domain.ID]*entry), historyGate: make(chan struct{}, 1), avatarGate: make(chan struct{}, 1)}
 }
 func (m *Manager) NormalizeAddress(protocol, address string) (string, error) {
 	if protocol != "xmpp" {
@@ -186,7 +192,7 @@ func (m *Manager) replace(a domain.Account, cfg configuration) *entry {
 		state = "connecting"
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
-	e := &entry{account: a, config: cfg, cancel: cancel, state: domain.Connection{AccountID: a.ID, State: state, UpdatedAt: time.Now().UTC()}}
+	e := &entry{avatarWake: make(chan struct{}, 1), avatarTargets: map[string]string{}, avatarDirty: map[string]string{}, account: a, config: cfg, cancel: cancel, state: domain.Connection{AccountID: a.ID, State: state, UpdatedAt: time.Now().UTC()}}
 	m.entries[a.ID] = e
 	m.workers.Add(1)
 	go func() {
@@ -285,8 +291,9 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			}
 			if err = m.publish(ctx, e, "connected", ""); err == nil {
 				historyCtx, historyCancel := context.WithCancel(ctx)
-				m.workers.Add(1)
+				m.workers.Add(2)
 				go func() { defer m.workers.Done(); m.historyLoop(historyCtx, e, session) }()
+				go func() { defer m.workers.Done(); m.avatarLoop(historyCtx, e, session) }()
 				delay = time.Second
 				err = session.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
 					return m.handle(ctx, e, tokens, start)
@@ -379,7 +386,7 @@ func (m *Manager) connect(ctx context.Context, e *entry) (*mx.Session, net.Conn,
 		err = errors.New("TLS required")
 	}
 	if err == nil {
-		err = session.Send(attempt, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(nil))
+		err = session.Send(attempt, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(avatarCaps().TokenReader()))
 	}
 	if err != nil {
 		_ = raw.Close()
@@ -463,14 +470,28 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 	case "message":
 		var msg struct {
 			stanza.Message
-			Body    string         `xml:"jabber:client body"`
-			Archive *archiveResult `xml:"urn:xmpp:mam:2 result"`
-			Delay   struct {
+			Body        string         `xml:"jabber:client body"`
+			Archive     *archiveResult `xml:"urn:xmpp:mam:2 result"`
+			AvatarEvent *struct {
+				Items struct {
+					Node string `xml:"node,attr"`
+				} `xml:"items"`
+			} `xml:"http://jabber.org/protocol/pubsub#event event"`
+			Delay struct {
 				Stamp string `xml:"stamp,attr"`
 			} `xml:"urn:xmpp:delay delay"`
 		}
 		if err := decoder.Decode(&msg); err != nil {
 			return err
+		}
+		if msg.AvatarEvent != nil && msg.AvatarEvent.Items.Node == avatarMetadataNS && msg.From.Resourcepart() == "" {
+			publisher := msg.From
+			// The authenticated server may omit From for the account's own PEP events.
+			// Never apply that shorthand to an identified remote publisher.
+			if publisher.String() == "" {
+				publisher, _ = jid.Parse(e.account.Address)
+			}
+			m.queueAvatar(e, publisher, "", false)
 		}
 		if msg.Archive != nil {
 			return m.captureArchive(e, msg.Message, msg.Archive)
@@ -493,7 +514,27 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		if errors.Is(err, application.ErrInvalid) {
 			return nil
 		}
+		if err == nil {
+			m.wakeAvatars(e)
+		}
 		return err
+	case "presence":
+		var presence struct {
+			stanza.Presence
+			Update *struct {
+				Photo *string `xml:"photo"`
+			} `xml:"vcard-temp:x:update x"`
+		}
+		if err := decoder.Decode(&presence); err != nil {
+			return err
+		}
+		if presence.Update != nil && presence.Update.Photo != nil {
+			hash := strings.TrimSpace(*presence.Update.Photo)
+			if hash == "" || validSHA1(hash) {
+				m.queueAvatar(e, presence.From, hash, true)
+			}
+		}
+		return nil
 	case "iq":
 		iq, err := stanza.NewIQ(*start)
 		if err != nil {
@@ -503,7 +544,8 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			return nil
 		}
 		var query struct {
-			Ping *struct{} `xml:"urn:xmpp:ping ping"`
+			Ping  *struct{}        `xml:"urn:xmpp:ping ping"`
+			Disco *disco.InfoQuery `xml:"http://jabber.org/protocol/disco#info query"`
 		}
 		if err = decoder.Decode(&query); err != nil {
 			return err
@@ -511,6 +553,15 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		reply := iq.Error(stanza.Error{Type: stanza.Cancel, Condition: stanza.ServiceUnavailable})
 		if query.Ping != nil && iq.Type == stanza.GetIQ {
 			reply = iq.Result(nil)
+		}
+		if query.Disco != nil && iq.Type == stanza.GetIQ {
+			info := clientInfo()
+			if query.Disco.Node == "" || query.Disco.Node == avatarCaps().Node+"#"+avatarCaps().Ver {
+				info.Node = query.Disco.Node
+				reply = iq.Result(info.TokenReader())
+			} else {
+				reply = iq.Error(stanza.Error{Type: stanza.Cancel, Condition: stanza.ItemNotFound})
+			}
 		}
 		_, err = xmlstream.Copy(t, reply)
 		return err

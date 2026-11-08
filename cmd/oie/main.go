@@ -17,6 +17,7 @@ import (
 
 	"github.com/araihu/goshtoso/assets"
 	"github.com/araihu/oie/api"
+	"github.com/araihu/oie/internal/adapters/avatarfiles"
 	"github.com/araihu/oie/internal/adapters/httpapi"
 	"github.com/araihu/oie/internal/adapters/sqlite"
 	"github.com/araihu/oie/internal/adapters/web"
@@ -78,6 +79,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
+		engine.SetAvatarFiles(avatarfiles.New(filepath.Join(*dataDir, "media", "avatars")))
 		roots, err := x509.SystemCertPool()
 		if err != nil {
 			roots = x509.NewCertPool()

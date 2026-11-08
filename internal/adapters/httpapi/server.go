@@ -116,7 +116,7 @@ func (s *Server) GetEngine(ctx context.Context, _ engineapi.GetEngineRequestObje
 	}
 	return engineapi.GetEngine200JSONResponse{
 		Id: string(state.ID), Role: engineapi.EngineRole(state.Role),
-		ApiVersion: "0.3.0", EventCursor: cursor(state.ID, state.Sequence),
+		ApiVersion: "0.4.0", EventCursor: cursor(state.ID, state.Sequence),
 	}, nil
 }
 

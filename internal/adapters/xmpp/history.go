@@ -321,6 +321,7 @@ func (m *Manager) recoverHistory(ctx context.Context, e *entry, s *mx.Session) {
 			partial = true
 			continue
 		}
+		m.wakeAvatars(e)
 		scopes = append(scopes, address)
 	}
 	anySupported := false

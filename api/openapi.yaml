@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.3.0
+  version: 0.4.0
   description: Native engine API for account metadata, XMPP connections, direct text conversations, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
     are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.
@@ -61,7 +61,7 @@ paths:
               example:
                 id: 019a5df0-0000-7000-8000-000000000003
                 role: local
-                apiVersion: 0.3.0
+                apiVersion: 0.4.0
                 eventCursor: 019a5df0-0000-7000-8000-000000000003:1
         '503':
           $ref: '#/components/responses/Unavailable'
@@ -213,6 +213,78 @@ paths:
                 label: Personal
                 connectionState: not_connected
                 createdAt: '2026-11-07T12:00:00Z'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/accounts/{accountId}/avatars:
+    parameters:
+    - $ref: '#/components/parameters/AccountID'
+    get:
+      operationId: listAccountAvatars
+      tags: [Accounts]
+      summary: Read retained profile image metadata
+      description: Account-scoped user and conversation profile images retrieved through the protocol. Initials remain
+        the fallback for absent or inaccessible images. Image bytes live outside SQLite and contain only normalized PNG thumbnails.
+      parameters:
+      - name: after
+        in: query
+        description: Continue after this avatar record UUID.
+        schema:
+          $ref: '#/components/schemas/ID'
+      - name: limit
+        in: query
+        description: Maximum page size.
+        schema: {type: integer, minimum: 1, maximum: 100, default: 100}
+      responses:
+        '200':
+          description: Known profile metadata, ordered by stable avatar UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvatarPage'
+              example: {items: []}
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/avatars/{hash}:
+    parameters:
+    - name: hash
+      in: path
+      required: true
+      description: SHA-256 of the normalized PNG thumbnail.
+      schema: {type: string, pattern: '^[0-9a-f]{64}$'}
+    get:
+      operationId: getAvatarImage
+      tags: [Accounts]
+      summary: Read a cached profile thumbnail
+      description: Returns only a locally retained, decoded and normalized image; never redirects to provider URLs.
+        Hash-addressed images can be cached privately and immutably.
+      parameters:
+      - name: If-None-Match
+        in: header
+        description: Previously received content ETag.
+        schema: {type: string}
+      responses:
+        '200':
+          description: Static PNG thumbnail, at most 256 pixels on either axis
+          headers:
+            ETag:
+              description: Quoted content hash.
+              schema: {type: string}
+            Cache-Control:
+              description: Private immutable cache policy.
+              schema: {type: string}
+          content:
+            image/png:
+              schema: {type: string, format: binary}
+        '304':
+          description: The supplied ETag still identifies this retained image
         '400':
           $ref: '#/components/responses/Invalid'
         '404':
@@ -905,7 +977,7 @@ components:
       example:
         id: 019a5df0-0000-7000-8000-000000000003
         role: local
-        apiVersion: 0.3.0
+        apiVersion: 0.4.0
         eventCursor: 019a5df0-0000-7000-8000-000000000003:1
       additionalProperties: false
       required:
@@ -924,7 +996,7 @@ components:
         apiVersion:
           type: string
           enum:
-          - 0.3.0
+          - 0.4.0
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -1113,6 +1185,7 @@ components:
           - account.registered
           - account.connection_changed
           - account.history_changed
+          - profile.avatar_changed
           - conversation.created
           - conversation.updated
           - message.created
@@ -1130,6 +1203,8 @@ components:
           $ref: '#/components/schemas/Connection'
         history:
           $ref: '#/components/schemas/HistoryStatus'
+        avatar:
+          $ref: '#/components/schemas/Avatar'
     Problem:
       type: object
       example:
@@ -1198,6 +1273,49 @@ components:
         accountId: 019a5df0-0000-7000-8000-000000000001
         state: not_connected
         updatedAt: '2026-11-07T12:00:00Z'
+    Avatar:
+      type: object
+      additionalProperties: false
+      description: Retained profile image projection, scoped to an account and canonical protocol address.
+        Empty imageHash means the provider explicitly returned no image. Provider errors keep the last known image.
+      required: [id, revisionId, accountId, address, imageHash, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/ID'
+        revisionId:
+          $ref: '#/components/schemas/ID'
+        accountId:
+          $ref: '#/components/schemas/ID'
+        address:
+          type: string
+          description: Canonical account or conversation address; callers treat it as an opaque identity key.
+        imageHash:
+          type: string
+          description: Empty for no image, otherwise SHA-256 of the normalized PNG; use getAvatarImage to retrieve it.
+          pattern: '^([0-9a-f]{64})?$'
+        updatedAt:
+          type: string
+          format: date-time
+      example:
+        id: 019a5df0-0000-7000-8000-000000000001
+        revisionId: 019a5df0-0000-7000-8000-000000000002
+        accountId: 019a5df0-0000-7000-8000-000000000003
+        address: bob@localhost
+        imageHash: ''
+        updatedAt: '2026-11-07T12:00:00Z'
+    AvatarPage:
+      type: object
+      additionalProperties: false
+      description: Account-scoped profile metadata page.
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Avatar'
+        nextCursor:
+          $ref: '#/components/schemas/ID'
+      example: {items: []}
     HistoryStatus:
       type: object
       additionalProperties: false

@@ -100,6 +100,10 @@ The BFF uses application capabilities; protocol namespaces and stanza handling r
 
 Support multiple simultaneous existing XMPP accounts, such as personal and work. Display the owning/sending account clearly in conversations and account-sensitive actions. In-app XMPP registration is backlogged.
 
+Recover available account, peer and room profile images from the protocol. Cache
+images locally and use initials when an image is absent or inaccessible. Room
+speaker nicknames alone do not establish a person's identity for image lookup.
+
 Use a profile control at the bottom of the navigation for account switching, following the supplied X account-switcher reference. Its popover lists account names/addresses, marks the active account, shows available unread counts, and offers adding an existing account and managing connections. Retain an All accounts inbox option. Switching the inbox account does not disconnect other protocol sessions, transfer drafts, or change pending-send ownership. Oie uses Disconnect for an XMPP session; built-in application login/logout remains backlogged. Account management starts with a compact account list and opens only one account’s connection details at a time. Adding an existing account is a separate screen; server/port overrides live under advanced connection settings.
 
 An Oie contact can group multiple protocol identities. Link identity and Unlink identity are manual, reversible operations. Each account/protocol conversation retains its own timeline; linking does not merge histories or retarget pending sends.

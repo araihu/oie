@@ -53,6 +53,7 @@ type Event struct {
 	Message      *domain.Message
 	Connection   *domain.Connection
 	History      *domain.HistoryStatus
+	Avatar       *domain.Avatar
 	Type         string
 	OccurredAt   time.Time
 }
@@ -76,12 +77,13 @@ type Repository interface {
 type NewID func() (domain.ID, error)
 
 type Engine struct {
-	repo      Repository
-	role      string
-	newID     NewID
-	now       func() time.Time
-	protocols Protocols
-	work      chan struct{}
+	repo        Repository
+	role        string
+	newID       NewID
+	now         func() time.Time
+	protocols   Protocols
+	avatarFiles AvatarFiles
+	work        chan struct{}
 }
 
 func New(repo Repository, role string, ids NewID, now func() time.Time) (*Engine, error) {
