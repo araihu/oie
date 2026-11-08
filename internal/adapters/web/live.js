@@ -132,7 +132,7 @@ window.OieRuntime.register('live', life => {
       const query=new URLSearchParams({engineId:body.dataset.engineId,conversationId:body.dataset.conversationId,accountId:body.dataset.accountId,messageId});
       const response=await life.fetch('/ui/reply-source?'+query,{credentials:'same-origin',cache:'no-store',signal:controller.signal}),reply=await response.json();
       if(life.signal.aborted||epoch!==replyEpoch)return;
-      if(!response.ok||reply.engineId!==body.dataset.engineId||reply.accountId!==body.dataset.accountId||reply.conversationId!==body.dataset.conversationId||reply.messageId!==messageId||typeof reply.senderName!=='string'||typeof reply.excerpt!=='string'||Array.from(reply.excerpt).length>512)throw Error('reply_unavailable');
+      if(!response.ok||reply.engineId!==body.dataset.engineId||reply.accountId!==body.dataset.accountId||reply.conversationId!==body.dataset.conversationId||reply.requestedMessageId!==messageId||!canonicalID(reply.messageId)||typeof reply.senderName!=='string'||typeof reply.excerpt!=='string'||Array.from(reply.excerpt).length>512)throw Error('reply_unavailable');
       saveDraft({...draftRecord(false),reply});feedback(composer,'');input?.focus({preventScroll:true});
     }catch{if(!life.signal.aborted&&epoch===replyEpoch)feedback(composer,text('replyUnavailable'),true)}
     finally{clearTimeout(timeout);if(!life.signal.aborted&&epoch===replyEpoch){preparingReply=false;renderReply()}}
@@ -168,6 +168,7 @@ window.OieRuntime.register('live', life => {
     for (const time of document.querySelectorAll('time[datetime]:not([data-day])')) {
       const date=new Date(time.dateTime);if(!Number.isNaN(date.getTime()))time.textContent=time.matches('[data-viewer-date],[data-capability-date],[data-details-date],[data-shared-source-date]')?new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(date):clock.format(date);
     }
+    for(const label of document.querySelectorAll('[data-message-edited][data-edited-at]')){const at=new Date(label.dataset.editedAt);if(!Number.isNaN(at.getTime()))label.title=new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(at);}
     const timeline=document.querySelector('#message-timeline');if(!timeline)return;
     for(const divider of timeline.querySelectorAll('.oie-day-divider'))divider.remove();
     const key=date=>[date.getFullYear(),date.getMonth(),date.getDate()].join('-');
@@ -374,6 +375,18 @@ window.OieRuntime.register('live', life => {
     if (sending) {
       if(preparingReply){feedback(form,text('replyPreparing'));return}
       if (form.dataset.sendAllowed !== 'true'&&!journal?.pending) return;
+      if(!journal?.pending&&journal?.reply){
+        const requested=journal.reply.messageId;preparingReply=true;renderReply();
+        const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),12000);
+        try{
+          const query=new URLSearchParams({engineId:body.dataset.engineId,conversationId:body.dataset.conversationId,accountId:body.dataset.accountId,messageId:requested});
+          const response=await life.fetch('/ui/reply-source?'+query,{credentials:'same-origin',cache:'no-store',signal:controller.signal}),reply=await response.json();
+          if(life.signal.aborted)return;
+          if(!response.ok||reply.engineId!==body.dataset.engineId||reply.accountId!==body.dataset.accountId||reply.conversationId!==body.dataset.conversationId||reply.requestedMessageId!==requested||!canonicalID(reply.messageId)||typeof reply.senderName!=='string'||typeof reply.excerpt!=='string'||Array.from(reply.excerpt).length>512)throw Error('reply_unavailable');
+          saveDraft({...draftRecord(false),reply});
+        }catch{if(!life.signal.aborted)feedback(form,text('replyUnavailable'),true);return}
+        finally{clearTimeout(timeout);if(!life.signal.aborted){preparingReply=false;renderReply()}}
+      }
       const value = journal?.pending ? journal.text : input.value;
       if (!value.trim() || Array.from(value).length > 16384) { feedback(form,text('invalidMessage'),true);input.focus();return; }
       if (journal?.pending) { input.value=journal.text; submissionKey.value=journal.key; }

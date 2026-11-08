@@ -10,12 +10,13 @@ import (
 )
 
 type replyPreparation struct {
-	EngineID       string `json:"engineId"`
-	MessageID      string `json:"messageId"`
-	AccountID      string `json:"accountId"`
-	ConversationID string `json:"conversationId"`
-	SenderName     string `json:"senderName"`
-	Excerpt        string `json:"excerpt"`
+	EngineID           string `json:"engineId"`
+	MessageID          string `json:"messageId"`
+	RequestedMessageID string `json:"requestedMessageId"`
+	AccountID          string `json:"accountId"`
+	ConversationID     string `json:"conversationId"`
+	SenderName         string `json:"senderName"`
+	Excerpt            string `json:"excerpt"`
 }
 
 func quoteExcerpt(m engineapi.Message) string {
@@ -42,11 +43,11 @@ func (s *Server) retainedReplySource(ctx context.Context, conversation, account,
 		}
 		return nil, status
 	}
-	if response.JSON200.TargetId != target {
+	if !validContextTarget(*response.JSON200, target, conversation, account) {
 		return nil, 503
 	}
 	for _, m := range response.JSON200.Items {
-		if m.Id == target && m.ConversationId == conversation && m.AccountId == account {
+		if m.Id == response.JSON200.TargetId && m.ConversationId == conversation && m.AccountId == account {
 			return &m, 200
 		}
 	}
@@ -91,7 +92,7 @@ func (s *Server) prepareReply(w http.ResponseWriter, r *http.Request) {
 		fail(status, text.ReplyUnavailable, "not_found")
 		return
 	}
-	_ = json.NewEncoder(w).Encode(replyPreparation{EngineID: engine.JSON200.Id, MessageID: source.Id, AccountID: source.AccountId, ConversationID: source.ConversationId, SenderName: source.Sender.DisplayName, Excerpt: quoteExcerpt(*source)})
+	_ = json.NewEncoder(w).Encode(replyPreparation{EngineID: engine.JSON200.Id, MessageID: source.Id, RequestedMessageID: target, AccountID: source.AccountId, ConversationID: source.ConversationId, SenderName: source.Sender.DisplayName, Excerpt: quoteExcerpt(*source)})
 }
 func matchingSend(m engineapi.Message, conversation, account, body, target string) bool {
 	if m.ConversationId != conversation || m.AccountId != account {

@@ -235,10 +235,10 @@
   "CapabilityStars": "Mensagens com estrela",
   "CapabilitySchedules": "Mensagens agendadas",
   "CapabilitySync": "Sincronização entre dispositivos",
-  "CapabilitySavedRoomsNote": "Histórico retido somente para leitura; entrada em salas e envio não implementados.",
+  "CapabilitySavedRoomsNote": "Histórico de salas retido; entre na sala para enviar mensagens.",
   "CapabilityProfileImagesNote": "Apenas imagens de perfil disponíveis; identidades de salas não verificadas mantêm as iniciais.",
   "CapabilityFormattingNote": "Renderização de Markdown recebido; conversão de formatação rica no envio não implementada.",
-  "CapabilityReceivedRepliesNote": "Visualização e navegação de respostas recebidas; criação de respostas não implementada.",
+  "CapabilityReceivedRepliesNote": "Veja respostas recebidas e responda a mensagens retidas.",
   "CapabilityLocalNote": "Fornecido pelo Oie sem exigir suporte do protocolo.",
   "CapabilityPartialDetails": "Detalhes parciais",
   "DetailsRefresh": "Atualizar",
@@ -346,5 +346,7 @@
   "RoomConflict": "O estado da sala mudou. Atualize antes de tentar novamente.",
   "RoomJoinRequested": "Entrada na sala solicitada.",
   "RoomLeaveRequested": "Saída da sala solicitada.",
-  "RoomQueueHint": "As mensagens aguardarão a conexão com a sala."
+  "RoomQueueHint": "As mensagens aguardarão a conexão com a sala.",
+  "Edited": "Editada",
+  "CapabilityEditMessagesNote": "Apenas correções recebidas; editar mensagens enviadas ainda não está implementado."
 }

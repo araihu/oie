@@ -91,7 +91,7 @@ func TestContextReadIsBoundedAndConversationScoped(t *testing.T) {
 				if tc.omittedTarget {
 					item = testRevision
 				}
-				_ = json.NewEncoder(w).Encode(engineapi.MessageContext{TargetId: target, HasOlder: true, HasNewer: true, Items: []engineapi.Message{{Id: item, ConversationId: testChat, AccountId: account}}})
+				_ = json.NewEncoder(w).Encode(engineapi.MessageContext{TargetId: target, HasOlder: true, HasNewer: true, Items: []engineapi.Message{{Id: item, RevisionId: testRevision, ConversationId: testChat, AccountId: account}}})
 			}))
 			defer backend.Close()
 			ui, err := New(backend.URL)
@@ -123,5 +123,54 @@ func TestReplyImagePresentationUsesOwnBodyOnly(t *testing.T) {
 	m.Reply.BodyText = ""
 	if m.presentationText() != "" {
 		t.Fatal("empty reply body reintroduced fallback quote")
+	}
+}
+
+func TestContextAliasRequiresExactProofAndCanonicalOwnership(t *testing.T) {
+	for _, name := range []string{"valid", "missing proof", "wrong proof", "foreign account", "foreign conversation", "missing target", "invalid revision", "unnecessary proof"} {
+		t.Run(name, func(t *testing.T) {
+			alias, canonical := testMessage, testRevision
+			proof := alias
+			page := engineapi.MessageContext{TargetId: canonical, RequestedTargetId: &proof, Items: []engineapi.Message{{Id: canonical, RevisionId: testEngine, AccountId: testAccount, ConversationId: testChat}}}
+			switch name {
+			case "missing proof":
+				page.RequestedTargetId = nil
+			case "wrong proof":
+				proof = testEngine
+			case "foreign account":
+				page.Items[0].AccountId = testEngine
+			case "foreign conversation":
+				page.Items[0].ConversationId = testEngine
+			case "missing target":
+				page.Items[0].Id = testEngine
+			case "invalid revision":
+				page.Items[0].RevisionId = "bad"
+			case "unnecessary proof":
+				page.TargetId = alias
+				page.Items[0].Id = alias
+			}
+			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v1/conversations/"+testChat+"/messages/"+alias+"/context" {
+					t.Error("alias changed before authoritative lookup")
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(page)
+			}))
+			defer backend.Close()
+			ui, err := New(backend.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			v := view{ChatID: testChat, FocusMessage: alias}
+			items, used := ui.contextMessages(context.Background(), &v, testAccount)
+			source, status := ui.retainedReplySource(context.Background(), testChat, testAccount, alias)
+			if name == "valid" {
+				if !used || v.Unavailable || v.FocusMessage != canonical || len(items) != 1 || source == nil || source.Id != canonical || status != 200 {
+					t.Fatal("explicit same-owner alias failed to normalize")
+				}
+			} else if !v.Unavailable || v.FocusMessage != alias || source != nil || status != 503 {
+				t.Fatal("unproven/foreign alias escaped checks")
+			}
+		})
 	}
 }

@@ -119,6 +119,8 @@ func (v view) capabilityNote(id string) string {
 		return v.Text.CapabilityFormattingNote
 	case "received_replies":
 		return v.Text.CapabilityReceivedRepliesNote
+	case "edit_messages":
+		return v.Text.CapabilityEditMessagesNote
 	case "image_previews", "link_previews", "message_stars":
 		return v.Text.CapabilityLocalNote
 	default:

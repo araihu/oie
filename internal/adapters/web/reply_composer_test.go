@@ -41,7 +41,7 @@ func TestReplyPreparationBindsCanonicalSourceAndBoundsPlainExcerpt(t *testing.T)
 			if r.URL.Query().Get("limit") != "1" {
 				t.Error("preparation loaded unnecessary history")
 			}
-			_ = json.NewEncoder(w).Encode(engineapi.MessageContext{TargetId: testMessage, Items: []engineapi.Message{{Id: testMessage, AccountId: sourceAccount, ConversationId: testChat, Sender: engineapi.Sender{DisplayName: "<sender>"}, OriginalText: "compatibility fallback", Reply: &engineapi.MessageReply{BodyText: strings.Repeat("😀", 520)}}}})
+			_ = json.NewEncoder(w).Encode(engineapi.MessageContext{TargetId: testMessage, Items: []engineapi.Message{{Id: testMessage, RevisionId: testRevision, AccountId: sourceAccount, ConversationId: testChat, Sender: engineapi.Sender{DisplayName: "<sender>"}, OriginalText: "compatibility fallback", Reply: &engineapi.MessageReply{BodyText: strings.Repeat("😀", 520)}}}})
 		default:
 			t.Errorf("unexpected source request %s", r.URL.Path)
 			w.WriteHeader(404)

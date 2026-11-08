@@ -56,25 +56,37 @@ func (s *Server) contextMessages(ctx context.Context, v *view, account string) (
 		return nil, true
 	}
 	page := response.JSON200
-	target := false
-	if page.TargetId != v.FocusMessage {
+	if !validContextTarget(*page, v.FocusMessage, v.ChatID, account) {
 		v.Unavailable = true
 		return nil, true
 	}
-	for _, m := range page.Items {
-		if m.ConversationId != v.ChatID || m.AccountId != account {
-			v.Unavailable = true
-			return nil, true
-		}
-		if m.Id == v.FocusMessage {
-			target = true
-		}
-	}
-	if !target {
-		v.Unavailable = true
-		return nil, true
-	}
+	v.FocusMessage = page.TargetId
 	v.ContextHasNewer = page.HasNewer
 	v.ContextHasOlder = page.HasOlder
 	return page.Items, true
+}
+
+// An alias can change only the canonical target, never its ownership. The engine
+// must explicitly prove the exact requested UUID and include the canonical row.
+func validContextTarget(page engineapi.MessageContext, requested, conversation, account string) bool {
+	if !validOperationKey(page.TargetId) || !validOperationKey(requested) {
+		return false
+	}
+	if page.TargetId == requested {
+		if page.RequestedTargetId != nil {
+			return false
+		}
+	} else if page.RequestedTargetId == nil || *page.RequestedTargetId != requested {
+		return false
+	}
+	target := false
+	for _, m := range page.Items {
+		if m.ConversationId != conversation || m.AccountId != account || !validOperationKey(m.Id) || !validOperationKey(m.RevisionId) {
+			return false
+		}
+		if m.Id == page.TargetId {
+			target = true
+		}
+	}
+	return target
 }
