@@ -364,5 +364,20 @@
   "VideoUnavailable": "Não foi possível carregar o vídeo. Verifique sua conexão e tente novamente.",
   "VideoUnsupported": "Este vídeo não pode ser reproduzido neste navegador.",
   "SharedLoadingOlder": "Carregando itens anteriores…",
-  "SharedLoadFailed": "Não foi possível carregar os itens anteriores. Tente novamente."
+  "SharedLoadFailed": "Não foi possível carregar os itens anteriores. Tente novamente.",
+  "DocumentOpen": "Abrir documento",
+  "DocumentViewer": "Visualizador de documentos",
+  "DocumentDownload": "Baixar documento",
+  "DocumentOriginal": "Abrir original",
+  "DocumentLoading": "Carregando documento…",
+  "DocumentLoadFailed": "Não foi possível carregar o documento. Tente novamente.",
+  "DocumentRetry": "Tentar novamente",
+  "DocumentUnsupported": "Não é possível visualizar este documento. Baixe-o ou abra o original.",
+  "DocumentEmpty": "Este documento está vazio.",
+  "DocumentPrevious": "Página anterior",
+  "DocumentNext": "Próxima página",
+  "DocumentPage": "Página",
+  "DocumentFit": "Ajustar",
+  "DocumentZoomIn": "Ampliar",
+  "DocumentZoomOut": "Reduzir"
 }

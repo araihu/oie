@@ -364,5 +364,20 @@
   "VideoUnavailable": "The video could not be loaded. Check your connection and try again.",
   "VideoUnsupported": "This video cannot be played in this browser.",
   "SharedLoadingOlder": "Loading older items…",
-  "SharedLoadFailed": "Could not load older items. Try again."
+  "SharedLoadFailed": "Could not load older items. Try again.",
+  "DocumentOpen": "Open document",
+  "DocumentViewer": "Document viewer",
+  "DocumentDownload": "Download document",
+  "DocumentOriginal": "Open original",
+  "DocumentLoading": "Loading document…",
+  "DocumentLoadFailed": "The document could not be loaded. Try again.",
+  "DocumentRetry": "Try again",
+  "DocumentUnsupported": "This document cannot be previewed. Download it or open the original.",
+  "DocumentEmpty": "This document is empty.",
+  "DocumentPrevious": "Previous page",
+  "DocumentNext": "Next page",
+  "DocumentPage": "Page",
+  "DocumentFit": "Fit",
+  "DocumentZoomIn": "Zoom in",
+  "DocumentZoomOut": "Zoom out"
 }
