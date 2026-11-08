@@ -26,7 +26,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(u.pathname===`/api/v1/conversations/${chat}/messages`)return send(200,{items:[...messages].reverse()});
   if(u.pathname.match(new RegExp('^/api/v1/conversations/'+chat+'/messages/[^/]+/context$')))return send(200,{targetId:messages[0].id,items:[...messages].reverse(),hasOlder:false,hasNewer:false});
   if(u.pathname==='/api/v1/shared-content'){
-   state.catalogReads.push(Object.fromEntries(u.searchParams));let selected=['media','video'].includes(u.searchParams.get('type'))?[...items]:[];const ids=u.searchParams.getAll('messageId');if(ids.length){assert.equal(u.searchParams.get('conversationId'),chat);assert.equal(u.searchParams.get('accountId'),account);assert(ids.length<=100);selected=selected.filter(item=>ids.includes(item.message.id))}return send(200,{items:selected,indexing:{state:'complete',indexedMessages:messages.length,totalMessages:messages.length}});
+   state.catalogReads.push(Object.fromEntries(u.searchParams));let selected=['media','video'].includes(u.searchParams.get('type'))?[...items]:[];const ids=u.searchParams.getAll('messageId');if(ids.length){assert.equal(u.searchParams.get('conversationId'),chat);assert.equal(u.searchParams.get('accountId'),account);assert(ids.length<=100);selected=selected.filter(item=>ids.includes(item.message.id))}selected.sort((a,b)=>Date.parse(b.message.createdAt)-Date.parse(a.message.createdAt)||b.id.localeCompare(a.id));return send(200,{items:selected,indexing:{state:'complete',indexedMessages:messages.length,totalMessages:messages.length}});
   }
   const match=u.pathname.match(/^\/api\/v1\/shared-content\/([^/]+)\/content$/);
   if(match){
