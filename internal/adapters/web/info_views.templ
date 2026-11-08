@@ -7,7 +7,6 @@ import (
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/link"
  "github.com/araihu/goshtoso/components/textinput"
- "github.com/araihu/goshtoso/components/button"
  "strconv"
 )
 
@@ -28,11 +27,11 @@ templ infoSharedContent(v view){
 <div id="details-shared-content" class="oie-info-shared" data-info-shared data-content-type={v.InfoType}>
 @infoBack(v)
 <h2 tabindex="-1" data-info-heading>{v.Text.SharedMedia}</h2>
-<form action="/" method="get" class="oie-info-search" data-info-search>
+<form action="/" method="get" id="info-shared-search-form" class="oie-info-search" data-info-search role="search" hx-sync="this:replace">
 @infoSearchFields(v)
-@textinput.TextInput(textinput.Config{ID:"info-shared-search",Name:"infoQuery",Value:v.InfoQuery,Label:v.Text.SharedSearch,RootClass:"oie-info-search-input",Type:textinput.TypeSearch})
-@button.Button(button.WithType("submit")){ {v.Text.SharedSearchAction} }
+@textinput.TextInput(textinput.Config{ID:"info-shared-search",Name:"infoQuery",Value:v.InfoQuery,Label:v.Text.SharedSearch,RootClass:"oie-info-search-input",Type:textinput.TypeSearch,InputAttrs:templ.Attributes{"hx-get":"/","hx-trigger":"oie:shared-search","hx-include":"#info-shared-search-form","hx-target":"#info-shared-search-results","hx-select":"#info-shared-search-results","hx-swap":"outerHTML show:none","hx-sync":"closest form:replace","hx-push-url":"false","hx-replace-url":"true","hx-headers":`{"X-Oie-Fragment":"info"}`,"aria-controls":"info-shared-search-results"}})
 </form>
+<div id="info-shared-search-results" data-search-query={v.InfoQuery}>
 <nav class="oie-shared-segments" aria-label={v.Text.SharedContentTypes}>
 @sharedTab(scoped,"media",v.Text.SharedMediaTab)
 @sharedTab(scoped,"links",v.Text.SharedLinksTab)
@@ -41,6 +40,7 @@ templ infoSharedContent(v view){
 <div id="info-shared-status" role="status">@sharedStatus(scoped)</div>
 <div id="info-shared-results" data-version={scoped.sharedVersion()} data-content-type={v.InfoType}>@sharedItems(scoped)</div>
 <div id="info-shared-pagination">@sharedPagination(scoped)</div>
+</div>
 </div>
 }
 templ infoSearchFields(v view){

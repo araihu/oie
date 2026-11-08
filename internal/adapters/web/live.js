@@ -377,7 +377,7 @@ window.OieRuntime.register('live', life => {
   }
   life.on(document,'oie:info-content',()=>{applyAvatars();localizeTimes();});
   life.on(document,'oie:shared-append',event=>{if(event.detail?.page)readAvatars(event.detail.page);applyAvatars();localizeTimes();});
-  life.on(document,'oie:shared-search-settled',()=>{applyAvatars();localizeTimes();});
+  for(const name of ['oie:shared-search-settled','oie:info-shared-search-settled'])life.on(document,name,event=>{if(event.detail?.page)readAvatars(event.detail.page);applyAvatars();localizeTimes();});
   life.on(document,'oie:refresh-request',()=>scheduleRefresh());
   function scheduleRefresh() { if(stopped||life.signal.aborted)return;clearTimeout(refreshTimer); refreshTimer = life.timeout(refresh,100); }
 
