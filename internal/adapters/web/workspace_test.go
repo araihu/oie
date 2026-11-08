@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
 func TestWorkspaceReadsMockThroughHTTPAndPreservesPresentationState(t *testing.T) {
@@ -35,7 +37,26 @@ func TestWorkspaceReadsMockThroughHTTPAndPreservesPresentationState(t *testing.T
 		if w.Code != 200 || !strings.Contains(w.Body.String(), tc.want) {
 			t.Fatalf("%s status=%d missing %q", tc.path, w.Code, tc.want)
 		}
-		if got := strings.Count(w.Body.String(), "data-conversation-id=") - 1; got != tc.rows {
+		tree, parseErr := html.Parse(strings.NewReader(w.Body.String()))
+		if parseErr != nil {
+			t.Fatal(parseErr)
+		}
+		got := 0
+		var rows func(*html.Node)
+		rows = func(node *html.Node) {
+			if node.Type == html.ElementNode && node.Data == "a" {
+				for _, attr := range node.Attr {
+					if attr.Key == "data-conversation-id" {
+						got++
+					}
+				}
+			}
+			for child := node.FirstChild; child != nil; child = child.NextSibling {
+				rows(child)
+			}
+		}
+		rows(tree)
+		if got != tc.rows {
 			t.Errorf("%s rows=%d want=%d", tc.path, got, tc.rows)
 		}
 	}

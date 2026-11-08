@@ -56,7 +56,8 @@ templ page(v view) {
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<title>Oie</title>
 			<link rel="icon" href="data:,"/>
-			<script src="/ui/theme.js"></script>
+			<script src="/ui/runtime.js"></script>
+<script src="/ui/theme.js"></script>
 <script src="/ui/formatting.js"></script>
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href="/ui/app.css"/>
@@ -65,9 +66,19 @@ templ page(v view) {
 <script src="/ui/previews.js" defer></script>
 <script src="/ui/shared-content.js" defer></script>
 <script src="/ui/live.js" defer></script>
+<script src="/ui/navigation.js" defer></script>
 <meta name="oie-csrf" content={v.CSRF}/>
 		</head>
 		<body data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
+@appFragment(v)
+		</body>
+	</html>
+}
+
+// Application state travels with each shell fragment; the head/runtime persists.
+templ appFragment(v view) {
+<div id="oie-app" hx-history-elt data-route-loading={v.Text.NavLoading} data-route-error={v.Text.NavFailed} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
+<p class="oie-live-status" data-navigation-status role="status" aria-live="polite" hidden></p>
 @liveCopy(v)
 if v.Section!="media"{
 @starData(v)
@@ -90,8 +101,7 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 @imageViewer(v)
 
 @conversationDetails(v)
-		</body>
-	</html>
+</div>
 }
 
 templ profile(v view,id string) {
@@ -539,6 +549,9 @@ if v.Section!="media"{
 @starData(v)
 }
 if v.Selected!=nil {
+if v.InfoView=="shared" || v.InfoView=="stars" {
+<div id="live-info-content" data-info-view={v.InfoView}>@chatInfoContent(v)</div>
+}
 <div id="live-conversation-details" data-details-conversation={v.Selected.Id}>
 <div id="live-details-identity" data-version={v.detailsVersion("identity")}>@detailsIdentity(v)</div>
 <div id="live-details-account" data-version={v.detailsVersion("account")}>@detailsAccount(v)</div>

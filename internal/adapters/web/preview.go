@@ -31,6 +31,20 @@ func (v *view) configureWorkspace(r *http.Request) {
 	default:
 		v.Filter = "all"
 	}
+	v.InfoView = q.Get("infoView")
+	if v.InfoView != "shared" && v.InfoView != "stars" {
+		v.InfoView = ""
+	}
+	v.InfoType = q.Get("infoType")
+	if v.InfoType != "links" && v.InfoType != "documents" {
+		v.InfoType = "media"
+	}
+	v.InfoCursor = q.Get("infoCursor")
+	v.InfoQuery = q.Get("infoQuery")
+	if len([]rune(v.InfoQuery)) > 200 {
+		v.InfoQuery = string([]rune(v.InfoQuery)[:200])
+	}
+	v.InfoFocus = q.Get("infoFocus")
 	v.SharedType = q.Get("contentType")
 	switch v.SharedType {
 	case "links", "documents":
@@ -64,6 +78,16 @@ func (v view) href(pairs ...string) string {
 			q.Set("message", v.FocusMessage)
 		}
 	}
+	if v.InfoView != "" {
+		q.Set("infoView", v.InfoView)
+		q.Set("infoType", v.InfoType)
+	}
+	if v.InfoCursor != "" {
+		q.Set("infoCursor", v.InfoCursor)
+	}
+	if v.InfoQuery != "" {
+		q.Set("infoQuery", v.InfoQuery)
+	}
 	if v.Section == "media" {
 		q.Set("contentType", v.SharedType)
 		if v.SharedCursor != "" {
@@ -83,6 +107,9 @@ func (v view) href(pairs ...string) string {
 			q.Del("contentCursor")
 		}
 		if pairs[i] == "chat" && pairs[i+1] != v.ChatID {
+			for _, key := range []string{"infoView", "infoType", "infoCursor", "infoQuery", "infoFocus"} {
+				q.Del(key)
+			}
 			q.Del("message")
 		}
 		if pairs[i+1] == "" {

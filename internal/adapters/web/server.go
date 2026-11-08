@@ -89,6 +89,10 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	InfoView, InfoType, InfoCursor, InfoQuery, InfoFocus  string
+	InfoShared                                            *engineapi.SharedContentPage
+	InfoStars                                             *engineapi.StarredMessagePage
+	InfoInvalid, SharedInDetails                          bool
 	SharedType, SharedCursor, SharedConversation          string
 	SharedContent                                         *engineapi.SharedContentPage
 	SharedInvalid                                         bool
@@ -120,6 +124,17 @@ type view struct {
 }
 
 type copy struct {
+	NavLoading             string
+	NavFailed              string
+	InfoSharedContent      string
+	InfoStarred            string
+	InfoConnection         string
+	InfoBack               string
+	InfoGroup              string
+	InfoReportedOccupants  string
+	InfoStarsUnavailable   string
+	InfoStarsEmpty         string
+	InfoNavigationFailed   string
 	SharedAccount          string
 	SharedTools            string
 	SharedContentTypes     string
@@ -318,6 +333,12 @@ func loadCatalogs() (map[string]copy, error) {
 //go:embed previews.js
 var previewsScript []byte
 
+//go:embed runtime.js
+var runtimeScript []byte
+
+//go:embed navigation.js
+var navigationScript []byte
+
 //go:embed shared-content.js
 var sharedScript []byte
 
@@ -342,7 +363,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mime string
 		body []byte
 	}{
-		"/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
+		"/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
 	}
 	if asset, ok := assets[r.URL.Path]; ok {
 		w.Header().Set("Content-Type", asset.mime)
@@ -369,7 +390,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	token := csrfToken(w, r)
 	v := s.baseView(r)
 	v.CSRF = token
-	if r.URL.Path != "/" && r.URL.Path != "/ui/refresh" {
+	if r.URL.Path != "/" && r.URL.Path != "/ui/refresh" && r.URL.Path != "/ui/info" {
 		v.NotFound = true
 		v.ChatOpen = true
 		s.render(w, r, v)
@@ -380,6 +401,21 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 	s.load(ctx, r, &v)
+	if r.URL.Path == "/ui/info" {
+		var buf bytes.Buffer
+		if v.Selected == nil || v.Unavailable {
+			w.WriteHeader(503)
+			return
+		}
+		if err := infoFragment(v).Render(presentationContext(r.Context(), v), &buf); err != nil {
+			w.WriteHeader(503)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = buf.WriteTo(w)
+		return
+	}
 	if r.URL.Path == "/ui/refresh" {
 		var buf bytes.Buffer
 		if err := liveRegions(v).Render(presentationContext(r.Context(), v), &buf); err != nil {
@@ -502,6 +538,10 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	v.Selected = conversation.JSON200
 	v.ChatID = selected
 	s.loadConversationDetails(ctx, v)
+	s.loadChatInfo(ctx, v)
+	if r.URL.Path == "/ui/info" {
+		return
+	}
 	items, usedContext := s.contextMessages(ctx, v, v.Selected.AccountId)
 	if v.Unavailable {
 		return
@@ -651,7 +691,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	ctx := presentationContext(r.Context(), v)
 	component := page(v)
 	if r.Header.Get("HX-Request") == "true" {
-		component = workspace(v)
+		component = appFragment(v)
+		if r.Header.Get("X-Oie-Fragment") == "info" && v.Selected != nil {
+			component = chatInfoShell(v)
+		}
 	}
 	if err := component.Render(ctx, &buf); err != nil {
 		http.Error(w, v.Text.Unavailable, http.StatusServiceUnavailable)
@@ -659,6 +702,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Vary", "HX-Request, X-Oie-Fragment")
 	if v.NotFound {
 		w.WriteHeader(http.StatusNotFound)
 	} else if v.Unavailable {
