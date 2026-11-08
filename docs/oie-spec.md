@@ -130,6 +130,13 @@ Do not imply that an available participant list is a complete persistent members
 
 Rejoin previously active rooms after reconnecting unless the user explicitly left or access was revoked. Preserve explicit leave decisions across restart. Leaving a room does not delete stored history. Kicking, banning, and role-management controls are backlogged; incoming removal/permission changes still need truthful handling.
 
+**AGREED:** on account connection, honor modern and legacy XMPP bookmarks marked
+`autojoin=true` or `1`. When no local room intent exists, create an initial join
+intent using the account username as nickname. Existing manual nickname choices,
+explicit leaves and access revocation take precedence over imported bookmarks.
+The server must still confirm this client's room presence; another client's
+participation does not establish it. See [bookmark autojoin](bookmark-autojoin.md).
+
 **OPEN O03:** room creation defaults, protocol-specific leave/rejoin behavior across independent engines, and the exact representation of participants and memberships.
 
 ## 4. Identity, revisions, and merge semantics
