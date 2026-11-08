@@ -13,11 +13,18 @@ type peerResource struct {
 }
 type incomingPresence struct {
 	stanza.Presence
-	Show     string    `xml:"jabber:client show"`
-	Status   string    `xml:"jabber:client status"`
-	Priority string    `xml:"jabber:client priority"`
-	MUC      *struct{} `xml:"http://jabber.org/protocol/muc#user x"`
-	Update   *struct {
+	Show     string   `xml:"jabber:client show"`
+	Status   string   `xml:"jabber:client status"`
+	Priority string   `xml:"jabber:client priority"`
+	MUC      *mucUser `xml:"http://jabber.org/protocol/muc#user x"`
+	Error    *struct {
+		Conflict             *struct{} `xml:"urn:ietf:params:xml:ns:xmpp-stanzas conflict"`
+		Forbidden            *struct{} `xml:"urn:ietf:params:xml:ns:xmpp-stanzas forbidden"`
+		NotAuthorized        *struct{} `xml:"urn:ietf:params:xml:ns:xmpp-stanzas not-authorized"`
+		RegistrationRequired *struct{} `xml:"urn:ietf:params:xml:ns:xmpp-stanzas registration-required"`
+		ItemNotFound         *struct{} `xml:"urn:ietf:params:xml:ns:xmpp-stanzas item-not-found"`
+	} `xml:"jabber:client error"`
+	Update *struct {
 		Photo *string `xml:"photo"`
 	} `xml:"vcard-temp:x:update x"`
 }

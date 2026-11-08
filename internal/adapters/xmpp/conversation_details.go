@@ -81,7 +81,11 @@ func (m *Manager) ConversationInfo(_ context.Context, a domain.Account, c domain
 		default:
 		}
 	}
-	return cloneConversationInfo(slot.info), nil
+	info := cloneConversationInfo(slot.info)
+	if room := e.rooms[c.Address]; room != nil && room.session == e.session {
+		info.RoomSession = room.snapshot.State
+	}
+	return info, nil
 }
 func (m *Manager) detailsLoop(ctx context.Context, e *entry, s *mx.Session, wake <-chan struct{}) {
 	for {

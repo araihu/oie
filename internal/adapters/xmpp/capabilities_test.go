@@ -56,6 +56,9 @@ func TestBoundedDiscoveryDoesNotInventMissingFeatureSupport(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, row := range evidence.Features {
+		if row.ID == "send_replies" && (row.ProtocolSupport != "supported" || row.ServerSupport != "not_required") {
+			t.Fatal("legacy-compatible replies were server-gated", row)
+		}
 		if row.ID == "reactions" && row.ServerSupport != "scope_dependent" {
 			t.Fatal(row)
 		}

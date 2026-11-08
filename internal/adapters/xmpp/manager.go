@@ -39,6 +39,10 @@ type entry struct {
 	config           configuration
 	cancel           context.CancelFunc
 	mu               sync.RWMutex
+	sendMu           sync.Mutex
+	roomNotifyMu     sync.Mutex
+	rooms            map[string]*roomSlot
+	ownRoomMessages  map[string]ownRoomMessage
 	state            domain.Connection
 	session          *mx.Session
 	raw              net.Conn
@@ -324,6 +328,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 				historyCancel()
 			}
 			_ = raw.Close()
+			m.resetRoomSessions(ctx, e, session)
 			e.mu.Lock()
 			e.session = nil
 			e.raw = nil
@@ -431,10 +436,32 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	if session == nil || raw == nil || state != "connected" {
 		return application.NotSent
 	}
-	to, err := jid.Parse(out.Address)
+	payload, err := buildOutgoing(a, out)
 	if err != nil {
 		return application.Failed
 	}
+	e.sendMu.Lock()
+	defer e.sendMu.Unlock()
+	if out.Kind == "room" {
+		e.mu.Lock()
+		slot := e.rooms[out.Address]
+		if slot == nil || slot.session != session || slot.snapshot.State != "joined" || slot.snapshot.IntentRevisionID != out.RoomIntentRevisionID {
+			e.mu.Unlock()
+			return application.NotSent
+		}
+		if e.ownRoomMessages == nil {
+			e.ownRoomMessages = map[string]ownRoomMessage{}
+		}
+		if len(e.ownRoomMessages) >= maxOwnRoomMessages {
+			for id := range e.ownRoomMessages {
+				delete(e.ownRoomMessages, id)
+				break
+			}
+		}
+		e.ownRoomMessages[string(out.ID)] = ownRoomMessage{address: out.Address, body: out.OriginalText}
+		e.mu.Unlock()
+	}
+
 	if ctx.Err() != nil {
 		return application.NotSent
 	}
@@ -444,15 +471,7 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	}
 	_ = raw.SetWriteDeadline(deadline)
 	defer func() { _ = raw.SetWriteDeadline(time.Time{}) }()
-	payload := struct {
-		stanza.Message
-		Body   string `xml:"body"`
-		Origin struct {
-			XMLName xml.Name `xml:"urn:xmpp:sid:0 origin-id"`
-			ID      string   `xml:"id,attr"`
-		}
-	}{Message: stanza.Message{To: to.Bare(), Type: stanza.ChatMessage, ID: string(out.ID)}, Body: out.OriginalText}
-	payload.Origin.ID = string(out.ID)
+
 	if err = session.Encode(ctx, payload); err != nil {
 		_ = raw.Close()
 		return application.Unknown
@@ -522,7 +541,33 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		}
 		if msg.Type == stanza.ErrorMessage {
 			own, _ := jid.Parse(e.account.Address)
-			return m.host.Reject(ctx, application.Rejected{AccountID: e.account.ID, MessageID: msg.ID, Address: msg.From.Bare().String(), FromServer: msg.From.Equal(own.Domain())})
+			address := msg.From.Bare().String()
+			fromServer := msg.From.Equal(own.Domain())
+			e.mu.RLock()
+			outgoing, tracked := e.ownRoomMessages[msg.ID]
+			_, knownRoom := e.rooms[address]
+			e.mu.RUnlock()
+			if (tracked || knownRoom) && msg.From.Resourcepart() != "" {
+				return nil
+			}
+			if tracked {
+				room, _ := jid.Parse(outgoing.address)
+				switch {
+				case msg.From.Equal(room.Bare()):
+					address = outgoing.address
+				case msg.From.Equal(room.Domain()):
+					address = outgoing.address
+					fromServer = true
+				case fromServer:
+					address = outgoing.address
+				default:
+					return nil
+				}
+			}
+			return m.host.Reject(ctx, application.Rejected{AccountID: e.account.ID, MessageID: msg.ID, Address: address, FromServer: fromServer, FromParticipant: msg.From.Resourcepart() != ""})
+		}
+		if msg.Type == stanza.GroupChatMessage {
+			return m.receiveRoomMessage(ctx, e, msg.Message, msg.replyMetadata, msg.Body, msg.Delay.Stamp)
 		}
 		if msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage {
 			return nil
@@ -550,6 +595,9 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		var presence incomingPresence
 		if err := decoder.Decode(&presence); err != nil {
 			return err
+		}
+		if m.captureRoomPresence(ctx, e, presence) {
+			return nil
 		}
 		capturePeerPresence(e, presence)
 		if presence.Update != nil && presence.Update.Photo != nil {

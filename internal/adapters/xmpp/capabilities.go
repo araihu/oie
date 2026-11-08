@@ -222,10 +222,10 @@ func (m *Manager) CapabilityEvidence(_ context.Context, a domain.Account) (domai
 	add := func(id, server string) {
 		rows = append(rows, domain.CapabilityFeature{ID: id, ProtocolSupport: "supported", ServerSupport: server})
 	}
-	for _, id := range []string{"direct_text", "presence"} {
+	for _, id := range []string{"direct_text", "presence", "send_replies"} {
 		add(id, "not_required")
 	}
-	for _, id := range []string{"received_replies", "send_replies", "edit_messages", "retract_messages", "reactions", "read_receipts", "typing", "profile_images", "formatting", "e2ee"} {
+	for _, id := range []string{"received_replies", "edit_messages", "retract_messages", "reactions", "read_receipts", "typing", "profile_images", "formatting", "e2ee"} {
 		add(id, "scope_dependent")
 	}
 	add("account_history", featureEvidence(d, "account", mamNS))

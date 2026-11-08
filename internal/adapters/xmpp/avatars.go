@@ -243,7 +243,7 @@ func (m *Manager) avatarLoop(ctx context.Context, e *entry, s *mx.Session) {
 
 // PEP requires advertising interest in avatar notifications through entity caps.
 func clientInfo() disco.Info {
-	return disco.Info{Identity: []info.Identity{{Category: "client", Type: "pc", Name: "Oie"}}, Features: []info.Feature{{Var: "http://jabber.org/protocol/disco#info"}, {Var: "urn:xmpp:ping"}, {Var: replyNS}, {Var: fallbackNS}, {Var: avatarMetadataNS + "+notify"}}}
+	return disco.Info{Identity: []info.Identity{{Category: "client", Type: "pc", Name: "Oie"}}, Features: []info.Feature{{Var: "http://jabber.org/protocol/disco#info"}, {Var: "urn:xmpp:ping"}, {Var: "http://jabber.org/protocol/muc"}, {Var: replyNS}, {Var: fallbackNS}, {Var: avatarMetadataNS + "+notify"}}}
 }
 func avatarCaps() disco.Caps {
 	return disco.Caps{Hash: crypto.SHA1, Node: "https://github.com/araihu/oie", Ver: clientInfo().Hash(sha1.New())}

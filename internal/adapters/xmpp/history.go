@@ -146,6 +146,14 @@ func archivedIncoming(account domain.Account, scope string, r *archiveResult, tr
 	}
 	verified := len(trusted) == 1 && trusted[0] && scope == msg.From.Bare().String()
 	in.References, in.Reply = decodeReplyMetadata(msg.replyMetadata, msg.Body, msg.From, account.Address, in.Address, in.Kind == "room", verified)
+	if in.Kind == "room" {
+		if provider := roomProviderID(msg.From, msg.ID, in.References); provider != "" {
+			in.ProviderID = provider
+		}
+		if in.IsOwn && len(msg.Origins) == 1 && usableID(msg.Origins[0].ID) && msg.Origins[0].Text == "" && len(msg.Origins[0].Children) == 0 {
+			in.CanonicalID, _ = domain.ParseID(msg.Origins[0].ID)
+		}
+	}
 	if in.Kind == "direct" && len(msg.Origins) == 0 && usableID(msg.ID) {
 		in.References = append(in.References, domain.MessageReference{Scope: "sender:" + msg.From.Bare().String(), ID: msg.ID, Author: msg.From.Bare().String()})
 	}

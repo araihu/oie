@@ -117,7 +117,7 @@ func TestObservedPeerPresenceNeverGuessesOfflineOrOccupantIdentity(t *testing.T)
 		t.Fatal("unsolicited presence trusted")
 	}
 	room, _ := jid.Parse("room@conference.localhost/name@localhost")
-	capturePeerPresence(e, incomingPresence{Presence: stanza.Presence{From: room}, MUC: &struct{}{}})
+	capturePeerPresence(e, incomingPresence{Presence: stanza.Presence{From: room}, MUC: &mucUser{}})
 	if peerPresence(e, room.Bare().String()).State != "unknown" {
 		t.Fatal("occupant nick became a person")
 	}

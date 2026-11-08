@@ -147,5 +147,8 @@ func decodeReplyMetadata(meta replyMetadata, body string, from jid.JID, account,
 }
 
 func (m *Manager) OutgoingReferences(a domain.Account, out application.Outgoing) []domain.MessageReference {
+	if out.Kind == "room" {
+		return nil
+	}
 	return []domain.MessageReference{{Scope: "sender:" + a.Address, ID: string(out.ID), Author: a.Address}}
 }
