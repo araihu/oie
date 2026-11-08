@@ -70,6 +70,17 @@ func (e *Engine) MessageStars(ctx context.Context, conversation domain.ID, ids [
 		if !validID(id) {
 			return nil, ErrInvalid
 		}
+		m, err := e.Message(ctx, id)
+		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvalid) {
+			return nil, ErrInvalid
+		}
+		if err != nil {
+			return nil, err
+		}
+		if m.ConversationID != conversation {
+			return nil, ErrInvalid
+		}
+		id = m.ID
 		if !seen[id] {
 			unique = append(unique, id)
 			seen[id] = true

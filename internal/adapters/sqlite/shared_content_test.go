@@ -214,6 +214,13 @@ func TestSharedCatalogMigrationRoundTripPreservesSourceAndOutbox(t *testing.T) {
 	if err = runner.Migrate(7); err != nil {
 		t.Fatal(err)
 	}
+	if err = runner.Migrate(8); err != nil {
+		t.Fatal(err)
+	}
+	catalogCursor, err := e.HistoryCheckpoint(t.Context(), c.AccountID, "alice@localhost")
+	if err != nil || catalogCursor != "keep-archive-position" {
+		t.Fatal("catalog upgrade reset server archive", err)
+	}
 	if err = runner.Up(); err != nil {
 		t.Fatal(err)
 	}
@@ -230,8 +237,12 @@ func TestSharedCatalogMigrationRoundTripPreservesSourceAndOutbox(t *testing.T) {
 		t.Fatal("migration changed source star", err)
 	}
 	cursor, err := e.HistoryCheckpoint(t.Context(), c.AccountID, "alice@localhost")
-	if err != nil || cursor != "keep-archive-position" {
-		t.Fatal("catalog upgrade reset server archive", err)
+	if err != nil || cursor != "" {
+		t.Fatal("correction upgrade did not request metadata replay", err)
+	}
+	var retainedScope int
+	if err = s.db.QueryRow("SELECT COUNT(*) FROM archive_checkpoints WHERE account_id=? AND scope=?", c.AccountID, "alice@localhost").Scan(&retainedScope); err != nil || retainedScope != 1 {
+		t.Fatal("correction upgrade removed archive scope", err)
 	}
 	page, err := e.SharedContent(t.Context(), domain.SharedContentQuery{Type: "media", Limit: 10})
 	if err != nil || page.Indexing.State != "pending" || len(page.Items) != 0 {

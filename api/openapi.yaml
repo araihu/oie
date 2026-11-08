@@ -109,6 +109,8 @@ paths:
         original UTC timestamp at millisecond precision and UUID tie-break. Includes the target even with limit 1.
         Only local retained data is read; no provider archive queries or read receipts are triggered. Foreign or
         unavailable source messages return not_found. Clients should offer return to latest when hasNewer is true.
+        A retained correction-source alias resolves to the original logical targetId with requestedTargetId
+        identifying the requested alias. All returned items remain scoped to this conversation.
       parameters:
       - name: limit
         in: query
@@ -1340,7 +1342,9 @@ paths:
       tags:
       - Messages
       summary: Read a retained message
-      description: Returns the latest revision and send evidence.
+      description: Returns the latest revision and send evidence. A retained correction-source alias resolves
+        to its canonical logical message, whose id can differ from the requested messageId. Use the scoped
+        context operation when explicit requestedTargetId alias proof is needed.
       responses:
         '200':
           description: Current resource
@@ -1896,7 +1900,10 @@ components:
     Event:
       type: object
       description: Durable event with the payload corresponding to its type. Accounts, connections, conversations,
-        and messages are separate payloads. No credentials or raw protocol errors are included.
+        and messages are separate payloads. Payloads are snapshots at the event time. Refresh affected retained
+        pages after message or conversation updates; validated corrections can collapse previously separate source
+        UUIDs into one logical message. Historical event snapshots do not replace the current canonical projection.
+        No credentials or raw protocol errors are included.
       example:
         id: 019a5df0-0000-7000-8000-000000000003:1
         type: account.registered
@@ -2580,11 +2587,16 @@ components:
     MessageContext:
       type: object
       description: Bounded retained timeline window. Neighbor availability is relative to the returned extremes.
+        Validated correction-source aliases resolve to the original logical message UUID returned as targetId.
       additionalProperties: false
       required: [targetId, items, hasOlder, hasNewer]
       properties:
         targetId:
           $ref: '#/components/schemas/ID'
+        requestedTargetId:
+          allOf:
+          - $ref: '#/components/schemas/ID'
+          description: Present only when the requested retained correction-source UUID resolves to a different canonical targetId. This is an engine-validated alias within this conversation, not a client-supplied replacement target.
         items:
           type: array
           minItems: 1
@@ -2676,8 +2688,9 @@ components:
         sendState: received
     MessagePage:
       type: object
-      description: Messages newest first in stable engine ingestion-ID order. Use nextCursor for older records;
-        render the page in reverse for a chronological timeline.
+      description: Logical messages newest first by original UTC creation time and UUID tie-break. Validated
+        correction sources are retained as revisions rather than additional timeline items. Use nextCursor for
+        older records; render the page in reverse for a chronological timeline.
       additionalProperties: false
       required:
       - items

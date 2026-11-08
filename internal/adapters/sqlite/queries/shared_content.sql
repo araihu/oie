@@ -1,6 +1,7 @@
 -- name: SharedContentCandidates :many
 SELECT m.* FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
-WHERE s.message_id IS NULL OR s.parser_version<sqlc.arg(parser_version)
+WHERE (s.message_id IS NULL OR s.parser_version<sqlc.arg(parser_version))
+AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 ORDER BY m.created_at_ms DESC,m.id DESC LIMIT sqlc.arg(batch_limit);
 
 -- name: PutSharedContent :exec
@@ -23,15 +24,18 @@ DELETE FROM shared_content_state WHERE message_id=?;
 SELECT COUNT(*) AS total_messages,COUNT(CASE WHEN s.parser_version>=sqlc.arg(parser_version) THEN 1 END) AS indexed_messages
 FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
 WHERE (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
-AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT));
+AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
+AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id);
 
 -- name: ListSharedContent :many
-SELECT sc.id,sc.revision_id,CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,sc.url,sc.file_name,m.payload AS message_payload,c.payload AS conversation_payload,a.label AS account_label,p.payload AS preview_payload
+SELECT sc.id,sc.revision_id,CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,sc.url,sc.file_name,CAST(COALESCE(h.payload,m.payload) AS TEXT) AS message_payload,c.payload AS conversation_payload,a.label AS account_label,p.payload AS preview_payload
 FROM shared_content AS sc JOIN messages AS m ON m.id=sc.message_id
+LEFT JOIN message_content_heads AS h ON h.canonical_id=m.id
 JOIN shared_content_state AS s ON s.message_id=m.id AND s.parser_version>=sqlc.arg(parser_version)
 JOIN conversations AS c ON c.id=m.conversation_id JOIN accounts AS a ON a.id=m.account_id
 LEFT JOIN message_previews AS p ON p.message_id=m.id AND p.url=sc.url
 WHERE (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
+AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
 AND ((CAST(sqlc.arg(content_type) AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
  OR (CAST(sqlc.arg(content_type) AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')

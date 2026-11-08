@@ -28,6 +28,11 @@ func (s *Store) SharedContentCandidates(ctx context.Context, version, limit int)
 	if err != nil {
 		return nil, err
 	}
+	for i := range items {
+		if err := hydrateMessageProjection(ctx, s.queries, &items[i]); err != nil {
+			return nil, err
+		}
+	}
 	return s.hydrateReplies(ctx, items)
 }
 func (s *Store) IndexSharedContent(ctx context.Context, batch []domain.SharedContentMutation) error {
@@ -45,10 +50,13 @@ func (s *Store) IndexSharedContent(ctx context.Context, batch []domain.SharedCon
 		if err != nil {
 			return err
 		}
+		if err = hydrateMessageProjection(ctx, q, &current); err != nil {
+			return err
+		}
 		if err = hydrateReply(ctx, q, &current); err != nil {
 			return err
 		}
-		if current.AccountID != in.Message.AccountID || current.ConversationID != in.Message.ConversationID || domain.DisplayBody(current) != domain.DisplayBody(in.Message) {
+		if current.ID != in.Message.ID || current.AccountID != in.Message.AccountID || current.ConversationID != in.Message.ConversationID || domain.DisplayBody(current) != domain.DisplayBody(in.Message) {
 			return application.ErrStateConflict
 		}
 		urls := make([]string, 0, len(in.References))
@@ -96,6 +104,9 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 			return page, err
 		}
 		item.ConversationTitle = conversation.Title
+		if err = hydrateMessageProjection(ctx, queries, &item.Message); err != nil {
+			return page, err
+		}
 		if err = hydrateReply(ctx, queries, &item.Message); err != nil {
 			return page, err
 		}

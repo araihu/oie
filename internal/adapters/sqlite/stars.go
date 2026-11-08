@@ -15,6 +15,9 @@ func decodeStar(id, account, conversation string, payload *string) (domain.Messa
 		return state, nil
 	}
 	err := json.Unmarshal([]byte(*payload), &state)
+	state.MessageID = domain.ID(id)
+	state.AccountID = domain.ID(account)
+	state.ConversationID = domain.ID(conversation)
 	return state, err
 }
 
@@ -103,6 +106,13 @@ func (s *Store) SetMessageStar(ctx context.Context, in application.StarMutation)
 }
 
 func (s *Store) StarredMessages(ctx context.Context, in application.StarQuery) ([]domain.StarredMessage, error) {
+	if in.Cursor != "" {
+		canonical, err := resolveMessageAlias(ctx, s.queries, in.Cursor)
+		if err != nil {
+			return nil, err
+		}
+		in.Cursor = canonical
+	}
 	rows, err := s.queries.ListStarredMessages(ctx, dbgen.ListStarredMessagesParams{
 		AccountID: string(in.AccountID), ConversationID: string(in.ConversationID), PageCursor: string(in.Cursor), PageLimit: int64(in.Limit),
 	})
@@ -119,6 +129,10 @@ func (s *Store) StarredMessages(ctx context.Context, in application.StarQuery) (
 			if err = json.Unmarshal([]byte(part.payload), part.target); err != nil {
 				return nil, err
 			}
+		}
+		item.Star.MessageID = item.Message.ID
+		if err = hydrateMessageProjection(ctx, s.queries, &item.Message); err != nil {
+			return nil, err
 		}
 		if err = hydrateReply(ctx, s.queries, &item.Message); err != nil {
 			return nil, err

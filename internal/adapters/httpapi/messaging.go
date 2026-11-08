@@ -33,6 +33,14 @@ func message(m domain.Message) engineapi.Message {
 		v := true
 		out.Historical = &v
 	}
+	if m.Edited {
+		v := true
+		out.Edited = &v
+		if !m.EditedAt.IsZero() {
+			at := m.EditedAt.UTC()
+			out.EditedAt = &at
+		}
+	}
 	if m.Reply != nil {
 		r := m.Reply
 		out.Reply = &engineapi.MessageReply{Available: r.Available, Excerpt: r.Excerpt, BodyText: r.BodyText}

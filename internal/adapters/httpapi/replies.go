@@ -16,6 +16,10 @@ func (s *Server) GetMessageContext(ctx context.Context, r engineapi.GetMessageCo
 		return nil, err
 	}
 	out := engineapi.MessageContext{TargetId: string(result.TargetID), Items: make([]engineapi.Message, 0, len(result.Items)), HasOlder: result.HasOlder, HasNewer: result.HasNewer}
+	if result.RequestedTargetID != "" {
+		requested := string(result.RequestedTargetID)
+		out.RequestedTargetId = &requested
+	}
 	for _, m := range result.Items {
 		out.Items = append(out.Items, message(m))
 	}
