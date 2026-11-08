@@ -18,6 +18,7 @@ func messageActions(v view, id string) []dropdown.Section {
 	sections := []dropdown.Section{{Items: []dropdown.Item{
 		{ID: "copy-message-" + id, Label: v.Text.CopyOriginal, OnClick: "void 0"},
 		{ID: "star-message-" + id, Label: v.starLabel(id), OnClick: "void 0", Disabled: !v.StarsKnown, Tooltip: v.Text.StarUnavailable},
+		{ID: "reply-message-" + id, Label: v.Text.ReplyMessage, OnClick: "void 0", Disabled: !v.replyAllowed(), Tooltip: v.Text.ReplyUnavailable},
 	}}}
 	if images := v.imagePreviews(id); len(images) == 1 {
 		sections = append(sections, imageActions(v, images[0])...)

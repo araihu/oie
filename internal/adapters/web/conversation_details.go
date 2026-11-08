@@ -89,6 +89,9 @@ func (v view) detailsAccountView() view {
 	return current
 }
 func (v view) roomSessionLabel() string {
+	if v.RoomSession != nil {
+		return v.roomLabel()
+	}
 	if v.ConversationInfo != nil && v.ConversationInfo.RoomSession != nil && *v.ConversationInfo.RoomSession == "not_joined" {
 		return v.Text.RoomNotJoined
 	}

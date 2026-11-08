@@ -89,6 +89,8 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	RoomSession                                           *engineapi.RoomSession
+	MessagingCapabilities                                 *engineapi.Capabilities
 	InfoView, InfoType, InfoCursor, InfoQuery, InfoFocus  string
 	InfoShared                                            *engineapi.SharedContentPage
 	InfoStars                                             *engineapi.StarredMessagePage
@@ -124,6 +126,29 @@ type view struct {
 }
 
 type copy struct {
+	ReplyMessage           string
+	CancelReply            string
+	ReplyUnavailable       string
+	ReplyPreparing         string
+	ReplyLocked            string
+	RoomJoined             string
+	RoomJoining            string
+	RoomJoinFailed         string
+	RoomJoinRequired       string
+	JoinRoom               string
+	LeaveRoom              string
+	RoomNickname           string
+	RoomNicknameConflict   string
+	RoomForbidden          string
+	RoomNotAuthorized      string
+	RoomJoinTimeout        string
+	RoomUnavailable        string
+	RoomCommandUnknown     string
+	RoomCommandFailed      string
+	RoomConflict           string
+	RoomJoinRequested      string
+	RoomLeaveRequested     string
+	RoomQueueHint          string
 	NavLoading             string
 	NavFailed              string
 	InfoSharedContent      string
@@ -371,6 +396,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(asset.body)
 		return
 	}
+	if r.URL.Path == "/ui/reply-source" {
+		s.prepareReply(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/message-star" {
 		s.readStar(w, r)
 		return
@@ -538,6 +567,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	v.Selected = conversation.JSON200
 	v.ChatID = selected
 	s.loadConversationDetails(ctx, v)
+	s.loadMessaging(ctx, v)
 	s.loadChatInfo(ctx, v)
 	if r.URL.Path == "/ui/info" {
 		return
@@ -670,7 +700,7 @@ func (v view) accountVersion() string {
 	return out.String()
 }
 func (v view) sendAllowed() bool {
-	return !v.Preview && v.Selected != nil && v.Selected.Kind == "direct" && v.account(v.Selected.AccountId).Address != "" && !v.Unavailable
+	return v.composeAllowed() && (v.Selected.Kind == "direct" || (v.RoomSession != nil && v.RoomSession.Active && v.messagingImplemented("room_messaging")))
 }
 func (v view) selectedAccount() string {
 	if v.AccountFilter != "" {

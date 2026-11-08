@@ -240,6 +240,7 @@ if v.Section=="media"{
 				<div class="oie-chat-empty">@glyph(heroicons.Icon16SolidRectangleGroup) @emptystate.EmptyState(emptystate.Config{Title: v.Text.MediaEmpty, Description: v.Text.MediaBody})</div>
 			} else if v.Selected!=nil && !v.Unavailable {
 				@chatHeader(v)
+@roomSessionStatus(v)
 				if v.Preview {
 					<p class="oie-preview-note">{ v.Text.PreviewNote }</p>
 				}
@@ -354,12 +355,14 @@ func messageSide(own bool) chatbubble.Side {
 func selectedAccountID(v view)string{if v.Selected!=nil{return v.Selected.AccountId};return ""}
 
 templ composer(v view){
-<form id="send-message-form" action="/ui/messages/send" method="post" data-oie-action="send" data-send-allowed={strconv.FormatBool(v.sendAllowed())}>
+<form id="send-message-form" action="/ui/messages/send" method="post" data-oie-action="send" data-send-allowed={strconv.FormatBool(v.sendAllowed())} data-compose-allowed={strconv.FormatBool(v.composeAllowed())} data-reply-allowed={strconv.FormatBool(v.replyAllowed())}>
 @mutationFields(v,"send",sendKey(v))
 <input type="hidden" name="conversationId" value={v.ChatID}/><input type="hidden" name="accountId" value={selectedAccountID(v)}/>
+<input type="hidden" name="replyToMessageId" value=""/>
+@composerReply(v)
 <div class="oie-composer">
 @button.Button(button.Disabled(),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Attach,"title":v.Text.MediaUnavailable})){@glyph(heroicons.Icon16SolidPlus)}
-@textarea.Textarea(textarea.Config{ID:"message-composer",Name:"originalText",Value:v.field("originalText"),Rows:1,Placeholder:v.Text.Message,Disabled:!v.sendAllowed(),RootClass:"oie-composer-input",InputAttrs:templ.Attributes{"aria-label":v.Text.Message,"style":"resize:none;min-height:2.7rem;background:var(--oie-raised);border-color:var(--oie-border);border-radius:1.5rem;color:var(--oie-text)"}})
+@textarea.Textarea(textarea.Config{ID:"message-composer",Name:"originalText",Value:v.field("originalText"),Rows:1,Placeholder:v.Text.Message,Disabled:!v.composeAllowed(),RootClass:"oie-composer-input",InputAttrs:templ.Attributes{"aria-label":v.Text.Message,"style":"resize:none;min-height:2.7rem;background:var(--oie-raised);border-color:var(--oie-border);border-radius:1.5rem;color:var(--oie-text)"}})
 @button.Button(button.WithType("submit"),button.WithRootClass("oie-icon-button oie-send"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Send,"data-send-message":"","disabled":!v.sendAllowed()})){@glyph(heroicons.Icon16SolidArrowUp)}
 </div>
 <div class="oie-composer-feedback" data-form-feedback role="status" aria-live="polite"></div>
@@ -540,7 +543,7 @@ templ liveCopy(v view){
 <div id="oie-formatting-copy" hidden data-copy={v.Text.CopyOriginal} data-copied={v.Text.MessageCopied} data-failed={v.Text.CopyFailed}></div>
 <div id="oie-copy-status" class="sr-only" role="status" aria-live="polite"></div>
 <div id="oie-preview-copy" hidden data-loading={v.Text.LoadingImage} data-image={v.Text.ImageView} data-not-downloaded={v.Text.ImageNotDownloaded} data-failed={v.Text.ImageDownloadFailed}></div>
-<div id="oie-live-copy" hidden data-saving={v.Text.Saving} data-invalid-message={v.Text.InvalidMessage} data-pending={v.Text.PendingAcceptance} data-storage-unavailable={v.Text.DraftStorageUnavailable} data-locked={v.Text.DraftLocked} data-retry={v.Text.RetrySubmission} data-send={v.Text.Send} data-live-ready={v.Text.LiveReady} data-live-retry={v.Text.LiveRetry} data-live-connecting={v.Text.LiveConnecting} data-latest={v.Text.JumpToLatest} data-new-messages={v.Text.NewMessages} data-engine-changed={v.Text.EngineChanged} data-today={v.Text.Today}></div>
+<div id="oie-live-copy" hidden data-reply-unavailable={v.Text.ReplyUnavailable} data-reply-preparing={v.Text.ReplyPreparing} data-reply-locked={v.Text.ReplyLocked} data-room-command-unknown={v.Text.RoomCommandUnknown} data-saving={v.Text.Saving} data-invalid-message={v.Text.InvalidMessage} data-pending={v.Text.PendingAcceptance} data-storage-unavailable={v.Text.DraftStorageUnavailable} data-locked={v.Text.DraftLocked} data-retry={v.Text.RetrySubmission} data-send={v.Text.Send} data-live-ready={v.Text.LiveReady} data-live-retry={v.Text.LiveRetry} data-live-connecting={v.Text.LiveConnecting} data-latest={v.Text.JumpToLatest} data-new-messages={v.Text.NewMessages} data-engine-changed={v.Text.EngineChanged} data-today={v.Text.Today}></div>
 }
 templ liveRegions(v view){
 <div id="oie-live-regions" data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
@@ -559,6 +562,7 @@ if v.InfoView=="shared" || v.InfoView=="stars" {
 <div id="live-details-participants" data-version={v.detailsVersion("participants")}>@detailsParticipants(v)</div>
 </div>
 }
+<div id="live-room-session">@roomSessionStatus(v)</div>
 <div id="live-context-notice">@contextNotice(v)</div>
 if v.Section=="media"{
 <div id="live-shared-content"><div id="live-shared-status">@sharedStatus(v)</div><div id="live-shared-results" data-version={v.sharedVersion()}>@sharedItems(v)</div><div id="live-shared-pagination">@sharedPagination(v)</div></div>

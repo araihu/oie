@@ -1,0 +1,56 @@
+package web
+
+import (
+ "github.com/araihu/goshtoso/components/button"
+ "github.com/araihu/goshtoso/components/card"
+ "github.com/araihu/goshtoso/components/icon/heroicons"
+ "github.com/araihu/goshtoso/components/link"
+ "github.com/araihu/goshtoso/components/textinput"
+ "strconv"
+)
+
+templ composerReply(v view){
+<div class="oie-composer-reply" data-composer-reply hidden role="group" aria-label={v.Text.ReplyMessage}>
+@card.Card(card.Config{Body:composerReplyBody(),Density:card.DensityCompact,RootClass:"oie-composer-reply-card"})
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"data-cancel-reply":"","aria-label":v.Text.CancelReply,"title":v.Text.CancelReply})){@glyph(heroicons.Icon16SolidXMark)}
+</div>
+}
+templ composerReplyBody(){<strong data-composer-reply-sender></strong><p data-composer-reply-excerpt></p>}
+
+templ roomSessionStatus(v view){
+if v.Selected!=nil&&v.Selected.Kind=="room" {
+<section id="room-session-status" class="oie-room-session" data-version={v.roomVersion()} data-room-state={v.roomState()} data-room-active={strconv.FormatBool(v.RoomSession!=nil&&v.RoomSession.Active)} data-send-allowed={strconv.FormatBool(v.sendAllowed())} data-compose-allowed={strconv.FormatBool(v.composeAllowed())} data-reply-allowed={strconv.FormatBool(v.replyAllowed())}>
+<p data-room-status-label>{v.roomLabel()}</p>
+if v.RoomSession!=nil&&v.RoomSession.Active&&v.RoomSession.State!="joined" {
+<p>{v.Text.RoomQueueHint}</p>
+}else if v.RoomSession!=nil&&!v.RoomSession.Active {
+<p>{v.Text.RoomJoinRequired}</p>
+}
+if problem:=v.roomError();problem!="" {
+<p class="oie-field-error">{problem}</p>
+}
+if v.RoomSession!=nil&&v.messagingImplemented("room_messaging") {
+{{ action:="join" }}
+if v.RoomSession.Active {
+{{action="leave"}}
+}
+<form id={"room-"+action+"-"+v.Selected.Id} action={"/ui/rooms/"+action} method="post" data-oie-action={action+"_room"} data-room-command={action}>
+@mutationFields(v,"room-"+v.Selected.Id,newOperationKey())
+<input type="hidden" name="conversationId" value={v.Selected.Id}/><input type="hidden" name="accountId" value={v.Selected.AccountId}/><input type="hidden" name="expectedRevisionId" value={roomRevision(v.RoomSession)}/>
+if !v.RoomSession.Active {
+@textinput.TextInput(textinput.Config{ID:"room-nickname",Name:"nickname",Label:v.Text.RoomNickname,Value:roomNickname(v),RootClass:"oie-room-nickname",InputAttrs:templ.Attributes{"maxlength":"100"}})
+}
+@button.Button(button.WithType("submit"),button.WithAttrs(templ.Attributes{"data-room-action":action})){
+if action=="join" {
+{v.Text.JoinRoom}
+}else{
+{v.Text.LeaveRoom}
+}
+}
+<div data-form-feedback role="status" aria-live="polite"></div>
+</form>
+}
+@link.Link(v.href(),link.WithRootClass("oie-room-refresh"),link.WithAttrs(templ.Attributes{"data-room-refresh":""})){ {v.Text.DetailsRefresh} }
+</section>
+}
+}

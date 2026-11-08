@@ -41,7 +41,19 @@ window.OieRuntime.register('live', life => {
   const submissionKey = composer?.elements.namedItem('operationKey');
   const draftKey = body.dataset.engineId && body.dataset.conversationId && body.dataset.accountId
     ? ['oie.draft.v1', body.dataset.engineId, body.dataset.accountId, body.dataset.conversationId].join(':') : '';
-  let journal;
+  let journal,preparingReply=false,replyEpoch=0;
+  const replyField=composer?.elements.namedItem('replyToMessageId');
+  const replyBox=composer?.querySelector('[data-composer-reply]');
+  const canonicalID=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
+  function renderReply(){
+    const reply=journal?.reply,locked=!!journal?.pending;
+    if(replyField)replyField.value=reply?.messageId||'';
+    if(replyBox){replyBox.hidden=!reply;replyBox.querySelector('[data-composer-reply-sender]').textContent=typeof reply?.senderName==='string'?reply.senderName:'';replyBox.querySelector('[data-composer-reply-excerpt]').textContent=typeof reply?.excerpt==='string'?reply.excerpt:'';const cancel=replyBox.querySelector('[data-cancel-reply]');if(cancel)cancel.disabled=locked||preparingReply;}
+    for(const button of document.querySelectorAll('[id^="reply-message-"]'))button.disabled=!composer||composer.dataset.replyAllowed!=='true'||locked||preparingReply;
+    const send=composer?.querySelector('[data-send-message]');if(send)send.disabled=stopped||preparingReply||composer.dataset.busy==='true'||(composer.dataset.sendAllowed!=='true'&&!locked);
+  }
+  function draftRecord(pending=false){return {text:input?.value||'',key:submissionKey?.value||'',pending,reply:journal?.reply||null};}
+
 
   function storageWarning() {
     if (!storageDenied && composer) { const note=document.createElement('p');note.className='oie-storage-warning';note.role='status';note.textContent=text('storageUnavailable');composer.append(note); }
@@ -50,7 +62,7 @@ window.OieRuntime.register('live', life => {
   }
   function readDraft() {
     if (!draftKey) return null;
-    try { const raw = localStorage.getItem(draftKey); return raw ? JSON.parse(raw) : null; }
+    try { const raw = localStorage.getItem(draftKey); return raw ? JSON.parse(raw) : inMemory.get(draftKey)||null; }
     catch { storageWarning(); return inMemory.get(draftKey) || null; }
   }
   function saveDraft(record) {
@@ -85,14 +97,14 @@ window.OieRuntime.register('live', life => {
   }
   if (input && submissionKey && draftKey && !mock) {
     const saved = readDraft();
-    if (saved && typeof saved.text === 'string' && typeof saved.key === 'string') {
-      journal = saved; input.value = saved.text; submissionKey.value = saved.key;
+    if (saved && typeof saved.text === 'string' && (canonicalID(saved.key)||(saved.key===''&&!saved.pending)) && (!saved.reply || (canonicalID(saved.reply.messageId) && saved.reply.engineId===body.dataset.engineId && saved.reply.accountId===body.dataset.accountId && saved.reply.conversationId===body.dataset.conversationId && typeof saved.reply.senderName==='string' && typeof saved.reply.excerpt==='string' && Array.from(saved.reply.excerpt).length<=512))) {
+      journal = {...saved,key:canonicalID(saved.key)?saved.key:submissionKey.value}; input.value = saved.text; submissionKey.value = journal.key;
       lockComposer(saved.pending === true);
       if (saved.pending) feedback(composer, text('pending'), true);
     }
     life.on(input,'input', () => {
       if (journal?.pending) return;
-      saveDraft({text:input.value,key:submissionKey.value,pending:false});
+      saveDraft(draftRecord(false));
     });
     life.on(input,'keydown', event => {
       const mobile = matchMedia('(pointer: coarse)').matches || innerWidth <= 720;
@@ -105,6 +117,42 @@ window.OieRuntime.register('live', life => {
     });
   }
 
+
+  renderReply();
+  life.on(document,'oie:actions-refreshed',renderReply);
+  life.on(document,'click',async event=>{
+    const cancel=event.target.closest('[data-cancel-reply]');
+    if(cancel){event.preventDefault();if(journal?.pending){feedback(composer,text('replyLocked'),true);return}replyEpoch++;preparingReply=false;saveDraft({...draftRecord(false),reply:null});renderReply();input?.focus({preventScroll:true});return;}
+    const action=event.target.closest('[id^="reply-message-"]');if(!action||action.disabled||!composer)return;
+    event.preventDefault();if(journal?.pending){feedback(composer,text('replyLocked'),true);return}if(composer.dataset.replyAllowed!=='true')return;
+    const messageId=action.id.slice(14);if(!canonicalID(messageId))return;
+    const epoch=++replyEpoch;preparingReply=true;renderReply();feedback(composer,text('replyPreparing'));
+    const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),12000);
+    try{
+      const query=new URLSearchParams({engineId:body.dataset.engineId,conversationId:body.dataset.conversationId,accountId:body.dataset.accountId,messageId});
+      const response=await life.fetch('/ui/reply-source?'+query,{credentials:'same-origin',cache:'no-store',signal:controller.signal}),reply=await response.json();
+      if(life.signal.aborted||epoch!==replyEpoch)return;
+      if(!response.ok||reply.engineId!==body.dataset.engineId||reply.accountId!==body.dataset.accountId||reply.conversationId!==body.dataset.conversationId||reply.messageId!==messageId||typeof reply.senderName!=='string'||typeof reply.excerpt!=='string'||Array.from(reply.excerpt).length>512)throw Error('reply_unavailable');
+      saveDraft({...draftRecord(false),reply});feedback(composer,'');input?.focus({preventScroll:true});
+    }catch{if(!life.signal.aborted&&epoch===replyEpoch)feedback(composer,text('replyUnavailable'),true)}
+    finally{clearTimeout(timeout);if(!life.signal.aborted&&epoch===replyEpoch){preparingReply=false;renderReply()}}
+  });
+
+  const roomDraftKey=draftKey?draftKey.replace('oie.draft.v1','oie.room-operation.v1'):'';
+  let roomOperation=null;
+  if(roomDraftKey){try{roomOperation=JSON.parse(localStorage.getItem(roomDraftKey)||'null')||inMemory.get(roomDraftKey)||null}catch{roomOperation=inMemory.get(roomDraftKey)||null}}
+  if(roomOperation&&(!canonicalID(roomOperation.operationKey)||!['join','leave'].includes(roomOperation.command)||roomOperation.conversationId!==body.dataset.conversationId||roomOperation.accountId!==body.dataset.accountId))roomOperation=null;
+  function keepRoomOperation(value){if(!value&&roomOperation){const region=document.querySelector('#room-session-status');if(region)region.dataset.version='';}roomOperation=value;if(!roomDraftKey)return;if(value)inMemory.set(roomDraftKey,value);else inMemory.delete(roomDraftKey);try{if(value)localStorage.setItem(roomDraftKey,JSON.stringify(value));else localStorage.removeItem(roomDraftKey)}catch{storageWarning()}}
+  function restoreRoomOperation(){
+    if(!roomOperation)return;
+    const form=document.querySelector('[data-room-command]');if(!form)return;
+    form.action='/ui/rooms/'+roomOperation.command;form.dataset.oieAction=roomOperation.command+'_room';form.dataset.roomCommand=roomOperation.command;
+    for(const key of ['operationKey','expectedRevisionId','nickname']){const field=form.elements.namedItem(key);if(field)field.value=roomOperation[key]||'';}
+    for(const field of form.querySelectorAll('input:not([type=hidden])'))field.readOnly=true;
+    const button=form.querySelector('[data-room-action]');if(button){button.dataset.roomAction=roomOperation.command;button.textContent=text('retry');button.title=text('retry');}
+    const region=form.querySelector('[data-form-feedback]');if(region){region.textContent=text('roomCommandUnknown');region.dataset.error='true';region.setAttribute('role','alert');}
+  }
+  restoreRoomOperation();
   function mutateDOM(target, html) {
     if (!target) return;
     const apply = () => {
@@ -188,6 +236,19 @@ window.OieRuntime.register('live', life => {
       const contextNotice=document.querySelector('#context-notice'),newNotice=page.querySelector('#live-context-notice');if(contextNotice&&newNotice&&contextNotice.innerHTML!==newNotice.innerHTML)mutateDOM(contextNotice,newNotice.innerHTML);
       if(pinned())showJump(true);
       readAvatars(page);
+      const room=document.querySelector('#room-session-status'),nextRoom=page.querySelector('#live-room-session #room-session-status');
+      if(room&&nextRoom&&composer){
+        for(const key of ['sendAllowed','composeAllowed','replyAllowed'])composer.dataset[key]=nextRoom.dataset[key]||'false';
+        input.disabled=composer.dataset.composeAllowed!=='true'&&!journal?.pending;
+        if(room.dataset.version!==nextRoom.dataset.version&&!room.querySelector('input[name="nickname"]')?.matches(':focus')){
+          const previousFocus=room.contains(document.activeElement),previousFeedback=room.querySelector('[data-form-feedback]'),previousCommand=room.querySelector('[data-room-command]')?.dataset.roomCommand;
+          const savedFeedback=previousFeedback?.textContent,savedError=previousFeedback?.dataset.error;
+          mutateDOM(room,nextRoom.innerHTML);room.dataset.version=nextRoom.dataset.version;room.dataset.roomState=nextRoom.dataset.roomState;room.dataset.roomActive=nextRoom.dataset.roomActive;for(const key of ['sendAllowed','composeAllowed','replyAllowed'])room.dataset[key]=nextRoom.dataset[key];
+          const currentFeedback=room.querySelector('[data-form-feedback]');if(savedFeedback&&currentFeedback&&previousCommand===room.querySelector('[data-room-command]')?.dataset.roomCommand){currentFeedback.textContent=savedFeedback;currentFeedback.dataset.error=savedError||'false';}
+          if(previousFocus){const target=currentFeedback?.textContent?currentFeedback:room.querySelector('[data-room-status-label]');if(target){target.tabIndex=-1;target.focus({preventScroll:true})}}
+        }
+        restoreRoomOperation();renderReply();
+      }
       const history=document.querySelector('#history-status'),newHistory=page.querySelector('#live-history-status');if(history&&newHistory&&history.innerHTML!==newHistory.innerHTML)mutateDOM(history,newHistory.innerHTML);
       const list = document.querySelector('#conversation-list');
       const nextList = page.querySelector('#live-list');
@@ -311,13 +372,18 @@ window.OieRuntime.register('live', life => {
     if (form.dataset.busy === 'true' || stopped) return;
     const sending = form.dataset.oieAction === 'send';
     if (sending) {
-      if (form.dataset.sendAllowed !== 'true') return;
+      if(preparingReply){feedback(form,text('replyPreparing'));return}
+      if (form.dataset.sendAllowed !== 'true'&&!journal?.pending) return;
       const value = journal?.pending ? journal.text : input.value;
       if (!value.trim() || Array.from(value).length > 16384) { feedback(form,text('invalidMessage'),true);input.focus();return; }
       if (journal?.pending) { input.value=journal.text; submissionKey.value=journal.key; }
-      saveDraft({text:value,key:submissionKey.value,pending:true});lockComposer(true);
+      saveDraft({text:value,key:submissionKey.value,pending:true,reply:journal?.reply||null});lockComposer(true);renderReply();
     }
     const values = new URLSearchParams(new FormData(form));
+    const roomCommand=form.dataset.roomCommand;
+    if(roomCommand){if(roomOperation){for(const key of ['operationKey','expectedRevisionId','nickname','conversationId','accountId'])values.set(key,roomOperation[key]||'')}else keepRoomOperation({command:roomCommand,operationKey:values.get('operationKey'),expectedRevisionId:values.get('expectedRevisionId'),nickname:values.get('nickname')||'',conversationId:values.get('conversationId'),accountId:values.get('accountId')})}
+
+    if(sending){values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');}
     const buttons = [...form.querySelectorAll('input:not([type=hidden]),textarea,select,button')];
     const disabled = buttons.map(button => button.disabled);
     form.dataset.busy = 'true'; form.setAttribute('aria-busy','true'); buttons.forEach(button => button.disabled = true);
@@ -332,15 +398,17 @@ window.OieRuntime.register('live', life => {
       if (!result.ok) {
         feedback(form,result.message || text('pending'),true);
         if(result.code==='engine_changed'){stopped=true;source?.close();}
-        if (sending && result.rejected) { saveDraft({text:input.value,key:submissionKey.value,pending:false});lockComposer(false); }
+        if (sending && result.rejected) { saveDraft(draftRecord(false));lockComposer(false); }
         if (sending) input.focus({preventScroll:true});
+        if(roomCommand&&result.rejected){keepRoomOperation(null);for(const field of form.querySelectorAll('input:not([type=hidden])'))field.readOnly=false;}
         if(!sending)scheduleRefresh();
       } else {
+        if(roomCommand)keepRoomOperation(null);
         feedback(form,result.message || '');
         if (sending && result.accepted) {
           const submittedKey = values.get('operationKey');
           clearDraft(submittedKey);input.value='';submissionKey.value=result.nextKey;lockComposer(false);forceBottom=true;
-          input.focus({preventScroll:true});
+          input.focus({preventScroll:true});renderReply();
         } else if (form.dataset.oieAction === 'register' || form.dataset.oieAction === 'open') {
           if (result.redirect) { if(window.OieNavigation)window.OieNavigation.go(result.redirect);else location.assign(result.redirect); return; }
         }
@@ -353,7 +421,7 @@ window.OieRuntime.register('live', life => {
       if (sending) input.focus({preventScroll:true});
     } finally {
       clearTimeout(timeout);if(life.signal.aborted)return;pendingRequests--;form.dataset.busy='false';form.removeAttribute('aria-busy');
-      buttons.forEach((button,index)=>button.disabled=disabled[index]);
+      buttons.forEach((button,index)=>button.disabled=disabled[index]);renderReply();
       if(stopped&&composer)composer.querySelector('[data-send-message]').disabled=true;
       if (refreshAgain) { refreshAgain=false;scheduleRefresh(); }
     }
@@ -365,7 +433,7 @@ window.OieRuntime.register('live', life => {
     source = new EventSource('/ui/events?cursor='+encodeURIComponent(cursor || ''));
     source.onopen = () => { if(stopped)return;announce(text('liveReady'),true);scheduleRefresh();retryPending(); };
     source.onerror = () => {if(!stopped)announce(text('liveRetry'));};
-    for (const type of ['message.preview_changed','profile.avatar_changed','account.registered','account.connection_changed','account.history_changed','conversation.created','conversation.updated','message.created','message.updated']) life.on(source,type,scheduleRefresh);
+    for (const type of ['message.preview_changed','profile.avatar_changed','account.registered','account.connection_changed','account.history_changed','conversation.created','conversation.updated','conversation.room_session_changed','message.created','message.updated']) life.on(source,type,scheduleRefresh);
     life.on(source,'message.star_changed',event=>{try{document.dispatchEvent(new CustomEvent('oie:star-event',{detail:JSON.parse(event.data).star}));}catch{}scheduleRefresh();});
     life.on(source,'oie.reset', event => {
       try {

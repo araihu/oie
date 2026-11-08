@@ -59,6 +59,7 @@ func validCSRF(r *http.Request) bool {
 }
 
 type mutationResult struct {
+	RoomSession *engineapi.RoomSession    `json:"roomSession,omitempty"`
 	Star        *engineapi.MessageStar    `json:"star,omitempty"`
 	StarPending bool                      `json:"starPending,omitempty"`
 	Preview     *engineapi.MessagePreview `json:"preview,omitempty"`
@@ -114,6 +115,10 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 	result := mutationResult{OK: true, NextKey: newOperationKey()}
 	status := 200
 	switch r.URL.Path {
+	case "/ui/rooms/join":
+		status, result = s.changeRoom(ctx, r, text, false)
+	case "/ui/rooms/leave":
+		status, result = s.changeRoom(ctx, r, text, true)
 	case "/ui/messages/star":
 		status, result = s.setStar(ctx, r, text)
 	case "/ui/previews/download":
@@ -256,32 +261,69 @@ func (s *Server) reconcileMessage(ctx context.Context, key, kind string) (*engin
 	return current.JSON200, true
 }
 func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mutationResult) {
-	key, body, conversationID := r.Form.Get("operationKey"), r.Form.Get("originalText"), r.Form.Get("conversationId")
-	if !validOperationKey(key) || strings.TrimSpace(body) == "" || len([]rune(body)) > 16384 {
+	key, body, conversation, account, target := r.Form.Get("operationKey"), r.Form.Get("originalText"), r.Form.Get("conversationId"), r.Form.Get("accountId"), r.Form.Get("replyToMessageId")
+	if !validOperationKey(key) || !validOperationKey(conversation) || !validOperationKey(account) || strings.TrimSpace(body) == "" || len([]rune(body)) > 16384 || (target != "" && !validOperationKey(target)) {
 		return 422, mutationResult{Message: text.InvalidMessage, Code: "invalid_request", Rejected: true}
 	}
-	conversation, err := s.client.GetConversationWithResponse(ctx, conversationID)
+	receipt, evidence := s.sendReceipt(ctx, key)
+	switch evidence {
+	case "found":
+		if matchingSend(*receipt, conversation, account, body, target) {
+			return acceptedResult(text, *receipt)
+		}
+		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
+	case "conflict":
+		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
+	case "unknown":
+		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
+	}
+	owner, err := s.client.GetConversationWithResponse(ctx, conversation)
 	if err != nil {
 		return 503, mutationResult{Message: text.PendingAcceptance}
 	}
-	if conversation.JSON200 == nil {
-		return conversation.StatusCode(), problemResult(text, conversation.StatusCode(), conversation.Body)
+	if owner.JSON200 == nil {
+		return owner.StatusCode(), problemResult(text, owner.StatusCode(), owner.Body)
 	}
-	if conversation.JSON200.Kind != "direct" {
-		return 409, mutationResult{Message: text.RoomReadOnly, Code: "read_only", Rejected: true}
-	}
-	if conversation.JSON200.AccountId != r.Form.Get("accountId") {
-		return 409, mutationResult{Message: text.OperationConflict}
-	}
-	if message, found := s.reconcileMessage(ctx, key, "send_message"); found {
-		if message != nil && message.ConversationId == conversationID && message.OriginalText == body {
-			return acceptedResult(text, *message)
-		}
+	if owner.JSON200.AccountId != account {
 		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
 	}
-	response, err := s.client.SendMessageWithResponse(ctx, conversationID, &engineapi.SendMessageParams{IdempotencyKey: key}, engineapi.SendMessage{OriginalText: body})
+	if owner.JSON200.Kind == "room" {
+		session, callErr := s.client.GetRoomSessionWithResponse(ctx, conversation)
+		if callErr != nil {
+			return 503, mutationResult{Message: text.PendingAcceptance}
+		}
+		if session.JSON200 == nil {
+			return 409, mutationResult{Message: text.RoomReadOnly, Code: "read_only", Rejected: true}
+		}
+		if !validRoomSession(*session.JSON200, conversation, account) {
+			return 503, mutationResult{Message: text.PendingAcceptance}
+		}
+		if !session.JSON200.Active {
+			return 409, mutationResult{Message: text.RoomJoinRequired, Code: "read_only", Rejected: true}
+		}
+	}
+	if target != "" || owner.JSON200.Kind == "room" {
+		capabilities, callErr := s.client.GetAccountCapabilitiesWithResponse(ctx, account)
+		if callErr != nil || capabilities.JSON200 == nil || capabilities.JSON200.AccountId != account {
+			return 503, mutationResult{Message: text.PendingAcceptance}
+		}
+		projection := view{MessagingCapabilities: capabilities.JSON200}
+		if (target != "" && !projection.messagingImplemented("send_replies")) || (owner.JSON200.Kind == "room" && !projection.messagingImplemented("room_messaging")) {
+			return 409, mutationResult{Message: text.ReplyUnavailable, Code: "unsupported", Rejected: true}
+		}
+	}
+	var targetID *string
+	if target != "" {
+		source, status := s.retainedReplySource(ctx, conversation, account, target)
+		if source == nil {
+			return status, mutationResult{Message: text.ReplyUnavailable, Code: "reply_unavailable", Rejected: status == 400 || status == 404}
+		}
+		targetID = &target
+	}
+	response, err := s.client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, engineapi.SendMessage{OriginalText: body, ReplyToMessageId: targetID})
 	if err != nil {
-		if message, _ := s.reconcileMessage(ctx, key, "send_message"); message != nil && message.ConversationId == conversationID && message.OriginalText == body {
+		message, _ := s.sendReceipt(ctx, key)
+		if message != nil && matchingSend(*message, conversation, account, body, target) {
 			return acceptedResult(text, *message)
 		}
 		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
@@ -293,8 +335,12 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 	if message == nil {
 		return response.StatusCode(), problemResult(text, response.StatusCode(), response.Body)
 	}
+	if !matchingSend(*message, conversation, account, body, target) {
+		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
+	}
 	return acceptedResult(text, *message)
 }
+
 func acceptedResult(text copy, m engineapi.Message) (int, mutationResult) {
 	return 200, mutationResult{OK: true, Accepted: true, Message: text.MessageAccepted, MessageID: m.Id, State: string(m.SendState), NextKey: newOperationKey()}
 }
@@ -370,7 +416,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 
 func isMutationPath(path string) bool {
 	switch path {
-	case "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/cancel":
+	case "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/cancel":
 		return true
 	}
 	return false
