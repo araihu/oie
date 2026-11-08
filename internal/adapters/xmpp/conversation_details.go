@@ -83,15 +83,19 @@ func (m *Manager) ConversationInfo(_ context.Context, a domain.Account, c domain
 	}
 	return cloneConversationInfo(slot.info), nil
 }
-func (m *Manager) detailsLoop(ctx context.Context, e *entry, s *mx.Session) {
+func (m *Manager) detailsLoop(ctx context.Context, e *entry, s *mx.Session, wake <-chan struct{}) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-e.detailsWake:
+		case <-wake:
 		}
 		for ctx.Err() == nil {
 			e.mu.Lock()
+			if e.session != s || e.state.State != "connected" {
+				e.mu.Unlock()
+				return
+			}
 			var selected *detailSlot
 			var id domain.ID
 			for key, slot := range e.details {

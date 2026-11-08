@@ -282,6 +282,7 @@ func (m *Manager) publish(ctx context.Context, e *entry, state, code string) err
 		e.peerPresence = nil
 	} else {
 		e.discovery = domain.CapabilityDiscovery{State: "pending", Services: []domain.DiscoveredService{}}
+		e.detailsWake = make(chan struct{}, 1)
 		e.discoveryPartial = false
 		e.details = nil
 		e.peerPresence = nil
@@ -312,7 +313,10 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 				go func() { defer m.workers.Done(); m.historyLoop(historyCtx, e, session) }()
 				go func() { defer m.workers.Done(); m.avatarLoop(historyCtx, e, session) }()
 				go func() { defer m.workers.Done(); m.discoverCapabilities(historyCtx, e, session) }()
-				go func() { defer m.workers.Done(); m.detailsLoop(historyCtx, e, session) }()
+				e.mu.RLock()
+				detailsWake := e.detailsWake
+				e.mu.RUnlock()
+				go func() { defer m.workers.Done(); m.detailsLoop(historyCtx, e, session, detailsWake) }()
 				delay = time.Second
 				err = session.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
 					return m.handle(ctx, e, tokens, start)

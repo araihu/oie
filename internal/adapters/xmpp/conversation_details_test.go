@@ -1,6 +1,7 @@
 package xmpp
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"strings"
@@ -96,7 +97,7 @@ func TestObservedPeerPresenceNeverGuessesOfflineOrOccupantIdentity(t *testing.T)
 		t.Fatal(got)
 	}
 	laptop, _ := jid.Parse("bob@localhost/laptop")
-	capturePeerPresence(e, incomingPresence{Presence: stanza.Presence{From: laptop}, Show: "dnd", Priority: 10})
+	capturePeerPresence(e, incomingPresence{Presence: stanza.Presence{From: laptop}, Show: "dnd", Priority: "10"})
 	capturePeerPresence(e, incomingPresence{Presence: stanza.Presence{From: from, Type: stanza.UnavailablePresence}})
 	if got = peerPresence(e, "bob@localhost"); got.State != "busy" {
 		t.Fatal("one device hid another", got)
@@ -104,6 +105,11 @@ func TestObservedPeerPresenceNeverGuessesOfflineOrOccupantIdentity(t *testing.T)
 	capturePeerPresence(e, incomingPresence{Presence: stanza.Presence{From: laptop, Type: stanza.UnavailablePresence}})
 	if got = peerPresence(e, "bob@localhost"); got.State != "unavailable" {
 		t.Fatal(got)
+	}
+	malformed, _ := jid.Parse("bob@localhost/malformed")
+	capturePeerPresence(e, incomingPresence{Presence: stanza.Presence{From: malformed}, Priority: strings.Repeat("9", 100)})
+	if peerPresence(e, "bob@localhost").State != "unavailable" {
+		t.Fatal("invalid priority invented available presence")
 	}
 	stranger, _ := jid.Parse("stranger@localhost/device")
 	capturePeerPresence(e, incomingPresence{Presence: stanza.Presence{From: stranger}})
@@ -117,5 +123,21 @@ func TestObservedPeerPresenceNeverGuessesOfflineOrOccupantIdentity(t *testing.T)
 	}
 	if !got.ObservedAt.Before(time.Now().Add(time.Second)) {
 		t.Fatal("non-observed timestamp")
+	}
+}
+
+func TestPreviousDetailsWorkerCannotConsumeCurrentSessionQueue(t *testing.T) {
+	current, previous := new(mx.Session), new(mx.Session)
+	oldWake, newWake := make(chan struct{}, 1), make(chan struct{}, 1)
+	oldWake <- struct{}{}
+	newWake <- struct{}{}
+	slot := &detailSlot{queued: true}
+	e := &entry{session: current, state: domain.Connection{State: "connected"}, detailsWake: newWake, details: map[domain.ID]*detailSlot{"current": slot}}
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	manager := New(t.TempDir(), nil)
+	manager.detailsLoop(ctx, e, previous, oldWake)
+	if !slot.queued || len(newWake) != 1 {
+		t.Fatal("old worker consumed current session request")
 	}
 }

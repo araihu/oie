@@ -3,6 +3,7 @@ package xmpp
 import (
 	"github.com/araihu/oie/internal/domain"
 	"mellium.im/xmpp/stanza"
+	"strconv"
 	"time"
 )
 
@@ -14,7 +15,7 @@ type incomingPresence struct {
 	stanza.Presence
 	Show     string    `xml:"jabber:client show"`
 	Status   string    `xml:"jabber:client status"`
-	Priority int       `xml:"jabber:client priority"`
+	Priority string    `xml:"jabber:client priority"`
 	MUC      *struct{} `xml:"http://jabber.org/protocol/muc#user x"`
 	Update   *struct {
 		Photo *string `xml:"photo"`
@@ -25,6 +26,14 @@ type incomingPresence struct {
 func capturePeerPresence(e *entry, p incomingPresence) {
 	if p.MUC != nil || p.From.Localpart() == "" || (p.Type != "" && p.Type != stanza.UnavailablePresence) {
 		return
+	}
+	priority := 0
+	if p.Priority != "" {
+		value, err := strconv.Atoi(p.Priority)
+		if err != nil || value < -128 || value > 127 {
+			return
+		}
+		priority = value
 	}
 	address := p.From.Bare().String()
 	e.avatarMu.Lock()
@@ -73,7 +82,7 @@ func capturePeerPresence(e *entry, p incomingPresence) {
 			state = "chat"
 		}
 	}
-	resources[resource] = peerResource{observation: domain.PresenceObservation{State: state, StatusText: cleanEvidence(p.Status, 300), ObservedAt: time.Now().UTC()}, priority: max(-128, min(127, p.Priority))}
+	resources[resource] = peerResource{observation: domain.PresenceObservation{State: state, StatusText: cleanEvidence(p.Status, 300), ObservedAt: time.Now().UTC()}, priority: priority}
 }
 
 // Caller holds e.mu. Prefer an available resource; explicit unavailability of one
