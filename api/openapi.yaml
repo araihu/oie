@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.11.0
+  version: 0.12.0
   description: Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
     are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.
@@ -472,7 +472,7 @@ paths:
               example:
                 id: 019a5df0-0000-7000-8000-000000000003
                 role: local
-                apiVersion: 0.11.0
+                apiVersion: 0.12.0
                 eventCursor: 019a5df0-0000-7000-8000-000000000003:1
         '503':
           $ref: '#/components/responses/Unavailable'
@@ -1605,7 +1605,7 @@ components:
       example:
         id: 019a5df0-0000-7000-8000-000000000003
         role: local
-        apiVersion: 0.11.0
+        apiVersion: 0.12.0
         eventCursor: 019a5df0-0000-7000-8000-000000000003:1
       additionalProperties: false
       required:
@@ -1625,6 +1625,7 @@ components:
           type: string
           enum:
           - 0.11.0
+          - 0.12.0
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -2632,7 +2633,7 @@ components:
           description: Canonical target UUID frozen in an outgoing reply intent, including a text-only fallback. It does not imply the original is still available. Reply bodyText preserves the authored response for receipt reconciliation.
         originalText:
           type: string
-          description: Unmodified original text.
+          description: Exact text of the current retained content revision. Validated incoming corrections retain the logical message UUID and original creation time; prior source bodies remain retained. Copying returns this text without removing formatting or compatibility quoting.
         createdAt:
           type: string
           format: date-time
@@ -2642,6 +2643,14 @@ components:
         historical:
           type: boolean
           description: True for archive imports. Omitted means false. Clients must not treat these as new unread messages or fresh notifications.
+        edited:
+          type: boolean
+          description: True when a validated protocol correction supplies the current content. Omitted means false. Send-state revisions alone do not mark a message edited.
+          example: true
+        editedAt:
+          type: string
+          format: date-time
+          description: UTC source timestamp of the selected protocol correction, when edited is true. Receiving or importing an old correction does not give it a new edit timestamp.
         sendState:
           type: string
           description: Durable transport evidence.
