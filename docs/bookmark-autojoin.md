@@ -32,3 +32,11 @@ application and SQLite tests rather than a forced live account reconnect.
 Native `make check`, focused adapter/HTTP/SQLite race tests, and Dagger
 `make ci-check` pass in the managed autojoin worktree. No full live-account
 reconnect or full browser/XMPP pipeline was forced for this increment.
+
+## Integration verification
+
+Merged into the primary checkout as `10930b0`. Native `make check` also passes
+with the integrated source. Its additional Dagger repeat passed native checks,
+then stopped producing progress during race tests and was interrupted; completion
+of that integrated repeat remains unverified. The isolated feature Dagger run
+completed successfully. Other sessions and their uncommitted edits were retained.
