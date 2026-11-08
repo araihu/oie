@@ -10,6 +10,14 @@ Details are session-local observations. A GET returns immediately and deduplicat
 
 The existing details action opens a localized Goshtoso Drawer composed from public Panel, Avatar, Badge and Link APIs. Room participant avatars are initials only. Section digests preserve identity DOM, focused controls, drawer scroll and the composer draft during unrelated updates. Retry/Refresh uses the same account/conversation URL; it does not promise a synchronous probe. User text is escaped plain text.
 
+## Group-info reference
+
+The supplied WhatsApp group-info reference guides the sidebar layout. Conversation identity, available description/topic, participants and conversation content take priority. Connection observations and protocol properties belong in a secondary section. Reported occupant counts remain distinct from a persistent group membership roster, including when the provider advertises a count but withholds names.
+
+Media/Links/Documents and starred-message subviews stay inside the details drawer with a Back action. Both use existing API operations scoped to the canonical conversation and owning account. A page length is not a total count. Favorites in this view are source-message stars, independent of the favorite-conversation navigation filter. Missing provider operations do not produce decorative call, edit, invite or mute buttons.
+
+Native navigation remains usable if enhancement is unavailable. Enhanced subview navigation must preserve the composer draft, timeline position, account/conversation identity, selected content tab, and localized theme. Source navigation leaves the drawer for the selected retained message. Image opening reuses existing viewer controls and per-device download policy.
+
 | State | Read/action | Expected result | Preserved context | Effects |
 |---|---|---|---|---|
 | Connected room | Open/refresh | Available metadata plus visible-occupant scope | Conversation/account, draft, language/theme | Bounded reads, zero joins/messages |
