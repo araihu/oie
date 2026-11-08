@@ -152,7 +152,19 @@ window.OieRuntime.register('live', life => {
     const button=form.querySelector('[data-room-action]');if(button){button.dataset.roomAction=roomOperation.command;button.textContent=text('retry');button.title=text('retry');}
     const region=form.querySelector('[data-form-feedback]');if(region){region.textContent=text('roomCommandUnknown');region.dataset.error='true';region.setAttribute('role','alert');}
   }
-  restoreRoomOperation();
+  function syncRoomLeave(){
+    const item=document.getElementById('chat-leave-room'),form=document.querySelector('[data-room-command]'),room=document.getElementById('room-session-status');
+    if(item)item.disabled=stopped||!form||form.dataset.roomCommand!=='leave'||room?.dataset.roomActive!=='true'||form.dataset.busy==='true'||!!(roomOperation&&roomOperation.command!=='leave');
+  }
+  life.on(window,'oie:leave-room',()=>{
+    const form=document.querySelector('[data-room-command]'),room=document.getElementById('room-session-status');
+    if(mock||stopped||!form||form.dataset.busy==='true')return;
+    if(roomOperation&&roomOperation.command!=='leave'){window.dispatchEvent(new CustomEvent('modal:open',{detail:{id:'room-session-dialog'}}));return}
+    if(form.dataset.roomCommand!=='leave'||room?.dataset.roomActive!=='true')return;
+    document.getElementById('chat-leave-room')?.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+    form.dataset.roomMenuSubmit='true';try{form.requestSubmit()}finally{delete form.dataset.roomMenuSubmit}
+  });
+  restoreRoomOperation();syncRoomLeave();
   function mutateDOM(target, html) {
     if (!target) return;
     if(window.OieVideos?.swap(target,html))return;
@@ -262,7 +274,7 @@ window.OieRuntime.register('live', life => {
           const currentFeedback=room.querySelector('[data-form-feedback]');if(savedFeedback&&currentFeedback&&previousCommand===room.querySelector('[data-room-command]')?.dataset.roomCommand){currentFeedback.textContent=savedFeedback;currentFeedback.dataset.error=savedError||'false';}
           if(previousFocus){const target=currentFeedback?.textContent?currentFeedback:room.querySelector('[data-room-status-label]');if(target){target.tabIndex=-1;target.focus({preventScroll:true})}}
         }
-        restoreRoomOperation();renderReply();
+        restoreRoomOperation();renderReply();syncRoomLeave();
       }
       const history=document.querySelector('#history-status'),newHistory=page.querySelector('#live-history-status');if(history&&newHistory&&history.innerHTML!==newHistory.innerHTML)mutateDOM(history,newHistory.innerHTML);
       const list = document.querySelector('#conversation-list');
@@ -368,7 +380,7 @@ window.OieRuntime.register('live', life => {
         }
         refreshAccountStatuses(menu,nextMenu);
       }
-      document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));document.dispatchEvent(new CustomEvent("oie:shared-refresh",{detail:page}));applyAvatars();document.dispatchEvent(new CustomEvent("oie:stars-refresh",{detail:{page,generation:starGeneration}}));document.dispatchEvent(new CustomEvent("oie:previews-refresh",{detail:page}));localizeTimes();
+      document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));document.dispatchEvent(new CustomEvent("oie:shared-refresh",{detail:page}));applyAvatars();document.dispatchEvent(new CustomEvent("oie:stars-refresh",{detail:{page,generation:starGeneration}}));document.dispatchEvent(new CustomEvent("oie:previews-refresh",{detail:page}));localizeTimes();syncRoomLeave();
     } catch { if(!life.signal.aborted)announce(text('liveRetry')); }
     finally {
       clearTimeout(timeout);if(life.signal.aborted)return; refreshing = false;
@@ -409,12 +421,13 @@ window.OieRuntime.register('live', life => {
     }
     const values = new URLSearchParams(new FormData(form));
     const roomCommand=form.dataset.roomCommand;
+    const roomMenuSubmit=roomCommand==='leave'&&form.dataset.roomMenuSubmit==='true';
     if(roomCommand){if(roomOperation){for(const key of ['operationKey','expectedRevisionId','nickname','conversationId','accountId'])values.set(key,roomOperation[key]||'')}else keepRoomOperation({command:roomCommand,operationKey:values.get('operationKey'),expectedRevisionId:values.get('expectedRevisionId'),nickname:values.get('nickname')||'',conversationId:values.get('conversationId'),accountId:values.get('accountId')})}
 
     if(sending){values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');}
     const buttons = [...form.querySelectorAll('input:not([type=hidden]),textarea,select,button')];
     const disabled = buttons.map(button => button.disabled);
-    form.dataset.busy = 'true'; form.setAttribute('aria-busy','true'); buttons.forEach(button => button.disabled = true);
+    form.dataset.busy = 'true'; form.setAttribute('aria-busy','true'); buttons.forEach(button => button.disabled = true);syncRoomLeave();
     for (const secret of form.querySelectorAll('input[type="password"]')) secret.value = '';
     feedback(form,text('saving'));
     pendingRequests++;
@@ -449,7 +462,11 @@ window.OieRuntime.register('live', life => {
       if (sending) input.focus({preventScroll:true});
     } finally {
       clearTimeout(timeout);if(life.signal.aborted)return;pendingRequests--;form.dataset.busy='false';form.removeAttribute('aria-busy');
-      buttons.forEach((button,index)=>button.disabled=disabled[index]);renderReply();
+      buttons.forEach((button,index)=>button.disabled=disabled[index]);renderReply();syncRoomLeave();
+      if(roomMenuSubmit&&form.querySelector('[data-form-feedback]')?.dataset.error==='true'){
+        window.dispatchEvent(new CustomEvent('modal:open',{detail:{id:'room-session-dialog'}}));
+        life.raf(()=>form.querySelector('[data-form-feedback]')?.focus({preventScroll:true}));
+      }
       if(stopped&&composer)composer.querySelector('[data-send-message]').disabled=true;
       if (refreshAgain) { refreshAgain=false;scheduleRefresh(); }
     }
