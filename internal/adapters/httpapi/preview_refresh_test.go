@@ -69,7 +69,7 @@ func TestExplicitLinkRefreshPreservesSourceAndCoalescesPendingWork(t *testing.T)
 	if err != nil || len(rows) != 1 {
 		t.Fatal(rows, err)
 	}
-	id := rows[0].ID
+	previewID := rows[0].ID
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() { done <- e.Run(ctx) }()
@@ -83,7 +83,7 @@ func TestExplicitLinkRefreshPreservesSourceAndCoalescesPendingWork(t *testing.T)
 		t.Helper()
 		deadline := time.Now().Add(5 * time.Second)
 		for time.Now().Before(deadline) {
-			p, err := e.Preview(t.Context(), id)
+			p, err := e.Preview(t.Context(), previewID)
 			if err == nil && p.State == state && !p.RefreshRequested {
 				return p
 			}
@@ -106,7 +106,7 @@ func TestExplicitLinkRefreshPreservesSourceAndCoalescesPendingWork(t *testing.T)
 	fetch.release = make(chan struct{})
 	entered, release := fetch.entered, fetch.release
 	fetch.mu.Unlock()
-	response, err := http.Post(server.URL+"/api/v1/previews/"+string(id)+"/refresh", "application/json", nil)
+	response, err := http.Post(server.URL+"/api/v1/previews/"+string(previewID)+"/refresh", "application/json", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,9 +115,13 @@ func TestExplicitLinkRefreshPreservesSourceAndCoalescesPendingWork(t *testing.T)
 	if err = json.NewDecoder(response.Body).Decode(&accepted); err != nil || response.StatusCode != 202 {
 		t.Fatal(response.StatusCode, err)
 	}
-	<-entered
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("refresh worker did not start")
+	}
 	for i := 0; i < 4; i++ {
-		queued, err := e.RefreshPreview(t.Context(), id)
+		queued, err := e.RefreshPreview(t.Context(), previewID)
 		if err != nil || string(queued.RevisionID) != accepted.RevisionId || queued.Title != first.Title || queued.FaviconHash != first.FaviconHash {
 			t.Fatal("pending refresh was duplicated or metadata cleared", queued, err)
 		}
@@ -136,7 +140,7 @@ func TestExplicitLinkRefreshPreservesSourceAndCoalescesPendingWork(t *testing.T)
 	fetch.release = nil
 	fetch.fail = true
 	fetch.mu.Unlock()
-	if _, err = e.RefreshPreview(t.Context(), id); err != nil {
+	if _, err = e.RefreshPreview(t.Context(), previewID); err != nil {
 		t.Fatal(err)
 	}
 	failed := wait("unavailable")
@@ -152,7 +156,7 @@ func TestExplicitLinkRefreshPreservesSourceAndCoalescesPendingWork(t *testing.T)
 	fetch.mu.Lock()
 	calls := fetch.calls
 	fetch.mu.Unlock()
-	if _, err = e.RefreshPreview(t.Context(), id); err == nil {
+	if _, err = e.RefreshPreview(t.Context(), previewID); err == nil {
 		t.Fatal("stale reference accepted")
 	}
 	fetch.mu.Lock()

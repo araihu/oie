@@ -61,13 +61,14 @@ window.OieRuntime.register('previews', life => {
   const state=element=>window.Alpine?.$data(element);
   const fields=['previewUrl','previewName','previewMime','previewSize','previewTitle','previewDescription','previewSite','previewImage','previewFavicon','previewHost','previewPath','previewFile','previewState','previewDownload','previewStatus','previewRevision'];
   function apply(scope,values) {
+    const previousRevision=scope.dataset.previewRevision;
     const data=state(scope);
     for(const field of fields) if(Object.hasOwn(values,field)) {
       scope.dataset[field]=values[field];if(data)data[field]=values[field];
     }
     if(data)data.previewBusy=downloading.has(scope.dataset.previewId)||refreshing.has(scope.dataset.previewId);
     const feedback=scope.querySelector('[data-link-refresh-feedback]');
-    if(feedback&&scope.dataset.previewRefreshing==='true'&&scope.dataset.previewState!=='queued'){feedback.textContent=scope.dataset.previewState==='unavailable'?(labels.refreshFailed||''):'';scope.dataset.previewRefreshing='false'}
+    if(feedback&&scope.dataset.previewState!=='queued'&&(scope.dataset.previewRefreshing==='true'||scope.dataset.previewState==='ready'&&scope.dataset.previewRevision!==previousRevision)){feedback.textContent=scope.dataset.previewState==='unavailable'?(labels.refreshFailed||''):'';scope.dataset.previewRefreshing='false'}
     const refresh=scope.querySelector('[id^="refresh-preview-"]');if(refresh)refresh.disabled=scope.dataset.previewState==='queued'||refreshing.has(scope.dataset.previewId);
     const save=document.getElementById('save-preview-'+scope.dataset.previewId);if(save){save.disabled=!scope.dataset.previewFile;save.hidden=!scope.dataset.previewFile;}
     if(viewing===scope.dataset.previewId&&contextOf(scope)===viewerOrigin)updateViewer(scope);
