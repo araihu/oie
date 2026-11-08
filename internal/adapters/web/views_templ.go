@@ -2798,7 +2798,7 @@ func composer(v view) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = textarea.Textarea(textarea.Config{ID: "message-composer", Name: "originalText", Value: v.field("originalText"), Rows: 1, Placeholder: v.Text.Message, Disabled: !v.composeAllowed(), RootClass: "oie-composer-input", InputAttrs: templ.Attributes{"aria-label": v.Text.Message, "style": "resize:none;min-height:2.7rem;background:var(--oie-raised);border-color:var(--oie-border);border-radius:1.5rem;color:var(--oie-text)"}}).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = textarea.Textarea(textarea.Config{ID: "message-composer", Name: "originalText", Value: v.field("originalText"), Rows: 1, Placeholder: v.Text.Message, Disabled: !v.composeAllowed(), RootClass: "oie-composer-input", InputAttrs: templ.Attributes{"aria-label": v.Text.Message, "style": "resize:none;field-sizing:content;min-height:2.7rem;max-height:min(12rem,30dvh);overflow-y:auto;background:var(--oie-raised);border-color:var(--oie-border);border-radius:1.5rem;color:var(--oie-text)"}}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

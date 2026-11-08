@@ -366,7 +366,7 @@ templ composer(v view){
 @composerReply(v)
 <div class="oie-composer">
 @button.Button(button.Disabled(),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Attach,"title":v.Text.MediaUnavailable})){@glyph(heroicons.Icon16SolidPlus)}
-@textarea.Textarea(textarea.Config{ID:"message-composer",Name:"originalText",Value:v.field("originalText"),Rows:1,Placeholder:v.Text.Message,Disabled:!v.composeAllowed(),RootClass:"oie-composer-input",InputAttrs:templ.Attributes{"aria-label":v.Text.Message,"style":"resize:none;min-height:2.7rem;background:var(--oie-raised);border-color:var(--oie-border);border-radius:1.5rem;color:var(--oie-text)"}})
+@textarea.Textarea(textarea.Config{ID:"message-composer",Name:"originalText",Value:v.field("originalText"),Rows:1,Placeholder:v.Text.Message,Disabled:!v.composeAllowed(),RootClass:"oie-composer-input",InputAttrs:templ.Attributes{"aria-label":v.Text.Message,"style":"resize:none;field-sizing:content;min-height:2.7rem;max-height:min(12rem,30dvh);overflow-y:auto;background:var(--oie-raised);border-color:var(--oie-border);border-radius:1.5rem;color:var(--oie-text)"}})
 @button.Button(button.WithType("submit"),button.WithRootClass("oie-icon-button oie-send"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Send,"data-send-message":"","disabled":!v.sendAllowed()})){@glyph(heroicons.Icon16SolidArrowUp)}
 </div>
 <div class="oie-composer-feedback" data-form-feedback role="status" aria-live="polite"></div>
