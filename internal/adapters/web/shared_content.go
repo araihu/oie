@@ -7,8 +7,22 @@ import (
 	"encoding/json"
 
 	"github.com/araihu/goshtoso/components/card"
+	"github.com/araihu/goshtoso/components/combobox"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
+
+func sharedAccountCombobox(v view) combobox.Config {
+	options := make([]combobox.Option, 0, len(v.Accounts)+1)
+	for _, option := range accountOptions(v, true) {
+		options = append(options, combobox.Option{Value: option.Value, Label: option.Label})
+	}
+	return combobox.Config{
+		ID: "shared-account", Name: "account", Label: v.Text.SharedAccount,
+		RootClass: "oie-shared-account-filter", Mode: combobox.ModeSingle,
+		Source: combobox.Source{Static: options}, Selected: []string{v.AccountFilter},
+		EnableSearch: true, DisablePersistence: true,
+	}
+}
 
 func (s *Server) loadSharedContent(ctx context.Context, v *view) {
 	limit := 50

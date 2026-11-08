@@ -315,6 +315,8 @@
   "SharedDocument": "Documento",
   "SharedLink": "Link",
   "SharedAccount": "Conta",
+  "SearchAccounts": "Pesquisar contas",
+  "NoAccountsFound": "Nenhuma conta encontrada",
   "InfoSharedContent": "Conteúdo compartilhado",
   "InfoStarred": "Mensagens com estrela",
   "InfoConnection": "Conexão e informações da sala",

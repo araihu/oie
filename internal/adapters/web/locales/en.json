@@ -315,6 +315,8 @@
   "SharedDocument": "Document",
   "SharedLink": "Link",
   "SharedAccount": "Account",
+  "SearchAccounts": "Search accounts",
+  "NoAccountsFound": "No accounts found",
   "InfoSharedContent": "Shared content",
   "InfoStarred": "Starred messages",
   "InfoConnection": "Connection and room information",

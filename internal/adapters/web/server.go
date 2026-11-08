@@ -165,6 +165,8 @@ type copy struct {
 	InfoStarsEmpty             string
 	InfoNavigationFailed       string
 	SharedAccount              string
+	SearchAccounts             string
+	NoAccountsFound            string
 	SharedTools                string
 	SharedContentTypes         string
 	SharedMediaTab             string
@@ -791,6 +793,7 @@ func presentationContext(ctx context.Context, v view) context.Context {
 		Drawer:    expressions.Drawer{CloseAriaLabel: v.Text.Close},
 		TextInput: expressions.TextInput{SearchAriaLabel: v.Text.SearchChats, ShowPasswordAriaLabel: v.Text.ShowPassword},
 		Select:    expressions.Select{Placeholder: v.Text.ChooseOption, ListAriaLabel: func(label string) string { return label }},
+		Combobox:  expressions.Combobox{Placeholder: v.Text.ChooseOption, SearchPlaceholder: v.Text.SearchAccounts, EmptyText: v.Text.NoAccountsFound, ErrorText: v.Text.UnavailableBody, RetryLabel: v.Text.Retry},
 		Form:      expressions.Form{ErrorTitle: v.Text.ValidationFailed, EditLabel: v.Text.Edit, DoneLabel: v.Text.Done},
 	})
 }

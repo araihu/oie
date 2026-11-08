@@ -263,7 +263,7 @@ Search across accounts/sources in the selected engine and within a direct/group 
 
 Provide searchable **Media, Files, and Links** views. Catalog shared URLs automatically from messages, including backfilled/synced messages; retain source message/conversation/account context. Here, bookmarks means a shared-link catalog, not an accepted browser-bookmark exporter or independent manual-save feature.
 
-**AGREED:** the main Media and Links destination aggregates all conversations in the selected engine, with account filtering and Media, Links, and Documents tabs. Show date groups and the source of each item, and provide navigation to its original message. Opening an image keeps the viewer's previous/next navigation scoped to its conversation.
+**AGREED:** the main Media and Links destination aggregates all conversations in the selected engine, with account filtering and Media, Links, and Documents tabs. The account filter uses a searchable single-selection combobox, matching account names and addresses and retaining an All accounts option. Its selected value follows the current URL rather than a separate persisted picker state. Show date groups and the source of each item, and provide navigation to its original message. Opening an image keeps the viewer's previous/next navigation scoped to its conversation.
 
 Provide WhatsApp-like rich link cards using structured engine metadata. Preview enrichment must not require a provider client in the browser.
 

@@ -6,7 +6,7 @@ bubble instead of the outer row, whose height includes avatars and previews.
 Header and compact-body spacing reserve room for the trigger without covering
 text. No dependency-private selectors are used for styling.
 
-Oie pins Goshtoso `v0.6.2-0.20261108205852-5fad228c5fb9` from the open
+Oie pins Goshtoso `v0.6.2-0.20261108213311-5320c913e330` from the open
 [consumer integration PR #375](https://github.com/araihu/goshtoso/pull/375).
 The generic collision handling is independently reviewable in
 [popover PR #374](https://github.com/araihu/goshtoso/pull/374). Panels flip/shift
@@ -27,7 +27,8 @@ inside the bubble, 4 pixels from the top and 6 from the right. The opened menu
 fits the viewport; Escape restores focus. No mutation requests or page errors
 occurred during that observation.
 
-The exact upstream version passes focused Popover/Dropdown/Dialog browser tests,
-unit/build checks and lint. Its broader library-wide browser run was stopped
-after being superseded by the final changes, so full upstream-suite completion
-is unverified; both PRs remain draft and record that limit.
+The original placement pin, `v0.6.2-0.20261108205852-5fad228c5fb9`, passed focused
+Popover/Dropdown/Dialog browser tests, unit/build checks and lint. The current pin
+also includes the searchable account-filter fixes from
+[combobox PR #376](https://github.com/araihu/goshtoso/pull/376). Full upstream
+browser-suite completion remains unverified; these PRs remain draft.
