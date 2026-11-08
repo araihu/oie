@@ -138,9 +138,7 @@ if v.AccountFilter=="" {
 }
 for _,a:=range v.Accounts {
 @link.Link(v.href("account",a.Id,"chat",""),link.WithRootClass("oie-account-choice"),link.WithAttrs(templ.Attributes{"data-switch-account":a.Id,"aria-current":strconv.FormatBool(v.AccountFilter==a.Id)})){
-<div class="inline-flex shrink-0" data-account-status={a.Id} data-connection-state={connectionState(v,a.Id)} title={v.connectionLabel(a.Id)} role="img" aria-label={v.connectionLabel(a.Id)}>
-@profileAvatar(v,a.Id,a.Address,avatar.Config{Name:a.Label,Size:avatar.SizeXS,Status:connectionAvatarStatus(v,a.Id)})
-</div>
+@accountAvatar(v,a,avatar.SizeXS)
 <span class="oie-profile-identity"><strong>{a.Label}</strong><small>{a.Address}</small></span>
 <span class="oie-account-indicators">
 if v.AccountFilter==a.Id {
@@ -478,22 +476,38 @@ templ mutationFields(v view,target,key string){
 templ accountDetail(v view,a engineapi.Account){
 <section class="oie-account-detail" data-account-id={a.Id}>
 <header class="oie-account-detail-heading">
-@profileAvatar(v,a.Id,a.Address,avatar.Config{Name:a.Label,Size:avatar.SizeLG})
+@accountAvatar(v,a,avatar.SizeLG)
 <div><h2>{a.Label}</h2><p>{a.Address}</p></div>
 </header>
 <p class="oie-history-status">{v.historyCaption(a.Id)}</p>
-<div class="oie-account-connection" id={"connection-status-"+a.Id}>@connectionStatus(v,a.Id)</div>
-@form.Form(form.Config{ID:"connect-"+a.Id,Action:"/ui/accounts/connect",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"connect","data-connect-account":""}}){
-@mutationFields(v,"connect-"+a.Id,newOperationKey())
-<input type="hidden" name="accountId" value={a.Id}/>
-@textinput.TextInput(textinput.Config{ID:"password-"+a.Id,Name:"password",Type:textinput.TypePassword,Label:v.Text.Password,Required:true,Autocomplete:"current-password",HelperText:v.Text.PasswordHelp})
-@accordion.Accordion(accordion.AccordionConfig{ID:"connection-advanced-"+a.Id,RootClass:"oie-account-advanced",Items:[]accordion.AccordionItem{{ID:"endpoint-advanced-"+a.Id,Title:v.Text.AdvancedConnection,Content:connectionEndpoint(v,a.Id),InitiallyExpanded:connectionField(v,a.Id,"endpoint")!=""}}})
+<div id={"connection-error-"+a.Id} role="status" aria-live="polite">
+if problem:=v.connectionError(a.Id);problem!="" {
+<p class="oie-field-error">{problem}</p>
+}
+</div>
+@accountConnectionControls(v,a.Id)
+@link.Link(v.capabilitiesHref(a.Id),link.WithRootClass("oie-capabilities-link"),link.WithAttrs(templ.Attributes{"data-account-capabilities":a.Id})){<span><strong>{v.Text.Capabilities}</strong><small>{v.Text.CapabilitiesIntro}</small></span>@glyph(heroicons.Icon16SolidChevronRight)}
+</section>
+}
+templ accountAvatar(v view,a engineapi.Account,size avatar.Size){
+<div class="inline-flex shrink-0" data-account-status={a.Id} data-connection-state={connectionState(v,a.Id)} title={v.connectionLabel(a.Id)} role="img" aria-label={v.connectionLabel(a.Id)}>
+@profileAvatar(v,a.Id,a.Address,avatar.Config{Name:a.Label,Size:size,Status:connectionAvatarStatus(v,a.Id)})
+</div>
+}
+templ accountConnectionControls(v view,id string){
+<div id={"connection-controls-"+id} data-connection-state={connectionState(v,id)}>
+if state:=connectionState(v,id);state=="not_connected"||state=="error" {
+@form.Form(form.Config{ID:"connect-"+id,Action:"/ui/accounts/connect",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"connect","data-connect-account":""}}){
+@mutationFields(v,"connect-"+id,newOperationKey())
+<input type="hidden" name="accountId" value={id}/>
+@textinput.TextInput(textinput.Config{ID:"password-"+id,Name:"password",Type:textinput.TypePassword,Label:v.Text.Password,Required:true,Autocomplete:"current-password",HelperText:v.Text.PasswordHelp})
+@accordion.Accordion(accordion.AccordionConfig{ID:"connection-advanced-"+id,RootClass:"oie-account-advanced",Items:[]accordion.AccordionItem{{ID:"endpoint-advanced-"+id,Title:v.Text.AdvancedConnection,Content:connectionEndpoint(v,id),InitiallyExpanded:connectionField(v,id,"endpoint")!=""}}})
 @button.Button(button.WithType("submit")){ {v.Text.Connect} }
 <div data-form-feedback role="status" aria-live="polite"></div>
 }
-<div id={"disconnect-action-"+a.Id}>@disconnectAction(v,a.Id)</div>
-@link.Link(v.capabilitiesHref(a.Id),link.WithRootClass("oie-capabilities-link"),link.WithAttrs(templ.Attributes{"data-account-capabilities":a.Id})){<span><strong>{v.Text.Capabilities}</strong><small>{v.Text.CapabilitiesIntro}</small></span>@glyph(heroicons.Icon16SolidChevronRight)}
-</section>
+}
+@disconnectAction(v,id)
+</div>
 }
 templ connectionEndpoint(v view,id string){
 @textinput.TextInput(textinput.Config{ID:"endpoint-"+id,Name:"endpoint",Label:v.Text.Endpoint,HelperText:v.Text.EndpointHelp,Value:connectionField(v,id,"endpoint")})
@@ -509,12 +523,6 @@ if state:=connectionState(v,id);state=="connected"||state=="connecting"||state==
 }
 }
 func connectionField(v view,id,key string)string{if v.FormTarget=="connect-"+id{return v.field(key)};return ""}
-templ connectionStatus(v view,id string){
-<span data-connection-state={connectionState(v,id)} data-account-id={id}>{v.connectionLabel(id)}</span>
-if problem:=v.connectionError(id);problem!="" {
-<p class="oie-field-error">{problem}</p>
-}
-}
 func connectionState(v view,id string)string{if c:=v.Connections[id];c.Known{return string(c.Value.State)};return "unknown"}
 func accountOptions(v view,all bool)[]selectfield.Option{
  out:=[]selectfield.Option{}

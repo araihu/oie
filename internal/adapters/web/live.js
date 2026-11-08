@@ -162,6 +162,17 @@ window.OieRuntime.register('live', life => {
     };
     if (window.Alpine?.mutateDom) window.Alpine.mutateDom(apply); else apply();
   }
+  function refreshAccountStatuses(root, nextRoot) {
+    for (const status of root.querySelectorAll('[data-account-status]')) {
+      const next = nextRoot.querySelector(`[data-account-status="${CSS.escape(status.dataset.accountStatus)}"]`);
+      if (next && status.dataset.connectionState !== next.dataset.connectionState) {
+        status.dataset.connectionState = next.dataset.connectionState;
+        status.title = next.title;
+        status.setAttribute('aria-label',next.getAttribute('aria-label'));
+        mutateDOM(status,next.innerHTML);
+      }
+    }
+  }
   function localizeTimes() {
     const locale=document.documentElement.lang || undefined;
     const clock=new Intl.DateTimeFormat(locale,{hour:'2-digit',minute:'2-digit'});
@@ -289,10 +300,17 @@ window.OieRuntime.register('live', life => {
         if (!fresh.matches('section[data-account-id]')) continue;
         const existing = document.querySelector(`#account-blocks>section[data-account-id="${CSS.escape(fresh.dataset.accountId)}"]`);
         if (existing) {
-          const oldStatus = existing.querySelector('[id^="connection-status-"]'), newStatus = fresh.querySelector('[id^="connection-status-"]');
-          if (oldStatus && newStatus && oldStatus.innerHTML !== newStatus.innerHTML) mutateDOM(oldStatus,newStatus.innerHTML);
-          const oldAction=existing.querySelector('[id^="disconnect-action-"]'),newAction=fresh.querySelector('[id^="disconnect-action-"]');
-          if(oldAction&&newAction&&oldAction.innerHTML!==newAction.innerHTML&&!oldAction.contains(document.activeElement))mutateDOM(oldAction,newAction.innerHTML);
+          refreshAccountStatuses(existing,fresh);
+          const oldError=existing.querySelector('[id^="connection-error-"]'),newError=fresh.querySelector('[id^="connection-error-"]');
+          if(oldError&&newError&&oldError.innerHTML!==newError.innerHTML)mutateDOM(oldError,newError.innerHTML);
+          const controls=existing.querySelector('[id^="connection-controls-"]'),nextControls=fresh.querySelector('[id^="connection-controls-"]');
+          // State transitions replace obsolete actions. Same-state refreshes keep
+          // password/endpoint edits, accordion state and pending feedback intact.
+          if(controls&&nextControls&&controls.dataset.connectionState!==nextControls.dataset.connectionState){
+            const restoreFocus=controls.contains(document.activeElement);
+            mutateDOM(controls,nextControls.innerHTML);controls.dataset.connectionState=nextControls.dataset.connectionState;
+            if(restoreFocus)controls.querySelector('button[type="submit"]')?.focus({preventScroll:true});
+          }
         }
       }
       const detailsRegion=page.querySelector('#live-conversation-details');
@@ -345,15 +363,7 @@ window.OieRuntime.register('live', life => {
           const next = nextMenu.querySelector(`[data-account-unread="${CSS.escape(badge.dataset.accountUnread)}"]`);
           if (next) {badge.textContent = next.textContent;badge.hidden = next.hidden;badge.setAttribute('aria-label',next.getAttribute('aria-label'));}
         }
-        for (const status of menu.querySelectorAll('[data-account-status]')) {
-          const next = nextMenu.querySelector(`[data-account-status="${CSS.escape(status.dataset.accountStatus)}"]`);
-          if (next && status.dataset.connectionState !== next.dataset.connectionState) {
-            status.dataset.connectionState = next.dataset.connectionState;
-            status.title = next.title;
-            status.setAttribute('aria-label',next.getAttribute('aria-label'));
-            mutateDOM(status,next.innerHTML);
-          }
-        }
+        refreshAccountStatuses(menu,nextMenu);
       }
       document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));document.dispatchEvent(new CustomEvent("oie:shared-refresh",{detail:page}));applyAvatars();document.dispatchEvent(new CustomEvent("oie:stars-refresh",{detail:{page,generation:starGeneration}}));document.dispatchEvent(new CustomEvent("oie:previews-refresh",{detail:page}));localizeTimes();
     } catch { if(!life.signal.aborted)announce(text('liveRetry')); }
