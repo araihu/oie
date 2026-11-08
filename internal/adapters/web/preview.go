@@ -15,6 +15,7 @@ func (v *view) configureWorkspace(r *http.Request) {
 	q := r.URL.Query()
 	v.ChatOpen = q.Get("chat") != ""
 	v.ChatID = q.Get("chat")
+	v.FocusMessage = q.Get("message")
 	v.AccountFilter = q.Get("account")
 	v.AccountPage = q.Get("accountPage")
 	v.ManagedAccount = q.Get("managedAccount")
@@ -51,8 +52,14 @@ func (v view) href(pairs ...string) string {
 	}
 	if v.ChatOpen && v.ChatID != "" {
 		q.Set("chat", v.ChatID)
+		if v.FocusMessage != "" {
+			q.Set("message", v.FocusMessage)
+		}
 	}
 	for i := 0; i+1 < len(pairs); i += 2 {
+		if pairs[i] == "chat" && pairs[i+1] != v.ChatID {
+			q.Del("message")
+		}
 		if pairs[i+1] == "" {
 			q.Del(pairs[i])
 		} else {

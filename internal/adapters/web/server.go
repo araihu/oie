@@ -4,6 +4,7 @@ package web
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -99,6 +100,8 @@ type view struct {
 	Histories                                             map[string]engineapi.HistoryStatus
 	Next                                                  string
 	Unavailable, NotFound, Preview, ChatOpen              bool
+	FocusMessage                                          string
+	ContextHasNewer, ContextHasOlder, ContextMissing      bool
 	Section, Filter, Query, ChatID, AccountFilter         string
 	Chats                                                 []engineapi.Conversation
 	Selected                                              *engineapi.Conversation
@@ -140,6 +143,7 @@ type copy struct {
 	NewMessages, QueueHelp, DraftStorageUnavailable, DraftLocked, MessageUnavailable                                                                                     string
 	MediaUnavailable, NativeError, NewerHistory, ShowPassword, ChooseOption                                                                                              string
 	PreviewLoading, PreviewUnavailable, LoadImage, LoadingImage, OpenImage, ImageView, ImageDownloadFailed, ImageTooLarge, ImageBlocked, ImageUnsupported, ImageNotFound string
+	UnknownOriginal, OriginalUnavailable, JumpToLatest                                                                                                                   string
 	MessageActions, ImageActions, SaveOriginalImage                                                                                                                      string
 	StarMessage, UnstarMessage, RetryStar, StarConflict, StarUncertain, StarUnavailable, StarRefreshed, StarStorageUnavailable                                           string
 	ImageInfo, ImageSource, ImageFilename, ImageType, ImageSize, ImageNotDownloaded                                                                                      string
@@ -342,14 +346,22 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		v.NotFound = true
 		return
 	}
-	messages, err := s.client.ListMessagesWithResponse(ctx, selected, &engineapi.ListMessagesParams{}, editor)
-	if err != nil || messages.JSON200 == nil {
-		v.Unavailable = true
-		return
-	}
 	v.Selected = conversation.JSON200
 	v.ChatID = selected
-	items := messages.JSON200.Items
+	items, usedContext := s.contextMessages(ctx, v, v.Selected.AccountId)
+	if v.Unavailable {
+		return
+	}
+	var messageBody []byte
+	if !usedContext {
+		messages, err := s.client.ListMessagesWithResponse(ctx, selected, &engineapi.ListMessagesParams{}, editor)
+		if err != nil || messages.JSON200 == nil {
+			v.Unavailable = true
+			return
+		}
+		items = messages.JSON200.Items
+		messageBody = messages.Body
+	}
 	slices.Reverse(items)
 	extras := map[string]*mediaView{}
 	if v.Preview {
@@ -359,7 +371,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 				Attachment *mediaView
 			}
 		}
-		if json.Unmarshal(messages.Body, &mock) == nil {
+		if json.Unmarshal(messageBody, &mock) == nil {
 			for _, m := range mock.Items {
 				extras[m.Id] = m.Attachment
 			}
@@ -373,7 +385,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	for i := range v.Messages {
 		m := &v.Messages[i]
 		m.PresentationKnown = v.PreviewsKnown
-		m.Presentation = imagePresentation(m.OriginalText, v.MessagePreviews[m.Id])
+		m.Presentation = imagePresentation(m.displayBody(), v.MessagePreviews[m.Id])
 		m.Formatted = formattedMessage(ctx, m.Presentation)
 	}
 }
@@ -445,6 +457,8 @@ func (v view) timelineVersion() string {
 	out.WriteString(v.ChatID)
 	for _, m := range v.Messages {
 		out.WriteString(m.Id + ":" + m.RevisionId + ":" + string(m.SendState) + ";")
+		reply, _ := json.Marshal(m.Reply)
+		_, _ = fmt.Fprintf(&out, "%x;", sha256.Sum256(reply))
 	}
 	return out.String()
 }

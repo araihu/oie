@@ -170,5 +170,8 @@
   "StarStorageUnavailable": "Star retries are kept in this window only. Reloading may lose an unconfirmed change.",
   "MessageActions": "Message actions",
   "ImageActions": "Image actions",
-  "SaveOriginalImage": "Save original image"
+  "SaveOriginalImage": "Save original image",
+  "UnknownOriginal": "Unknown original sender",
+  "OriginalUnavailable": "Original message unavailable",
+  "JumpToLatest": "Jump to latest"
 }

@@ -170,5 +170,8 @@
   "StarStorageUnavailable": "As tentativas de estrela são mantidas apenas nesta janela. Recarregar pode perder uma alteração não confirmada.",
   "MessageActions": "Ações da mensagem",
   "ImageActions": "Ações da imagem",
-  "SaveOriginalImage": "Salvar imagem original"
+  "SaveOriginalImage": "Salvar imagem original",
+  "UnknownOriginal": "Autor original desconhecido",
+  "OriginalUnavailable": "Mensagem original indisponível",
+  "JumpToLatest": "Ir para as mais recentes"
 }

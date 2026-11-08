@@ -118,7 +118,7 @@
   });
   function synchronize(root) {
     const timeline=document.querySelector('#message-timeline');
-    const follow=timeline&&timeline.scrollHeight-timeline.scrollTop-timeline.clientHeight<60;
+    const follow=timeline&&!document.body.dataset.focusMessage&&timeline.scrollHeight-timeline.scrollTop-timeline.clientHeight<60;
     const anchor=timeline&&[...timeline.querySelectorAll('[data-message-id]')].find(el=>el.getBoundingClientRect().bottom>=timeline.getBoundingClientRect().top);
     const anchorTop=anchor?.getBoundingClientRect().top;
     for(const fresh of root.querySelectorAll('#live-timeline [data-message-presentation]')) {

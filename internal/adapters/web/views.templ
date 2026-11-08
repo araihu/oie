@@ -65,7 +65,7 @@ templ page(v view) {
 <script src="/ui/live.js" defer></script>
 <meta name="oie-csrf" content={v.CSRF}/>
 		</head>
-		<body data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-mock={strconv.FormatBool(v.Preview)}>
+		<body data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
 @liveCopy(v)
 @starData(v)
 @avatarData(v)
@@ -240,10 +240,11 @@ templ workspace(v view) {
 				if v.Preview {
 					<p class="oie-preview-note">{ v.Text.PreviewNote }</p>
 				}
-				<div class="oie-timeline" id="message-timeline" tabindex="0" aria-label={v.Text.Conversations} data-version={v.timelineVersion()}>
+				<div id="context-notice" class="oie-context-notice" role="status">@contextNotice(v)</div>
+<div class="oie-timeline" id="message-timeline" tabindex="0" aria-label={v.Text.Conversations} data-version={v.timelineVersion()}>
 @timeline(v)
 </div>
-<button type="button" class="oie-jump-latest" data-jump-latest hidden>{v.Text.NewMessages}</button>
+<button type="button" class="oie-jump-latest" data-jump-latest hidden?={!v.ContextHasNewer&&!v.ContextMissing}>{v.Text.JumpToLatest}</button>
 
 				@composer(v)
 			} else {
@@ -305,7 +306,7 @@ templ chatHeader(v view) {
 }
 
 templ message(v view,m messageView,grouped bool){
-<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-grouped",grouped)} data-message-id={m.Id} data-starred={strconv.FormatBool(v.StarsKnown&&v.Stars[m.Id].Starred)} data-send-state={string(m.SendState)} data-created-at={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-message-source={originalMessageJSON(m.OriginalText)}>
+<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-grouped",grouped)} tabindex="-1" data-message-id={m.Id} data-starred={strconv.FormatBool(v.StarsKnown&&v.Stars[m.Id].Starred)} data-send-state={string(m.SendState)} data-created-at={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-message-source={originalMessageJSON(m.OriginalText)}>
 @viewerSource(v,m)
 if m.Attachment!=nil {
 <div class="oie-media-message">@card.Card(card.Config{Image:m.Attachment.PreviewUrl,ImageAlt:m.Attachment.Title,Title:m.Attachment.Title,Description:m.Attachment.Description,Density:card.DensityCompact,RootClass:"oie-media-card"})</div>
@@ -534,12 +535,13 @@ templ liveCopy(v view){
 <div id="oie-formatting-copy" hidden data-copy={v.Text.CopyOriginal} data-copied={v.Text.MessageCopied} data-failed={v.Text.CopyFailed}></div>
 <div id="oie-copy-status" class="sr-only" role="status" aria-live="polite"></div>
 <div id="oie-preview-copy" hidden data-loading={v.Text.LoadingImage} data-image={v.Text.ImageView} data-not-downloaded={v.Text.ImageNotDownloaded} data-failed={v.Text.ImageDownloadFailed}></div>
-<div id="oie-live-copy" hidden data-saving={v.Text.Saving} data-invalid-message={v.Text.InvalidMessage} data-pending={v.Text.PendingAcceptance} data-storage-unavailable={v.Text.DraftStorageUnavailable} data-locked={v.Text.DraftLocked} data-retry={v.Text.RetrySubmission} data-send={v.Text.Send} data-live-ready={v.Text.LiveReady} data-live-retry={v.Text.LiveRetry} data-live-connecting={v.Text.LiveConnecting} data-new-messages={v.Text.NewMessages} data-engine-changed={v.Text.EngineChanged} data-today={v.Text.Today}></div>
+<div id="oie-live-copy" hidden data-saving={v.Text.Saving} data-invalid-message={v.Text.InvalidMessage} data-pending={v.Text.PendingAcceptance} data-storage-unavailable={v.Text.DraftStorageUnavailable} data-locked={v.Text.DraftLocked} data-retry={v.Text.RetrySubmission} data-send={v.Text.Send} data-live-ready={v.Text.LiveReady} data-live-retry={v.Text.LiveRetry} data-live-connecting={v.Text.LiveConnecting} data-latest={v.Text.JumpToLatest} data-new-messages={v.Text.NewMessages} data-engine-changed={v.Text.EngineChanged} data-today={v.Text.Today}></div>
 }
 templ liveRegions(v view){
-<div id="oie-live-regions" data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
+<div id="oie-live-regions" data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
 @avatarData(v)
 @starData(v)
+<div id="live-context-notice">@contextNotice(v)</div>
 <div id="live-history-status">@historyBanner(v)</div>
 <div id="live-list">@conversationList(v)</div>
 <div id="live-timeline" data-version={v.timelineVersion()}>@timeline(v)</div>
@@ -639,6 +641,7 @@ for identity,hash:=range v.Avatars {
 // Rendered and original projections share one public ChatBubble content slot.
 // A device preference switches visibility without replacing message rows.
 templ messageBody(v view,m messageView){
+@replyCard(v,m)
 <div data-message-presentation data-presentation-known={strconv.FormatBool(m.PresentationKnown)} data-presentation-version={originalMessageJSON(m.presentationText())}>
 <div class="oie-rendered-message" data-rendered-message>
 if m.Formatted!=nil {
@@ -680,4 +683,27 @@ templ viewerSource(v view,m messageView){
 <div class="oie-viewer-sender"><strong title={m.Sender.DisplayName}>{m.Sender.DisplayName}</strong><time data-viewer-date datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("2006-01-02 15:04")}</time></div>
 </div>
 </template>
+}
+
+templ replyCard(v view,m messageView){
+if m.Reply!=nil {
+if replyNavigable(m.Reply) {
+@link.Link(v.replyHref(m),link.WithRootClass("oie-reply-link"),link.WithAttrs(templ.Attributes{"data-reply-target":*m.Reply.MessageId,"data-reply-conversation":m.ConversationId})){
+@card.Card(card.Config{Title:v.replySender(m.Reply),Body:replyExcerpt(v,m.Reply),Density:card.DensityCompact,RootClass:"oie-reply-card"})
+}
+}else{
+<div data-reply-unavailable>@card.Card(card.Config{Title:v.replySender(m.Reply),Body:replyExcerpt(v,m.Reply),Density:card.DensityCompact,RootClass:"oie-reply-card"})</div>
+}
+}
+}
+templ replyExcerpt(v view,r *engineapi.MessageReply){
+<p class="oie-reply-excerpt">{r.Excerpt}</p>
+if !replyNavigable(r){
+<small class="oie-reply-unavailable">{v.Text.OriginalUnavailable}</small>
+}
+}
+templ contextNotice(v view){
+if v.ContextMissing {
+<p>{v.Text.OriginalUnavailable} @link.Link(v.latestHref(),link.WithAttrs(templ.Attributes{"data-return-latest":""})){ {v.Text.JumpToLatest} }</p>
+}
 }

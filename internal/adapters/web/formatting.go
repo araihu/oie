@@ -119,7 +119,7 @@ func presentationInlineTicks(line string, current int) int {
 
 func (m messageView) presentationText() string {
 	if !m.PresentationKnown && m.Presentation == "" {
-		return m.OriginalText
+		return m.displayBody()
 	}
 	return m.Presentation
 }
