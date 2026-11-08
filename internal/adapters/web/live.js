@@ -4,7 +4,7 @@
   const labels = document.querySelector('#oie-live-copy')?.dataset || {};
   const text = key => labels[key] || '';
   const status = document.querySelector('[data-live-status]');
-  const announce = message => { if (status) status.textContent = message; };
+  const announce = (message, quiet = false) => { if (status) { status.textContent = message; status.hidden = quiet; } };
   const mock = body.dataset.mock === 'true';
   const csrf = document.querySelector('meta[name="oie-csrf"]')?.content || '';
   let pendingRequests = 0, refreshTimer, refreshing = false, refreshAgain = false;
@@ -323,9 +323,9 @@
   function retryPending() { if (composer && journal?.pending && composer.dataset.busy !== 'true' && !stopped && navigator.onLine) composer.requestSubmit(); }
   function connect(cursor) {
     if (mock || stopped) return;
-    source?.close();announce(text('liveConnecting'));
+    source?.close();announce(text('liveConnecting'),true);
     source = new EventSource('/ui/events?cursor='+encodeURIComponent(cursor || ''));
-    source.onopen = () => { announce(text('liveReady'));scheduleRefresh();retryPending(); };
+    source.onopen = () => { announce(text('liveReady'),true);scheduleRefresh();retryPending(); };
     source.onerror = () => announce(text('liveRetry'));
     for (const type of ['message.preview_changed','profile.avatar_changed','account.registered','account.connection_changed','account.history_changed','conversation.created','conversation.updated','message.created','message.updated']) source.addEventListener(type,scheduleRefresh);
     source.addEventListener('message.star_changed',event=>{try{document.dispatchEvent(new CustomEvent('oie:star-event',{detail:JSON.parse(event.data).star}));}catch{}scheduleRefresh();});

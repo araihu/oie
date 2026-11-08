@@ -69,7 +69,7 @@ templ page(v view) {
 @liveCopy(v)
 @starData(v)
 @avatarData(v)
-<div class="oie-live-status" data-live-status role="status" aria-live="polite"></div>
+<div class="oie-live-status" data-live-status role="status" aria-live="polite" hidden></div>
 if v.ErrorMessage!="" {
 <div class="oie-native-error" role="alert" tabindex="-1" data-native-error>
 {v.ErrorMessage}
