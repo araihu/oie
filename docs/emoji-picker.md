@@ -6,7 +6,7 @@ Opening the selector loads the current locale's embedded catalog. Names, keyword
 
 Picking an emoji replaces the textarea's selection or inserts at its cursor. It updates the existing draft journal through the input event and returns focus to the composer. It does not submit the form, change the operation key, discard a reply target, or require a protocol capability. The selector is disabled while the composer is disabled, read-only or handling a send. HTMX route cleanup removes its listeners and aborts pending catalog reads.
 
-Keyboard users can open with Enter or Arrow Down, search, move into results with Arrow Down, navigate emoji buttons with arrow keys, select with Enter, and dismiss with Escape. The panel uses Goshtoso's viewport-aware placement and the browser's emoji font. Names are accessible labels, not HTML from the catalog. Results render in batches rather than adding thousands of buttons at once.
+Keyboard users can open with Enter or Arrow Down, search, move into results with Arrow Down, navigate emoji buttons with arrow keys, select with Enter, and dismiss with Escape. The panel uses Goshtoso's viewport-aware placement and the browser's emoji font. Names are accessible labels, not HTML from the catalog. Results render in batches rather than adding thousands of buttons at once. The panel keeps its responsive height across categories and empty states, including Recent lists without any choices.
 
 The catalog contains Unicode 17.0 and CLDR 48 data with the retained Unicode-3.0 license. See [the data generation instructions](../tools/emoji/README.md). No external service receives search terms, and the app does not download an emoji font or image set.
 
