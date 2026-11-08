@@ -26,6 +26,7 @@ const {chromium} = require('playwright');
     await page.getByRole('option').filter({hasText: label}).click();
   };
   const openAccounts = async page => {
+    await page.locator('[data-account-switcher]:visible').first().click();
     await page.locator('[data-open-accounts]:visible').first().click();
     await page.locator('#register-account-form').waitFor({state: 'visible'});
   };
@@ -52,12 +53,13 @@ const {chromium} = require('playwright');
     await until(async () => (await form.locator('#message-composer').inputValue()) === '', 'composer clears after engine acceptance');
   };
   const pickAccount = async (page, label) => {
-    const form = page.locator('#account-filter-form');
-    await choose(page, form, label);
-    const submit = form.locator('button[type="submit"]');
-    if (await submit.count() && await submit.isVisible()) await submit.click();
-    const account = await form.locator('input[name="account"]').inputValue();
+    await page.locator('[data-account-switcher]:visible').first().click();
+    const choice=page.locator('[data-switch-account]:visible').filter({hasText:label});
+    const account=await choice.getAttribute('data-switch-account');
+    await choice.click();
     await page.waitForURL(url => (url.searchParams.get('account') || '') === account);
+    assert.equal(await page.locator('[data-account-switcher]:visible').textContent().then(t=>t.includes(label)),true);
+
   };
   try {
     await fs.mkdir('artifacts', {recursive: true});
@@ -147,8 +149,12 @@ const {chromium} = require('playwright');
     await send(bobPage, replyText);
     await alicePage.locator('[data-message-id]').filter({hasText: replyText}).waitFor({state: 'visible'});
     assert.equal(await alicePage.locator('#message-composer').inputValue(), draft, 'live update preserved unsent draft');
+    await pickAccount(alicePage,'Bob development');
+    assert.equal(await alicePage.locator('#message-composer').inputValue(),'','Alice draft must not move to Bob');
+    await pickAccount(alicePage,'Alice development');
+    assert.equal(await alicePage.locator('#message-composer').inputValue(),draft,'switching back restores the account-scoped draft');
     await alicePage.locator('#message-composer').fill('');
-    evidence.workflows.push('Bob replies; Alice receives automatically without losing her unsent draft');
+    evidence.workflows.push('Bob replies; Alice receives automatically without losing her unsent draft; profile switching keeps drafts isolated');
     const ownStored = (await api('/api/v1/conversations/' + aliceConversation.id + '/messages')).items.find(m => m.originalText === firstText && m.isOwn);
     const ownTime = alicePage.locator('[data-message-id="' + ownStored.id + '"] time[datetime]').last();
     await until(async () => ownTime.evaluate(time => {
@@ -157,10 +163,14 @@ const {chromium} = require('playwright');
       return visibleHour === hour || visibleHour === (hour % 12 || 12);
     }), 'timestamps follow browser device timezone');
 
-    await openAccounts(alicePage);
-    await disconnectForm(alicePage, alice).locator('button[type="submit"]').click();
-    await until(async () => (await api('/api/v1/accounts/' + alice.id + '/connection')).state === 'not_connected', 'explicit disconnect');
-    await closeAccounts(alicePage);
+    await alicePage.locator('[data-account-switcher]:visible').click();
+    const menu=alicePage.getByRole('dialog',{name:'Switch account',exact:true});
+    const unread=Number(await menu.locator('[data-account-unread="'+alice.id+'"]').textContent());
+    assert(unread>0,'profile shows actual unread messages for the account');
+    await menu.locator('form[data-oie-action="disconnect"] button[type="submit"]').click();
+    await until(async () => (await api('/api/v1/accounts/' + alice.id + '/connection')).state === 'not_connected', 'explicit profile disconnect');
+    assert.equal((await api('/api/v1/accounts/'+bob.id+'/connection')).state,'connected','disconnect targets only the selected account');
+    await alicePage.keyboard.press('Escape');await menu.waitFor({state:'hidden'});
     const cancelledText = 'Cancel this queued message ' + nonce;
     await send(alicePage, cancelledText);
     let cancelled;

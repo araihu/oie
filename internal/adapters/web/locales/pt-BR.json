@@ -121,5 +121,7 @@
   "ChooseOption": "Escolha uma opção",
   "ValidationFailed": "Verifique estes campos",
   "Edit": "Editar",
-  "Done": "Concluir"
+  "Done": "Concluir",
+  "SwitchAccount": "Trocar de conta",
+  "ManageAccounts": "Gerenciar contas"
 }

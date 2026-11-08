@@ -48,7 +48,7 @@ const casa='019a5df0-0000-7000-8000-000000000102';
    await page.goto(base+'/?lang=en&theme=dark');
    await page.locator('[data-filter="unread"]').click();await page.waitForURL(/filter=unread/);assert.equal(await page.locator('.oie-conversations>li').count(),3);
    await page.locator('[data-filter="groups"]').click();await page.waitForURL(/filter=groups/);assert.equal(await page.locator('.oie-conversations>li').count(),5);
-   await page.locator('.oie-list-footer button').click();
+   await page.locator('[data-footer-settings]:visible').click();
    await page.getByRole('dialog',{name:'Settings',exact:true}).waitFor({state:'visible'});
    await page.keyboard.press('Escape');await page.getByRole('dialog',{name:'Settings',exact:true}).waitFor({state:'hidden'});
    if(width===390){

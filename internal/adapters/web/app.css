@@ -126,3 +126,28 @@ html{color-scheme:light}html.dark{color-scheme:dark}
 .oie-day-divider time{background:var(--oie-panel);border:1px solid var(--oie-border);padding:4px 12px;border-radius:7px;font-size:11px;color:var(--oie-muted)}
 
 .oie-native-error{max-height:85dvh;overflow:auto}.oie-native-recovery{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+/* Account identity lives in the sidebar footer; Popover owns dismissal/focus. */
+.oie-sidebar,.oie-navigation{overflow:visible}
+.oie-sidebar{position:relative;z-index:45}
+.oie-profile{padding:8px;width:100%}
+.oie-account-switcher{width:100%}
+.oie-profile-trigger{display:flex;width:100%;min-width:0;gap:10px;align-items:center;justify-content:flex-start;padding:10px 7px;border:0;border-radius:28px;background:transparent;color:var(--oie-text);text-align:left;font-weight:400}
+.oie-profile-trigger:hover{background:var(--oie-raised)}
+.oie-profile-identity{display:flex;flex:1;min-width:0;flex-direction:column;gap:2px;text-align:left;line-height:1.4}
+.oie-profile-identity strong{font-size:13px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.oie-profile-identity small{font-size:11px;font-weight:400;color:var(--oie-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.oie-account-popover{width:290px;max-width:calc(100vw - 32px);max-height:min(600px,75dvh);overflow:auto;border-radius:14px;border-color:var(--oie-border);background:var(--oie-panel);color:var(--oie-text);box-shadow:0 3px 18px #0004;z-index:60}
+.oie-account-menu{width:100%;padding:6px 0}
+.oie-account-choice{display:flex;align-items:center;gap:10px;min-height:64px;padding:12px 16px;color:var(--oie-text);text-decoration:none}
+.oie-account-choice:hover,.oie-account-choice:focus-visible{background:var(--oie-raised);color:var(--oie-text);text-decoration:none}
+.oie-account-all{width:32px;height:32px;display:grid;place-items:center;background:var(--oie-raised);border-radius:50%;flex-shrink:0}
+.oie-account-indicators{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.oie-account-selected{display:inline-flex;color:var(--oie-accent)}
+.oie-account-actions{border-top:1px solid var(--oie-border);padding:6px 0;margin-top:4px}
+.oie-account-action{display:block;width:100%;padding:12px 16px;font-size:13px;font-weight:600;text-align:left;color:var(--oie-text);text-decoration:none;border:0;border-radius:0;background:transparent}
+.oie-account-action:hover{background:var(--oie-raised);color:var(--oie-text);text-decoration:none}
+.oie-account-actions [data-form-feedback]:empty{display:none}
+.oie-unread-count[hidden]{display:none}
+.oie-list-account{display:none;align-items:center;border-top:1px solid var(--oie-border);padding-right:12px}
+.oie-list-account>.oie-profile{flex:1;min-width:0}
+@media(max-width:1100px){.oie-list-account{display:flex}.oie-list-account+.oie-list-footer{display:none}}

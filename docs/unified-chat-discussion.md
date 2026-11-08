@@ -1260,3 +1260,13 @@ The independent mock stays available only for development tests. See live-previe
 and live-ui-integration.md for deployment, invariant ledger and remaining limits.
 The user also reported an oval New conversation icon at1076px; the public root
 geometry now enforces equal minimum width and height.
+
+## Profile account switching · 2026-11-08
+
+Agreed: adopt the supplied X profile-popover account-switching pattern. Move
+account controls out of the conversation header; preserve an All accounts inbox,
+active identity and unread badges. Compact layouts place the account switcher
+beside the existing settings gear in the conversation footer. Remove the
+redundant header More menu and the navigation-profile settings shortcut.
+Switching inbox accounts leaves protocol sessions and pending ownership intact.
+See account-switcher.md for composition and verified scope.

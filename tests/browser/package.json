@@ -4,7 +4,8 @@
   "scripts": {
     "test": "node smoke.cjs",
     "test:chat": "node chat.cjs",
-    "test:states": "node states.cjs"
+    "test:states": "node states.cjs",
+    "test:accounts": "node account-switcher.cjs"
   },
   "devDependencies": {
     "axe-core": "4.13.0",

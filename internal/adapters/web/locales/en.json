@@ -121,5 +121,7 @@
   "ChooseOption": "Choose an option",
   "ValidationFailed": "Check these fields",
   "Edit": "Edit",
-  "Done": "Done"
+  "Done": "Done",
+  "SwitchAccount": "Switch account",
+  "ManageAccounts": "Manage accounts"
 }

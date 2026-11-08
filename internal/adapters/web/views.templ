@@ -13,6 +13,7 @@ import (
 	"github.com/araihu/goshtoso/components/icon"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/link"
+"github.com/araihu/goshtoso/components/popover"
 	"github.com/araihu/goshtoso/components/sidebar"
 	"github.com/araihu/goshtoso/components/textarea"
 	"github.com/araihu/goshtoso/components/textinput"
@@ -22,9 +23,11 @@ selectfield "github.com/araihu/goshtoso/components/select"
 	"strconv"
 )
 
-func navigation(v view) sidebar.Config {
+func navigation(v view, id string) sidebar.Config {
+ footer:=profile(v,id)
+ if id=="mobile-navigation" {footer=nil}
 	return sidebar.Config{
-		Logo: brand(), LogoHref: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), DisableSkipLink: true, RootClass: "oie-navigation", FooterSlot: profile(v),
+		Logo: brand(), LogoHref: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), DisableSkipLink: true, RootClass: "oie-navigation", FooterSlot: footer,
 		Items: []sidebar.Item{
 			{ID: "chats", Label: v.Text.Chats, Href: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidQueueList), Active: v.Section == "chats"},
 			{ID: "media", Label: v.Text.SharedMedia, Href: v.href("section", "media", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidRectangleGroup), Active: v.Section == "media"},
@@ -68,7 +71,7 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 </div>
 }
 			<h1 class="sr-only">Oie</h1>
-			@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: sidebar.Sidebar(navigation(v)), Content: workspace(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
+			@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: sidebar.Sidebar(navigation(v,"desktop")), Content: workspace(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
 			@settings(v)
 			@accounts(v)
 @newConversation(v)
@@ -91,14 +94,56 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 	</html>
 }
 
-templ profile(v view) {
-	<div class="oie-profile" x-data="{}">
-		@avatar.Avatar(avatar.Config{Name: v.Text.You, Size: avatar.SizeXS})
-		<span>{ v.Text.You }</span>
-		@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Settings, "title": v.Text.Settings}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'settings'})"})) {
-			@glyph(heroicons.Icon16SolidCog6Tooth)
-		}
-	</div>
+templ profile(v view,id string) {
+<div class="oie-profile">
+@popover.Popover(popover.Config{ID:"account-switcher-"+id,Trigger:accountTrigger(v),Content:accountMenu(v),Placement:popover.PlacementTopStart,Role:"dialog",Label:v.Text.SwitchAccount,RootClass:"oie-account-switcher",PanelClass:"oie-account-popover",TrapFocus:true})
+</div>
+}
+
+templ accountTrigger(v view){
+@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-profile-trigger"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.SwitchAccount,"data-account-switcher":""})){
+@avatar.Avatar(avatar.Config{Name:v.activeAccountName(),Size:avatar.SizeXS})
+<span class="oie-profile-identity"><strong>{v.activeAccountName()}</strong><small>{v.activeAccountAddress()}</small></span>
+@glyph(heroicons.Icon16SolidEllipsisHorizontal)
+}
+}
+
+templ accountMenu(v view){
+<div class="oie-account-menu">
+<nav aria-label={v.Text.SwitchAccount}>
+@link.Link(v.href("account","","chat",""),link.WithRootClass("oie-account-choice"),link.WithAttrs(templ.Attributes{"data-switch-account":"","aria-current":strconv.FormatBool(v.AccountFilter=="")})){
+<span class="oie-account-all">@glyph(heroicons.Icon16SolidQueueList)</span>
+<span class="oie-profile-identity"><strong>{v.Text.AllAccounts}</strong></span>
+if v.AccountFilter=="" {
+<span class="oie-account-selected" aria-label={v.Text.Active}>@glyph(heroicons.Icon16SolidCheckCircle)</span>
+}
+}
+for _,a:=range v.Accounts {
+@link.Link(v.href("account",a.Id,"chat",""),link.WithRootClass("oie-account-choice"),link.WithAttrs(templ.Attributes{"data-switch-account":a.Id,"aria-current":strconv.FormatBool(v.AccountFilter==a.Id)})){
+@avatar.Avatar(avatar.Config{Name:a.Label,Size:avatar.SizeXS})
+<span class="oie-profile-identity"><strong>{a.Label}</strong><small>{a.Address}</small><small>{v.connectionLabel(a.Id)}</small></span>
+<span class="oie-account-indicators">
+if v.AccountFilter==a.Id {
+<span class="oie-account-selected" aria-label={v.Text.Active}>@glyph(heroicons.Icon16SolidCheckCircle)</span>
+}
+<span data-account-unread={a.Id} class="oie-unread-count" aria-label={v.Text.Unread+": "+strconv.Itoa(v.AccountUnread[a.Id])} hidden?={v.AccountUnread[a.Id]==0}>{strconv.Itoa(v.AccountUnread[a.Id])}</span>
+</span>
+}
+}
+</nav>
+<div class="oie-account-actions" x-data="{}">
+@link.Link(v.href("open","accounts"),link.WithRootClass("oie-account-action"),link.WithAttrs(templ.Attributes{"data-add-account":""})){ {v.Text.AddAccount} }
+@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-account-action"),button.WithAttrs(templ.Attributes{"data-open-accounts":""}),button.WithAlpine(&button.AlpineConfig{OnClick:"close(); $dispatch('drawer:open', {id: 'accounts'})"})){ {v.Text.ManageAccounts} }
+if v.AccountFilter!="" && connectionState(v,v.AccountFilter)!="not_connected" && connectionState(v,v.AccountFilter)!="unknown" {
+@form.Form(form.Config{ID:"",Action:"/ui/accounts/disconnect",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"disconnect"}}){
+@mutationFields(v,"disconnect-"+v.AccountFilter,newOperationKey())
+<input type="hidden" name="accountId" value={v.AccountFilter}/>
+@button.Button(button.WithType("submit"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-account-action")){ {v.Text.Disconnect} }
+<div data-form-feedback role="status"></div>
+}
+}
+</div>
+</div>
 }
 
 templ workspace(v view) {
@@ -106,7 +151,7 @@ templ workspace(v view) {
 		<section class="oie-list-pane" aria-label={ v.Text.Chats }>
 			<div class="oie-list-heading">
 				<div class="oie-mobile-nav">
-					@sidebar.Overlay(sidebar.OverlayConfig{ID: "mobile-navigation", Sidebar: navigation(v), TriggerLabel: v.Text.OpenNavigation, Trigger: glyph(heroicons.Icon16SolidBars3)})
+					@sidebar.Overlay(sidebar.OverlayConfig{ID: "mobile-navigation", Sidebar: navigation(v,"mobile-navigation"), TriggerLabel: v.Text.OpenNavigation, Trigger: glyph(heroicons.Icon16SolidBars3)})
 				</div>
 				<h2>
 					switch v.Section {
@@ -125,15 +170,11 @@ templ workspace(v view) {
 						@glyph(heroicons.Icon16SolidPlus)
 					}
 				</div>
-<div x-data="{}">
-@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Accounts,"data-open-accounts":""}),button.WithAlpine(&button.AlpineConfig{OnClick:"$dispatch('drawer:open', {id: 'accounts'})"})){@glyph(heroicons.Icon16SolidUserCircle)}
-</div>
-				@dropdown.Dropdown(dropdown.Config{ID: "list-options", Label: v.Text.More, Trigger: menuTrigger(v.Text.More), MenuAlign: dropdown.AlignEnd, Sections: []dropdown.Section{{Items: []dropdown.Item{{Label: v.Text.Settings, OnClick: "$dispatch('drawer:open', {id: 'settings'})"}, {ID:"open-accounts",Label: v.Text.Accounts, OnClick: "$dispatch('drawer:open', {id: 'accounts'})"}}}}})
+
 			</div>
 			if v.Preview {
 				<p class="oie-preview-label">{ v.Text.Preview }</p>
 			}
-			@accountFilter(v)
 <form action="/" method="get" class="oie-search" role="search">
 <input type="hidden" name="account" value={v.AccountFilter}/>
 				<input type="hidden" name="section" value={ v.Section }/>
@@ -149,10 +190,14 @@ templ workspace(v view) {
 <div class="oie-conversation-scroll" id="conversation-list">
 @conversationList(v)
 </div>
+			<div class="oie-list-account" x-data="{}">
+@profile(v,"compact")
+@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Settings,"data-footer-settings":""}),button.WithAlpine(&button.AlpineConfig{OnClick:"$dispatch('drawer:open', {id: 'settings'})"})){@glyph(heroicons.Icon16SolidCog6Tooth)}
+</div>
 			<div class="oie-list-footer" x-data="{}">
 				<span class={ "oie-status-dot",templ.KV("oie-status-error",v.Unavailable) } aria-hidden="true"></span>
 				<span>{ v.Role }</span>
-				@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Settings}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'settings'})"})) {
+				@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Settings,"data-footer-settings":""}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'settings'})"})) {
 					@glyph(heroicons.Icon16SolidCog6Tooth)
 				}
 			</div>
@@ -382,12 +427,6 @@ func accountOptions(v view,all bool)[]selectfield.Option{
  selected:=v.AccountFilter;if !all{selected=v.selectedAccount()}
  for _,a:=range v.Accounts{out=append(out,selectfield.Option{Value:a.Id,Label:a.Label+" · "+a.Address,Selected:selected==a.Id})};return out
 }
-templ accountFilter(v view){
-<form id="account-filter-form" action="/" method="get" class="oie-account-filter">
-<input type="hidden" name="section" value={v.Section}/><input type="hidden" name="filter" value={v.Filter}/><input type="hidden" name="q" value={v.Query}/>
-<div id="account-filter-select">@selectfield.Select(selectfield.Config{ID:"account-filter",Name:"account",Label:v.Text.Accounts,Options:accountOptions(v,true),InputAttrs:templ.Attributes{"x-on:change":"$el.form.requestSubmit()"}})</div>
-</form>
-}
 templ newConversation(v view){
 @drawer.Drawer(drawer.Config{ID:"newchat",Title:v.Text.NewChat}){
 <div class="oie-settings">
@@ -419,7 +458,7 @@ if v.Selected!=nil {
 }
 </div>
 <div id="live-account-blocks">@accountBlocks(v)</div>
-<div id="live-account-filter">@selectfield.Select(selectfield.Config{ID:"account-filter",Name:"account",Label:v.Text.Accounts,Options:accountOptions(v,true),InputAttrs:templ.Attributes{"x-on:change":"$el.form.requestSubmit()"}})</div>
+<div id="live-account-menu">@accountMenu(v)</div>
 <div id="live-newchat-account">@selectfield.Select(selectfield.Config{ID:"sending-account",Name:"accountId",Label:v.Text.ChooseAccount,Options:accountOptions(v,false),Required:true})</div>
 </div>
 }

@@ -182,9 +182,18 @@
         }
       }
       if (accountsVersion !== regions.dataset.accountsVersion && !document.querySelector('#new-conversation-form')?.contains(document.activeElement)) {
-        mutateDOM(document.querySelector('#account-filter-select'), page.querySelector('#live-account-filter')?.innerHTML || '');
         mutateDOM(document.querySelector('#newchat-account-select'), page.querySelector('#live-newchat-account')?.innerHTML || '');
         accountsVersion = regions.dataset.accountsVersion;
+      }
+      const nextMenu = page.querySelector('#live-account-menu .oie-account-menu');
+      if (nextMenu) for (const menu of document.querySelectorAll('.oie-account-menu')) {
+        // Keep an open menu's focus and its lifecycle intact while refreshing counts.
+        if (!menu.contains(document.activeElement)) {
+          if (menu.innerHTML !== nextMenu.innerHTML) mutateDOM(menu,nextMenu.innerHTML);
+        } else for (const badge of menu.querySelectorAll('[data-account-unread]')) {
+          const next = nextMenu.querySelector(`[data-account-unread="${CSS.escape(badge.dataset.accountUnread)}"]`);
+          if (next) {badge.textContent = next.textContent;badge.hidden = next.hidden;badge.setAttribute('aria-label',next.getAttribute('aria-label'));}
+        }
       }
       localizeTimes();
     } catch { announce(text('liveRetry')); }

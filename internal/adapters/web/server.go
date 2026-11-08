@@ -78,6 +78,7 @@ type view struct {
 	Locale, Theme, Role                                   string
 	Text                                                  copy
 	Accounts                                              []engineapi.Account
+	AccountUnread                                         map[string]int
 	Connections                                           map[string]connectionView
 	Next                                                  string
 	Unavailable, NotFound, Preview, ChatOpen              bool
@@ -95,6 +96,7 @@ type copy struct {
 	Skip, Languages, Appearance, System, Light                                         string
 	Dark, Next, English, Portuguese, NotFound                                          string
 	NotFoundBody, Chats, Favorites, Archived, SharedMedia                              string
+	SwitchAccount, ManageAccounts                                                      string
 	Settings, You, All, Unread, Groups                                                 string
 	SearchChats, NoResults, NoResultsBody, NewChat, More                               string
 	Preview, PreviewNote, Message, Send, Attach                                        string
@@ -225,6 +227,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		return
 	}
 	v.Accounts = accounts.JSON200.Items
+	v.AccountUnread = s.accountUnread(ctx)
 	for _, a := range v.Accounts {
 		connection, err := s.client.GetAccountConnectionWithResponse(ctx, a.Id, editor)
 		if err == nil && connection.JSON200 != nil {
@@ -486,4 +489,54 @@ func presentationContext(ctx context.Context, v view) context.Context {
 		Select:    expressions.Select{Placeholder: v.Text.ChooseOption, ListAriaLabel: func(label string) string { return label }},
 		Form:      expressions.Form{ErrorTitle: v.Text.ValidationFailed, EditLabel: v.Text.Edit, DoneLabel: v.Text.Done},
 	})
+}
+
+// accountUnread composes the existing paginated API without depending on the
+// currently selected account, search or archive filter. Incomplete totals are
+// hidden rather than presenting a partial count as an exact total.
+func (s *Server) accountUnread(ctx context.Context) map[string]int {
+	totals := map[string]int{}
+	seen := map[string]bool{}
+	limit := 100
+	unread := true
+	for _, archived := range []bool{false, true} {
+		params := &engineapi.ListConversationsParams{Limit: &limit, UnreadOnly: &unread, Archived: &archived}
+		cursors := map[string]bool{}
+		for {
+			response, err := s.client.ListConversationsWithResponse(ctx, params)
+			if err != nil || response.JSON200 == nil {
+				return nil
+			}
+			for _, c := range response.JSON200.Items {
+				if !seen[c.Id] {
+					totals[c.AccountId] += c.UnreadCount
+					seen[c.Id] = true
+				}
+			}
+			next := response.JSON200.NextCursor
+			if next == nil || *next == "" {
+				break
+			}
+			if cursors[*next] {
+				return nil
+			}
+			cursors[*next] = true
+			params.Cursor = next
+		}
+	}
+	return totals
+}
+func (v view) activeAccountName() string {
+	if v.AccountFilter != "" {
+		if a := v.account(v.AccountFilter); a.Id != "" {
+			return a.Label
+		}
+	}
+	return v.Text.AllAccounts
+}
+func (v view) activeAccountAddress() string {
+	if v.AccountFilter != "" {
+		return v.account(v.AccountFilter).Address
+	}
+	return v.Text.SwitchAccount
 }
