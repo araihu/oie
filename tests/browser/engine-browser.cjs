@@ -176,6 +176,44 @@ const {chromium} = require('playwright');
       return visibleHour === hour || visibleHour === (hour % 12 || 12);
     }), 'timestamps follow browser device timezone');
 
+    // Exercise app-owned star metadata through the real BFF/API/store. A second
+    // UI observes the same source, while Bob's account-scoped copy stays separate.
+    const starPeer = await aliceContext.newPage();
+    try {
+      await starPeer.goto(base + '/?chat=' + aliceConversation.id + '&account=' + alice.id + '&lang=en&theme=dark');
+      await starPeer.locator('#message-composer').waitFor({state:'visible'});
+      const starDraft = 'Preserve this draft while starring a retained message';
+      await alicePage.locator('#message-composer').fill(starDraft);
+      const sourceRow = alicePage.locator('[data-message-id="' + ownStored.id + '"]');
+      await sourceRow.hover();
+      await sourceRow.locator('[data-message-menu-trigger]').click();
+      const starAction = alicePage.locator('#star-message-' + ownStored.id);
+      await starAction.waitFor({state:'visible'});
+      assert.equal(await starAction.getAttribute('data-starred'),'false');
+      await starAction.click();
+      await until(async () => (await api('/api/v1/messages/' + ownStored.id + '/star')).starred, 'real source message star commits');
+      await until(async () => sourceRow.getAttribute('data-starred').then(value => value === 'true'), 'the first tab displays the committed star');
+      const recipientCopy = bobMessages.items.find(m => m.originalText === firstText && !m.isOwn);
+      assert.equal((await api('/api/v1/messages/' + recipientCopy.id + '/star')).starred, false, 'a star does not leak into another account copy');
+      const peerRow = starPeer.locator('[data-message-id="' + ownStored.id + '"]');
+      await peerRow.hover();
+      await peerRow.locator('[data-message-menu-trigger]').click();
+      const peerAction = starPeer.locator('#star-message-' + ownStored.id);
+      await until(async () => (await peerAction.getAttribute('data-starred')) === 'true', 'another tab observes star through real SSE');
+      await alicePage.locator('#message-composer').focus();
+      await peerAction.click();
+      await until(async () => !(await api('/api/v1/messages/' + ownStored.id + '/star')).starred, 'another tab unstars the same source');
+      await until(async () => sourceRow.getAttribute('data-starred').then(value => value === 'false'), 'the first tab reconciles the later unstar');
+      assert.equal(await alicePage.locator('#message-composer').inputValue(), starDraft);
+      assert(await alicePage.locator('#message-composer').evaluate(el => document.activeElement === el), 'background star refresh preserves composer focus');
+      const sourceNow = await api('/api/v1/messages/' + ownStored.id);
+      assert.equal(sourceNow.revisionId, ownStored.revisionId, 'star metadata does not edit message content');
+      const recipientNow = await api('/api/v1/conversations/' + bobConversation.id + '/messages');
+      assert.equal(recipientNow.items.filter(m => m.originalText === firstText && !m.isOwn).length, 1, 'starring causes no additional recipient effect');
+      await alicePage.locator('#message-composer').fill('');
+      evidence.workflows.push('Real source star/unstar through message menus, two-tab SSE, independent content revisions, account isolation and preserved draft/focus with no new protocol send');
+    } finally { await starPeer.close(); }
+
     await alicePage.locator('[data-account-switcher]:visible').click();
     const menu=alicePage.getByRole('dialog',{name:'Switch account',exact:true});
     const unread=Number(await menu.locator('[data-account-unread="'+alice.id+'"]').textContent());
@@ -231,6 +269,6 @@ const {chromium} = require('playwright');
     evidence.workflows.push('Actual chat usable at390px in Brazilian Portuguese with no checked WCAG A/AA violations');
     assert.deepEqual(evidence.consoleErrors, []);
     await fs.writeFile('artifacts/' + prefix + '-report.json', JSON.stringify(evidence, null, 2));
-    console.log('PASS: real-engine browser connection, two-way XMPP, live draft preservation, queue/cancel/reconnect, mobile and accessibility');
+    console.log('PASS: real-engine browser connection, two-way XMPP, source stars across tabs, live drafts, queue/cancel/reconnect, mobile and accessibility');
   } finally { await browser.close(); }
 })().catch(error => {console.error(error); process.exitCode = 1;});

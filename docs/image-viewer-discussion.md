@@ -36,6 +36,6 @@ Oie supplies conversation context and actions through the uniform engine API.
 
 The feature set is agreed. API 0.6.0 implements source-message stars and a
 paginated starred-message collection. Timeline/viewer star actions, message
-context menus and the compact sender header are being integrated. See
+context menus, cached-original saving and the compact sender header are implemented. See
 [message-star invariants](message-stars.md). Zoom/navigation, device sharing,
 Copy image, Forward, Reply and React remain unimplemented in this increment.

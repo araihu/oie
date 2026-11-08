@@ -70,4 +70,32 @@ The generated CLI exercises explicit null preconditions, replay, current source
 projections and operation receipts. A saved-room test reads the actual SSE event
 without enabling room sending.
 
-UI integration and full pipeline verification are recorded after their checks.
+The interface now exposes a source-message chevron menu with Copy original and
+Star/Unstar. A single-image message shares that menu with Open, Image info and
+Save original; multiple-image messages have scoped image menus. The expanded
+viewer has a compact sender/avatar/device-time toolbar with Star, Info and Close.
+It preserves the image-info popover and omits the technical file-identification
+note. Save reads the cached original through the same-origin BFF.
+
+UI checks cover two tabs, exact-key retries across reload, stale conflicts,
+provider-free cached saving, clipboard source preservation, denied storage,
+keyboard/touch interaction and Brazilian Portuguese mobile accessibility. Delayed
+SSE events invalidate state rather than overwriting newer authoritative reads.
+The real engine/Prosody browser workflow verifies star/unstar across two tabs,
+preserved draft/focus, account-copy isolation and no additional XMPP message.
+`make check`, changed-package race tests and native XMPP integration pass.
+
+The live engine is API 0.6.0/schema 6. Migration verification preserved all prior
+account, conversation, message and content-revision UUIDs, the engine UUID and
+outbox state. Browser inspection of retained room images verified the source
+header, unavailable-note removal, known star state and no page errors/overflow.
+
+A full Dagger run remains unverified because its client timed out after 180
+seconds. See [local CI status](local-ci.md). Zoom/navigation, sharing, Copy image
+and protocol actions remain outside this increment. The starred collection is
+available through the engine API and generated CLI; no separate library UI has
+been added.
+
+The reusable public `modal.DialogConfig.HeaderContent` slot is supplied by
+[Goshtoso PR 373](https://github.com/araihu/goshtoso/pull/373), pinned at
+`v0.6.2-0.20261108145912-0cfde7dfc89c`.

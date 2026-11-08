@@ -47,15 +47,19 @@ its ordinary configured runner connection.
 
 ## Validation on 2026-11-08
 
-`make check` passes, including golangci-lint with zero findings. Dagger executed
-the Go checks, race tests, builds and isolated Prosody integration successfully.
-Its browser UI suites also passed. The final real-engine browser check initially
-failed because the slim image lacked curl. Its readiness probe now uses Node;
-the complete real-engine browser workflow passes locally.
+The message-star increment passes native `make check`, including golangci-lint
+with zero findings, changed-package race tests, development Prosody integration,
+and the complete real-engine browser workflow. Browser acceptance also covers
+source stars, retries, conflicts, menus, the compact sender header and existing
+preview/Markdown/avatar/live-chat behavior.
 
-Full `make ci` completion remains unverified on this host. Dagger v0.21.9 clients
-intermittently stop receiving completed API results and fail their engine
-healthcheck. An independent SSH forward did not resolve the stalls. A Docker
-connection attempt also did not produce a completed run. No green full-pipeline
-result is claimed.
-The live-preview engine and its data were not used by the Dagger tests.
+Earlier Dagger runs completed Go checks, races, builds, isolated XMPP integration
+and browser UI suites. The final real-engine readiness probe initially failed
+because the slim image lacked curl; it now uses Node and passes locally.
+
+Full `make ci` completion for the current increment remains unverified on this
+host. The latest attempt timed out after 180 seconds. Dagger v0.21.9 clients have
+intermittently stopped receiving completed API results and failed their engine
+healthcheck. Independent SSH and Docker connection attempts did not establish a
+completed pipeline. No green full-pipeline result is claimed. The live-preview
+engine and its data are excluded from Dagger tests.

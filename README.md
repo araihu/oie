@@ -42,7 +42,12 @@ retained original; Image info provides its source URL and file details. Standalo
 image URLs appear only as the image. Messages render Markdown by default through
 Margo, with a device override and an action to copy the original plain text. See
 [preview scope](docs/message-previews.md) and the agreed
-[future viewer actions](docs/image-viewer-discussion.md).
+[viewer actions](docs/image-viewer-discussion.md). Source messages can now be
+starred from a contextual chevron menu or the image toolbar. Star state has its
+own guarded revisions and durable receipts; the engine API and generated CLI
+provide a paginated starred-message collection. The image toolbar shows the
+sender and local device time, and cached originals can be saved from the message
+menu. See [message stars](docs/message-stars.md).
 
 ## Run
 
