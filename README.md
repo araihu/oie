@@ -194,3 +194,7 @@ OIE_BROWSER_URL=http://127.0.0.1:8080 npm test
 The checks cover 390/1440px layouts, Goshtoso/Minimal themes, light/dark modes,
 en/pt-BR, focus, accessibility, console errors, and system-theme changes.
 Screenshots and a report are written to the ignored `tests/browser/artifacts`.
+
+## License
+
+[Apache License 2.0](LICENSE).
