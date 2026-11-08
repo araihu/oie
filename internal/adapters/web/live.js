@@ -232,13 +232,15 @@ window.OieRuntime.register('live', life => {
     if (pendingRequests || refreshing) { refreshAgain = true; return; }
     refreshing = true;
     const starGeneration=Number(body.dataset.starGeneration||0);
+    const requestedSearch=location.search;
     const controller = new AbortController(); const timeout = life.timeout(() => controller.abort(), 12000);
     try {
-      const response = await life.fetch('/ui/refresh'+location.search, {credentials:'same-origin',cache:'no-store',signal:controller.signal});
+      const response = await life.fetch('/ui/refresh'+requestedSearch, {credentials:'same-origin',cache:'no-store',signal:controller.signal});
       if(life.signal.aborted)return;
       if (!response.ok) throw new Error('refresh unavailable');
       const page = new DOMParser().parseFromString(await response.text(), 'text/html');
       if(life.signal.aborted)return;
+      if(requestedSearch!==location.search){refreshAgain=true;return;}
       const regions = page.querySelector('#oie-live-regions');
       if (!regions || regions.dataset.unavailable === 'true') { announce(text('liveRetry')); return; }
       if (body.dataset.engineId && regions.dataset.engineId !== body.dataset.engineId) {
@@ -374,6 +376,7 @@ window.OieRuntime.register('live', life => {
     }
   }
   life.on(document,'oie:info-content',()=>{applyAvatars();localizeTimes();});
+  life.on(document,'oie:shared-search-settled',()=>{applyAvatars();localizeTimes();});
   life.on(document,'oie:refresh-request',()=>scheduleRefresh());
   function scheduleRefresh() { if(stopped||life.signal.aborted)return;clearTimeout(refreshTimer); refreshTimer = life.timeout(refresh,100); }
 

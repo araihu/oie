@@ -268,6 +268,10 @@ Keep retrieved history until explicit user deletion, even after the provider exp
 
 Search across accounts/sources in the selected engine and within a direct/group conversation. Alpha indexes message text, captions, filenames, URLs, page titles/descriptions, and available media metadata. Document-body extraction, image OCR, and audio transcription are backlogged.
 
+**AGREED:** shared-content search updates while typing, without requiring Enter, and tolerates limited typing errors. Preserve the text field, focus and caret while replacing results; stale responses must not replace a newer query or screen. Search the retained engine catalog before pagination, rather than only the currently loaded browser page.
+
+**RECOMMENDED R08:** use a 300 ms debounce, accent/case folding, exact substring/prefix matches, and bounded adjacent-transposition edit distance. Allow one edit for terms of four to seven letters and two for longer terms; keep shorter terms and symbols exact. Retain chronological result ordering initially; relevance ranking remains open.
+
 Provide searchable **Media, Files, and Links** views. Catalog shared URLs automatically from messages, including backfilled/synced messages; retain source message/conversation/account context. Here, bookmarks means a shared-link catalog, not an accepted browser-bookmark exporter or independent manual-save feature.
 
 **AGREED:** the main Media and Links destination aggregates all conversations in the selected engine, with account filtering and Media, Links, and Documents tabs. The account filter uses a searchable single-selection combobox, matching account names and addresses and retaining an All accounts option. Its selected value follows the current URL rather than a separate persisted picker state. Show date groups and the source of each item, and provide navigation to its original message. Opening an image keeps the viewer's previous/next navigation scoped to its conversation.
