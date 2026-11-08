@@ -12,6 +12,19 @@ The web adapter embeds a selected, checksum-recorded distribution snapshot under
 whether the source was an unpublished release candidate. Third-party notices
 and license texts accompany the copied assets and executable.
 
+## Application palette
+
+The approved icon blue `#6092AB` is the primary action color in both modes,
+including the browser theme color and web manifest. Filled controls use
+`#07111F` foregrounds. White text on the original blue has only 3.39:1 contrast;
+the dark foreground has 5.59:1. Blue text uses `#274C5E` on light surfaces and
+`#9AC3D8` on dark surfaces. Selected filters and outgoing bubbles use related
+blue tints. Semantic error and connection statuses retain their meaning.
+
+The app composes Goshtoso's public primary/on-primary theme tokens. Its public
+text-primary utilities use the text-specific blue so the exact icon color can
+remain the background of primary actions without reducing text contrast.
+
 ## BFF resource contract
 
 - `GET`/`HEAD /ui/brand/{file}` serves embedded SVG, PNG, JSON and notice files,

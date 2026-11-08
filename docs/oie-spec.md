@@ -373,7 +373,7 @@ Separate devices notify independently even if another device is active. Activity
 
 ### 11.1 WhatsApp-like presentation
 
-**AGREED:** the public brand is **Oiê**, with uppercase O and a circumflex on ê. It is a friendly Portuguese greeting expressing warmth and proximity. Use the approved flat Noto-derived moon-face chat balloon in navigation, favicons and PWA icons, distributed through `araihu/assets`. Technical identifiers retain `oie`.
+**AGREED:** the public brand is **Oiê**, with uppercase O and a circumflex on ê. It is a friendly Portuguese greeting expressing warmth and proximity. Use the approved flat Noto-derived moon-face chat balloon in navigation, favicons and PWA icons, distributed through `araihu/assets`. Technical identifiers retain `oie`. The icon blue `#6092AB` is the primary action color in light and dark modes. Use dark foregrounds on filled primary controls and contrasting blue variants for text, selected surfaces and outgoing bubbles.
 
 Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screenshots. On wide screens, use navigation, a searchable/filterable conversation list, and the active conversation workspace. Include account identity, message bubbles, composer, media/link cards, room/contact details, and settings.
 

@@ -56,7 +56,7 @@ func (s *Server) serveBrand(w http.ResponseWriter, r *http.Request) bool {
 			ID: "/", Name: text.AppName, ShortName: text.AppName,
 			Description: text.AppDescription, Lang: locale(r),
 			StartURL: "/", Scope: "/", Display: "standalone",
-			ThemeColor: "#274c5e", BackgroundColor: "#f7f8f7", Icons: icons.Icons,
+			ThemeColor: "#6092ab", BackgroundColor: "#f7f8f7", Icons: icons.Icons,
 		}
 		w.Header().Set("Content-Type", "application/manifest+json; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
