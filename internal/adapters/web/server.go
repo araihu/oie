@@ -127,6 +127,9 @@ type view struct {
 }
 
 type copy struct {
+	EmojiNoRecent              string
+	EmojiVariants              string
+	EmojiVariantsFor           string
 	EmojiPicker                string
 	EmojiSearch                string
 	EmojiCategories            string

@@ -19,23 +19,39 @@ templ emojiTrigger(v view) {
 
 templ emojiContent(v view) {
 {{ ctx=expressions.With(ctx,expressions.Set{TextInput:expressions.TextInput{SearchAriaLabel:v.Text.EmojiSearch}}) }}
-<div class="oie-emoji-content" data-emoji-content data-emoji-url={"/ui/emoji/"+v.Locale+".json"} data-emoji-loading={v.Text.EmojiLoading} data-emoji-empty={v.Text.EmojiEmpty} data-emoji-failed={v.Text.EmojiFailed}>
+<div class="oie-emoji-content" data-emoji-content data-emoji-url={"/ui/emoji/"+v.Locale+".json"} data-emoji-loading={v.Text.EmojiLoading} data-emoji-empty={v.Text.EmojiEmpty} data-emoji-failed={v.Text.EmojiFailed} data-emoji-no-recent={v.Text.EmojiNoRecent}>
 @textinput.TextInput(textinput.Config{ID:"emoji-search",Type:textinput.TypeSearch,Placeholder:v.Text.EmojiSearch,Autocomplete:"off",InputAttrs:templ.Attributes{"aria-label":v.Text.EmojiSearch,"aria-controls":"emoji-grid","maxlength":"128"}})
-<div class="oie-emoji-categories" role="group" aria-label={v.Text.EmojiCategories}>
-@button.Button(button.WithType("button"),button.WithSize(button.SizeSmall),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-emoji-category":"all","aria-pressed":"true"})){ {v.Text.EmojiAll} }
-@button.Button(button.WithType("button"),button.WithSize(button.SizeSmall),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-emoji-category":"recent","aria-pressed":"false"})){ {v.Text.EmojiRecent} }
-for index,label:=range emojiCategoryLabels(v) {
-@button.Button(button.WithType("button"),button.WithSize(button.SizeSmall),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-emoji-category":strconv.Itoa(index),"aria-pressed":"false"})){ {label} }
-}
-</div>
 <p data-emoji-status class="oie-emoji-status" role="status" aria-live="polite"></p>
 <div class="oie-emoji-scroll" data-emoji-scroll>
-<div id="emoji-grid" class="oie-emoji-grid" role="group" aria-label={v.Text.EmojiPicker}></div>
-@button.Button(button.WithType("button"),button.WithSize(button.SizeSmall),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-emoji-more"),button.WithAttrs(templ.Attributes{"data-emoji-more":"","hidden":true})){ {v.Text.EmojiMore} }
+<div id="emoji-grid" class="oie-emoji-sections" role="group" aria-label={v.Text.EmojiPicker}></div>
 </div>
+<nav class="oie-emoji-footer" aria-label={v.Text.EmojiCategories}>
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-emoji-jump"),button.WithAttrs(templ.Attributes{"data-emoji-jump":"recent","aria-label":v.Text.EmojiRecent,"title":v.Text.EmojiRecent,"aria-controls":"emoji-grid","disabled":true})){@glyph(heroicons.Icon16SolidClock)}
+for index,label:=range emojiCategoryLabels(v) {
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-emoji-jump"),button.WithAttrs(templ.Attributes{"data-emoji-jump":strconv.Itoa(index),"aria-label":label,"title":label,"aria-controls":"emoji-grid","disabled":true})){<span class="oie-emoji-category-symbol" aria-hidden="true">{emojiCategoryGlyph(index)}</span>}
+}
+</nav>
+<template data-emoji-section-template><section class="oie-emoji-section"><h3 tabindex="-1"></h3><div class="oie-emoji-grid"></div></section></template>
 @button.Button(button.WithType("button"),button.WithSize(button.SizeSmall),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-emoji-retry":"","hidden":true})){ {v.Text.Retry} }
 <template data-emoji-button>
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-emoji-cell"),button.WithAttrs(templ.Attributes{"data-emoji-pick":""})){}
 </template>
+<template data-emoji-choice>
+<span class="oie-emoji-choice" data-emoji-family>
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-emoji-cell"),button.WithAttrs(templ.Attributes{"data-emoji-pick":""})){}
+@popover.Popover(popover.Config{Trigger:emojiVariantsTrigger(v),Content:emojiVariantsContent(v),Placement:popover.PlacementBottomStart,Role:"dialog",Label:v.Text.EmojiVariants,RootClass:"oie-emoji-variants",PanelClass:"oie-emoji-variants-panel"})
+</span>
+</template>
+</div>
+}
+
+templ emojiVariantsTrigger(v view) {
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-emoji-variants-trigger"),button.WithAttrs(templ.Attributes{"data-emoji-variants-trigger":"","data-emoji-variants-label":v.Text.EmojiVariantsFor,"aria-label":v.Text.EmojiVariants})){@glyph(heroicons.Icon16SolidChevronDown)}
+}
+
+templ emojiVariantsContent(v view) {
+<div class="oie-emoji-variants-content">
+<strong>{v.Text.EmojiVariants}</strong>
+<div data-emoji-variants class="oie-emoji-grid" role="group" aria-label={v.Text.EmojiVariants}></div>
 </div>
 }

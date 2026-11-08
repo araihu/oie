@@ -380,5 +380,8 @@
   "EmojiActivities": "Activities",
   "EmojiObjects": "Objects",
   "EmojiSymbols": "Symbols",
-  "EmojiFlags": "Flags"
+  "EmojiFlags": "Flags",
+  "EmojiVariants": "Emoji variants",
+  "EmojiVariantsFor": "Variants of {emoji}",
+  "EmojiNoRecent": "No recent emojis yet."
 }

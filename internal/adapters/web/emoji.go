@@ -43,3 +43,7 @@ func serveEmojiAsset(w http.ResponseWriter, r *http.Request) bool {
 func emojiCategoryLabels(v view) []string {
 	return []string{v.Text.EmojiSmileys, v.Text.EmojiPeople, v.Text.EmojiAnimals, v.Text.EmojiFood, v.Text.EmojiTravel, v.Text.EmojiActivities, v.Text.EmojiObjects, v.Text.EmojiSymbols, v.Text.EmojiFlags}
 }
+
+func emojiCategoryGlyph(index int) string {
+	return []string{"😀", "👋", "🐻", "🍔", "🚗", "⚽", "💡", "🔣", "🚩"}[index]
+}

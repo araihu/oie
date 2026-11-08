@@ -398,7 +398,7 @@ Theme follows the system by default with per-device Light/Dark overrides.
 
 Desktop composer defaults: Enter sends, Shift+Enter inserts a newline, with a per-device Enter-to-send setting. On mobile, Enter inserts a newline and the Send button sends. Preserve IME composition.
 
-**AGREED:** the composer has an emoji selector with search. Emoji selection inserts Unicode text into the current draft and does not send it. Search and accessible names support English and Brazilian Portuguese. Keep the selector at the same responsive size across categories, including empty Recent lists and empty search results. Stickers and GIF discovery/sending are deferred.
+**AGREED:** the composer has an emoji selector with search. Emoji selection inserts Unicode text into the current draft and does not send it. Search matches names, keywords and aliases in all supported app languages regardless of the interface language, including equivalent results for `thumbs up` and `joinha`. Accessible names follow the interface language. Group skin-tone variants under a subpicker rather than repeating them in the main grid, and avoid underlined hover styles in the selector. Browse one continuous list with category headers. Footer category icons navigate to those headers rather than filter the list; search always covers the complete catalog. Keep the selector at the same responsive size across categories, including empty Recent lists and empty search results. Stickers and GIF discovery/sending are deferred.
 
 The composer grows and shrinks with wrapped or multiline text, including restored drafts, up to the smaller of 12rem or 30% of the dynamic viewport height. Beyond that limit, scroll inside the textarea. Keep composer actions aligned to its bottom edge.
 
