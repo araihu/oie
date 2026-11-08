@@ -15,7 +15,7 @@ function thumbnail(color){
 (async()=>{
  const engine=id(1),account=id(2),other=id(3),direct=id(4),room=id(5),revision=id(6),bad='f'.repeat(64);
  const images=[thumbnail([12,185,127]),thumbnail([210,80,110])],hashes=images.map(body=>createHash('sha256').update(body).digest('hex'));
- const streams=new Set(),state={seq:0,avatars:new Map(),fail:false};
+ const streams=new Set(),state={seq:0,avatars:new Map(),fail:false,connection:'connected'};
  const accounts=[{id:account,address:'alice@fixture',label:'Alice'},{id:other,address:'alice@fixture',label:'Other Alice'}].map(a=>({...a,revisionId:revision,protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z',connectionState:'connected'}));
  const conversations=[{id:direct,kind:'direct',address:'bob@fixture',title:'Bob'},{id:room,kind:'room',address:'room@fixture',title:'Saved room'}].map(c=>({...c,accountId:account,revisionId:revision,lastMessage:'Retained text',updatedAt:'2026-11-08T12:00:00Z',unreadCount:0,archived:false,favorite:false}));
  const emit=()=>{state.seq++;for(const s of streams)s.write(`id: ${engine}:${state.seq}\nevent: profile.avatar_changed\ndata: {}\n\n`)};
@@ -24,7 +24,7 @@ function thumbnail(color){
   if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.4.0',eventCursor:engine+':'+state.seq});
   if(u.pathname==='/api/v1/accounts')return send(200,{items:accounts});
   for(const a of accounts){
-   if(u.pathname===`/api/v1/accounts/${a.id}/connection`)return send(200,{accountId:a.id,state:'connected',updatedAt:'2026-11-08T12:00:00Z'});
+   if(u.pathname===`/api/v1/accounts/${a.id}/connection`)return send(200,{accountId:a.id,state:state.connection,updatedAt:'2026-11-08T12:00:00Z'});
    if(u.pathname===`/api/v1/accounts/${a.id}/history`)return send(200,{accountId:a.id,state:'complete',retainedMessages:80,conversations:2,updatedAt:'2026-11-08T12:00:00Z'});
    if(u.pathname===`/api/v1/accounts/${a.id}/avatars`){
     if(state.fail)return send(503,{code:'unavailable',status:503});
@@ -74,11 +74,11 @@ function thumbnail(color){
   await until(async()=>await page.locator(peer).evaluate(img=>getComputedStyle(img).display==='none'),'failed-image initials fallback');
   findings.push('Unavailable image falls back to initials');
   set(account,'bob@fixture',hashes[1]);emit();await until(async()=>await page.locator(peer).evaluate(img=>img.naturalWidth===8&&getComputedStyle(img).display!=='none'),'photo recovery');
-  await page.keyboard.press('Escape');await page.locator('[data-account-switcher]:visible').click();await page.locator('[data-open-accounts]:visible').click();await page.locator(`[data-manage-account="${account}"]`).click();
+  state.connection='not_connected';await page.keyboard.press('Escape');await page.locator('[data-account-switcher]:visible').click();await page.locator('[data-open-accounts]:visible').click();await page.locator(`[data-manage-account="${account}"]`).click();
   const password=page.locator('[data-connect-account] input[name=password]');await password.fill('unsent-form-value');await password.focus();set(account,'alice@fixture',hashes[1]);emit();
   await until(async()=>await page.locator(`.oie-account-detail ${own} img`).getAttribute('src')==='/ui/avatars/'+hashes[1],'account-detail photo');assert.equal(await password.inputValue(),'unsent-form-value');assert(await password.evaluate(el=>document.activeElement===el));
   findings.push('Account-detail photo updates preserve the focused connection form');
-  await page.goto(`${base}/?account=${account}&chat=${room}&lang=pt-BR&theme=dark`);
+  state.connection='connected';await page.goto(`${base}/?account=${account}&chat=${room}&lang=pt-BR&theme=dark`);
   await until(async()=>await page.locator('#chat-header img').evaluate(img=>img.naturalWidth===8),'room photo');
   assert.equal(await page.locator('#chat-header img').getAttribute('src'),'/ui/avatars/'+hashes[1]);
   const participantSources=await page.locator('#message-timeline [data-avatar-account] img').evaluateAll(images=>images.map(img=>img.getAttribute('src')));assert.equal(participantSources.length,0);const initials=page.locator('#message-timeline [data-avatar-initials]');assert(await initials.count()>0);assert(await initials.first().isVisible());

@@ -50,7 +50,7 @@ const {chromium} = require('playwright');
     const [reply]=await Promise.all([page.waitForResponse(r=>r.url().endsWith('/ui/accounts/connect')&&r.request().method()==='POST'),form.locator('button[type="submit"]').click()]);
     assert.equal((await reply.json()).ok,true,'connection configuration accepted by real BFF');
     await until(async () => {const connection=await api('/api/v1/accounts/' + account.id + '/connection');if(connection.state==='error')throw Error('XMPP connection failed: '+connection.lastErrorCode);return connection.state==='connected'}, 'verified XMPP connection ' + account.address);
-    await until(async () => await page.locator('[data-connection-state="connected"][data-account-id="' + account.id + '"]').count() > 0, 'visible connected state');
+    await until(async () => await page.locator('.oie-account-detail [data-account-status="' + account.id + '"][data-connection-state="connected"]').count() > 0, 'visible connected avatar state');
     const remainingPassword = form.locator('[name="password"]');
     if (await remainingPassword.count()) assert.equal(await remainingPassword.inputValue(), '', 'password must clear after accepted connection');
   };

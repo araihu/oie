@@ -24,7 +24,7 @@ function image(){
   if(u.pathname==='/api/v1/accounts')return send(200,{items:accounts});
   if(u.pathname==='/api/v1/conversations')return send(200,{items:[]});
   for(const account of accounts){
-   if(u.pathname===`/api/v1/accounts/${account.id}/connection`)return send(200,{accountId:account.id,state:state.connection,updatedAt:stamp});
+   if(u.pathname===`/api/v1/accounts/${account.id}/connection`)return send(200,{accountId:account.id,state:state.connection,lastErrorCode:state.connection==='error'?'authentication_failed':undefined,updatedAt:stamp});
    if(u.pathname===`/api/v1/accounts/${account.id}/history`)return send(200,{accountId:account.id,state:'complete',retainedMessages:0,conversations:0,updatedAt:stamp});
    if(u.pathname===`/api/v1/accounts/${account.id}/avatars`)return send(200,{items:state.avatars.has(account.id)?[{id:id(20),revisionId:revision,accountId:account.id,address:account.address,imageHash:state.avatars.get(account.id),updatedAt:stamp}]:[]});
   }
@@ -46,11 +46,11 @@ function image(){
    await until(()=>streams.size>0,'live event stream');await page.locator('[data-account-switcher]:visible').click();
    const menu=page.getByRole('dialog',{name:config.locale==='en'?'Switch account':'Trocar de conta',exact:true});await menu.waitFor({state:'visible'});
    const choice=account=>menu.locator(`[data-switch-account="${account}"]`),status=account=>choice(account).locator(`[data-account-status="${account}"]`);
-   const placement=async account=>{
-    const marker=status(account);assert.equal(await marker.count(),1);assert.equal(await choice(account).locator('.oie-account-indicators [data-account-status]').count(),0);
+   const placement=async(account,marker=status(account))=>{
+    assert.equal(await marker.count(),1);
     let geometry;await until(async()=>{geometry=await marker.evaluate(root=>{
      const avatar=root.querySelector('[data-avatar-account]'),box=avatar?.getBoundingClientRect();
-     const dots=[...root.querySelectorAll('span[aria-hidden="true"]')].map(node=>({node,rect:node.getBoundingClientRect(),style:getComputedStyle(node)})).filter(({rect,style})=>rect.width>0&&rect.width<20&&rect.height>0&&rect.height<20&&style.position==='absolute'&&style.backgroundColor!=='rgba(0, 0, 0, 0)'&&style.visibility!=='hidden'&&style.display!=='none');
+     const dots=[...root.querySelectorAll('span[aria-hidden="true"]')].map(node=>({node,rect:node.getBoundingClientRect(),style:getComputedStyle(node)})).filter(({rect,style})=>rect.width>0&&rect.width<Math.max(20,(box?.width||0)/2)&&rect.height>0&&rect.height<Math.max(20,(box?.height||0)/2)&&style.position==='absolute'&&style.backgroundColor!=='rgba(0, 0, 0, 0)'&&style.visibility!=='hidden'&&style.display!=='none');
      return{avatar:box?{left:box.left,right:box.right,top:box.top,bottom:box.bottom}:null,dots:dots.map(({rect,style})=>({left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom,color:style.backgroundColor}))};
     });return geometry.dots.length===1},'avatar indicator mounted '+config.width+' '+theme+' '+account);
     assert(geometry.avatar,'connection status must wrap the account avatar');
@@ -73,9 +73,20 @@ function image(){
    assert(await choice(bob).evaluate(node=>document.activeElement===node));
    state.avatars.set(bob,'');emit('profile.avatar_changed');await until(async()=>await choice(bob).locator('img').count()===0,'explicit avatar removal');await placement(bob);
    await page.keyboard.press('Escape');await menu.waitFor({state:'hidden'});assert(await page.locator('[data-account-switcher]:visible').evaluate(node=>document.activeElement===node));
-   findings.push({...config,theme,statuses:4,initials:true,image:true,failedImageFallback:true,focusedLiveUpdates:true});await page.close();
+   await page.goto(`${base}/?open=accounts&managedAccount=${bob}&lang=${config.locale}&theme=${config.mode}`);await page.evaluate(value=>document.documentElement.dataset.theme=value,theme);
+   const detail=page.locator('.oie-account-detail'),detailStatus=detail.locator(`[data-account-status="${bob}"]`),connect=detail.locator('[data-connect-account]');await detail.waitFor({state:'visible'});
+   assert.equal(await connect.count(),0);assert.equal(await detail.locator('input[name=password],input[name=endpoint]').count(),0);assert.equal(await detail.locator('[id^=connection-status-]').count(),0);assert(await detail.locator('[data-disconnect-account]').isVisible());await placement(bob,detailStatus);
+   const transition=async(value,form)=>{state.connection=value;emit('account.connection_changed');await until(async()=>await detailStatus.getAttribute('data-connection-state')===value&&await connect.count()===form,'account detail '+value);assert.equal(await detailStatus.getAttribute('title'),labels[value]);assert.equal(await detailStatus.getAttribute('aria-label'),labels[value]);await placement(bob,detailStatus)};
+   await transition('not_connected',1);assert.equal(await detail.locator('[data-disconnect-account]').count(),0);
+   const endpoint=connect.locator('[name=endpoint]');assert(await endpoint.isHidden());await connect.getByRole('button',{name:config.locale==='en'?'Advanced connection settings':'Configurações avançadas',exact:true}).click();await endpoint.fill('127.0.0.1:5222');
+   const password=connect.locator('[name=password]');await password.fill('Unsaved fixture password');await password.focus();await password.evaluate(node=>window.accountStatusInput=node);
+   await page.evaluate(()=>{window.accountStatusRefreshed=false;document.addEventListener('oie:stars-refresh',()=>window.accountStatusRefreshed=true,{once:true})});emit('account.history_changed');await until(()=>page.evaluate(()=>window.accountStatusRefreshed),'same-state detail refresh');
+   assert.equal(await password.inputValue(),'Unsaved fixture password');assert(await password.evaluate(node=>node===window.accountStatusInput&&document.activeElement===node));assert.equal(await endpoint.inputValue(),'127.0.0.1:5222');assert(await endpoint.isVisible());
+   await transition('connecting',0);assert.equal(await detail.locator('input[name=password],input[name=endpoint]').count(),0);assert(await detail.locator('[data-disconnect-account]').isVisible());assert(await detail.locator('[data-disconnect-account] button[type=submit]').evaluate(node=>document.activeElement===node));
+   await transition('error',1);assert(await connect.locator('button[type=submit]').evaluate(node=>document.activeElement===node));assert(await detail.getByText(config.locale==='en'?'Authentication failed. Check the password.':'Falha na autenticação. Verifique a senha.',{exact:true}).isVisible());
+   findings.push({...config,theme,statuses:4,initials:true,image:true,failedImageFallback:true,focusedLiveUpdates:true,managementTransitions:true,pendingPasswordPreserved:true});await page.close();
   }
   assert.deepEqual(errors,[]);const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await fs.writeFile(path.join(artifacts,'account-status-report.json'),JSON.stringify({findings,pageErrors:errors},null,2));
-  console.log('PASS: avatar-attached account status, localized accessibility, semantic colors, live focus and image fallbacks');
+  console.log('PASS: avatar status, state-specific account controls, localized accessibility, focused refresh and image fallbacks');
  }finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(resolve=>api.close(resolve))}
 })().catch(error=>{console.error(error);process.exitCode=1});
