@@ -90,7 +90,7 @@ AND ((CAST(?5 AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json
  OR (CAST(?5 AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
  OR (CAST(?5 AS TEXT)='documents' AND sc.kind='document' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image'))
 AND (CAST(?6 AS TEXT)='' OR (m.created_at_ms,sc.id)<(CAST(?7 AS INTEGER),CAST(?6 AS TEXT)))
-AND (CAST(?8 AS TEXT)='' OR instr(oie_casefold(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),'')),oie_casefold(CAST(?8 AS TEXT)))>0)
+AND (CAST(?8 AS TEXT)='' OR oie_search_match(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),''),CAST(?8 AS TEXT))=1)
 ORDER BY m.created_at_ms DESC,sc.id DESC LIMIT ?9
 `
 
