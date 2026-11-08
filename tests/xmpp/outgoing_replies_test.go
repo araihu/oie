@@ -17,6 +17,7 @@ import (
 	"github.com/araihu/oie/internal/domain"
 	"mellium.im/xmlstream"
 	mx "mellium.im/xmpp"
+	"mellium.im/xmpp/disco"
 	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/stanza"
 )
@@ -341,6 +342,47 @@ func TestExplicitRoomJoinReplyWireReconnectAndLeave(t *testing.T) {
 		return err == nil && s.State == "joined"
 	})
 	verifyReply(queued.Message, authored)
+	// Received corrections use the sender's client ID, not the room-assigned
+	// reply target. Discovery after reconnect must establish occupant authority.
+	response, err = seed.SendIQ(ctx, stanza.IQ{To: room, Type: stanza.GetIQ}.Wrap(xml.NewDecoder(strings.NewReader(`<query xmlns="http://jabber.org/protocol/disco#info"/>`))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var discovered struct {
+		stanza.IQ
+		Info disco.Info `xml:"http://jabber.org/protocol/disco#info query"`
+	}
+	err = xml.NewTokenDecoder(response).Decode(&discovered)
+	_ = response.Close()
+	if err != nil || discovered.Type != stanza.ResultIQ {
+		t.Fatal("correction fixture room discovery", err)
+	}
+	occupantSupport := false
+	for _, feature := range discovered.Info.Features {
+		occupantSupport = occupantSupport || feature.Var == "urn:xmpp:occupant-id:0"
+	}
+	corrected := original + "\nCorrected room source"
+	payload = `<body>` + stanzaText(corrected) + `</body><replace xmlns="urn:xmpp:message-correct:0" id="` + clientID + `"/>`
+	if err = seed.Send(ctx, stanza.Message{To: room, Type: stanza.GroupChatMessage, ID: "room-edit-" + string(id())}.Wrap(xml.NewDecoder(strings.NewReader(payload)))); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, func() bool {
+		messages, err := engine.Messages(ctx, conversation.ID, "", 100)
+		if err != nil {
+			return false
+		}
+		matches := []domain.Message{}
+		for _, message := range messages {
+			if message.OriginalText == original || message.OriginalText == corrected {
+				matches = append(matches, message)
+			}
+		}
+		if !occupantSupport {
+			return len(matches) == 2
+		}
+		return len(matches) == 1 && matches[0].ID == target.ID && matches[0].Edited && matches[0].OriginalText == corrected && matches[0].RevisionID != target.RevisionID
+	})
+	t.Logf("received room correction verified with XEP-0421 authority: %t", occupantSupport)
 	session, err = engine.RoomSession(ctx, conversation.ID)
 	if err != nil {
 		t.Fatal(err)
