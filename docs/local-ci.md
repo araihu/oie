@@ -1,5 +1,7 @@
 # Local CI loop
 
+The fragment-navigation increment on 2026-11-08 passes native checks and all host browser suites. Dagger completes Go checks/races/builds and isolated XMPP integration, but its browser initialization currently fails expanding the cache argument with `waiting for client session attachables: context deadline exceeded`. A fresh client retry reproduced the failure. Full Dagger completion for this increment is unverified. See [fragment navigation](fragment-navigation.md) for the verified scope.
+
 Keep Oie increments as local commits. Open a pull request when there is a version
 ready for alpha v0.0.1. Existing draft requests remain historical review points.
 
