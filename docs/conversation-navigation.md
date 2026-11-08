@@ -28,3 +28,20 @@ The focused browser fixture is `tests/browser/conversation-navigation.cjs`.
 It uses isolated HTTP engines and checks unchanged DOM nodes and scroll,
 drafts, details, Back/Forward, stale requests, failure preservation, real inbox
 updates, one live stream, mobile navigation and native links without JavaScript.
+
+## Validation
+
+Validated with `make check`, the web package race tests, the focused conversation
+navigation browser fixture and the existing live-chat browser fixture. Vacuum
+used a 30-second rule timeout for the local check.
+
+The Dagger `ci-check` container completed its checks and builds, but the enclosing
+command did not exit before the six-minute timeout. The overall Dagger invocation
+therefore remains unverified.
+
+The existing chat-info browser fixture times out waiting for the scoped media
+snapshot version to change. It fails at the same assertion with both this build
+and the source worktree's baseline binary. The full browser pipeline was not run.
+
+This change is isolated in its managed worktree. It has not been applied to the
+source worktree or its running preview.
