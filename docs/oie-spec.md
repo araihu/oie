@@ -296,6 +296,8 @@ SQLite stores attachment references, metadata, and media integrity hashes; binar
 
 Use an advertised supported expected digest where available and verify it against a complete download. If none is available, compute a local hash on full download. Distinguish expected-and-verified from computed-only: a first-download fingerprint does not independently verify the sender's original. Preview and original-file digests are separate.
 
+**AGREED:** open PDF and web-friendly text documents inside the app from the shared-content catalog and conversation details. Display TXT, LOG, Markdown, CSV, JSON and XML as plain text, with a download-original action. Retrieve originals only after explicit activation. Unsupported document formats retain an action to open their provider address. Document-text extraction into search remains backlogged.
+
 Support audio-file attachments and inline playback in alpha where the format is supported. Inline player display does not force a full-file automatic download. Voice recording and calls are backlogged.
 
 Media-file sync is separate from history sync and **off by default**. When explicitly enabled, downloaded files can be retained by the sync service and retrieved by other devices after provider expiration. Receiving devices still obey their own download preferences. Message/metadata sync alone does not upload all full files.
