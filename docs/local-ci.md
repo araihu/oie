@@ -1,5 +1,12 @@
 # Local CI loop
 
+The account-avatar connection indicator passes final native `make check` and
+its isolated browser fixture across four viewport/locale/theme variants. A
+read-only live preview check also passes with no mutations or page errors.
+Dagger `make ci-check` passed the initial markup version. The final repeat passed
+its container `make check`, then ended with SIGTERM, exit 143, during race tests.
+Completion of the full final-snapshot Dagger run remains unverified.
+
 The message-action corner fix passes native `make check`, Dagger `make ci-check`
 and the 42-case browser layout/action matrix. Its exact upstream dependency is
 pinned to an open integration PR. See [message actions](message-actions.md) for
