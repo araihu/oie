@@ -24,7 +24,7 @@ templ sharedWorkspace(v view){
 </header>
 <form action="/" method="get" id="shared-content-search" class="oie-shared-search" role="search" hx-sync="this:replace">
 <input type="hidden" name="section" value="media"/><input type="hidden" name="contentType" value={v.SharedType}/><input type="hidden" name="contentConversation" value={v.SharedConversation}/><input type="hidden" name="lang" value={v.Locale}/><input type="hidden" name="theme" value={v.Theme}/>
-@toolbar.Toolbar(toolbar.Config{Label:v.Text.SharedTools,RootClass:"oie-shared-toolbar",SearchClass:"oie-shared-search-region",FiltersClass:"oie-shared-filter-region",ActionsClass:"oie-shared-action-region",Search:sharedSearch(v),Filters:sharedAccountFilter(v),Actions:sharedSearchAction(v)})
+@toolbar.Toolbar(toolbar.Config{Label:v.Text.SharedTools,RootClass:"oie-shared-toolbar",SearchClass:"oie-shared-search-region",FiltersClass:"oie-shared-filter-region",Search:sharedSearch(v),Filters:sharedAccountFilter(v)})
 </form>
 <div id="shared-search-results" class="oie-shared-search-results" data-search-query={v.Query}>
 <nav class="oie-shared-segments" aria-label={v.Text.SharedContentTypes}>
@@ -49,9 +49,6 @@ templ sharedSearch(v view){
 templ sharedAccountFilter(v view){
 {{ cfg:=sharedAccountCombobox(v) }}
 @combobox.Combobox(cfg,cfg.InitialState())
-}
-templ sharedSearchAction(v view){
-@button.Button(button.WithType("submit"),button.WithAttrs(templ.Attributes{"data-shared-search":""})){ {v.Text.SharedSearchAction} }
 }
 templ sharedTab(v view,kind,label string){
 @link.Link(v.sharedHref("contentType",kind,"contentCursor",""),link.WithAttrs(templ.Attributes{"aria-current":strconv.FormatBool(v.SharedType==kind),"data-shared-tab":kind}),link.WithRootClass("oie-shared-segment")){ {label} }
