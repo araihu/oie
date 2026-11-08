@@ -151,7 +151,13 @@ window.OieRuntime.register('live', life => {
   }
   life.on(document,'click',event=>{
     const reply=event.target.closest('[data-reply-target]');
-    if(reply&&!event.defaultPrevented&&event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey&&reply.dataset.replyConversation===body.dataset.conversationId&&focusMessage(reply.dataset.replyTarget)){event.preventDefault();return;}
+    if(!reply||event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||!body.dataset.accountId||reply.dataset.replyConversation!==body.dataset.conversationId)return;
+    let target;try{target=new URL(reply.href,location.href)}catch{return}
+    const account=target.searchParams.get('account');
+    if(target.origin!==location.origin||target.pathname!=='/'||target.searchParams.get('chat')!==body.dataset.conversationId||(account&&account!==body.dataset.accountId))return;
+    if(focusMessage(reply.dataset.replyTarget)){event.preventDefault();event.stopPropagation();}
+  },true);
+  life.on(document,'click',event=>{
     if(event.target.closest('[data-jump-latest]')){
       if(pinned()||new URLSearchParams(location.search).has('message')){const url=new URL(location.href);url.searchParams.delete('message');window.OieNavigation?.go(url.pathname+url.search) ?? location.assign(url.pathname+url.search);}
       else scrollLatest();
