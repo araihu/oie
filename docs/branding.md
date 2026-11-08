@@ -51,6 +51,27 @@ exceeded`; the remaining client was interrupted after that failure.
 
 The shared snapshot comes from araihu/assets commit
 342a1c87a1f3784521cd6efc58820a1bd44b84b7, proposed in PR 42 as candidate v0.2.7.
-No Oiê pull request or public assets release was created. This app increment is
-isolated from the main session's ongoing engine edits and can be integrated by
-its commit.
+No Oiê pull request or public assets release was created.
+
+## Main-session integration and live preview
+
+The identity is integrated into the main session checkout on 2026-11-08,
+alongside commit 5776c03. Existing message-menu edits were preserved; the
+separate pending browser test changes were left untouched.
+
+- Native `make check` and the 16-layout brand browser test passed against the
+  integrated checkout.
+- `make ci-check` passed locally through Dagger, including contract and Go
+  checks, race tests, and application/CLI builds. This is the checks pipeline,
+  not a new claim that the complete XMPP/browser pipeline passed.
+- Only the live BFF was restarted on port 8080, still using the existing engine
+  on port 18084. Engine process, identity, data and account sessions were retained.
+- A read-only browser observation of the real-engine preview passed at
+  1440 px/dark/English and 390 px/light/pt-BR: Oiê title, matching logo,
+  favicon, localized manifest and all four install icons loaded without page
+  errors or horizontal overflow. Evidence is saved under
+  `tests/browser/artifacts/branding-live-*`.
+- The forwarded browser preview remains `http://localhost:53626/`.
+
+Assets PR 42 passed its complete CI and CodeQL checks. Version v0.2.7 remains a
+candidate until its release is published.
