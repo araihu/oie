@@ -27,13 +27,13 @@ func seedSession(t *testing.T, ctx context.Context, name, password string, roots
 	t.Helper()
 	j, _ := jid.Parse(name)
 	j, _ = j.WithResource("history-seed-" + string(id()))
-	raw, err := (&net.Dialer{}).DialContext(ctx, "tcp", "127.0.0.1:5222")
+	raw, err := (&net.Dialer{}).DialContext(ctx, "tcp", xmppEndpoint())
 	if err != nil {
 		t.Fatal(err)
 	}
 	s, err := mx.NewClientSession(ctx, j, raw, mx.StartTLS(&tls.Config{ServerName: "localhost", RootCAs: roots, MinVersion: tls.VersionTLS12}), mx.SASL("", password, sasl.ScramSha256, sasl.ScramSha1, sasl.Plain), mx.BindResource())
 	if err != nil {
-		raw.Close()
+		_ = raw.Close()
 		t.Fatal(err)
 	}
 	return s, raw
@@ -53,26 +53,30 @@ func TestExistingHistoryAndSavedRoomRecovery(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 	alice, aliceRaw := seedSession(t, ctx, "alice@localhost", "alice-local-only", roots)
-	defer aliceRaw.Close()
+	defer func() { _ = aliceRaw.Close() }()
 	bob, bobRaw := seedSession(t, ctx, "bob@localhost", "bob-local-only", roots)
-	defer bobRaw.Close()
+	defer func() { _ = bobRaw.Close() }()
 	body := "History before Oie registration " + string(id())
 	received := make(chan bool, 1)
-	go alice.Serve(mx.HandlerFunc(func(xmlstream.TokenReadEncoder, *xml.StartElement) error { return nil }))
-	go bob.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
-		if start.Name.Local == "message" {
-			var m struct {
-				Body string `xml:"body"`
-			}
-			if xml.NewTokenDecoder(xmlstream.MultiReader(xmlstream.Token(*start), tokens)).Decode(&m) == nil && m.Body == body {
-				select {
-				case received <- true:
-				default:
+	go func() {
+		_ = alice.Serve(mx.HandlerFunc(func(xmlstream.TokenReadEncoder, *xml.StartElement) error { return nil }))
+	}()
+	go func() {
+		_ = bob.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
+			if start.Name.Local == "message" {
+				var m struct {
+					Body string `xml:"body"`
+				}
+				if xml.NewTokenDecoder(xmlstream.MultiReader(xmlstream.Token(*start), tokens)).Decode(&m) == nil && m.Body == body {
+					select {
+					case received <- true:
+					default:
+					}
 				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}))
+	}()
 	if err = bob.Send(ctx, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(nil)); err != nil {
 		t.Fatal(err)
 	}
@@ -97,18 +101,18 @@ func TestExistingHistoryAndSavedRoomRecovery(t *testing.T) {
 	}
 	var published stanza.IQ
 	err = xml.NewTokenDecoder(result).Decode(&published)
-	result.Close()
+	_ = result.Close()
 	if err != nil || published.Type != stanza.ResultIQ {
 		t.Fatalf("bookmark fixture failed: %v %v", published.Type, err)
 	}
-	aliceRaw.Close()
-	bobRaw.Close()
+	_ = aliceRaw.Close()
+	_ = bobRaw.Close()
 	dir := t.TempDir()
 	store, err := sqlite.Open(ctx, dir, id())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 	engine, _ := application.New(store, "hosted", func() (domain.ID, error) { return id(), nil }, time.Now)
 	manager := adapter.New(filepath.Join(dir, "private", "connections"), roots)
 	engine.SetProtocols(manager)
@@ -120,7 +124,7 @@ func TestExistingHistoryAndSavedRoomRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = engine.ConfigureConnection(ctx, account.Account.ID, application.ConnectionInput{Password: "alice-local-only", Endpoint: "127.0.0.1:5222"}); err != nil {
+	if _, err = engine.ConfigureConnection(ctx, account.Account.ID, application.ConnectionInput{Password: "alice-local-only", Endpoint: xmppEndpoint()}); err != nil {
 		t.Fatal(err)
 	}
 	var conversation domain.Conversation

@@ -21,7 +21,7 @@ func validAvatarHash(hash string) bool {
 		return false
 	}
 	for _, c := range hash {
-		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			return false
 		}
 	}
@@ -101,7 +101,7 @@ func (s *Server) avatarImage(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	cache := func() {
 		w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 		w.Header().Set("ETag", `"`+hash+`"`)

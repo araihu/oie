@@ -29,7 +29,7 @@ func (s *Store) RecordHistory(ctx context.Context, h domain.HistoryStatus) error
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	counts, err := q.GetHistoryCounts(ctx, string(h.AccountID))
 	if err != nil {
 		return err
@@ -59,7 +59,7 @@ func (s *Store) RestoreConversation(ctx context.Context, c domain.Conversation) 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if err = q.AcquireWriteLock(ctx); err != nil {
 		return err
 	}

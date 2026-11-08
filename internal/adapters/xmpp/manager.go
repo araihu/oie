@@ -159,8 +159,8 @@ func (m *Manager) save(ctx context.Context, cfg configuration) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(f.Name())
-	defer f.Close()
+	defer func() { _ = os.Remove(f.Name()) }()
+	defer func() { _ = f.Close() }()
 	if err = f.Chmod(0600); err != nil {
 		return err
 	}
@@ -180,7 +180,7 @@ func (m *Manager) save(ctx context.Context, cfg configuration) error {
 	if err != nil {
 		return err
 	}
-	defer dir.Close()
+	defer func() { _ = dir.Close() }()
 	return dir.Sync()
 }
 func (m *Manager) replace(a domain.Account, cfg configuration) *entry {
@@ -420,7 +420,7 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 		deadline = time.Now().Add(10 * time.Second)
 	}
 	_ = raw.SetWriteDeadline(deadline)
-	defer raw.SetWriteDeadline(time.Time{})
+	defer func() { _ = raw.SetWriteDeadline(time.Time{}) }()
 	payload := struct {
 		stanza.Message
 		Body   string `xml:"body"`
@@ -444,7 +444,7 @@ type boundedTokens struct {
 
 func (b *boundedTokens) Token() (xml.Token, error) {
 	token, err := b.reader.Token()
-	if err != nil && !(err == io.EOF && token != nil) {
+	if err != nil && (err != io.EOF || token == nil) {
 		return token, err
 	}
 	switch t := token.(type) {

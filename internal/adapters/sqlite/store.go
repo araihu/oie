@@ -142,7 +142,7 @@ func (s *Store) Register(ctx context.Context, in application.Registration) (appl
 	if err != nil {
 		return application.RegistrationResult{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	in.Operation.Kind = "register_account"
 	existing, err := operation(ctx, q, in.Operation, in.Fingerprint, in.Account)
 	if err != nil {

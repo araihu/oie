@@ -56,7 +56,7 @@ func TestMockUsesGeneratedReadContractAndStableFixtureIdentities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode < 400 {
 		t.Fatal("read-only mock accepted a mutation")
 	}

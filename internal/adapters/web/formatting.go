@@ -106,9 +106,10 @@ func presentationInlineTicks(line string, current int) int {
 			end++
 		}
 		length := end - i
-		if current == 0 {
+		switch current {
+		case 0:
 			current = length
-		} else if current == length {
+		case length:
 			current = 0
 		}
 		i = end

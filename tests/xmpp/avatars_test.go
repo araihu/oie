@@ -40,8 +40,10 @@ func TestPublishedAvatarsUpdateClearAndReconnect(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
 	publisher, raw := seedSession(t, ctx, "alice@localhost", "alice-local-only", roots)
-	defer raw.Close()
-	go publisher.Serve(mx.HandlerFunc(func(xmlstream.TokenReadEncoder, *xml.StartElement) error { return nil }))
+	defer func() { _ = raw.Close() }()
+	go func() {
+		_ = publisher.Serve(mx.HandlerFunc(func(xmlstream.TokenReadEncoder, *xml.StartElement) error { return nil }))
+	}()
 	own, _ := jid.Parse("alice@localhost")
 	publish := func(payload string) {
 		t.Helper()
@@ -51,7 +53,7 @@ func TestPublishedAvatarsUpdateClearAndReconnect(t *testing.T) {
 		}
 		var iq stanza.IQ
 		err = xml.NewTokenDecoder(result).Decode(&iq)
-		result.Close()
+		_ = result.Close()
 		if err != nil || iq.Type != stanza.ResultIQ {
 			t.Fatalf("avatar fixture publication: %v %v", iq.Type, err)
 		}
@@ -81,8 +83,8 @@ func TestPublishedAvatarsUpdateClearAndReconnect(t *testing.T) {
 		for _, node := range []string{"urn:xmpp:avatar:metadata", "urn:xmpp:avatar:data"} {
 			r, err := publisher.SendIQ(cleanup, stanza.IQ{To: own, Type: stanza.SetIQ}.Wrap(xml.NewDecoder(strings.NewReader(`<pubsub xmlns="http://jabber.org/protocol/pubsub#owner"><delete node="`+node+`"/></pubsub>`))))
 			if err == nil {
-				xmlstream.Copy(xmlstream.Discard(), r)
-				r.Close()
+				_, _ = xmlstream.Copy(xmlstream.Discard(), r)
+				_ = r.Close()
 			}
 		}
 	}()
@@ -91,7 +93,7 @@ func TestPublishedAvatarsUpdateClearAndReconnect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 	engine, err := application.New(store, "hosted", func() (domain.ID, error) { return id(), nil }, time.Now)
 	if err != nil {
 		t.Fatal(err)
@@ -109,7 +111,7 @@ func TestPublishedAvatarsUpdateClearAndReconnect(t *testing.T) {
 	}
 	connect := func() {
 		t.Helper()
-		if _, err := engine.ConfigureConnection(ctx, account.Account.ID, application.ConnectionInput{Password: "alice-local-only", Endpoint: "127.0.0.1:5222"}); err != nil {
+		if _, err := engine.ConfigureConnection(ctx, account.Account.ID, application.ConnectionInput{Password: "alice-local-only", Endpoint: xmppEndpoint()}); err != nil {
 			t.Fatal(err)
 		}
 	}

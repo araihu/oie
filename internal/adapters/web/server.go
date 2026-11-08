@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -450,9 +449,6 @@ func (v view) accountVersion() string {
 func (v view) sendAllowed() bool {
 	return !v.Preview && v.Selected != nil && v.Selected.Kind == "direct" && v.account(v.Selected.AccountId).Address != "" && !v.Unavailable
 }
-func (v view) csrfFields() map[string]string {
-	return map[string]string{"csrf": v.CSRF, "engineId": v.EngineID, "returnTo": v.href()}
-}
 func (v view) selectedAccount() string {
 	if v.AccountFilter != "" {
 		return v.AccountFilter
@@ -465,8 +461,7 @@ func (v view) selectedAccount() string {
 	}
 	return ""
 }
-func (v view) field(key string) string    { return v.Values[key] }
-func (v view) boolText(value bool) string { return strconv.FormatBool(value) }
+func (v view) field(key string) string { return v.Values[key] }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	var buf bytes.Buffer

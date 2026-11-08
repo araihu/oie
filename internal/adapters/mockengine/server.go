@@ -52,7 +52,7 @@ func New(empty bool) (http.Handler, error) {
 	mux.HandleFunc("GET /api/v1/accounts", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, engineapi.AccountPage{Items: []engineapi.Account{{Id: id(2), RevisionId: id(3), Protocol: "xmpp", Address: "alice@localhost", Label: "Personal", CreatedAt: time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC), ConnectionState: "not_connected"}}})
 	})
-	schema, err := previewapi.GetSwagger()
+	schema, err := previewapi.GetSpec()
 	if err != nil {
 		return nil, err
 	}

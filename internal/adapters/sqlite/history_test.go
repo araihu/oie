@@ -128,7 +128,7 @@ func TestHistoryMigrationDownUpPreservesExistingMessagesAndOutbox(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer source.Close()
+	defer func() { _ = source.Close() }()
 	driver, err := migratesqlite.WithInstance(store.db, &migratesqlite.Config{})
 	if err != nil {
 		t.Fatal(err)

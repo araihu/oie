@@ -184,7 +184,7 @@ func (m *Manager) readHistoryIQ(ctx context.Context, e *entry, s *mx.Session, sc
 	if err != nil {
 		return "", err
 	}
-	defer response.Close()
+	defer func() { _ = response.Close() }()
 	var result struct {
 		stanza.IQ
 		Inner string `xml:",innerxml"`

@@ -4,7 +4,7 @@ CODEGEN = GOWORK=off $(GO) tool -modfile=tools/go.mod
 VACUUM = GOWORK=off $(GO) -C tools/vacuum tool vacuum
 CLI_ARGS = --spec api/openapi.cli.json --name oiectl --module github.com/araihu/oie/cli --out cli
 
-.PHONY: generate lint build build-cli run check test test-race check-generated dev-up dev-down test-xmpp test-engine-xmpp
+.PHONY: generate lint lint-go build build-cli run check test test-race check-generated dev-up dev-down test-xmpp test-engine-xmpp
 
 generate:
 	$(CODEGEN) sqlc generate
@@ -20,6 +20,9 @@ generate:
 lint:
 	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn ../../api/openapi.yaml
 	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn ../../api/ui-preview.openapi.yaml
+
+lint-go:
+	$(CODEGEN) golangci-lint run
 
 build:
 	GOWORK=off $(GO) build -trimpath -o bin/oie ./cmd/oie
@@ -40,7 +43,7 @@ test-race:
 check-generated:
 	sh scripts/check-generated.sh
 
-check: lint check-generated
+check: lint lint-go check-generated
 	@test -z "$$(gofmt -l cmd internal api/spec.go tests tools/cmd)" || { echo 'Go formatting drift'; exit 1; }
 	GOWORK=off $(GO) vet ./...
 	GOWORK=off $(GO) -C cli vet ./...
@@ -77,3 +80,10 @@ dev-bridge: build-dev-bridge
 .PHONY: test-live-browser
 test-live-browser: build
 	sh scripts/test-live-browser.sh
+
+.PHONY: ci ci-check
+ci:
+	sh tools/ci/run.sh all
+
+ci-check:
+	sh tools/ci/run.sh checks

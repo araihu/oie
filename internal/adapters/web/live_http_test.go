@@ -153,7 +153,7 @@ func livePost(t *testing.T, client *http.Client, base, path, csrf string, values
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	var result mutationResult
 	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
 		t.Fatal(err)
@@ -203,7 +203,7 @@ func TestLiveCancelConflictAndPasswordNeverEcho(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	body, _ := io.ReadAll(res.Body)
 	if res.StatusCode != 403 || strings.Contains(string(body), password) {
 		t.Fatal("native error echoed a password")
@@ -235,7 +235,7 @@ func TestLiveSSEForwardsCursorAndOutlivesOrdinaryClientTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if got := <-seen; got != testEngine+":1" {
 		t.Fatalf("reconnect cursor lost: %s", got)
 	}
@@ -314,7 +314,7 @@ func TestNativeUnavailableSendRetainsOriginalAndOperationKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	html, _ := io.ReadAll(response.Body)
 	if response.StatusCode != 503 || !strings.Contains(string(html), body) || !strings.Contains(string(html), key) || !strings.Contains(string(html), "native-retained-message") || fixture.effectCount() != 0 {
 		t.Fatalf("native draft recovery lost context: %d", response.StatusCode)
@@ -330,7 +330,7 @@ func TestNativeAccountRecoveryReturnsToItsSingleScreen(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, _ := io.ReadAll(response.Body)
-	response.Body.Close()
+	_ = response.Body.Close()
 	html := string(data)
 	if response.StatusCode != 422 || strings.Count(html, "data-connect-account") != 1 || !strings.Contains(html, `data-open-drawer="accounts"`) || !strings.Contains(html, `value="127.0.0.1:5222"`) {
 		t.Fatal("connection validation did not retain its detail screen")
@@ -345,7 +345,7 @@ func TestNativeAccountRecoveryReturnsToItsSingleScreen(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, _ = io.ReadAll(response.Body)
-	response.Body.Close()
+	_ = response.Body.Close()
 	html = string(data)
 	if response.StatusCode != 503 || !strings.Contains(html, `id="register-account-form"`) || strings.Contains(html, "data-connect-account") || !strings.Contains(html, key) || !strings.Contains(html, "carol@localhost") || !strings.Contains(html, `data-open-drawer="accounts"`) {
 		t.Fatal("unavailable registration lost its screen, values or logical operation key")

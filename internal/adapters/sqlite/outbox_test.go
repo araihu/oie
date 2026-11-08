@@ -16,7 +16,7 @@ func outboxFixture(t *testing.T) (*Store, *application.Engine, domain.Conversati
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { store.Close() })
+	t.Cleanup(func() { _ = store.Close() })
 	e, err := application.New(store, "local", func() (domain.ID, error) { return migrationID(), nil }, time.Now)
 	if err != nil {
 		t.Fatal(err)

@@ -31,7 +31,7 @@ func TestAvatarMetadataBinaryAndConditionalCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	body, _ := io.ReadAll(res.Body)
-	res.Body.Close()
+	_ = res.Body.Close()
 	var page engineapi.AvatarPage
 	if res.StatusCode != 200 || json.Unmarshal(body, &page) != nil || len(page.Items) != 1 || strings.Contains(string(body), "private-source-token") {
 		t.Fatal("metadata contract", res.StatusCode, string(body))
@@ -43,7 +43,7 @@ func TestAvatarMetadataBinaryAndConditionalCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, _ := io.ReadAll(res.Body)
-	res.Body.Close()
+	_ = res.Body.Close()
 	if res.StatusCode != 200 || res.Header.Get("Content-Type") != "image/png" || res.Header.Get("X-Content-Type-Options") != "nosniff" {
 		t.Fatal("image contract", res.StatusCode, res.Header)
 	}
@@ -56,7 +56,7 @@ func TestAvatarMetadataBinaryAndConditionalCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res.Body.Close()
+	_ = res.Body.Close()
 	if res.StatusCode != 304 {
 		t.Fatal("conditional GET", res.StatusCode)
 	}
@@ -68,7 +68,7 @@ func TestAvatarMetadataBinaryAndConditionalCache(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		res.Body.Close()
+		_ = res.Body.Close()
 		if res.StatusCode != test.status {
 			t.Fatal("bad image response", test, res.StatusCode)
 		}

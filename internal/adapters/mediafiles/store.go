@@ -120,8 +120,8 @@ func (s *Store) persist(ctx context.Context, data []byte, mime string) (domain.M
 	if err != nil {
 		return result, err
 	}
-	defer os.Remove(file.Name())
-	defer file.Close()
+	defer func() { _ = os.Remove(file.Name()) }()
+	defer func() { _ = file.Close() }()
 	if err = file.Chmod(0600); err != nil {
 		return result, err
 	}
@@ -144,7 +144,7 @@ func (s *Store) persist(ctx context.Context, data []byte, mime string) (domain.M
 	if err != nil {
 		return result, err
 	}
-	defer dir.Close()
+	defer func() { _ = dir.Close() }()
 	return result, dir.Sync()
 }
 func (s *Store) Read(ctx context.Context, file domain.MediaFile) ([]byte, error) {
@@ -169,7 +169,7 @@ func (s *Store) Read(ctx context.Context, file domain.MediaFile) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	data, err := io.ReadAll(io.LimitReader(f, MaxOriginal+1))
 	if err != nil {
 		return nil, err

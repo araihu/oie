@@ -26,7 +26,7 @@ func (s *Store) EnsurePreview(ctx context.Context, p domain.MessagePreview) (dom
 	if err != nil {
 		return p, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	n, err := q.InsertMessagePreview(ctx, dbgen.InsertMessagePreviewParams{ID: string(p.ID), RevisionID: string(p.RevisionID), AccountID: string(p.AccountID), ConversationID: string(p.ConversationID), MessageID: string(p.MessageID), Url: p.URL, State: p.State, DownloadState: p.DownloadState, UpdatedAt: stamp(p.UpdatedAt), Payload: jsonText(p)})
 	if err != nil {
 		return p, err
@@ -55,7 +55,7 @@ func (s *Store) SavePreview(ctx context.Context, p domain.MessagePreview, expect
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	n, err := q.UpdateMessagePreview(ctx, dbgen.UpdateMessagePreviewParams{RevisionID: string(p.RevisionID), State: p.State, DownloadState: p.DownloadState, UpdatedAt: stamp(p.UpdatedAt), Payload: jsonText(p), ID: string(p.ID), RevisionID_2: string(expected)})
 	if err != nil {
 		return err

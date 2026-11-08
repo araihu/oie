@@ -333,7 +333,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 		if target == "" {
 			target = safeReturn(r.Form.Get("returnTo"))
 		}
-		http.Redirect(w, r, target, 303)
+		http.Redirect(w, r, target, http.StatusSeeOther)
 		return
 	}
 	target := safeReturn(r.Form.Get("returnTo"))

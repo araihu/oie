@@ -116,7 +116,7 @@ func (s *Server) mediaImage(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(503)
 		return
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	cache := func() {
 		w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 		w.Header().Set("ETag", `"`+hash+`"`)

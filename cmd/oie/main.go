@@ -63,7 +63,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	var engineDone <-chan error
 	mux := http.NewServeMux()
 	mux.Handle("GET /assets/", assets.Handler())
@@ -76,7 +76,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		defer store.Close()
+		defer func() { _ = store.Close() }()
 		engine, err := application.New(store, *role, newID, time.Now)
 		if err != nil {
 			return err
@@ -134,7 +134,7 @@ func run() error {
 		Handler: mux, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second,
 		BaseContext: func(net.Listener) context.Context { return ctx },
 	}
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
 	slog.Info("oie listening", "address", listener.Addr(), "role", *role)

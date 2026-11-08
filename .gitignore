@@ -11,3 +11,4 @@ test-results/
 /tests/browser/node_modules/
 /tests/browser/artifacts/
 /.codegen-check.*/
+__pycache__/

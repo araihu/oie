@@ -21,7 +21,7 @@ import (
 type Server struct{ engine *application.Engine }
 
 func New(engine *application.Engine) (http.Handler, error) {
-	schema, err := engineapi.GetSwagger()
+	schema, err := engineapi.GetSpec()
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +247,7 @@ func (s stream) VisitStreamEventsResponse(w http.ResponseWriter) error {
 		}
 		return control.Flush() == nil
 	}
-	defer control.SetWriteDeadline(time.Time{})
+	defer func() { _ = control.SetWriteDeadline(time.Time{}) }()
 	if !write(": connected\n\n") {
 		return nil
 	}

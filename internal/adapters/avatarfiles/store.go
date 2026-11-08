@@ -79,8 +79,8 @@ func (s *Store) Put(ctx context.Context, data []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(file.Name())
-	defer file.Close()
+	defer func() { _ = os.Remove(file.Name()) }()
+	defer func() { _ = file.Close() }()
 	if err = file.Chmod(0600); err != nil {
 		return "", err
 	}
@@ -103,7 +103,7 @@ func (s *Store) Put(ctx context.Context, data []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer dir.Close()
+	defer func() { _ = dir.Close() }()
 	if err = dir.Sync(); err != nil {
 		return "", err
 	}
@@ -131,7 +131,7 @@ func (s *Store) Read(ctx context.Context, hash string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	data, err := io.ReadAll(io.LimitReader(file, (1<<20)+1))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, application.ErrNotFound

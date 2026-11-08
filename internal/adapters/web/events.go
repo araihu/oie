@@ -30,7 +30,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(503)
 		return
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == 409 {
 		snapshot, err := s.client.GetEngineWithResponse(r.Context())
 		if err != nil || snapshot.JSON200 == nil {
@@ -59,7 +59,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	if control.Flush() != nil {
 		return
 	}
-	defer control.SetWriteDeadline(time.Time{})
+	defer func() { _ = control.SetWriteDeadline(time.Time{}) }()
 	scanner := bufio.NewScanner(response.Body)
 	scanner.Buffer(make([]byte, 4096), 8<<20)
 	for scanner.Scan() {

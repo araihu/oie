@@ -147,7 +147,7 @@ func (f *Fetcher) get(ctx context.Context, address string) (*http.Response, erro
 		return nil, application.PreviewFailure{Code: "fetch_failed"}
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		response.Body.Close()
+		_ = response.Body.Close()
 		code := "fetch_failed"
 		if response.StatusCode == 404 || response.StatusCode == 410 {
 			code = "not_found"
@@ -177,7 +177,7 @@ func (f *Fetcher) Image(ctx context.Context, address string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	mimeType, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if mimeType != "" && !imageMIME(mimeType) && mimeType != "application/octet-stream" {
 		return nil, application.PreviewFailure{Code: "unsupported"}
@@ -189,7 +189,7 @@ func (f *Fetcher) smallImage(ctx context.Context, address string) []byte {
 	if err != nil {
 		return nil
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	mediaType, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if !imageMIME(mediaType) {
 		return nil
@@ -265,7 +265,7 @@ func (f *Fetcher) link(ctx context.Context, address string) (application.Preview
 	if err != nil {
 		return application.PreviewMetadata{}, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	out := application.PreviewMetadata{SiteName: plain(response.Request.URL.Hostname(), 200)}
 	mediaType, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	// A dynamic image endpoint is still an original, not an automatic thumbnail.

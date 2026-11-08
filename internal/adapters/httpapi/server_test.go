@@ -60,7 +60,7 @@ func request(t *testing.T, server, method, path, key, body string) (int, []byte)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatal(err)
@@ -144,7 +144,7 @@ func TestConcurrentRetriesHaveOneEffect(t *testing.T) {
 				return
 			}
 			_, _ = io.Copy(io.Discard, res.Body)
-			res.Body.Close()
+			_ = res.Body.Close()
 			statuses <- res.StatusCode
 		})
 	}
@@ -239,7 +239,7 @@ func TestSSEReplayAndCursorValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != 200 || res.Header.Get("Content-Type") != "text/event-stream" {
 		t.Fatalf("SSE status=%d", res.StatusCode)
 	}
@@ -272,7 +272,7 @@ func TestSSEReplayAndCursorValidation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		res.Body.Close()
+		_ = res.Body.Close()
 		if res.StatusCode != 409 {
 			t.Fatalf("invalid cursor produced %d", res.StatusCode)
 		}

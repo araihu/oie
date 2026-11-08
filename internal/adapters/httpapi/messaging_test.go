@@ -76,7 +76,7 @@ func newMessagingEngine(t *testing.T, dir string, p *protocolStub) (*application
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { store.Close() })
+	t.Cleanup(func() { _ = store.Close() })
 	e, err := application.New(store, "local", func() (domain.ID, error) { return id(), nil }, time.Now)
 	if err != nil {
 		t.Fatal(err)
@@ -160,7 +160,7 @@ func TestSendAcceptanceReplayAndCancellationAfterRestart(t *testing.T) {
 		}
 	}
 	server.Close()
-	store.Close()
+	_ = store.Close()
 	restarted, _, next := newMessagingEngine(t, dir, p)
 	cancelKey := string(id())
 	cancelBody := `{"expectedRevisionId":"` + first.RevisionId + `"}`

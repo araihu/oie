@@ -60,7 +60,7 @@ func TestDevelopmentServerMessageExchange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 	engine, err := application.New(store, "hosted", func() (domain.ID, error) { return id(), nil }, time.Now)
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +99,7 @@ func TestDevelopmentServerMessageExchange(t *testing.T) {
 	}
 	alice, bob := register("alice@localhost"), register("bob@localhost")
 	proxy := newNetworkProxy(t)
-	directEndpoint := "127.0.0.1:5222"
+	directEndpoint := xmppEndpoint()
 	connect := func(account, password string) {
 		t.Helper()
 		endpoint := directEndpoint
@@ -322,7 +322,7 @@ func newNetworkProxy(t *testing.T) *networkProxy {
 			p.wg.Add(1)
 			go func() {
 				defer p.wg.Done()
-				defer client.Close()
+				defer func() { _ = client.Close() }()
 				p.mu.Lock()
 				up := p.up
 				if up {
@@ -333,20 +333,20 @@ func newNetworkProxy(t *testing.T) *networkProxy {
 					return
 				}
 				defer func() { p.mu.Lock(); delete(p.active, client); p.mu.Unlock() }()
-				server, err := net.DialTimeout("tcp", "127.0.0.1:5222", time.Second)
+				server, err := net.DialTimeout("tcp", xmppEndpoint(), time.Second)
 				if err != nil {
 					return
 				}
-				defer server.Close()
+				defer func() { _ = server.Close() }()
 				copied := make(chan struct{})
-				go func() { io.Copy(server, client); server.Close(); close(copied) }()
-				io.Copy(client, server)
-				client.Close()
+				go func() { _, _ = io.Copy(server, client); _ = server.Close(); close(copied) }()
+				_, _ = io.Copy(client, server)
+				_ = client.Close()
 				<-copied
 			}()
 		}
 	}()
-	t.Cleanup(func() { p.listener.Close(); p.cut(); p.wg.Wait() })
+	t.Cleanup(func() { _ = p.listener.Close(); p.cut(); p.wg.Wait() })
 	return p
 }
 func (p *networkProxy) cut() {
@@ -354,7 +354,7 @@ func (p *networkProxy) cut() {
 	defer p.mu.Unlock()
 	p.up = false
 	for conn := range p.active {
-		conn.Close()
+		_ = conn.Close()
 	}
 }
 func (p *networkProxy) restore() { p.mu.Lock(); p.up = true; p.mu.Unlock() }
@@ -370,7 +370,7 @@ func TestConnectionConfigurationSurvivesRestartAndTLSIsVerified(t *testing.T) {
 	roots := x509.NewCertPool()
 	roots.AppendCertsFromPEM(pem)
 	dir := t.TempDir()
-	endpoint := "127.0.0.1:5222"
+	endpoint := xmppEndpoint()
 	start := func(path string, trust *x509.CertPool) (*application.Engine, *sqlite.Store, *adapter.Manager) {
 		t.Helper()
 		store, err := sqlite.Open(t.Context(), path, id())
@@ -401,9 +401,9 @@ func TestConnectionConfigurationSurvivesRestartAndTLSIsVerified(t *testing.T) {
 		return err == nil && c.State == "connected"
 	})
 	manager.Close()
-	store.Close()
+	_ = store.Close()
 	again, store2, reconnected := start(dir, roots)
-	defer store2.Close()
+	defer func() { _ = store2.Close() }()
 	defer reconnected.Close()
 	eventually(t, func() bool {
 		c, err := again.Connection(t.Context(), a.Account.ID)
@@ -411,7 +411,7 @@ func TestConnectionConfigurationSurvivesRestartAndTLSIsVerified(t *testing.T) {
 	})
 	// A second independent engine with no trusted fixture CA must reject TLS.
 	untrusted, badStore, badManager := start(t.TempDir(), x509.NewCertPool())
-	defer badStore.Close()
+	defer func() { _ = badStore.Close() }()
 	defer badManager.Close()
 	bad, err := untrusted.Register(t.Context(), id(), application.RegisterInput{Protocol: "xmpp", Address: "bob@localhost", Label: "Untrusted TLS"})
 	if err != nil {
@@ -424,4 +424,11 @@ func TestConnectionConfigurationSurvivesRestartAndTLSIsVerified(t *testing.T) {
 		c, err := untrusted.Connection(t.Context(), bad.Account.ID)
 		return err == nil && c.State == "error" && c.LastErrorCode == "tls_failed"
 	})
+}
+
+func xmppEndpoint() string {
+	if endpoint := os.Getenv("OIE_XMPP_ENDPOINT"); endpoint != "" {
+		return endpoint
+	}
+	return "127.0.0.1:5222"
 }

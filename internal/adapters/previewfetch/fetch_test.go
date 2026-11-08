@@ -65,7 +65,7 @@ func fixtureFetcher(t *testing.T, handler http.HandlerFunc) (*Fetcher, *atomic.I
 }
 func TestRedirectsAndRebindingCannotReachPrivateServices(t *testing.T) {
 	f, _ := fixtureFetcher(t, func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "http://internal.example/metadata", 302)
+		http.Redirect(w, r, "http://internal.example/metadata", http.StatusFound)
 	})
 	if _, err := f.Link(t.Context(), "http://public.example/"); failCode(err) != "blocked" {
 		t.Fatal("unsafe redirect accepted", err)
@@ -97,13 +97,13 @@ func TestBoundedMetadataAndOriginalImageSeparation(t *testing.T) {
 		switch r.URL.Path {
 		case "/page":
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			fmt.Fprint(w, `<html><head><title>Fallback</title><meta property="og:title" content="Rich &amp; plain"><meta name="description" content="Words"><meta property="og:site_name" content="Publisher"><meta property="og:image" content="http://internal.example/private"></head><body><script>bad()</script></body></html>`)
+			_, _ = fmt.Fprint(w, `<html><head><title>Fallback</title><meta property="og:title" content="Rich &amp; plain"><meta name="description" content="Words"><meta property="og:site_name" content="Publisher"><meta property="og:image" content="http://internal.example/private"></head><body><script>bad()</script></body></html>`)
 		case "/image":
 			w.Header().Set("Content-Type", "image/jpeg")
 			w.Header().Set("Content-Length", "99999999")
 		case "/large":
 			w.Header().Set("Content-Type", "text/html")
-			fmt.Fprint(w, strings.Repeat("x", (512<<10)+1))
+			_, _ = fmt.Fprint(w, strings.Repeat("x", (512<<10)+1))
 		}
 	})
 	metadata, err := f.Link(t.Context(), "http://public.example/page")

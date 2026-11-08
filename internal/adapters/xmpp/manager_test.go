@@ -68,7 +68,7 @@ func TestCredentialsAreNotSentWithoutTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	captured := make(chan string, 1)
 	go func() {
 		conn, err := listener.Accept()
@@ -76,8 +76,8 @@ func TestCredentialsAreNotSentWithoutTLS(t *testing.T) {
 			captured <- ""
 			return
 		}
-		defer conn.Close()
-		conn.SetDeadline(time.Now().Add(2 * time.Second))
+		defer func() { _ = conn.Close() }()
+		_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
 		var buf [8192]byte
 		n, _ := conn.Read(buf[:])
 		text := string(buf[:n])
@@ -90,8 +90,8 @@ func TestCredentialsAreNotSentWithoutTLS(t *testing.T) {
 	defer cancel()
 	session, raw, err := m.connect(ctx, &entry{account: domain.Account{ID: "019a5df0-0000-7000-8000-000000000001", Address: "alice@localhost"}, config: configuration{Endpoint: listener.Addr().String(), Password: "never-send-without-TLS"}})
 	if err == nil {
-		raw.Close()
-		session.Conn().Close()
+		_ = raw.Close()
+		_ = session.Conn().Close()
 		t.Fatal("cleartext session accepted")
 	}
 	if data := <-captured; strings.Contains(data, "<auth") || strings.Contains(data, "never-send-without-TLS") {

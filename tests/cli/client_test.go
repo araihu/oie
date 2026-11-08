@@ -33,7 +33,7 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 	engine, _ := application.New(store, "hosted", ids, time.Now)
 	engine.SetProtocols(xmppadapter.New(t.TempDir(), nil))
 	handler, err := httpapi.New(engine)

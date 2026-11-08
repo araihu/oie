@@ -32,7 +32,7 @@ func migrateDatabase(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	defer source.Close()
+	defer func() { _ = source.Close() }()
 	runner, err := migrate.NewWithInstance("iofs", source, "sqlite", driver)
 	if err != nil {
 		return err

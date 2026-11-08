@@ -57,12 +57,12 @@ func TestLegacyFoundationMigratesWithoutDiscardingData(t *testing.T) {
 	if err = tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	db.Close()
+	_ = db.Close()
 	store, err := Open(context.Background(), dir, migrationID())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 	gotID, seq, err := store.Snapshot(t.Context())
 	if err != nil || gotID != engineID || seq != 1 {
 		t.Fatalf("engine identity/history changed: %s %d %v", gotID, seq, err)
@@ -101,10 +101,10 @@ func TestDirtyAndFutureMigrationsAreNotForced(t *testing.T) {
 			if _, err = store.db.Exec("UPDATE schema_migrations SET version=?,dirty=?", tc.version, tc.dirty); err != nil {
 				t.Fatal(err)
 			}
-			store.Close()
+			_ = store.Close()
 			next, err := Open(t.Context(), dir, migrationID())
 			if next != nil {
-				next.Close()
+				_ = next.Close()
 			}
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("unsafe migration repair: %v", err)
@@ -121,7 +121,7 @@ func TestDataDirectoryHasOneEngineOwner(t *testing.T) {
 	}
 	second, err := Open(t.Context(), dir, migrationID())
 	if second != nil {
-		second.Close()
+		_ = second.Close()
 	}
 	if err == nil || !strings.Contains(err.Error(), "already in use") {
 		t.Fatal("two dispatchers can open one engine directory")
@@ -133,12 +133,12 @@ func TestDataDirectoryHasOneEngineOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reopened.Close()
+	defer func() { _ = reopened.Close() }()
 	// Repeated cleanup of the former owner must not release the new owner's lock.
-	first.Close()
+	_ = first.Close()
 	third, err := Open(t.Context(), dir, migrationID())
 	if third != nil {
-		third.Close()
+		_ = third.Close()
 	}
 	if err == nil {
 		t.Fatal("former owner cleanup released another engine's lock")

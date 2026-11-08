@@ -17,7 +17,7 @@ func TestFailedRevisionWriteRollsBackAccountOperationAndEvent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 	_, err = store.db.Exec(`CREATE TRIGGER fail_revision BEFORE INSERT ON revisions BEGIN SELECT RAISE(ABORT,'injected write failure'); END;`)
 	if err != nil {
 		t.Fatal(err)

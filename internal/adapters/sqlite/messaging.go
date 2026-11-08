@@ -47,7 +47,7 @@ func (s *Store) OpenConversation(ctx context.Context, in application.Conversatio
 	if err != nil {
 		return application.ConversationResult{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	receipt, err := operation(ctx, q, in.Operation, in.Fingerprint, in.Conversation)
 	if err != nil {
 		return application.ConversationResult{}, err
@@ -136,7 +136,7 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 	if err != nil {
 		return application.MessageResult{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	receipt, err := operation(ctx, q, in.Operation, in.Fingerprint, in.Message)
 	if err != nil {
 		return application.MessageResult{}, err
@@ -199,7 +199,7 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if err = q.AcquireWriteLock(ctx); err != nil {
 		return err
 	}
@@ -278,7 +278,7 @@ func (s *Store) CancelMessage(ctx context.Context, in application.CancelMutation
 	if err != nil {
 		return application.MessageResult{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	receipt, err := operation(ctx, q, in.Operation, in.Fingerprint, struct{}{})
 	if err != nil {
 		return application.MessageResult{}, err
@@ -330,7 +330,7 @@ func (s *Store) TransitionMessage(ctx context.Context, id domain.ID, expected, s
 	if err != nil {
 		return domain.Message{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if err = q.AcquireWriteLock(ctx); err != nil {
 		return domain.Message{}, err
 	}

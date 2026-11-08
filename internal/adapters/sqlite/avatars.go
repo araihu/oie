@@ -50,7 +50,7 @@ func (s *Store) SaveAvatar(ctx context.Context, a domain.Avatar) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if err = q.AcquireWriteLock(ctx); err != nil {
 		return err
 	}

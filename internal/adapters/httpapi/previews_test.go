@@ -60,7 +60,7 @@ func TestPreviewLifecycleDoesNotDownloadOriginalUntilExplicitDemand(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer res.Body.Close()
+		defer func() { _ = res.Body.Close() }()
 		body, _ := io.ReadAll(res.Body)
 		if res.StatusCode != 200 {
 			t.Fatal("GET", res.StatusCode, string(body))
@@ -104,7 +104,7 @@ func TestPreviewLifecycleDoesNotDownloadOriginalUntilExplicitDemand(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		res.Body.Close()
+		_ = res.Body.Close()
 		if res.StatusCode != 202 && res.StatusCode != 200 {
 			t.Fatal("download ensure", res.StatusCode)
 		}
