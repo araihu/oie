@@ -145,7 +145,6 @@
   "ImageBlocked": "This image address cannot be downloaded.",
   "ImageUnsupported": "This image format is not supported.",
   "ImageNotFound": "This image is no longer available.",
-  "ImageComputed": "File fingerprint computed after download.",
   "DevicePreferences": "This device",
   "AutoImageDownloads": "Download images automatically",
   "AutoImageDownloadsHelp": "Images download as you scroll. Turn this off to load them manually. Other files stay on demand.",
@@ -160,5 +159,16 @@
   "ImageFilename": "Filename",
   "ImageType": "File type",
   "ImageSize": "File size",
-  "ImageNotDownloaded": "The image has not been downloaded."
+  "ImageNotDownloaded": "The image has not been downloaded.",
+  "StarMessage": "Star message",
+  "UnstarMessage": "Unstar message",
+  "RetryStar": "Retry star change",
+  "StarConflict": "The star changed elsewhere. Current state loaded; choose again.",
+  "StarUncertain": "The star change could not be confirmed. Retry the same change.",
+  "StarUnavailable": "The current star is unavailable.",
+  "StarRefreshed": "Current star state loaded.",
+  "StarStorageUnavailable": "Star retries are kept in this window only. Reloading may lose an unconfirmed change.",
+  "MessageActions": "Message actions",
+  "ImageActions": "Image actions",
+  "SaveOriginalImage": "Save original image"
 }

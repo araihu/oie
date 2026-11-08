@@ -154,7 +154,26 @@ func (s *Server) mediaImage(w http.ResponseWriter, r *http.Request) {
 	}
 	cache()
 	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Content-Disposition", `inline; filename="image"`)
+	if name := r.URL.Query().Get("download"); name != "" {
+		name = path.Base(strings.ReplaceAll(name, "\\", "/"))
+		name = strings.Map(func(r rune) rune {
+			if r < 32 || r == 127 {
+				return -1
+			}
+			return r
+		}, name)
+		if len(name) > 180 || name == "." || name == "/" || name == "" {
+			name = "image"
+		}
+		extension := map[string]string{"image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif"}[contentType]
+		current := strings.ToLower(path.Ext(name))
+		if current != extension && (contentType != "image/jpeg" || current != ".jpeg") {
+			name += extension
+		}
+		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	} else {
+		w.Header().Set("Content-Disposition", `inline; filename="image"`)
+	}
 	if r.Method != http.MethodHead {
 		_, _ = w.Write(data)
 	}

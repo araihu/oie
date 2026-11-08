@@ -3,6 +3,7 @@ package web
 import (
  "github.com/araihu/goshtoso/components/button"
  "github.com/araihu/goshtoso/components/card"
+ "github.com/araihu/goshtoso/components/dropdown"
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/link"
  "github.com/araihu/goshtoso/components/modal"
@@ -13,13 +14,16 @@ import (
 // Provider text is plain HTML data. The Alpine expression is fixed application
 // code, and image sources are exclusively BFF paths built from validated hashes.
 templ messagePreview(v view,p engineapi.MessagePreview){
-<section class="oie-message-preview" data-preview-id={p.Id} data-preview-revision={p.RevisionId} data-preview-kind={string(p.Kind)} data-preview-title={previewValue(p.Title)} data-preview-url={safePreviewURL(p.Url)} data-preview-name={previewFilename(p)} data-preview-mime={previewMime(p)} data-preview-size={previewSize(p)} data-preview-description={previewValue(p.Description)} data-preview-site={previewValue(p.SiteName)} data-preview-image={mediaSource(p.ImageHash)} data-preview-file={mediaSource(p.FileHash)} data-preview-state={string(p.State)} data-preview-download={string(p.DownloadState)} data-preview-status={v.previewStatus(p)} x-data="{previewTitle:$el.dataset.previewTitle,previewDescription:$el.dataset.previewDescription,previewSite:$el.dataset.previewSite,previewImage:$el.dataset.previewImage,previewFile:$el.dataset.previewFile,previewState:$el.dataset.previewState,previewDownload:$el.dataset.previewDownload,previewStatus:$el.dataset.previewStatus,previewBusy:false,previewImageFailed:false}">
+<section class="oie-message-preview" data-preview-id={p.Id} data-preview-revision={p.RevisionId} data-preview-kind={string(p.Kind)} data-preview-title={previewValue(p.Title)} data-preview-message={p.MessageId} data-preview-url={safePreviewURL(p.Url)} data-preview-name={previewFilename(p)} data-preview-mime={previewMime(p)} data-preview-size={previewSize(p)} data-preview-description={previewValue(p.Description)} data-preview-site={previewValue(p.SiteName)} data-preview-image={mediaSource(p.ImageHash)} data-preview-file={mediaSource(p.FileHash)} data-preview-state={string(p.State)} data-preview-download={string(p.DownloadState)} data-preview-status={v.previewStatus(p)} x-data="{previewTitle:$el.dataset.previewTitle,previewDescription:$el.dataset.previewDescription,previewSite:$el.dataset.previewSite,previewImage:$el.dataset.previewImage,previewFile:$el.dataset.previewFile,previewState:$el.dataset.previewState,previewDownload:$el.dataset.previewDownload,previewStatus:$el.dataset.previewStatus,previewBusy:false,previewImageFailed:false}">
 if p.Kind=="link" {
 @link.Link(safePreviewURL(p.Url),link.WithRootClass("oie-link-preview"),link.WithAttrs(templ.Attributes{"target":"_blank","rel":"noopener noreferrer","data-preview-page":""})){
 @card.Card(card.Config{Title:previewHost(p),Media:previewThumbnail(v,p),MediaClass:"oie-preview-media",Body:previewDescription(v,p),Density:card.DensityCompact,RootClass:"oie-preview-card"})
 }
 }else{
 <div class="oie-image-preview">
+if len(v.imagePreviews(p.MessageId))>1 {
+@dropdown.Dropdown(dropdown.Config{ID:"image-menu-"+p.Id,Label:v.Text.ImageActions,Trigger:imageMenuTrigger(v,p.Id),RootClass:"oie-image-menu",MenuAlign:dropdown.AlignEnd,Sections:imageActions(v,p)})
+}
 @previewThumbnail(v,p)
 <p class="oie-preview-status" x-show="previewStatus" x-text="previewStatus">{v.previewStatus(p)}</p>
 @previewImageActions(v)
@@ -61,7 +65,7 @@ templ previewImageActions(v view){
 
 templ imageViewer(v view){
 <div data-image-viewer x-data="{viewerSrc:'',viewerLabel:'',viewerStatus:'',viewerFailed:false,viewerActive:false,viewerUrl:'',viewerFilename:'',viewerMime:'',viewerSize:''}">
-@modal.Dialog(modal.DialogConfig{ID:"oie-image-viewer",Title:v.Text.ImageView,Content:imageViewerContent(v),FullscreenMobile:true})
+@modal.Dialog(modal.DialogConfig{ID:"oie-image-viewer",Title:v.Text.ImageView,HeaderContent:imageViewerHeader(v),Content:imageViewerContent(v),FullscreenMobile:true})
 </div>
 }
 
@@ -71,11 +75,7 @@ templ imageViewerContent(v view){
 <p role="status" aria-live="polite" x-show="viewerStatus" x-text="viewerStatus"></p>
 <img class="oie-expanded-image" alt={v.Text.ImageView} data-failed={v.Text.ImageDownloadFailed} x-cloak x-show="viewerSrc && !viewerFailed" x-bind:src="viewerSrc || null" x-bind:alt="viewerLabel" x-on:error="viewerFailed=true;viewerStatus=$el.dataset.failed"/>
 </div>
-<footer class="oie-image-viewer-footer">
-<template x-if="viewerActive">
-@popover.Popover(popover.Config{ID:"oie-image-info-popover",Trigger:imageInfoTrigger(v),Content:imageInfoContent(v),Placement:popover.PlacementTopEnd,Role:"dialog",Label:v.Text.ImageInfo,PanelClass:"oie-image-info-panel",TrapFocus:true})
-</template>
-</footer>
+
 </div>
 }
 
@@ -93,6 +93,21 @@ templ imageInfoContent(v view){
 <div x-show="viewerMime"><dt>{v.Text.ImageType}</dt><dd data-image-type x-text="viewerMime"></dd></div>
 <div x-show="viewerSize"><dt>{v.Text.ImageSize}</dt><dd data-image-size x-text="viewerSize"></dd></div>
 </dl>
-<p class="oie-image-integrity" x-show="viewerSrc && !viewerFailed">{v.Text.ImageComputed}</p>
 </div>
+}
+
+templ imageMenuTrigger(v view,id string){
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-menu-chevron"),button.WithAttrs(templ.Attributes{"data-image-menu-trigger":id,"aria-label":v.Text.ImageActions,"title":v.Text.ImageActions})){@glyph(heroicons.Icon16SolidChevronDown)}
+}
+templ imageViewerHeader(v view){
+<header class="oie-viewer-header">
+<div class="oie-viewer-identity" data-viewer-identity></div>
+<div class="oie-viewer-toolbar">
+@starButton(v,"")
+<template x-if="viewerActive">
+@popover.Popover(popover.Config{ID:"oie-image-info-popover",Trigger:imageInfoTrigger(v),Content:imageInfoContent(v),Placement:popover.PlacementBottomEnd,Role:"dialog",Label:v.Text.ImageInfo,PanelClass:"oie-image-info-panel",TrapFocus:true})
+</template>
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-viewer-action"),button.WithAttrs(templ.Attributes{"data-viewer-close":"","aria-label":v.Text.Close,"title":v.Text.Close}),button.WithAlpine(&button.AlpineConfig{OnClick:"$dispatch('modal:close',{id:'oie-image-viewer'})"})){@glyph(heroicons.Icon16SolidXMark)}
+</div>
+</header>
 }

@@ -115,7 +115,7 @@
     const locale=document.documentElement.lang || undefined;
     const clock=new Intl.DateTimeFormat(locale,{hour:'2-digit',minute:'2-digit'});
     for (const time of document.querySelectorAll('time[datetime]:not([data-day])')) {
-      const date=new Date(time.dateTime);if(!Number.isNaN(date.getTime()))time.textContent=clock.format(date);
+      const date=new Date(time.dateTime);if(!Number.isNaN(date.getTime()))time.textContent=time.matches('[data-viewer-date]')?new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(date):clock.format(date);
     }
     const timeline=document.querySelector('#message-timeline');if(!timeline)return;
     for(const divider of timeline.querySelectorAll('.oie-day-divider'))divider.remove();
@@ -148,6 +148,7 @@
     if (stopped || mock) return;
     if (pendingRequests || refreshing) { refreshAgain = true; return; }
     refreshing = true;
+    const starGeneration=Number(body.dataset.starGeneration||0);
     const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 12000);
     try {
       const response = await fetch('/ui/refresh'+location.search, {credentials:'same-origin',cache:'no-store',signal:controller.signal});
@@ -218,13 +219,14 @@
           if (next) {badge.textContent = next.textContent;badge.hidden = next.hidden;badge.setAttribute('aria-label',next.getAttribute('aria-label'));}
         }
       }
-      applyAvatars();document.dispatchEvent(new CustomEvent("oie:previews-refresh",{detail:page}));localizeTimes();
+      applyAvatars();document.dispatchEvent(new CustomEvent("oie:stars-refresh",{detail:{page,generation:starGeneration}}));document.dispatchEvent(new CustomEvent("oie:previews-refresh",{detail:page}));localizeTimes();
     } catch { announce(text('liveRetry')); }
     finally {
       clearTimeout(timeout); refreshing = false;
       if (refreshAgain) { refreshAgain = false; scheduleRefresh(); }
     }
   }
+  document.addEventListener('oie:refresh-request',()=>scheduleRefresh());
   function scheduleRefresh() { clearTimeout(refreshTimer); refreshTimer = setTimeout(refresh,100); }
 
   document.addEventListener('submit', async event => {
@@ -287,6 +289,7 @@
     source.onopen = () => { announce(text('liveReady'));scheduleRefresh();retryPending(); };
     source.onerror = () => announce(text('liveRetry'));
     for (const type of ['message.preview_changed','profile.avatar_changed','account.registered','account.connection_changed','account.history_changed','conversation.created','conversation.updated','message.created','message.updated']) source.addEventListener(type,scheduleRefresh);
+    source.addEventListener('message.star_changed',event=>{try{document.dispatchEvent(new CustomEvent('oie:star-event',{detail:JSON.parse(event.data).star}));}catch{}scheduleRefresh();});
     source.addEventListener('oie.reset', event => {
       try {
         const reset=JSON.parse(event.data);

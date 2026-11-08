@@ -59,12 +59,15 @@ templ page(v view) {
 <script src="/ui/formatting.js"></script>
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href="/ui/app.css"/>
+<script src="/ui/actions.js" defer></script>
+<script src="/ui/stars.js" defer></script>
 <script src="/ui/previews.js" defer></script>
 <script src="/ui/live.js" defer></script>
 <meta name="oie-csrf" content={v.CSRF}/>
 		</head>
 		<body data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-mock={strconv.FormatBool(v.Preview)}>
 @liveCopy(v)
+@starData(v)
 @avatarData(v)
 <div class="oie-live-status" data-live-status role="status" aria-live="polite"></div>
 if v.ErrorMessage!="" {
@@ -302,7 +305,8 @@ templ chatHeader(v view) {
 }
 
 templ message(v view,m messageView,grouped bool){
-<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-grouped",grouped)} data-message-id={m.Id} data-send-state={string(m.SendState)} data-created-at={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-message-source={originalMessageJSON(m.OriginalText)}>
+<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-grouped",grouped)} data-message-id={m.Id} data-starred={strconv.FormatBool(v.StarsKnown&&v.Stars[m.Id].Starred)} data-send-state={string(m.SendState)} data-created-at={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-message-source={originalMessageJSON(m.OriginalText)}>
+@viewerSource(v,m)
 if m.Attachment!=nil {
 <div class="oie-media-message">@card.Card(card.Config{Image:m.Attachment.PreviewUrl,ImageAlt:m.Attachment.Title,Title:m.Attachment.Title,Description:m.Attachment.Description,Density:card.DensityCompact,RootClass:"oie-media-card"})</div>
 }else{
@@ -311,9 +315,10 @@ if !m.IsOwn && !grouped {
 @profileAvatar(v,m.AccountId,v.messageAvatarAddress(m),avatar.Config{Name:m.Sender.DisplayName,Initials:initials(m.Sender.DisplayName),Size:avatar.SizeSM})
 }
 @chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),Message:m.OriginalText,MessageContent:messageBody(v,m),SenderName:m.Sender.DisplayName,Timestamp:m.CreatedAt.Format("15:04"),RootClass:"oie-bubble",Grouped:grouped})
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithRootClass("oie-copy-message"),button.WithAttrs(templ.Attributes{"data-copy-original":"","aria-label":v.Text.CopyOriginal,"title":v.Text.CopyOriginal})){
-@glyph(heroicons.Icon16SolidDocumentDuplicate)
-}
+<span class="oie-message-star-indicator" data-message-star-indicator hidden?={!v.StarsKnown||!v.Stars[m.Id].Starred} role="img" aria-label={v.Text.StarMessage}>@glyph(heroicons.Icon16SolidStar)</span>
+<div data-message-menu-slot={m.Id}>
+@dropdown.Dropdown(dropdown.Config{ID:"message-menu-"+m.Id,Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,m.Id),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:messageActions(v,m.Id)})
+</div>
 </div>
 }
 
@@ -523,6 +528,9 @@ if len(v.Accounts)==0 {
 }
 }
 templ liveCopy(v view){
+<div id="oie-star-copy" hidden data-star={v.Text.StarMessage} data-unstar={v.Text.UnstarMessage} data-retry={v.Text.RetryStar} data-uncertain={v.Text.StarUncertain} data-storage={v.Text.StarStorageUnavailable}></div>
+<div id="oie-star-status" class="sr-only" role="status" aria-live="polite"></div>
+<p id="oie-star-storage-warning" class="oie-star-warning" role="status" hidden>{v.Text.StarStorageUnavailable}</p>
 <div id="oie-formatting-copy" hidden data-copy={v.Text.CopyOriginal} data-copied={v.Text.MessageCopied} data-failed={v.Text.CopyFailed}></div>
 <div id="oie-copy-status" class="sr-only" role="status" aria-live="polite"></div>
 <div id="oie-preview-copy" hidden data-loading={v.Text.LoadingImage} data-image={v.Text.ImageView} data-not-downloaded={v.Text.ImageNotDownloaded} data-failed={v.Text.ImageDownloadFailed}></div>
@@ -531,6 +539,7 @@ templ liveCopy(v view){
 templ liveRegions(v view){
 <div id="oie-live-regions" data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
 @avatarData(v)
+@starData(v)
 <div id="live-history-status">@historyBanner(v)</div>
 <div id="live-list">@conversationList(v)</div>
 <div id="live-timeline" data-version={v.timelineVersion()}>@timeline(v)</div>
@@ -645,4 +654,30 @@ for _,p:=range v.MessagePreviews[m.Id] {
 @messagePreview(v,p)
 }
 </div>
+}
+
+
+templ starData(v view){
+<div id="oie-star-data" hidden data-known={strconv.FormatBool(v.StarsKnown)}>
+for _,star:=range v.Stars {
+<div data-star-state data-star-source={star.MessageId} data-starred={strconv.FormatBool(star.Starred)} data-revision={starRevision(star)}></div>
+}
+</div>
+}
+templ starButton(v view,id string){
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithRootClass("oie-star-message"),button.WithAttrs(templ.Attributes{"data-star-message":id,"data-starred":strconv.FormatBool(v.Stars[id].Starred),"aria-label":v.starLabel(id),"title":v.starLabel(id),"aria-pressed":strconv.FormatBool(v.Stars[id].Starred),"hidden":!v.StarsKnown,"disabled":!v.StarsKnown})){
+@glyph(heroicons.Icon16SolidStar)
+}
+}
+
+templ messageMenuTrigger(v view,id string){
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-menu-chevron"),button.WithAttrs(templ.Attributes{"data-message-menu-trigger":id,"aria-label":v.Text.MessageActions,"title":v.Text.MessageActions})){@glyph(heroicons.Icon16SolidChevronDown)}
+}
+templ viewerSource(v view,m messageView){
+<template data-viewer-source={m.Id}>
+<div class="oie-viewer-source" data-viewer-source-id={m.Id}>
+@profileAvatar(v,m.AccountId,v.messageAvatarAddress(m),avatar.Config{Name:m.Sender.DisplayName,Initials:initials(m.Sender.DisplayName),Size:avatar.SizeXS})
+<div class="oie-viewer-sender"><strong title={m.Sender.DisplayName}>{m.Sender.DisplayName}</strong><time data-viewer-date datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("2006-01-02 15:04")}</time></div>
+</div>
+</template>
 }

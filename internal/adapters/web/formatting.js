@@ -40,9 +40,10 @@
     if(!copied)throw new Error('copy_failed');
   }
   document.addEventListener('click',async event=>{
-    const button=event.target.closest('[data-copy-original]');if(!button)return;
+    const button=event.target.closest('[data-copy-original],[id^="copy-message-"]');if(!button)return;
     event.preventDefault();
-    const row=button.closest('[data-message-source]'),labels=document.querySelector('#oie-formatting-copy')?.dataset || {};
+    const id=button.id?.startsWith('copy-message-')?button.id.slice(13):button.closest('[data-message-id]')?.dataset.messageId;
+    const row=id&&document.querySelector(`[data-message-id="${CSS.escape(id)}"][data-message-source]`),labels=document.querySelector('#oie-formatting-copy')?.dataset || {};
     const status=document.querySelector('#oie-copy-status');
     try {
       const original=JSON.parse(row.dataset.messageSource);

@@ -145,7 +145,6 @@
   "ImageBlocked": "Este endereço de imagem não pode ser baixado.",
   "ImageUnsupported": "Este formato de imagem não é compatível.",
   "ImageNotFound": "Esta imagem não está mais disponível.",
-  "ImageComputed": "Identificação do arquivo calculada após o download.",
   "DevicePreferences": "Este dispositivo",
   "AutoImageDownloads": "Baixar imagens automaticamente",
   "AutoImageDownloadsHelp": "As imagens são baixadas conforme você navega. Desative para carregá-las manualmente. Outros arquivos continuam sob demanda.",
@@ -160,5 +159,16 @@
   "ImageFilename": "Nome do arquivo",
   "ImageType": "Tipo do arquivo",
   "ImageSize": "Tamanho do arquivo",
-  "ImageNotDownloaded": "A imagem ainda não foi baixada."
+  "ImageNotDownloaded": "A imagem ainda não foi baixada.",
+  "StarMessage": "Marcar mensagem com estrela",
+  "UnstarMessage": "Remover estrela da mensagem",
+  "RetryStar": "Tentar alteração da estrela novamente",
+  "StarConflict": "A estrela mudou em outro lugar. O estado atual foi carregado; escolha novamente.",
+  "StarUncertain": "Não foi possível confirmar a alteração da estrela. Tente a mesma alteração novamente.",
+  "StarUnavailable": "A estrela atual está indisponível.",
+  "StarRefreshed": "Estado atual da estrela carregado.",
+  "StarStorageUnavailable": "As tentativas de estrela são mantidas apenas nesta janela. Recarregar pode perder uma alteração não confirmada.",
+  "MessageActions": "Ações da mensagem",
+  "ImageActions": "Ações da imagem",
+  "SaveOriginalImage": "Salvar imagem original"
 }

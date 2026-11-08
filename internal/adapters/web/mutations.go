@@ -59,16 +59,18 @@ func validCSRF(r *http.Request) bool {
 }
 
 type mutationResult struct {
-	Preview   *engineapi.MessagePreview `json:"preview,omitempty"`
-	OK        bool                      `json:"ok"`
-	Message   string                    `json:"message"`
-	Code      string                    `json:"code,omitempty"`
-	Redirect  string                    `json:"redirect,omitempty"`
-	MessageID string                    `json:"messageId,omitempty"`
-	State     string                    `json:"state,omitempty"`
-	Accepted  bool                      `json:"accepted,omitempty"`
-	Rejected  bool                      `json:"rejected,omitempty"`
-	NextKey   string                    `json:"nextKey,omitempty"`
+	Star        *engineapi.MessageStar    `json:"star,omitempty"`
+	StarPending bool                      `json:"starPending,omitempty"`
+	Preview     *engineapi.MessagePreview `json:"preview,omitempty"`
+	OK          bool                      `json:"ok"`
+	Message     string                    `json:"message"`
+	Code        string                    `json:"code,omitempty"`
+	Redirect    string                    `json:"redirect,omitempty"`
+	MessageID   string                    `json:"messageId,omitempty"`
+	State       string                    `json:"state,omitempty"`
+	Accepted    bool                      `json:"accepted,omitempty"`
+	Rejected    bool                      `json:"rejected,omitempty"`
+	NextKey     string                    `json:"nextKey,omitempty"`
 }
 
 func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
@@ -92,6 +94,9 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 	engine, err := s.client.GetEngineWithResponse(ctx)
 	if err != nil || engine.JSON200 == nil {
 		message := text.PendingAcceptance
+		if r.URL.Path == "/ui/messages/star" {
+			message = text.StarUncertain
+		}
 		if r.URL.Path == "/ui/previews/download" {
 			message = text.ImageDownloadFailed
 		}
@@ -109,6 +114,8 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 	result := mutationResult{OK: true, NextKey: newOperationKey()}
 	status := 200
 	switch r.URL.Path {
+	case "/ui/messages/star":
+		status, result = s.setStar(ctx, r, text)
 	case "/ui/previews/download":
 		status, result = s.downloadPreview(ctx, r, text)
 	case "/ui/accounts/register":
@@ -363,7 +370,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 
 func isMutationPath(path string) bool {
 	switch path {
-	case "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/cancel":
+	case "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/cancel":
 		return true
 	}
 	return false
