@@ -86,7 +86,7 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 	if err != nil {
 		return page, err
 	}
-	rows, err := queries.ListSharedContent(ctx, dbgen.ListSharedContentParams{ParserVersion: application.SharedContentVersion, AccountID: string(query.AccountID), ConversationID: string(query.ConversationID), ContentType: query.Type, CursorID: string(cursor.ID), CursorMs: cursor.Milliseconds, Search: strings.TrimSpace(query.Search), PageLimit: int64(query.Limit + 1)})
+	rows, err := queries.ListSharedContent(ctx, dbgen.ListSharedContentParams{ParserVersion: application.SharedContentVersion, MessageIds: jsonText(nonNilIDs(query.MessageIDs)), AccountID: string(query.AccountID), ConversationID: string(query.ConversationID), ContentType: query.Type, CursorID: string(cursor.ID), CursorMs: cursor.Milliseconds, Search: strings.TrimSpace(query.Search), PageLimit: int64(query.Limit + 1)})
 	if err != nil {
 		return page, err
 	}
@@ -123,7 +123,7 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 		last := page.Items[len(page.Items)-1]
 		page.NextCursor = application.SharedContentCursor(last.Message.CreatedAt.UnixMilli(), last.ID)
 	}
-	status, err := queries.SharedContentIndexStatus(ctx, dbgen.SharedContentIndexStatusParams{ParserVersion: application.SharedContentVersion, AccountID: string(query.AccountID), ConversationID: string(query.ConversationID)})
+	status, err := queries.SharedContentIndexStatus(ctx, dbgen.SharedContentIndexStatusParams{ParserVersion: application.SharedContentVersion, MessageIds: jsonText(nonNilIDs(query.MessageIDs)), AccountID: string(query.AccountID), ConversationID: string(query.ConversationID)})
 	if err != nil {
 		return page, err
 	}
@@ -133,4 +133,33 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 	}
 	page.Indexing = domain.SharedContentIndex{State: state, IndexedMessages: status.IndexedMessages, TotalMessages: status.TotalMessages}
 	return page, tx.Commit()
+}
+
+func nonNilIDs(ids []domain.ID) []domain.ID {
+	if ids == nil {
+		return []domain.ID{}
+	}
+	return ids
+}
+func (s *Store) SharedContentItem(ctx context.Context, id domain.ID) (domain.SharedContentItem, error) {
+	row, err := s.queries.GetSharedContentItem(ctx, dbgen.GetSharedContentItemParams{ParserVersion: application.SharedContentVersion, ItemID: string(id)})
+	if err != nil {
+		return domain.SharedContentItem{}, notFound(err)
+	}
+	item := domain.SharedContentItem{SharedReference: domain.SharedReference{ID: domain.ID(row.ID), RevisionID: domain.ID(row.RevisionID), URL: row.Url, Kind: row.Kind, FileName: row.FileName}}
+	if err = json.Unmarshal([]byte(row.MessagePayload), &item.Message); err != nil {
+		return item, err
+	}
+	if err = hydrateMessageProjection(ctx, s.queries, &item.Message); err != nil {
+		return item, err
+	}
+	if err = hydrateReply(ctx, s.queries, &item.Message); err != nil {
+		return item, err
+	}
+	for _, ref := range application.SharedReferences(domain.DisplayBody(item.Message)) {
+		if ref.URL == item.URL && ref.Kind == item.Kind {
+			return item, nil
+		}
+	}
+	return domain.SharedContentItem{}, application.ErrNotFound
 }

@@ -35,6 +35,7 @@ type Querier interface {
 	GetMessageStar(ctx context.Context, messageID string) (GetMessageStarRow, error)
 	GetOperation(ctx context.Context, id string) (Operation, error)
 	GetRoomIntent(ctx context.Context, conversationID string) (RoomIntent, error)
+	GetSharedContentItem(ctx context.Context, arg GetSharedContentItemParams) (GetSharedContentItemRow, error)
 	InsertAccount(ctx context.Context, arg InsertAccountParams) error
 	InsertAccountRevision(ctx context.Context, arg InsertAccountRevisionParams) error
 	InsertArchiveAlias(ctx context.Context, arg InsertArchiveAliasParams) error

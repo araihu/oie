@@ -95,8 +95,18 @@ func (e *Engine) SharedContent(ctx context.Context, q domain.SharedContentQuery)
 	if q.Type == "" {
 		q.Type = "media"
 	}
-	if q.Type != "media" && q.Type != "links" && q.Type != "documents" || q.Limit < 1 || q.Limit > 100 || !utf8.ValidString(q.Search) || utf8.RuneCountInString(q.Search) > 200 {
+	if q.Type != "media" && q.Type != "links" && q.Type != "documents" && q.Type != "video" || q.Limit < 1 || q.Limit > 100 || !utf8.ValidString(q.Search) || utf8.RuneCountInString(q.Search) > 200 {
 		return empty, ErrInvalid
+	}
+	if len(q.MessageIDs) > 100 || (len(q.MessageIDs) > 0 && q.ConversationID == "") {
+		return empty, ErrInvalid
+	}
+	seen := map[domain.ID]bool{}
+	for _, id := range q.MessageIDs {
+		if !validID(id) || seen[id] {
+			return empty, ErrInvalid
+		}
+		seen[id] = true
 	}
 	if _, err := ParseSharedContentCursor(q.Cursor); err != nil {
 		return empty, err

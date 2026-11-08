@@ -50,7 +50,8 @@ func New() (*cobra.Command, error) {
 		"GetMessagePreview":            build31,
 		"DownloadPreviewImage":         build32,
 		"ListSharedContent":            build33,
-		"ListStarredMessages":          build34,
+		"GetSharedContentMedia":        build34,
+		"ListStarredMessages":          build35,
 	})
 }
 func build0(server string, input cliruntime.Input) (*http.Request, error) {
@@ -369,6 +370,9 @@ func build33(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("query", "conversationId", &params.ConversationId); err != nil {
 		return nil, err
 	}
+	if err := input.Decode("query", "messageId", &params.MessageId); err != nil {
+		return nil, err
+	}
 	if err := input.Decode("query", "q", &params.Q); err != nil {
 		return nil, err
 	}
@@ -381,6 +385,20 @@ func build33(server string, input cliruntime.Input) (*http.Request, error) {
 	return api.NewListSharedContentRequest(server, &params)
 }
 func build34(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.ID
+	if err := input.Decode("path", "itemId", &path0); err != nil {
+		return nil, err
+	}
+	var params api.GetSharedContentMediaParams
+	if err := input.Decode("header", "Range", &params.Range); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("header", "If-Range", &params.IfRange); err != nil {
+		return nil, err
+	}
+	return api.NewGetSharedContentMediaRequest(server, path0, &params)
+}
+func build35(server string, input cliruntime.Input) (*http.Request, error) {
 	var params api.ListStarredMessagesParams
 	if err := input.Decode("query", "accountId", &params.AccountId); err != nil {
 		return nil, err

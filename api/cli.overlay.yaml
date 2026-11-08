@@ -12,3 +12,6 @@ actions:
   - target: $.paths['/api/v1/media/{hash}'].get
     update:
       x-cli-ignore: true
+  - target: $.paths['/api/v1/shared-content/{itemId}/content'].get
+    update:
+      x-cli-ignore: true

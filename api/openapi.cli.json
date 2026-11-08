@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.12.0",
+    "version": "0.13.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.",
     "contact": {
       "name": "Arai Hû",
@@ -57,18 +57,19 @@
         ],
         "operationId": "listSharedContent",
         "summary": "Browse shared content across retained conversations",
-        "description": "Browse the local derived catalog, newest original message time first with item UUID ties at millisecond precision. Account/conversation filters apply before pagination. Metadata search covers URL, filename, visible caption, cached preview title/description, sender, conversation and account label. A background worker indexes all retained and incoming messages. Listing registers preview enrichment only for the returned image/link references; originals still follow device preferences and explicit download operations. Document/audio/video entries are URL references, not implemented file transfers. Backfill or new arrivals may insert items before the current cursor; reload to include them. A conversation filter with another account is invalid.",
+        "description": "Browse the local derived catalog, newest original message time first with item UUID ties at millisecond precision. Account/conversation filters apply before pagination. Metadata search covers URL, filename, visible caption, cached preview title/description, sender, conversation and account label. A background worker indexes all retained and incoming messages. Listing registers preview enrichment only for the returned image/link references; originals still follow device preferences and explicit download operations. Document/audio entries remain URL references. Video bytes are available only through the explicit content operation; listing does not fetch video metadata or bytes. Backfill or new arrivals may insert items before the current cursor; reload to include them. A conversation filter with another account is invalid.",
         "parameters": [
           {
             "name": "type",
-            "description": "Content category; media combines image, audio and video references.",
+            "description": "Content category; media combines image, audio and video references; video restricts to video before pagination.",
             "in": "query",
             "schema": {
               "type": "string",
               "enum": [
                 "media",
                 "links",
-                "documents"
+                "documents",
+                "video"
               ],
               "default": "media"
             }
@@ -87,6 +88,25 @@
             "in": "query",
             "schema": {
               "$ref": "#/components/schemas/ID"
+            }
+          },
+          {
+            "name": "messageId",
+            "description": "Restrict to at most one hundred unique source message UUIDs. Requires conversationId; filters before pagination.",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "example": [
+              "019a5df0-0000-7000-8000-000000000101"
+            ],
+            "schema": {
+              "type": "array",
+              "maxItems": 100,
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/components/schemas/ID"
+              }
             }
           },
           {
@@ -140,6 +160,313 @@
             "$ref": "#/components/responses/Unavailable"
           }
         }
+      }
+    },
+    "/api/v1/shared-content/{itemId}/content": {
+      "get": {
+        "tags": [
+          "SharedContent"
+        ],
+        "operationId": "getSharedContentMedia",
+        "summary": "Stream an explicitly selected video reference",
+        "description": "Reads the current retained canonical source before opening its video URL through the engine's public-network policy. Never redirects the browser to the provider. Supports one byte range and If-Range; an upstream that ignores Range returns 200 rather than an invented 206. Sources must advertise a valid complete size no larger than 2 GiB. Only MP4, WebM, Ogg video and QuickTime media types are accepted; codec playback remains a browser capability. This is on-demand streaming, not a retained download: no full-file hash, sender verification, offline availability or transfer state is implied. Listing/mounting UI must not call this operation; set a player source only after explicit user activation. Client disconnect cancels the upstream read. HEAD is unsupported and returns 405 without contacting the provider. Multiple or malformed ranges are invalid.",
+        "parameters": [
+          {
+            "name": "itemId",
+            "in": "path",
+            "required": true,
+            "description": "Current video catalog item UUID, never an arbitrary provider URL.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "description": "One bytes range, including an open-ended or suffix range.",
+            "schema": {
+              "type": "string",
+              "maxLength": 256
+            }
+          },
+          {
+            "name": "If-Range",
+            "in": "header",
+            "description": "A strong entity tag or HTTP date previously returned for this resource. Ignored without Range.",
+            "schema": {
+              "type": "string",
+              "maxLength": 1024
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Complete video response; the provider may have ignored Range.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability for this source.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Content-Disposition": {
+                "description": "Inline playback with a sanitized retained source filename.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Length": {
+                "description": "Exact response byte count.",
+                "schema": {
+                  "type": "integer",
+                  "format": "int64",
+                  "minimum": 0
+                }
+              },
+              "Content-Range": {
+                "description": "Validated bytes start-end/total for a partial response; absent for 200.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "description": "Sanitized provider entity validator, not a computed or verified digest.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Last-Modified": {
+                "description": "Validated provider HTTP date when supplied.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "video/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/webm": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/ogg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/quicktime": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "Validated partial video response.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability for this source.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Content-Disposition": {
+                "description": "Inline playback with a sanitized retained source filename.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Length": {
+                "description": "Exact response byte count.",
+                "schema": {
+                  "type": "integer",
+                  "format": "int64",
+                  "minimum": 0
+                }
+              },
+              "Content-Range": {
+                "description": "Validated bytes start-end/total for a partial response; absent for 200.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "description": "Sanitized provider entity validator, not a computed or verified digest.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Last-Modified": {
+                "description": "Validated provider HTTP date when supplied.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "video/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/webm": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/ogg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/quicktime": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed or multiple byte ranges, invalid validators, or invalid identity.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The current retained video reference does not exist.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Only GET is supported; no provider request occurs.",
+            "headers": {
+              "Allow": {
+                "description": "GET is the only supported method.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "GET"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The complete source exceeds the 2 GiB streaming limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The provider response is not an accepted video media type.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "Requested range cannot be satisfied.",
+            "headers": {
+              "Content-Range": {
+                "description": "bytes */total when the complete source size is known.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The provider destination is blocked by the public-network policy.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider response or range metadata is invalid, unavailable, or truncated.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Streaming is unavailable or the bounded concurrent-reader limit is reached.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The provider read timed out.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-cli-ignore": true
       }
     },
     "/api/v1/conversations/{conversationId}/messages/{messageId}/context": {
@@ -3004,7 +3331,14 @@
               "invalid_cursor",
               "unavailable",
               "state_conflict",
-              "protocol_unavailable"
+              "protocol_unavailable",
+              "media_blocked",
+              "media_fetch_failed",
+              "media_too_large",
+              "media_unsupported",
+              "range_not_satisfiable",
+              "media_busy",
+              "media_timeout"
             ]
           },
           "currentStar": {

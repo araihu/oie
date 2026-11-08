@@ -87,6 +87,7 @@ type Engine struct {
 	protocols      Protocols
 	avatarFiles    AvatarFiles
 	previewFetcher PreviewFetcher
+	mediaReader    MediaReader
 	mediaFiles     MediaFiles
 	previewWork    chan struct{}
 	work           chan struct{}

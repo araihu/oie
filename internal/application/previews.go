@@ -113,6 +113,9 @@ func (e *Engine) ConversationPreviews(ctx context.Context, conversation domain.I
 	out := []domain.MessagePreview{}
 	for _, m := range messages {
 		for _, address := range previewURLs(domain.DisplayBody(m)) {
+			if knownNonPreviewFile(address) {
+				continue
+			}
 			p, err := e.ensureMessagePreview(ctx, r, m, address)
 			if err != nil {
 				return nil, err
@@ -123,7 +126,18 @@ func (e *Engine) ConversationPreviews(ctx context.Context, conversation domain.I
 	e.wakePreviews()
 	return out, nil
 }
+func knownNonPreviewFile(address string) bool {
+	for _, ref := range SharedReferences(address) {
+		if ref.Kind == "video" || ref.Kind == "audio" || ref.Kind == "document" {
+			return true
+		}
+	}
+	return false
+}
 func (e *Engine) ensureMessagePreview(ctx context.Context, r PreviewRepository, m domain.Message, address string) (domain.MessagePreview, error) {
+	if knownNonPreviewFile(address) {
+		return domain.MessagePreview{}, ErrInvalid
+	}
 	id, err := e.newID()
 	if err != nil {
 		return domain.MessagePreview{}, err
@@ -191,7 +205,7 @@ func (e *Engine) DownloadPreview(ctx context.Context, id domain.ID) (domain.Mess
 		if err != nil {
 			return p, err
 		}
-		if p.Kind != "image" {
+		if p.Kind != "image" || knownNonPreviewFile(p.URL) {
 			return p, ErrInvalid
 		}
 		if p.DownloadState == "ready" || p.DownloadState == "queued" || p.DownloadState == "downloading" {
@@ -311,6 +325,22 @@ func (e *Engine) runPreviews(ctx context.Context) error {
 	return nil
 }
 func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p domain.MessagePreview) error {
+	if knownNonPreviewFile(p.URL) {
+		old := p.RevisionID
+		var err error
+		p.RevisionID, err = e.newID()
+		if err != nil {
+			return err
+		}
+		p.State = "unavailable"
+		p.LastErrorCode = "unsupported"
+		p.PreviewVersion = previewRendererVersion
+		if p.DownloadState == "queued" || p.DownloadState == "downloading" {
+			p.DownloadState = "failed"
+		}
+		p.UpdatedAt = e.now().UTC()
+		return r.SavePreview(ctx, p, old)
+	}
 	original := p.DownloadState == "queued"
 	old := p.RevisionID
 	if original {
