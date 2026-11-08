@@ -28,7 +28,8 @@ It does not use the live-preview engine, account credentials or data directory.
 Integration tests accept `OIE_XMPP_ENDPOINT` for the Dagger service binding while
 keeping account-domain TLS verification. Host Compose tests keep their existing
 loopback default. Browser evidence is exported to the ignored directory
-`tests/browser/artifacts/ci`.
+`tests/browser/artifacts/ci`, including `ci.log` on browser failure.
+The pipeline exports that evidence before enforcing the browser exit status.
 
 Failures stop the pipeline. No image publication, application deployment, push,
 pull request or merge is part of either command.
@@ -43,3 +44,17 @@ This uses the configured SSH alias and `/run/dagger/engine.sock` on that host.
 It does not restart the engine or a shared tunnel. Override `OIE_CI_SSH_SOCKET`
 when the engine uses another remote Unix socket. Without this option, Dagger uses
 its ordinary configured runner connection.
+
+## Validation on 2026-11-08
+
+`make check` passes, including golangci-lint with zero findings. Dagger executed
+the Go checks, race tests, builds and isolated Prosody integration successfully.
+Its browser UI suites also passed. The final real-engine browser check initially
+failed because the slim image lacked curl. Its readiness probe now uses Node;
+the complete real-engine browser workflow passes locally.
+
+Full `make ci` completion remains unverified on this host. Dagger v0.21.9 clients
+intermittently stop receiving completed API results and fail their engine
+healthcheck. This occurred with the shared Unix socket, an independent SSH
+forward and the Docker connection. No green full-pipeline result is claimed.
+The live-preview engine and its data were not used by the Dagger tests.

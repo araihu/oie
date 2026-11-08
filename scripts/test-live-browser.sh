@@ -24,11 +24,16 @@ bin/oie --role hosted --listen 127.0.0.1:18086 --data-dir "$tmp/engine" --xmpp-c
 api_pid=$!
 bin/oie --role bff --listen 127.0.0.1:18087 --engine-url http://127.0.0.1:18086 > "$tmp/web.log" 2>&1 &
 web_pid=$!
-ready=false
-for attempt in $(seq 1 60); do
-  if curl --fail --silent --output /dev/null http://127.0.0.1:18087/; then ready=true; break; fi
-  sleep 1
-done
-if [ "$ready" != true ]; then cat "$tmp/engine.log" "$tmp/web.log"; exit 1; fi
+node -e '
+let remaining = 60;
+async function ready() {
+  try {
+    if ((await fetch("http://127.0.0.1:18087/", {signal: AbortSignal.timeout(1000)})).ok) return;
+  } catch {}
+  if (--remaining === 0) { console.error("Live browser BFF did not become ready"); process.exit(1); }
+  setTimeout(ready, 1000);
+}
+ready();
+'
 cd tests/browser
 OIE_LIVE_URL=http://127.0.0.1:18087 OIE_ENGINE_URL=http://127.0.0.1:18086 node engine-browser.cjs

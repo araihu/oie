@@ -33,7 +33,7 @@ cd "$task_tmp/source"
 export OIE_CI_MODE="$mode" OIE_CI_RUN_ID="$(date -u +%Y%m%dT%H%M%S)-$$"
 export OIE_CI_ARTIFACTS="$root/tests/browser/artifacts/ci" DAGGER_NO_NAG=1
 if [ "$mode" = checks ]; then
-  dagger shell --no-mod tools/ci/checks.dag
+  dagger --silent shell --no-mod tools/ci/checks.dag
 else
-  dagger shell --no-mod tools/ci/pipeline.dag
+  dagger --silent shell --no-mod tools/ci/pipeline.dag
 fi
