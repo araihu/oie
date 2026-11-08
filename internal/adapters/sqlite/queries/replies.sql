@@ -13,15 +13,17 @@ WHERE m.account_id=sqlc.arg(account_id) AND m.conversation_id=sqlc.arg(conversat
 AND r.remote_id=sqlc.arg(remote_id)
 AND (CAST(sqlc.arg(scope) AS TEXT)='' OR r.scope=CAST(sqlc.arg(scope) AS TEXT))
 AND (CAST(sqlc.arg(author) AS TEXT)='' OR r.author=CAST(sqlc.arg(author) AS TEXT))
-LIMIT 2;
+LIMIT 129;
 
 -- name: MessagesAtOrBeforeTarget :many
 SELECT m.* FROM messages m WHERE m.conversation_id=sqlc.arg(conversation_id)
+AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
 AND (m.created_at_ms,m.id)<=(SELECT t.created_at_ms,t.id FROM messages t WHERE t.id=sqlc.arg(target_id) AND t.conversation_id=sqlc.arg(conversation_id))
 ORDER BY m.created_at_ms DESC,m.id DESC LIMIT sqlc.arg(page_limit);
 
 -- name: MessagesAfterTarget :many
 SELECT m.* FROM messages m WHERE m.conversation_id=sqlc.arg(conversation_id)
+AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
 AND (m.created_at_ms,m.id)>(SELECT t.created_at_ms,t.id FROM messages t WHERE t.id=sqlc.arg(target_id) AND t.conversation_id=sqlc.arg(conversation_id))
 ORDER BY m.created_at_ms,m.id LIMIT sqlc.arg(page_limit);
 

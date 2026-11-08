@@ -27,7 +27,7 @@ SELECT * FROM messages WHERE id=?;
 -- name: FindProviderMessage :one
 SELECT * FROM messages WHERE account_id=? AND conversation_id=? AND provider_id=? AND is_own=?;
 -- name: ListMessages :many
-SELECT m.* FROM messages AS m WHERE m.conversation_id=sqlc.arg(page_conversation_id) AND (
+SELECT m.* FROM messages AS m WHERE m.conversation_id=sqlc.arg(page_conversation_id) AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id) AND (
 CAST(sqlc.arg(page_cursor) AS TEXT)='' OR
 m.created_at_ms<(SELECT x.created_at_ms FROM messages AS x WHERE x.id=CAST(sqlc.arg(page_cursor) AS TEXT) AND x.conversation_id=sqlc.arg(page_conversation_id)) OR
 (m.created_at_ms=(SELECT x.created_at_ms FROM messages AS x WHERE x.id=CAST(sqlc.arg(page_cursor) AS TEXT) AND x.conversation_id=sqlc.arg(page_conversation_id)) AND m.id<CAST(sqlc.arg(page_cursor) AS TEXT))

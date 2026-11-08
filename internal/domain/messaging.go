@@ -25,6 +25,10 @@ type Message struct {
 	ID, RevisionID, AccountID, ConversationID ID
 	Sender                                    Sender
 	OriginalText                              string
+	Edited                                    bool               `json:",omitempty"`
+	EditedAt                                  time.Time          `json:",omitempty"`
+	ProjectionSourceID                        ID                 `json:"-"`
+	Correction                                *MessageCorrection `json:"-"`
 	CreatedAt                                 time.Time
 	IsOwn                                     bool
 	SendState                                 string

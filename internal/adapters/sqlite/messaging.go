@@ -109,7 +109,14 @@ func insertMessage(ctx context.Context, q *dbgen.Queries, m domain.Message) erro
 	if err := recordReplyMetadata(ctx, q, string(m.ID), m, false); err != nil {
 		return err
 	}
-	_, err := change(ctx, q, "message.created", m, m.CreatedAt)
+	if err := recordCorrectionMetadata(ctx, q, string(m.ID), m); err != nil {
+		return err
+	}
+	kind := "message.created"
+	if correctionValid(m.Correction) && m.Correction.TargetID != "" {
+		kind = "message.updated"
+	}
+	_, err := emitCanonicalMessageEvent(ctx, q, kind, m, m.CreatedAt)
 	return err
 }
 func updateConversation(ctx context.Context, q *dbgen.Queries, c domain.Conversation, m domain.Message, revision domain.ID, at time.Time) error {
@@ -182,6 +189,9 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 		if err != nil {
 			return application.MessageResult{}, err
 		}
+		if err = hydrateMessageProjection(ctx, q, &source); err != nil {
+			return application.MessageResult{}, err
+		}
 		if source.AccountID != in.Message.AccountID || source.ConversationID != in.Message.ConversationID || bodyHash(source.OriginalText) != plan.TargetBodyHash {
 			return application.MessageResult{}, application.ErrStateConflict
 		}
@@ -227,13 +237,20 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 	return application.MessageResult{Message: in.Message}, nil
 }
 func (s *Store) Message(ctx context.Context, id domain.ID) (domain.Message, error) {
-	row, err := s.queries.GetMessage(ctx, string(id))
+	canonical, err := resolveMessageAlias(ctx, s.queries, id)
+	if err != nil {
+		return domain.Message{}, err
+	}
+	row, err := s.queries.GetMessage(ctx, string(canonical))
 	if err != nil {
 		return domain.Message{}, notFound(err)
 	}
 	m, err := decodeMessage(row)
 	if err == nil {
-		err = hydrateReply(ctx, s.queries, &m)
+		err = hydrateMessageProjection(ctx, s.queries, &m)
+		if err == nil {
+			err = hydrateReply(ctx, s.queries, &m)
+		}
 		if err == nil {
 			err = hydrateReferences(ctx, s.queries, &m)
 		}
@@ -241,6 +258,11 @@ func (s *Store) Message(ctx context.Context, id domain.ID) (domain.Message, erro
 	return m, err
 }
 func (s *Store) Messages(ctx context.Context, id, cursor domain.ID, limit int) ([]domain.Message, error) {
+	canonical, err := resolveMessageAlias(ctx, s.queries, cursor)
+	if err != nil {
+		return nil, err
+	}
+	cursor = canonical
 	rows, err := s.queries.ListMessages(ctx, dbgen.ListMessagesParams{PageConversationID: string(id), PageCursor: string(cursor), PageLimit: int64(limit)})
 	if err != nil {
 		return nil, err
@@ -287,6 +309,9 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 			if chat.AccountID != string(c.AccountID) || chat.Address != c.Address {
 				return application.ErrInvalid
 			}
+			if err = recordCorrectionMetadata(ctx, q, existingID, m); err != nil {
+				return err
+			}
 			if err = s.reconcileArchivedAuthor(ctx, q, existingID, c, m, revision); err != nil {
 				return err
 			}
@@ -319,6 +344,9 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 			if err = archiveAlias(ctx, q, m, existing.ID); err != nil {
 				return err
 			}
+			if err = recordCorrectionMetadata(ctx, q, existing.ID, m); err != nil {
+				return err
+			}
 			if err = recordReplyMetadata(ctx, q, existing.ID, m, true); err != nil {
 				return err
 			}
@@ -334,8 +362,24 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if err = archiveAlias(ctx, q, m, string(m.ID)); err != nil {
 		return err
 	}
-	if err = updateConversation(ctx, q, c, m, revision, at); err != nil {
-		return err
+	if !correctionValid(m.Correction) || m.Correction.TargetID == "" {
+		fresh, err := q.GetConversation(ctx, string(c.ID))
+		if err != nil {
+			return err
+		}
+		c, err = decodeConversation(fresh)
+		if err != nil {
+			return err
+		}
+		projected := m
+		if err = hydrateMessageProjection(ctx, q, &projected); err != nil {
+			return err
+		}
+		if projected.ID == m.ID {
+			if err = updateConversation(ctx, q, c, projected, revision, at); err != nil {
+				return err
+			}
+		}
 	}
 	return tx.Commit()
 }
@@ -359,7 +403,7 @@ func updateMessage(ctx context.Context, q *dbgen.Queries, m domain.Message, stat
 	if err := hydrateReply(ctx, q, &m); err != nil {
 		return m, err
 	}
-	_, err := change(ctx, q, "message.updated", m, at)
+	_, err := emitCanonicalMessageEvent(ctx, q, "message.updated", m, at)
 	return m, err
 }
 func (s *Store) CancelMessage(ctx context.Context, in application.CancelMutation) (application.MessageResult, error) {
@@ -477,6 +521,6 @@ func (s *Store) reconcileArchivedAuthor(ctx context.Context, q *dbgen.Queries, i
 	if err = q.InsertMessageRevision(ctx, dbgen.InsertMessageRevisionParams{ID: string(revision), EntityID: id, Parents: parents, Payload: jsonText(old), CreatedAt: stamp(at)}); err != nil {
 		return err
 	}
-	_, err = change(ctx, q, "message.updated", old, at)
+	_, err = emitCanonicalMessageEvent(ctx, q, "message.updated", old, at)
 	return err
 }

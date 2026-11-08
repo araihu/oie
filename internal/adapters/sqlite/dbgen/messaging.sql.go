@@ -343,7 +343,7 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 }
 
 const listMessages = `-- name: ListMessages :many
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms FROM messages AS m WHERE m.conversation_id=?1 AND (
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms FROM messages AS m WHERE m.conversation_id=?1 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id) AND (
 CAST(?2 AS TEXT)='' OR
 m.created_at_ms<(SELECT x.created_at_ms FROM messages AS x WHERE x.id=CAST(?2 AS TEXT) AND x.conversation_id=?1) OR
 (m.created_at_ms=(SELECT x.created_at_ms FROM messages AS x WHERE x.id=CAST(?2 AS TEXT) AND x.conversation_id=?1) AND m.id<CAST(?2 AS TEXT))

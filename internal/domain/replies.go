@@ -20,6 +20,7 @@ type MessageReply struct {
 	SenderName, Excerpt, BodyText string
 }
 type MessageContext struct {
+	RequestedTargetID  ID
 	TargetID           ID
 	Items              []Message
 	HasOlder, HasNewer bool

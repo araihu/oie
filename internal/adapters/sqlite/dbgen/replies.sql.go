@@ -15,7 +15,7 @@ WHERE m.account_id=?1 AND m.conversation_id=?2
 AND r.remote_id=?3
 AND (CAST(?4 AS TEXT)='' OR r.scope=CAST(?4 AS TEXT))
 AND (CAST(?5 AS TEXT)='' OR r.author=CAST(?5 AS TEXT))
-LIMIT 2
+LIMIT 129
 `
 
 type FindReplyTargetsParams struct {
@@ -168,6 +168,7 @@ func (q *Queries) InsertMessageReply(ctx context.Context, arg InsertMessageReply
 
 const messagesAfterTarget = `-- name: MessagesAfterTarget :many
 SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms FROM messages m WHERE m.conversation_id=?1
+AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
 AND (m.created_at_ms,m.id)>(SELECT t.created_at_ms,t.id FROM messages t WHERE t.id=?2 AND t.conversation_id=?1)
 ORDER BY m.created_at_ms,m.id LIMIT ?3
 `
@@ -213,6 +214,7 @@ func (q *Queries) MessagesAfterTarget(ctx context.Context, arg MessagesAfterTarg
 
 const messagesAtOrBeforeTarget = `-- name: MessagesAtOrBeforeTarget :many
 SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms FROM messages m WHERE m.conversation_id=?1
+AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
 AND (m.created_at_ms,m.id)<=(SELECT t.created_at_ms,t.id FROM messages t WHERE t.id=?2 AND t.conversation_id=?1)
 ORDER BY m.created_at_ms DESC,m.id DESC LIMIT ?3
 `

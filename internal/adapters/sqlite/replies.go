@@ -73,7 +73,7 @@ func recordReplyMetadata(ctx context.Context, q *dbgen.Queries, id string, in do
 		}
 	}
 	if changed > 0 && emit {
-		_, err = change(ctx, q, "message.updated", old, time.Now().UTC())
+		_, err = emitCanonicalMessageEvent(ctx, q, "message.updated", old, time.Now().UTC())
 	}
 	return err
 }
@@ -81,18 +81,26 @@ func recordReplyMetadata(ctx context.Context, q *dbgen.Queries, id string, in do
 func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) error {
 	if m.OutboundReply != nil {
 		domain.ProjectOutboundReply(m)
-		target, err := q.GetMessage(ctx, string(m.OutboundReply.TargetID))
+		targetID, err := resolveMessageAlias(ctx, q, m.OutboundReply.TargetID)
+		if err != nil {
+			return err
+		}
+		target, err := q.GetMessage(ctx, string(targetID))
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
+		m.Reply.MessageID = targetID
 		m.Reply.Available = target.AccountID == string(m.AccountID) && target.ConversationID == string(m.ConversationID)
 		return nil
 	}
-
-	payload, err := q.GetMessageReply(ctx, dbgen.GetMessageReplyParams{MessageID: string(m.ID), BodyHash: bodyHash(m.OriginalText)})
+	sourceID := m.ID
+	if m.ProjectionSourceID != "" {
+		sourceID = m.ProjectionSourceID
+	}
+	payload, err := q.GetMessageReply(ctx, dbgen.GetMessageReplyParams{MessageID: string(sourceID), BodyHash: bodyHash(m.OriginalText)})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
@@ -109,18 +117,53 @@ func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) erro
 	if err != nil {
 		return err
 	}
-	if len(rows) != 1 || rows[0].ID == string(m.ID) {
+	if len(rows) >= 129 {
+		return nil
+	}
+	candidates := map[domain.ID]domain.Message{}
+	for _, row := range rows {
+		var raw domain.Message
+		if err = json.Unmarshal([]byte(row.Payload), &raw); err != nil {
+			return err
+		}
+		if bodyHash(raw.OriginalText) != row.SourceHash {
+			return nil
+		}
+		id, err := resolveMessageAlias(ctx, q, raw.ID)
+		if err != nil {
+			return err
+		}
+		if id == m.ID {
+			continue
+		}
+		root, err := q.GetMessage(ctx, string(id))
+		if err != nil {
+			return err
+		}
+		target, err := decodeMessage(root)
+		if err != nil {
+			return err
+		}
+		if err = hydrateMessageProjection(ctx, q, &target); err != nil {
+			return err
+		}
+		candidates[id] = target
+	}
+	if len(candidates) != 1 {
 		return nil
 	}
 	var target domain.Message
-	if err = json.Unmarshal([]byte(rows[0].Payload), &target); err != nil {
-		return err
-	}
-	if bodyHash(target.OriginalText) != rows[0].SourceHash {
-		return nil
+	for _, candidate := range candidates {
+		target = candidate
 	}
 	excerpt := target.OriginalText
-	if payload, err = q.GetMessageReply(ctx, dbgen.GetMessageReplyParams{MessageID: string(target.ID), BodyHash: bodyHash(excerpt)}); err == nil {
+	metadataID := target.ID
+	if target.ProjectionSourceID != "" {
+		metadataID = target.ProjectionSourceID
+	}
+	if target.OutboundReply != nil {
+		excerpt = target.OutboundReply.BodyText
+	} else if payload, err = q.GetMessageReply(ctx, dbgen.GetMessageReplyParams{MessageID: string(metadataID), BodyHash: bodyHash(excerpt)}); err == nil {
 		var nested domain.ReplyReference
 		if err = json.Unmarshal([]byte(payload), &nested); err != nil {
 			return err
@@ -135,8 +178,12 @@ func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) erro
 	m.Reply.Excerpt = boundedText(excerpt, 512)
 	return nil
 }
+
 func (s *Store) hydrateReplies(ctx context.Context, items []domain.Message) ([]domain.Message, error) {
 	for i := range items {
+		if err := hydrateMessageProjection(ctx, s.queries, &items[i]); err != nil {
+			return nil, err
+		}
 		if err := hydrateReply(ctx, s.queries, &items[i]); err != nil {
 			return nil, err
 		}
@@ -145,7 +192,15 @@ func (s *Store) hydrateReplies(ctx context.Context, items []domain.Message) ([]d
 }
 
 func (s *Store) MessageContext(ctx context.Context, conversation, target domain.ID, limit int) (domain.MessageContext, error) {
-	window := domain.MessageContext{TargetID: target}
+	canonical, err := resolveMessageAlias(ctx, s.queries, target)
+	if err != nil {
+		return domain.MessageContext{}, err
+	}
+	window := domain.MessageContext{TargetID: canonical}
+	if canonical != target {
+		window.RequestedTargetID = target
+	}
+	target = canonical
 	row, err := s.queries.GetMessage(ctx, string(target))
 	if err != nil {
 		return window, notFound(err)
@@ -182,13 +237,32 @@ func (s *Store) MessageContext(ctx context.Context, conversation, target domain.
 }
 
 func hydrateReferences(ctx context.Context, q *dbgen.Queries, m *domain.Message) error {
-	rows, err := q.GetMessageReferences(ctx, dbgen.GetMessageReferencesParams{MessageID: string(m.ID), SourceHash: bodyHash(m.OriginalText)})
+	id, err := resolveMessageAlias(ctx, q, m.ID)
+	if err != nil {
+		return err
+	}
+	rows, err := q.ListCanonicalMessageReferences(ctx, string(id))
 	if err != nil {
 		return err
 	}
 	m.References = nil
+	seen := map[domain.MessageReference]bool{}
 	for _, row := range rows {
-		m.References = append(m.References, domain.MessageReference{Scope: row.Scope, ID: row.RemoteID, Author: row.Author})
+		var source domain.Message
+		if err = json.Unmarshal([]byte(row.MessagePayload), &source); err != nil {
+			return err
+		}
+		if bodyHash(source.OriginalText) != row.SourceHash {
+			continue
+		}
+		ref := domain.MessageReference{Scope: row.Scope, ID: row.RemoteID, Author: row.Author}
+		if !seen[ref] {
+			m.References = append(m.References, ref)
+			seen[ref] = true
+		}
+		if len(m.References) == 8 {
+			break
+		}
 	}
 	return nil
 }

@@ -12,5 +12,5 @@ SELECT payload FROM history_status WHERE account_id=?;
 -- name: PutHistoryStatus :exec
 INSERT INTO history_status(account_id,payload) VALUES(?,?) ON CONFLICT(account_id) DO UPDATE SET payload=excluded.payload;
 -- name: GetHistoryCounts :one
-SELECT CAST((SELECT COUNT(*) FROM messages AS m WHERE m.account_id=sqlc.arg(owner_id)) AS INTEGER) AS retained_messages,
+SELECT CAST((SELECT COUNT(*) FROM messages AS m WHERE m.account_id=sqlc.arg(owner_id) AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)) AS INTEGER) AS retained_messages,
 CAST((SELECT COUNT(*) FROM conversations AS c WHERE c.account_id=sqlc.arg(owner_id)) AS INTEGER) AS conversations;

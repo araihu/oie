@@ -99,6 +99,29 @@ type Message struct {
 	CreatedAtMs    int64
 }
 
+type MessageCanonicalAlias struct {
+	AliasID     string
+	CanonicalID string
+}
+
+type MessageContentHead struct {
+	CanonicalID string
+	SourceID    string
+	RevisionID  string
+	Payload     string
+	EditedAt    string
+}
+
+type MessageCorrectionFact struct {
+	MessageID        string
+	Scope            string
+	Author           string
+	RemoteID         string
+	TargetID         string
+	SourceHash       string
+	SourceRevisionID string
+}
+
 type MessagePreview struct {
 	ID             string
 	RevisionID     string

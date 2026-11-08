@@ -34,12 +34,14 @@ func (q *Queries) InvalidateSharedContent(ctx context.Context, messageID string)
 }
 
 const listSharedContent = `-- name: ListSharedContent :many
-SELECT sc.id,sc.revision_id,CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,sc.url,sc.file_name,m.payload AS message_payload,c.payload AS conversation_payload,a.label AS account_label,p.payload AS preview_payload
+SELECT sc.id,sc.revision_id,CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,sc.url,sc.file_name,CAST(COALESCE(h.payload,m.payload) AS TEXT) AS message_payload,c.payload AS conversation_payload,a.label AS account_label,p.payload AS preview_payload
 FROM shared_content AS sc JOIN messages AS m ON m.id=sc.message_id
+LEFT JOIN message_content_heads AS h ON h.canonical_id=m.id
 JOIN shared_content_state AS s ON s.message_id=m.id AND s.parser_version>=?1
 JOIN conversations AS c ON c.id=m.conversation_id JOIN accounts AS a ON a.id=m.account_id
 LEFT JOIN message_previews AS p ON p.message_id=m.id AND p.url=sc.url
 WHERE (CAST(?2 AS TEXT)='' OR m.account_id=CAST(?2 AS TEXT))
+AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 AND (CAST(?3 AS TEXT)='' OR m.conversation_id=CAST(?3 AS TEXT))
 AND ((CAST(?4 AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
  OR (CAST(?4 AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
@@ -159,7 +161,8 @@ func (q *Queries) PutSharedContent(ctx context.Context, arg PutSharedContentPara
 
 const sharedContentCandidates = `-- name: SharedContentCandidates :many
 SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
-WHERE s.message_id IS NULL OR s.parser_version<?1
+WHERE (s.message_id IS NULL OR s.parser_version<?1)
+AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 ORDER BY m.created_at_ms DESC,m.id DESC LIMIT ?2
 `
 
@@ -206,6 +209,7 @@ SELECT COUNT(*) AS total_messages,COUNT(CASE WHEN s.parser_version>=?1 THEN 1 EN
 FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
 WHERE (CAST(?2 AS TEXT)='' OR m.account_id=CAST(?2 AS TEXT))
 AND (CAST(?3 AS TEXT)='' OR m.conversation_id=CAST(?3 AS TEXT))
+AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 `
 
 type SharedContentIndexStatusParams struct {
