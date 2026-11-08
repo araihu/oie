@@ -1,0 +1,41 @@
+package web
+
+import (
+ "strconv"
+ "github.com/araihu/goshtoso/components/button"
+ "github.com/araihu/goshtoso/components/icon/heroicons"
+ "github.com/araihu/goshtoso/components/popover"
+ "github.com/araihu/goshtoso/components/textinput"
+ "github.com/araihu/goshtoso/expressions"
+)
+
+templ emojiPicker(v view) {
+@popover.Popover(popover.Config{ID:"oie-emoji-picker",Trigger:emojiTrigger(v),Content:emojiContent(v),Placement:popover.PlacementTopEnd,Role:"dialog",Label:v.Text.EmojiPicker,RootClass:"oie-emoji-picker",PanelClass:"oie-emoji-panel"})
+}
+
+templ emojiTrigger(v view) {
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"data-emoji-trigger":"","aria-label":v.Text.EmojiPicker,"title":v.Text.EmojiPicker,"disabled":!v.composeAllowed()})){@glyph(heroicons.Icon16SolidFaceSmile)}
+}
+
+templ emojiContent(v view) {
+{{ ctx=expressions.With(ctx,expressions.Set{TextInput:expressions.TextInput{SearchAriaLabel:v.Text.EmojiSearch}}) }}
+<div class="oie-emoji-content" data-emoji-content data-emoji-url={"/ui/emoji/"+v.Locale+".json"} data-emoji-loading={v.Text.EmojiLoading} data-emoji-empty={v.Text.EmojiEmpty} data-emoji-failed={v.Text.EmojiFailed}>
+@textinput.TextInput(textinput.Config{ID:"emoji-search",Type:textinput.TypeSearch,Placeholder:v.Text.EmojiSearch,Autocomplete:"off",InputAttrs:templ.Attributes{"aria-label":v.Text.EmojiSearch,"aria-controls":"emoji-grid","maxlength":"128"}})
+<div class="oie-emoji-categories" role="group" aria-label={v.Text.EmojiCategories}>
+@button.Button(button.WithType("button"),button.WithSize(button.SizeSmall),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-emoji-category":"all","aria-pressed":"true"})){ {v.Text.EmojiAll} }
+@button.Button(button.WithType("button"),button.WithSize(button.SizeSmall),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-emoji-category":"recent","aria-pressed":"false"})){ {v.Text.EmojiRecent} }
+for index,label:=range emojiCategoryLabels(v) {
+@button.Button(button.WithType("button"),button.WithSize(button.SizeSmall),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-emoji-category":strconv.Itoa(index),"aria-pressed":"false"})){ {label} }
+}
+</div>
+<p data-emoji-status class="oie-emoji-status" role="status" aria-live="polite"></p>
+<div class="oie-emoji-scroll" data-emoji-scroll>
+<div id="emoji-grid" class="oie-emoji-grid" role="group" aria-label={v.Text.EmojiPicker}></div>
+@button.Button(button.WithType("button"),button.WithSize(button.SizeSmall),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-emoji-more"),button.WithAttrs(templ.Attributes{"data-emoji-more":"","hidden":true})){ {v.Text.EmojiMore} }
+</div>
+@button.Button(button.WithType("button"),button.WithSize(button.SizeSmall),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-emoji-retry":"","hidden":true})){ {v.Text.Retry} }
+<template data-emoji-button>
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-emoji-cell"),button.WithAttrs(templ.Attributes{"data-emoji-pick":""})){}
+</template>
+</div>
+}
