@@ -154,5 +154,11 @@
   "RenderMarkdownHelp": "Show quotes, emphasis, lists, links and code on this device. Copy always preserves the original message.",
   "CopyOriginal": "Copy original message",
   "MessageCopied": "Original message copied",
-  "CopyFailed": "The message could not be copied."
+  "CopyFailed": "The message could not be copied.",
+  "ImageInfo": "Image info",
+  "ImageSource": "Original URL",
+  "ImageFilename": "Filename",
+  "ImageType": "File type",
+  "ImageSize": "File size",
+  "ImageNotDownloaded": "The image has not been downloaded."
 }

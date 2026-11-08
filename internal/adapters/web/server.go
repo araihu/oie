@@ -72,8 +72,10 @@ func (errInvalidURL) Error() string {
 
 type messageView struct {
 	engineapi.Message
-	Formatted  templ.Component
-	Attachment *mediaView
+	Presentation      string
+	PresentationKnown bool
+	Formatted         templ.Component
+	Attachment        *mediaView
 }
 type mediaView struct{ Kind, Title, Description, PreviewUrl string }
 type connectionView struct {
@@ -96,6 +98,7 @@ type view struct {
 	Chats                                                 []engineapi.Conversation
 	Selected                                              *engineapi.Conversation
 	Messages                                              []messageView
+	PreviewsKnown                                         bool
 	MessagePreviews                                       map[string][]engineapi.MessagePreview
 	EngineID, EventCursor, CSRF, ErrorMessage, FormTarget string
 	Values                                                map[string]string
@@ -130,6 +133,7 @@ type copy struct {
 	NewMessages, QueueHelp, DraftStorageUnavailable, DraftLocked, MessageUnavailable                                                                                                    string
 	MediaUnavailable, NativeError, NewerHistory, ShowPassword, ChooseOption                                                                                                             string
 	PreviewLoading, PreviewUnavailable, LoadImage, LoadingImage, OpenImage, ImageView, ImageDownloadFailed, ImageTooLarge, ImageBlocked, ImageUnsupported, ImageNotFound, ImageComputed string
+	ImageInfo, ImageSource, ImageFilename, ImageType, ImageSize, ImageNotDownloaded                                                                                                     string
 	RenderMarkdown, RenderMarkdownHelp, CopyOriginal, MessageCopied, CopyFailed                                                                                                         string
 	DevicePreferences, AutoImageDownloads, AutoImageDownloadsHelp, DevicePreferenceUnavailable                                                                                          string
 	ValidationFailed, Edit, Done                                                                                                                                                        string
@@ -349,9 +353,15 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		}
 	}
 	for _, m := range items {
-		v.Messages = append(v.Messages, messageView{Message: m, Attachment: extras[m.Id], Formatted: formattedMessage(ctx, m.OriginalText)})
+		v.Messages = append(v.Messages, messageView{Message: m, Attachment: extras[m.Id], Presentation: m.OriginalText})
 	}
 	s.loadMessagePreviews(ctx, v)
+	for i := range v.Messages {
+		m := &v.Messages[i]
+		m.PresentationKnown = v.PreviewsKnown
+		m.Presentation = imagePresentation(m.OriginalText, v.MessagePreviews[m.Id])
+		m.Formatted = formattedMessage(ctx, m.Presentation)
+	}
 }
 func (v view) account(id string) engineapi.Account {
 	for _, a := range v.Accounts {

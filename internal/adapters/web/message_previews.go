@@ -12,6 +12,8 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"path"
+	"strconv"
 	"strings"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -31,6 +33,7 @@ func (s *Server) loadMessagePreviews(ctx context.Context, v *view) {
 	if err != nil || response.JSON200 == nil {
 		return
 	}
+	v.PreviewsKnown = true
 	for _, p := range response.JSON200.Items {
 		if p.ConversationId == v.Selected.Id && p.AccountId == v.Selected.AccountId && visible[p.MessageId] && safePreviewURL(p.Url) != "" {
 			v.MessagePreviews[p.MessageId] = append(v.MessagePreviews[p.MessageId], p)
@@ -155,4 +158,31 @@ func (s *Server) mediaImage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodHead {
 		_, _ = w.Write(data)
 	}
+}
+
+func previewFilename(p engineapi.MessagePreview) string {
+	if p.Title != nil && *p.Title != "" {
+		return *p.Title
+	}
+	u, err := url.Parse(safePreviewURL(p.Url))
+	if err != nil {
+		return ""
+	}
+	name := path.Base(u.Path)
+	if name == "." || name == "/" {
+		return ""
+	}
+	return name
+}
+func previewMime(p engineapi.MessagePreview) string {
+	if p.FileMimeType != nil {
+		return string(*p.FileMimeType)
+	}
+	return ""
+}
+func previewSize(p engineapi.MessagePreview) string {
+	if p.FileSize != nil {
+		return strconv.FormatInt(*p.FileSize, 10)
+	}
+	return ""
 }

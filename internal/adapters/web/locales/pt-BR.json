@@ -154,5 +154,11 @@
   "RenderMarkdownHelp": "Exiba citações, ênfase, listas, links e código neste dispositivo. A cópia sempre preserva a mensagem original.",
   "CopyOriginal": "Copiar mensagem original",
   "MessageCopied": "Mensagem original copiada",
-  "CopyFailed": "Não foi possível copiar a mensagem."
+  "CopyFailed": "Não foi possível copiar a mensagem.",
+  "ImageInfo": "Informações da imagem",
+  "ImageSource": "URL original",
+  "ImageFilename": "Nome do arquivo",
+  "ImageType": "Tipo do arquivo",
+  "ImageSize": "Tamanho do arquivo",
+  "ImageNotDownloaded": "A imagem ainda não foi baixada."
 }

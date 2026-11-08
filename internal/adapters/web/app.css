@@ -185,7 +185,7 @@ html{color-scheme:light}html.dark{color-scheme:dark}
 /* Preview content lives in public Card slots; all image URLs are local. */
 .oie-message-previews{max-width:340px;display:grid;gap:8px;margin-top:6px}
 .oie-message-previews:empty{display:none}
-.oie-message:not(.oie-message-own):not(.oie-message-grouped) .oie-message-previews{margin-left:48px}
+
 .oie-message-own .oie-message-previews{margin-left:auto}
 .oie-link-preview{display:block;text-decoration:none;color:inherit}
 .oie-preview-card{overflow:hidden;background:var(--oie-raised);border:1px solid var(--oie-border);color:var(--oie-text);box-shadow:none}
@@ -221,3 +221,10 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-message:hover .oie-copy-message,.oie-copy-message:focus-visible{opacity:1}
 .oie-copy-message[data-copy-state=copied]{color:var(--oie-accent);opacity:1}
 @media(hover:none){.oie-copy-message{opacity:.8}}
+
+.oie-image-preview{overflow:hidden;border-radius:8px;max-width:340px}
+.oie-image-preview .oie-preview-image-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.oie-image-info{align-self:stretch;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.oie-image-info dl{margin:0;display:grid;gap:10px}
+.oie-image-info dt{font-weight:600;color:var(--oie-muted)}
+.oie-image-info dd{margin:2px 0 0;white-space:pre-wrap}
