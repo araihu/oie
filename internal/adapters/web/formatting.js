@@ -1,10 +1,10 @@
-(() => {
+window.OieRuntime.register('formatting', life => {
   'use strict';
   const key='oie.device.render-markdown.v1';
   let enabled=true,storageDenied=false;
-  try {enabled=localStorage.getItem(key)!=='false';}catch{storageDenied=true;}
+  try {enabled=localStorage.getItem(key)!=='false';}catch{storageDenied=true;enabled=window.OieRuntime.memory.get(key)!==false;}
   document.documentElement.dataset.messageMarkdown=String(enabled);
-  function applyPreference() {
+  function applyPreference(preserve=true) {
     const timeline=document.querySelector('#message-timeline');
     const follow=timeline&&timeline.scrollHeight-timeline.scrollTop-timeline.clientHeight<60;
     const anchor=timeline&&[...timeline.querySelectorAll('[data-message-id]')].find(el=>el.getBoundingClientRect().bottom>=timeline.getBoundingClientRect().top);
@@ -12,16 +12,17 @@
     document.documentElement.dataset.messageMarkdown=String(enabled);
     for(const input of document.querySelectorAll('[data-render-markdown]'))input.checked=enabled;
     if(storageDenied){const warning=document.querySelector('[data-device-preference-warning]');if(warning)warning.hidden=false;}
-    requestAnimationFrame(()=>{if(!timeline)return;if(follow)timeline.scrollTop=timeline.scrollHeight;else if(anchor?.isConnected)timeline.scrollTop+=anchor.getBoundingClientRect().top-top;});
+    if(!preserve)return;
+    life.raf(()=>{if(!timeline)return;if(follow)timeline.scrollTop=timeline.scrollHeight;else if(anchor?.isConnected)timeline.scrollTop+=anchor.getBoundingClientRect().top-top;});
   }
-  document.addEventListener('DOMContentLoaded',applyPreference);
-  document.addEventListener('change',event=>{
+  applyPreference(false);
+  life.on(document,'change',event=>{
     if(!event.target.matches('[data-render-markdown]'))return;
-    enabled=event.target.checked;
+    enabled=event.target.checked;window.OieRuntime.memory.set(key,enabled);
     try{localStorage.setItem(key,String(enabled));}catch{storageDenied=true;}
     applyPreference();
   });
-  addEventListener('storage',event=>{if(event.key===key){enabled=event.newValue!=='false';applyPreference();}});
+  life.on(window,'storage',event=>{if(event.key===key){enabled=event.newValue!=='false';applyPreference();}});
   function copyFallback(original) {
     const previous=document.activeElement,selection=getSelection(),ranges=[];
     if(selection)for(let i=0;i<selection.rangeCount;i++)ranges.push(selection.getRangeAt(i).cloneRange());
@@ -30,7 +31,7 @@
     // The copy event sets a single MIME type, including on insecure HTTP origins
     // where the async Clipboard API is unavailable.
     const copy=event=>{if(event.clipboardData){event.preventDefault();event.clipboardData.setData('text/plain',original);}};
-    field.addEventListener('copy',copy);
+    life.on(field,'copy',copy);
     let copied=false;
     try{copied=document.execCommand('copy');}
     finally{
@@ -39,7 +40,7 @@
     }
     if(!copied)throw new Error('copy_failed');
   }
-  document.addEventListener('click',async event=>{
+  life.on(document,'click',async event=>{
     const button=event.target.closest('[data-copy-original],[id^="copy-message-"]');if(!button)return;
     event.preventDefault();
     const id=button.id?.startsWith('copy-message-')?button.id.slice(13):button.closest('[data-message-id]')?.dataset.messageId;
@@ -48,11 +49,11 @@
     try {
       const original=JSON.parse(row.dataset.messageSource);
       if(typeof original!=='string')throw new Error('copy_source_missing');
-      if(navigator.clipboard?.writeText){try{await navigator.clipboard.writeText(original);}catch{copyFallback(original);}}
+      if(navigator.clipboard?.writeText){try{await navigator.clipboard.writeText(original);if(life.signal.aborted)return;}catch{if(life.signal.aborted)return;copyFallback(original);}}
       else copyFallback(original);
       if(status)status.textContent=labels.copied || '';
       button.dataset.copyState='copied';button.title=labels.copied || '';
-      setTimeout(()=>{button.dataset.copyState='';button.title=labels.copy || '';},1800);
-    }catch{if(status)status.textContent=labels.failed || '';}
+      life.timeout(()=>{button.dataset.copyState='';button.title=labels.copy || '';},1800);
+    }catch{if(!life.signal.aborted&&status)status.textContent=labels.failed || '';}
   });
-})();
+});

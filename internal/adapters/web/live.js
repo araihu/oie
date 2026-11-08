@@ -1,4 +1,4 @@
-(() => {
+window.OieRuntime.register('live', life => {
   'use strict';
   const body = document.body;
   const labels = document.querySelector('#oie-live-copy')?.dataset || {};
@@ -9,6 +9,7 @@
   const csrf = document.querySelector('meta[name="oie-csrf"]')?.content || '';
   let pendingRequests = 0, refreshTimer, refreshing = false, refreshAgain = false;
   let source, stopped = false, forceBottom = false, storageDenied = false;
+  life.cleanup(()=>{stopped=true;source?.close();});
   let accountsVersion = [...document.querySelectorAll('#account-blocks>[data-account-id]')].map(e => e.dataset.accountId+';').join('');
   // Exact account/address tuples avoid nickname guesses and cross-account leaks.
   const avatarSources = new Map();
@@ -31,8 +32,10 @@
     }
   }
   readAvatars(document);
-  document.addEventListener('alpine:initialized',applyAvatars);
-  const inMemory = new Map();
+  life.on(document,'alpine:initialized',applyAvatars);life.raf(applyAvatars);
+  const memoryKey='device-drafts';
+  if(!window.OieRuntime.memory.has(memoryKey))window.OieRuntime.memory.set(memoryKey,new Map());
+  const inMemory=window.OieRuntime.memory.get(memoryKey);
   const composer = document.querySelector('#send-message-form');
   const input = document.querySelector('#message-composer');
   const submissionKey = composer?.elements.namedItem('operationKey');
@@ -87,17 +90,17 @@
       lockComposer(saved.pending === true);
       if (saved.pending) feedback(composer, text('pending'), true);
     }
-    input.addEventListener('input', () => {
+    life.on(input,'input', () => {
       if (journal?.pending) return;
       saveDraft({text:input.value,key:submissionKey.value,pending:false});
     });
-    input.addEventListener('keydown', event => {
+    life.on(input,'keydown', event => {
       const mobile = matchMedia('(pointer: coarse)').matches || innerWidth <= 720;
       if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && !event.isComposing && event.keyCode !== 229 && !mobile) {
         event.preventDefault(); composer.requestSubmit();
       }
     });
-    addEventListener('beforeunload', event => {
+    life.on(window,'beforeunload', event => {
       if (journal?.pending || (storageDenied && input.value)) { event.preventDefault(); event.returnValue = ''; }
     });
   }
@@ -143,18 +146,18 @@
     if(!row)return false;
     clearTimeout(highlightTimer);for(const old of timeline.querySelectorAll('.oie-reply-highlight'))old.classList.remove('oie-reply-highlight');
     highlightedMessage=id;row.classList.add('oie-reply-highlight');row.scrollIntoView({block:'center',behavior:'auto'});if(focus)row.focus({preventScroll:true});
-    highlightTimer=setTimeout(()=>{row.classList.remove('oie-reply-highlight');document.querySelector(`#message-timeline [data-message-id="${CSS.escape(id)}"]`)?.classList.remove('oie-reply-highlight');highlightedMessage='';},1800);
+    highlightTimer=life.timeout(()=>{row.classList.remove('oie-reply-highlight');document.querySelector(`#message-timeline [data-message-id="${CSS.escape(id)}"]`)?.classList.remove('oie-reply-highlight');highlightedMessage='';},1800);
     return true;
   }
-  document.addEventListener('click',event=>{
+  life.on(document,'click',event=>{
     const reply=event.target.closest('[data-reply-target]');
     if(reply&&!event.defaultPrevented&&event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey&&reply.dataset.replyConversation===body.dataset.conversationId&&focusMessage(reply.dataset.replyTarget)){event.preventDefault();return;}
     if(event.target.closest('[data-jump-latest]')){
-      if(pinned()||new URLSearchParams(location.search).has('message')){const url=new URL(location.href);url.searchParams.delete('message');location.assign(url.pathname+url.search);}
+      if(pinned()||new URLSearchParams(location.search).has('message')){const url=new URL(location.href);url.searchParams.delete('message');window.OieNavigation?.go(url.pathname+url.search) ?? location.assign(url.pathname+url.search);}
       else scrollLatest();
     }
   });
-  document.querySelector('#message-timeline')?.addEventListener('scroll',()=>{if(nearBottom(document.querySelector('#message-timeline')))showJump(pinned());});
+  life.on(document.querySelector('#message-timeline'),'scroll',()=>{if(nearBottom(document.querySelector('#message-timeline')))showJump(pinned());});
   localizeTimes();if(!body.dataset.focusMessage||!focusMessage(body.dataset.focusMessage))scrollLatest();else showJump(true);
 
   async function refresh() {
@@ -162,11 +165,13 @@
     if (pendingRequests || refreshing) { refreshAgain = true; return; }
     refreshing = true;
     const starGeneration=Number(body.dataset.starGeneration||0);
-    const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 12000);
+    const controller = new AbortController(); const timeout = life.timeout(() => controller.abort(), 12000);
     try {
-      const response = await fetch('/ui/refresh'+location.search, {credentials:'same-origin',cache:'no-store',signal:controller.signal});
+      const response = await life.fetch('/ui/refresh'+location.search, {credentials:'same-origin',cache:'no-store',signal:controller.signal});
+      if(life.signal.aborted)return;
       if (!response.ok) throw new Error('refresh unavailable');
       const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+      if(life.signal.aborted)return;
       const regions = page.querySelector('#oie-live-regions');
       if (!regions || regions.dataset.unavailable === 'true') { announce(text('liveRetry')); return; }
       if (body.dataset.engineId && regions.dataset.engineId !== body.dataset.engineId) {
@@ -225,7 +230,7 @@
       const detailsRegion=page.querySelector('#live-conversation-details');
       if(detailsRegion?.dataset.detailsConversation===body.dataset.conversationId){
         const detailsScroll=document.getElementById('details-body')?.scrollTop;
-        for(const section of ['identity','account','metadata','participants']){
+        for(const section of ['identity','description','account','metadata','participants']){
           const existing=document.getElementById('conversation-details-'+section),fresh=detailsRegion.querySelector('#live-details-'+section);
           if(existing&&fresh&&existing.dataset.version!==fresh.dataset.version&&!existing.contains(document.activeElement)){
             mutateDOM(existing,fresh.innerHTML);existing.dataset.version=fresh.dataset.version;
@@ -282,17 +287,18 @@
           }
         }
       }
-      document.dispatchEvent(new CustomEvent("oie:shared-refresh",{detail:page}));applyAvatars();document.dispatchEvent(new CustomEvent("oie:stars-refresh",{detail:{page,generation:starGeneration}}));document.dispatchEvent(new CustomEvent("oie:previews-refresh",{detail:page}));localizeTimes();
-    } catch { announce(text('liveRetry')); }
+      document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));document.dispatchEvent(new CustomEvent("oie:shared-refresh",{detail:page}));applyAvatars();document.dispatchEvent(new CustomEvent("oie:stars-refresh",{detail:{page,generation:starGeneration}}));document.dispatchEvent(new CustomEvent("oie:previews-refresh",{detail:page}));localizeTimes();
+    } catch { if(!life.signal.aborted)announce(text('liveRetry')); }
     finally {
-      clearTimeout(timeout); refreshing = false;
+      clearTimeout(timeout);if(life.signal.aborted)return; refreshing = false;
       if (refreshAgain) { refreshAgain = false; scheduleRefresh(); }
     }
   }
-  document.addEventListener('oie:refresh-request',()=>scheduleRefresh());
-  function scheduleRefresh() { clearTimeout(refreshTimer); refreshTimer = setTimeout(refresh,100); }
+  life.on(document,'oie:info-content',()=>{applyAvatars();localizeTimes();});
+  life.on(document,'oie:refresh-request',()=>scheduleRefresh());
+  function scheduleRefresh() { if(stopped||life.signal.aborted)return;clearTimeout(refreshTimer); refreshTimer = life.timeout(refresh,100); }
 
-  document.addEventListener('submit', async event => {
+  life.on(document,'submit', async event => {
     const form = event.target.closest('form[data-oie-action]');
     if (!form || mock) return;
     event.preventDefault();
@@ -312,10 +318,11 @@
     for (const secret of form.querySelectorAll('input[type="password"]')) secret.value = '';
     feedback(form,text('saving'));
     pendingRequests++;
-    const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(),15000);
+    const controller = new AbortController(); const timeout = life.timeout(() => controller.abort(),15000);
     try {
-      const response = await fetch(form.action,{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-Token':csrf},body:values,signal:controller.signal});
+      const response = await life.fetch(form.action,{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-Token':csrf},body:values,signal:controller.signal});
       const result = await response.json();
+      if(life.signal.aborted)return;
       if (!result.ok) {
         feedback(form,result.message || text('pending'),true);
         if(result.code==='engine_changed'){stopped=true;source?.close();}
@@ -329,16 +336,17 @@
           clearDraft(submittedKey);input.value='';submissionKey.value=result.nextKey;lockComposer(false);forceBottom=true;
           input.focus({preventScroll:true});
         } else if (form.dataset.oieAction === 'register' || form.dataset.oieAction === 'open') {
-          if (result.redirect) { location.assign(result.redirect); return; }
+          if (result.redirect) { if(window.OieNavigation)window.OieNavigation.go(result.redirect);else location.assign(result.redirect); return; }
         }
         const key = form.elements.namedItem('operationKey'); if (key && result.nextKey) key.value=result.nextKey;
         scheduleRefresh();
       }
     } catch {
+      if(life.signal.aborted)return;
       feedback(form,sending ? text('pending') : text('liveRetry'),true);
       if (sending) input.focus({preventScroll:true});
     } finally {
-      clearTimeout(timeout);pendingRequests--;form.dataset.busy='false';form.removeAttribute('aria-busy');
+      clearTimeout(timeout);if(life.signal.aborted)return;pendingRequests--;form.dataset.busy='false';form.removeAttribute('aria-busy');
       buttons.forEach((button,index)=>button.disabled=disabled[index]);
       if(stopped&&composer)composer.querySelector('[data-send-message]').disabled=true;
       if (refreshAgain) { refreshAgain=false;scheduleRefresh(); }
@@ -349,11 +357,11 @@
     if (mock || stopped) return;
     source?.close();announce(text('liveConnecting'),true);
     source = new EventSource('/ui/events?cursor='+encodeURIComponent(cursor || ''));
-    source.onopen = () => { announce(text('liveReady'),true);scheduleRefresh();retryPending(); };
-    source.onerror = () => announce(text('liveRetry'));
-    for (const type of ['message.preview_changed','profile.avatar_changed','account.registered','account.connection_changed','account.history_changed','conversation.created','conversation.updated','message.created','message.updated']) source.addEventListener(type,scheduleRefresh);
-    source.addEventListener('message.star_changed',event=>{try{document.dispatchEvent(new CustomEvent('oie:star-event',{detail:JSON.parse(event.data).star}));}catch{}scheduleRefresh();});
-    source.addEventListener('oie.reset', event => {
+    source.onopen = () => { if(stopped)return;announce(text('liveReady'),true);scheduleRefresh();retryPending(); };
+    source.onerror = () => {if(!stopped)announce(text('liveRetry'));};
+    for (const type of ['message.preview_changed','profile.avatar_changed','account.registered','account.connection_changed','account.history_changed','conversation.created','conversation.updated','message.created','message.updated']) life.on(source,type,scheduleRefresh);
+    life.on(source,'message.star_changed',event=>{try{document.dispatchEvent(new CustomEvent('oie:star-event',{detail:JSON.parse(event.data).star}));}catch{}scheduleRefresh();});
+    life.on(source,'oie.reset', event => {
       try {
         const reset=JSON.parse(event.data);
         if (body.dataset.engineId && reset.engineId !== body.dataset.engineId) {stopped=true;source.close();announce(text('engineChanged'));return;}
@@ -363,19 +371,19 @@
   }
   connect(body.dataset.eventCursor);
   // Bounded recovery polling also covers a proxy that buffers or disables SSE.
-  setInterval(() => { if (!mock && !document.hidden) {scheduleRefresh();retryPending();} },15000);
-  addEventListener('online', () => {scheduleRefresh();retryPending();});
+  life.interval(() => { if (!mock && !document.hidden) {scheduleRefresh();retryPending();} },15000);
+  life.on(window,'online', () => {scheduleRefresh();retryPending();});
   const open = new URLSearchParams(location.search).get('open') || body.dataset.openDrawer;
   if (open === 'accounts' || open === 'newchat' || open === 'details') {
     const show = () => {
       dispatchEvent(new CustomEvent('drawer:open',{detail:{id:open}}));
-      if(open==='accounts')setTimeout(()=>{
+      if(open==='accounts')life.timeout(()=>{
         const query=new URLSearchParams(location.search);
         const target=query.get('accountPage')==='capabilities'?document.querySelector('[data-account-capabilities-title]'):query.get('accountFocus')==='capabilities'?document.querySelector('[data-account-capabilities]'):null;
         target?.focus({preventScroll:true});
       },230);
     };
-    if (window.Alpine) setTimeout(show,0); else document.addEventListener('alpine:initialized',show,{once:true});
+    if (window.Alpine) life.timeout(show,0); else life.on(document,'alpine:initialized',show,{once:true});
   }
   const nativeError=document.querySelector('[data-native-error]');if(nativeError)nativeError.focus();
-})();
+});

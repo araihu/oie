@@ -1,4 +1,4 @@
-(() => {
+window.OieRuntime.register('previews', life => {
   'use strict';
   const labels=document.querySelector('#oie-preview-copy')?.dataset || {};
   const viewer=document.querySelector('[data-image-viewer]');
@@ -8,7 +8,7 @@
   const preferenceKey='oie.device.auto-image-downloads.v1';
   let automatic=true;
   try { automatic=localStorage.getItem(preferenceKey)!=='false'; }
-  catch { preferenceWarning(); }
+  catch { automatic=window.OieRuntime.memory.get(preferenceKey)!==false;preferenceWarning(); }
   function preferenceWarning() {
     const warning=document.querySelector('[data-device-preference-warning]');if(warning)warning.hidden=false;
   }
@@ -16,58 +16,48 @@
     for(const control of document.querySelectorAll('[data-auto-image-downloads]'))control.checked=automatic;
   }
   showPreference();
-  document.addEventListener('change',event=>{
+  life.on(document,'change',event=>{
     if(!event.target.matches('[data-auto-image-downloads]'))return;
-    automatic=event.target.checked;
+    automatic=event.target.checked;window.OieRuntime.memory.set(preferenceKey,automatic);
     try {localStorage.setItem(preferenceKey,String(automatic));}catch{preferenceWarning();}
     showPreference();scheduleAutomatic();
   });
-  addEventListener('storage',event=>{
+  life.on(window,'storage',event=>{
     if(event.key!==preferenceKey)return;
-    automatic=event.newValue!=='false';showPreference();scheduleAutomatic();
+    automatic=event.newValue!=='false';window.OieRuntime.memory.set(preferenceKey,automatic);showPreference();scheduleAutomatic();
   });
-  const near=new Set(),observed=new Set(),attempted=new Set();
-  const timeline=document.querySelector('#message-timeline')||document.querySelector('#shared-content-scroll');
+  const near=new Set(),observed=new Set(),attempted=new Set(),observers=new Map(),scopeRoots=new Map();
   let activeAutomatic=0,automaticFrame;
-  const observer=timeline&&typeof IntersectionObserver==='function'?new IntersectionObserver(entries=>{
-    for(const entry of entries) {if(entry.isIntersecting)near.add(entry.target);else near.delete(entry.target);}
-    scheduleAutomatic();
-  },{root:timeline,rootMargin:'240px 0px',threshold:0.01}):null;
-  function trackImages() {
-    for(const scope of observed)if(!scope.isConnected){observer?.unobserve(scope);observed.delete(scope);near.delete(scope);}
-    for(const scope of timeline?.querySelectorAll('[data-preview-kind="image"]')||[]) {
-      if(!observed.has(scope)){observed.add(scope);observer?.observe(scope);}
+  life.cleanup(()=>{for(const observer of observers.values())observer.disconnect();near.clear();observed.clear();});
+  function previewRoot(scope){return scope.closest('#info-shared-results')?document.querySelector('#details-body'):scope.closest('#shared-content-scroll')||scope.closest('#message-timeline');}
+  function observerFor(root){
+    if(!root||typeof IntersectionObserver!=='function')return null;
+    if(!observers.has(root))observers.set(root,new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting)near.add(entry.target);else near.delete(entry.target);}scheduleAutomatic();},{root,rootMargin:'240px 0px',threshold:0.01}));
+    return observers.get(root);
+  }
+  function trackImages(){
+    for(const scope of observed)if(!scope.isConnected){observers.get(scopeRoots.get(scope))?.unobserve(scope);scopeRoots.delete(scope);observed.delete(scope);near.delete(scope);}
+    for(const scope of document.querySelectorAll('#message-timeline [data-preview-kind="image"],#shared-content-scroll [data-preview-kind="image"],#info-shared-results [data-preview-kind="image"]')){
+      if(!observed.has(scope)){const root=previewRoot(scope);observed.add(scope);scopeRoots.set(scope,root);observerFor(root)?.observe(scope);}
     }
-    if(!observer)measureImages();
-    scheduleAutomatic();
+    if(typeof IntersectionObserver!=='function')measureImages();scheduleAutomatic();
   }
-  function measureImages() {
-    if(!timeline)return;
-    const bounds=timeline.getBoundingClientRect();
-    for(const scope of observed){const box=scope.getBoundingClientRect();if(box.height>0&&box.bottom>=bounds.top-240&&box.top<=bounds.bottom+240)near.add(scope);else near.delete(scope);}
+  function measureImages(){
+    for(const scope of observed){const root=scopeRoots.get(scope);if(!root)continue;const bounds=root.getBoundingClientRect(),box=scope.getBoundingClientRect();if(bounds.height>0&&box.height>0&&box.bottom>=bounds.top-240&&box.top<=bounds.bottom+240)near.add(scope);else near.delete(scope);}
   }
-  function scheduleAutomatic() {
-    if(automaticFrame)return;
-    automaticFrame=requestAnimationFrame(()=>{automaticFrame=0;drainAutomatic();});
-  }
-  function drainAutomatic() {
+  function scheduleAutomatic(){if(life.signal.aborted||automaticFrame)return;automaticFrame=life.raf(()=>{automaticFrame=0;drainAutomatic();});}
+  function drainAutomatic(){
     if(!automatic||document.body.dataset.mock==='true'||document.visibilityState==='hidden')return;
-    for(const scope of near) {
-      if(activeAutomatic>=2)break;
-      const id=scope.dataset.previewId;
-      if(!scope.isConnected||scope.dataset.previewFile||scope.dataset.previewDownload!=='not_downloaded'||attempted.has(id)||downloading.has(id))continue;
-      // One automatic attempt per preview per page. Failure and unknown outcomes
-      // stay available for explicit retry, including after SSE replaces rows.
-      attempted.add(id);activeAutomatic++;
-      download(scope).finally(()=>{activeAutomatic--;scheduleAutomatic();});
-    }
+    for(const scope of near){if(activeAutomatic>=2)break;const id=scope.dataset.previewId;if(!scope.isConnected||!scope.getClientRects().length||scope.dataset.previewFile||scope.dataset.previewDownload!=='not_downloaded'||attempted.has(id)||downloading.has(id))continue;attempted.add(id);activeAutomatic++;download(scope).finally(()=>{activeAutomatic--;scheduleAutomatic();});}
   }
-  if(!observer){timeline?.addEventListener('scroll',()=>{measureImages();scheduleAutomatic();},{passive:true});addEventListener('resize',()=>{measureImages();scheduleAutomatic();});}
-  document.addEventListener('visibilitychange',scheduleAutomatic);
-  requestAnimationFrame(()=>{trackImages();for(const menu of document.querySelectorAll('[id^="save-preview-"]')){const scope=document.querySelector(`[data-preview-id="${CSS.escape(menu.id.slice(13))}"]`);menu.hidden=!scope?.dataset.previewFile;menu.disabled=!scope?.dataset.previewFile;}});
-  let viewing='',menuOpener=false;
+  if(typeof IntersectionObserver!=='function'){life.on(document,'scroll',()=>{measureImages();scheduleAutomatic();},{capture:true,passive:true});life.on(window,'resize',()=>{measureImages();scheduleAutomatic();});}
+  life.on(document,'visibilitychange',scheduleAutomatic);
+  life.raf(()=>{trackImages();for(const menu of document.querySelectorAll('[id^="save-preview-"]')){const scope=document.querySelector(`[data-preview-id="${CSS.escape(menu.id.slice(13))}"]`);menu.hidden=!scope?.dataset.previewFile;menu.disabled=!scope?.dataset.previewFile;}});
+  let viewing='',menuOpener=false,viewerOrigin='timeline';
   const source=hash=>typeof hash==='string' && /^[0-9a-f]{64}$/.test(hash)?'/ui/media/'+hash:'';
-  const find=id=>document.querySelector(`[data-preview-id="${CSS.escape(id)}"]`);
+  const contextOf=scope=>scope.closest('#info-shared-results')?'info':scope.closest('#shared-content-results')?'shared':'timeline';
+  const findAll=id=>document.querySelectorAll(`[data-preview-id="${CSS.escape(id)}"]`);
+  const find=id=>{const selector=viewerOrigin==='info'?'#info-shared-results':viewerOrigin==='shared'?'#shared-content-results':'#message-timeline';return document.querySelector(`${selector} [data-preview-id="${CSS.escape(id)}"]`)||document.querySelector(`[data-preview-id="${CSS.escape(id)}"]`);};
   const state=element=>window.Alpine?.$data(element);
   const fields=['previewUrl','previewName','previewMime','previewSize','previewTitle','previewDescription','previewSite','previewImage','previewFile','previewState','previewDownload','previewStatus','previewRevision'];
   function apply(scope,values) {
@@ -77,7 +67,7 @@
     }
     if(data)data.previewBusy=downloading.has(scope.dataset.previewId);
     const save=document.getElementById('save-preview-'+scope.dataset.previewId);if(save){save.disabled=!scope.dataset.previewFile;save.hidden=!scope.dataset.previewFile;}
-    if(viewing===scope.dataset.previewId)updateViewer(scope);
+    if(viewing===scope.dataset.previewId&&contextOf(scope)===viewerOrigin)updateViewer(scope);
   }
   function updateViewer(scope) {
     if(!viewer)return;const data=state(viewer);if(!data)return;
@@ -106,17 +96,25 @@
   }
   function expand(scope,fromMenu=false) {
     if(!dialog||!viewer)return;
-    viewing=scope.dataset.previewId;menuOpener=fromMenu;state(viewer).viewerActive=true;updateViewer(scope);
+    viewing=scope.dataset.previewId;menuOpener=fromMenu;viewerOrigin=contextOf(scope);state(viewer).viewerActive=true;updateViewer(scope);
     window.dispatchEvent(new CustomEvent('modal:open',{detail:{id:'oie-image-viewer'}}));
   }
-  dialog?.addEventListener('close',()=>{
+  // A disabled focused action can leave focus on body while this native modal
+  // remains open. Consume that Escape before the underlying Drawer's window
+  // listener; an inner popover already handles and stops its own Escape.
+  life.on(document,'keydown',event=>{
+    if(event.key!=='Escape'||!dialog?.open)return;
+    event.preventDefault();event.stopPropagation();dialog.close();
+  });
+  life.on(dialog,'close',()=>{
     const previous=viewing;viewing='';
     if(state(viewer))state(viewer).viewerActive=false;
     // A new message may replace the timeline while the dialog is open. Restore
     // focus to the equivalent surviving action instead of a detached opener.
-    setTimeout(()=>{const scope=find(previous);const target=scope&&(menuOpener?(scope.querySelector('[data-image-menu-trigger]')||scope.closest('[data-message-id]')?.querySelector('[data-message-menu-trigger]')):[...scope.querySelectorAll('[data-preview-expand],[data-preview-download]')].find(el=>el.getClientRects().length));target?.focus({preventScroll:true});},0);
+    life.timeout(()=>{const scope=find(previous);const target=scope&&(menuOpener?(scope.querySelector('[data-image-menu-trigger]')||scope.closest('[data-message-id]')?.querySelector('[data-message-menu-trigger]')):[...scope.querySelectorAll('[data-preview-expand],[data-preview-download]')].find(el=>el.getClientRects().length));target?.focus({preventScroll:true});},0);
   });
   function synchronize(root) {
+    if(!root||life.signal.aborted)return;
     const timeline=document.querySelector('#message-timeline');
     const follow=timeline&&!document.body.dataset.focusMessage&&timeline.scrollHeight-timeline.scrollTop-timeline.clientHeight<60;
     const anchor=timeline&&[...timeline.querySelectorAll('[data-message-id]')].find(el=>el.getBoundingClientRect().bottom>=timeline.getBoundingClientRect().top);
@@ -139,7 +137,7 @@
         if(window.Alpine?.mutateDom)window.Alpine.mutateDom(replace);else replace();
       }
     }
-    for(const fresh of root.querySelectorAll('#live-timeline [data-preview-id],#live-shared-results [data-preview-id]')) {
+    for(const fresh of root.querySelectorAll('#live-timeline [data-preview-id],#live-shared-results [data-preview-id],#info-shared-results [data-preview-id]')) {
       let current=find(fresh.dataset.previewId);
       if(!current) {
         const message=fresh.closest('[data-message-previews]')?.dataset.messagePreviews;
@@ -149,42 +147,45 @@
         const insert=()=>{container.append(current);window.Alpine?.initTree(current);};
         if(window.Alpine?.mutateDom)window.Alpine.mutateDom(insert);else insert();
       }
-      apply(current,fresh.dataset);
+      for(const scope of findAll(fresh.dataset.previewId))apply(scope,fresh.dataset);
     }
     document.dispatchEvent(new CustomEvent('oie:actions-refreshed'));
     // Alpine applies text/visibility changes in its next microtask. Preserve the
     // visible message after those updates, including newly appended link cards.
-    requestAnimationFrame(()=>{
+    life.raf(()=>{
       if(!timeline)return;
       if(follow)timeline.scrollTop=timeline.scrollHeight;
       else if(anchor?.isConnected)timeline.scrollTop+=anchor.getBoundingClientRect().top-anchorTop;
     });
   }
-  document.addEventListener('oie:previews-refresh',event=>{synchronize(event.detail);trackImages();});
+  life.on(document,'oie:previews-refresh',event=>{synchronize(event.detail);trackImages();});
+  life.on(document,'oie:info-content',event=>{synchronize(event.detail.root);trackImages();});
   async function download(scope) {
     const id=scope.dataset.previewId;if(downloading.has(id))return;
-    downloading.add(id);if(state(scope))state(scope).previewBusy=true;
+    downloading.add(id);for(const matching of findAll(id))if(state(matching))state(matching).previewBusy=true;
     const feedback=scope.querySelector('[data-preview-feedback]');if(feedback)feedback.textContent=labels.loading || '';
-    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
+    const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),12000);
     let failure=labels.failed || '';
     try {
       const values=new URLSearchParams({csrf,engineId:document.body.dataset.engineId,previewId:id,returnTo:location.pathname+location.search});
-      const response=await fetch('/ui/previews/download',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json'},body:values,signal:controller.signal});
+      const response=await life.fetch('/ui/previews/download',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json'},body:values,signal:controller.signal});
       const result=await response.json();
+      if(life.signal.aborted)return;
       if(!response.ok||!result.ok){failure=result.message || failure;throw new Error('preview_rejected');}
       const p=result.preview;
-      if(p&&p.id===id)apply(find(id)||scope,{previewUrl:p.url||'',previewName:p.title||scope.dataset.previewName||'',previewMime:p.fileMimeType||'',previewSize:p.fileSize===undefined?'':String(p.fileSize),previewTitle:p.title||'',previewDescription:p.description||'',previewSite:p.siteName||'',previewImage:source(p.imageHash),previewFile:p.downloadState==='ready'?source(p.fileHash):'',previewState:p.state,previewDownload:p.downloadState,previewRevision:p.revisionId,previewStatus:result.message||''});
+      if(p&&p.id===id)for(const matching of findAll(id))apply(matching,{previewUrl:p.url||'',previewName:p.title||scope.dataset.previewName||'',previewMime:p.fileMimeType||'',previewSize:p.fileSize===undefined?'':String(p.fileSize),previewTitle:p.title||'',previewDescription:p.description||'',previewSite:p.siteName||'',previewImage:source(p.imageHash),previewFile:p.downloadState==='ready'?source(p.fileHash):'',previewState:p.state,previewDownload:p.downloadState,previewRevision:p.revisionId,previewStatus:result.message||''});
       if(feedback)feedback.textContent='';
     } catch(error) {
+      if(life.signal.aborted)return;
       const current=find(id)||scope,feedback=current.querySelector('[data-preview-feedback]');
       const message=failure;
       if(feedback)feedback.textContent=message || '';
       if(viewing===id&&state(viewer))state(viewer).viewerStatus=message || '';
     } finally {
-      clearTimeout(timeout);downloading.delete(id);const current=find(id);if(current&&state(current))state(current).previewBusy=false;
+      clearTimeout(timeout);if(life.signal.aborted)return;downloading.delete(id);for(const matching of findAll(id))if(state(matching))state(matching).previewBusy=false;
     }
   }
-  document.addEventListener('click',event=>{
+  life.on(document,'click',event=>{
     const menu=event.target.closest('[id^="open-preview-"],[id^="info-preview-"],[id^="save-preview-"]');
     const button=menu||event.target.closest('button[data-preview-download],button[data-preview-expand]');if(!button)return;
     const id=menu?menu.id.slice(menu.id.indexOf('-preview-')+9):'';
@@ -195,10 +196,10 @@
       const link=document.createElement('a');link.href=path+'?download='+encodeURIComponent(scope.dataset.previewName||'image');link.download=scope.dataset.previewName||'image';document.body.append(link);link.click();link.remove();return;
     }
     if(menu?.id.startsWith('info-preview-')){
-      expand(scope,true);setTimeout(()=>{viewer.querySelector('[data-viewer-info]')?.click();},40);return;
+      expand(scope,true);life.timeout(()=>{viewer.querySelector('[data-viewer-info]')?.click();},40);return;
     }
     if(menu||button.hasAttribute('data-preview-expand')){
       expand(scope,!!menu);if(!scope.dataset.previewFile&&!['queued','downloading'].includes(scope.dataset.previewDownload))download(scope);
     }else download(scope);
   });
-})();
+});
