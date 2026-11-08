@@ -96,6 +96,8 @@ The BFF uses application capabilities; protocol namespaces and stanza handling r
 
 **RECOMMENDED R04:** distinguish unsupported, supported, permission-denied, and temporarily unknown/unavailable states; revalidate at operation time. **OPEN O02:** the complete capability schema and minimum tested XMPP interoperability matrix.
 
+Account management retains priority in the account sidebar. A deeper capabilities page shows a comparison of Oie implementation, protocol support and discovered server support, followed by server/entity discovery details. Unknown evidence, unadvertised features, app-only features and peer/room-specific support remain distinct. Server advertisements never imply that Oie implements an operation or that a room permits it. This diagnostic report is a bounded session snapshot; reading it does not probe the protocol server.
+
 ### 3.2 Accounts and contacts
 
 Support multiple simultaneous existing XMPP accounts, such as personal and work. Display the owning/sending account clearly in conversations and account-sensitive actions. In-app XMPP registration is backlogged.

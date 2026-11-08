@@ -26,4 +26,5 @@ OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/previews.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/markdown.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/stars.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/replies.cjs
+OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/capabilities.cjs
 sh scripts/test-live-browser.sh

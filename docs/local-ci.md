@@ -73,3 +73,13 @@ separately from these native checks.
 The current attempt exited 124 after 180 seconds without a Dagger stage result.
 Native `make check` completed successfully. Full Dagger completion remains
 unverified; no green pipeline result is claimed.
+
+The account-capabilities increment adds `capabilities.cjs` to the Dagger browser
+stage. Native `make check`, engine/API/XMPP/web race tests, development-server
+discovery integration and the real-engine browser workflow pass. The fixture
+covers sixteen responsive theme/color/language combinations and read-only
+unknown/partial/error recovery. A real-account browser observation confirms the
+scoped matrix and return to management. Full Dagger completion is tracked
+separately from these checks.
+The capabilities run again timed out at 180 seconds with exit 124 before
+returning Dagger stage results. No green full-pipeline result is claimed.
