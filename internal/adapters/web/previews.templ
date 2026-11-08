@@ -17,7 +17,7 @@ templ messagePreview(v view,p engineapi.MessagePreview){
 <section class="oie-message-preview" data-preview-id={p.Id} data-preview-revision={p.RevisionId} data-preview-kind={string(p.Kind)} data-preview-title={previewValue(p.Title)} data-preview-message={p.MessageId} data-preview-url={safePreviewURL(p.Url)} data-preview-name={previewFilename(p)} data-preview-mime={previewMime(p)} data-preview-size={previewSize(p)} data-preview-description={previewValue(p.Description)} data-preview-site={previewValue(p.SiteName)} data-preview-image={mediaSource(p.ImageHash)} data-preview-file={mediaSource(p.FileHash)} data-preview-state={string(p.State)} data-preview-download={string(p.DownloadState)} data-preview-status={v.previewStatus(p)} x-data="{previewTitle:$el.dataset.previewTitle,previewDescription:$el.dataset.previewDescription,previewSite:$el.dataset.previewSite,previewImage:$el.dataset.previewImage,previewFile:$el.dataset.previewFile,previewState:$el.dataset.previewState,previewDownload:$el.dataset.previewDownload,previewStatus:$el.dataset.previewStatus,previewBusy:false,previewImageFailed:false}">
 if p.Kind=="link" {
 @link.Link(safePreviewURL(p.Url),link.WithRootClass("oie-link-preview"),link.WithAttrs(templ.Attributes{"target":"_blank","rel":"noopener noreferrer","data-preview-page":""})){
-@card.Card(card.Config{Title:previewHost(p),Media:previewThumbnail(v,p),MediaClass:"oie-preview-media",Body:previewDescription(v,p),Density:card.DensityCompact,RootClass:"oie-preview-card"})
+@card.Card(card.Config{Layout:previewCardLayout(v),Title:previewHost(p),Media:previewThumbnail(v,p),MediaClass:"oie-preview-media",Body:previewDescription(v,p),Density:card.DensityCompact,RootClass:"oie-preview-card"})
 }
 }else{
 <div class="oie-image-preview">

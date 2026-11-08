@@ -115,7 +115,7 @@
     const locale=document.documentElement.lang || undefined;
     const clock=new Intl.DateTimeFormat(locale,{hour:'2-digit',minute:'2-digit'});
     for (const time of document.querySelectorAll('time[datetime]:not([data-day])')) {
-      const date=new Date(time.dateTime);if(!Number.isNaN(date.getTime()))time.textContent=time.matches('[data-viewer-date],[data-capability-date],[data-details-date]')?new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(date):clock.format(date);
+      const date=new Date(time.dateTime);if(!Number.isNaN(date.getTime()))time.textContent=time.matches('[data-viewer-date],[data-capability-date],[data-details-date],[data-shared-source-date]')?new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(date):clock.format(date);
     }
     const timeline=document.querySelector('#message-timeline');if(!timeline)return;
     for(const divider of timeline.querySelectorAll('.oie-day-divider'))divider.remove();
@@ -282,7 +282,7 @@
           }
         }
       }
-      applyAvatars();document.dispatchEvent(new CustomEvent("oie:stars-refresh",{detail:{page,generation:starGeneration}}));document.dispatchEvent(new CustomEvent("oie:previews-refresh",{detail:page}));localizeTimes();
+      document.dispatchEvent(new CustomEvent("oie:shared-refresh",{detail:page}));applyAvatars();document.dispatchEvent(new CustomEvent("oie:stars-refresh",{detail:{page,generation:starGeneration}}));document.dispatchEvent(new CustomEvent("oie:previews-refresh",{detail:page}));localizeTimes();
     } catch { announce(text('liveRetry')); }
     finally {
       clearTimeout(timeout); refreshing = false;

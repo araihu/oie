@@ -31,6 +31,14 @@ func (v *view) configureWorkspace(r *http.Request) {
 	default:
 		v.Filter = "all"
 	}
+	v.SharedType = q.Get("contentType")
+	switch v.SharedType {
+	case "links", "documents":
+	default:
+		v.SharedType = "media"
+	}
+	v.SharedCursor = q.Get("contentCursor")
+	v.SharedConversation = q.Get("contentConversation")
 	v.Query = q.Get("q")
 	if query := []rune(v.Query); len(query) > 200 {
 		v.Query = string(query[:200])
@@ -56,7 +64,24 @@ func (v view) href(pairs ...string) string {
 			q.Set("message", v.FocusMessage)
 		}
 	}
+	if v.Section == "media" {
+		q.Set("contentType", v.SharedType)
+		if v.SharedCursor != "" {
+			q.Set("contentCursor", v.SharedCursor)
+		}
+		if v.SharedConversation != "" {
+			q.Set("contentConversation", v.SharedConversation)
+		}
+	}
 	for i := 0; i+1 < len(pairs); i += 2 {
+		if pairs[i] == "section" && pairs[i+1] != "media" {
+			q.Del("contentType")
+			q.Del("contentCursor")
+			q.Del("contentConversation")
+		}
+		if pairs[i] == "account" && pairs[i+1] != v.AccountFilter {
+			q.Del("contentCursor")
+		}
 		if pairs[i] == "chat" && pairs[i+1] != v.ChatID {
 			q.Del("message")
 		}

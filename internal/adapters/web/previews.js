@@ -27,7 +27,7 @@
     automatic=event.newValue!=='false';showPreference();scheduleAutomatic();
   });
   const near=new Set(),observed=new Set(),attempted=new Set();
-  const timeline=document.querySelector('#message-timeline');
+  const timeline=document.querySelector('#message-timeline')||document.querySelector('#shared-content-scroll');
   let activeAutomatic=0,automaticFrame;
   const observer=timeline&&typeof IntersectionObserver==='function'?new IntersectionObserver(entries=>{
     for(const entry of entries) {if(entry.isIntersecting)near.add(entry.target);else near.delete(entry.target);}
@@ -35,7 +35,7 @@
   },{root:timeline,rootMargin:'240px 0px',threshold:0.01}):null;
   function trackImages() {
     for(const scope of observed)if(!scope.isConnected){observer?.unobserve(scope);observed.delete(scope);near.delete(scope);}
-    for(const scope of document.querySelectorAll('#message-timeline [data-preview-kind="image"]')) {
+    for(const scope of timeline?.querySelectorAll('[data-preview-kind="image"]')||[]) {
       if(!observed.has(scope)){observed.add(scope);observer?.observe(scope);}
     }
     if(!observer)measureImages();
@@ -90,7 +90,7 @@
     const identity=viewer.querySelector('[data-viewer-identity]');
     if(identity&&identity.dataset.sourceId!==viewer.dataset.viewerMessageId){
       const row=document.querySelector(`[data-message-id="${CSS.escape(viewer.dataset.viewerMessageId)}"]`);
-      const template=row?.querySelector('[data-viewer-source]');
+      const template=(scope.closest('[data-shared-item]')||row)?.querySelector('[data-viewer-source]');
       if(template){
         const replace=()=>{for(const child of identity.children)window.Alpine?.destroyTree(child);identity.replaceChildren(template.content.cloneNode(true));for(const child of identity.children)window.Alpine?.initTree(child);};
         if(window.Alpine?.mutateDom)window.Alpine.mutateDom(replace);else replace();
@@ -139,7 +139,7 @@
         if(window.Alpine?.mutateDom)window.Alpine.mutateDom(replace);else replace();
       }
     }
-    for(const fresh of root.querySelectorAll('#live-timeline [data-preview-id]')) {
+    for(const fresh of root.querySelectorAll('#live-timeline [data-preview-id],#live-shared-results [data-preview-id]')) {
       let current=find(fresh.dataset.previewId);
       if(!current) {
         const message=fresh.closest('[data-message-previews]')?.dataset.messagePreviews;
@@ -186,7 +186,7 @@
   }
   document.addEventListener('click',event=>{
     const menu=event.target.closest('[id^="open-preview-"],[id^="info-preview-"],[id^="save-preview-"]');
-    const button=menu||event.target.closest('[data-preview-download],[data-preview-expand]');if(!button)return;
+    const button=menu||event.target.closest('button[data-preview-download],button[data-preview-expand]');if(!button)return;
     const id=menu?menu.id.slice(menu.id.indexOf('-preview-')+9):'';
     const scope=menu?find(id):button.closest('[data-preview-id]');if(!scope||scope.dataset.previewKind!=='image')return;
     event.preventDefault();

@@ -1,0 +1,124 @@
+package web
+
+import (
+ "github.com/araihu/goshtoso/components/avatar"
+ "github.com/araihu/goshtoso/components/button"
+ "github.com/araihu/goshtoso/components/card"
+ "github.com/araihu/goshtoso/components/emptystate"
+ "github.com/araihu/goshtoso/components/icon/heroicons"
+ "github.com/araihu/goshtoso/components/link"
+ "github.com/araihu/goshtoso/components/sidebar"
+ selectfield "github.com/araihu/goshtoso/components/select"
+ "github.com/araihu/goshtoso/components/textinput"
+ "github.com/araihu/goshtoso/components/toolbar"
+ "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+ "strconv"
+)
+
+templ sharedWorkspace(v view){
+<section id="workspace" class="oie-shared-workspace" aria-label={v.Text.SharedMedia}>
+<header class="oie-shared-header">
+<div class="oie-mobile-nav">@sidebar.Overlay(sidebar.OverlayConfig{ID:"mobile-navigation",Sidebar:navigation(v,"mobile-navigation"),TriggerLabel:v.Text.OpenNavigation,Trigger:glyph(heroicons.Icon16SolidBars3)})</div>
+<h2>{v.Text.SharedMedia}</h2>
+<div x-data="{}">@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Settings,"data-shared-settings":""}),button.WithAlpine(&button.AlpineConfig{OnClick:"$dispatch('drawer:open', {id: 'settings'})"})){@glyph(heroicons.Icon16SolidCog6Tooth)}</div>
+</header>
+<form action="/" method="get" id="shared-content-search" class="oie-shared-search" role="search">
+<input type="hidden" name="section" value="media"/><input type="hidden" name="contentType" value={v.SharedType}/><input type="hidden" name="contentConversation" value={v.SharedConversation}/><input type="hidden" name="lang" value={v.Locale}/><input type="hidden" name="theme" value={v.Theme}/>
+@toolbar.Toolbar(toolbar.Config{Label:v.Text.SharedTools,RootClass:"oie-shared-toolbar",SearchClass:"oie-shared-search-region",FiltersClass:"oie-shared-filter-region",ActionsClass:"oie-shared-action-region",Search:sharedSearch(v),Filters:sharedAccountFilter(v),Actions:sharedSearchAction(v)})
+</form>
+<nav class="oie-shared-segments" aria-label={v.Text.SharedContentTypes}>
+@sharedTab(v,"media",v.Text.SharedMediaTab)
+@sharedTab(v,"links",v.Text.SharedLinksTab)
+@sharedTab(v,"documents",v.Text.SharedDocsTab)
+</nav>
+if v.SharedConversation!="" {
+@link.Link(v.sharedHref("contentConversation","","contentCursor",""),link.WithRootClass("oie-shared-scope")){ {v.Text.SharedAllChats} }
+}
+<div id="shared-content-scroll" class="oie-shared-scroll" tabindex="0" aria-label={v.Text.SharedMedia}>
+<div id="shared-content-status" role="status">@sharedStatus(v)</div>
+<div id="shared-content-results" data-version={v.sharedVersion()} data-content-type={v.SharedType}>@sharedItems(v)</div>
+<div id="shared-content-pagination">@sharedPagination(v)</div>
+</div>
+</section>
+}
+templ sharedSearch(v view){
+@textinput.TextInput(textinput.Config{ID:"shared-search",Name:"q",Value:v.Query,Type:textinput.TypeSearch,Label:v.Text.SharedSearch,Placeholder:v.Text.SharedSearch})
+}
+templ sharedAccountFilter(v view){
+@selectfield.Select(selectfield.Config{ID:"shared-account",Name:"account",Label:v.Text.SharedAccount,RootClass:"oie-shared-account-filter",Options:accountOptions(v,true)})
+}
+templ sharedSearchAction(v view){
+@button.Button(button.WithType("submit"),button.WithAttrs(templ.Attributes{"data-shared-search":""})){ {v.Text.SharedSearchAction} }
+}
+templ sharedTab(v view,kind,label string){
+@link.Link(v.sharedHref("contentType",kind,"contentCursor",""),link.WithAttrs(templ.Attributes{"aria-current":strconv.FormatBool(v.SharedType==kind),"data-shared-tab":kind}),link.WithRootClass("oie-shared-segment")){ {label} }
+}
+templ sharedStatus(v view){
+if v.Unavailable {
+<p>{v.Text.UnavailableBody}</p>
+@link.Link(v.sharedHref()){ {v.Text.Retry} }
+}else if v.SharedInvalid {
+<p>{v.Text.SharedPageUnavailable}</p>
+@link.Link(v.sharedHref("contentCursor","")){ {v.Text.SharedNewest} }
+}else if v.SharedContent==nil {
+<p>{v.Text.SharedUnavailable}</p>
+@link.Link(v.sharedHref(),link.WithAttrs(templ.Attributes{"data-shared-retry":""})){ {v.Text.Retry} }
+}else if v.SharedContent.Indexing.State=="pending" {
+<p data-shared-indexing>{v.Text.SharedFinding} <span>{strconv.FormatInt(v.SharedContent.Indexing.IndexedMessages,10)} / {strconv.FormatInt(v.SharedContent.Indexing.TotalMessages,10)}</span></p>
+}
+}
+templ sharedItems(v view){
+if v.SharedContent!=nil {
+if len(v.SharedContent.Items)==0 {
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.SharedEmpty,Description:v.Text.SharedEmptyHelp})
+}else{
+for _,item:=range v.SharedContent.Items {
+@sharedItem(v,item)
+}
+}
+}
+}
+templ sharedItem(v view,item engineapi.SharedContentItem){
+<article class="oie-shared-item" data-shared-item={item.Id} data-shared-created-at={item.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-shared-conversation={item.Message.ConversationId}>
+@sharedViewerSource(v,item)
+if item.Preview!=nil {
+@messagePreview(v,*item.Preview)
+}else{
+@card.Card(card.Config{Title:v.sharedTitle(item),TitlePrefix:sharedKindIcon(string(item.Kind)),Body:sharedReference(v,item),Density:card.DensityCompact,RootClass:"oie-shared-reference"})
+}
+<footer class="oie-shared-source">
+<strong>{item.ConversationTitle}</strong><small>{v.sharedAccountLabel(item)} · {item.Message.Sender.DisplayName}</small>
+<time data-shared-source-date datetime={item.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{item.Message.CreatedAt.Format("2006-01-02 15:04")}</time>
+@link.Link(v.sharedSourceHref(item),link.WithID("shared-source-"+item.Id),link.WithAttrs(templ.Attributes{"data-shared-source":item.Message.Id})){ {v.Text.SharedGoToMessage} }
+</footer>
+</article>
+}
+templ sharedKindIcon(kind string){
+switch kind {
+case "audio":
+@glyph(heroicons.Icon16SolidPlay)
+case "video":
+@glyph(heroicons.Icon16SolidPlay)
+case "document":
+@glyph(heroicons.Icon16SolidDocumentText)
+default:
+@glyph(heroicons.Icon16SolidLink)
+}
+}
+templ sharedReference(v view,item engineapi.SharedContentItem){
+<p class="oie-shared-kind">{v.sharedKindLabel(string(item.Kind))}</p>
+@link.Link(safePreviewURL(item.Url),link.WithAttrs(templ.Attributes{"target":"_blank","rel":"noopener noreferrer","data-shared-reference":""})){ {v.Text.SharedOpenLink} }
+}
+templ sharedPagination(v view){
+if v.SharedContent!=nil&&v.SharedContent.NextCursor!=nil {
+@link.Link(v.sharedHref("contentCursor",*v.SharedContent.NextCursor),link.WithAppearance(link.AppearanceButton),link.WithRootClass("oie-shared-next"),link.WithAttrs(templ.Attributes{"data-shared-next":""})){ {v.Text.SharedNext} }
+}
+}
+templ sharedViewerSource(v view,item engineapi.SharedContentItem){
+<template data-viewer-source={item.Message.Id}>
+<div class="oie-viewer-source" data-viewer-source-id={item.Message.Id}>
+@profileAvatar(v,item.Message.AccountId,v.sharedSenderAddress(item),avatar.Config{Name:item.Message.Sender.DisplayName,Size:avatar.SizeXS})
+<div class="oie-viewer-sender"><strong title={item.Message.Sender.DisplayName}>{item.Message.Sender.DisplayName}</strong><time data-viewer-date datetime={item.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{item.Message.CreatedAt.Format("2006-01-02 15:04")}</time></div>
+</div>
+</template>
+}

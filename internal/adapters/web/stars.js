@@ -81,6 +81,7 @@
     }catch{announce(labels.uncertain);}
     finally{
       clearTimeout(timeout);busy.delete(id);generation++;body.dataset.starGeneration=String(generation);render();
+      if(id===viewerMessage)refreshViewer();
       document.dispatchEvent(new CustomEvent('oie:refresh-request'));
     }
   });

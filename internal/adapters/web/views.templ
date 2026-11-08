@@ -63,12 +63,15 @@ templ page(v view) {
 <script src="/ui/actions.js" defer></script>
 <script src="/ui/stars.js" defer></script>
 <script src="/ui/previews.js" defer></script>
+<script src="/ui/shared-content.js" defer></script>
 <script src="/ui/live.js" defer></script>
 <meta name="oie-csrf" content={v.CSRF}/>
 		</head>
 		<body data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
 @liveCopy(v)
+if v.Section!="media"{
 @starData(v)
+}
 @avatarData(v)
 <div class="oie-live-status" data-live-status role="status" aria-live="polite" hidden></div>
 if v.ErrorMessage!="" {
@@ -147,6 +150,9 @@ if v.AccountFilter!="" && connectionState(v,v.AccountFilter)!="not_connected" &&
 }
 
 templ workspace(v view) {
+if v.Section=="media"{
+@sharedWorkspace(v)
+}else{
 	<div id="workspace" class={ "oie-workspace",templ.KV("oie-chat-open",v.ChatOpen) }>
 		<section class="oie-list-pane" aria-label={ v.Text.Chats }>
 			<div class="oie-list-heading">
@@ -242,6 +248,7 @@ templ workspace(v view) {
 			}
 		</section>
 	</div>
+}
 }
 
 templ menuTrigger(label string) {
@@ -528,7 +535,9 @@ templ liveCopy(v view){
 templ liveRegions(v view){
 <div id="oie-live-regions" data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
 @avatarData(v)
+if v.Section!="media"{
 @starData(v)
+}
 if v.Selected!=nil {
 <div id="live-conversation-details" data-details-conversation={v.Selected.Id}>
 <div id="live-details-identity" data-version={v.detailsVersion("identity")}>@detailsIdentity(v)</div>
@@ -538,6 +547,9 @@ if v.Selected!=nil {
 </div>
 }
 <div id="live-context-notice">@contextNotice(v)</div>
+if v.Section=="media"{
+<div id="live-shared-content"><div id="live-shared-status">@sharedStatus(v)</div><div id="live-shared-results" data-version={v.sharedVersion()}>@sharedItems(v)</div><div id="live-shared-pagination">@sharedPagination(v)</div></div>
+}
 <div id="live-history-status">@historyBanner(v)</div>
 <div id="live-list">@conversationList(v)</div>
 <div id="live-timeline" data-version={v.timelineVersion()}>@timeline(v)</div>

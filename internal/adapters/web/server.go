@@ -89,6 +89,9 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	SharedType, SharedCursor, SharedConversation          string
+	SharedContent                                         *engineapi.SharedContentPage
+	SharedInvalid                                         bool
 	Locale, Theme, Role                                   string
 	Text                                                  copy
 	Avatars                                               map[avatarIdentity]string
@@ -117,6 +120,29 @@ type view struct {
 }
 
 type copy struct {
+	SharedAccount          string
+	SharedTools            string
+	SharedContentTypes     string
+	SharedMediaTab         string
+	SharedLinksTab         string
+	SharedDocsTab          string
+	SharedAllChats         string
+	SharedSearch           string
+	SharedSearchAction     string
+	SharedPageUnavailable  string
+	SharedNewest           string
+	SharedUnavailable      string
+	SharedFinding          string
+	SharedEmpty            string
+	SharedEmptyHelp        string
+	SharedGoToMessage      string
+	SharedOpenLink         string
+	SharedNext             string
+	SharedImage            string
+	SharedAudio            string
+	SharedVideo            string
+	SharedDocument         string
+	SharedLink             string
 	CapabilityPresenceNote string
 	DetailsRefresh         string
 	DetailsOwningAccount   string
@@ -292,6 +318,9 @@ func loadCatalogs() (map[string]copy, error) {
 //go:embed previews.js
 var previewsScript []byte
 
+//go:embed shared-content.js
+var sharedScript []byte
+
 //go:embed live.js
 var liveScript []byte
 
@@ -313,7 +342,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mime string
 		body []byte
 	}{
-		"/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
+		"/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
 	}
 	if asset, ok := assets[r.URL.Path]; ok {
 		w.Header().Set("Content-Type", asset.mime)
@@ -409,6 +438,10 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		}
 	}
 	s.loadCapabilities(ctx, v)
+	if v.Section == "media" {
+		s.loadSharedContent(ctx, v)
+		return
+	}
 	params := &engineapi.ListConversationsParams{Limit: &limit}
 	archived := v.Section == "archived"
 	params.Archived = &archived

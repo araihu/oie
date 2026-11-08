@@ -67,6 +67,13 @@ const {chromium} = require('playwright');
     await choice.click();
     await page.waitForURL(url => (url.searchParams.get('account') || '') === account);
     assert.equal(await page.locator('[data-account-switcher]:visible').textContent().then(t=>t.includes(label)),true);
+    await until(async()=>page.evaluate(expectedAccount=>{
+      if(document.readyState!=='complete'||document.body.dataset.accountId!==expectedAccount)return false;
+      const input=document.querySelector('#message-composer');if(!input)return false;
+      const key=['oie.draft.v1',document.body.dataset.engineId,expectedAccount,document.body.dataset.conversationId].join(':');
+      const raw=localStorage.getItem(key),saved=raw?JSON.parse(raw):null;
+      return input.value===(saved?.text||'');
+    },account),'initialized account-scoped device draft for '+label);
 
   };
   try {

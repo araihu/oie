@@ -264,7 +264,7 @@ func messagePreview(v view, p engineapi.MessagePreview) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = card.Card(card.Config{Title: previewHost(p), Media: previewThumbnail(v, p), MediaClass: "oie-preview-media", Body: previewDescription(v, p), Density: card.DensityCompact, RootClass: "oie-preview-card"}).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = card.Card(card.Config{Layout: previewCardLayout(v), Title: previewHost(p), Media: previewThumbnail(v, p), MediaClass: "oie-preview-media", Body: previewDescription(v, p), Density: card.DensityCompact, RootClass: "oie-preview-card"}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
