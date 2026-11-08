@@ -1,0 +1,21 @@
+# Shared media, links and documents
+
+API 0.10.0 adds `GET /api/v1/shared-content`. It aggregates references across retained conversations, including history that has never been opened in the UI. Media, Links and Documents tabs share account, optional conversation, Unicode metadata search and cursor filters. Results include the canonical source message and owning account/conversation. The same URL in two messages remains two source-associated items.
+
+Migration 8 creates a derived reference catalog and per-message indexing state. A paced local worker indexes batches of 64 messages. It does not download originals, re-fetch protocol archives or change source bodies. Reply fallback ranges are excluded; later fallback enrichment invalidates the derived state. Reindexing preserves surviving item UUIDs. Cached preview evidence can identify an extensionless image without changing its source identity. Read transactions keep page results and indexing progress consistent.
+
+Pages order by source UTC milliseconds and item UUID, with filters applied before the limit. Indexing progress distinguishes an empty result from an incomplete catalog. Metadata search case-folds filenames, URLs, captions, sender names, conversation/account names and available preview titles/descriptions. It does not extract document bodies, OCR images or transcribe audio.
+
+The web destination uses the main pane, with device-local month groups, account/search controls and native category links. Public Goshtoso Toolbar, Select, TextInput, Link and Card components provide the controls and composition slots; the application owns the date-group grid. English and Brazilian Portuguese are included. Source navigation opens the exact retained message and preserves account-scoped drafts. Images reuse existing preview, original-download policy and viewer controls. Starring either of two images from the same message stars that source message.
+
+Only visible image originals download automatically when the device preference permits it. Links reuse engine-generated previews. Documents, audio and video currently appear as references with source navigation. This increment does not implement new binary transfers, inline players, uploads, full-text document extraction or protocol operations.
+
+## Verification on 2026-11-08
+
+`make check` passes, including vacuum, golangci-lint, generation checks, vet and native tests. SQLite/application/API race checks pass. Tests cover unviewed history, equal-time pagination, source/account isolation, Unicode search, stable identities, transactional rollback, late reply fallback, cached image classification and migration down/up with retained source data. The generated CLI exercises the operation. Development Prosody integration passes with the catalog worker running alongside messaging.
+
+An online backup preceded the live migration. All 5,738 retained messages were indexed. The initial catalog contained 1,267 media references, 697 links and 10 document references across two conversations. Source IDs, exact original bodies, revisions, stars, outbox, engine identity and archive checkpoints were preserved. A read-only browser check verified the 50-item first page, all three tabs, aggregation across conversations, source-message focus and no overflow or browser mutations.
+
+The gallery browser fixture covers filters, pagination, source navigation, original copying, source-message stars, image download preferences, live focus/scroll preservation, invalid projections and recovery. Sixteen responsive theme/language variants pass WCAG A/AA checks. Existing previews, stars and live-chat fixture regressions pass. The real-engine browser workflow passes, including two-way XMPP, stars across tabs, drafts, queued-send cancellation and reconnect. Its account-switch helper now waits for the new document and device draft initialization before asserting restoration. The Dagger browser stage includes the gallery fixture.
+
+The first local full `make ci` attempt exited with code 2 before returning stage results. A diagnostic run with progress output completed containerized `make check` and race tests before its sixty-second budget expired during later stages. Full Dagger completion remains unverified.

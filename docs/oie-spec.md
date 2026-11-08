@@ -258,6 +258,8 @@ Search across accounts/sources in the selected engine and within a direct/group 
 
 Provide searchable **Media, Files, and Links** views. Catalog shared URLs automatically from messages, including backfilled/synced messages; retain source message/conversation/account context. Here, bookmarks means a shared-link catalog, not an accepted browser-bookmark exporter or independent manual-save feature.
 
+**AGREED:** the main Media and Links destination aggregates all conversations in the selected engine, with account filtering and Media, Links, and Documents tabs. Show date groups and the source of each item, and provide navigation to its original message. Opening an image keeps the viewer's previous/next navigation scoped to its conversation.
+
 Provide WhatsApp-like rich link cards using structured engine metadata. Preview enrichment must not require a provider client in the browser.
 
 Search matches the latest message revision by default. **Include edit history** explicitly enables retained earlier versions, with historical matches labeled. Retracted content is hidden from search and Media/Files/Links by default; **Include retracted** enables deliberate retrieval. These filters are independent and never bypass explicit deletion.
