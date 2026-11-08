@@ -1,5 +1,14 @@
 # Local CI loop
 
+The searchable shared-content account filter passes final native `make check`,
+Dagger `make ci-check` and the shared-content browser fixture with 16 accessible
+viewport/theme/locale variants. Selection follows the URL through fragment
+navigation, Back/Forward and reload; account search does not submit an extra `q`.
+A read-only live check also passes with no mutations or page errors. Goshtoso
+[combobox PR #376](https://github.com/araihu/goshtoso/pull/376) provides the generic
+form-isolation, search feedback and accessibility fixes through the pinned
+[integration PR #375](https://github.com/araihu/goshtoso/pull/375).
+
 The account-avatar indicator and state-aware account controls pass native
 `make check` and Dagger `make ci-check`, including lint, generation, race tests
 and builds. The account-status browser fixture covers four viewport/locale/theme
