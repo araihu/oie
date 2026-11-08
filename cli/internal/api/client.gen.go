@@ -1619,7 +1619,7 @@ type ClientInterface interface {
 
 	// ListStarredMessages Browse retained starred messages with their source context
 	//
-	// Lists current starred messages across accounts or within an account/conversation. Order is source message UTC timestamp descending, then message UUID descending. Unstarring a cursor message does not break paging. This is a live collection, not a frozen snapshot; newer stars can appear before the current page. No provider requests, enrichment or downloads are started. Conversation favorites are independent of message stars.
+	// Lists current starred messages across accounts or within an account/conversation. Order is source message UTC timestamp at millisecond precision descending, then message UUID descending. Unstarring a cursor message does not break paging. This is a live collection, not a frozen snapshot; newer stars can appear before the current page. No provider requests, enrichment or downloads are started. Conversation favorites are independent of message stars.
 	//
 	// Corresponds with GET /api/v1/starred-messages (the `ListStarredMessages` operationId).
 	ListStarredMessages(ctx context.Context, params *ListStarredMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2242,7 +2242,7 @@ func (c *Client) DownloadPreviewImage(ctx context.Context, previewId ID, reqEdit
 
 // ListStarredMessages Browse retained starred messages with their source context
 //
-// Lists current starred messages across accounts or within an account/conversation. Order is source message UTC timestamp descending, then message UUID descending. Unstarring a cursor message does not break paging. This is a live collection, not a frozen snapshot; newer stars can appear before the current page. No provider requests, enrichment or downloads are started. Conversation favorites are independent of message stars.
+// Lists current starred messages across accounts or within an account/conversation. Order is source message UTC timestamp at millisecond precision descending, then message UUID descending. Unstarring a cursor message does not break paging. This is a live collection, not a frozen snapshot; newer stars can appear before the current page. No provider requests, enrichment or downloads are started. Conversation favorites are independent of message stars.
 //
 // Corresponds with GET /api/v1/starred-messages (the `ListStarredMessages` operationId).
 func (c *Client) ListStarredMessages(ctx context.Context, params *ListStarredMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4085,7 +4085,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListStarredMessagesWithResponse Browse retained starred messages with their source context
 	//
-	// Lists current starred messages across accounts or within an account/conversation. Order is source message UTC timestamp descending, then message UUID descending. Unstarring a cursor message does not break paging. This is a live collection, not a frozen snapshot; newer stars can appear before the current page. No provider requests, enrichment or downloads are started. Conversation favorites are independent of message stars.
+	// Lists current starred messages across accounts or within an account/conversation. Order is source message UTC timestamp at millisecond precision descending, then message UUID descending. Unstarring a cursor message does not break paging. This is a live collection, not a frozen snapshot; newer stars can appear before the current page. No provider requests, enrichment or downloads are started. Conversation favorites are independent of message stars.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -6454,7 +6454,7 @@ func (c *ClientWithResponses) DownloadPreviewImageWithResponse(ctx context.Conte
 
 // ListStarredMessagesWithResponse Browse retained starred messages with their source context
 //
-// Lists current starred messages across accounts or within an account/conversation. Order is source message UTC timestamp descending, then message UUID descending. Unstarring a cursor message does not break paging. This is a live collection, not a frozen snapshot; newer stars can appear before the current page. No provider requests, enrichment or downloads are started. Conversation favorites are independent of message stars.
+// Lists current starred messages across accounts or within an account/conversation. Order is source message UTC timestamp at millisecond precision descending, then message UUID descending. Unstarring a cursor message does not break paging. This is a live collection, not a frozen snapshot; newer stars can appear before the current page. No provider requests, enrichment or downloads are started. Conversation favorites are independent of message stars.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -8083,14 +8083,14 @@ var swaggerSpec = []string{
 	"gZ7LsLYIWun0S0ztxJB1EwRuQnD4BYxU+0RbF1p+9JA9Fd/T30LaLgWaWSEWIJsU2jAfZ3Q4WRzivlMh",
 	"Z6ArLVxmFJ54bcFh2Q6cGeSjNugjcF6iobdinA92pqmK6QkmBeZcFxGr13sKnKLd6tHXabngt8NTx04B",
 	"7L8WR2jKNDoUtnuNxl1NJRxWktoqZIM/ey+4VEi46Eo1xzB2ZVvezTXcWkH8hLD6E0NZ66TwMdiYAcIb",
-	"dxStXyETAPBWVQHB4zsUgo6fpl183KBYDnC1sl262/wVdWealWtCnLfrfKM3jmp6XTvzmWegAk126iiW",
-	"q7J0ICqDAJ+t1e8gk0JDLJkmi0w7vserCnhM8k0jSQRMiVkv0eEXeO8gKT/AjWo4KQ8ND5DNtaD5IqYg",
-	"PbPG6UnT6q8wuHAHtmtd9fMqlIe6Tvf+BFEWWNAfG3Uyft1TRhuWjqZAKOcEmMFnGsBXoofvu5y1ibJz",
-	"t6UeG3fdvFcqJO6qIsLFOZq682NKtV1jxfbhfxgoXWsJygL9JKXosl5MQJOc7F7yCvRGvNXPXaS+ow+p",
-	"dRV2ALxIGSSt/0/pbPkeIWmSpLmV0w893YVO7iUmB69xv+Do6Glbk7uH+lsBl1CqatHk0GeDrNZldpTN",
-	"ra2ODg4ePPxmNB6NRw+Ovh1/OyZ/u//Whx2KANKETE+jPh+zL1lvfctZ/27EmF59O1js0eAN3qDm7cS4",
-	"XX3ft7FIPUbeV90M4LODV1/utOvsASczfjsCCkfT6YG6PzTfaAMv9c0zBRBpxL8sosMrKbNMBn7awL58",
-	"2FqFVDZqOI4MjZEUZGWEzG++EBWc61+u/98A",
+	"dxStXyETAPBWVQHB4zsUgo6fZrfi4wTecoDbINs1vc1fUamm6bruxHm7ADi66ajY1/U5n3nOKtCWp1Zj",
+	"uSpLh64yCLjaWv0OMqlAxFpqMtW0Y4i8qoDH7N80xESIlZgOEz2BgSkPkroE3MGGxfLQCQH5XwuzL4IN",
+	"0jNrvKE0rf7Sgwt3krsWXD+vQt2oa4HvjxaFhAX9seEo49c9ybTx6mgKBH9OSBp8pgF8iXr4vktmmyg7",
+	"d1vqQXPXzXuldOKuSiVcAKQpSD+mHNw15m0fMIiB0vWcoPTQT1KjLuvFBDQJ0O7tr0BvBGL93NXrOzqX",
+	"WldhBySMlHPS+v+UXpjvEasmyaZbOf3Q7F3o5F5i1vAavwyOji64NUl9qNgVcAmlqhZNcn02yGpdZkfZ",
+	"3Nrq6ODgwcNvRuPRePTg6Nvxt2NyxPtvfdihOiDN1PQ06hM1+7L41vei9e9G8OnVt4MpHy3h4CZq3k6s",
+	"3tX3fX+L1JXkndjNAD5tePXlTh/PHtQy47cjwHM0LSCoLUTzjTYiU988U2SRRi+QRfSEJfWXycBPGzyY",
+	"D1vLk8pGP8eRobGegqyMWPrNF6Lmc/3L9f8bAA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

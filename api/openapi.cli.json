@@ -203,7 +203,7 @@
           "Messages"
         ],
         "summary": "Browse retained starred messages with their source context",
-        "description": "Lists current starred messages across accounts or within an account/conversation. Order is source message UTC timestamp descending, then message UUID descending. Unstarring a cursor message does not break paging. This is a live collection, not a frozen snapshot; newer stars can appear before the current page. No provider requests, enrichment or downloads are started. Conversation favorites are independent of message stars.",
+        "description": "Lists current starred messages across accounts or within an account/conversation. Order is source message UTC timestamp at millisecond precision descending, then message UUID descending. Unstarring a cursor message does not break paging. This is a live collection, not a frozen snapshot; newer stars can appear before the current page. No provider requests, enrichment or downloads are started. Conversation favorites are independent of message stars.",
         "parameters": [
           {
             "name": "accountId",

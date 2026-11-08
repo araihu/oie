@@ -32,7 +32,8 @@ downgrade removes star metadata, receipts and star events, preserving the source
 messages and pending sends. Upgrades never reset the data directory or force a
 dirty journal.
 
-The collection currently sorts by original UTC message timestamp descending,
+The collection currently sorts by original UTC message timestamp at millisecond
+precision descending,
 then message UUID descending. This is an implementation choice, separate from
 the product requirement to browse starred messages. Unstarring a cursor message
 does not invalidate the retained source used for paging. New stars can appear
