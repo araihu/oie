@@ -6,7 +6,7 @@ bubble instead of the outer row, whose height includes avatars and previews.
 Header and compact-body spacing reserve room for the trigger without covering
 text. No dependency-private selectors are used for styling.
 
-Oie pins Goshtoso `v0.6.2-0.20261108213311-5320c913e330` from the open
+Oie pins Goshtoso `v0.6.2-0.20261108214005-3c5adf6acc24` from the open
 [consumer integration PR #375](https://github.com/araihu/goshtoso/pull/375).
 The generic collision handling is independently reviewable in
 [popover PR #374](https://github.com/araihu/goshtoso/pull/374). Panels flip/shift
