@@ -293,7 +293,6 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 /* The public Drawer body hosts an app-owned scrolling list and fixed action. */
 .oie-account-list-drawer #accounts-body{display:flex;flex-direction:column;overflow:hidden}
 .oie-account-list-workspace{display:flex;flex:1;min-height:0;flex-direction:column;padding-bottom:0}
-.oie-account-list-workspace>.oie-account-intro{flex-shrink:0}
 .oie-account-list-workspace #account-overview{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .oie-account-list-workspace .oie-account-list{margin-bottom:0}
 .oie-account-list-footer{flex-shrink:0;border-top:1px solid var(--oie-border);background:var(--oie-panel);padding:14px 0 max(14px,env(safe-area-inset-bottom))}

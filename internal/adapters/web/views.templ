@@ -435,7 +435,6 @@ if a:=v.account(v.managedAccountID());a.Address!="" {
 @emptystate.EmptyState(emptystate.Config{Title:v.Text.AccountMissing,Description:v.Text.AccountHelp})
 }
 default:
-<div class="oie-account-intro"><p>{v.Text.AccountHelp}</p></div>
 <div id="account-overview">@accountOverview(v)</div>
 <footer class="oie-account-list-footer">
 @link.Link(v.addAccountHref(),link.WithAppearance(link.AppearanceButton),link.WithRootClass("oie-add-account"),link.WithAttrs(templ.Attributes{"data-account-add":""})){@glyph(heroicons.Icon16SolidPlus)<span>{v.Text.AddAccount}</span>}
