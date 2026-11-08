@@ -31,6 +31,8 @@ type resolver interface {
 }
 type Fetcher struct {
 	client          *http.Client
+	mediaClient     *http.Client
+	mediaActive     chan struct{}
 	resolver        resolver
 	dial            func(context.Context, string, string) (net.Conn, error)
 	mu              sync.Mutex
@@ -51,6 +53,16 @@ func newFetcher(r resolver, dial func(context.Context, string, string) (net.Conn
 		_, err := f.destination(req.Context(), req.URL)
 		return err
 	}}
+	mediaTransport := transport.Clone()
+	mediaTransport.DisableCompression = true
+	mediaTransport.MaxConnsPerHost = 2
+	f.mediaClient = &http.Client{Transport: mediaTransport, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		req.Header.Del("Authorization")
+		req.Header.Del("Cookie")
+		req.Header.Del("Referer")
+		return f.client.CheckRedirect(req, via)
+	}}
+	f.mediaActive = make(chan struct{}, 4)
 	return f
 }
 

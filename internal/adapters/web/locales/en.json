@@ -354,5 +354,13 @@
   "RoomLeaveRequested": "Room exit requested.",
   "RoomQueueHint": "Messages will wait until the room is connected.",
   "Edited": "Edited",
-  "CapabilityEditMessagesNote": "Received corrections only; editing sent messages is not implemented."
+  "CapabilityEditMessagesNote": "Received corrections only; editing sent messages is not implemented.",
+  "VideoPlay": "Play video",
+  "VideoRetry": "Try video again",
+  "VideoLoading": "Loading video…",
+  "VideoPlaying": "Playing video",
+  "VideoPaused": "Video paused",
+  "VideoReady": "Play this video.",
+  "VideoUnavailable": "The video could not be loaded. Check your connection and try again.",
+  "VideoUnsupported": "This video cannot be played in this browser."
 }

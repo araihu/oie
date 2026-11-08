@@ -17,6 +17,11 @@ func (s *Server) ListSharedContent(ctx context.Context, r engineapi.ListSharedCo
 	if r.Params.ConversationId != nil {
 		q.ConversationID = domain.ID(*r.Params.ConversationId)
 	}
+	if r.Params.MessageId != nil {
+		for _, id := range *r.Params.MessageId {
+			q.MessageIDs = append(q.MessageIDs, domain.ID(id))
+		}
+	}
 	if r.Params.Q != nil {
 		q.Search = *r.Params.Q
 	}

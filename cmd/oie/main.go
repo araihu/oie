@@ -82,7 +82,9 @@ func run() error {
 			return err
 		}
 		engine.SetAvatarFiles(avatarfiles.New(filepath.Join(*dataDir, "media", "avatars")))
-		engine.SetPreviewServices(previewfetch.New(), mediafiles.New(filepath.Join(*dataDir, "media", "images")))
+		fetcher := previewfetch.New()
+		engine.SetPreviewServices(fetcher, mediafiles.New(filepath.Join(*dataDir, "media", "images")))
+		engine.SetMediaReader(fetcher)
 		roots, err := x509.SystemCertPool()
 		if err != nil {
 			roots = x509.NewCertPool()

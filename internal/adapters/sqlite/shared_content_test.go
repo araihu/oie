@@ -283,3 +283,32 @@ func TestCachedImageEvidenceReclassifiesOpaqueReferenceAndSearchesTitle(t *testi
 		t.Fatal("known image remained in links", err)
 	}
 }
+
+func TestVideoCatalogUsesEffectiveKindBeforePagination(t *testing.T) {
+	s, e, c := outboxFixture(t)
+	at := time.Now().UTC()
+	video := replySeed(t, s, c, "https://example.test/older.mp4", at, nil, nil)
+	image := replySeed(t, s, c, "https://example.test/image.mp4", at.Add(time.Second), nil, nil)
+	_, err := s.EnsurePreview(t.Context(), domain.MessagePreview{ID: migrationID(), RevisionID: migrationID(), AccountID: c.AccountID, ConversationID: c.ID, MessageID: image.ID, URL: image.OriginalText, Kind: "image", State: "ready", DownloadState: "not_downloaded", UpdatedAt: at})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop := startCatalog(t, e)
+	defer stop()
+	waitCatalog(t, s, 2)
+	page, err := e.SharedContent(t.Context(), domain.SharedContentQuery{Type: "video", Limit: 1})
+	if err != nil || len(page.Items) != 1 || page.Items[0].Kind != "video" || page.Items[0].Message.ID != video.ID || page.NextCursor != "" {
+		t.Fatal("effective image consumed video page", page, err)
+	}
+	images, err := s.SharedContent(t.Context(), domain.SharedContentQuery{Type: "media", Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range images.Items {
+		if item.Message.ID == image.ID {
+			if _, err := s.SharedContentItem(t.Context(), item.ID); !errors.Is(err, application.ErrNotFound) {
+				t.Fatal("effective image can be opened as video", err)
+			}
+		}
+	}
+}

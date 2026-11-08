@@ -53,6 +53,11 @@ func New(engine *application.Engine) (http.Handler, error) {
 		},
 	})(handler)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead && strings.HasPrefix(r.URL.Path, "/api/v1/shared-content/") && strings.HasSuffix(r.URL.Path, "/content") {
+			w.Header().Set("Allow", http.MethodGet)
+			writeProblem(w, http.StatusMethodNotAllowed, "invalid_request")
+			return
+		}
 		w.Header().Set("Cache-Control", "no-store")
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 		validated.ServeHTTP(w, r)
@@ -77,6 +82,29 @@ func WriteProblem(w http.ResponseWriter, err error) {
 		status, code = http.StatusServiceUnavailable, "protocol_unavailable"
 	case errors.Is(err, application.ErrInvalidCursor):
 		status, code = http.StatusConflict, "invalid_cursor"
+	}
+	var mediaFailure application.MediaFailure
+	if errors.As(err, &mediaFailure) {
+		status = http.StatusBadGateway
+		switch mediaFailure.Code {
+		case "media_blocked":
+			status = http.StatusUnprocessableEntity
+		case "media_too_large":
+			status = http.StatusRequestEntityTooLarge
+		case "media_unsupported":
+			status = http.StatusUnsupportedMediaType
+		case "range_not_satisfiable":
+			status = http.StatusRequestedRangeNotSatisfiable
+		case "media_busy":
+			status = http.StatusServiceUnavailable
+		case "media_timeout":
+			status = http.StatusGatewayTimeout
+		}
+		if mediaFailure.Code == "range_not_satisfiable" && mediaFailure.Total >= 0 {
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", mediaFailure.Total))
+		}
+		writeProblem(w, status, mediaFailure.Code)
+		return
 	}
 	var roomConflict application.RoomStateConflict
 	if errors.As(err, &roomConflict) {

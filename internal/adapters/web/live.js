@@ -155,6 +155,7 @@ window.OieRuntime.register('live', life => {
   restoreRoomOperation();
   function mutateDOM(target, html) {
     if (!target) return;
+    if(window.OieVideos?.swap(target,html))return;
     const apply = () => {
       for (const child of target.children) window.Alpine?.destroyTree(child);
       target.innerHTML = html;
@@ -285,7 +286,7 @@ window.OieRuntime.register('live', life => {
             timeline.scrollTop = same ? top + same.getBoundingClientRect().top - anchorTop : top;
             const jump = document.querySelector('[data-jump-latest]'); if (jump) jump.hidden = false;
           }
-          if(activeRow){const row=timeline.querySelector(`[data-message-id="${CSS.escape(activeRow)}"]`);const target=(activeID&&document.getElementById(activeID))||(activeReply&&row?.querySelector(`[data-reply-target="${CSS.escape(activeReply)}"]`))||row;target?.focus({preventScroll:true});}
+          if(activeRow&&!active?.isConnected){const row=timeline.querySelector(`[data-message-id="${CSS.escape(activeRow)}"]`);const target=(activeID&&document.getElementById(activeID))||(activeReply&&row?.querySelector(`[data-reply-target="${CSS.escape(activeReply)}"]`))||row;target?.focus({preventScroll:true});}
           if(highlightedMessage)timeline.querySelector(`[data-message-id="${CSS.escape(highlightedMessage)}"]`)?.classList.add('oie-reply-highlight');
           forceBottom = false;
         }

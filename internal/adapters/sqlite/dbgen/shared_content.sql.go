@@ -24,6 +24,47 @@ func (q *Queries) DeleteObsoleteSharedContent(ctx context.Context, arg DeleteObs
 	return err
 }
 
+const getSharedContentItem = `-- name: GetSharedContentItem :one
+SELECT sc.id,sc.revision_id,sc.message_id,sc.url,CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,sc.file_name,CAST(COALESCE(h.payload,m.payload) AS TEXT) AS message_payload
+FROM shared_content sc JOIN messages m ON m.id=sc.message_id
+LEFT JOIN message_previews p ON p.message_id=m.id AND p.url=sc.url
+LEFT JOIN message_content_heads h ON h.canonical_id=m.id
+JOIN shared_content_state s ON s.message_id=m.id AND s.parser_version>=?1
+JOIN conversations c ON c.id=m.conversation_id JOIN accounts a ON a.id=m.account_id
+WHERE sc.id=?2
+AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
+`
+
+type GetSharedContentItemParams struct {
+	ParserVersion int64
+	ItemID        string
+}
+
+type GetSharedContentItemRow struct {
+	ID             string
+	RevisionID     string
+	MessageID      string
+	Url            string
+	Kind           string
+	FileName       string
+	MessagePayload string
+}
+
+func (q *Queries) GetSharedContentItem(ctx context.Context, arg GetSharedContentItemParams) (GetSharedContentItemRow, error) {
+	row := q.db.QueryRowContext(ctx, getSharedContentItem, arg.ParserVersion, arg.ItemID)
+	var i GetSharedContentItemRow
+	err := row.Scan(
+		&i.ID,
+		&i.RevisionID,
+		&i.MessageID,
+		&i.Url,
+		&i.Kind,
+		&i.FileName,
+		&i.MessagePayload,
+	)
+	return i, err
+}
+
 const invalidateSharedContent = `-- name: InvalidateSharedContent :exec
 DELETE FROM shared_content_state WHERE message_id=?
 `
@@ -43,18 +84,21 @@ LEFT JOIN message_previews AS p ON p.message_id=m.id AND p.url=sc.url
 WHERE (CAST(?2 AS TEXT)='' OR m.account_id=CAST(?2 AS TEXT))
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 AND (CAST(?3 AS TEXT)='' OR m.conversation_id=CAST(?3 AS TEXT))
-AND ((CAST(?4 AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
- OR (CAST(?4 AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
- OR (CAST(?4 AS TEXT)='documents' AND sc.kind='document' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image'))
-AND (CAST(?5 AS TEXT)='' OR (m.created_at_ms,sc.id)<(CAST(?6 AS INTEGER),CAST(?5 AS TEXT)))
-AND (CAST(?7 AS TEXT)='' OR instr(oie_casefold(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),'')),oie_casefold(CAST(?7 AS TEXT)))>0)
-ORDER BY m.created_at_ms DESC,sc.id DESC LIMIT ?8
+AND (CAST(?4 AS TEXT)='[]' OR m.id IN (SELECT value FROM json_each(CAST(?4 AS TEXT))))
+AND ((CAST(?5 AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
+ OR (CAST(?5 AS TEXT)='video' AND sc.kind='video' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
+ OR (CAST(?5 AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
+ OR (CAST(?5 AS TEXT)='documents' AND sc.kind='document' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image'))
+AND (CAST(?6 AS TEXT)='' OR (m.created_at_ms,sc.id)<(CAST(?7 AS INTEGER),CAST(?6 AS TEXT)))
+AND (CAST(?8 AS TEXT)='' OR instr(oie_casefold(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),'')),oie_casefold(CAST(?8 AS TEXT)))>0)
+ORDER BY m.created_at_ms DESC,sc.id DESC LIMIT ?9
 `
 
 type ListSharedContentParams struct {
 	ParserVersion  int64
 	AccountID      string
 	ConversationID string
+	MessageIds     string
 	ContentType    string
 	CursorID       string
 	CursorMs       int64
@@ -79,6 +123,7 @@ func (q *Queries) ListSharedContent(ctx context.Context, arg ListSharedContentPa
 		arg.ParserVersion,
 		arg.AccountID,
 		arg.ConversationID,
+		arg.MessageIds,
 		arg.ContentType,
 		arg.CursorID,
 		arg.CursorMs,
@@ -209,6 +254,7 @@ SELECT COUNT(*) AS total_messages,COUNT(CASE WHEN s.parser_version>=?1 THEN 1 EN
 FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
 WHERE (CAST(?2 AS TEXT)='' OR m.account_id=CAST(?2 AS TEXT))
 AND (CAST(?3 AS TEXT)='' OR m.conversation_id=CAST(?3 AS TEXT))
+AND (CAST(?4 AS TEXT)='[]' OR m.id IN (SELECT value FROM json_each(CAST(?4 AS TEXT))))
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 `
 
@@ -216,6 +262,7 @@ type SharedContentIndexStatusParams struct {
 	ParserVersion  int64
 	AccountID      string
 	ConversationID string
+	MessageIds     string
 }
 
 type SharedContentIndexStatusRow struct {
@@ -224,7 +271,12 @@ type SharedContentIndexStatusRow struct {
 }
 
 func (q *Queries) SharedContentIndexStatus(ctx context.Context, arg SharedContentIndexStatusParams) (SharedContentIndexStatusRow, error) {
-	row := q.db.QueryRowContext(ctx, sharedContentIndexStatus, arg.ParserVersion, arg.AccountID, arg.ConversationID)
+	row := q.db.QueryRowContext(ctx, sharedContentIndexStatus,
+		arg.ParserVersion,
+		arg.AccountID,
+		arg.ConversationID,
+		arg.MessageIds,
+	)
 	var i SharedContentIndexStatusRow
 	err := row.Scan(&i.TotalMessages, &i.IndexedMessages)
 	return i, err

@@ -66,7 +66,7 @@ func New(engineURL string) (*Server, error) {
 	transport.DialContext = (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext
 	transport.ResponseHeaderTimeout = 5 * time.Second
 	transport.TLSHandshakeTimeout = 5 * time.Second
-	streamClient, err := engineapi.NewClient(engineURL, engineapi.WithHTTPClient(&http.Client{Transport: transport}))
+	streamClient, err := engineapi.NewClient(engineURL, engineapi.WithHTTPClient(&http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}))
 	return &Server{client: client, streamClient: streamClient, catalogs: catalogs}, err
 }
 
@@ -121,6 +121,7 @@ type view struct {
 	Stars                                                 map[string]engineapi.MessageStar
 	PreviewsKnown                                         bool
 	MessagePreviews                                       map[string][]engineapi.MessagePreview
+	MessageVideos                                         map[string][]engineapi.SharedContentItem
 	EngineID, EventCursor, CSRF, ErrorMessage, FormTarget string
 	Values                                                map[string]string
 }
@@ -128,6 +129,14 @@ type view struct {
 type copy struct {
 	RefreshPreview             string
 	RefreshPreviewFailed       string
+	VideoPlay                  string
+	VideoRetry                 string
+	VideoLoading               string
+	VideoPlaying               string
+	VideoPaused                string
+	VideoReady                 string
+	VideoUnavailable           string
+	VideoUnsupported           string
 	AppName                    string
 	AppDescription             string
 	CapabilityEditMessagesNote string
@@ -375,6 +384,12 @@ var navigationScript []byte
 //go:embed shared-content.js
 var sharedScript []byte
 
+//go:embed videos.js
+var videosScript []byte
+
+//go:embed video.css
+var videosStylesheet []byte
+
 //go:embed live.js
 var liveScript []byte
 
@@ -399,6 +414,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mime string
 		body []byte
 	}{
+		"/ui/videos.js": {"text/javascript", videosScript}, "/ui/video.css": {"text/css", videosStylesheet},
 		"/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
 	}
 	if asset, ok := assets[r.URL.Path]; ok {
@@ -417,6 +433,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/ui/media/") {
 		s.mediaImage(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/ui/shared-content/") {
+		s.sharedVideoContent(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/ui/avatars/") {
@@ -617,10 +637,11 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	}
 	s.loadMessageStars(ctx, v)
 	s.loadMessagePreviews(ctx, v)
+	s.loadMessageVideos(ctx, v)
 	for i := range v.Messages {
 		m := &v.Messages[i]
 		m.PresentationKnown = v.PreviewsKnown
-		m.Presentation = imagePresentation(m.displayBody(), v.MessagePreviews[m.Id])
+		m.Presentation = videoPresentation(imagePresentation(m.displayBody(), v.MessagePreviews[m.Id]), v.messageVideos(m.Id))
 		m.Formatted = formattedMessage(ctx, m.Presentation)
 	}
 }
@@ -692,6 +713,8 @@ func (v view) timelineVersion() string {
 	out.WriteString(v.ChatID)
 	for _, m := range v.Messages {
 		out.WriteString(m.Id + ":" + m.RevisionId + ":" + string(m.SendState) + ";")
+		videos, _ := json.Marshal(v.messageVideos(m.Id))
+		_, _ = fmt.Fprintf(&out, "video:%x;", sha256.Sum256(videos))
 		reply, _ := json.Marshal([]any{m.Reply, m.Edited, m.EditedAt})
 		_, _ = fmt.Fprintf(&out, "%x;", sha256.Sum256(reply))
 	}

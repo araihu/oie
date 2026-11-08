@@ -354,5 +354,13 @@
   "RoomLeaveRequested": "Saída da sala solicitada.",
   "RoomQueueHint": "As mensagens aguardarão a conexão com a sala.",
   "Edited": "Editada",
-  "CapabilityEditMessagesNote": "Apenas correções recebidas; editar mensagens enviadas ainda não está implementado."
+  "CapabilityEditMessagesNote": "Apenas correções recebidas; editar mensagens enviadas ainda não está implementado.",
+  "VideoPlay": "Reproduzir vídeo",
+  "VideoRetry": "Tentar vídeo novamente",
+  "VideoLoading": "Carregando vídeo…",
+  "VideoPlaying": "Reproduzindo vídeo",
+  "VideoPaused": "Vídeo pausado",
+  "VideoReady": "Reproduza este vídeo.",
+  "VideoUnavailable": "Não foi possível carregar o vídeo. Verifique sua conexão e tente novamente.",
+  "VideoUnsupported": "Este vídeo não pode ser reproduzido neste navegador."
 }

@@ -25,6 +25,7 @@ type SharedContentMutation struct {
 	ParserVersion int
 }
 type SharedContentQuery struct {
+	MessageIDs                []ID
 	AccountID, ConversationID ID
 	Type, Search, Cursor      string
 	Limit                     int

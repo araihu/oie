@@ -276,28 +276,18 @@ func (m *Manager) supportsArchive(ctx context.Context, e *entry, s *mx.Session, 
 	return mam, nil
 }
 
-type savedRoom struct{ Address, Title string }
+type savedRoom struct {
+	Address, Title string
+	AutoJoin       bool
+}
 
 func (m *Manager) savedRooms(ctx context.Context, e *entry, s *mx.Session) ([]savedRoom, error) {
 	payload, err := m.readHistoryIQ(ctx, e, s, e.account.Address, stanza.GetIQ, `<pubsub xmlns="http://jabber.org/protocol/pubsub"><items node="urn:xmpp:bookmarks:1"/></pubsub>`)
-	var modern struct {
-		Pubsub struct {
-			Items struct {
-				Item []struct {
-					ID         string `xml:"id,attr"`
-					Conference struct {
-						Name string `xml:"name,attr"`
-					} `xml:"urn:xmpp:bookmarks:1 conference"`
-				} `xml:"item"`
-			} `xml:"items"`
-		} `xml:"http://jabber.org/protocol/pubsub pubsub"`
-	}
 	rooms := []savedRoom{}
-	if err == nil && xml.Unmarshal([]byte("<root>"+payload+"</root>"), &modern) == nil {
-		for _, i := range modern.Pubsub.Items.Item {
-			rooms = append(rooms, savedRoom{Address: i.ID, Title: i.Conference.Name})
+	if err == nil {
+		if parsed, parseErr := parseModernSavedRooms(payload); parseErr == nil {
+			return parsed, nil
 		}
-		return rooms, nil
 	}
 	payload, err = m.readHistoryIQ(ctx, e, s, e.account.Address, stanza.GetIQ, `<query xmlns="jabber:iq:private"><storage xmlns="storage:bookmarks"/></query>`)
 	if err != nil {
@@ -306,24 +296,74 @@ func (m *Manager) savedRooms(ctx context.Context, e *entry, s *mx.Session) ([]sa
 		}
 		return nil, err
 	}
+	return parseLegacySavedRooms(payload)
+}
+
+func parseModernSavedRooms(payload string) ([]savedRoom, error) {
+	var modern struct {
+		Pubsub struct {
+			Items struct {
+				Node string `xml:"node,attr"`
+				Item []struct {
+					ID         string `xml:"id,attr"`
+					Conference struct {
+						Name     string `xml:"name,attr"`
+						AutoJoin string `xml:"autojoin,attr"`
+					} `xml:"urn:xmpp:bookmarks:1 conference"`
+				} `xml:"item"`
+			} `xml:"items"`
+		} `xml:"http://jabber.org/protocol/pubsub pubsub"`
+	}
+	if err := xml.Unmarshal([]byte("<root>"+payload+"</root>"), &modern); err != nil {
+		return nil, err
+	}
+	if modern.Pubsub.Items.Node != "urn:xmpp:bookmarks:1" {
+		return nil, errArchive
+	}
+	rooms := []savedRoom{}
+	for _, item := range modern.Pubsub.Items.Item {
+		rooms = append(rooms, savedRoom{Address: item.ID, Title: item.Conference.Name, AutoJoin: bookmarkAutoJoin(item.Conference.AutoJoin)})
+	}
+	return rooms, nil
+}
+
+func parseLegacySavedRooms(payload string) ([]savedRoom, error) {
 	var legacy struct {
 		Query struct {
 			Storage struct {
 				Room []struct {
-					JID  string `xml:"jid,attr"`
-					Name string `xml:"name,attr"`
-				} `xml:"conference"`
+					JID      string `xml:"jid,attr"`
+					Name     string `xml:"name,attr"`
+					AutoJoin string `xml:"autojoin,attr"`
+				} `xml:"storage:bookmarks conference"`
 			} `xml:"storage:bookmarks storage"`
 		} `xml:"jabber:iq:private query"`
 	}
-	if err = xml.Unmarshal([]byte("<root>"+payload+"</root>"), &legacy); err != nil {
+	if err := xml.Unmarshal([]byte("<root>"+payload+"</root>"), &legacy); err != nil {
 		return nil, err
 	}
-	for _, r := range legacy.Query.Storage.Room {
-		rooms = append(rooms, savedRoom{Address: r.JID, Title: r.Name})
+	rooms := []savedRoom{}
+	for _, room := range legacy.Query.Storage.Room {
+		rooms = append(rooms, savedRoom{Address: room.JID, Title: room.Name, AutoJoin: bookmarkAutoJoin(room.AutoJoin)})
 	}
 	return rooms, nil
 }
+
+func bookmarkAutoJoin(value string) bool {
+	value = strings.TrimSpace(value)
+	return value == "true" || value == "1"
+}
+
+func restoreSavedRoom(ctx context.Context, host application.HistoryHost, account domain.Account, room savedRoom) error {
+	if bookmarks, ok := host.(application.RoomBookmarkHost); ok {
+		return bookmarks.RestoreRoomBookmark(ctx, application.RoomBookmark{
+			AccountID: account.ID, Address: room.Address, Title: room.Title,
+			AutoJoin: room.AutoJoin, Nickname: defaultRoomNickname(account),
+		})
+	}
+	return host.RestoreConversation(ctx, account.ID, room.Address, "room", room.Title)
+}
+
 func (m *Manager) recoverHistory(ctx context.Context, e *entry, s *mx.Session) {
 	host, ok := m.host.(application.HistoryHost)
 	if !ok {
@@ -353,7 +393,8 @@ func (m *Manager) recoverHistory(ctx context.Context, e *entry, s *mx.Session) {
 			continue
 		}
 		seen[address] = true
-		if host.RestoreConversation(ctx, e.account.ID, address, "room", room.Title) != nil {
+		room.Address = address
+		if restoreSavedRoom(ctx, host, e.account, room) != nil {
 			partial = true
 			continue
 		}

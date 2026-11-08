@@ -95,11 +95,7 @@ func (m *Manager) JoinRoom(ctx context.Context, a domain.Account, c domain.Conve
 		return domain.RoomSession{}, err
 	}
 	if nickname == "" {
-		account, _ := jid.Parse(a.Address)
-		nickname = account.Localpart()
-		if chars := []rune(nickname); len(chars) > 100 {
-			nickname = string(chars[:100])
-		}
+		nickname = defaultRoomNickname(a)
 	}
 	if !utf8.ValidString(nickname) || strings.TrimSpace(nickname) == "" || len([]rune(nickname)) > 100 || strings.ContainsAny(nickname, "\x00\r\n") {
 		return domain.RoomSession{}, application.ErrInvalid

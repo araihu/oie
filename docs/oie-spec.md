@@ -130,6 +130,13 @@ Do not imply that an available participant list is a complete persistent members
 
 Rejoin previously active rooms after reconnecting unless the user explicitly left or access was revoked. Preserve explicit leave decisions across restart. Leaving a room does not delete stored history. Kicking, banning, and role-management controls are backlogged; incoming removal/permission changes still need truthful handling.
 
+**AGREED:** on account connection, honor modern and legacy XMPP bookmarks marked
+`autojoin=true` or `1`. When no local room intent exists, create an initial join
+intent using the account username as nickname. Existing manual nickname choices,
+explicit leaves and access revocation take precedence over imported bookmarks.
+The server must still confirm this client's room presence; another client's
+participation does not establish it. See [bookmark autojoin](bookmark-autojoin.md).
+
 **OPEN O03:** room creation defaults, protocol-specific leave/rejoin behavior across independent engines, and the exact representation of participants and memberships.
 
 ## 4. Identity, revisions, and merge semantics
@@ -390,6 +397,8 @@ Alpha is responsive: on phones, show one primary panel at a time with access to 
 Theme follows the system by default with per-device Light/Dark overrides.
 
 Desktop composer defaults: Enter sends, Shift+Enter inserts a newline, with a per-device Enter-to-send setting. On mobile, Enter inserts a newline and the Send button sends. Preserve IME composition.
+
+The composer grows and shrinks with wrapped or multiline text, including restored drafts, up to the smaller of 12rem or 30% of the dynamic viewport height. Beyond that limit, scroll inside the textarea. Keep composer actions aligned to its bottom edge.
 
 Open at the first unread message, otherwise at latest, with **Jump to latest**. Incoming messages auto-scroll only if the user is already at the bottom; otherwise preserve position and show **New messages**. Explicit search/reply navigation targets its selected message.
 
