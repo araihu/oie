@@ -49,6 +49,7 @@ type entry struct {
 	historyMu        sync.Mutex
 	archive          *archiveQuery
 	sidScopes        map[string]bool
+	occupantScopes   map[string]bool
 	discovery        domain.CapabilityDiscovery
 	discoveryPartial bool
 	detailsWake      chan struct{}
@@ -279,6 +280,9 @@ func (m *Manager) publish(ctx context.Context, e *entry, state, code string) err
 	}
 	e.mu.Lock()
 	e.state = domain.Connection{AccountID: e.account.ID, State: state, LastErrorCode: code, UpdatedAt: time.Now().UTC()}
+	e.historyMu.Lock()
+	e.occupantScopes = nil
+	e.historyMu.Unlock()
 	if state != "connected" {
 		e.discovery = domain.CapabilityDiscovery{State: "not_connected", Services: []domain.DiscoveredService{}}
 		e.discoveryPartial = false
@@ -513,6 +517,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		var msg struct {
 			stanza.Message
 			replyMetadata
+			correctionMetadata
 			Body        string         `xml:"jabber:client body"`
 			Archive     *archiveResult `xml:"urn:xmpp:mam:2 result"`
 			AvatarEvent *struct {
@@ -567,7 +572,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			return m.host.Reject(ctx, application.Rejected{AccountID: e.account.ID, MessageID: msg.ID, Address: address, FromServer: fromServer, FromParticipant: msg.From.Resourcepart() != ""})
 		}
 		if msg.Type == stanza.GroupChatMessage {
-			return m.receiveRoomMessage(ctx, e, msg.Message, msg.replyMetadata, msg.Body, msg.Delay.Stamp)
+			return m.receiveRoomMessage(ctx, e, msg.Message, msg.replyMetadata, msg.Body, msg.Delay.Stamp, msg.correctionMetadata)
 		}
 		if msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage {
 			return nil
@@ -583,7 +588,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		if len(msg.Origins) == 0 && usableID(msg.ID) {
 			refs = append(refs, domain.MessageReference{Scope: "sender:" + msg.From.Bare().String(), ID: msg.ID, Author: msg.From.Bare().String()})
 		}
-		err := m.host.Receive(ctx, application.Incoming{AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID, OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address, References: refs, Reply: reply})
+		err := m.host.Receive(ctx, application.Incoming{AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID, OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address, References: refs, Reply: reply, Correction: decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, false, false)})
 		if errors.Is(err, application.ErrInvalid) {
 			return nil
 		}

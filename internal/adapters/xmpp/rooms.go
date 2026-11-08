@@ -429,7 +429,7 @@ func (m *Manager) resetRoomSessions(ctx context.Context, e *entry, s *mx.Session
 	}
 }
 
-func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.Message, meta replyMetadata, body, stamp string) error {
+func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.Message, meta replyMetadata, body, stamp string, operations ...correctionMetadata) error {
 	if strings.TrimSpace(body) == "" || msg.From.Localpart() == "" || msg.From.Resourcepart() == "" {
 		return nil
 	}
@@ -451,6 +451,7 @@ func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.M
 	e.mu.RUnlock()
 	e.historyMu.Lock()
 	stable := e.sidScopes[address]
+	occupantVerified := e.occupantScopes[address]
 	e.historyMu.Unlock()
 	refs, reply := decodeReplyMetadata(meta, body, msg.From, e.account.Address, address, true, stable)
 	provider := roomProviderID(msg.From, msg.ID, refs)
@@ -465,7 +466,11 @@ func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.M
 	if delayed, err := time.Parse(time.RFC3339Nano, stamp); err == nil {
 		created = delayed.UTC()
 	}
-	err := m.host.Receive(ctx, application.Incoming{AccountID: e.account.ID, Address: address, Kind: "room", SenderName: msg.From.Resourcepart(), ProviderID: provider, OriginalText: body, CreatedAt: created, IsOwn: own, References: refs, Reply: reply, CanonicalID: canonical})
+	var correction *domain.MessageCorrection
+	if len(operations) == 1 {
+		correction = decodeCorrectionMetadata(operations[0], msg, true, occupantVerified)
+	}
+	err := m.host.Receive(ctx, application.Incoming{AccountID: e.account.ID, Address: address, Kind: "room", SenderName: msg.From.Resourcepart(), ProviderID: provider, OriginalText: body, CreatedAt: created, IsOwn: own, References: refs, Reply: reply, CanonicalID: canonical, Correction: correction})
 	if errors.Is(err, application.ErrInvalid) {
 		return nil
 	}

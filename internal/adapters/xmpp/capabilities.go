@@ -128,6 +128,7 @@ func (m *Manager) queryInfo(ctx context.Context, e *entry, s *mx.Session, addres
 	if result.Query == nil {
 		return disco.Info{}, errArchive
 	}
+	recordOccupantSupport(e, s, address, *result.Query)
 	return *result.Query, nil
 }
 

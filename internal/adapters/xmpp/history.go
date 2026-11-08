@@ -27,6 +27,7 @@ var errUnstable = errors.New("archive not stable")
 type archiveMessage struct {
 	stanza.Message
 	replyMetadata
+	correctionMetadata
 	Body  string `xml:"jabber:client body"`
 	Users []struct {
 		Items []struct {
@@ -45,11 +46,12 @@ type archiveResult struct {
 	} `xml:"urn:xmpp:forward:0 forwarded"`
 }
 type archiveQuery struct {
-	ID, Scope   string
-	SIDVerified bool
-	Messages    []application.Incoming
-	Bytes, Seen int
-	Err         error
+	ID, Scope        string
+	SIDVerified      bool
+	OccupantVerified bool
+	Messages         []application.Incoming
+	Bytes, Seen      int
+	Err              error
 }
 
 func archiveSender(from jid.JID, scope, account string) bool {
@@ -75,7 +77,7 @@ func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResul
 	if q.Err != nil {
 		return nil
 	}
-	in, ok, err := archivedIncoming(e.account, q.Scope, r, q.SIDVerified)
+	in, ok, err := archivedIncoming(e.account, q.Scope, r, q.SIDVerified, q.OccupantVerified)
 	if err != nil {
 		q.Err = err
 		return nil
@@ -144,7 +146,9 @@ func archivedIncoming(account domain.Account, scope string, r *archiveResult, tr
 			return in, false, errArchive
 		}
 	}
-	verified := len(trusted) == 1 && trusted[0] && scope == msg.From.Bare().String()
+	verified := (len(trusted) == 1 || len(trusted) == 2) && trusted[0] && scope == msg.From.Bare().String()
+	occupantVerified := len(trusted) == 2 && trusted[1] && scope == msg.From.Bare().String()
+	in.Correction = decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, in.Kind == "room", occupantVerified)
 	in.References, in.Reply = decodeReplyMetadata(msg.replyMetadata, msg.Body, msg.From, account.Address, in.Address, in.Kind == "room", verified)
 	if in.Kind == "room" {
 		if provider := roomProviderID(msg.From, msg.ID, in.References); provider != "" {
@@ -413,6 +417,7 @@ func (m *Manager) recoverArchive(ctx context.Context, host application.HistoryHo
 		}
 		e.historyMu.Lock()
 		query.SIDVerified = e.sidScopes[scope]
+		query.OccupantVerified = e.occupantScopes[scope]
 		e.archive = query
 		e.historyMu.Unlock()
 		set := `<max>50</max>`
