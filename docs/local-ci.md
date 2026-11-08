@@ -1,5 +1,10 @@
 # Local CI loop
 
+The message-action corner fix passes native `make check`, Dagger `make ci-check`
+and the 42-case browser layout/action matrix. Its exact upstream dependency is
+pinned to an open integration PR. See [message actions](message-actions.md) for
+the verified scope and the broader upstream-suite limitation.
+
 The conversation-wallpaper update passes `make check` and Dagger `make ci-check`,
 including lint, generation checks, native/race tests and builds. Read-only live
 browser checks pass at 390 px and 1440 px in light and dark modes, with no page

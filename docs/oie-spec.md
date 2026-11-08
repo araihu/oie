@@ -221,7 +221,7 @@ independent of protocol support, conversation favorites, and message content edi
 The message-actions chevron sits inside the upper-right corner of its own bubble,
 with space reserved so it does not cover the sender, timestamp or message content.
 It remains available through keyboard focus and touch, and the opened menu stays
-within the visible conversation area.
+within the visible viewport.
 
 Support quoted replies with referenced sender/excerpt and a stable message reference. This does not select separate threaded timelines.
 
