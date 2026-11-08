@@ -32,4 +32,5 @@ OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/conversation-details.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/shared-content.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/chat-info.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/fragment-navigation.cjs
+OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/reply-compose.cjs
 sh scripts/test-live-browser.sh

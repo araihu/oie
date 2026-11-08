@@ -10,7 +10,7 @@ Migration 007 adds append-only observed reference and fallback metadata. It rese
 
 The browser keeps the target window pinned during live refresh. It preserves drafts and provides a return-to-latest action when newer messages exist. Pointer, keyboard and touch navigation use the same conversation-scoped URL. Available excerpts use public Goshtoso ChatBubble, Card and Link components. There is no new upstream API requirement.
 
-This increment receives and renders replies. It does not add reply composition, sending room messages, reactions or forwarding.
+This increment originally added received reply rendering. The subsequent [outgoing replies increment](outgoing-replies.md) adds reply composition and basic saved-public-room sending. Reactions and forwarding remain outside these increments.
 
 ## Verification on 2026-11-08
 
