@@ -113,53 +113,60 @@ func (e *Engine) ConversationPreviews(ctx context.Context, conversation domain.I
 	out := []domain.MessagePreview{}
 	for _, m := range messages {
 		for _, address := range previewURLs(domain.DisplayBody(m)) {
-			id, err := e.newID()
+			p, err := e.ensureMessagePreview(ctx, r, m, address)
 			if err != nil {
 				return nil, err
 			}
-			rev, err := e.newID()
-			if err != nil {
-				return nil, err
-			}
-			p := domain.MessagePreview{ID: id, RevisionID: rev, AccountID: c.AccountID, ConversationID: c.ID, MessageID: m.ID, URL: address, PreviewVersion: previewRendererVersion, Kind: "link", State: "queued", DownloadState: "not_downloaded", UpdatedAt: e.now().UTC()}
-			u, _ := url.Parse(address)
-			ext := strings.ToLower(path.Ext(u.Path))
-			if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" {
-				p.Kind = "image"
-				p.State = "ready"
-				p.Title = path.Base(u.Path)
-				if title := []rune(p.Title); len(title) > 300 {
-					p.Title = string(title[:300])
-				}
-				p.SiteName = u.Hostname()
-			}
-			p, err = r.EnsurePreview(ctx, p)
-			if err != nil {
-				return nil, err
-			}
-			if p.PreviewVersion < previewRendererVersion && p.ImageHash != "" {
-				old := p.RevisionID
-				p.RevisionID, err = e.newID()
-				if err != nil {
-					return nil, err
-				}
-				p.PreviewVersion = previewRendererVersion
-				p.State = "queued"
-				p.UpdatedAt = e.now().UTC()
-				err = r.SavePreview(ctx, p, old)
-				if errors.Is(err, ErrStateConflict) {
-					p, err = r.Preview(ctx, p.ID)
-				}
-				if err != nil {
-					return nil, err
-				}
-			}
-
 			out = append(out, p)
 		}
 	}
 	e.wakePreviews()
 	return out, nil
+}
+func (e *Engine) ensureMessagePreview(ctx context.Context, r PreviewRepository, m domain.Message, address string) (domain.MessagePreview, error) {
+	id, err := e.newID()
+	if err != nil {
+		return domain.MessagePreview{}, err
+	}
+	rev, err := e.newID()
+	if err != nil {
+		return domain.MessagePreview{}, err
+	}
+	p := domain.MessagePreview{ID: id, RevisionID: rev, AccountID: m.AccountID, ConversationID: m.ConversationID, MessageID: m.ID, URL: address, PreviewVersion: previewRendererVersion, Kind: "link", State: "queued", DownloadState: "not_downloaded", UpdatedAt: e.now().UTC()}
+	u, _ := url.Parse(address)
+	ext := strings.ToLower(path.Ext(u.Path))
+	if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" {
+		p.Kind = "image"
+		p.State = "ready"
+		p.Title = path.Base(u.Path)
+		if title := []rune(p.Title); len(title) > 300 {
+			p.Title = string(title[:300])
+		}
+		p.SiteName = u.Hostname()
+	}
+	p, err = r.EnsurePreview(ctx, p)
+	if err != nil {
+		return domain.MessagePreview{}, err
+	}
+	if p.PreviewVersion < previewRendererVersion && p.ImageHash != "" {
+		old := p.RevisionID
+		p.RevisionID, err = e.newID()
+		if err != nil {
+			return domain.MessagePreview{}, err
+		}
+		p.PreviewVersion = previewRendererVersion
+		p.State = "queued"
+		p.UpdatedAt = e.now().UTC()
+		err = r.SavePreview(ctx, p, old)
+		if errors.Is(err, ErrStateConflict) {
+			p, err = r.Preview(ctx, p.ID)
+		}
+		if err != nil {
+			return domain.MessagePreview{}, err
+		}
+	}
+
+	return p, nil
 }
 func (e *Engine) Preview(ctx context.Context, id domain.ID) (domain.MessagePreview, error) {
 	if !validID(id) {
@@ -394,22 +401,25 @@ func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p doma
 
 // Run joins independent outbox and cache workers under one lifecycle.
 func (e *Engine) Run(ctx context.Context) error {
-	if e.previewFetcher == nil || e.mediaFiles == nil {
-		return e.runOutbox(ctx)
-	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	done := make(chan error, 2)
+	done := make(chan error, 3)
+	workers := 2
 	go func() { done <- e.runOutbox(ctx) }()
-	go func() { done <- e.runPreviews(ctx) }()
-	first := <-done
-	cancel()
-	second := <-done
-	if errors.Is(first, context.Canceled) {
-		first = nil
+	go func() { done <- e.runSharedContent(ctx) }()
+	if e.previewFetcher != nil && e.mediaFiles != nil {
+		workers++
+		go func() { done <- e.runPreviews(ctx) }()
 	}
-	if errors.Is(second, context.Canceled) {
-		second = nil
+	var result error
+	for i := 0; i < workers; i++ {
+		err := <-done
+		if err != nil && !errors.Is(err, context.Canceled) {
+			result = errors.Join(result, err)
+		}
+		if i == 0 {
+			cancel()
+		}
 	}
-	return errors.Join(first, second)
+	return result
 }

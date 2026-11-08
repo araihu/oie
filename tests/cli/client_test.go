@@ -131,6 +131,11 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err != nil || json.Unmarshal(output, &details) != nil || details.ConversationId != conversation.Id || details.AccountId != account.Id || details.State != "not_connected" {
 		t.Fatalf("CLI scoped details: %v %s", err, output)
 	}
+	output, err = run("", "shared-content", "list-shared-content", "--type", "documents", "--account-id", account.Id)
+	var library engineapi.SharedContentPage
+	if err != nil || json.Unmarshal(output, &library) != nil || library.Indexing.TotalMessages != 1 || library.Indexing.State != "pending" {
+		t.Fatalf("CLI shared-content query: %v %s", err, output)
+	}
 	// Star metadata is independent of the already-cancelled message and uses an
 	// explicit null precondition on the first write through the generated CLI.
 	starKey, _ := ids()

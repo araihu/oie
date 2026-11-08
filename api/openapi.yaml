@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.9.0
+  version: 0.10.0
   description: Native engine API for account metadata, XMPP connections, direct text conversations, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
     are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.
@@ -27,7 +27,76 @@ tags:
   description: Retained text messages and durable send intents
 - name: Previews
   description: Cached structured link cards and explicitly downloaded images
+- name: SharedContent
+  description: Source-linked media, documents and links across retained conversations
 paths:
+  /api/v1/shared-content:
+    get:
+      tags: [SharedContent]
+      operationId: listSharedContent
+      summary: Browse shared content across retained conversations
+      description: >-
+        Browse the local derived catalog, newest original message time first with
+        item UUID ties at millisecond precision. Account/conversation filters apply
+        before pagination. Metadata search covers URL, filename, visible caption,
+        cached preview title/description, sender, conversation and account label.
+        A background worker indexes all retained and incoming messages. Listing
+        registers preview enrichment only for the returned image/link references;
+        originals still follow device preferences and explicit download operations.
+        Document/audio/video entries are URL references, not implemented file transfers.
+        Backfill or new arrivals may insert items before the current cursor; reload
+        to include them. A conversation filter with another account is invalid.
+      parameters:
+      - name: type
+        description: Content category; media combines image, audio and video references.
+        in: query
+        schema:
+          type: string
+          enum: [media, links, documents]
+          default: media
+      - name: accountId
+        description: Restrict to one owning account, or omit for all accounts.
+        in: query
+        schema:
+          $ref: '#/components/schemas/ID'
+      - name: conversationId
+        description: Restrict to one source conversation, or omit for all conversations.
+        in: query
+        schema:
+          $ref: '#/components/schemas/ID'
+      - name: q
+        description: Unicode case-insensitive metadata substring.
+        in: query
+        schema:
+          type: string
+          maxLength: 200
+      - name: cursor
+        in: query
+        description: Opaque source-millisecond/item-UUID keyset cursor returned by this operation.
+        schema:
+          type: string
+          maxLength: 512
+      - name: limit
+        description: Maximum returned items, independent of indexing batch size.
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      responses:
+        '200':
+          description: Shared items and catalog indexing progress in the selected account/conversation scope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedContentPage'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /api/v1/conversations/{conversationId}/messages/{messageId}/context:
     parameters:
     - $ref: '#/components/parameters/ConversationID'
@@ -403,7 +472,7 @@ paths:
               example:
                 id: 019a5df0-0000-7000-8000-000000000003
                 role: local
-                apiVersion: 0.9.0
+                apiVersion: 0.10.0
                 eventCursor: 019a5df0-0000-7000-8000-000000000003:1
         '503':
           $ref: '#/components/responses/Unavailable'
@@ -1444,7 +1513,7 @@ components:
       example:
         id: 019a5df0-0000-7000-8000-000000000003
         role: local
-        apiVersion: 0.9.0
+        apiVersion: 0.10.0
         eventCursor: 019a5df0-0000-7000-8000-000000000003:1
       additionalProperties: false
       required:
@@ -1463,7 +1532,7 @@ components:
         apiVersion:
           type: string
           enum:
-          - 0.9.0
+          - 0.10.0
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -1960,6 +2029,74 @@ components:
         title: Shared article
         siteName: Example
         updatedAt: '2026-11-08T12:00:00Z'
+    SharedContentItem:
+      type: object
+      description: One shared URL reference with its exact retained source message and current owning labels.
+      additionalProperties: false
+      required: [id, revisionId, kind, url, fileName, accountLabel, conversationTitle, message]
+      properties:
+        id:
+          $ref: '#/components/schemas/ID'
+        revisionId:
+          $ref: '#/components/schemas/ID'
+        kind:
+          type: string
+          enum: [image, video, audio, link, document]
+        url:
+          type: string
+          format: uri
+          maxLength: 4096
+          description: Original HTTP/HTTPS reference. Never use as an automatic browser media source.
+        fileName:
+          type: string
+          maxLength: 300
+        accountLabel:
+          type: string
+        conversationTitle:
+          type: string
+        message:
+          $ref: '#/components/schemas/Message'
+        preview:
+          $ref: '#/components/schemas/MessagePreview'
+    SharedContentIndexing:
+      type: object
+      description: Local source-message indexing progress, scoped by account/conversation but independent of tab/search.
+      additionalProperties: false
+      required: [state, indexedMessages, totalMessages]
+      properties:
+        state:
+          type: string
+          enum: [pending, complete]
+        indexedMessages:
+          type: integer
+          format: int64
+          minimum: 0
+        totalMessages:
+          type: integer
+          format: int64
+          minimum: 0
+    SharedContentPage:
+      type: object
+      description: Bounded shared-content page. Image previews and originals retain their independent hashes and states.
+      additionalProperties: false
+      required: [items, indexing]
+      example:
+        items: []
+        indexing:
+          state: pending
+          indexedMessages: 0
+          totalMessages: 100
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/SharedContentItem'
+        nextCursor:
+          type: string
+          maxLength: 512
+        indexing:
+          $ref: '#/components/schemas/SharedContentIndexing'
     PreviewPage:
       type: object
       description: At most three preview references for each selected retained message, up to three hundred items.

@@ -181,3 +181,18 @@ type Revision struct {
 	Payload   string
 	CreatedAt string
 }
+
+type SharedContent struct {
+	ID         string
+	RevisionID string
+	MessageID  string
+	Url        string
+	Kind       string
+	FileName   string
+}
+
+type SharedContentState struct {
+	MessageID     string
+	ParserVersion int64
+	Caption       string
+}

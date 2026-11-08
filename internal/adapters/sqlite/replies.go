@@ -67,6 +67,11 @@ func recordReplyMetadata(ctx context.Context, q *dbgen.Queries, id string, in do
 		}
 		changed += n
 	}
+	if changed > 0 {
+		if err = q.InvalidateSharedContent(ctx, id); err != nil {
+			return err
+		}
+	}
 	if changed > 0 && emit {
 		_, err = change(ctx, q, "message.updated", old, time.Now().UTC())
 	}

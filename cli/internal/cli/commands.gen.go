@@ -46,7 +46,8 @@ func New() (*cobra.Command, error) {
 		"GetOperation":                 build27,
 		"GetMessagePreview":            build28,
 		"DownloadPreviewImage":         build29,
-		"ListStarredMessages":          build30,
+		"ListSharedContent":            build30,
+		"ListStarredMessages":          build31,
 	})
 }
 func build0(server string, input cliruntime.Input) (*http.Request, error) {
@@ -326,6 +327,28 @@ func build29(server string, input cliruntime.Input) (*http.Request, error) {
 	return api.NewDownloadPreviewImageRequest(server, path0)
 }
 func build30(server string, input cliruntime.Input) (*http.Request, error) {
+	var params api.ListSharedContentParams
+	if err := input.Decode("query", "type", &params.Type); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "accountId", &params.AccountId); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "conversationId", &params.ConversationId); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "q", &params.Q); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "cursor", &params.Cursor); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "limit", &params.Limit); err != nil {
+		return nil, err
+	}
+	return api.NewListSharedContentRequest(server, &params)
+}
+func build31(server string, input cliruntime.Input) (*http.Request, error) {
 	var params api.ListStarredMessagesParams
 	if err := input.Decode("query", "accountId", &params.AccountId); err != nil {
 		return nil, err

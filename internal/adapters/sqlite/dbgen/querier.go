@@ -10,6 +10,7 @@ import (
 
 type Querier interface {
 	AcquireWriteLock(ctx context.Context) error
+	DeleteObsoleteSharedContent(ctx context.Context, arg DeleteObsoleteSharedContentParams) error
 	FindAvatar(ctx context.Context, arg FindAvatarParams) (Avatar, error)
 	FindConversation(ctx context.Context, arg FindConversationParams) (Conversation, error)
 	FindMessagePreview(ctx context.Context, arg FindMessagePreviewParams) (MessagePreview, error)
@@ -48,6 +49,7 @@ type Querier interface {
 	InsertPreviewRevision(ctx context.Context, arg InsertPreviewRevisionParams) error
 	InterruptedMessages(ctx context.Context) ([]Message, error)
 	InterruptedPreviewJobs(ctx context.Context, limit int64) ([]MessagePreview, error)
+	InvalidateSharedContent(ctx context.Context, messageID string) error
 	ListAccounts(ctx context.Context, arg ListAccountsParams) ([]string, error)
 	ListAvatarTargets(ctx context.Context, ownerID string) ([]ListAvatarTargetsRow, error)
 	ListAvatars(ctx context.Context, arg ListAvatarsParams) ([]Avatar, error)
@@ -55,7 +57,9 @@ type Querier interface {
 	ListConversationMessageStars(ctx context.Context, arg ListConversationMessageStarsParams) ([]ListConversationMessageStarsRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
+	ListSharedContent(ctx context.Context, arg ListSharedContentParams) ([]ListSharedContentRow, error)
 	ListStarredMessages(ctx context.Context, arg ListStarredMessagesParams) ([]ListStarredMessagesRow, error)
+	MarkSharedContentIndexed(ctx context.Context, arg MarkSharedContentIndexedParams) error
 	MessagesAfterTarget(ctx context.Context, arg MessagesAfterTargetParams) ([]Message, error)
 	MessagesAtOrBeforeTarget(ctx context.Context, arg MessagesAtOrBeforeTargetParams) ([]Message, error)
 	PendingMessages(ctx context.Context, nextAttemptAt string) ([]Message, error)
@@ -63,8 +67,11 @@ type Querier interface {
 	PutArchiveCheckpoint(ctx context.Context, arg PutArchiveCheckpointParams) error
 	PutHistoryStatus(ctx context.Context, arg PutHistoryStatusParams) error
 	PutMessageStar(ctx context.Context, arg PutMessageStarParams) error
+	PutSharedContent(ctx context.Context, arg PutSharedContentParams) error
 	ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error
 	SetOperationResult(ctx context.Context, arg SetOperationResultParams) error
+	SharedContentCandidates(ctx context.Context, arg SharedContentCandidatesParams) ([]Message, error)
+	SharedContentIndexStatus(ctx context.Context, arg SharedContentIndexStatusParams) (SharedContentIndexStatusRow, error)
 	Snapshot(ctx context.Context) (SnapshotRow, error)
 	UpdateAvatar(ctx context.Context, arg UpdateAvatarParams) error
 	UpdateConversation(ctx context.Context, arg UpdateConversationParams) error
