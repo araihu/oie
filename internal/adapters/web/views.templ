@@ -77,6 +77,9 @@ templ page(v view) {
 <script src="/ui/shared-content.js" defer></script>
 <script src="/ui/live.js" defer></script>
 <script src="/ui/navigation.js" defer></script>
+if v.DevBuildID!="" {
+<script src="/ui/dev-reload.js" data-build-id={v.DevBuildID} defer></script>
+}
 <meta name="oie-csrf" content={v.CSRF}/>
 		</head>
 		<body data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>

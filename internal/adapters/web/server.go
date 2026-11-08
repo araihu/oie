@@ -44,12 +44,13 @@ var themeScript []byte
 var localeFiles embed.FS
 
 type Server struct {
+	devBuildID   string
 	client       *engineapi.ClientWithResponses
 	streamClient *engineapi.Client
 	catalogs     map[string]copy
 }
 
-func New(engineURL string) (*Server, error) {
+func New(engineURL string, options ...Option) (*Server, error) {
 	u, err := url.Parse(engineURL)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 		return nil, &url.Error{Op: "configure engine", URL: "", Err: errInvalidURL{}}
@@ -67,7 +68,16 @@ func New(engineURL string) (*Server, error) {
 	transport.ResponseHeaderTimeout = 5 * time.Second
 	transport.TLSHandshakeTimeout = 5 * time.Second
 	streamClient, err := engineapi.NewClient(engineURL, engineapi.WithHTTPClient(&http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}))
-	return &Server{client: client, streamClient: streamClient, catalogs: catalogs}, err
+	if err != nil {
+		return nil, err
+	}
+	server := &Server{client: client, streamClient: streamClient, catalogs: catalogs}
+	for _, option := range options {
+		if option != nil {
+			option(server)
+		}
+	}
+	return server, nil
 }
 
 type errInvalidURL struct{}
@@ -89,6 +99,7 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	DevBuildID                                            string
 	RoomSession                                           *engineapi.RoomSession
 	MessagingCapabilities                                 *engineapi.Capabilities
 	InfoView, InfoType, InfoCursor, InfoQuery, InfoFocus  string
@@ -396,6 +407,9 @@ var videosStylesheet []byte
 var liveScript []byte
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if s.serveDevReload(w, r) {
+		return
+	}
 	if isMutationPath(r.URL.Path) && r.Method != http.MethodPost {
 		w.Header().Set("Allow", "POST")
 		w.WriteHeader(405)
@@ -492,7 +506,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, v)
 }
 func (s *Server) baseView(r *http.Request) view {
-	v := view{Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system"), Avatars: map[avatarIdentity]string{}, Connections: map[string]connectionView{}, Histories: map[string]engineapi.HistoryStatus{}, Values: map[string]string{}, MessagePreviews: map[string][]engineapi.MessagePreview{}}
+	v := view{DevBuildID: s.devBuildID, Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system"), Avatars: map[avatarIdentity]string{}, Connections: map[string]connectionView{}, Histories: map[string]engineapi.HistoryStatus{}, Values: map[string]string{}, MessagePreviews: map[string][]engineapi.MessagePreview{}}
 	v.Text = s.catalogs[v.Locale]
 	v.configureWorkspace(r)
 	return v
