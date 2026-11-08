@@ -6,4 +6,4 @@
 [data-video-metadata]{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;line-height:1.5;overflow-wrap:anywhere}[data-video-label]{display:block;flex-basis:100%;font-weight:600}[data-video-status]{flex-basis:100%;margin:0;color:var(--oie-muted)}[data-video-status][data-state=failed]{color:light-dark(#9e2626,#ffb4ab)}[data-video-metadata]>a{font-size:11px}
 .oie-shared-item>.oie-video-card{max-width:none}.oie-info-shared .oie-video-stage,.oie-info-shared .oie-video-cover{min-height:95px}.oie-info-shared [data-video-metadata]{font-size:11px;gap:5px}
 
-.oie-video-play{max-width:100%;white-space:normal;gap:6px;line-height:1.35}.oie-video-play>span{white-space:normal;overflow-wrap:anywhere}
+.oie-video-play{max-width:100%;white-space:normal;gap:6px;line-height:1.35}.oie-video-play-label{min-width:0;white-space:normal;overflow-wrap:anywhere}

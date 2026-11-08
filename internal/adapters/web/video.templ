@@ -20,7 +20,7 @@ templ videoPlayer(v view){
 <div class="oie-video-stage">
 <video data-video-player controls playsinline preload="none" tabindex="0" hidden aria-label={v.Text.SharedVideo}>{v.Text.VideoUnsupported}</video>
 <div class="oie-video-cover" data-video-cover>
-@button.Button(button.WithType("button"),button.WithRootClass("oie-video-play"),button.WithAttrs(templ.Attributes{"data-video-play":""})){@glyph(heroicons.Icon16SolidPlay)<span>{v.Text.VideoPlay}</span>}
+@button.Button(button.WithType("button"),button.WithSize(button.SizeSmall),button.WithRootClass("oie-video-play"),button.WithAttrs(templ.Attributes{"data-video-play":""})){@glyph(heroicons.Icon16SolidPlay)<span class="oie-video-play-label">{v.Text.VideoPlay}</span>}
 </div>
 </div>
 }
