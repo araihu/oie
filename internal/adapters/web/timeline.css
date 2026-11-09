@@ -1,0 +1,3 @@
+.oie-timeline{overflow-anchor:none}
+.oie-timeline-edge{position:relative;display:flex;flex-direction:column;align-items:center;flex-shrink:0;min-height:32px;font-size:12px;line-height:1.5;color:var(--oie-muted);overflow-anchor:none}
+.oie-timeline-edge p{position:absolute;z-index:3;inset-inline:8px;top:100%;margin:4px 0;padding:4px 8px;border-radius:6px;background:var(--oie-panel);text-align:center}.oie-timeline-edge[data-timeline-edge=newer] p{top:auto;bottom:100%}.oie-timeline-edge p:empty{display:none}.oie-timeline-load{padding:6px 12px;color:var(--oie-accent-text)}.oie-timeline-load[hidden]{display:none}.oie-timeline-load[aria-disabled=true]{opacity:.65;pointer-events:none}

@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 	"time"
 
@@ -90,6 +89,7 @@ type messageView struct {
 	engineapi.Message
 	Presentation      string
 	PresentationKnown bool
+	VideosKnown       bool
 	Formatted         templ.Component
 	Attachment        *mediaView
 }
@@ -99,184 +99,189 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
-	DevBuildID                                            string
-	RoomSession                                           *engineapi.RoomSession
-	MessagingCapabilities                                 *engineapi.Capabilities
-	InfoView, InfoType, InfoCursor, InfoQuery, InfoFocus  string
-	InfoShared                                            *engineapi.SharedContentPage
-	InfoStars                                             *engineapi.StarredMessagePage
-	InfoInvalid, SharedInDetails                          bool
-	SharedType, SharedCursor, SharedConversation          string
-	SharedContent                                         *engineapi.SharedContentPage
-	SharedInvalid                                         bool
-	SharedCard                                            bool
-	Locale, Theme, Role                                   string
-	Text                                                  copy
-	Avatars                                               map[avatarIdentity]string
-	AvatarAccounts                                        []string
-	Accounts                                              []engineapi.Account
-	AccountUnread                                         map[string]int
-	AccountPage, ManagedAccount                           string
-	CapabilityEvidence                                    *engineapi.Capabilities
-	ConversationInfo                                      *engineapi.ConversationDetails
-	Connections                                           map[string]connectionView
-	Histories                                             map[string]engineapi.HistoryStatus
-	Next                                                  string
-	Unavailable, NotFound, Preview, ChatOpen              bool
-	FocusMessage                                          string
-	ContextHasNewer, ContextHasOlder, ContextMissing      bool
-	Section, Filter, Query, ChatID, AccountFilter         string
-	Chats                                                 []engineapi.Conversation
-	Selected                                              *engineapi.Conversation
-	Messages                                              []messageView
-	StarsKnown                                            bool
-	Stars                                                 map[string]engineapi.MessageStar
-	PreviewsKnown                                         bool
-	MessagePreviews                                       map[string][]engineapi.MessagePreview
-	MessageVideos                                         map[string][]engineapi.SharedContentItem
-	EngineID, EventCursor, CSRF, ErrorMessage, FormTarget string
-	Values                                                map[string]string
+	DevBuildID                                                                                    string
+	RoomSession                                                                                   *engineapi.RoomSession
+	MessagingCapabilities                                                                         *engineapi.Capabilities
+	InfoView, InfoType, InfoCursor, InfoQuery, InfoFocus                                          string
+	InfoShared                                                                                    *engineapi.SharedContentPage
+	InfoStars                                                                                     *engineapi.StarredMessagePage
+	InfoInvalid, SharedInDetails                                                                  bool
+	SharedType, SharedCursor, SharedConversation                                                  string
+	SharedContent                                                                                 *engineapi.SharedContentPage
+	SharedInvalid                                                                                 bool
+	SharedCard                                                                                    bool
+	Locale, Theme, Role                                                                           string
+	Text                                                                                          copy
+	Avatars                                                                                       map[avatarIdentity]string
+	AvatarAccounts                                                                                []string
+	Accounts                                                                                      []engineapi.Account
+	AccountUnread                                                                                 map[string]int
+	AccountPage, ManagedAccount                                                                   string
+	CapabilityEvidence                                                                            *engineapi.Capabilities
+	ConversationInfo                                                                              *engineapi.ConversationDetails
+	Connections                                                                                   map[string]connectionView
+	Histories                                                                                     map[string]engineapi.HistoryStatus
+	Next                                                                                          string
+	Unavailable, NotFound, Preview, ChatOpen                                                      bool
+	FocusMessage                                                                                  string
+	ContextHasNewer, ContextHasOlder, ContextMissing                                              bool
+	TimelineOlder, TimelineNewer, TimelineComplete                                                bool
+	TimelineMode, TimelineDirection, TimelineCursor, TimelineRequestOldest, TimelineRequestNewest string
+	TimelineCanonicalCursor                                                                       string
+	TimelineAliases                                                                               map[string]messageView
+	Section, Filter, Query, ChatID, AccountFilter                                                 string
+	Chats                                                                                         []engineapi.Conversation
+	Selected                                                                                      *engineapi.Conversation
+	Messages                                                                                      []messageView
+	StarsKnown                                                                                    bool
+	Stars                                                                                         map[string]engineapi.MessageStar
+	PreviewsKnown                                                                                 bool
+	MessagePreviews                                                                               map[string][]engineapi.MessagePreview
+	MessageVideos                                                                                 map[string][]engineapi.SharedContentItem
+	EngineID, EventCursor, CSRF, ErrorMessage, FormTarget                                         string
+	Values                                                                                        map[string]string
 }
 
 type copy struct {
-	ReadFailed                 string
-	SharedItemActions          string
-	SharedCopyLink             string
-	SharedDownload             string
-	SharedActionFailed         string
-	SharedLinkCopied           string
-	SharedDownloading          string
-	RoomActions                string
-	DocumentOpen               string
-	DocumentViewer             string
-	DocumentDownload           string
-	DocumentOriginal           string
-	DocumentLoading            string
-	DocumentLoadFailed         string
-	DocumentRetry              string
-	DocumentUnsupported        string
-	DocumentEmpty              string
-	DocumentPrevious           string
-	DocumentNext               string
-	DocumentPage               string
-	DocumentFit                string
-	DocumentZoomIn             string
-	DocumentZoomOut            string
-	EmojiNoRecent              string
-	EmojiVariants              string
-	EmojiVariantsFor           string
-	EmojiPicker                string
-	EmojiSearch                string
-	EmojiCategories            string
-	EmojiAll                   string
-	EmojiRecent                string
-	EmojiMore                  string
-	EmojiLoading               string
-	EmojiEmpty                 string
-	EmojiFailed                string
-	EmojiSmileys               string
-	EmojiPeople                string
-	EmojiAnimals               string
-	EmojiFood                  string
-	EmojiTravel                string
-	EmojiActivities            string
-	EmojiObjects               string
-	EmojiSymbols               string
-	EmojiFlags                 string
-	RefreshPreview             string
-	RefreshPreviewFailed       string
-	SharedLoadingOlder         string
-	SharedLoadFailed           string
-	VideoPlay                  string
-	VideoRetry                 string
-	VideoLoading               string
-	VideoPlaying               string
-	VideoPaused                string
-	VideoReady                 string
-	VideoUnavailable           string
-	VideoUnsupported           string
-	AppName                    string
-	AppDescription             string
-	CapabilityEditMessagesNote string
-	Edited                     string
-	ReplyMessage               string
-	CancelReply                string
-	ReplyUnavailable           string
-	ReplyPreparing             string
-	ReplyLocked                string
-	RoomJoined                 string
-	RoomJoining                string
-	RoomJoinFailed             string
-	RoomJoinRequired           string
-	JoinRoom                   string
-	LeaveRoom                  string
-	RoomNickname               string
-	RoomNicknameConflict       string
-	RoomForbidden              string
-	RoomNotAuthorized          string
-	RoomJoinTimeout            string
-	RoomUnavailable            string
-	RoomCommandUnknown         string
-	RoomCommandFailed          string
-	RoomConflict               string
-	RoomJoinRequested          string
-	RoomLeaveRequested         string
-	RoomQueueHint              string
-	NavLoading                 string
-	NavFailed                  string
-	InfoSharedContent          string
-	InfoStarred                string
-	InfoConnection             string
-	InfoBack                   string
-	InfoGroup                  string
-	InfoReportedOccupants      string
-	InfoStarsUnavailable       string
-	InfoStarsEmpty             string
-	InfoNavigationFailed       string
-	SharedAccount              string
-	SearchAccounts             string
-	NoAccountsFound            string
-	SharedTools                string
-	SharedContentTypes         string
-	SharedMediaTab             string
-	SharedLinksTab             string
-	SharedDocsTab              string
-	SharedAllChats             string
-	SharedSearch               string
-	SharedSearchAction         string
-	SharedPageUnavailable      string
-	SharedNewest               string
-	SharedUnavailable          string
-	SharedFinding              string
-	SharedEmpty                string
-	SharedEmptyHelp            string
-	SharedGoToMessage          string
-	SharedOpenLink             string
-	SharedNext                 string
-	SharedImage                string
-	SharedAudio                string
-	SharedVideo                string
-	SharedDocument             string
-	SharedLink                 string
-	CapabilityPresenceNote     string
-	DetailsRefresh             string
-	DetailsOwningAccount       string
-	DetailsObservation         string
-	DetailsSnapshotHelp        string
-	DetailsPending             string
-	DetailsKnown               string
-	DetailsPartial             string
-	DetailsForbidden           string
-	DetailsUnavailable         string
-	DetailsNotConnected        string
-	DetailsUnsupported         string
-	DetailsUnknown             string
-	DetailsReadUnavailable     string
-	DetailsRoomName            string
-	DetailsDescription         string
-	DetailsTopic               string
-	DetailsRoomSession         string
-	RoomNotJoined              string
+	ReadFailed                                                                    string
+	TimelineOlder, TimelineNewer, TimelineLoading, TimelineFailed, TimelinePaused string
+	SharedItemActions                                                             string
+	SharedCopyLink                                                                string
+	SharedDownload                                                                string
+	SharedActionFailed                                                            string
+	SharedLinkCopied                                                              string
+	SharedDownloading                                                             string
+	RoomActions                                                                   string
+	DocumentOpen                                                                  string
+	DocumentViewer                                                                string
+	DocumentDownload                                                              string
+	DocumentOriginal                                                              string
+	DocumentLoading                                                               string
+	DocumentLoadFailed                                                            string
+	DocumentRetry                                                                 string
+	DocumentUnsupported                                                           string
+	DocumentEmpty                                                                 string
+	DocumentPrevious                                                              string
+	DocumentNext                                                                  string
+	DocumentPage                                                                  string
+	DocumentFit                                                                   string
+	DocumentZoomIn                                                                string
+	DocumentZoomOut                                                               string
+	EmojiNoRecent                                                                 string
+	EmojiVariants                                                                 string
+	EmojiVariantsFor                                                              string
+	EmojiPicker                                                                   string
+	EmojiSearch                                                                   string
+	EmojiCategories                                                               string
+	EmojiAll                                                                      string
+	EmojiRecent                                                                   string
+	EmojiMore                                                                     string
+	EmojiLoading                                                                  string
+	EmojiEmpty                                                                    string
+	EmojiFailed                                                                   string
+	EmojiSmileys                                                                  string
+	EmojiPeople                                                                   string
+	EmojiAnimals                                                                  string
+	EmojiFood                                                                     string
+	EmojiTravel                                                                   string
+	EmojiActivities                                                               string
+	EmojiObjects                                                                  string
+	EmojiSymbols                                                                  string
+	EmojiFlags                                                                    string
+	RefreshPreview                                                                string
+	RefreshPreviewFailed                                                          string
+	SharedLoadingOlder                                                            string
+	SharedLoadFailed                                                              string
+	VideoPlay                                                                     string
+	VideoRetry                                                                    string
+	VideoLoading                                                                  string
+	VideoPlaying                                                                  string
+	VideoPaused                                                                   string
+	VideoReady                                                                    string
+	VideoUnavailable                                                              string
+	VideoUnsupported                                                              string
+	AppName                                                                       string
+	AppDescription                                                                string
+	CapabilityEditMessagesNote                                                    string
+	Edited                                                                        string
+	ReplyMessage                                                                  string
+	CancelReply                                                                   string
+	ReplyUnavailable                                                              string
+	ReplyPreparing                                                                string
+	ReplyLocked                                                                   string
+	RoomJoined                                                                    string
+	RoomJoining                                                                   string
+	RoomJoinFailed                                                                string
+	RoomJoinRequired                                                              string
+	JoinRoom                                                                      string
+	LeaveRoom                                                                     string
+	RoomNickname                                                                  string
+	RoomNicknameConflict                                                          string
+	RoomForbidden                                                                 string
+	RoomNotAuthorized                                                             string
+	RoomJoinTimeout                                                               string
+	RoomUnavailable                                                               string
+	RoomCommandUnknown                                                            string
+	RoomCommandFailed                                                             string
+	RoomConflict                                                                  string
+	RoomJoinRequested                                                             string
+	RoomLeaveRequested                                                            string
+	RoomQueueHint                                                                 string
+	NavLoading                                                                    string
+	NavFailed                                                                     string
+	InfoSharedContent                                                             string
+	InfoStarred                                                                   string
+	InfoConnection                                                                string
+	InfoBack                                                                      string
+	InfoGroup                                                                     string
+	InfoReportedOccupants                                                         string
+	InfoStarsUnavailable                                                          string
+	InfoStarsEmpty                                                                string
+	InfoNavigationFailed                                                          string
+	SharedAccount                                                                 string
+	SearchAccounts                                                                string
+	NoAccountsFound                                                               string
+	SharedTools                                                                   string
+	SharedContentTypes                                                            string
+	SharedMediaTab                                                                string
+	SharedLinksTab                                                                string
+	SharedDocsTab                                                                 string
+	SharedAllChats                                                                string
+	SharedSearch                                                                  string
+	SharedSearchAction                                                            string
+	SharedPageUnavailable                                                         string
+	SharedNewest                                                                  string
+	SharedUnavailable                                                             string
+	SharedFinding                                                                 string
+	SharedEmpty                                                                   string
+	SharedEmptyHelp                                                               string
+	SharedGoToMessage                                                             string
+	SharedOpenLink                                                                string
+	SharedNext                                                                    string
+	SharedImage                                                                   string
+	SharedAudio                                                                   string
+	SharedVideo                                                                   string
+	SharedDocument                                                                string
+	SharedLink                                                                    string
+	CapabilityPresenceNote                                                        string
+	DetailsRefresh                                                                string
+	DetailsOwningAccount                                                          string
+	DetailsObservation                                                            string
+	DetailsSnapshotHelp                                                           string
+	DetailsPending                                                                string
+	DetailsKnown                                                                  string
+	DetailsPartial                                                                string
+	DetailsForbidden                                                              string
+	DetailsUnavailable                                                            string
+	DetailsNotConnected                                                           string
+	DetailsUnsupported                                                            string
+	DetailsUnknown                                                                string
+	DetailsReadUnavailable                                                        string
+	DetailsRoomName                                                               string
+	DetailsDescription                                                            string
+	DetailsTopic                                                                  string
+	DetailsRoomSession                                                            string
+	RoomNotJoined                                                                 string
 
 	DetailsOccupantCount                                                                                                                                                 string
 	DetailsRoomProperties                                                                                                                                                string
@@ -436,6 +441,12 @@ var previewsScript []byte
 //go:embed runtime.js
 var runtimeScript []byte
 
+//go:embed timeline.js
+var timelineScript []byte
+
+//go:embed timeline.css
+var timelineStylesheet []byte
+
 //go:embed shared-actions.js
 var sharedActionsScript []byte
 
@@ -504,6 +515,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mime string
 		body []byte
 	}{
+		"/ui/timeline.js": {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
 		"/ui/videos.js": {"text/javascript", videosScript}, "/ui/video.css": {"text/css", videosStylesheet},
 		"/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/read-state.js": {"text/javascript", readStateScript}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
@@ -512,6 +524,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", asset.mime)
 		w.Header().Set("Cache-Control", "no-store")
 		_, _ = w.Write(asset.body)
+		return
+	}
+	if r.URL.Path == "/ui/timeline" {
+		s.timelinePage(w, r)
 		return
 	}
 	if r.URL.Path == "/ui/reply-source" {
@@ -700,15 +716,28 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	}
 	var messageBody []byte
 	if !usedContext {
-		messages, err := s.client.ListMessagesWithResponse(ctx, selected, &engineapi.ListMessagesParams{}, editor)
+		messages, err := s.client.ListMessagesWithResponse(ctx, selected, timelineInitialParams(*v), editor)
 		if err != nil || messages.JSON200 == nil {
 			v.Unavailable = true
 			return
 		}
 		items = messages.JSON200.Items
+		v.TimelineOlder = messages.JSON200.NextCursor != nil
+		v.TimelineNewer = v.TimelineCursor != "" && v.TimelineDirection != "newer"
+		if v.TimelineDirection == "newer" {
+			v.TimelineNewer = messages.JSON200.NextCursor != nil
+			v.TimelineOlder = true
+		}
 		messageBody = messages.Body
 	}
-	slices.Reverse(items)
+	if usedContext {
+		v.TimelineOlder = v.ContextHasOlder
+		v.TimelineNewer = v.ContextHasNewer
+	}
+	if !validTimelineMessages(items, v.Selected.AccountId, v.ChatID, 50) {
+		v.Unavailable = true
+		return
+	}
 	extras := map[string]*mediaView{}
 	if v.Preview {
 		var mock struct {
@@ -723,18 +752,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 			}
 		}
 	}
-	for _, m := range items {
-		v.Messages = append(v.Messages, messageView{Message: m, Attachment: extras[m.Id], Presentation: m.OriginalText})
-	}
-	s.loadMessageStars(ctx, v)
-	s.loadMessagePreviews(ctx, v)
-	s.loadMessageVideos(ctx, v)
-	for i := range v.Messages {
-		m := &v.Messages[i]
-		m.PresentationKnown = v.PreviewsKnown
-		m.Presentation = videoPresentation(imagePresentation(m.displayBody(), v.MessagePreviews[m.Id]), v.messageVideos(m.Id))
-		m.Formatted = formattedMessage(ctx, m.Presentation)
-	}
+	s.formatTimeline(ctx, v, items, extras)
 }
 func (v view) account(id string) engineapi.Account {
 	for _, a := range v.Accounts {

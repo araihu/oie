@@ -16,6 +16,8 @@ func (v *view) configureWorkspace(r *http.Request) {
 	v.ChatOpen = q.Get("chat") != ""
 	v.ChatID = q.Get("chat")
 	v.FocusMessage = q.Get("message")
+	v.TimelineCursor = q.Get("timelineCursor")
+	v.TimelineDirection = q.Get("timelineDirection")
 	v.AccountFilter = q.Get("account")
 	v.AccountPage = q.Get("accountPage")
 	v.ManagedAccount = q.Get("managedAccount")

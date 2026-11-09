@@ -408,5 +408,10 @@
   "EmojiFlags": "Bandeiras",
   "EmojiVariants": "Variações do emoji",
   "EmojiVariantsFor": "Variações de {emoji}",
-  "EmojiNoRecent": "Nenhum emoji recente ainda."
+  "EmojiNoRecent": "Nenhum emoji recente ainda.",
+  "TimelineOlder": "Mensagens anteriores",
+  "TimelineNewer": "Mensagens seguintes",
+  "TimelineLoading": "Carregando mensagens…",
+  "TimelineFailed": "Não foi possível carregar as mensagens. Tente novamente.",
+  "TimelinePaused": "Pause a reprodução ou afaste-se da outra extremidade e tente novamente."
 }

@@ -55,6 +55,8 @@ that needed more content stopped below the 2 MiB budget and retained its
 clickable fallback. The fixture recorded zero unexpected mutations, browser
 errors or external browser requests. The live catalog also rendered text
 excerpts without the separate Open document button.
+The final card-preview source passes `make check`, the full native race suite
+and local Dagger checks, including application, CLI and mock builds.
 
 `make check` passes on the final dependency pin, with Vacuum's rule timeout
 set to 30 seconds. The final web package also passes the race detector in

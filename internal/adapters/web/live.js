@@ -208,7 +208,7 @@ window.OieRuntime.register('live', life => {
   }
   function nearBottom(timeline) { return !timeline || timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 60; }
   let highlightedMessage='',highlightTimer;
-  function pinned(){return !!body.dataset.focusMessage;}
+  function pinned(){return !!body.dataset.focusMessage||!!window.OieTimeline?.hasNewer;}
   function showJump(show){const jump=document.querySelector('[data-jump-latest]');if(jump){jump.hidden=!show;jump.textContent=pinned()?text('latest'):text('newMessages');}}
   function scrollLatest() {
     const timeline=document.querySelector('#message-timeline');if(timeline)timeline.scrollTop=timeline.scrollHeight;
@@ -232,7 +232,7 @@ window.OieRuntime.register('live', life => {
   },true);
   life.on(document,'click',event=>{
     if(event.target.closest('[data-jump-latest]')){
-      if(pinned()||new URLSearchParams(location.search).has('message')){const url=new URL(location.href);url.searchParams.delete('message');window.OieNavigation?.go(url.pathname+url.search) ?? location.assign(url.pathname+url.search);}
+      if(pinned()||new URLSearchParams(location.search).has('message')||new URLSearchParams(location.search).has('timelineCursor')){const url=new URL(location.href);url.searchParams.delete('message');url.searchParams.delete('timelineCursor');url.searchParams.delete('timelineDirection');window.OieNavigation?.go(url.pathname+url.search) ?? location.assign(url.pathname+url.search);}
       else scrollLatest();
     }
   });
@@ -287,23 +287,7 @@ window.OieRuntime.register('live', life => {
       }
       if (regions.dataset.conversationId === body.dataset.conversationId) {
         const timeline = document.querySelector('#message-timeline'), next = page.querySelector('#live-timeline');
-        if (timeline && next && timeline.dataset.version !== next.dataset.version) {
-          const follow = !pinned()&&(forceBottom || nearBottom(timeline)), top = timeline.scrollTop;
-          const active=timeline.contains(document.activeElement)?document.activeElement:null;
-          const activeRow=active?.closest('[data-message-id]')?.dataset.messageId,activeID=active?.id,activeReply=active?.closest('[data-reply-target]')?.dataset.replyTarget;
-          const anchor = [...timeline.querySelectorAll('[data-message-id]')].find(el => el.getBoundingClientRect().bottom >= timeline.getBoundingClientRect().top);
-          const anchorID = anchor?.dataset.messageId, anchorTop = anchor?.getBoundingClientRect().top;
-          mutateDOM(timeline,next.innerHTML); timeline.dataset.version = next.dataset.version;localizeTimes();
-          if (follow) scrollLatest();
-          else {
-            const same = anchorID && timeline.querySelector(`[data-message-id="${CSS.escape(anchorID)}"]`);
-            timeline.scrollTop = same ? top + same.getBoundingClientRect().top - anchorTop : top;
-            const jump = document.querySelector('[data-jump-latest]'); if (jump) jump.hidden = false;
-          }
-          if(activeRow&&!active?.isConnected){const row=timeline.querySelector(`[data-message-id="${CSS.escape(activeRow)}"]`);const target=(activeID&&document.getElementById(activeID))||(activeReply&&row?.querySelector(`[data-reply-target="${CSS.escape(activeReply)}"]`))||row;target?.focus({preventScroll:true});}
-          if(highlightedMessage)timeline.querySelector(`[data-message-id="${CSS.escape(highlightedMessage)}"]`)?.classList.add('oie-reply-highlight');
-          forceBottom = false;
-        }
+        if (timeline && next && window.OieTimeline) {window.OieTimeline.refresh(page,forceBottom);forceBottom=false;}
         const header = document.querySelector('#chat-header'), nextHeader = page.querySelector('#live-header');
         if (header && nextHeader?.firstElementChild && header.dataset.version !== nextHeader.dataset.version && !header.contains(document.activeElement)) {
           const replacement = nextHeader.firstElementChild.cloneNode(true);
@@ -387,6 +371,9 @@ window.OieRuntime.register('live', life => {
       if (refreshAgain) { refreshAgain = false; scheduleRefresh(); }
     }
   }
+  life.on(document,'oie:timeline-content',event=>{readAvatars(event.detail.page);applyAvatars();localizeTimes();if(highlightedMessage)document.querySelector(`#message-timeline [data-message-id="${CSS.escape(highlightedMessage)}"]`)?.classList.add('oie-reply-highlight');});
+  life.on(document,'oie:timeline-focus',event=>{focusMessage(event.detail.id);showJump(true);});
+  life.on(document,'oie:timeline-alias',event=>{if(highlightedMessage===event.detail.requested)highlightedMessage=event.detail.canonical;});
   life.on(document,'oie:info-content',()=>{applyAvatars();localizeTimes();});
   life.on(document,'oie:shared-append',event=>{if(event.detail?.page)readAvatars(event.detail.page);applyAvatars();localizeTimes();});
   for(const name of ['oie:shared-search-settled','oie:info-shared-search-settled'])life.on(document,name,event=>{if(event.detail?.page)readAvatars(event.detail.page);applyAvatars();localizeTimes();});

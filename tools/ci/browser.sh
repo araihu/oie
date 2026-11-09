@@ -41,6 +41,7 @@ OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/documents.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/shared-search.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/chat-info.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/fragment-navigation.cjs
+OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/timeline-scroll.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/read-state.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/conversation-navigation.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/reply-compose.cjs

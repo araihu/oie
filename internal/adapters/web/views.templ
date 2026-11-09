@@ -69,6 +69,7 @@ templ page(v view) {
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href="/ui/app.css"/>
 			<link rel="stylesheet" href="/ui/shared-actions.css"/><link rel="stylesheet" href="/ui/message-star.css"/>
+<link rel="stylesheet" href="/ui/timeline.css"/>
 <link rel="stylesheet" href="/ui/video.css"/>
 <link rel="stylesheet" href="/ui/document.css"/>
 <link rel="stylesheet" href="/ui/emoji-picker.css"/>
@@ -79,6 +80,7 @@ templ page(v view) {
 <script src="/ui/documents.js" defer></script>
 <script src="/ui/shared-content.js" defer></script>
 <script src="/ui/shared-actions.js" defer></script>
+<script src="/ui/timeline.js" defer></script>
 <script src="/ui/live.js" defer></script><script src="/ui/read-state.js" defer></script>
 <script src="/ui/emoji-picker.js" defer></script>
 <script src="/ui/navigation.js"></script>
@@ -290,7 +292,7 @@ if v.Selected.Kind=="room" {
 }
 
 templ message(v view,m messageView,grouped bool){
-<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-grouped",grouped)} tabindex="-1" data-message-id={m.Id} data-read-eligible={strconv.FormatBool(!m.IsOwn&&(m.Historical==nil||!*m.Historical))} data-starred={strconv.FormatBool(v.StarsKnown&&v.Stars[m.Id].Starred)} data-send-state={string(m.SendState)} data-created-at={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-message-source={originalMessageJSON(m.OriginalText)}>
+<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-grouped",grouped)} tabindex="-1" data-message-id={m.Id} data-read-eligible={strconv.FormatBool(!m.IsOwn&&(m.Historical==nil||!*m.Historical))} data-starred={strconv.FormatBool(v.StarsKnown&&v.Stars[m.Id].Starred)} data-send-state={string(m.SendState)} data-created-at={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-created-ms={strconv.FormatInt(m.CreatedAt.UnixMilli(),10)} data-message-revision={m.RevisionId} data-message-previews-known={strconv.FormatBool(m.PresentationKnown&&m.VideosKnown)} data-message-account={m.AccountId} data-message-conversation={m.ConversationId} data-message-version={v.messageVersion(m)} data-message-source={originalMessageJSON(m.OriginalText)}>
 @viewerSource(v,m)
 if m.Attachment!=nil {
 <div class="oie-media-message">@card.Card(card.Config{Image:m.Attachment.PreviewUrl,ImageAlt:m.Attachment.Title,Title:m.Attachment.Title,Description:m.Attachment.Description,Density:card.DensityCompact,RootClass:"oie-media-card"})</div>
@@ -603,10 +605,13 @@ for _,c:=range v.Chats {
 }
 
 templ timeline(v view){
+@timelineEnvelope(v)
+@timelineControl(v,"older",v.TimelineOlder)
 <div class="oie-day-divider"><span>{v.Text.Today}</span></div>
 for index,m:=range v.Messages {
 @message(v,m,index>0&&v.Messages[index-1].Sender.Id==m.Sender.Id&&v.Messages[index-1].Sender.DisplayName==m.Sender.DisplayName&&v.Messages[index-1].IsOwn==m.IsOwn&&v.Messages[index-1].Attachment==nil&&m.Attachment==nil)
 }
+@timelineControl(v,"newer",v.TimelineNewer)
 }
 
 templ nativeRecovery(v view){

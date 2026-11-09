@@ -420,6 +420,8 @@ The composer grows and shrinks with wrapped or multiline text, including restore
 
 Open at the first unread message, otherwise at latest, with **Jump to latest**. Incoming messages auto-scroll only if the user is already at the bottom; otherwise preserve position and show **New messages**. Explicit search/reply navigation targets its selected message.
 
+**AGREED:** conversation history loads in bounded pages as the user scrolls upward. Navigation from a reply, shared item, starred message or another source opens only a bounded page around the target, with infinite loading toward both older and newer messages and the existing Jump to latest action. Keep a bounded rendered window, unloading distant messages while retaining the ability to page back to them. Preserve the visible position when pages arrive; never load the complete retained archive into the DOM merely to reach a message.
+
 ### 11.2 Goshtoso discovery and composition
 
 **AGREED:** explore and reuse Goshtoso public components and examples before introducing custom primitives. If a dependency has a limitation, a generic change that belongs in the library can be developed upstream under the workflow below.

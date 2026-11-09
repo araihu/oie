@@ -408,5 +408,10 @@
   "EmojiFlags": "Flags",
   "EmojiVariants": "Emoji variants",
   "EmojiVariantsFor": "Variants of {emoji}",
-  "EmojiNoRecent": "No recent emojis yet."
+  "EmojiNoRecent": "No recent emojis yet.",
+  "TimelineOlder": "Older messages",
+  "TimelineNewer": "Newer messages",
+  "TimelineLoading": "Loading messages…",
+  "TimelineFailed": "Messages could not be loaded. Try again.",
+  "TimelinePaused": "Pause playback or move away from the other edge, then try again."
 }
