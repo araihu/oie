@@ -213,7 +213,7 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		result.Redirect = "/?chat=" + url.QueryEscape(c.Id) + "&account=" + url.QueryEscape(c.AccountId)
-	case "/ui/messages/send":
+	case "/ui/messages/send", "/ui/messages/reconcile":
 		status, result = s.send(ctx, r, text)
 	case "/ui/messages/cancel":
 		status, result = s.cancelSend(ctx, r, text)
@@ -285,6 +285,9 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
 	case "unknown":
 		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
+	}
+	if r.URL.Path == "/ui/messages/reconcile" {
+		return 404, mutationResult{Message: text.PendingAcceptance, Code: "not_found"}
 	}
 	owner, err := s.client.GetConversationWithResponse(ctx, conversation)
 	if err != nil {
@@ -429,7 +432,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 
 func isMutationPath(path string) bool {
 	switch path {
-	case "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/cancel":
+	case "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
 		return true
 	}
 	return false

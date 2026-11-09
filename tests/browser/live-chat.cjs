@@ -18,6 +18,7 @@ const engine=id(1),account=id(2),chat=id(3);
   let raw='';for await(const chunk of req)raw+=chunk;let input={};try{if(raw)input=JSON.parse(raw)}catch{return problem(400,'invalid_request')}
   if(u.pathname==='/api/v1/engine')return write(200,{id:engine,role:'hosted',apiVersion:'0.2.0',eventCursor:engine+':'+state.seq});
   if(u.pathname==='/api/v1/accounts')return write(200,{items:[accountData]});
+  if(u.pathname==='/api/v1/accounts/'+account)return write(200,accountData);
   if(u.pathname==='/api/v1/accounts/'+account+'/history')return write(200,{accountId:account,state:state.showRoom?'partial':'syncing',retainedMessages:state.messages.length,conversations:1,updatedAt:new Date().toISOString()});
   if(u.pathname==='/api/v1/accounts/'+account+'/connection'){
    if(req.method==='PUT'){state.connection='error';state.error='authentication_failed';emit('account.connection_changed');return write(202,{accountId:account,state:'error',lastErrorCode:state.error,updatedAt:new Date().toISOString()})}
@@ -26,8 +27,12 @@ const engine=id(1),account=id(2),chat=id(3);
   if(u.pathname==='/api/v1/conversations')return write(200,{items:[conversation()]});
   if(u.pathname==='/api/v1/conversations/'+chat)return write(200,conversation());
   if(u.pathname==='/api/v1/conversations/'+chat+'/messages'){
-   if(req.method==='GET')return write(200,{items:[...state.messages].reverse()});
-   const key=req.headers['idempotency-key'];const known=state.operations.get(key);
+   if(req.method==='GET'){
+    const cursor=state.messages.find(m=>m.id===u.searchParams.get('cursor')),newer=u.searchParams.get('direction')==='newer';
+    const compare=(a,b)=>Date.parse(a.createdAt)-Date.parse(b.createdAt)||a.id.localeCompare(b.id);
+    return write(200,{items:state.messages.filter(m=>!cursor||(newer?compare(m,cursor)>0:compare(m,cursor)<0)).sort((a,b)=>compare(b,a))});
+   }
+   state.posts=(state.posts||0)+1;const key=req.headers['idempotency-key'];const known=state.operations.get(key);
    if(known){const message=state.messages.find(m=>m.id===known.resourceId);return message.originalText===input.originalText?write(200,message):problem(409,'idempotency_conflict')}
    const message={id:id(100+state.effects),revisionId:id(200+state.effects),accountId:account,conversationId:chat,sender:{id:account,displayName:'Alice'},originalText:input.originalText,createdAt:new Date().toISOString(),isOwn:true,sendState:'queued'};
    state.effects++;state.messages.push(message);state.operations.set(key,{id:key,kind:'send_message',resourceId:message.id,status:'succeeded',createdAt:message.createdAt});emit('message.created',message);return write(202,message);
@@ -72,13 +77,43 @@ const engine=id(1),account=id(2),chat=id(3);
   const guards=await page.evaluate(async()=>{const form=document.querySelector('#send-message-form');const values=new URLSearchParams(new FormData(form));values.set('originalText','blocked');values.set('engineId','019a5df0-0000-7000-8000-000000009999');const rejected=await fetch(form.action,{method:'POST',headers:{Accept:'application/json'},body:values});return {engine:rejected.status,method:(await fetch(form.action)).status}});assert.equal(guards.engine,409);assert.equal(guards.method,405);assert.equal(state.effects,0);
   findings.push('Device draft survives reload; forged CSRF/engine identity and wrong method have zero API effects');
   await until(async()=>await page.locator('[data-live-status]').textContent().then(t=>t.includes('Live updates connected')),'live stream ready before transport fault');assert(await page.locator('[data-live-status]').isHidden());
-  let dropped=false,release;const gate=new Promise(resolve=>release=resolve);
-  await page.route('**/ui/messages/send',async route=>{if(!dropped){dropped=true;await route.fetch();await gate;await route.abort('connectionreset')}else await route.continue()});
-  await page.locator('[data-send-message]').click();await until(()=>state.effects===1,'one in-flight effect');assert(await page.locator('[data-send-message]').isDisabled());await page.evaluate(()=>document.querySelector('#send-message-form').requestSubmit());await new Promise(r=>setTimeout(r,100));assert.equal(state.effects,1);release();await until(async()=>await page.locator('[data-form-feedback]').filter({hasText:'Acceptance could not be confirmed'}).count()>0,'visible lost-response recovery');
-  assert.equal(state.effects,1);assert.equal(await page.locator('#message-composer').inputValue(),draft);assert(await page.locator('#message-composer').evaluate(e=>e.readOnly));
+  await page.route('**/ui/messages/reconcile',route=>route.abort('connectionreset'));
+  let dropped=false,release,allowRetry=false;const gate=new Promise(resolve=>release=resolve);
+  await page.route('**/ui/messages/send',async route=>{if(!dropped){dropped=true;await gate;await route.abort('connectionreset')}else if(allowRetry)await route.continue();else await route.abort('connectionreset')});
+  const composerBounds=()=>page.locator('.oie-composer').evaluate(node=>{const box=node.getBoundingClientRect();return {top:box.top,height:box.height,bottom:box.bottom}});
+  const beforeSend=await composerBounds();
+  await page.locator('[data-send-message]').click();await until(async()=>await page.locator('#send-message-form').getAttribute('data-busy')==='true','in-flight submission');assert(await page.locator('[data-send-message]').isDisabled());assert.equal(await page.locator('[data-pending-send-text]').textContent(),draft);assert(await page.locator('#retry-pending-send').isDisabled());assert.deepEqual(await composerBounds(),beforeSend,'in-flight send preserves composer geometry');await page.evaluate(()=>document.querySelector('#send-message-form').requestSubmit());await new Promise(r=>setTimeout(r,100));assert.equal(state.effects,0);release();await until(async()=>await page.locator('[data-pending-send][data-pending-state=uncertain]').count()===1,'visible lost-response recovery');
+  assert.equal(state.effects,0);assert.equal(await page.locator('#message-composer').inputValue(),'');assert(await page.locator('#message-composer').evaluate(e=>e.readOnly));assert.equal(await page.locator('#send-message-form [data-form-feedback]').textContent(),'');assert.deepEqual(await composerBounds(),beforeSend,'uncertain send preserves composer geometry');
+  const frozenProbe=await page.evaluate(async()=>{
+    const form=document.querySelector('#send-message-form'),journal=JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.startsWith('oie.draft.v1'))));
+    return {key:journal.key,text:journal.text};
+  });
   const pending=await page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('oie.draft.v1')).map(k=>JSON.parse(localStorage.getItem(k))).find(v=>v.pending));assert(pending&&pending.text===draft);
-  await page.locator('[data-send-message]').click();await until(async()=>await page.locator('#message-composer').inputValue()==='','receipt reconciliation');assert.equal(state.effects,1);assert.equal(await page.locator('#send-message-form [data-form-feedback]').textContent(),'');assert.equal(await page.locator('.oie-list-footer').count(),0);
-  findings.push('Lost BFF acceptance response preserves key/body, locks editing, and reconciles to one effect');
+  for(const width of [390,1440])for(const lang of ['en','pt-BR'])for(const mode of ['light','dark'])for(const libraryTheme of ['goshtoso','minimal']){
+    await page.setViewportSize({width,height:900});await page.goto(base+'/?chat='+chat+'&lang='+lang+'&theme='+mode);
+    await until(async()=>await page.locator('[data-pending-send][data-pending-state=uncertain]').count()===1&&await page.locator('#send-message-form').getAttribute('data-busy')==='false','matrix pending bubble');
+    await page.evaluate(theme=>document.documentElement.dataset.theme=theme,libraryTheme);
+    const retry=page.locator('[data-pending-send-retry]');await retry.scrollIntoViewIfNeeded();assert(await retry.isVisible());assert((await retry.textContent()).includes(lang==='en'?'Try again':'Tentar novamente'));
+    const box=await retry.boundingBox(),bubble=await page.locator('[data-pending-send] .oie-message-content').boundingBox();assert(box.y>=bubble.y+bubble.height,'retry shortcut is below the bubble');
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal page overflow');
+    await page.evaluate(()=>Promise.all([document.fonts.ready,...document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{}))]));
+    await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+    const violations=await page.evaluate(async()=>{const result=await axe.run(document.querySelector('[data-pending-send]'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}});return result.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>({html:n.html,checks:n.any.map(c=>c.data)}))}))});assert.deepEqual(violations,[],JSON.stringify({width,lang,mode,libraryTheme,violations}));
+    if(lang==='en'&&libraryTheme==='goshtoso'){await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,`pending-send-${width}-${mode}.png`)});}
+  }
+  await page.goto(base+'/?chat='+chat+'&lang=en&theme=dark');
+  await page.reload();await until(async()=>await page.locator('[data-pending-send][data-pending-state=uncertain]').count()===1&&await page.locator('#send-message-form').getAttribute('data-busy')==='false','pending bubble restored after reload');assert.equal(await page.locator('[data-pending-send-text]').textContent(),draft);
+  allowRetry=true;await page.locator('[data-pending-send-retry]').focus();await page.keyboard.press('Enter');await until(async()=>!await page.locator('#message-composer').evaluate(e=>e.readOnly),'receipt reconciliation');assert.equal(state.effects,1);assert.equal(await page.locator('#send-message-form [data-form-feedback]').textContent(),'');assert.equal(await page.locator('.oie-list-footer').count(),0);
+  await until(async()=>await page.locator('[data-pending-send]').count()===0,'canonical message replaces local placeholder');
+  assert.deepEqual(await composerBounds(),beforeSend,'accepted send preserves composer geometry');
+  await page.unroute('**/ui/messages/reconcile');
+  const receipts=await page.evaluate(async frozen=>{
+    const form=document.querySelector('#send-message-form'),base=new URLSearchParams(new FormData(form));base.set('operationKey',frozen.key);base.set('originalText',frozen.text);
+    const probe=async changes=>{const values=new URLSearchParams(base);for(const [key,value]of Object.entries(changes))values.set(key,value);const response=await fetch('/ui/messages/reconcile',{method:'POST',headers:{Accept:'application/json'},body:values});return {status:response.status,body:await response.json()}};
+    return {same:await probe({}),foreign:await probe({conversationId:'019a5df0-0000-7000-8000-000000009999'}),changed:await probe({originalText:'different'}),csrf:await probe({csrf:'forged'}),absent:await probe({operationKey:document.querySelector('[name=operationKey]').value})};
+  },frozenProbe);
+  assert.equal(receipts.same.status,200);assert(receipts.same.body.accepted);assert.equal(receipts.foreign.status,409);assert.equal(receipts.changed.status,409);assert.equal(receipts.csrf.status,403);assert.equal(receipts.absent.status,404);assert.equal(state.effects,1,'receipt probes never create messages');
+  findings.push('Pending bubble, below-bubble retry, reload recovery and one canonical message; no composer layout shift across sending, uncertain and accepted states');
   await until(async()=>await page.locator('[data-cancel-message]').count()===1,'queued cancellation control');
   state.messages[0].sendState='submitted';state.messages[0].revisionId=id(999);
   await page.locator('[data-cancel-message] button[type=submit]').click();await until(async()=>await page.locator('[data-live-status]').textContent().then(t=>t.includes('Cancellation was not applied')),'cancel conflict announced');assert(await page.locator('[data-live-status]').isVisible());assert.equal(state.cancelEffects,0);
@@ -96,11 +131,19 @@ const engine=id(1),account=id(2),chat=id(3);
   findings.push('Recovered room is read-only even for a forged valid-CSRF send; partial history is visible');state.showRoom=false;
   const denied=await browser.newContext({viewport:{width:390,height:844},locale:'pt-BR',timezoneId:'America/Sao_Paulo'});
   await denied.addInitScript(()=>{for(const name of ['getItem','setItem','removeItem'])Object.defineProperty(Storage.prototype,name,{configurable:true,value(){throw new DOMException('Denied','SecurityError')}})});
-  const mobile=await denied.newPage();mobile.on('pageerror',e=>errors.push(e.message));await mobile.goto(base+'/?chat='+chat+'&lang=pt-BR&theme=dark');await mobile.locator('#message-composer').fill('Envio com armazenamento indisponível');await mobile.locator('[data-send-message]').click();await until(async()=>await mobile.locator('#message-composer').inputValue()==='','denied-storage send');assert.equal(state.effects,2);assert(await mobile.locator('.oie-storage-warning').isVisible());
+  const mobile=await denied.newPage();mobile.on('pageerror',e=>errors.push(e.message));await mobile.goto(base+'/?chat='+chat+'&lang=pt-BR&theme=dark');await mobile.locator('#message-composer').fill('Envio com armazenamento indisponível');await mobile.locator('[data-send-message]').click();await until(async()=>!await mobile.locator('#message-composer').evaluate(e=>e.readOnly),'denied-storage send');assert.equal(state.effects,2);assert(await mobile.locator('.oie-storage-warning').isVisible());
   findings.push('Denied storage is an explicit warning; an accepted send still works without a script crash');
   await mobile.setViewportSize({width:1076,height:1109});await mobile.goto(base+'/?section=chats&lang=pt-BR&theme=dark');
   const circles=await mobile.locator('.oie-icon-button:visible').evaluateAll(nodes=>nodes.map(node=>{const b=node.getBoundingClientRect();return {name:node.getAttribute('aria-label'),width:b.width,height:b.height}}));assert(circles.length>0);for(const circle of circles)assert(Math.abs(circle.width-circle.height)<1,JSON.stringify(circle));
   findings.push('Circular controls have square actual bounds at the reported1076x1109 viewport');
+  await page.unroute('**/ui/messages/send');await page.goto(base+'/?chat='+chat+'&lang=en&theme=dark');
+  await until(async()=>await page.locator('[data-live-status]').isHidden(),'stream ready for lost-acceptance recovery');
+  const postsBefore=state.posts||0;let loseAcceptance=true;
+  await page.route('**/ui/messages/send',async route=>{if(loseAcceptance){loseAcceptance=false;await route.fetch();await route.abort('connectionreset')}else await route.continue()});
+  await page.locator('#message-composer').fill('Recover this acceptance without another send');await page.locator('[data-send-message]').click();
+  await until(async()=>state.effects===3&&!await page.locator('#message-composer').evaluate(e=>e.readOnly)&&await page.locator('[data-pending-send]').count()===0,'read-only acceptance receipt recovery');
+  assert.equal(state.posts,postsBefore+1,'receipt recovery never dispatches another send');
+  findings.push('A lost accepted response resolves through read-only receipt lookup before merging the canonical timeline, with exactly one send POST');
   assert.deepEqual(errors,[]);await fs.mkdir(artifacts,{recursive:true});await fs.writeFile(path.join(artifacts,'live-adversarial-report.json'),JSON.stringify({backend:'independent HTTP fixture; actual XMPP is a separate observer',findings,pageErrors:errors,effects:state.effects,cancelEffects:state.cancelEffects},null,2));console.log('PASS: live UI CSRF, reload drafts, lost-response reconciliation, stale cancel, password hygiene, and denied storage');
  }finally{await browser.close();child.kill('SIGTERM');api.closeAllConnections();await new Promise(r=>api.close(r))}
 })().catch(e=>{console.error(e);process.exitCode=1});

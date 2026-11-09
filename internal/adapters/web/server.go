@@ -407,6 +407,7 @@ type copy struct {
 	Disconnected, Queued, Dispatching, Submitted, UnknownSend                                                                                                            string
 	FailedSend, Cancelled, SubmittedHint, UnknownHint, CancelSend                                                                                                        string
 	CancelConflict, CancelSuccess, MessageAccepted, PendingAcceptance, RetrySubmission                                                                                   string
+	SendPending, SendUnconfirmed, SendAccepted                                                                                                                           string
 	Saving, InvalidForm, InvalidMessage, CSRFError, OperationConflict                                                                                                    string
 	AccountExists, EngineChanged, LiveConnecting, LiveReady, LiveRetry                                                                                                   string
 	NewMessages, QueueHelp, DraftStorageUnavailable, DraftLocked, MessageUnavailable                                                                                     string

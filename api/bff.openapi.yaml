@@ -12,7 +12,55 @@ security: []
 tags:
 - name: Documents
   description: Static document presentation
+- name: Messages
+  description: Browser submission receipt recovery
 paths:
+  /ui/messages/reconcile:
+    post:
+      operationId: reconcileBrowserSubmission
+      tags: [Messages]
+      summary: Check acceptance of an immutable pending submission
+      description: Read-only lookup of an existing engine operation and message. Never creates or dispatches a message. Requires the same CSRF token, engine, account, conversation, operation key, text, reply target and mention selections as the original send. Returns acceptance only when the complete intent matches. A missing receipt does not prove that the original request cannot still arrive.
+      requestBody:
+        required: true
+        description: Frozen original submission, scoped to its engine and conversation.
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PendingSubmission'
+            example:
+              csrf: browser-csrf-token
+              engineId: 019a5df0-0000-7000-8000-000000000001
+              accountId: 019a5df0-0000-7000-8000-000000000002
+              conversationId: 019a5df0-0000-7000-8000-000000000003
+              operationKey: 019a5df0-0000-7000-8000-000000000006
+              originalText: Hello
+      responses:
+        '200':
+          description: Existing matching operation proves engine acceptance, not provider delivery
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmissionReceipt'
+              example:
+                ok: true
+                accepted: true
+                message: Message saved by the engine.
+                messageId: 019a5df0-0000-7000-8000-000000000004
+                state: queued
+                nextKey: 019a5df0-0000-7000-8000-000000000007
+        '400':
+          description: Invalid or oversized form encoding
+        '403':
+          description: Invalid or cross-site CSRF token
+        '404':
+          description: No existing operation receipt yet; submission remains uncertain
+        '409':
+          description: Engine changed or operation intent conflicts
+        '422':
+          description: Invalid frozen submission
+        '503':
+          description: Receipt or engine evidence unavailable
   /ui/document-markdown:
     post:
       operationId: renderDocumentMarkdown
@@ -47,6 +95,106 @@ paths:
           description: Rendering capacity is occupied
 components:
   schemas:
+    PendingSubmission:
+      example:
+        csrf: browser-csrf-token
+        engineId: 019a5df0-0000-7000-8000-000000000001
+        accountId: 019a5df0-0000-7000-8000-000000000002
+        conversationId: 019a5df0-0000-7000-8000-000000000003
+        operationKey: 019a5df0-0000-7000-8000-000000000006
+        originalText: Hello
+      description: Immutable device submission used only for receipt lookup.
+      type: object
+      additionalProperties: false
+      required: [csrf, engineId, accountId, conversationId, operationKey, originalText]
+      properties:
+        csrf:
+          example: browser-csrf-token
+          type: string
+          description: Same-origin CSRF token from the composer.
+        engineId:
+          example: 019a5df0-0000-7000-8000-000000000001
+          type: string
+          format: uuid
+          description: Selected engine identity.
+        accountId:
+          example: 019a5df0-0000-7000-8000-000000000002
+          type: string
+          format: uuid
+          description: Sending account identity.
+        conversationId:
+          example: 019a5df0-0000-7000-8000-000000000003
+          type: string
+          format: uuid
+          description: Sending conversation identity.
+        operationKey:
+          example: 019a5df0-0000-7000-8000-000000000006
+          type: string
+          format: uuid
+          description: Original send operation key, never replaced during retry.
+        originalText:
+          example: Hello
+          type: string
+          minLength: 1
+          maxLength: 16384
+          description: Exact authored body before any protocol reply fallback.
+        replyToMessageId:
+          example: 019a5df0-0000-7000-8000-000000000008
+          type: string
+          description: Original reply target UUID, or empty for no reply.
+        mentions:
+          example: '[]'
+          type: string
+          description: JSON-encoded original mention selections.
+        lang:
+          example: en
+          type: string
+          enum: [en, pt-BR]
+          description: UI response locale.
+        theme:
+          example: dark
+          type: string
+          enum: [light, dark, system]
+          description: Retained composer theme.
+    SubmissionReceipt:
+      example:
+        ok: true
+        accepted: true
+        message: Message saved by the engine.
+        messageId: 019a5df0-0000-7000-8000-000000000004
+        state: queued
+        nextKey: 019a5df0-0000-7000-8000-000000000007
+      description: Verified acceptance of the same immutable operation.
+      type: object
+      additionalProperties: false
+      required: [ok, accepted, message, messageId, state, nextKey]
+      properties:
+        ok:
+          example: true
+          type: boolean
+          description: Lookup succeeded.
+        accepted:
+          example: true
+          type: boolean
+          description: A matching persisted operation and message exist.
+        message:
+          example: Message saved by the engine.
+          type: string
+          description: Localized result.
+        messageId:
+          example: 019a5df0-0000-7000-8000-000000000004
+          type: string
+          format: uuid
+          description: Canonical accepted message to replace the local bubble.
+        state:
+          example: queued
+          type: string
+          description: Engine transport evidence, independent of acceptance.
+        nextKey:
+          example: 019a5df0-0000-7000-8000-000000000007
+          type: string
+          format: uuid
+          description: Fresh key for a subsequent distinct send.
     MarkdownSource:
       description: Authored source text for a static Markdown document.
       example:

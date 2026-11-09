@@ -1,0 +1,44 @@
+package web
+
+import (
+ "github.com/araihu/goshtoso/components/badge"
+ "github.com/araihu/goshtoso/components/button"
+ "github.com/araihu/goshtoso/components/chatbubble"
+ "github.com/araihu/goshtoso/components/dropdown"
+ "github.com/araihu/goshtoso/components/icon/heroicons"
+)
+
+// A local submission is separate from authoritative timeline rows. It is retired
+// only after the accepted message ID appears, never by matching message text.
+templ pendingSendTemplate(v view) {
+ <template data-pending-send-template>
+  <div class="oie-message oie-message-own" data-pending-send tabindex="-1">
+   <div class="oie-message-content" data-pending-send-content>
+    @chatbubble.ChatBubble(chatbubble.Config{Side:chatbubble.Sent,RootClass:"oie-bubble",MessageContent:pendingSendBody(v)})
+   </div>
+   <div class="oie-message-meta">
+    <span role="status" aria-live="polite" aria-atomic="true" data-pending-send-status>
+     <span data-pending-state="sending">@badge.Badge(badge.Config{Label:v.Text.SendPending,Size:badge.SizeSM,Appearance:badge.AppearanceSoft,Icon:glyph(heroicons.Icon16SolidClock)})</span>
+     <span data-pending-state="uncertain" hidden>@badge.Badge(badge.Config{Label:v.Text.SendUnconfirmed,Size:badge.SizeSM,Appearance:badge.AppearanceSoft,Icon:glyph(heroicons.Icon16SolidExclamationCircle)})</span>
+     <span data-pending-state="accepted" hidden>@badge.Badge(badge.Config{Label:v.Text.SendAccepted,Size:badge.SizeSM,Appearance:badge.AppearanceSoft,Icon:glyph(heroicons.Icon16SolidCheck)})</span>
+    </span>
+    <span data-pending-send-shortcut hidden>
+     @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-pending-send-retry":"","title":v.Text.RetrySubmission})){
+      @glyph(heroicons.Icon16SolidArrowPath)
+      {v.Text.Retry}
+     }
+    </span>
+   </div>
+  </div>
+ </template>
+}
+
+templ pendingSendBody(v view) {
+ <div class="oie-message-body oie-message-body-compact">
+  <div class="oie-message-menu-slot">
+   @dropdown.Dropdown(dropdown.Config{ID:"pending-send-menu",Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,"pending-send"),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:[]dropdown.Section{{Items:[]dropdown.Item{{ID:"retry-pending-send",Label:v.Text.RetrySubmission,Icon:glyph(heroicons.Icon16SolidArrowPath),OnClick:"void 0"}}}}})
+  </div>
+  <div class="oie-reply-card" data-pending-send-reply hidden><strong data-pending-send-sender></strong><div data-pending-send-excerpt></div></div>
+  <div class="oie-plain-fallback" data-pending-send-text></div>
+ </div>
+}

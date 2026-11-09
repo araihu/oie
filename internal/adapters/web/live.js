@@ -51,9 +51,9 @@ window.OieRuntime.register('live', life => {
   function renderReply(){
     const reply=journal?.reply,locked=!!journal?.pending;
     if(replyField)replyField.value=reply?.messageId||'';
-    if(replyBox){replyBox.hidden=!reply;replyBox.querySelector('[data-composer-reply-sender]').textContent=typeof reply?.senderName==='string'?reply.senderName:'';replyBox.querySelector('[data-composer-reply-excerpt]').textContent=typeof reply?.excerpt==='string'?reply.excerpt:'';const cancel=replyBox.querySelector('[data-cancel-reply]');if(cancel)cancel.disabled=locked||preparingReply;}
+    if(replyBox){replyBox.hidden=!reply||locked;replyBox.querySelector('[data-composer-reply-sender]').textContent=typeof reply?.senderName==='string'?reply.senderName:'';replyBox.querySelector('[data-composer-reply-excerpt]').textContent=typeof reply?.excerpt==='string'?reply.excerpt:'';const cancel=replyBox.querySelector('[data-cancel-reply]');if(cancel)cancel.disabled=locked||preparingReply;}
     for(const button of document.querySelectorAll('[id^="reply-message-"]'))button.disabled=!composer||composer.dataset.replyAllowed!=='true'||locked||preparingReply;
-    const send=composer?.querySelector('[data-send-message]');if(send)send.disabled=stopped||preparingReply||composer.dataset.busy==='true'||(composer.dataset.sendAllowed!=='true'&&!locked);
+    const send=composer?.querySelector('[data-send-message]');if(send)send.disabled=stopped||locked||preparingReply||composer.dataset.busy==='true'||(composer.dataset.sendAllowed!=='true'&&!locked);
   }
   function draftRecord(pending=false){return {text:input?.value||'',key:submissionKey?.value||'',pending,reply:journal?.reply||null,mentions:readMentions()};}
 
@@ -83,8 +83,57 @@ window.OieRuntime.register('live', life => {
     }
     journal = null;
   }
+  let pendingBubble;
+  const acceptedBubbles=new Set();
+  function retireAcceptedBubbles(){
+    const timeline=document.querySelector('#message-timeline');
+    for(const node of acceptedBubbles)if(timeline?.querySelector(`[data-message-id="${CSS.escape(node.dataset.acceptedMessage)}"]`)){
+      if(node.contains(document.activeElement))input?.focus({preventScroll:true});
+      window.Alpine?.destroyTree(node);node.remove();acceptedBubbles.delete(node);
+    }
+  }
+  function renderPendingSend(state='sending',detail=''){
+    if(!journal?.pending)return;
+    const timeline=document.querySelector('#message-timeline'),template=composer?.querySelector('[data-pending-send-template]');
+    if(!timeline||!template)return;
+    if(!pendingBubble){
+      pendingBubble=template.content.firstElementChild.cloneNode(true);
+      pendingBubble.dataset.operationKey=journal.key;
+      pendingBubble.querySelector('[data-pending-send-text]').textContent=journal.text;
+      const quote=pendingBubble.querySelector('[data-pending-send-reply]');quote.hidden=!journal.reply;
+      pendingBubble.querySelector('[data-pending-send-sender]').textContent=journal.reply?.senderName||'';
+      pendingBubble.querySelector('[data-pending-send-excerpt]').textContent=journal.reply?.excerpt||'';
+      timeline.append(pendingBubble);window.Alpine?.initTree(pendingBubble);
+      // Submitting is an explicit intent to view this outgoing message.
+      timeline.scrollTop=timeline.scrollHeight;
+    }
+    pendingBubble.dataset.pendingState=state;
+    // Keep an unresolved send readable while the retry action is available.
+    pendingBubble.querySelector('[data-pending-send-content]').style.opacity=state==='uncertain'?'1':'';
+    for(const node of pendingBubble.querySelectorAll('[data-pending-state]'))node.hidden=node.dataset.pendingState!==state;
+    pendingBubble.querySelector('[data-pending-send-status]').title=detail;
+    pendingBubble.querySelector('[data-pending-send-shortcut]').hidden=state!=='uncertain';
+    const disabled=state!=='uncertain'||stopped||composer.dataset.busy==='true';
+    for(const action of pendingBubble.querySelectorAll('[data-pending-send-retry],#retry-pending-send')){action.disabled=disabled;action.setAttribute('aria-disabled',String(disabled));}
+  }
+  function acceptPendingSend(id){
+    if(!pendingBubble)return;
+    renderPendingSend('accepted');
+    // Accepted placeholders have no retry action. The engine now owns delivery.
+    const menu=pendingBubble.querySelector('.oie-message-menu-slot');window.Alpine?.destroyTree(menu);menu.remove();
+    pendingBubble.querySelector('[data-pending-send-shortcut]').remove();
+    pendingBubble.dataset.acceptedMessage=id;acceptedBubbles.add(pendingBubble);pendingBubble=null;retireAcceptedBubbles();
+  }
+  life.cleanup(()=>{for(const node of [...acceptedBubbles,pendingBubble])if(node){window.Alpine?.destroyTree(node);node.remove();}});
+  life.on(document,'oie:timeline-content',retireAcceptedBubbles);
+  life.on(document,'click',event=>{
+    const action=event.target.closest('[data-pending-send-retry],#retry-pending-send');
+    if(!action||!pendingBubble?.contains(action)||action.disabled||!journal?.pending)return;
+    event.preventDefault();composer.requestSubmit();
+  });
   function feedback(form, message, error = false) {
     const region = form.querySelector('[data-form-feedback]');
+    if(form===composer&&journal?.pending){if(region)region.textContent='';renderPendingSend(error?'uncertain':'sending',message);announce(message,true);return;}
     if (region) { region.textContent = message; region.dataset.error = String(error);region.setAttribute('role',error?'alert':'status'); if(error&&form.dataset.oieAction!=='send'){region.tabIndex=-1;region.focus({preventScroll:true});} }
     announce(message);
   }
@@ -94,14 +143,14 @@ window.OieRuntime.register('live', life => {
     input.setAttribute('aria-readonly', String(locked));
     const button = composer.querySelector('[data-send-message]');
     if (button) {
-      button.setAttribute('aria-label', locked ? text('retry') : text('send'));
+      button.setAttribute('aria-label', text('send'));
       button.title = locked ? text('locked') : text('send');
     }
   }
   if (input && submissionKey && draftKey && !mock) {
     const saved = readDraft();
     if (saved && typeof saved.text === 'string' && (canonicalID(saved.key)||(saved.key===''&&!saved.pending)) && (!saved.reply || (canonicalID(saved.reply.messageId) && saved.reply.engineId===body.dataset.engineId && saved.reply.accountId===body.dataset.accountId && saved.reply.conversationId===body.dataset.conversationId && typeof saved.reply.senderName==='string' && typeof saved.reply.excerpt==='string' && Array.from(saved.reply.excerpt).length<=512))) {
-      journal = {...saved,key:canonicalID(saved.key)?saved.key:submissionKey.value}; input.value = saved.text; submissionKey.value = journal.key; restoreMentions(saved.mentions);
+      journal = {...saved,key:canonicalID(saved.key)?saved.key:submissionKey.value}; input.value = saved.pending?'':saved.text; submissionKey.value = journal.key; restoreMentions(saved.mentions);
       lockComposer(saved.pending === true);
       if (saved.pending) feedback(composer, text('pending'), true);
     }
@@ -242,6 +291,20 @@ window.OieRuntime.register('live', life => {
   life.on(document.querySelector('#message-timeline'),'scroll',()=>{if(nearBottom(document.querySelector('#message-timeline')))showJump(pinned());});
   localizeTimes();if(!body.dataset.focusMessage||!focusMessage(body.dataset.focusMessage))scrollLatest();else showJump(true);
 
+  function completeSubmission(result){
+    if(!result.accepted||!canonicalID(result.messageId)||!canonicalID(result.nextKey))return false;
+    const key=journal?.key;if(!journal?.pending)return false;
+    acceptPendingSend(result.messageId);clearDraft(key);input.value='';restoreMentions([]);submissionKey.value=result.nextKey;lockComposer(false);forceBottom=true;renderReply();return true;
+  }
+  async function reconcilePending(signal){
+    if(!journal?.pending||composer.dataset.busy==='true')return;
+    const key=journal.key,values=new URLSearchParams(new FormData(composer));
+    values.set('operationKey',key);values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');values.set('mentions',JSON.stringify(journal.mentions||[]));
+    try{
+      const response=await life.fetch('/ui/messages/reconcile',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-Token':csrf},body:values,signal});
+      if(response.ok){const result=await response.json();if(!life.signal.aborted&&journal?.key===key&&composer.dataset.busy!=='true'&&result.ok)completeSubmission(result);}
+    }catch{/* Keep the frozen submission and explicit retry on missing evidence. */}
+  }
   async function refresh() {
     if (stopped || mock) return;
     if (pendingRequests || refreshing) { refreshAgain = true; return; }
@@ -250,6 +313,7 @@ window.OieRuntime.register('live', life => {
     const requestedSearch=location.search;
     const controller = new AbortController(); const timeout = life.timeout(() => controller.abort(), 12000);
     try {
+      await reconcilePending(controller.signal);
       const response = await life.fetch('/ui/refresh'+requestedSearch, {credentials:'same-origin',cache:'no-store',signal:controller.signal});
       if(life.signal.aborted)return;
       if (!response.ok) throw new Error('refresh unavailable');
@@ -406,9 +470,9 @@ window.OieRuntime.register('live', life => {
       }
       const value = journal?.pending ? journal.text : input.value;
       if (!value.trim() || Array.from(value).length > 16384) { feedback(form,text('invalidMessage'),true);input.focus();return; }
-      if (journal?.pending) { input.value=journal.text; submissionKey.value=journal.key; }
+      if (journal?.pending) submissionKey.value=journal.key;
       const mentions=journal?.pending?(journal.mentions||[]):readMentions();
-      saveDraft({text:value,key:submissionKey.value,pending:true,reply:journal?.reply||null,mentions});restoreMentions(mentions);lockComposer(true);renderReply();
+      saveDraft({text:value,key:submissionKey.value,pending:true,reply:journal?.reply||null,mentions});input.value='';restoreMentions(mentions);lockComposer(true);renderReply();
     }
     const values = new URLSearchParams(new FormData(form));
     const roomCommand=form.dataset.roomCommand;
@@ -420,7 +484,7 @@ window.OieRuntime.register('live', life => {
     const disabled = buttons.map(button => button.disabled);
     form.dataset.busy = 'true'; form.setAttribute('aria-busy','true'); buttons.forEach(button => button.disabled = true);syncRoomLeave();
     for (const secret of form.querySelectorAll('input[type="password"]')) secret.value = '';
-    feedback(form,text('saving'));
+    feedback(form,sending?'':text('saving'));
     pendingRequests++;
     const controller = new AbortController(); const timeout = life.timeout(() => controller.abort(),15000);
     try {
@@ -430,7 +494,10 @@ window.OieRuntime.register('live', life => {
       if (!result.ok) {
         feedback(form,result.message || text('pending'),true);
         if(result.code==='engine_changed'){stopped=true;source?.close();}
-        if (sending && result.rejected) { saveDraft(draftRecord(false));lockComposer(false); }
+        if (sending && result.rejected) {
+          window.Alpine?.destroyTree(pendingBubble);pendingBubble?.remove();pendingBubble=null;
+          input.value=journal.text;restoreMentions(journal.mentions);saveDraft({...journal,pending:false});lockComposer(false);feedback(form,result.message||text('invalidMessage'),true);
+        }
         if (sending) input.focus({preventScroll:true});
         if(roomCommand&&result.rejected){keepRoomOperation(null);for(const field of form.querySelectorAll('input:not([type=hidden])'))field.readOnly=false;}
         if(!sending)scheduleRefresh();
@@ -438,13 +505,12 @@ window.OieRuntime.register('live', life => {
         if(roomCommand)keepRoomOperation(null);
         feedback(form,sending ? '' : result.message || '');
         if (sending && result.accepted) {
-          const submittedKey = values.get('operationKey');
-          clearDraft(submittedKey);input.value='';restoreMentions([]);submissionKey.value=result.nextKey;lockComposer(false);forceBottom=true;
+          if(!completeSubmission(result))feedback(form,text('pending'),true);
           input.focus({preventScroll:true});renderReply();
         } else if (form.dataset.oieAction === 'register' || form.dataset.oieAction === 'open') {
           if (result.redirect) { if(window.OieNavigation)window.OieNavigation.go(result.redirect);else location.assign(result.redirect); return; }
         }
-        const key = form.elements.namedItem('operationKey'); if (key && result.nextKey) key.value=result.nextKey;
+        const key = form.elements.namedItem('operationKey'); if (key && result.nextKey && (!sending || !journal?.pending)) key.value=result.nextKey;
         scheduleRefresh();
       }
     } catch {
@@ -454,6 +520,8 @@ window.OieRuntime.register('live', life => {
     } finally {
       clearTimeout(timeout);if(life.signal.aborted)return;pendingRequests--;form.dataset.busy='false';form.removeAttribute('aria-busy');
       buttons.forEach((button,index)=>button.disabled=disabled[index]);renderReply();syncRoomLeave();
+      if(journal?.pending)renderPendingSend(pendingBubble?.dataset.pendingState||'uncertain');
+      if(sending)input.focus({preventScroll:true});
       if(roomMenuSubmit&&form.querySelector('[data-form-feedback]')?.dataset.error==='true'){
         window.dispatchEvent(new CustomEvent('modal:open',{detail:{id:'room-session-dialog'}}));
         life.raf(()=>form.querySelector('[data-form-feedback]')?.focus({preventScroll:true}));
