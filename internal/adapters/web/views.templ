@@ -26,8 +26,7 @@ selectfield "github.com/araihu/goshtoso/components/select"
 )
 
 func navigation(v view, id string) sidebar.Config {
- footer:=profile(v,id)
- if id=="mobile-navigation" {footer=nil}
+ footer:=navigationFooter(v,id)
 	return sidebar.Config{
 		Logo: brand(v), LogoHref: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), DisableSkipLink: true, RootClass: "oie-navigation", FooterSlot: footer,
 		Items: []sidebar.Item{
@@ -229,14 +228,12 @@ if v.Section=="media"{
 </div>
 			<div class="oie-list-account" x-data="{}">
 @profile(v,"compact")
-@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Settings,"data-footer-settings":""}),button.WithAlpine(&button.AlpineConfig{OnClick:"$dispatch('drawer:open', {id: 'settings'})"})){@glyph(heroicons.Icon16SolidCog6Tooth)}
+
 </div>
 			<div class="oie-list-footer" x-data="{}">
 				<span class={ "oie-status-dot",templ.KV("oie-status-error",v.Unavailable) } aria-hidden="true"></span>
 				<span>{ v.Role }</span>
-				@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Settings,"data-footer-settings":""}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'settings'})"})) {
-					@glyph(heroicons.Icon16SolidCog6Tooth)
-				}
+
 			</div>
 		</section>
 @conversationPane(v)
@@ -288,7 +285,7 @@ templ chatHeader(v view) {
 		@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Details, "title": v.Text.Details,"data-open-details":""}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'details'})"})) {
 			@glyph(heroicons.Icon16SolidInformationCircle)
 		}
-{{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{Label:v.Text.Details,OnClick:"$dispatch('drawer:open', {id: 'details'})"},{Label:v.Text.Settings,OnClick:"$dispatch('drawer:open', {id: 'settings'})"}}}} }}
+{{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{Label:v.Text.Details,OnClick:"$dispatch('drawer:open', {id: 'details'})"}}}} }}
 if v.Selected.Kind=="room" {
 {{ sections=append(sections,dropdown.Section{Items:[]dropdown.Item{{ID:"chat-room-actions",Label:v.Text.RoomActions,OnClick:"$dispatch('modal:open', {id: 'room-session-dialog'})"},{ID:"chat-leave-room",Label:v.Text.LeaveRoom,Icon:glyph(heroicons.Icon16SolidArrowTopRightOnSquare),OnClick:"$dispatch('oie:leave-room')",Disabled:v.RoomSession==nil||!v.RoomSession.Active||!v.messagingImplemented("room_messaging")}}}) }}
 }

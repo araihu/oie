@@ -2,7 +2,6 @@ package web
 
 import (
  "github.com/araihu/goshtoso/components/avatar"
- "github.com/araihu/goshtoso/components/button"
  "github.com/araihu/goshtoso/components/card"
  "github.com/araihu/goshtoso/components/emptystate"
  "github.com/araihu/goshtoso/components/icon/heroicons"
@@ -20,7 +19,7 @@ templ sharedWorkspace(v view){
 <header class="oie-shared-header">
 <div class="oie-mobile-nav">@sidebar.Overlay(sidebar.OverlayConfig{ID:"mobile-navigation",Sidebar:navigation(v,"mobile-navigation"),TriggerLabel:v.Text.OpenNavigation,Trigger:glyph(heroicons.Icon16SolidBars3)})</div>
 <h2>{v.Text.SharedMedia}</h2>
-<div x-data="{}">@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Settings,"data-shared-settings":""}),button.WithAlpine(&button.AlpineConfig{OnClick:"$dispatch('drawer:open', {id: 'settings'})"})){@glyph(heroicons.Icon16SolidCog6Tooth)}</div>
+
 </header>
 <form action="/" method="get" id="shared-content-search" class="oie-shared-search" role="search" hx-sync="this:replace">
 <input type="hidden" name="section" value="media"/><input type="hidden" name="contentType" value={v.SharedType}/><input type="hidden" name="contentConversation" value={v.SharedConversation}/><input type="hidden" name="lang" value={v.Locale}/><input type="hidden" name="theme" value={v.Theme}/>
