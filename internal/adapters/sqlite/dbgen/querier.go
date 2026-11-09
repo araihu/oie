@@ -99,6 +99,7 @@ type Querier interface {
 	Snapshot(ctx context.Context) (SnapshotRow, error)
 	UpdateAvatar(ctx context.Context, arg UpdateAvatarParams) error
 	UpdateConversation(ctx context.Context, arg UpdateConversationParams) error
+	UpdateConversationPreferences(ctx context.Context, arg UpdateConversationPreferencesParams) (int64, error)
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) error
 	UpdateMessagePreview(ctx context.Context, arg UpdateMessagePreviewParams) (int64, error)
 	UpdateOutbox(ctx context.Context, arg UpdateOutboxParams) error

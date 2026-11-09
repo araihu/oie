@@ -114,6 +114,14 @@ func WriteProblem(w http.ResponseWriter, err error) {
 		_ = json.NewEncoder(w).Encode(engineapi.Problem{Type: "urn:oie:problem:" + code, Title: http.StatusText(status), Status: status, Code: engineapi.ProblemCode(code), CurrentRoomSession: &current})
 		return
 	}
+	var preferenceConflict application.ConversationPreferencesConflict
+	if errors.As(err, &preferenceConflict) {
+		current := conversation(preferenceConflict.Current)
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(engineapi.Problem{Type: "urn:oie:problem:" + code, Title: http.StatusText(status), Status: status, Code: engineapi.ProblemCode(code), CurrentConversation: &current})
+		return
+	}
 	var conflict application.StateConflict
 	var starConflict application.StarConflict
 	if errors.As(err, &starConflict) {
@@ -160,7 +168,7 @@ func (s *Server) GetEngine(ctx context.Context, _ engineapi.GetEngineRequestObje
 	}
 	return engineapi.GetEngine200JSONResponse{
 		Id: string(state.ID), Role: engineapi.EngineRole(state.Role),
-		ApiVersion: "0.19.0", EventCursor: cursor(state.ID, state.Sequence),
+		ApiVersion: "0.20.0", EventCursor: cursor(state.ID, state.Sequence),
 	}, nil
 }
 

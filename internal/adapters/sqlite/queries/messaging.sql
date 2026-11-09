@@ -55,3 +55,8 @@ WHERE m.conversation_id=sqlc.arg(conversation_id)
 AND (m.created_at_ms,m.id)>(anchor.created_at_ms,anchor.id)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
 ORDER BY m.created_at_ms ASC,m.id ASC LIMIT sqlc.arg(page_limit);
+
+-- name: UpdateConversationPreferences :execrows
+UPDATE conversations
+SET revision_id=sqlc.arg(revision_id),payload=sqlc.arg(payload),archived=sqlc.arg(archived),favorite=sqlc.arg(favorite)
+WHERE id=sqlc.arg(id) AND account_id=sqlc.arg(account_id) AND revision_id=sqlc.arg(expected_revision_id);

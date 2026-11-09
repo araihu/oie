@@ -512,6 +512,38 @@ func (q *Queries) UpdateConversation(ctx context.Context, arg UpdateConversation
 	return err
 }
 
+const updateConversationPreferences = `-- name: UpdateConversationPreferences :execrows
+UPDATE conversations
+SET revision_id=?1,payload=?2,archived=?3,favorite=?4
+WHERE id=?5 AND account_id=?6 AND revision_id=?7
+`
+
+type UpdateConversationPreferencesParams struct {
+	RevisionID         string
+	Payload            string
+	Archived           int64
+	Favorite           int64
+	ID                 string
+	AccountID          string
+	ExpectedRevisionID string
+}
+
+func (q *Queries) UpdateConversationPreferences(ctx context.Context, arg UpdateConversationPreferencesParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, updateConversationPreferences,
+		arg.RevisionID,
+		arg.Payload,
+		arg.Archived,
+		arg.Favorite,
+		arg.ID,
+		arg.AccountID,
+		arg.ExpectedRevisionID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const updateMessage = `-- name: UpdateMessage :exec
 UPDATE messages SET revision_id=?,state=?,payload=? WHERE id=?
 `

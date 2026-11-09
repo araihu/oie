@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.19.0",
+    "version": "0.20.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.",
     "contact": {
       "name": "Arai Hû",
@@ -2422,6 +2422,86 @@
             "$ref": "#/components/responses/Unavailable"
           }
         }
+      },
+      "patch": {
+        "operationId": "updateConversationPreferences",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Change retained conversation archive or favorite preferences",
+        "description": "Atomically updates only the supplied app-owned flags, records an immutable conversation revision and operation receipt, and emits conversation.updated only for an actual change. No protocol operation is performed. The owning account must match accountId. expectedRevisionId must match the latest conversation revision, including intervening incoming-message or read updates. A matching Idempotency-Key replays its original accepted snapshot before checking current state. Reusing a key with different fields or preconditions conflicts. Setting an already-current value succeeds without another revision or event. Activity order, message timestamps, unread counts and outbox are unchanged. Read the conversation after a replay for current state.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Durable key bound to this exact preference change and precondition.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Owning account, current revision and the flags to change.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateConversationPreferences"
+              },
+              "example": {
+                "accountId": "019a5df0-0000-7000-8000-000000000001",
+                "expectedRevisionId": "019a5df0-0000-7000-8000-000000000002",
+                "archived": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted conversation snapshot, or its original idempotent replay",
+            "headers": {
+              "Idempotency-Replayed": {
+                "description": "True only when this exact operation was already accepted; the body is its original snapshot.",
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conversation"
+                },
+                "example": {
+                  "id": "019a5df0-0000-7000-8000-000000000001",
+                  "revisionId": "019a5df0-0000-7000-8000-000000000002",
+                  "accountId": "019a5df0-0000-7000-8000-000000000003",
+                  "kind": "direct",
+                  "address": "bob@localhost",
+                  "title": "Bob",
+                  "lastMessage": "Retained message",
+                  "updatedAt": "2026-11-07T12:00:00Z",
+                  "unreadCount": 0,
+                  "archived": true,
+                  "favorite": false
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
       }
     },
     "/api/v1/conversations/{conversationId}/messages": {
@@ -3569,6 +3649,8 @@
             "enum": [
               "register_account",
               "open_conversation",
+              "update_conversation_preferences",
+              "mark_messages_read",
               "send_message",
               "cancel_message",
               "set_message_star",
@@ -3713,6 +3795,9 @@
               "media_busy",
               "media_timeout"
             ]
+          },
+          "currentConversation": {
+            "$ref": "#/components/schemas/Conversation"
           },
           "currentStar": {
             "$ref": "#/components/schemas/MessageStar"
@@ -4292,6 +4377,47 @@
         "example": {
           "accountId": "019a5df0-0000-7000-8000-000000000001",
           "address": "bob@localhost"
+        }
+      },
+      "UpdateConversationPreferences": {
+        "type": "object",
+        "description": "Field-isolated archive or favorite change with a current conversation revision precondition. At least one flag is required; omitted flags remain unchanged and null values are invalid.",
+        "additionalProperties": false,
+        "minProperties": 3,
+        "required": [
+          "accountId",
+          "expectedRevisionId"
+        ],
+        "properties": {
+          "accountId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ID"
+              }
+            ],
+            "description": "Owning account assertion; a different account is rejected without changing the conversation."
+          },
+          "expectedRevisionId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ID"
+              }
+            ],
+            "description": "Exact current conversation revision. A stale revision yields state_conflict with currentConversation."
+          },
+          "archived": {
+            "type": "boolean",
+            "description": "Desired archive state. Incoming messages never automatically unarchive a conversation."
+          },
+          "favorite": {
+            "type": "boolean",
+            "description": "Desired conversation favorite state, separate from source-message stars."
+          }
+        },
+        "example": {
+          "accountId": "019a5df0-0000-7000-8000-000000000001",
+          "expectedRevisionId": "019a5df0-0000-7000-8000-000000000002",
+          "favorite": true
         }
       },
       "Conversation": {
