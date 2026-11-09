@@ -27,3 +27,14 @@ actual image/video sizes at 390, 1211 and 1440 pixels in light and dark mode,
 assert a 4:3 frame, and verify that playback does not resize it. They also cover
 automatic requests, cached reuse, explicit opt-out, keyboard manual loading,
 failed-preview retry and accessibility. All fixture media is local.
+
+Read-only inspection of the live catalog measured equal image/video frames of
+222 × 166.5 pixels at a 1211-pixel viewport and 176 × 132 pixels at 390 pixels.
+It produced no mutations, original-video loads or page errors. Evidence is
+`/tmp/oie-uniform-media-live.log` and the corresponding screenshots.
+
+Dagger's engine logs confirm that `make check test-race build build-cli` and the
+mock build completed without errors. The local client timed out with exit 124,
+so this is not a clean CLI completion. Evidence is saved in
+`/tmp/oie-uniform-media-dagger-remote-proof.log` and
+`/tmp/oie-uniform-media-dagger.log`.
