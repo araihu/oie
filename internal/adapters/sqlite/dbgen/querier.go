@@ -58,6 +58,7 @@ type Querier interface {
 	InsertMessageReference(ctx context.Context, arg InsertMessageReferenceParams) (int64, error)
 	InsertMessageReply(ctx context.Context, arg InsertMessageReplyParams) (int64, error)
 	InsertMessageRevision(ctx context.Context, arg InsertMessageRevisionParams) error
+	InsertMessageSenderIdentity(ctx context.Context, arg InsertMessageSenderIdentityParams) (int64, error)
 	InsertMessageStarRevision(ctx context.Context, arg InsertMessageStarRevisionParams) error
 	InsertOperation(ctx context.Context, arg InsertOperationParams) (int64, error)
 	InsertOutbox(ctx context.Context, arg InsertOutboxParams) error
@@ -71,6 +72,7 @@ type Querier interface {
 	ListAvatarTargets(ctx context.Context, ownerID string) ([]ListAvatarTargetsRow, error)
 	ListAvatars(ctx context.Context, arg ListAvatarsParams) ([]Avatar, error)
 	ListCanonicalMessageReferences(ctx context.Context, canonicalID string) ([]ListCanonicalMessageReferencesRow, error)
+	ListCanonicalSenderIdentities(ctx context.Context, arg ListCanonicalSenderIdentitiesParams) ([]ListCanonicalSenderIdentitiesRow, error)
 	ListChanges(ctx context.Context, arg ListChangesParams) ([]Change, error)
 	ListContactRecords(ctx context.Context, accountID string) ([]Contact, error)
 	ListContactSources(ctx context.Context, accountID string) ([]ListContactSourcesRow, error)

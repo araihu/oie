@@ -60,6 +60,7 @@ type entry struct {
 	avatarTargets    map[string]string
 	avatarDirty      map[string]string
 	contactsWake     chan struct{}
+	profiles         map[string]*profileSlot
 }
 type Manager struct {
 	dir         string

@@ -254,6 +254,9 @@ func (s *Store) Message(ctx context.Context, id domain.ID) (domain.Message, erro
 		if err == nil {
 			err = hydrateReferences(ctx, s.queries, &m)
 		}
+		if err == nil {
+			err = hydrateSenderIdentity(ctx, s.queries, &m)
+		}
 	}
 	return m, err
 }

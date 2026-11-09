@@ -18,8 +18,9 @@ type Conversation struct {
 	ActivitySequence                  int64
 }
 type Sender struct {
-	ID          ID
-	DisplayName string
+	PersonalAddress string `json:"-"`
+	ID              ID
+	DisplayName     string
 }
 
 // MediaThumbnail binds an advertised small preview to its exact source URL.

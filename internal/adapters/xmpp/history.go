@@ -122,7 +122,10 @@ func archivedIncoming(account domain.Account, scope string, r *archiveResult, tr
 		// supplied inside an authenticated archive result establishes own authorship.
 		if len(msg.Users) == 1 && len(msg.Users[0].Items) == 1 {
 			author, err := jid.Parse(msg.Users[0].Items[0].JID)
-			in.IsOwn = err == nil && author.Bare().Equal(own.Bare())
+			if err == nil && author.Localpart() != "" && author.Domainpart() != "" && !author.Bare().Equal(msg.From.Bare()) {
+				in.IsOwn = author.Bare().Equal(own.Bare())
+				in.SenderAddress = author.Bare().String()
+			}
 		}
 
 		if msg.ID != "" {

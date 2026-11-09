@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.22.0",
+    "version": "0.23.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.",
     "contact": {
       "name": "Arai Hû",
@@ -2832,6 +2832,52 @@
         }
       }
     },
+    "/api/v1/messages/{messageId}/sender-profile": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MessageID"
+        }
+      ],
+      "get": {
+        "operationId": "getMessageSenderProfile",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Read the author's available published profile",
+        "description": "Resolves the author from the retained message and message-time protocol identity evidence. May issue a bounded read-only profile query to a known personal address. Room nicknames and current same-name occupants never establish a historical author's personal JID. Missing or undisclosed identity remains unavailable; user-provided vCard JABBERID does not establish it. Does not join rooms, add contacts, subscribe to presence or mark messages read.",
+        "responses": {
+          "200": {
+            "description": "Scoped profile availability and optional published full name and personal address",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSenderProfile"
+                },
+                "example": {
+                  "accountId": "019a5df0-0000-7000-8000-000000000001",
+                  "conversationId": "019a5df0-0000-7000-8000-000000000002",
+                  "messageId": "019a5df0-0000-7000-8000-000000000003",
+                  "state": "not_disclosed"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid message identifier",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
     "/api/v1/messages/{messageId}": {
       "parameters": [
         {
@@ -5140,6 +5186,51 @@
         },
         "example": {
           "items": []
+        }
+      },
+      "MessageSenderProfile": {
+        "type": "object",
+        "description": "Published profile data for a retained source author. Optional values never imply a verified legal name.",
+        "additionalProperties": false,
+        "required": [
+          "accountId",
+          "conversationId",
+          "messageId",
+          "state"
+        ],
+        "properties": {
+          "accountId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "conversationId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "messageId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "known",
+              "unavailable",
+              "not_connected",
+              "unsupported",
+              "not_disclosed"
+            ],
+            "example": "not_disclosed"
+          },
+          "personalAddress": {
+            "type": "string",
+            "maxLength": 1024,
+            "description": "Personal user@host disclosed by authenticated protocol evidence for this message's author, never guessed from its nickname or vCard.",
+            "example": "juliet@example.test"
+          },
+          "fullName": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Published full name from the known author's profile; plain text, not a verified legal name.",
+            "example": "Juliet Example"
+          }
         }
       },
       "Sender": {

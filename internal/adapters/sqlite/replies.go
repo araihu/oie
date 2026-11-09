@@ -32,21 +32,24 @@ func boundedText(s string, max int) string {
 // bind Unicode spans to their exact body, and preserve collision evidence rather
 // than silently selecting a wrong original. No content or send revision changes.
 func recordReplyMetadata(ctx context.Context, q *dbgen.Queries, id string, in domain.Message, emit bool) error {
-	if len(in.References) == 0 && in.ReplyReference == nil {
+	if len(in.References) == 0 && in.ReplyReference == nil && in.Sender.PersonalAddress == "" {
 		return nil
 	}
 	row, err := q.GetMessage(ctx, id)
 	if err != nil {
 		return err
 	}
-	if row.AccountID != string(in.AccountID) {
+	if row.AccountID != string(in.AccountID) || (in.ConversationID != "" && row.ConversationID != string(in.ConversationID)) {
 		return application.ErrInvalid
 	}
 	old, err := decodeMessage(row)
 	if err != nil {
 		return err
 	}
-	changed := int64(0)
+	changed, err := recordSenderIdentity(ctx, q, old, in)
+	if err != nil {
+		return err
+	}
 	for i, r := range in.References {
 		if i >= 8 {
 			break

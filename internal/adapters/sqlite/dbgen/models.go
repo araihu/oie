@@ -204,6 +204,14 @@ type MessageRevision struct {
 	CreatedAt string
 }
 
+type MessageSenderIdentity struct {
+	MessageID       string
+	AccountID       string
+	ConversationID  string
+	PersonalAddress string
+	SourceHash      string
+}
+
 type MessageStar struct {
 	MessageID  string
 	RevisionID string
