@@ -18,6 +18,11 @@ marker restores focus to the language control after the drawer's initial focus
 event. This uses public DOM events and Select attributes, without accessing
 component internals or delaying focus by an arbitrary timeout.
 
+An explicit `settingsFocus=language` route takes priority over restoring focus
+to the checked appearance radio. This prevents the appearance control from
+taking focus after a language fragment swap. The existing language fixture
+covers this interaction in English and Portuguese at mobile and desktop sizes.
+
 ## Verification
 
 The isolated language fixture passes in English and Brazilian Portuguese at
