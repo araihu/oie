@@ -10,7 +10,11 @@ import (
 )
 
 templ emojiPicker(v view) {
+if !v.composeAllowed() {
+@emojiTrigger(v)
+}else{
 @popover.Popover(popover.Config{ID:"oie-emoji-picker",Trigger:emojiTrigger(v),Content:emojiContent(v),Placement:popover.PlacementTopEnd,Role:"dialog",Label:v.Text.EmojiPicker,RootClass:"oie-emoji-picker",PanelClass:"oie-emoji-panel"})
+}
 }
 
 templ emojiTrigger(v view) {
