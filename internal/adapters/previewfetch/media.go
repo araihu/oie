@@ -215,6 +215,7 @@ func (f *Fetcher) Open(parent context.Context, address string, request applicati
 	if err != nil {
 		return empty, application.MediaFailure{Code: "media_blocked"}
 	}
+	u = documentDownloadURL(u, request.Format)
 	if _, err = f.destination(ctx, u); err != nil {
 		return empty, mediaFailure(err)
 	}
@@ -249,4 +250,25 @@ func (f *Fetcher) Open(parent context.Context, address string, request applicati
 	out.Body = &mediaBody{ReadCloser: response.Body, remaining: out.Length, release: release}
 	success = true
 	return out, nil
+}
+
+// Codeberg source links name repository documents but return an HTML page.
+// Resolve the same host/path identity to the raw file before the normal public
+// destination, MIME, size, redirect and byte-range checks run.
+func documentDownloadURL(source *url.URL, format application.MediaFormat) *url.URL {
+	if format != "md" || source.Scheme != "https" || source.Host != "codeberg.org" {
+		return source
+	}
+	parts := strings.Split(source.Path, "/")
+	if len(parts) < 7 || parts[1] == "" || parts[2] == "" || parts[3] != "src" || (parts[4] != "branch" && parts[4] != "tag" && parts[4] != "commit") {
+		return source
+	}
+	// Avoid interpreting escaped separators as a different repository identity.
+	if source.RawPath != "" {
+		return source
+	}
+	result := *source
+	parts[3] = "raw"
+	result.Path = strings.Join(parts, "/")
+	return &result
 }
