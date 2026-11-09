@@ -9,7 +9,7 @@ import (
 
 // The inbox remains mounted while this conversation-owned region is replaced.
 templ conversationPane(v view){
-<div id="conversation-pane" style="display:contents" data-conversation-scope={v.conversationScope()} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)} data-open-chat={strconv.FormatBool(v.ChatOpen)}>
+<div id="conversation-pane" class="oie-conversation-pane" data-conversation-scope={v.conversationScope()} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)} data-open-chat={strconv.FormatBool(v.ChatOpen)}>
 @starData(v)
 @avatarData(v)
 		<section class="oie-chat-pane" aria-label={ v.Text.Conversations }>

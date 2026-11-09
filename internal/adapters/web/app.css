@@ -66,6 +66,8 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-pin{color:var(--oie-muted)}.oie-pin .oie-icon{width:12px;height:12px}
 .oie-list-footer{height:48px;min-height:48px;padding:6px 12px;display:flex;align-items:center;gap:7px;border-top:1px solid var(--oie-border);font-size:11px;color:var(--oie-muted)}
 .oie-list-footer>span:nth-child(2){flex:1}.oie-status-dot{height:6px;width:6px;border-radius:50%;background:var(--oie-accent)}.oie-status-error{background:#e76e6e}
+.oie-conversation-pane{display:flex;flex-direction:column;min-width:0;min-height:0}
+.oie-conversation-pane>.oie-chat-pane{flex:1}
 .oie-chat-pane{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--oie-chat)}
 .oie-chat-header{height:65px;min-height:65px;display:flex;align-items:center;gap:11px;padding:10px 20px;background:var(--oie-panel);border-bottom:1px solid var(--oie-border)}
 .oie-chat-identity{flex:1;min-width:0}.oie-chat-identity h2{font-weight:650;font-size:14px;margin:0 0 3px}.oie-chat-identity p{font-size:11px;color:var(--oie-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0}
@@ -96,6 +98,7 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-details{display:flex;flex-direction:column;gap:20px;padding:12px}.oie-details h2{font-size:20px;font-weight:650}.oie-details h3{font-size:13px;font-weight:650}.oie-details p,.oie-details li{font-size:13px;color:var(--oie-muted)}.oie-details ul{display:flex;flex-direction:column;gap:12px}
 @media(max-width:1100px){.oie-sidebar{display:none}.oie-mobile-nav{display:block}.oie-workspace{grid-template-columns:320px minmax(0,1fr)}.oie-brand-name{font-size:18px}}
 @media(max-width:720px){
+ .oie-conversation-pane{display:none;height:100%}.oie-chat-open .oie-conversation-pane{display:flex}
  .oie-workspace{display:block}.oie-list-pane{height:100%;border:0}.oie-chat-pane{display:none;height:100%}.oie-chat-open .oie-chat-pane{display:flex}.oie-chat-open .oie-list-pane{display:none}
  .oie-back-button{display:inline-flex;align-items:center;justify-content:center;width:27px;height:35px;flex-shrink:0}
  .oie-chat-header{padding:10px;gap:8px}.oie-chat-header .oie-icon-button{width:30px;min-width:30px;height:30px;min-height:30px;min-block-size:30px;min-inline-size:30px}
