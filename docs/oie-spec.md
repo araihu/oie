@@ -362,6 +362,10 @@ Without app sync, independent engines can diverge. Configured sync can also dive
 
 Automatically mark incoming messages read only when visible in the active, focused conversation. Receipt, indexing, fetching, and background tabs are not automatic read triggers.
 
+Implemented alpha scope: record exact visible incoming message identities in the owning engine, with durable independent UUID revisions and idempotent read batches. Reading does not alter message content or conversation activity ordering, and it does not clear other messages or subsequent arrivals. Hosted clients observe the shared counter through conversation events. Independent-engine read replication, manual unread reminders and provider receipt emission remain separate work.
+
+**RECOMMENDED R12:** the current browser implementation requires 500 ms of foreground visibility and at least 60% of the message height, capped by the available timeline height for tall messages. Hidden tabs, unfocused documents and open modal overlays do not qualify. Visibility tuning remains open; these defaults are not a new device preference.
+
 Provide synced **Mark as read** and **Mark as unread**. Unread is a reminder, not reversal of delivery/read evidence. Explicit Mark as read sends supported/enabled protocol read receipts, respecting the account setting, without requiring every message to be individually viewed.
 
 Read-receipt sending defaults on where supported, with a synced per-account disable setting. Internal read-state tracking/sync remains independent.
