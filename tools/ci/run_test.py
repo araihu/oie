@@ -16,6 +16,8 @@ args = sys.argv[1:]
 source = Path(args[args.index('-source')+1])
 assert (source / 'current.go').read_text() == 'current edit'
 assert not (source / 'data').exists()
+if os.environ.get('CI_TEST_RESIST_TERM'):
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
 Path(os.environ['CI_TEST_CAPTURE']).write_text(json.dumps({'args': args, 'source': str(source), 'pid': os.getpid(), 'runner': os.environ.get('_EXPERIMENTAL_DAGGER_RUNNER_HOST')}))
 if os.environ.get('CI_TEST_SLEEP'):
     time.sleep(30)
@@ -53,6 +55,8 @@ class RunnerLifecycleTest(unittest.TestCase):
         self.env.pop('OIE_CI_SSH_HOST', None)
         self.env.pop('CI_TEST_SLEEP', None)
         self.env.pop('CI_TEST_EXIT', None)
+        self.env.pop('CI_TEST_RESIST_TERM', None)
+        self.env.pop('OIE_CI_CLEANUP_GRACE_SECONDS', None)
         self.command = ['sh', str(self.root / 'tools/ci/run.sh'), 'checks']
 
     def test_success_and_failure_keep_status_and_remove_snapshot(self):
@@ -89,8 +93,15 @@ time.sleep(30)
     def test_shell_only_sigterm_stops_owned_runner_and_cleans_snapshot(self):
         self.check_termination(whole_group=False)
 
-    def check_termination(self, whole_group):
-        child = subprocess.Popen(self.command, env={**self.env, 'CI_TEST_SLEEP': '1'}, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, start_new_session=True)
+    def test_term_resistant_runner_is_killed_and_snapshot_removed(self):
+        self.check_termination(whole_group=False, resistant=True)
+
+    def check_termination(self, whole_group, resistant=False):
+        env = {**self.env, 'CI_TEST_SLEEP': '1'}
+        if resistant:
+            env['CI_TEST_RESIST_TERM'] = '1'
+            env['OIE_CI_CLEANUP_GRACE_SECONDS'] = '.15'
+        child = subprocess.Popen(self.command, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, start_new_session=True)
         try:
             for _ in range(100):
                 if self.capture.exists():
@@ -98,12 +109,14 @@ time.sleep(30)
                 time.sleep(.02)
             self.assertTrue(self.capture.exists())
             record = json.loads(self.capture.read_text())
+            started = time.monotonic()
             if whole_group:
                 os.killpg(child.pid, signal.SIGTERM)
             else:
                 os.kill(child.pid, signal.SIGTERM)
             _, error = child.communicate(timeout=5)
             self.assertEqual(child.returncode, 143, error)
+            self.assertLess(time.monotonic()-started, 3, 'owned runner cleanup exceeded its grace')
             self.assertFalse(Path(record['source']).parent.exists())
             with self.assertRaises(ProcessLookupError):
                 os.kill(record['pid'], 0)

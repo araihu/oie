@@ -48,11 +48,31 @@ func main() {
 	defer stop()
 	ctx, cancel := context.WithTimeout(ctx, *limit)
 	defer cancel()
-	if err := run(ctx, *mode, *source, *artifacts); err != nil {
+	if err := execute(ctx, 15*time.Second, func() error { return run(ctx, *mode, *source, *artifacts) }); err != nil {
 		fmt.Fprintln(os.Stderr, "[ci] failed:", err)
 		os.Exit(1)
 	}
 	fmt.Fprintln(os.Stderr, "[ci] finished successfully")
+}
+
+// execute gives session shutdown a bounded grace after cancellation. Returning
+// lets main exit even when an upstream Close call does not honor cancellation.
+func execute(ctx context.Context, grace time.Duration, task func() error) error {
+	result := make(chan error, 1)
+	go func() { result <- task() }()
+	select {
+	case err := <-result:
+		return errors.Join(ctx.Err(), err)
+	case <-ctx.Done():
+	}
+	timer := time.NewTimer(grace)
+	defer timer.Stop()
+	select {
+	case err := <-result:
+		return errors.Join(ctx.Err(), err)
+	case <-timer.C:
+		return fmt.Errorf("session cleanup exceeded cancellation grace: %w", ctx.Err())
+	}
 }
 
 func run(ctx context.Context, mode, source, artifacts string) (err error) {

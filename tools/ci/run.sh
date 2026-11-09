@@ -8,10 +8,46 @@ python3 -m unittest discover -s "$root/tools/ci" -p '*_test.py'
 task_tmp=$(mktemp -d)
 ssh_pid=
 runner_pid=
+watchdog_pid=
 cleanup() {
   result=$?
   trap - EXIT HUP INT TERM
-  if [ -n "$runner_pid" ]; then kill -TERM "$runner_pid" 2>/dev/null || true; wait "$runner_pid" 2>/dev/null || true; fi
+  if [ -n "$runner_pid" ]; then
+    kill -TERM "$runner_pid" 2>/dev/null || true
+    # One Python process owns the delay, so stopping it cannot orphan a sleep.
+    python3 - "$runner_pid" "${OIE_CI_CLEANUP_GRACE_SECONDS:-15}" <<'PY_WATCHDOG' &
+import math
+import os
+import signal
+import sys
+import time
+
+pid = int(sys.argv[1])
+try:
+    grace = float(sys.argv[2])
+    if not math.isfinite(grace) or grace < 0:
+        raise ValueError('invalid grace')
+except ValueError:
+    grace = 15
+try:
+    handle = os.pidfd_open(pid) if hasattr(os, 'pidfd_open') else None
+except ProcessLookupError:
+    sys.exit(0)
+time.sleep(grace)
+try:
+    if handle is not None:
+        signal.pidfd_send_signal(handle, signal.SIGKILL)
+    else:
+        os.kill(pid, signal.SIGKILL)
+except ProcessLookupError:
+    pass
+PY_WATCHDOG
+    watchdog_pid=$!
+    wait "$runner_pid" 2>/dev/null || true
+    kill -TERM "$watchdog_pid" 2>/dev/null || true
+    wait "$watchdog_pid" 2>/dev/null || true
+    watchdog_pid=
+  fi
   if [ -n "$ssh_pid" ]; then kill "$ssh_pid" 2>/dev/null || true; wait "$ssh_pid" 2>/dev/null || true; fi
   rm -rf "$task_tmp"
   exit "$result"

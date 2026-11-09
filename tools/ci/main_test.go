@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestConnectionWithoutOverrideUsesPinnedEngine(t *testing.T) {
@@ -32,5 +35,48 @@ func TestBrowserStatusCannotBeMaskedBySuccessfulArtifactExport(t *testing.T) {
 				t.Fatalf("exit receipt %q returned %v", tc.value, err)
 			}
 		})
+	}
+}
+
+func TestExecutePreservesTaskResult(t *testing.T) {
+	failure := errors.New("fixture failure")
+	for _, want := range []error{nil, failure} {
+		if got := execute(context.Background(), time.Second, func() error { return want }); !errors.Is(got, want) {
+			t.Fatalf("execute returned %v, want %v", got, want)
+		}
+	}
+}
+
+func TestExecuteBoundsBlockedCleanupAfterCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	blocked := make(chan struct{})
+	defer close(blocked)
+	cancel()
+	start := time.Now()
+	err := execute(ctx, 10*time.Millisecond, func() error { <-blocked; return nil })
+	if !errors.Is(err, context.Canceled) || !strings.Contains(err.Error(), "cleanup exceeded") {
+		t.Fatalf("blocked cleanup returned %v", err)
+	}
+	if time.Since(start) > time.Second {
+		t.Fatal("blocked cleanup ignored cancellation grace")
+	}
+}
+
+func TestExecuteCancellationCannotBecomeSuccess(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := execute(ctx, time.Second, func() error { return nil }); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled task returned %v", err)
+	}
+}
+
+func TestExecuteDeadlineIncludesBlockedSessionClose(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	blocked := make(chan struct{})
+	defer close(blocked)
+	err := execute(ctx, 10*time.Millisecond, func() error { <-blocked; return nil })
+	if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "cleanup exceeded") {
+		t.Fatalf("deadline with blocked session close returned %v", err)
 	}
 }
