@@ -253,3 +253,28 @@ func TestEmptyGlobalSearchQualifiesUnavailableContactCoverage(t *testing.T) {
 		}
 	}
 }
+
+func TestLiveRefreshDoesNotRequeryGlobalSearch(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/engine":
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": testEngine, "role": "hosted", "apiVersion": "0.22.0", "eventCursor": testEngine + ":0"})
+		case "/api/v1/accounts", "/api/v1/conversations":
+			_, _ = w.Write([]byte(`{"items":[]}`))
+		default:
+			t.Errorf("live refresh reissued a search/group read: %s", r.URL)
+			w.WriteHeader(500)
+		}
+	}))
+	defer backend.Close()
+	ui, err := New(backend.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	ui.ServeHTTP(w, httptest.NewRequest("GET", "/ui/refresh?searchMode=messages&searchQuery=needle", nil))
+	if w.Code != 200 {
+		t.Fatalf("live refresh failed: %d", w.Code)
+	}
+}

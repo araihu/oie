@@ -614,7 +614,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 	s.load(ctx, r, &v)
-	if !v.NativeMessageSearch && v.GlobalMessageSearch && r.Header.Get("X-Oie-Fragment") != "conversation" && !v.Unavailable {
+	if r.URL.Path == "/" && v.GlobalMessageSearch && (r.Header.Get("X-Oie-Fragment") == "" || r.Header.Get("X-Oie-Fragment") == "app") && !v.Unavailable {
 		s.loadMessageSearch(ctx, &v)
 	}
 	if r.URL.Path == "/ui/info" {
