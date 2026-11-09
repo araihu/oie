@@ -25,6 +25,7 @@ OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/live-chat.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" OIE_SEND_GEOMETRY_ONLY=1 node tests/browser/live-chat.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/account-status.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/avatars.cjs
+OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/sender-info.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/previews.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/markdown.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/stars.cjs

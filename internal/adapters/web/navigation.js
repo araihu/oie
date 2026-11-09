@@ -33,7 +33,7 @@
  function fragment(kind){return kind==='conversation-pane'?'conversation':kind==='chat-info-content'?'info':'app';}
  function showError(){const region=document.querySelector('[data-navigation-status]');if(region){region.textContent=app()?.dataset.routeError||'';region.hidden=false}}
  function upgrade(root=document){if(!root)return;for(const node of root.querySelectorAll('a[href],form')){
-  if(node.matches('[data-global-search-form],a[download],a[target]:not([target="_self"])')||node.hasAttribute('hx-get')||node.hasAttribute('hx-post'))continue;
+  if(node.matches('[data-global-search-form],[data-open-sender],a[download],a[target]:not([target="_self"])')||node.hasAttribute('hx-get')||node.hasAttribute('hx-post'))continue;
   const form=node.tagName==='FORM';if(form&&(node.method||'get').toLowerCase()!=='get')continue;
   let url;try{url=new URL(form?node.action:node.href,location.href)}catch{continue}
   if(url.origin!==location.origin||!['/','/search'].includes(url.pathname)||(!form&&(node.getAttribute('href')||'').startsWith('#')))continue;
@@ -52,7 +52,7 @@
   if(link)window.htmx.process(link);
  },true);
  function infoReady(starGeneration){const root=document.getElementById('chat-info-content');if(!root)return;upgrade(root);document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root,generation:starGeneration}}));const body=document.getElementById('details-body');if(root.dataset.infoView){if(body)body.scrollTop=0;root.querySelector('[data-info-heading]')?.focus({preventScroll:true})}else{if(body)body.scrollTop=infoReturnScroll;const kind=new URL(location.href).searchParams.get('infoFocus');root.querySelector(`[data-info-entry="${CSS.escape(kind||'media')}"]`)?.focus({preventScroll:true})}}
- function closeOverlays(){for(const id of ['oie-image-viewer','oie-document-viewer']){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id}}));const dialog=document.getElementById(id);if(dialog?.open)dialog.close()}for(const id of ['details','accounts','settings','newchat'])window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id}}));}
+ function closeOverlays(){for(const id of ['oie-image-viewer','oie-document-viewer']){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id}}));const dialog=document.getElementById(id);if(dialog?.open)dialog.close()}for(const id of ['details','accounts','settings','newchat','sender'])window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id}}));}
  document.addEventListener('htmx:before:request',event=>{
   const ctx=event.detail.ctx;if(ctx?.target?.id==='shared-search-results'){epoch++;document.getElementById('shared-content-scroll')?.removeAttribute('aria-busy')}if(!ctx||!kinds.includes(ctx.target?.id))return;
   ctx.oieEpoch=++epoch;ctx.oieKind=ctx.target.id;

@@ -17,6 +17,52 @@ tags:
 - name: Messages
   description: Browser submission receipt recovery
 paths:
+  /ui/sender:
+    get:
+      operationId: getBrowserMessageSender
+      tags: [Messages]
+      summary: Render the retained message author's information
+      description: Read-only HTML fragment scoped to engine, account, conversation and retained message. Direct peers may use the conversation address and cached avatar/presence. Room authors expose only their retained name and room context, never a nickname-based personal profile or inferred current presence. Does not join rooms, subscribe to presence, mark read or mutate contacts.
+      parameters:
+      - in: query
+        name: engineId
+        description: Identity of the engine that owns the retained message.
+        required: true
+        schema: {type: string, format: uuid}
+      - in: query
+        name: accountId
+        description: Owning account, checked against the message and conversation.
+        required: true
+        schema: {type: string, format: uuid}
+      - in: query
+        name: conversationId
+        description: Conversation containing the retained source message.
+        required: true
+        schema: {type: string, format: uuid}
+      - in: query
+        name: messageId
+        description: Retained message whose author is displayed.
+        required: true
+        schema: {type: string, format: uuid}
+      - in: query
+        name: lang
+        description: Preferred presentation language.
+        schema: {type: string, enum: [en, pt-BR]}
+      responses:
+        '200':
+          description: Escaped sender information, including scope identifiers for safe fragment replacement
+          content:
+            text/html:
+              schema: {type: string}
+              example: '<section data-sender-info></section>'
+        '400':
+          description: Invalid scope identifiers
+        '404':
+          description: Message, conversation or account absent or scope mismatch
+        '409':
+          description: Engine identity changed
+        '503':
+          description: Saved information unavailable
   /ui/message-search:
     get:
       operationId: searchBrowserMessages

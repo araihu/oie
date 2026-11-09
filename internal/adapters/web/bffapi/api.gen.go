@@ -87,6 +87,24 @@ func (e SearchBrowserMessagesParamsLang) Valid() bool {
 	}
 }
 
+// Defines values for GetBrowserMessageSenderParamsLang.
+const (
+	GetBrowserMessageSenderParamsLangEn   GetBrowserMessageSenderParamsLang = "en"
+	GetBrowserMessageSenderParamsLangPtBR GetBrowserMessageSenderParamsLang = "pt-BR"
+)
+
+// Valid indicates whether the value is a known member of the GetBrowserMessageSenderParamsLang enum.
+func (e GetBrowserMessageSenderParamsLang) Valid() bool {
+	switch e {
+	case GetBrowserMessageSenderParamsLangEn:
+		return true
+	case GetBrowserMessageSenderParamsLangPtBR:
+		return true
+	default:
+		return false
+	}
+}
+
 // ConversationPreferenceIntent Browser command scoped to one engine and one owning account.
 type ConversationPreferenceIntent struct {
 	// AccountId Owning account UUID.
@@ -344,6 +362,27 @@ type SearchBrowserMessagesParams struct {
 
 // SearchBrowserMessagesParamsLang defines parameters for SearchBrowserMessages.
 type SearchBrowserMessagesParamsLang string
+
+// GetBrowserMessageSenderParams defines parameters for GetBrowserMessageSender.
+type GetBrowserMessageSenderParams struct {
+	// EngineId Identity of the engine that owns the retained message.
+	EngineId openapi_types.UUID `form:"engineId" json:"engineId"`
+
+	// AccountId Owning account, checked against the message and conversation.
+	AccountId openapi_types.UUID `form:"accountId" json:"accountId"`
+
+	// ConversationId Conversation containing the retained source message.
+	ConversationId openapi_types.UUID `form:"conversationId" json:"conversationId"`
+
+	// MessageId Retained message whose author is displayed.
+	MessageId openapi_types.UUID `form:"messageId" json:"messageId"`
+
+	// Lang Preferred presentation language.
+	Lang *GetBrowserMessageSenderParamsLang `form:"lang,omitempty" json:"lang,omitempty"`
+}
+
+// GetBrowserMessageSenderParamsLang defines parameters for GetBrowserMessageSender.
+type GetBrowserMessageSenderParamsLang string
 
 // UpdateBrowserConversationPreferencesFormdataRequestBody defines body for UpdateBrowserConversationPreferences for application/x-www-form-urlencoded ContentType.
 type UpdateBrowserConversationPreferencesFormdataRequestBody = ConversationPreferenceIntent

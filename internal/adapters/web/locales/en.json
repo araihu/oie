@@ -470,5 +470,11 @@
   "SearchContacts": "Contacts",
   "SearchContactsPartial": "Saved contacts are unavailable for some accounts.",
   "SearchContactsLimited": "Contact matches are limited. Refine your search.",
-  "SearchContactsCoverage": "Results include available saved data. Some saved contacts are unavailable."
+  "SearchContactsCoverage": "Results include available saved data. Some saved contacts are unavailable.",
+  "SenderInfo": "User information",
+  "OpenSenderInfo": "View user information",
+  "SenderInfoLoading": "Loading user information…",
+  "SenderInfoUnavailable": "User information is unavailable. Try again.",
+  "SenderConversation": "Conversation",
+  "SenderAccount": "Account"
 }

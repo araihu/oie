@@ -1,0 +1,47 @@
+package web
+
+import (
+ "github.com/araihu/goshtoso/components/avatar"
+ "github.com/araihu/goshtoso/components/drawer"
+ "github.com/araihu/goshtoso/components/link"
+)
+
+templ senderAvatar(v view,m messageView){
+@link.Link(v.senderHref(m),link.WithRootClass("oie-avatar-scope oie-sender-avatar"),link.WithAttrs(templ.Attributes{"aria-label":v.Text.OpenSenderInfo+": "+m.Sender.DisplayName,"data-open-sender":"","data-sender-fragment":v.senderFragmentHref(m),"data-avatar-account":m.AccountId,"data-avatar-address":v.messageAvatarAddress(m),"data-avatar-src":v.avatarSource(m.AccountId,v.messageAvatarAddress(m)),"x-data":"{oieAvatarSrc: $el.dataset.avatarSrc}"})){
+@profileAvatarContent(v,m.AccountId,v.messageAvatarAddress(m),avatar.Config{Name:m.Sender.DisplayName,Initials:initials(m.Sender.DisplayName),Size:avatar.SizeSM,Border:true,BorderColor:v.messageAvatarBorder(m)})
+}
+}
+
+templ senderDrawer(v view){
+if v.Selected!=nil {
+@drawer.Drawer(drawer.Config{ID:"sender",Title:v.Text.SenderInfo}){
+<div id="sender-content" data-sender-loading={v.Text.SenderInfoLoading} data-sender-error={v.Text.SenderInfoUnavailable} aria-live="polite">@senderContent(v)</div>
+}
+}
+}
+
+templ senderContent(v view){
+if p:=v.SenderInfo;p!=nil&&v.Selected!=nil {
+<section class="oie-sender-info" data-sender-info data-sender-engine={v.EngineID} data-sender-account={p.Message.AccountId} data-sender-conversation={p.Message.ConversationId} data-sender-message={p.Message.Id}>
+<header class="oie-details-identity oie-info-centered">
+@profileAvatar(v,p.Message.AccountId,p.Address,avatar.Config{Name:p.Message.Sender.DisplayName,Initials:initials(p.Message.Sender.DisplayName),Size:avatar.SizeXL,Border:true,BorderColor:v.messageAvatarBorder(p.Message)})
+<h2>{p.Message.Sender.DisplayName}</h2>
+if p.Address!="" {
+<p data-sender-address>{p.Address}</p>
+}
+if p.Presence!=nil {
+@presenceObservation(v,*p.Presence)
+}
+</header>
+<dl class="oie-sender-context">
+<dt>{v.Text.SenderConversation}</dt><dd>{v.infoTitle()}</dd>
+if v.Selected.Kind=="room" {
+<dd>{v.Selected.Address}</dd>
+}
+<dt>{v.Text.SenderAccount}</dt><dd>{v.accountLabel(p.Message.AccountId)}</dd>
+</dl>
+</section>
+}else{
+<p role="status">{v.Text.SenderInfoUnavailable}</p>
+}
+}

@@ -470,5 +470,11 @@
   "SearchContacts": "Contatos",
   "SearchContactsPartial": "Os contatos salvos estão indisponíveis para algumas contas.",
   "SearchContactsLimited": "Os resultados de contatos são limitados. Refine sua pesquisa.",
-  "SearchContactsCoverage": "Os resultados incluem os dados salvos disponíveis. Alguns contatos salvos estão indisponíveis."
+  "SearchContactsCoverage": "Os resultados incluem os dados salvos disponíveis. Alguns contatos salvos estão indisponíveis.",
+  "SenderInfo": "Informações do usuário",
+  "OpenSenderInfo": "Ver informações do usuário",
+  "SenderInfoLoading": "Carregando informações do usuário…",
+  "SenderInfoUnavailable": "Não foi possível carregar as informações do usuário. Tente novamente.",
+  "SenderConversation": "Conversa",
+  "SenderAccount": "Conta"
 }

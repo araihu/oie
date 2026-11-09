@@ -80,6 +80,7 @@ templ page(v view) {
 <link rel="stylesheet" href="/ui/emoji-picker.css"/><link rel="stylesheet" href="/ui/mentions.css"/>
 <script src="/ui/actions.js" defer></script>
 <script src="/ui/stars.js" defer></script>
+<script src="/ui/sender.js" defer></script>
 <script src="/ui/conversation-preferences.js" defer></script>
 <script src="/ui/message-search.js" defer></script>
 <script src="/ui/conversation-search.js" defer></script>
@@ -325,7 +326,7 @@ if m.Attachment!=nil {
 }else{
 <div class="oie-message-content">
 if !m.IsOwn {
-@profileAvatar(v,m.AccountId,v.messageAvatarAddress(m),avatar.Config{Name:m.Sender.DisplayName,Initials:initials(m.Sender.DisplayName),Size:avatar.SizeSM,Border:true,BorderColor:v.messageAvatarBorder(m)})
+@senderAvatar(v,m)
 }
 @chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),Message:m.OriginalText,MessageContent:messageBubbleBody(v,m,grouped),RootClass:"oie-bubble",Grouped:grouped})
 </div>
@@ -650,14 +651,18 @@ if h,ok:=v.Histories[a.Id];ok&&(h.State=="syncing"||h.State=="partial"||h.State=
 // The scope belongs to Oie. Avatar's public SrcExpr consumes a fixed expression;
 // opaque addresses are escaped HTML data, never JavaScript source.
 templ profileAvatar(v view,account,address string,cfg avatar.Config){
+<div class="oie-avatar-scope" data-avatar-account={account} data-avatar-address={address} data-avatar-src={v.avatarSource(account,address)} x-data="{oieAvatarSrc: $el.dataset.avatarSrc}">
+@profileAvatarContent(v,account,address,cfg)
+</div>
+}
+
+templ profileAvatarContent(v view,account,address string,cfg avatar.Config){
 {{
  cfg.Src=v.avatarSource(account,address);cfg.SrcExpr="oieAvatarSrc"
  fallback:=cfg;fallback.Src="";fallback.SrcExpr=""
 }}
-<div class="oie-avatar-scope" data-avatar-account={account} data-avatar-address={address} data-avatar-src={cfg.Src} x-data="{oieAvatarSrc: $el.dataset.avatarSrc}">
 <div class="oie-avatar-initials" data-avatar-initials x-show="!oieAvatarSrc">@avatar.Avatar(fallback)</div>
 <template x-if="oieAvatarSrc">@avatar.Avatar(cfg)</template>
-</div>
 }
 
 templ avatarData(v view){
