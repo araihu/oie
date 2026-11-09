@@ -27,6 +27,15 @@ unavailable without fetching. A browser must receive only same-origin engine
 or BFF media URLs. It must not receive provider redirects or use provider URLs
 as video sources.
 
+Gallery cards, including the conversation's shared-media panel, show the video
+player without a filename caption or routine playback instructions. Errors and
+the retry action remain visible when playback fails. The filename remains
+available to existing metadata and download actions. These cards do not repeat
+the source-message link in their footer; it remains in the chevron menu.
+Browser checks cover hidden captions during playback, live metadata refresh,
+retry and restored gallery history, while errors remain visible and listing
+cards still starts no video transfer.
+
 The reader accepts `video/mp4`, `video/webm`, `video/ogg` and
 `video/quicktime`. It requires a known complete size no greater than 2 GiB,
 identity encoding and consistent range metadata. Unknown-size responses,

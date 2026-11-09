@@ -8,7 +8,7 @@ window.OieRuntime.register('shared-content', life => {
   const copy=node.cloneNode(true);
   for(const media of copy.querySelectorAll('video,audio')){media.removeAttribute('src');media.hidden=true;media.removeAttribute('autoplay')}
   for(const source of copy.querySelectorAll('source'))source.removeAttribute('src');
-  for(const card of copy.querySelectorAll('[data-video-item]')){const cover=card.querySelector('[data-video-cover]'),retry=card.querySelector('[data-video-retry]'),status=card.querySelector('[data-video-status]');if(cover)cover.hidden=false;if(retry)retry.hidden=true;if(status){status.textContent=card.dataset.videoReady||'';status.dataset.state='ready';status.setAttribute('role','status')}}
+  for(const card of copy.querySelectorAll('[data-video-item]')){const cover=card.querySelector('[data-video-cover]'),retry=card.querySelector('[data-video-retry]'),status=card.querySelector('[data-video-status]'),metadata=card.querySelector('[data-video-metadata]'),compact=card.hasAttribute('data-video-compact');if(cover)cover.hidden=false;if(retry)retry.hidden=true;if(metadata&&compact)metadata.hidden=true;if(status){status.textContent=compact?'':card.dataset.videoReady||'';status.dataset.state='ready';status.setAttribute('role','status')}}
   return copy.outerHTML;
  }
  function records(root){

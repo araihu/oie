@@ -6,7 +6,7 @@ window.OieRuntime.register('videos', life => {
  const identity=card=>JSON.stringify(['videoEngine','videoAccount','videoConversation','videoMessage','videoItem'].map(key=>card.dataset[key]||''));
  const cards=root=>[...(root.matches?.(selector)?[root]:[]),...root.querySelectorAll(selector)];
  const isLoaded=card=>!!card.querySelector(playerSelector)?.getAttribute('src');
- function status(card,key,state){const region=card.querySelector('[data-video-status]');if(region){region.textContent=card.dataset[key]||'';region.dataset.state=state;region.setAttribute('role',state==='failed'?'alert':'status')}}
+ function status(card,key,state){const region=card.querySelector('[data-video-status]'),compact=card.hasAttribute('data-video-compact');if(region){region.textContent=compact&&state!=='failed'?'':card.dataset[key]||'';region.dataset.state=state;region.setAttribute('role',state==='failed'?'alert':'status')}const metadata=card.querySelector('[data-video-metadata]');if(metadata&&compact)metadata.hidden=state!=='failed'}
  function release(video){
   if(!video)return;generations.set(video,(generations.get(video)||0)+1);releasing.add(video);loaded.delete(video);failed.delete(video);
   video.pause();video.removeAttribute('src');video.load();video.hidden=true;
