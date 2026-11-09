@@ -40,3 +40,15 @@ Read-only checks against the running API 0.17 engine verified 50-message latest,
 older, newer and context pages, exact scope/order and nearest-neighbor results
 while preserving the engine identity. Paging itself did not issue protocol
 operations.
+
+Loaded videos use the existing video reconciler for authoritative message
+updates. Matching players keep their playback and native focus. Removing the
+canonical video reference releases its player. This inner update does not relax
+the protections against evicting playing media, open menus or text selections.
+The native-video and bounded-timeline browser fixtures pass this combination.
+`make check` passes after this video reconciliation fix. The final Dagger engine
+completed `make check test-race build build-cli` and the mock build without an
+error, as recorded in `/tmp/oie-video-reconcile-dagger-remote-proof.log`. Its
+client transport subsequently failed its health check, so that attempt does
+not provide a successful CLI completion. The preceding footer-removal Dagger
+run did exit successfully.

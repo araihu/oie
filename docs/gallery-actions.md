@@ -5,6 +5,14 @@ Shared media, links and document cards have a top-right chevron using the public
 Go to message appears in the card action menu. Card footers show the source
 conversation, sender and timestamp without repeating that navigation link.
 
+The footer-removal increment passes the catalog-action, shared-content,
+gallery-scroll, native-video and bounded-timeline browser fixtures. Live HTML
+contains 50 cards, zero footer links and 50 source-menu actions. `make check`
+and Dagger checks pass. The broader fragment-navigation fixture passes desktop
+and source-menu navigation but times out in its final mobile Back-to-sidebar
+case. That run is not a complete fragment-navigation pass; its log is
+`/tmp/oie-gallery-footer-fragment-navigation-final.log`.
+
 The menu uses the catalog item's engine, account, conversation and source-message identity. Source navigation keeps the existing HTMX route contract. Copy writes the original URL as plain text. Video and document downloads use the existing same-origin, resource-scoped streaming endpoint with `download=1`; opening a menu never starts playback or a file download.
 
 Image Download reuses the existing preview ensure operation once. A retained original saves directly. A queued original uses bounded status reads through the existing OpenAPI `GET /api/v1/previews/{previewId}` operation, now also proxied by the BFF. This covers older gallery pages without relying on their inclusion in the latest live snapshot. The optional `X-Oie-Engine-ID` header checks the current engine before reading metadata. Status reads do not queue a job or contact a provider. Polling stops on failure, timeout, a changed engine, removed card or route disposal. A matching ready file is saved once through the retained media endpoint.

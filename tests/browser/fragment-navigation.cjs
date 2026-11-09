@@ -51,7 +51,11 @@ async function until(check, label) {
           if(!m){m={...messages[0],id:id(1000+state.effects),accountId:c.accountId,conversationId:c.id,originalText:body.originalText,isOwn:true,sendState:'queued'};operations.set(key,m);state.effects++;messages.push(m);emit();}
           return send(202,m);
         }
-        return send(200,{items:messages.filter(m=>m.conversationId===c.id)});
+        const compare=(a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt)||b.id.localeCompare(a.id),ordered=messages.filter(m=>m.conversationId===c.id).sort(compare),cursor=u.searchParams.get('cursor'),limit=Number(u.searchParams.get('limit')||50),direction=u.searchParams.get('direction')||'older',anchor=cursor?ordered.find(message=>message.id===cursor):null;
+        if(cursor&&!anchor)return send(404,{status:404});
+        const candidates=anchor?ordered.filter(message=>direction==='newer'?compare(message,anchor)<0:compare(message,anchor)>0):ordered;
+        const selected=direction==='newer'?candidates.slice(-limit):candidates.slice(0,limit);
+        return send(200,{items:selected,nextCursor:candidates.length>limit?selected[direction==='newer'?0:selected.length-1].id:undefined});
       }
       if(u.pathname===`/api/v1/conversations/${c.id}/message-stars`)return send(200,{items:u.searchParams.getAll('messageId').map(messageId=>({messageId,accountId:c.accountId,conversationId:c.id,starred:false,revisionId:null,updatedAt:null}))});
       if(u.pathname===`/api/v1/conversations/${c.id}/previews`)return send(200,{items:[]});
@@ -98,7 +102,7 @@ async function until(check, label) {
     await page.locator('[data-shared-next]').click();await route(async()=>new URL(page.url()).searchParams.get('contentCursor')==='next-page'&&await page.locator('[data-shared-item]').count()===3);
     await page.locator('[data-shared-tab="links"]').click();await route(async()=>new URL(page.url()).searchParams.get('contentType')==='links'&&await page.locator('[data-shared-item]').count()===2);assert.equal(new URL(page.url()).searchParams.get('contentCursor'),null);
     await page.locator('[data-shared-tab="documents"]').click();await route(async()=>new URL(page.url()).searchParams.get('contentType')==='documents'&&await page.locator('[data-shared-item]').count()===2);
-    await page.locator('[data-shared-conversation="'+chatA+'"] [data-shared-source]').first().click();await route(async()=>await page.locator('[data-message-id="'+messages[0].id+'"]').count()===1&&new URL(page.url()).searchParams.get('message')===messages[0].id);await until(async()=>page.locator('[data-message-id="'+messages[0].id+'"]').evaluate(node=>document.activeElement===node),'source message focused');assert.equal(await page.locator('#message-composer').inputValue(),draft);
+    const sourceCard=page.locator('[data-shared-conversation="'+chatA+'"]').first();await sourceCard.locator('[data-shared-menu-trigger]').click();await sourceCard.getByRole('menuitem',{name:'Go to message',exact:true}).click();await route(async()=>await page.locator('[data-message-id="'+messages[0].id+'"]').count()===1&&new URL(page.url()).searchParams.get('message')===messages[0].id);await until(async()=>page.locator('[data-message-id="'+messages[0].id+'"]').evaluate(node=>document.activeElement===node),'source message focused');assert.equal(await page.locator('#message-composer').inputValue(),draft);
     await page.locator('.oie-sidebar a').filter({hasText:'Chats'}).click();await route(async()=>new URL(page.url()).searchParams.get('section')!=='media'&&!new URL(page.url()).searchParams.has('message'));
     await page.locator('form.oie-search input[name="q"]').fill('Family');await page.locator('form.oie-search').evaluate(form=>form.requestSubmit());await route(async()=>new URL(page.url()).searchParams.get('q')==='Family');await until(async()=>page.locator('#conversation-search').evaluate(node=>document.activeElement===node),'search focus preserved');assert.equal(await page.locator('#message-composer').inputValue(),draft);
     await page.goBack();await route(async()=>new URL(page.url()).searchParams.get('q')!=='Family');
