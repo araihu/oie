@@ -33,19 +33,21 @@ window.OieRuntime.register('mentions',life=>{
   previous=input.value;sync();
  }
  function trigger(){
-  if(!writable()||composing||tokens.length>=32||input.selectionStart!==input.selectionEnd)return null;
+  if(!writable()||composing||tokens.length>=32||input.selectionStart!==input.selectionEnd||(document.activeElement!==input&&!root.contains(document.activeElement)))return null;
   const caret=input.selectionStart,prefix=input.value.slice(0,caret),start=prefix.lastIndexOf('@');
   if(start<0||(start>0&&!/[\s([{]/u.test(prefix[start-1])))return null;
   const query=prefix.slice(start+1),begin=points(prefix.slice(0,start)).length;
   if(points(query).length>80||/[\r\n@\u0000]/u.test(query)||query.split(/\s+/u).length>4||tokens.some(token=>token.begin===begin))return null;
   if(dismissed===start+':'+prefix)return null;
-  return{start,caret,begin,query};
+  const suffix=input.value.slice(caret).match(/^[\p{L}\p{M}\p{N}_'-]*/u)[0];
+  return{start,caret,end:caret+suffix.length,begin,query};
  }
  function clearOptions(){
   for(const child of list.children)window.Alpine?.destroyTree(child);
   list.replaceChildren();visible=[];active=-1;input.removeAttribute('aria-activedescendant');
  }
  function hide(){root.hidden=true;input.removeAttribute('aria-activedescendant');active=-1;}
+ function dismiss(){const current=trigger();if(current)dismissed=current.start+':'+input.value.slice(0,current.caret);hide();}
  function position(){
   geometryFrame=false;if(root.hidden)return;
   const viewport=window.visualViewport,top=form.querySelector('.oie-composer').getBoundingClientRect().top;
@@ -110,7 +112,8 @@ window.OieRuntime.register('mentions',life=>{
  }
  function choose(index){
   const item=visible[index],current=trigger();if(!item||!current||!writable()||tokens.length>=32)return;
-  const replacement=item.insertText+' ',old=input.value;input.setRangeText(replacement,current.start,current.caret,'end');track();
+  const following=input.value.slice(current.end),separator=!following||!/^[\s.,;:!?)\]}]/u.test(following)?' ':'';
+  const replacement=item.insertText+separator,old=input.value;input.setRangeText(replacement,current.start,current.end,'end');track();
   const mention={participantId:item.id,begin:current.begin,end:current.begin+points(item.insertText).length,text:item.insertText};
   tokens=tokens.filter(token=>mention.begin>=token.end||mention.end<=token.begin);tokens.push(mention);tokens.sort((a,b)=>a.begin-b.begin);sync();previous=input.value;dismissed='';hide();
   input.focus({preventScroll:true});input.dispatchEvent(new Event('input',{bubbles:true}));
@@ -124,17 +127,18 @@ window.OieRuntime.register('mentions',life=>{
   if(['ArrowDown','ArrowUp','Enter','Escape'].includes(event.key)){
    event.preventDefault();event.stopImmediatePropagation();
    if(event.key==='ArrowDown'||event.key==='ArrowUp')setActive(active+(event.key==='ArrowDown'?1:-1),true);
-   else if(event.key==='Enter'){if(active>=0)choose(active);else{const current=trigger();if(current)dismissed=current.start+':'+input.value.slice(0,current.caret);hide();}}
-   else{const current=trigger();if(current)dismissed=current.start+':'+input.value.slice(0,current.caret);hide();}
+   else if(event.key==='Enter'){if(active>=0)choose(active);else dismiss();}
+   else dismiss();
   }else if(event.key==='Tab')hide();
  },{capture:true});
- for(const name of ['keyup','click','select'])life.on(input,name,event=>{if(event.key&&['Escape','Tab','Enter','ArrowDown','ArrowUp'].includes(event.key))return;update()});
+ life.on(input,'focus',update);
+ for(const name of ['keyup','click','select'])life.on(input,name,event=>{if(event.key&&['Escape','Tab','Enter','ArrowDown','ArrowUp'].includes(event.key))return;if(name==='click')dismissed='';update()});
  life.on(list,'pointerdown',event=>{if(event.pointerType!=='touch')event.preventDefault()});
  life.on(list,'click',event=>{const option=event.target.closest('[data-mention-option]');if(option){event.preventDefault();choose(Number(option.dataset.mentionOption));}});
- life.on(root,'keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();hide();input.focus({preventScroll:true});}});
+ life.on(root,'keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();dismiss();input.focus({preventScroll:true});}});
  life.on(root,'focusout',event=>{if(event.relatedTarget!==input&&!root.contains(event.relatedTarget))hide()});
  life.on(retry,'click',()=>{input.focus({preventScroll:true});void load(true)});
- life.on(document,'pointerdown',event=>{if(event.target!==input&&!root.contains(event.target))hide()},{capture:true});
+ life.on(document,'pointerdown',event=>{if(event.target!==input&&!root.contains(event.target))dismiss()},{capture:true});
  life.on(form,'oie:mentions-restore',()=>{restore();hide()});
  life.on(input,'blur',event=>{if(!root.contains(event.relatedTarget))hide()});
  life.on(window,'resize',schedulePosition);life.on(window,'scroll',schedulePosition,{capture:true,passive:true});

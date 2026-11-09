@@ -32,7 +32,9 @@ send intent, and owns protocol translation. The frontend has no XMPP client.
 | --- | --- | --- |
 | Room draft | Type `@`, then a query | Read-only candidate load, local filtering, no send or join |
 | Loading/error/partial candidates | Continue typing or retry | Preserve text/caret; explain incomplete observations or failure |
-| Candidate selected | Enter/click/tap | Insert only the selected readable name; retain textarea focus |
+| Candidate selected | Enter/click/tap | Complete the nickname without duplicating letters after the caret, preserve adjacent punctuation/spacing and retain textarea focus |
+| Focus leaves the composer | Tab or outside click while loading | Keep suggestions closed when the delayed response arrives |
+| Suggestion panel focused | Escape | Return focus to the composer without reopening the dismissed list |
 | IME composition or email text | Type/confirm | Preserve normal text input; no accidental selection or send |
 | Selected text edited | Insert/delete/replace | Shift untouched ranges; discard overlapping selections |
 | Another account/chat/engine | Restore or delayed response | Keep draft ownership; reject stale candidate results |
@@ -48,7 +50,10 @@ native tests and Compose validation. The isolated mention browser fixture passes
 in English and Brazilian Portuguese at 390 and 1440 pixels, under light/dark
 Goshtoso and Minimal themes, including accessibility checks. It verifies Unicode
 ranges, edits, IME, drafts, scope changes, failed/partial lists, and recovery of
-a lost acceptance response without a duplicate send. An index-only source export
+a lost acceptance response without a duplicate send. Regression cases also cover
+delayed responses after Tab/outside dismissal, explicit return to the composer,
+Escape from the focused scrollable panel and completion inside an existing
+nickname with punctuation or Unicode text. An index-only source export
 also builds and passes the fixture, independently of other pending UI edits.
 
 The development Prosody test passes both through Compose and the host endpoint.
@@ -69,3 +74,12 @@ step with both the preceding binary and this increment. It is not recorded as
 passing; logs are `/tmp/oie-mentions-reply-regression.log` and
 `/tmp/oie-mentions-reply-baseline.log`. Mention and reply serialization/receipt
 checks pass separately in the native and protocol tests above.
+
+The composer-focus follow-up passes `make check` in the shared checkout. The
+extended browser fixture passes against builds from both the shared checkout
+and an export of committed source plus this JavaScript change. Read-only live inspection verifies Tab dismissal, returning
+to the composer and selecting a participant, with no writes or page errors.
+For this follow-up, Dagger engine logs again confirm successful checks, race
+tests and builds, but the client exits 124 after the 180-second timeout. Logs
+are `/tmp/oie-mentions-continuation-dagger.log` and
+`/tmp/oie-mentions-continuation-dagger-remote.log`.
