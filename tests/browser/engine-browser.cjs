@@ -88,12 +88,14 @@ const {chromium} = require('playwright');
     const bobContext = await browser.newContext({viewport: {width: 1440, height: 900}, locale: 'en-US', timezoneId: 'America/Sao_Paulo'});
     const alicePage = await aliceContext.newPage();
     const bobPage = await bobContext.newPage();
+    const preferenceConflictURLs=new Map(),consoleLocations=[];
+    const searchTransport=[];alicePage.on('response',async response=>{if(response.url().includes('/ui/message-search?'))searchTransport.push({url:response.url(),status:response.status(),body:await response.text().catch(()=>'<response unavailable>')})});
     let expectedLostReply = false;
     for (const page of [alicePage, bobPage]) {
       page.on('pageerror', error => evidence.consoleErrors.push(error.message));
       page.on('console', message => {if (message.type() === 'error') {
         if (expectedLostReply && message.text().includes('net::ERR_FAILED')) evidence.expectedTransportFailures.push(message.text());
-        else evidence.consoleErrors.push(message.text());
+        else {evidence.consoleErrors.push(message.text());consoleLocations.push(message.location().url||'')}
       }});
     }
     await alicePage.goto(base + '/?theme=dark&lang=en');
@@ -332,13 +334,33 @@ const {chromium} = require('playwright');
     const historyBeforePreferences=await Promise.all([alice,bob].map(account=>api('/api/v1/accounts/'+account.id+'/history')));
     const connectionsBeforePreferences=await Promise.all([alice,bob].map(account=>api('/api/v1/accounts/'+account.id+'/connection')));
     const preference=async(field,value)=>{
-      await until(async()=>{
-        const current=await api('/api/v1/conversations/'+aliceConversation.id);
-        return await alicePage.locator('#chat-header [data-conversation-preference-state]').getAttribute('data-revision')===current.revisionId;
-      },'current conversation revision before '+field);
-      const prefix=field==='archived'?(value?'archive':'unarchive'):(value?'favorite':'unfavorite');
-      await alicePage.locator('#chat-options button').first().click();
-      await alicePage.locator('#'+prefix+'-conversation-'+aliceConversation.id+':visible').click();
+      const activate=async()=>{
+        await until(async()=>{
+          const current=await api('/api/v1/conversations/'+aliceConversation.id);
+          return await alicePage.locator('#chat-header [data-conversation-preference-state]').getAttribute('data-revision')===current.revisionId;
+        },'current conversation revision before '+field);
+        const prefix=field==='archived'?(value?'archive':'unarchive'):(value?'favorite':'unfavorite');
+        const form=alicePage.locator('#conversation-preferences-'+aliceConversation.id+'-'+(field==='archived'?'archive':'favorite'));
+        const operation=await form.locator('[name="operationKey"]').inputValue();
+        await alicePage.locator('#chat-options button').first().click();
+        const reply=alicePage.waitForResponse(response=>response.url().includes('/ui/conversations/preferences')&&response.request().method()==='POST');
+        await alicePage.locator('#'+prefix+'-conversation-'+aliceConversation.id+':visible').click();
+        const response=await reply;return {result:await response.json(),status:response.status(),url:response.url(),operation,form};
+      };
+      let attempt=await activate();
+      if(!attempt.result.ok){
+        assert.equal(attempt.result.code,'state_conflict','a concurrent incoming/read revision is an explicit CAS rejection');
+        assert.equal(attempt.result.rejected,true);
+        assert.equal(attempt.status,409,'the reviewed conflict is the actual HTTP rejection');
+        preferenceConflictURLs.set(attempt.url,(preferenceConflictURLs.get(attempt.url)||0)+1);
+        assert.equal(attempt.result.conversation.id,aliceConversation.id);
+        assert.notEqual(attempt.result.conversation[field],value,'rejected command leaves the requested flag unchanged');
+        assert.notEqual(attempt.result.nextKey,attempt.operation,'rejected command prepares a fresh intent');
+        await until(async()=>{const fresh=await attempt.form.locator('[name="operationKey"]').inputValue(),current=await api('/api/v1/conversations/'+aliceConversation.id);return /^[0-9a-f-]{36}$/.test(fresh)&&fresh!==attempt.operation&&await attempt.form.locator('[name="expectedRevisionId"]').inputValue()===current.revisionId},'UI exposes a fresh key and current revision for the reviewed preference');
+        attempt=await activate();
+        evidence.workflows.push('A real concurrent preference revision conflict is surfaced and recovered through one reviewed fresh user action');
+      }
+      assert.equal(attempt.result.ok,true,'real preference accepted '+field+'='+value+' '+JSON.stringify(attempt.result));
       await until(async()=>{
         const current=await api('/api/v1/conversations/'+aliceConversation.id);
         return current[field]===value&&await alicePage.locator('#chat-header [data-conversation-preference-state]').getAttribute('data-'+field)===String(value);
@@ -367,6 +389,44 @@ const {chromium} = require('playwright');
     await alicePage.locator('#message-composer').fill('');
     evidence.workflows.push('Real menu archive/favorite writes persist through BFF/API/SQLite without message or connection effects, retain the selected workspace/draft, and stay archived on a new XMPP arrival before explicit reset');
 
+    // Search follows the retained engine projection, then navigates back to the
+    // canonical source through the existing bounded timeline contract.
+    const searchDraft='Keep this draft while searching retained messages '+nonce;
+    await alicePage.locator('#message-composer').fill(searchDraft);
+    const searchSource=(await api('/api/v1/conversations/'+aliceConversation.id+'/messages?limit=100')).items.find(message=>message.originalText===archivedIncoming&&!message.isOwn);
+    assert(searchSource,'search source is a real received XMPP message');
+    const searchMessagesBefore=await Promise.all([aliceConversation,bobConversation].map(conversation=>api('/api/v1/conversations/'+conversation.id+'/messages?limit=100')));
+    const searchConnectionsBefore=await Promise.all([alice,bob].map(account=>api('/api/v1/accounts/'+account.id+'/connection')));
+    await alicePage.evaluate(()=>{window.searchComposer=document.getElementById('message-composer');window.searchTimeline=document.getElementById('message-timeline');window.searchDocument=Math.random()});
+    const searchDocument=await alicePage.evaluate(()=>window.searchDocument);
+    await alicePage.locator('[data-open-message-search]:visible').first().click();
+    await alicePage.locator('#message-search-query').fill(archivedIncoming);
+    const searchHit=alicePage.locator('[data-message-search-hit][data-search-message="'+searchSource.id+'"]').filter({has:alicePage.locator('[data-message-search-source]')});
+    await searchHit.waitFor({state:'visible'}).catch(async error=>{console.error('Real search failure',JSON.stringify({transport:searchTransport,api:await api('/api/v1/messages/search?accountId='+alice.id+'&q='+encodeURIComponent(archivedIncoming)),ui:await alicePage.evaluate(()=>({url:location.href,query:document.getElementById('message-search-query')?.value,feedback:document.getElementById('message-search-feedback')?.textContent,root:document.querySelector('[data-message-search-root]')?.dataset,results:document.getElementById('message-search-results')?.innerText}))}));throw error});
+    assert.equal(await searchHit.getAttribute('data-search-historical'),'false');
+    const retainedSearch=await api('/api/v1/messages/search?accountId='+alice.id+'&q='+encodeURIComponent(archivedIncoming));
+    assert.equal(retainedSearch.items.length,1,'exact current text has one canonical result in its owning account');
+    assert.equal(retainedSearch.items[0].message.id,searchSource.id);
+    assert(await alicePage.evaluate(()=>window.searchComposer===document.getElementById('message-composer')&&window.searchTimeline===document.getElementById('message-timeline')),'read-only search preserves composer and timeline nodes');
+    assert.equal(await alicePage.locator('#message-composer').inputValue(),searchDraft);
+    const sourceLink=searchHit.locator('[data-message-search-source]'),sourceHref=new URL(await sourceLink.getAttribute('href'),base);
+    assert.equal(sourceHref.searchParams.get('message'),searchSource.id);
+    assert.equal(sourceHref.searchParams.get('account'),alice.id);
+    assert.equal(sourceHref.searchParams.get('chat'),aliceConversation.id);
+    const sourceGeneration=await alicePage.evaluate(()=>window.OieRuntime.generation);
+    await sourceLink.click();
+    await alicePage.waitForURL(url=>url.searchParams.get('message')===searchSource.id);
+    await alicePage.waitForFunction(generation=>window.OieRuntime.generation>generation,sourceGeneration);
+    await alicePage.locator('[data-message-id="'+searchSource.id+'"]').waitFor({state:'attached'});
+    assert.equal(new URL(alicePage.url()).searchParams.get('message'),searchSource.id);
+    assert.equal(await alicePage.evaluate(()=>window.searchDocument),searchDocument,'source navigation swaps fragments in the existing document');
+    assert.equal(await alicePage.locator('#message-composer').inputValue(),searchDraft);
+    assert((await alicePage.locator('#message-timeline [data-message-id]').count())<=50,'source jump loads a bounded timeline page');
+    for(const [index,conversation] of [aliceConversation,bobConversation].entries())assert.deepEqual(await api('/api/v1/conversations/'+conversation.id+'/messages?limit=100'),searchMessagesBefore[index],'search and source navigation do not mutate retained messages');
+    for(const [index,account] of [alice,bob].entries())assert.equal((await api('/api/v1/accounts/'+account.id+'/connection')).state,searchConnectionsBefore[index].state,'search preserves the XMPP connection');
+    await alicePage.locator('#message-composer').fill('');
+    evidence.workflows.push('Real received XMPP text is searchable through BFF/API/SQLite with one current source per account, retained draft/document, bounded canonical source jump, and no message or connection effect');
+
     await alicePage.screenshot({path: 'artifacts/' + prefix + '-alice-desktop.png', fullPage: true});
     await bobPage.setViewportSize({width: 390, height: 844});
     await bobPage.goto(base + '/?chat=' + bobConversation.id + '&account=' + bob.id + '&theme=dark&lang=pt-BR');
@@ -377,7 +437,15 @@ const {chromium} = require('playwright');
     assert.deepEqual(a11y.violations.map(v => ({id: v.id, targets: v.nodes.map(n => n.target)})), [], 'live mobile accessibility');
     await bobPage.screenshot({path: 'artifacts/' + prefix + '-bob-mobile-pt.png', fullPage: true});
     evidence.workflows.push('Actual chat usable at390px in Brazilian Portuguese with no checked WCAG A/AA violations');
-    assert.deepEqual(evidence.consoleErrors, []);
+    for(let index=evidence.consoleErrors.length-1;index>=0;index--){
+      const url=consoleLocations[index],remaining=preferenceConflictURLs.get(url)||0;
+      if(remaining>0&&evidence.consoleErrors[index]==='Failed to load resource: the server responded with a status of 409 (Conflict)'){
+        preferenceConflictURLs.set(url,remaining-1);
+        evidence.expectedTransportFailures.push('Verified reviewed preference CAS conflict: '+url);
+        evidence.consoleErrors.splice(index,1);consoleLocations.splice(index,1);
+      }
+    }
+    assert.deepEqual(evidence.consoleErrors, [],JSON.stringify(consoleLocations));
     await fs.writeFile('artifacts/' + prefix + '-report.json', JSON.stringify(evidence, null, 2));
     console.log('PASS: real-engine browser connection, two-way XMPP, source stars across tabs, live drafts, queue/cancel/reconnect, mobile and accessibility');
   } finally { await browser.close(); }
