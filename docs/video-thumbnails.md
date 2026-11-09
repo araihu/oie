@@ -17,3 +17,12 @@ The device-local “Video previews” setting defaults on and requests previews 
 Verification covers real FFmpeg extraction from the local WebM fixture; read/validator limits; supplied metadata; API coalescing, source correction and queued restart recovery; BFF identity/CSRF validation; cached posters, manual opt-out, keyboard activation, mobile accessibility and explicit native playback. No real account or third-party video is needed for these checks.
 
 References: [XEP-0447](https://xmpp.org/extensions/xep-0447.html), [XEP-0446](https://xmpp.org/extensions/xep-0446.html), [XEP-0264](https://xmpp.org/extensions/xep-0264.html), [FFmpeg formats](https://ffmpeg.org/ffmpeg-formats.html), [FFmpeg filters](https://ffmpeg.org/ffmpeg-filters.html#thumbnail).
+
+## Local validation of this increment
+
+- `make check`: passed, including contract lint, generation checks, Go lint/vet, root/CLI tests and Compose validation. The host's storage quota required placing temporary build files under `/run/user/501`; no shared caches or data directories were deleted.
+- Dagger checks container: `make check test-race build build-cli`, followed by the mock engine build, completed without errors. The Dagger CLI remained stuck after the final `Container.stdout DONE` and was terminated during cleanup; a clean runner shutdown was not verified.
+- Browser fixtures `video-thumbnails.cjs`, `video.cjs`, `shared-actions.cjs` and `shared-content-scroll.cjs`: passed, including real native WebM playback, cached poster reuse, explicit/manual loading, mobile keyboard/axe checks and preservation through appended catalog pages.
+- Broader `fragment-navigation.cjs`: reached same-document sidebar and Back/Forward checks, then timed out at line 91 waiting for a new page after a Ctrl/middle-click gesture. The remainder of that fixture was not verified by this run. Navigation behavior was not changed to resolve that separate failure.
+
+The isolated live demonstration uses only the repository's tiny WebM fixture and its extracted frame; it does not demonstrate retrieval from a connected account or deploy these commits to the separate main-session engine.
