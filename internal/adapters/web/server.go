@@ -291,7 +291,6 @@ type copy struct {
 	DetailsRoomProperties                                                                                                                                                string
 	DetailsPeerPresence                                                                                                                                                  string
 	DetailsPeerPresenceHelp                                                                                                                                              string
-	DetailsParticipantsHelp                                                                                                                                              string
 	DetailsParticipantsTruncated                                                                                                                                         string
 	DetailsNoParticipants                                                                                                                                                string
 	DetailsSourceDiscovery                                                                                                                                               string

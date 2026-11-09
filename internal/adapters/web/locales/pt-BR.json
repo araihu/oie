@@ -280,7 +280,6 @@
   "DetailsRoomProperties": "Propriedades anunciadas da sala",
   "DetailsPeerPresence": "Presença do contato",
   "DetailsPeerPresenceHelp": "Não há observações de presença disponíveis para este contato.",
-  "DetailsParticipantsHelp": "Ocupantes visíveis; esta lista pode estar incompleta.",
   "DetailsParticipantsTruncated": "Apenas parte das informações disponíveis de participantes é exibida.",
   "DetailsNoParticipants": "Não há observações de participantes disponíveis. Isso não significa que a sala esteja vazia.",
   "DetailsSourceDiscovery": "Lista pública da sala",

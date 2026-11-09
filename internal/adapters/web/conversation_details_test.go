@@ -68,7 +68,7 @@ func TestRoomParticipantIdentityAndPresenceRemainScoped(t *testing.T) {
 	if strings.Contains(html, "<img") || strings.Contains(html, "/ui/avatars/") || strings.Contains(html, "<script>") {
 		t.Fatal("unverified occupant gained a photo or executable status text")
 	}
-	if !strings.Contains(html, "Presence unknown") || !strings.Contains(html, "Public room listing") || !strings.Contains(html, "this list may be incomplete") || !strings.Contains(html, "data-participants-truncated") {
+	if !strings.Contains(html, "Presence unknown") || !strings.Contains(html, "Public room listing") || !strings.Contains(html, "data-participants-truncated") {
 		t.Fatal("participant observation lost its limited scope")
 	}
 	if v.presenceLabel("") != v.Text.PresenceUnknown || v.presenceLabel("unknown") == v.presenceLabel("unavailable") {

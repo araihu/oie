@@ -280,7 +280,6 @@
   "DetailsRoomProperties": "Advertised room properties",
   "DetailsPeerPresence": "Peer presence",
   "DetailsPeerPresenceHelp": "No presence observation is available for this contact.",
-  "DetailsParticipantsHelp": "Visible occupants; this list may be incomplete.",
   "DetailsParticipantsTruncated": "Only part of the available participant information is shown.",
   "DetailsNoParticipants": "No participant observations are available. This does not mean the room is empty.",
   "DetailsSourceDiscovery": "Public room listing",
