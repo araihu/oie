@@ -14,8 +14,10 @@ async function until(fn,label){for(let i=0;i<240;i++){if(await fn())return;await
  function incoming(text='New incoming'){const m={...messages[0],id:id(300+messages.length),originalText:text,createdAt:new Date(Date.UTC(2026,10,8,14,messages.length)).toISOString()};messages.push(m);emit();return m}
  const api=http.createServer(async(req,res)=>{
   const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(status,data)=>{res.statusCode=status;res.end(JSON.stringify(data))};let raw='';for await(const c of req)raw+=c;
-  if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.16.0',eventCursor:engine+':'+seq});
+  if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.17.0',eventCursor:engine+':'+seq});
   if(u.pathname==='/api/v1/accounts')return send(200,{items:[{id:account,revisionId:revision,address:'alice@fixture',label:'Alice',protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z'}]});
+  if(u.pathname==='/api/v1/accounts/'+account)return send(200,{id:account,revisionId:revision,address:'alice@fixture',label:'Alice',protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z'});
+  if(u.pathname.startsWith('/api/v1/messages/')){const message=messages.find(m=>m.id===u.pathname.split('/').at(-1));return send(message?200:404,message||{status:404,code:'not_found'})}
   if(u.pathname.endsWith('/connection'))return send(200,{accountId:account,state:'connected',updatedAt:'2026-11-08T12:00:00Z'});
   if(u.pathname.endsWith('/history'))return send(200,{accountId:account,state:'complete',retainedMessages:messages.length,conversations:2,updatedAt:'2026-11-08T12:00:00Z'});
   if(u.pathname.endsWith('/avatars'))return send(200,{items:[]});
@@ -23,7 +25,11 @@ async function until(fn,label){for(let i=0;i<240;i++){if(await fn())return;await
   if(u.pathname==='/api/v1/conversations')return send(200,{items:chats.filter(c=>u.searchParams.get('archived')!=='true'&&(u.searchParams.get('unreadOnly')!=='true'||c.unreadCount>0))});
   for(const c of chats){
    if(u.pathname==='/api/v1/conversations/'+c.id)return send(200,c);
-   if(u.pathname===`/api/v1/conversations/${c.id}/messages`)return send(200,{items:messages.filter(m=>m.conversationId===c.id).slice().reverse()});
+   if(u.pathname===`/api/v1/conversations/${c.id}/messages`){
+    const retained=messages.filter(m=>m.conversationId===c.id).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||b.id.localeCompare(a.id)),cursor=u.searchParams.get('cursor'),position=retained.findIndex(m=>m.id===cursor),newer=u.searchParams.get('direction')==='newer',limit=Number(u.searchParams.get('limit')||50);
+    const candidates=cursor?(newer?retained.slice(0,position):retained.slice(position+1)):retained,items=newer?candidates.slice(-limit):candidates.slice(0,limit);
+    return send(200,{items,...(candidates.length>items.length?{nextCursor:newer?items[0].id:items.at(-1).id}:{})});
+   }
    if(u.pathname===`/api/v1/conversations/${c.id}/previews`)return send(200,{items:[]});
    if(u.pathname===`/api/v1/conversations/${c.id}/message-stars`)return send(200,{items:[]});
    if(u.pathname===`/api/v1/conversations/${c.id}/read-state`){
