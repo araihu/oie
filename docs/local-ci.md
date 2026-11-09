@@ -12,13 +12,28 @@ clean client exits in 44 and 37 seconds. An intentional container exit of 23 and
 cancellation of a running command both returned errors and closed their sessions.
 These probes did not require restarting the shared engine or preview processes.
 
-On 2026-11-09, `make check` and `OIE_CI_SSH_HOST=dagger-vm make ci-check` passed
-with clean exit 0, including a repeat with cached stages. An intentionally expired
-`OIE_CI_TIMEOUT=1ms` returned a failing status promptly. The full runner also
-exported genuine browser-test failures and returned a failing status after
-passing checks, races, builds and isolated XMPP integration. These are separate
-from a green full-suite result. Earlier timeout reports in this document describe
-the previous CLI runner.
+On 2026-11-09, `OIE_CI_SSH_HOST=dagger-vm make ci` completed with exit 0 on
+committed source `2bdaa06749ced7e3e69bf7be9aa7f2310758d245`. The client closed
+normally after checks, lint, generation, race tests, builds, isolated Prosody
+integration and all 35 browser workflows, including real two-way XMPP messaging.
+Checks took 1m06s, XMPP integration 37s and the browser stage 9m43s. Evidence and
+the exact source/exit record are under the ignored
+`tests/browser/artifacts/ci-committed-full` directory. Independent, uncommitted UI
+edits in the shared checkout were excluded from this full-suite snapshot.
+
+Native `make check` also passed after the cancellation hardening. The runner's
+Go race tests and six shell/source lifecycle tests cover failed commands,
+expired deadlines, blocked session cleanup and a runner that ignores TERM.
+`OIE_CI_SSH_HOST=dagger-vm make ci-check` then passed with clean exit 0 on
+`60e9bc9`, including the final shutdown protection. Its separate evidence is in
+`tests/browser/artifacts/ci-committed-checks`.
+Cancellation gives session cleanup at most 15 seconds before failing the process;
+the shell also kills an unresponsive owned runner after its grace period. An
+intentionally expired `OIE_CI_TIMEOUT=1ms` returned a failing status promptly.
+Browser failures export evidence and preserve a failing status.
+
+The per-feature notes below describe earlier snapshots, including the previous
+CLI runner's timeouts. They do not override the completed full-suite result above.
 
 The video playback increment passes native `make check`, backend/BFF race tests,
 real native WebM playback/lifecycle checks and the 16-case shared-content browser
