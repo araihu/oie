@@ -13,13 +13,31 @@ cancellation of a running command both returned errors and closed their sessions
 These probes did not require restarting the shared engine or preview processes.
 
 On 2026-11-09, `OIE_CI_SSH_HOST=dagger-vm make ci` completed with exit 0 on
+`45e4f147553039332b01e177f57edfc2c6f202ca`, including all current app changes.
+The previously uncommitted appearance, pending-send, media feedback and wallpaper
+work is integrated in `9f794e0`; no app edits were excluded. Checks, lint,
+generation, race tests, builds, isolated XMPP integration and all 37 browser
+workflows passed. Checks took 1m00s, XMPP integration 34s and the browser stage
+8m39s. Current logs, the real-engine report and source/exit metadata are under
+the ignored `tests/browser/artifacts/ci-current-full` directory.
+
+The combined run exposed insufficient pending-bubble text contrast and a real
+emoji keyboard-focus race during cached rendering. Pending text now retains
+contrast while faded. The emoji regression deterministically fails the previous
+binary and passes the fix, including a native run with 4x CPU throttling.
+Appearance and send-geometry fixtures now run permanently in Dagger; the latter
+covers 24 sends and 32 accessibility scans across widths, modes and library
+themes. The pipeline also covers the current queued-cancellation menu and
+complete two-way messaging against its disposable Prosody service.
+
+An earlier full run on the same date completed with exit 0 on
 committed source `2bdaa06749ced7e3e69bf7be9aa7f2310758d245`. The client closed
 normally after checks, lint, generation, race tests, builds, isolated Prosody
 integration and all 35 browser workflows, including real two-way XMPP messaging.
 Checks took 1m06s, XMPP integration 37s and the browser stage 9m43s. Evidence and
 the exact source/exit record are under the ignored
-`tests/browser/artifacts/ci-committed-full` directory. Independent, uncommitted UI
-edits in the shared checkout were excluded from this full-suite snapshot.
+`tests/browser/artifacts/ci-committed-full` directory. That earlier snapshot
+excluded independent UI edits; the current run above includes them.
 
 Native `make check` also passed after the cancellation hardening. The runner's
 Go race tests and six shell/source lifecycle tests cover failed commands,
