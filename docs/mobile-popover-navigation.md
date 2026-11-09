@@ -25,3 +25,15 @@ The unmodified fixture passes against the rebuilt pinned dependency. It checks
 context. The same ownership assertion fails against the preceding dependency.
 Upstream Popover, Dropdown and Sidebar browser checks pass, including the new
 ownership and remount regression in both light/dark Goshtoso and Minimal themes.
+
+`make check` passes, as does the language/settings browser fixture after giving
+an explicit language focus request priority over appearance focus restoration.
+Read-only inspection of the live BFF confirms distinct sidebar/account control
+targets, one document request across media navigation, and no browser errors.
+
+The focused conversation fixture now measures the retained account/profile
+footer instead of the removed engine-status footer. Its layout checks advance,
+but the later held-request scenario times out waiting for a conversation to
+settle with both the previous binary and the corrected dependency. This fixture
+is not recorded as passing. Logs are `/tmp/oie-popover-conversation-final.log`
+and `/tmp/oie-popover-conversation-baseline.log`.
