@@ -317,14 +317,14 @@ if v.Selected.Kind=="room" {
 	</header>
 }
 
-templ message(v view,m messageView,grouped bool){
-<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-grouped",grouped)} tabindex="-1" data-message-id={m.Id} data-read-eligible={strconv.FormatBool(!m.IsOwn&&(m.Historical==nil||!*m.Historical))} data-starred={strconv.FormatBool(v.StarsKnown&&v.Stars[m.Id].Starred)} data-send-state={string(m.SendState)} data-created-at={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-created-ms={strconv.FormatInt(m.CreatedAt.UnixMilli(),10)} data-message-revision={m.RevisionId} data-message-previews-known={strconv.FormatBool(m.PresentationKnown&&m.VideosKnown)} data-message-account={m.AccountId} data-message-conversation={m.ConversationId} data-message-version={v.messageVersion(m)} data-message-source={originalMessageJSON(m.OriginalText)}>
+templ message(v view,m messageView,grouped,groupEnd bool){
+<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-grouped",grouped),templ.KV("oie-message-group-end",groupEnd)} tabindex="-1" data-message-id={m.Id} data-read-eligible={strconv.FormatBool(!m.IsOwn&&(m.Historical==nil||!*m.Historical))} data-starred={strconv.FormatBool(v.StarsKnown&&v.Stars[m.Id].Starred)} data-send-state={string(m.SendState)} data-created-at={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-created-ms={strconv.FormatInt(m.CreatedAt.UnixMilli(),10)} data-message-revision={m.RevisionId} data-message-previews-known={strconv.FormatBool(m.PresentationKnown&&m.VideosKnown)} data-message-account={m.AccountId} data-message-conversation={m.ConversationId} data-message-sender={m.Sender.Id} data-message-sender-name={m.Sender.DisplayName} data-message-groupable={strconv.FormatBool(m.Attachment==nil)} data-message-version={v.messageVersion(m)} data-message-source={originalMessageJSON(m.OriginalText)}>
 @viewerSource(v,m)
 if m.Attachment!=nil {
 <div class="oie-media-message">@card.Card(card.Config{Image:m.Attachment.PreviewUrl,ImageAlt:m.Attachment.Title,Title:m.Attachment.Title,Description:m.Attachment.Description,Density:card.DensityCompact,RootClass:"oie-media-card"})</div>
 }else{
 <div class="oie-message-content">
-if !m.IsOwn && !grouped {
+if !m.IsOwn {
 @profileAvatar(v,m.AccountId,v.messageAvatarAddress(m),avatar.Config{Name:m.Sender.DisplayName,Initials:initials(m.Sender.DisplayName),Size:avatar.SizeSM,Border:true,BorderColor:v.messageAvatarBorder(m)})
 }
 @chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),Message:m.OriginalText,MessageContent:messageBubbleBody(v,m,grouped),RootClass:"oie-bubble",Grouped:grouped})
@@ -621,7 +621,7 @@ templ timeline(v view){
 @timelineControl(v,"older",v.TimelineOlder)
 <div class="oie-day-divider"><span>{v.Text.Today}</span></div>
 for index,m:=range v.Messages {
-@message(v,m,index>0&&v.Messages[index-1].Sender.Id==m.Sender.Id&&v.Messages[index-1].Sender.DisplayName==m.Sender.DisplayName&&v.Messages[index-1].IsOwn==m.IsOwn&&v.Messages[index-1].Attachment==nil&&m.Attachment==nil)
+@message(v,m,index>0&&messagesGrouped(v.Messages[index-1],m),index+1==len(v.Messages)||!messagesGrouped(m,v.Messages[index+1]))
 }
 @timelineControl(v,"newer",v.TimelineNewer)
 }
@@ -679,7 +679,7 @@ templ messageBubbleBody(v view,m messageView,grouped bool){
 @dropdown.Dropdown(dropdown.Config{ID:"message-menu-"+m.Id,Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,m.Id),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:messageActions(v,m.Id)})
 </div>
 if !m.IsOwn && !grouped {
-<div class="oie-message-heading"><strong>{m.Sender.DisplayName}</strong></div>
+<div class="oie-message-heading"><strong class={v.messageAvatarBorder(m)}>{m.Sender.DisplayName}</strong></div>
 }
 @messageBody(v,m)
 <div class="oie-message-stamp">
