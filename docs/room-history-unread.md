@@ -23,8 +23,11 @@ alone is insufficient evidence to alter a retained message or clear its unread
 state. Those records require an explicit read operation or a separate repair
 with provider evidence.
 
-Work is isolated on `fix/room-history-unread`. No running engine, protocol
-session or retained data directory is modified by this change.
+The change was developed on `fix/room-history-unread`, then integrated into
+`codex/message-previews` as `5d5921c`. The complete XMPP and SQLite package tests
+and `make check` pass again after integration alongside the room-mention work.
+No running engine, protocol session or retained data directory was modified;
+previously stored unread entries remain pending an explicit read or repair.
 
 Focused validation covers XML room-history ingestion, invalid authorities,
 normal live traffic and direct offline delivery. Existing SQLite history and
