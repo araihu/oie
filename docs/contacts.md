@@ -47,3 +47,10 @@ session ownership. The development Prosody integration exercises initial roster
 recovery, push-driven rename/groups/removal, stable identity on reappearance and
 retained cache after restart. Fixtures use disposable development contacts.
 Whole-pipeline evidence is recorded in [local CI](local-ci.md).
+
+The full Dagger graph passed on `ef9a9a6`, including roster integration, generated
+CLI checks and real-engine browser messaging. The live preview was upgraded from
+migration 11 to 12 after a consistent SQLite backup. Integrity checks passed;
+all previously stored account, conversation, message, revision and operation UUIDs
+were retained, and the previously connected account reconnected. No stored
+credentials were exposed during verification.

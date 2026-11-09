@@ -29,6 +29,30 @@ Seven shell lifecycle tests cover defaults, absolute/relative overrides, failure
 evidence and exit-status preservation. Separate paths prevent one session from
 overwriting another session's stage logs.
 
+On 2026-11-09, the full graph completed with exit 0 on
+`ef9a9a6aec7ad39eff9c05995859b2ff3efc2574`, using
+`OIE_CI_ARTIFACTS=tests/browser/artifacts/ci-unified-search`. Checks, lint,
+generation, race tests, builds, isolated XMPP integration and all 39 browser
+workflows passed, including unified global search, simultaneous conversation
+search and saved XMPP contacts. Checks took 1m03s, XMPP integration 54s and the
+browser stage 10m34s. The six stage logs, complete browser log, real-engine report,
+preview preservation checks and exact source/exit receipt are retained in that
+ignored directory. Native `GOMAXPROCS=4 make check` also passed.
+
+The final run includes the current sender-color and avatar-grouping changes.
+It preserves the original Control-click and middle-click popup assertions and
+30-second bounds. That fixture uses full Chromium's new headless mode because
+the lighter headless shell intermittently loaded a real background tab without
+emitting Playwright's initialized-page event. Five focused and three complete
+native runs, a scoped Dagger run and the full graph passed after the browser
+selection change. Original-page instrumentation now stays on that page.
+
+The combined suite also verified search Back/Forward query restoration and
+localized, accessible conversation-search links. A room-reply recovery helper
+now checks that controls belong to their modal and remain outside the timeline,
+including when the modal stays open through a revision conflict. No send,
+conflict, draft, accessibility or popup assertions were removed.
+
 The same engine and SSH tunnel passed two uncached FFmpeg installations with
 clean client exits in 44 and 37 seconds. An intentional container exit of 23 and
 cancellation of a running command both returned errors and closed their sessions.

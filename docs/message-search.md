@@ -117,3 +117,11 @@ conversation opens directly. A contact without one opens the existing new-chat
 form with its account and address prefilled; creation still needs explicit form
 submission. Category links use the existing catalog and its device preferences.
 Search itself does not fetch thumbnails or enrich remote previews.
+
+Whole-pipeline validation completed on `ef9a9a6` with exit 0 and all 39 browser
+workflows, including the isolated real-engine XMPP workflow. Native `make check`
+also passes. Back/Forward restores both the visible query and category links;
+details-search links retain their visible localized name and native account/chat
+scope. The live preview serves the verified styles and both search controllers,
+with its existing account connected. See [local CI](local-ci.md) for the exact
+source and evidence directory.
