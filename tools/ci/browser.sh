@@ -43,6 +43,7 @@ OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/video.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/video-thumbnails.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/documents.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/shared-search.cjs
+OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/message-search.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/chat-info.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/fragment-navigation.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/timeline-scroll.cjs
