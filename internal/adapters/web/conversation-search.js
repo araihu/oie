@@ -59,7 +59,7 @@ window.OieRuntime.register('conversation-search',life=>{
   finally{clearTimeout(timeout);if(controller===ownController)controller=null;}
  }
  function changed(delay=300){if(!opened)return;returnFocus=null;abort();reset();address();if(!composing&&state().q)timer=life.timeout(()=>request(),delay);}
- function open(){if(!valid())return;opened=true;root.hidden=false;root.dataset.searchOpen='true';address();query.focus({preventScroll:true});if(state().q&&index<0)changed(0);}
+ function open(){if(!valid())return;const menu=document.getElementById('chat-options'),item=menu?.contains(document.activeElement)?document.activeElement:menu?.querySelector('[role=menuitem]');item?.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));opened=true;root.hidden=false;root.dataset.searchOpen='true';address();query.focus({preventScroll:true});if(state().q&&index<0)changed(0);}
  function close(){opened=false;root.hidden=true;root.dataset.searchOpen='false';abort();clearHighlights();address();controls();document.getElementById('chat-search-messages')?.focus({preventScroll:true});}
  life.on(document,'oie:conversation-search-open',open);
  life.on(document,'click',event=>{const link=event.target.closest?.('[data-open-conversation-search]');if(link&&event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey&&(!link.dataset.searchConversation||link.dataset.searchConversation===conversation)){event.preventDefault();event.stopImmediatePropagation();window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id:'details'}}));open()}},true);
