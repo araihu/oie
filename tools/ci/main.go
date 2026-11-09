@@ -158,6 +158,9 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 		WithMountedCache("/go/pkg/mod", client.CacheVolume("oie-ci-go-mod-v1")).
 		WithMountedCache("/root/.cache/go-build", client.CacheVolume("oie-ci-go-build-v1")).
 		WithMountedCache("/root/.cache/golangci-lint", client.CacheVolume("oie-ci-golangci-lint-v1")).
+		// Bound both Go's runtime and its default package/build parallelism on
+		// shared runners. Child processes still keep their production deadlines.
+		WithEnvVariable("GOMAXPROCS", "4").
 		WithEnvVariable("GOWORK", "off").WithExec([]string{"sh", "-c", setupCommand})
 	base, err := r.stage(ctx, "setup", base)
 	if err != nil {
