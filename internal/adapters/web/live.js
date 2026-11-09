@@ -473,7 +473,7 @@ window.OieRuntime.register('live', life => {
     }
   }
   life.on(document,'oie:timeline-content',event=>{readAvatars(event.detail.page);applyAvatars();localizeTimes();if(highlightedMessage)document.querySelector(`#message-timeline [data-message-id="${CSS.escape(highlightedMessage)}"]`)?.classList.add('oie-reply-highlight');});
-  life.on(document,'oie:timeline-focus',event=>{focusMessage(event.detail.id);showJump(true);});
+  life.on(document,'oie:timeline-focus',event=>{focusMessage(event.detail.id,event.detail.focus!==false);showJump(true);});
   life.on(document,'oie:timeline-alias',event=>{if(highlightedMessage===event.detail.requested)highlightedMessage=event.detail.canonical;});
   life.on(document,'oie:info-content',()=>{applyAvatars();localizeTimes();});
   life.on(document,'oie:shared-append',event=>{if(event.detail?.page)readAvatars(event.detail.page);applyAvatars();localizeTimes();});

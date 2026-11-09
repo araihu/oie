@@ -4,7 +4,7 @@ window.OieRuntime.register('timeline',life=>{
  const uuid=value=>/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value||''),tuple=(a,b)=>a.ms===b.ms?(a.id>b.id?1:a.id<b.id?-1:0):a.ms>b.ms?1:-1;
  const rows=()=>[...root.querySelectorAll(':scope>[data-message-id][data-message-source]')];
  const identity={engine:document.body.dataset.engineId,account:document.body.dataset.accountId,conversation:document.body.dataset.conversationId};
- let disposed=false,busy=false,epoch=0,controller,observer,resizer,anchor,restoring=false,follow=false,failed='',retryDirection='',refreshAgain=false,refreshPage,liveAttached=false,older=false,newer=false,retryMode='page',retryTarget='',forceFollow=false;
+ let disposed=false,busy=false,epoch=0,controller,observer,resizer,anchor,restoring=false,follow=false,failed='',retryDirection='',refreshAgain=false,refreshPage,liveAttached=false,older=false,newer=false,retryMode='page',retryTarget='',forceFollow=false,focusEpoch=0,focusPending=false;
  const edge=direction=>root.querySelector(`[data-timeline-edge="${direction}"]`),nearBottom=()=>root.scrollHeight-root.scrollTop-root.clientHeight<60;
  function parse(scope,limit=200){
   const envelope=scope.querySelector('template[data-timeline-page]');if(!envelope)return null;const data=envelope.dataset;
@@ -47,17 +47,17 @@ window.OieRuntime.register('timeline',life=>{
   if(trimmed.length){if(direction==='older'){newer=true;liveAttached=false}else older=true}
   for(const plan of aliases){if(anchor?.id===plan.previous)anchor.id=plan.record.id;if(document.body.dataset.focusMessage===plan.previous)document.body.dataset.focusMessage=plan.record.id;document.dispatchEvent(new CustomEvent('oie:timeline-alias',{detail:{requested:plan.previous,canonical:plan.record.id}}))}hooks(page.scope,starGeneration);correct();life.raf(correct);observe();return true;
  }
- function observe(){observer?.disconnect();resizer?.disconnect();if(resizer)for(const row of rows())resizer.observe(row);if(failed||busy||disposed)return;if(observer){if(older)observer.observe(edge('older'));if(newer)observer.observe(edge('newer'))}}
+ function observe(){observer?.disconnect();resizer?.disconnect();if(resizer)for(const row of rows())resizer.observe(row);if(failed||busy||disposed||focusPending)return;if(observer){if(older)observer.observe(edge('older'));if(newer)observer.observe(edge('newer'))}}
  function aliasPlans(pageDocument,requested){
   const plans=[],seen=new Set();for(const template of pageDocument.querySelectorAll('template[data-timeline-alias]')){const previous=template.dataset.timelineAlias,id=template.dataset.canonical,node=template.content.firstElementChild,ms=Number(node?.dataset.createdMs);if(!requested.includes(previous)||seen.has(previous)||!uuid(id)||id===previous||!node||node.dataset.messageId!==id||node.dataset.messageAccount!==identity.account||node.dataset.messageConversation!==identity.conversation||!uuid(node.dataset.messageRevision)||!/^[-]?\d+$/.test(node.dataset.createdMs||'')||!Number.isSafeInteger(ms)||!node.dataset.messageVersion)throw Error('alias');seen.add(previous);plans.push({previous,record:{id,ms,node,version:node.dataset.messageVersion}})}return plans;
  }
  function normalizedRows(before,plans){const items=new Map(before.map(item=>[item.id,item]));for(const plan of plans){if(!items.has(plan.previous))continue;items.delete(plan.previous);const existing=items.get(plan.record.id);if(existing&&existing.ms!==plan.record.ms)throw Error('alias_timestamp');if(!existing)items.set(plan.record.id,plan.record)}return [...items.values()].sort(tuple)}
  function endpoint(mode,direction='',cursor='',bounds){const url=new URL('/ui/timeline',location.origin);for(const [key,value]of Object.entries({engineId:identity.engine,accountId:identity.account,conversationId:identity.conversation,mode,direction,cursor,lang:document.documentElement.lang,theme:document.documentElement.dataset.mode||'system',...(bounds||{})}))if(value)url.searchParams.set(key,value);return url}
- async function request(mode,direction,manual=false,target=''){let nextRequest;
+ async function request(mode,direction,manual=false,target='',focusOptions={}){let nextRequest;
   if(disposed||busy||!manual&&failed)return;if(mode==='page'&&!(direction==='older'?older:newer))return;
   retryMode=mode;
   if(mode==='page'&&!capacity(direction)){failed='paused';retryDirection=direction;controls();observe();return}
-  const before=current();if(!before.length)return;const bound=direction==='older'?before[0]:before.at(-1),bounds={oldest:before[0].id,newest:before.at(-1).id},url=mode==='window'?endpoint(mode,'','',bounds):mode==='context'?endpoint(mode,'',target):endpoint(mode,direction,bound.id),generation=++epoch,starGeneration=Number(document.body.dataset.starGeneration||0),wasBottom=nearBottom()||forceFollow;forceFollow=false;
+  const before=current();if(!before.length&&mode!=='context')return false;const bound=direction==='older'?before[0]:before.at(-1),bounds={oldest:before[0]?.id||'',newest:before.at(-1)?.id||''},url=mode==='window'?endpoint(mode,'','',bounds):mode==='context'?endpoint(mode,'',target):endpoint(mode,direction,bound.id),generation=++epoch,starGeneration=Number(document.body.dataset.starGeneration||0),wasBottom=nearBottom()||forceFollow;forceFollow=false;
   busy=true;retryDirection=direction;retryMode=mode;retryTarget=target;failed='';controls();observe();controller=new AbortController();const timer=life.timeout(()=>controller.abort(),12000);
   try{
    const response=await life.fetch(url,{credentials:'same-origin',cache:'no-store',redirect:'error',signal:controller.signal});if(!response.ok||!response.headers.get('Content-Type')?.startsWith('text/html'))throw Error('response');const html=await response.text();if(html.length>12*1024*1024)throw Error('large');if(disposed||generation!==epoch)return;
@@ -70,7 +70,7 @@ window.OieRuntime.register('timeline',life=>{
    if(mode==='context'){
     if(!page.entries.some(item=>item.id===page.data.canonicalCursor))throw Error('context_target');
     const selection=getSelection(),locked=rows().some(row=>!!row.querySelector('[aria-expanded="true"]')||[...row.querySelectorAll('video,audio')].some(media=>!media.paused&&!media.ended)||selection&&!selection.isCollapsed&&(row.contains(selection.anchorNode)||row.contains(selection.focusNode)));if(locked){failed='paused';return}
-    if(merge(page,{direction:'context',reset:true,starGeneration})){older=page.data.hasOlder==='true';newer=page.data.hasNewer==='true';liveAttached=false;document.body.dataset.focusMessage=page.data.canonicalCursor;document.dispatchEvent(new CustomEvent('oie:timeline-focus',{detail:{id:page.data.canonicalCursor}}));capture()}return;
+    if(merge(page,{direction:'context',reset:true,starGeneration})){older=page.data.hasOlder==='true';newer=page.data.hasNewer==='true';liveAttached=false;document.body.dataset.focusMessage=page.data.canonicalCursor;document.dispatchEvent(new CustomEvent('oie:timeline-focus',{detail:{id:page.data.canonicalCursor,focus:focusOptions.focus!==false}}));capture();return true}return false;
    }
    const far=aliases.filter(plan=>!before.some(item=>item.id===plan.record.id)&&(tuple(plan.record,before[0])<0||tuple(plan.record,before.at(-1))>0));
    if(far.length){
@@ -84,8 +84,8 @@ window.OieRuntime.register('timeline',life=>{
    if(merge(page,{direction:mode==='page'?direction:'update',authoritative:mode==='window',followEnd:mode==='page'&&direction==='newer'&&liveAttached&&wasBottom,starGeneration,aliases})){
     if(mode==='page'){if(direction==='older')older=page.data.hasOlder==='true';else{newer=page.data.hasNewer==='true';if(!newer&&!window.document.body.dataset.focusMessage)liveAttached=true}}
    }
-  }catch(error){if(!disposed&&!life.signal.aborted){failed='failed';retryDirection=direction||'older'}}
-  finally{clearTimeout(timer);if(!disposed){busy=false;controls();observe();if(nextRequest){life.timeout(()=>request(nextRequest.mode,nextRequest.direction,true,nextRequest.target||''),0)}else if(refreshAgain&&!failed){refreshAgain=false;life.timeout(()=>refresh(refreshPage),100)}}}
+  }catch(error){if(!disposed&&!life.signal.aborted&&generation===epoch){failed='failed';retryDirection=direction||'older'}}
+  finally{clearTimeout(timer);if(!disposed){busy=false;controls();observe();if(nextRequest&&!focusPending){life.timeout(()=>request(nextRequest.mode,nextRequest.direction,true,nextRequest.target||''),0)}else if(refreshAgain&&!failed&&!focusPending){refreshAgain=false;life.timeout(()=>refresh(refreshPage),100)}}}
  }
  function refresh(page,force=false){forceFollow=forceFollow||force;
   if(disposed)return;let snapshot;try{snapshot=parse(page.querySelector('#live-timeline')||page)}catch{return}if(!snapshot)return;refreshPage=page;if(busy){refreshAgain=true;return}
@@ -97,7 +97,23 @@ window.OieRuntime.register('timeline',life=>{
   if(!completeCoverage&&!failed)request('window','older');controls();
  }
  let initial;try{initial=parse(root,50)}catch{return}if(!initial)return;older=initial.data.hasOlder==='true';newer=initial.data.hasNewer==='true';liveAttached=!newer&&!document.body.dataset.focusMessage;
- const api={refresh,get hasNewer(){return newer},get liveAttached(){return liveAttached},get size(){return rows().length}};window.OieTimeline=api;
+ // Search uses the same bounded context parser/merge path as reply navigation.
+ // A newer target invalidates an unfinished request before it can mount rows.
+ function cancelFocus(){focusEpoch++;if(focusPending){epoch++;controller?.abort()}focusPending=false}
+ async function focus(id,options={}){
+  const generation=++focusEpoch;focusPending=true;
+  if(disposed||!uuid(id)||document.body.dataset.engineId!==identity.engine||document.body.dataset.accountId!==identity.account||document.body.dataset.conversationId!==identity.conversation){focusPending=false;return false}
+  if(busy){epoch++;controller?.abort()}
+  while(busy&&!disposed&&generation===focusEpoch)await new Promise(resolve=>setTimeout(resolve,16));
+  if(disposed||generation!==focusEpoch)return false;
+  const row=rows().find(item=>item.dataset.messageId===id);
+  let found=false;
+  if(row){document.body.dataset.focusMessage=id;liveAttached=false;document.dispatchEvent(new CustomEvent('oie:timeline-focus',{detail:{id,focus:options.focus!==false}}));controls();found=true}
+  else found=await request('context','',true,id,options)===true;
+  if(generation!==focusEpoch||disposed)return false;
+  focusPending=false;controls();observe();return found;
+ }
+ const api={refresh,focus,cancelFocus,get hasNewer(){return newer},get liveAttached(){return liveAttached},get size(){return rows().length}};window.OieTimeline=api;
  if(typeof IntersectionObserver==='function')observer=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){const direction=entry.target.dataset.timelineEdge;if(direction==='older'&&older||direction==='newer'&&newer){request('page',direction);break}}},{root,rootMargin:'70px 0px'});
  if(typeof ResizeObserver==='function')resizer=new ResizeObserver(()=>correct());
  life.on(document,'click',event=>{const button=event.target.closest('[data-timeline-load]');if(button&&root.contains(button)&&!event.defaultPrevented&&event.button===0&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey){event.preventDefault();event.stopPropagation();request(failed?retryMode:'page',button.dataset.timelineLoad,true,failed?retryTarget:'')}},true);
@@ -105,6 +121,6 @@ window.OieRuntime.register('timeline',life=>{
  life.on(document,'oie:timeline-snapshot',event=>refresh(event.detail.page));
  life.on(document,'oie:actions-refreshed',()=>{if(!busy&&!failed)observe()});
  life.on(document,'keydown',event=>{if(event.key==='Escape'&&failed==='paused')life.timeout(()=>{failed='';controls();observe()},200)});
- life.cleanup(()=>{disposed=true;epoch++;controller?.abort();observer?.disconnect();resizer?.disconnect();if(window.OieTimeline===api)delete window.OieTimeline});
+ life.cleanup(()=>{disposed=true;focusEpoch++;epoch++;controller?.abort();observer?.disconnect();resizer?.disconnect();if(window.OieTimeline===api)delete window.OieTimeline});
  controls();life.raf(()=>{capture();observe()});
 });

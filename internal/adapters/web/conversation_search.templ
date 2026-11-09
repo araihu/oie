@@ -1,0 +1,35 @@
+package web
+
+import (
+ "strconv"
+ "github.com/araihu/goshtoso/components/button"
+ "github.com/araihu/goshtoso/components/checkbox"
+ "github.com/araihu/goshtoso/components/icon/heroicons"
+ "github.com/araihu/goshtoso/components/link"
+ "github.com/araihu/goshtoso/components/textinput"
+)
+
+templ conversationSearchBar(v view) {
+if v.Selected!=nil {
+<section id="conversation-message-search" class="oie-conversation-search" hidden?={!v.ConversationSearchOpen} data-conversation-search data-search-engine={v.EngineID} data-search-account={v.Selected.AccountId} data-search-conversation={v.Selected.Id} data-search-open={strconv.FormatBool(v.ConversationSearchOpen)} data-search-loading={v.Text.SearchLoading} data-search-failed={v.Text.SearchFailed} data-search-engine-changed={v.Text.EngineChanged} data-search-invalid={v.Text.SearchInvalid} data-search-empty={v.Text.SearchEmptyTitle} data-search-result-label={v.Text.ConversationSearchResult} data-search-missing={v.Text.ConversationSearchMissing} data-search-historical-label={v.Text.SearchPriorVersion} data-search-metadata-label={v.Text.SearchMetadata} aria-label={v.Text.SearchMessages}>
+<form action="/search" method="get" role="search" aria-label={v.Text.SearchMessages+" · "+v.Selected.Title} class="oie-conversation-search-form">
+<input type="hidden" name="engineId" value={v.EngineID}/><input type="hidden" name="accountId" value={v.Selected.AccountId}/><input type="hidden" name="conversationId" value={v.Selected.Id}/><input type="hidden" name="lang" value={v.Locale}/><input type="hidden" name="theme" value={v.Theme}/>
+<div class="oie-conversation-search-query">
+@textinput.TextInput(textinput.Config{ID:"conversation-search-query",Name:"q",Type:textinput.TypeSearch,Value:v.ConversationSearchQuery,Placeholder:v.Text.SearchQuery,InputAttrs:templ.Attributes{"aria-label":v.Text.SearchQuery,"maxlength":"400","autocomplete":"off","aria-controls":"message-timeline","aria-describedby":"conversation-search-status"}})
+</div>
+<div class="oie-conversation-search-actions">
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"data-conversation-search-older":"","disabled":true,"aria-label":v.Text.ConversationSearchOlder,"title":v.Text.ConversationSearchOlder})) { <span class="oie-conversation-search-up">@glyph(heroicons.Icon16SolidChevronDown)</span> }
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"data-conversation-search-newer":"","disabled":true,"aria-label":v.Text.ConversationSearchNewer,"title":v.Text.ConversationSearchNewer})) { @glyph(heroicons.Icon16SolidChevronDown) }
+@link.Link(v.conversationSearchCloseHref(),link.WithRootClass("oie-icon-button"),link.WithAttrs(templ.Attributes{"data-conversation-search-close":"","aria-label":v.Text.ConversationSearchClose,"title":v.Text.ConversationSearchClose})) { @glyph(heroicons.Icon16SolidXMark) }
+</div>
+<div class="oie-conversation-search-options">
+@checkbox.Checkbox(checkbox.Config{ID:"conversation-search-history",Name:"includeEditHistory",Value:"true",Label:v.Text.IncludeEditHistory,Checked:v.ConversationSearchHistory})
+<p id="conversation-search-status" data-conversation-search-status role="status" aria-live="polite"></p>
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-conversation-search-retry":"","hidden":true})){ {v.Text.Retry} }
+</div>
+<noscript>@button.Button(button.WithType("submit")){ {v.Text.SearchMessages} }</noscript>
+</form>
+<p class="oie-conversation-search-excerpt" data-conversation-search-excerpt hidden></p>
+</section>
+}
+}
