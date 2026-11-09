@@ -358,6 +358,7 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 
 /* Link fallback content belongs to Oie inside the public Card body slot. */
 .oie-link-card-shell{position:relative;min-width:0}
+.oie-shared-item .oie-link-fallback-card{width:100%;max-width:none}
 .oie-link-options{position:absolute;top:4px;right:4px;z-index:2}
 .oie-link-card-image{display:block;width:100%;max-height:220px;object-fit:cover;aspect-ratio:16/9;margin-bottom:12px;border-radius:6px}
 .oie-link-card-summary{display:flex;gap:10px;min-width:0;padding-right:28px;align-items:flex-start}

@@ -8,7 +8,7 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
  const previews=[
   {title:'Full social card',imageHash:hash,url:'https://social.example/post'},
   {title:'Anti-circumvention laws — Wikipedia',faviconHash:hash,url:'https://en.wikipedia.org/wiki/Anti-circumvention_laws'},
-  {title:'Readable title <script>alert(1)</script>',description:'Plain description',url:'https://article.example/story'},
+  {title:'Readable title for a post-American, enshittification-resistant internet <script>alert(1)</script>',description:'Plain description',url:'https://article.example/story'},
   {url:'https://empty.example/readable%20path?private=secret'},
   {title:'Broken image fallback',imageHash:bad,faviconHash:bad,url:'https://broken.example/story'},
   {url:'https://bare.example/'},
@@ -36,7 +36,7 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
   await page.goto(base+'/?section=media&contentType=links&lang=en&theme=dark');const scope=n=>page.locator(`[data-preview-id="${previews[n].id}"]`),card=n=>page.locator(`[data-shared-item="${previews[n].id}"]`);
   await until(async()=>await scope(1).locator('.oie-link-card-favicon').evaluate(img=>img.complete&&img.naturalWidth===32),'favicon ready');
   assert.equal(await scope(1).locator('[data-link-title]').innerText(),previews[1].title);assert.equal(await scope(1).locator('[data-link-domain]').innerText(),'en.wikipedia.org');assert.equal(await scope(1).locator('.oie-preview-media').count(),0);
-  const box=await scope(1).locator('[data-link-card]').boundingBox(),title=await scope(1).locator('[data-link-title]').boundingBox();assert(title.x-box.x<65&&box.height<150,'empty image column remains');
+  const box=await scope(1).locator('[data-link-card]').boundingBox(),title=await scope(1).locator('[data-link-title]').boundingBox();assert(title.x-box.x<65&&box.height<150,'empty image column remains');const widthProof=await scope(2).evaluate(node=>{const card=node.querySelector('.oie-link-fallback-card').getBoundingClientRect(),link=node.querySelector('[data-preview-page]').getBoundingClientRect(),title=node.querySelector('[data-link-title]'),rect=title.getBoundingClientRect();return{card:card.width,available:link.width,titleHeight:rect.height,lineHeight:parseFloat(getComputedStyle(title).lineHeight)}});assert(Math.abs(widthProof.card-widthProof.available)<1,'catalog card leaves unused row width');assert(widthProof.titleHeight<=widthProof.lineHeight+1,'long title wraps despite available desktop width');
   assert.equal(await scope(3).locator('[data-link-title]').innerText(),'/readable path');assert.equal(await scope(3).locator('[data-preview-page]').getAttribute('href'),previews[3].url);assert(!(await scope(3).innerText()).includes('secret'));
   await until(async()=>await scope(4).locator('.oie-link-card-image').isHidden()&&await scope(4).locator('.oie-link-card-favicon').isHidden(),'broken image/icon fallback');assert((await scope(4).innerText()).includes('Broken image fallback'));assert.equal((await scope(5).innerText()).split('bare.example').length-1,1);
   await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});await scope(1).screenshot({path:path.join(__dirname,'artifacts','link-fallback-compact.png')});assert.equal(await page.locator('[data-link-card] script').count(),0);assert((await scope(2).locator('[data-link-title]').innerText()).includes('<script>'));

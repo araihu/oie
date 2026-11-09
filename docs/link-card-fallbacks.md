@@ -5,6 +5,9 @@ catalog. It keeps the page title primary and displays the actual destination
 domain once. Missing metadata falls back to a decoded, bounded URL path and
 domain; the clickable destination keeps the full original URL.
 
+Catalog link cards fill the available row width. Their title and description
+wrap according to that width rather than the default 384-pixel Card limit.
+
 Cards without an image do not allocate an image column. Missing or broken
 images fall back to a locally cached site icon, then a decorative local link
 icon. The engine fetches declared site icons and a conventional favicon through
