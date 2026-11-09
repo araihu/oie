@@ -34,6 +34,7 @@ templ conversationPane(v view){
 			} else if v.Selected!=nil && !v.Unavailable {
 				@chatHeader(v)
 @conversationPreferenceForms(v)
+@conversationSearchBar(v)
 				if v.Preview {
 					<p class="oie-preview-note">{ v.Text.PreviewNote }</p>
 				}

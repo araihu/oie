@@ -99,7 +99,28 @@ func (v view) href(pairs ...string) string {
 			q.Set("contentConversation", v.SharedConversation)
 		}
 	}
+	if v.GlobalMessageSearch && !v.NativeMessageSearch {
+		q.Set("searchMode", "messages")
+		q.Set("searchQuery", v.MessageSearch.Query)
+		q.Set("searchAccount", v.MessageSearch.AccountID)
+		q.Set("searchEngine", v.EngineID)
+		if v.MessageSearch.IncludeHistory {
+			q.Set("includeEditHistory", "true")
+		}
+	}
+	if v.ConversationSearchOpen {
+		q.Set("chatSearch", "1")
+		q.Set("chatQuery", v.ConversationSearchQuery)
+		if v.ConversationSearchHistory {
+			q.Set("chatIncludeHistory", "true")
+		}
+	}
 	for i := 0; i+1 < len(pairs); i += 2 {
+		if pairs[i] == "section" && pairs[i+1] == "media" {
+			for _, key := range []string{"searchMode", "searchQuery", "searchAccount", "searchEngine", "includeEditHistory", "chatSearch", "chatQuery", "chatIncludeHistory"} {
+				q.Del(key)
+			}
+		}
 		if pairs[i] == "section" && pairs[i+1] != "media" {
 			q.Del("contentType")
 			q.Del("contentCursor")
@@ -109,6 +130,9 @@ func (v view) href(pairs ...string) string {
 			q.Del("contentCursor")
 		}
 		if pairs[i] == "chat" && pairs[i+1] != v.ChatID {
+			q.Del("chatSearch")
+			q.Del("chatQuery")
+			q.Del("chatIncludeHistory")
 			for _, key := range []string{"infoView", "infoType", "infoCursor", "infoQuery", "infoFocus"} {
 				q.Del(key)
 			}

@@ -59,6 +59,10 @@ func TestMessageSearchReadOnlyScopedEscapedRecovery(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/v1/engine":
 			_ = json.NewEncoder(w).Encode(map[string]any{"id": testEngine, "role": "hosted", "apiVersion": "0.21.0", "eventCursor": testEngine + ":0"})
+		case "/api/v1/contacts":
+			w.WriteHeader(404)
+		case "/api/v1/conversations":
+			_, _ = w.Write([]byte(`{"items":[]}`))
 		case "/api/v1/accounts":
 			_, _ = w.Write([]byte(`{"items":[]}`))
 		case "/api/v1/conversations/" + testChat:
@@ -154,5 +158,78 @@ func TestMessageSearchRejectsForeignOrMalformedPages(t *testing.T) {
 				t.Fatal("foreign/malformed projection accepted")
 			}
 		})
+	}
+}
+
+func TestSavedContactsRequireScopedDirectoryEvidence(t *testing.T) {
+	for _, tc := range []struct {
+		name, state                      string
+		foreign, empty, unavailable      bool
+		wantKnown, wantPartial, wantRows bool
+	}{
+		{name: "known roster", state: "known", wantKnown: true, wantRows: true},
+		{name: "known empty", state: "known", empty: true, wantKnown: true},
+		{name: "unobserved", state: "unknown", empty: true, wantPartial: true},
+		{name: "cached unavailable", state: "unavailable", wantPartial: true, wantRows: true},
+		{name: "foreign source", state: "known", foreign: true},
+		{name: "old API unavailable", unavailable: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "GET" || r.URL.Path != "/api/v1/contacts" || r.URL.Query().Get("q") != "needle" || r.URL.Query().Get("accountId") != testAccount || r.URL.Query().Get("limit") != "20" {
+					t.Errorf("unexpected directory request %s %s", r.Method, r.URL)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				if tc.unavailable {
+					w.WriteHeader(404)
+					return
+				}
+				owner := testAccount
+				if tc.foreign {
+					owner = testChat
+				}
+				page := engineapi.ContactPage{Items: []engineapi.Contact{}, Sources: []engineapi.ContactSource{{AccountId: owner, State: engineapi.ContactSourceState(tc.state)}}}
+				if !tc.empty {
+					page.Items = append(page.Items, engineapi.Contact{Id: testMessage, RevisionId: testRevision, AccountId: owner, AccountLabel: "Account", Address: "peer@example.test", DisplayName: "<img> needle", Subscription: "none"})
+				}
+				_ = json.NewEncoder(w).Encode(page)
+			}))
+			defer backend.Close()
+			ui, err := New(backend.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			v := view{MessageSearch: messageSearchView{Query: "needle", AccountID: testAccount}}
+			ui.loadSearchContacts(t.Context(), &v)
+			if v.MessageSearch.ContactsKnown != tc.wantKnown || v.MessageSearch.ContactsPartial != tc.wantPartial || (len(v.MessageSearch.Contacts) > 0) != tc.wantRows {
+				t.Fatalf("directory coverage inferred or foreign entries exposed: %#v", v.MessageSearch)
+			}
+		})
+	}
+}
+
+func TestSearchNavigationSeparatesGlobalAndConversationScopes(t *testing.T) {
+	v := view{GlobalMessageSearch: true, ConversationSearchOpen: true, ConversationSearchQuery: "inner", ConversationSearchHistory: true, Section: "chats", Filter: "unread", Query: "old title", ChatID: testChat, ChatOpen: true, Locale: "en", Theme: "dark", EngineID: testEngine, MessageSearch: messageSearchView{Query: "outer", AccountID: testAccount, IncludeHistory: true}}
+	same, _ := url.Parse(v.href("chat", testChat))
+	if same.Query().Get("chatQuery") != "inner" || same.Query().Get("searchQuery") != "outer" {
+		t.Fatal("same-chat navigation lost an independent query")
+	}
+	changed, _ := url.Parse(v.href("chat", testMessage))
+	if changed.Query().Has("chatQuery") || changed.Query().Has("chatSearch") || changed.Query().Get("searchQuery") != "outer" {
+		t.Fatal("different conversation inherited the old conversation query")
+	}
+	contact := engineapi.Contact{AccountId: testAccount, Address: "friend@example.test"}
+	target, _ := url.Parse(v.messageSearchContactHref(contact))
+	if target.Path != "/" || target.Query().Get("open") != "newchat" || target.Query().Get("newChatAddress") != contact.Address || target.Query().Get("account") != testAccount {
+		t.Fatal("new contact did not lead to an explicit prefilled conversation form")
+	}
+	contact.ConversationId = &v.ChatID
+	target, _ = url.Parse(v.messageSearchContactHref(contact))
+	if target.Query().Get("chat") != testChat || target.Query().Has("newChatAddress") {
+		t.Fatal("existing contact conversation was not reused")
+	}
+	category, _ := url.Parse(v.messageSearchCategoryHref("documents"))
+	if category.Query().Get("section") != "media" || category.Query().Get("q") != "outer" || category.Query().Has("searchMode") || category.Query().Has("chatQuery") {
+		t.Fatal("category did not use the existing scoped catalog")
 	}
 }

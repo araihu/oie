@@ -33,7 +33,7 @@ func navigation(v view, id string) sidebar.Config {
 		Logo: brand(v), LogoHref: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), DisableSkipLink: true, RootClass: "oie-navigation", FooterSlot: footer,
 		Items: []sidebar.Item{
 			{ID: "chats", Label: v.Text.Chats, Href: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidQueueList), Active: v.Section == "chats", LinkAttrs: applicationNavigationAttrs()},
-			{ID:"message-search",Label:v.Text.SearchMessages,Href:v.messageSearchHref(v.AccountFilter,""),Icon:glyph(heroicons.Icon16SolidMagnifyingGlass),Active:v.NativeMessageSearch,LinkAttrs:templ.Attributes{"data-open-message-search":""}},
+			
             {ID: "media", Label: v.Text.SharedMedia, Href: v.href("section", "media", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidRectangleGroup), Active: v.Section == "media", LinkAttrs: applicationNavigationAttrs()},
 			{ID: "archived", Label: v.Text.Archived, Href: v.href("section", "archived", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidFolder), Active: v.Section == "archived", LinkAttrs: applicationNavigationAttrs()},
 			{ID: "favorites", Label: v.Text.Favorites, Href: v.href("section", "favorites", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidStar), Active: v.Section == "favorites", LinkAttrs: applicationNavigationAttrs()},
@@ -72,6 +72,7 @@ templ page(v view) {
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href="/ui/app.css"/>
 <link rel="stylesheet" href="/ui/message-search.css"/>
+<link rel="stylesheet" href="/ui/conversation-search.css"/>
 			<link rel="stylesheet" href="/ui/shared-actions.css"/><link rel="stylesheet" href="/ui/message-star.css"/>
 <link rel="stylesheet" href="/ui/timeline.css"/>
 <link rel="stylesheet" href="/ui/video.css"/>
@@ -81,6 +82,7 @@ templ page(v view) {
 <script src="/ui/stars.js" defer></script>
 <script src="/ui/conversation-preferences.js" defer></script>
 <script src="/ui/message-search.js" defer></script>
+<script src="/ui/conversation-search.js" defer></script>
 <script src="/ui/previews.js" defer></script>
 <script src="/ui/videos.js" defer></script>
 <script src="/ui/video-thumbnails.js" defer></script>
@@ -133,7 +135,7 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 @newConversation(v)
 @imageViewer(v)
 @documentViewer(v)
-@messageSearchDrawer(v)
+
 
 
 if v.Section=="media" {
@@ -218,9 +220,6 @@ if v.NativeMessageSearch {
 							{ v.Text.Chats }
 					}
 				</h2>
-				<div>
-@link.Link(v.messageSearchHref(v.AccountFilter,""),link.WithRootClass("oie-icon-button"),link.WithAttrs(templ.Attributes{"data-open-message-search":"","aria-label":v.Text.SearchMessages,"title":v.Text.SearchMessages})){@glyph(heroicons.Icon16SolidMagnifyingGlass)}
-</div>
 <div x-data="{}">
 					@button.Button(button.WithRootClass("oie-icon-button oie-new-chat"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.NewChat, "title": v.Text.NewChat,"data-new-conversation":""}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'newchat'})"})) {
 						@glyph(heroicons.Icon16SolidPlus)
@@ -231,12 +230,15 @@ if v.NativeMessageSearch {
 			if v.Preview {
 				<p class="oie-preview-label">{ v.Text.Preview }</p>
 			}
-<form action="/" method="get" class="oie-search" role="search">
+<form id="conversation-filter-form" action="/" method="get" class="oie-search" role="search">
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button oie-global-search-back"),button.WithAttrs(templ.Attributes{"data-message-search-close":"","aria-label":v.Text.Back,"title":v.Text.Back,"hidden":!v.GlobalMessageSearch})){@glyph(heroicons.Icon16SolidChevronLeft)}
 <input type="hidden" name="account" value={v.AccountFilter}/>
 				<input type="hidden" name="section" value={ v.Section }/>
 				<input type="hidden" name="filter" value={ v.Filter }/>
 				@textinput.TextInput(textinput.Config{ID: "conversation-search", Name: "q", Value: v.Query, Type: textinput.TypeSearch, Placeholder: v.Text.SearchChats, InputAttrs: templ.Attributes{"style": "padding-left:2.5rem;border-radius:1.4rem;background:var(--oie-raised);border-color:var(--oie-border);color:var(--oie-text)"}})
 			</form>
+@messageSearchSlot(v)
+<div id="conversation-list-default" class="oie-list-default" hidden?={v.GlobalMessageSearch}>
 			<nav class="oie-filters" aria-label={ v.Text.Chats }>
 				@filterLink(v, "all", v.Text.All)
 				@filterLink(v, "unread", v.Text.Unread)
@@ -246,6 +248,7 @@ if v.NativeMessageSearch {
 <div id="history-status" class="oie-history-status" role="status">@historyBanner(v)</div>
 <div class="oie-conversation-scroll" id="conversation-list" data-version={v.conversationListVersion()}>
 @conversationList(v)
+</div>
 </div>
 			<div class="oie-list-account" x-data="{}">
 @profile(v,"compact")
@@ -304,7 +307,7 @@ templ chatHeader(v view) {
 		@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Details, "title": v.Text.Details,"data-open-details":""}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'details'})"})) {
 			@glyph(heroicons.Icon16SolidInformationCircle)
 		}
-{{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{Label:v.Text.Details,OnClick:"$dispatch('drawer:open', {id: 'details'})"}}},v.conversationPreferenceSection(),{Items:[]dropdown.Item{{ID:"chat-search-messages",Label:v.Text.SearchMessages,Icon:glyph(heroicons.Icon16SolidMagnifyingGlass),OnClick:"$dispatch('oie:message-search-open')"}}}} }}
+{{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{Label:v.Text.Details,OnClick:"$dispatch('drawer:open', {id: 'details'})"}}},v.conversationPreferenceSection(),{Items:[]dropdown.Item{{ID:"chat-search-messages",Label:v.Text.SearchMessages,Icon:glyph(heroicons.Icon16SolidMagnifyingGlass),OnClick:"$dispatch('oie:conversation-search-open')"}}}} }}
 if v.Selected.Kind=="room" {
 {{ sections=append(sections,dropdown.Section{Items:[]dropdown.Item{{ID:"chat-leave-room",Label:v.Text.LeaveRoom,Icon:glyph(heroicons.Icon16SolidArrowTopRightOnSquare),OnClick:"$dispatch('oie:leave-room')",Disabled:v.RoomSession==nil||!v.RoomSession.Active||!v.messagingImplemented("room_messaging")}}}) }}
 }

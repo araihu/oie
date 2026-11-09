@@ -9,16 +9,19 @@ Conversation-list title filtering remains separate.
 
 Primary task: find a saved message, inspect its source and open its current
 canonical message in the bounded timeline. The existing Oiê identity, system
-font, compact rows and semantic color tokens stay in use. Search is a public
-Goshtoso Drawer alongside the current conversation, with the same form and
-results available at `/search` for native GET navigation. Query/filter changes
-replace only results. Result links use existing conversation context navigation.
-Motion is limited to the library drawer; results do not animate into place.
+font, compact rows and semantic color tokens stay in use. The existing conversation-list search input opens global results in that same
+column. Conversation-title matches and saved-message matches share the query.
+The original filter controls and list remain mounted while hidden and return
+when search closes. A separate toolbar above the timeline searches only the
+current conversation. Both queries can remain active together. `/search` keeps
+native GET navigation available. Query/filter changes replace only results;
+result links use the existing bounded conversation context navigation. Results
+do not animate into place.
 
 The selected Goshtoso version is `v0.6.2-0.20261109092607-b79c3a7a8527`.
 Public `search.Search` provides a client-ranked command palette and JSON item
 loading, which does not own the engine-scoped history cursor contract. Compose
-`drawer`, `textinput`, searchable `combobox`, `checkbox`, `link`, `button`,
+`textinput`, searchable `combobox`, `checkbox`, `link`, `button`,
 `badge`, `spinner` and `emptystate` instead. Native account selection uses public
 Radio inputs inside a noscript fieldset. No dependency internals or copied
 component DOM are used. App-owned code owns debounce, request scope, history and
@@ -39,7 +42,7 @@ bounded result pagination.
 | Engine changed | Receive an old search response | Clear old results and reject stale scope; no automatic engine fallback | 0 |
 | Search navigation | Source then Back | Query/history/account/conversation restored from addressable search context | 0 search effects |
 | Native browser | GET `/search` and submit | Localized shell, controls, source links and explicit retry remain usable | 0 |
-| Drawer open | Inspect results | Results do not emit read receipts or request provider history/profile/media | 0 |
+| Search active | Inspect results | Results do not emit read receipts or request provider history/profile/media | 0 |
 
 Queries are limited to 200 Unicode code points. Include edit history is off by
 default and independent of archive provenance. Excerpts are escaped plain text,
@@ -66,16 +69,51 @@ explicit `accountId` contract.
 
 Source navigation carries an engine-bound pending search intent through a pane
 swap when the user immediately reopens search. New typing and scope choices win.
-Closing search cancels pending reads and pagination, and ignores the native
-search-input clear event that follows Escape. No deferred restore can reopen a
-closed drawer. Engine replacement requires the explicit restart action before
+Closing global search cancels pending reads and pagination and restores the
+original title filter. Escape prevents the browser search-input clear event from
+reopening search. No deferred restore can reopen a closed search. Engine replacement requires the explicit restart action before
 rebinding the search page.
 
 Focused validation: web package tests and race tests pass. Scoped
 `golangci-lint` passes. Independent browser QA verified global/account/chat
 queries, paginated results, prior-version labels with canonical bounded source
 jumps, Back, held older queries, transport failure and retry, Escape cancellation,
-rapid source navigation, explicit engine recovery and native GET. Eight actual
-drawer layouts passed axe at 390px and 1440px in both designs and light/dark.
-Mobile and desktop screenshots were reviewed. The coordinator records full
+rapid source navigation, explicit engine recovery and native GET. The earlier drawer prototype passed eight
+layouts through axe before the two-search reference refinement. Updated column
+and toolbar acceptances are recorded by independent browser QA.
+Mobile and desktop screenshots are reviewed for each accepted layout. The coordinator records full
 Dagger CI and the isolated development-XMPP integration result separately.
+
+## Unified global field and conversation toolbar
+
+The existing `conversation-search` field opens global search on focus or typing.
+It keeps the native conversation-title GET form as its fallback. Global mode
+shows categories for the existing media, links and documents catalog, matching
+saved roster contacts, bounded conversation-title matches and saved messages.
+It leaves the original conversation list, title query, filter controls and scroll
+mounted behind the results. Closing restores that list and query without
+reopening search through its own focus restoration.
+
+Global state uses `searchMode`, `searchQuery`, `searchAccount` and
+`includeEditHistory`. Conversation search uses `chatSearch`, `chatQuery` and
+`chatIncludeHistory`. Both remain visible together. Same-conversation source
+navigation retains both queries. Navigating to another conversation clears the
+previous conversation query. Back restores its earlier addressable context.
+
+The conversation toolbar searches newest matches first. Older and newer controls
+navigate retained results without wrapping. Its loaded-result indicator does not
+invent a total before pagination ends. Selecting a match uses the existing scoped
+context loader and retains the composer, toolbar and global search column. The
+context loader keeps its existing 50-message page and 200-message DOM bounds.
+Highlights decorate visible plain text; original message content and plain-text
+copy remain unchanged. Historical excerpts stay explicitly labeled and never
+replace the canonical current bubble.
+
+Contacts come only from the persisted protocol roster directory. Unknown or
+unavailable observations do not become a known-empty contact list. Cached
+contacts remain searchable while disconnected. Search does not request a roster,
+subscribe to presence or infer contacts from room occupants. An existing contact
+conversation opens directly. A contact without one opens the existing new-chat
+form with its account and address prefilled; creation still needs explicit form
+submission. Category links use the existing catalog and its device preferences.
+Search itself does not fetch thumbnails or enrich remote previews.

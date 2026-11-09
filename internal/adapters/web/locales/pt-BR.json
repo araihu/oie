@@ -457,5 +457,17 @@
   "SearchScope": "Conversa",
   "SearchAllConversations": "Todas as conversas",
   "SearchMetadataPending": "Os metadados guardados ainda estão sendo indexados.",
-  "SearchMore": "Mais mensagens"
+  "SearchMore": "Mais mensagens",
+  "SearchEverything": "Pesquisar",
+  "SearchConversations": "Conversas",
+  "SearchMessagesGroup": "Mensagens",
+  "SearchConversationsLimited": "Os resultados de conversas são limitados. Refine sua pesquisa.",
+  "ConversationSearchOlder": "Correspondência anterior",
+  "ConversationSearchNewer": "Próxima correspondência",
+  "ConversationSearchClose": "Fechar pesquisa na conversa",
+  "ConversationSearchResult": "Resultado",
+  "ConversationSearchMissing": "Mensagem indisponível nesta conversa",
+  "SearchContacts": "Contatos",
+  "SearchContactsPartial": "Os contatos salvos estão indisponíveis para algumas contas.",
+  "SearchContactsLimited": "Os resultados de contatos são limitados. Refine sua pesquisa."
 }

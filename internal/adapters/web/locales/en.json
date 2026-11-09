@@ -457,5 +457,17 @@
   "SearchScope": "Conversation",
   "SearchAllConversations": "All conversations",
   "SearchMetadataPending": "Saved metadata is still being indexed.",
-  "SearchMore": "More messages"
+  "SearchMore": "More messages",
+  "SearchEverything": "Search",
+  "SearchConversations": "Conversations",
+  "SearchMessagesGroup": "Messages",
+  "SearchConversationsLimited": "Conversation matches are limited. Refine your search.",
+  "ConversationSearchOlder": "Previous match",
+  "ConversationSearchNewer": "Next match",
+  "ConversationSearchClose": "Close conversation search",
+  "ConversationSearchResult": "Result",
+  "ConversationSearchMissing": "Message is unavailable in this conversation",
+  "SearchContacts": "Contacts",
+  "SearchContactsPartial": "Saved contacts are unavailable for some accounts.",
+  "SearchContactsLimited": "Contact matches are limited. Refine your search."
 }

@@ -9,7 +9,7 @@ window.OieRuntime.register('read-state',life=>{
  const seen=new Map(),acknowledged=new Set();let supported=false,busy=false,pending=null,nextKey='',retryAt=0,delay=1000;
  const status=root.querySelector('[data-read-status]');
  function feedback(failed){if(status){status.textContent=failed?status.dataset.readFailed:'';status.hidden=!failed;}}
- function focused(){return !document.hidden&&document.hasFocus()&&document.getElementById('oie-app')===root&&document.body.dataset.conversationId===conversation&&timeline.getClientRects().length>0&&![...document.querySelectorAll('dialog[open],[role="dialog"][aria-modal="true"]')].some(node=>node.getClientRects().length>0);}
+ function focused(){return !document.querySelector('[data-message-search-root][data-search-open="true"],[data-conversation-search][data-search-open="true"]')&&!document.hidden&&document.hasFocus()&&document.getElementById('oie-app')===root&&document.body.dataset.conversationId===conversation&&timeline.getClientRects().length>0&&![...document.querySelectorAll('dialog[open],[role="dialog"][aria-modal="true"]')].some(node=>node.getClientRects().length>0);}
  function valid(state){return state?.conversationId===conversation&&state.accountId===account&&Number.isInteger(state.unreadCount)&&state.unreadCount>=0;}
  async function initialize(){
   try{const response=await life.fetch(path,{credentials:'same-origin',cache:'no-store',headers});if(life.signal.aborted)return;if(response.status===404||response.status===405)return;if(!response.ok||!valid(await response.json()))throw Error('read_state_unavailable');nextKey=response.headers.get('X-Oie-Next-Operation-Key')||'';supported=uuid(nextKey);}

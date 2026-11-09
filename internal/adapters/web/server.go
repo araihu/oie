@@ -104,6 +104,10 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	GlobalMessageSearch                                                                           bool
+	ConversationSearchOpen                                                                        bool
+	ConversationSearchQuery                                                                       string
+	ConversationSearchHistory                                                                     bool
 	MessageSearch                                                                                 messageSearchView
 	NativeMessageSearch                                                                           bool
 	PreferenceRecovery                                                                            bool
@@ -151,6 +155,11 @@ type view struct {
 }
 
 type copy struct {
+	SearchContacts, SearchContactsPartial, SearchContactsLimited string
+
+	SearchEverything, SearchConversations, SearchMessagesGroup, SearchConversationsLimited                                         string
+	ConversationSearchOlder, ConversationSearchNewer, ConversationSearchClose, ConversationSearchResult, ConversationSearchMissing string
+
 	SearchMessages, SearchSavedMessages, SearchQuery, IncludeEditHistory, SearchHistoryHelp, SearchPriorVersion, SearchMetadata, SearchBlankTitle, SearchBlankBody, SearchEmptyTitle, SearchEmptyBody, SearchLoading, SearchFailed, SearchInvalid, SearchMissing, SearchRestart, SearchScope, SearchAllConversations, SearchMetadataPending, SearchMore string
 
 	ArchiveConversation, UnarchiveConversation, FavoriteConversation, UnfavoriteConversation                                                                                                                 string
@@ -543,7 +552,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/timeline.js": {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/cache.js": {"text/javascript", cacheScript}, "/ui/cache/LICENSE.md": {"text/plain; charset=utf-8", cacheLibraryLicense}, "/ui/cache/lru-cache.min.mjs": {"text/javascript", cacheLibrary}, "/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
 		"/ui/video-thumbnails.js": {"text/javascript", videoThumbnailsScript}, "/ui/videos.js": {"text/javascript", videosScript}, "/ui/video.css": {"text/css", videosStylesheet},
-		"/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/read-state.js": {"text/javascript", readStateScript}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/message-search.js": {"text/javascript", messageSearchScript}, "/ui/message-search.css": {"text/css", messageSearchStylesheet}, "/ui/conversation-preferences.js": {"text/javascript", conversationPreferencesScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
+		"/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/read-state.js": {"text/javascript", readStateScript}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/message-search.js": {"text/javascript", messageSearchScript}, "/ui/message-search.css": {"text/css", messageSearchStylesheet}, "/ui/conversation-search.js": {"text/javascript", conversationSearchScript}, "/ui/conversation-search.css": {"text/css", conversationSearchStylesheet}, "/ui/conversation-preferences.js": {"text/javascript", conversationPreferencesScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
 	}
 	if asset, ok := assets[r.URL.Path]; ok {
 		w.Header().Set("Content-Type", asset.mime)
@@ -605,7 +614,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 	s.load(ctx, r, &v)
-	if !v.NativeMessageSearch && r.URL.Query().Get("open") == "message-search" && r.Header.Get("X-Oie-Fragment") != "conversation" && !v.Unavailable {
+	if !v.NativeMessageSearch && v.GlobalMessageSearch && r.Header.Get("X-Oie-Fragment") != "conversation" && !v.Unavailable {
 		s.loadMessageSearch(ctx, &v)
 	}
 	if r.URL.Path == "/ui/info" {
@@ -640,11 +649,16 @@ func (s *Server) baseView(r *http.Request) view {
 	v := view{DevBuildID: s.devBuildID, Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system"), Avatars: map[avatarIdentity]string{}, Connections: map[string]connectionView{}, Histories: map[string]engineapi.HistoryStatus{}, Values: map[string]string{}, MessagePreviews: map[string][]engineapi.MessagePreview{}}
 	v.Text = s.catalogs[v.Locale]
 	v.configureWorkspace(r)
+	v.Values["address"] = r.URL.Query().Get("newChatAddress")
 	v.NativeMessageSearch = r.URL.Path == "/search"
 	if v.NativeMessageSearch {
 		v.Section = "search"
 	}
 	v.configureMessageSearch(r)
+	v.GlobalMessageSearch = r.URL.Query().Get("searchMode") == "messages"
+	v.ConversationSearchOpen = r.URL.Query().Get("chatSearch") == "1"
+	v.ConversationSearchQuery = strings.TrimSpace(r.URL.Query().Get("chatQuery"))
+	v.ConversationSearchHistory = r.URL.Query().Get("chatIncludeHistory") == "true"
 	return v
 }
 func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
