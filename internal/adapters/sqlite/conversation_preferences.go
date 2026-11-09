@@ -53,14 +53,14 @@ func (s *Store) UpdateConversationPreferences(ctx context.Context, in applicatio
 		if count != 1 {
 			return application.ConversationResult{}, conversationPreferencesConflict(ctx, q, in.ConversationID)
 		}
-		if err = q.InsertConversationRevision(ctx, dbgen.InsertConversationRevisionParams{ID: string(conversation.RevisionID), EntityID: string(conversation.ID), Parents: parents, Payload: jsonText(conversation), CreatedAt: stamp(in.Operation.CreatedAt)}); err != nil {
+		if err = q.InsertConversationRevision(ctx, dbgen.InsertConversationRevisionParams{ID: string(conversation.RevisionID), EntityID: string(conversation.ID), Parents: parents, Payload: jsonText(conversation), CreatedAt: stamp(in.CreatedAt)}); err != nil {
 			return application.ConversationResult{}, err
 		}
-		if _, err = change(ctx, q, "conversation.updated", conversation, in.Operation.CreatedAt); err != nil {
+		if _, err = change(ctx, q, "conversation.updated", conversation, in.CreatedAt); err != nil {
 			return application.ConversationResult{}, err
 		}
 	}
-	if err = q.SetOperationResult(ctx, dbgen.SetOperationResultParams{ID: string(in.Operation.ID), ResourceID: string(conversation.ID), Result: jsonText(conversation)}); err != nil {
+	if err = q.SetOperationResult(ctx, dbgen.SetOperationResultParams{ID: string(in.ID), ResourceID: string(conversation.ID), Result: jsonText(conversation)}); err != nil {
 		return application.ConversationResult{}, err
 	}
 	if err = tx.Commit(); err != nil {
