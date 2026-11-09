@@ -71,7 +71,7 @@ templ page(v view) {
 <script src="/ui/formatting.js"></script>
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href="/ui/app.css"/>
-<link rel="stylesheet" href="/ui/message-search.css"/>
+<link rel="stylesheet" href={templ.URL(messageSearchStylesheetURL())}/>
 <link rel="stylesheet" href="/ui/conversation-search.css"/>
 			<link rel="stylesheet" href="/ui/shared-actions.css"/><link rel="stylesheet" href="/ui/message-star.css"/>
 <link rel="stylesheet" href="/ui/timeline.css"/>

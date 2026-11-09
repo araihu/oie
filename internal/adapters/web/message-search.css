@@ -14,10 +14,11 @@
 .oie-message-search-heading{display:flex;align-items:center;gap:1rem;flex-shrink:0}.oie-message-search-heading h2{flex:1;font-size:1.25rem;font-weight:700}
 .oie-message-search-workspace>.oie-message-search{max-width:60rem;width:100%;align-self:center}
 
-.oie-message-search-slot{display:flex;flex:1;min-height:0;min-width:0}
+.oie-message-search-slot{display:flex;flex:1;min-height:0;min-width:0;padding:4px 16px 12px;box-sizing:border-box}
 .oie-message-search-slot[hidden],.oie-list-default[hidden]{display:none!important}
 .oie-list-default{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
-.oie-message-search-slot>.oie-message-search{padding:0 14px 12px;width:100%}
+.oie-message-search-slot>.oie-message-search{padding:0;width:100%;min-width:0}
+.oie-global-search-active{margin-inline:16px}
 .oie-message-search-slot .oie-message-search-help{font-size:.75rem}
 .oie-message-search-slot .oie-message-search-hit{padding:.7rem .25rem}
 .oie-global-search-back{position:absolute;z-index:2;left:4px;top:3px;background:var(--oie-raised)}

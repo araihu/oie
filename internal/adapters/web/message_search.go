@@ -2,7 +2,9 @@ package web
 
 import (
 	"context"
+	"crypto/sha256"
 	_ "embed"
+	"fmt"
 	"net/http"
 	"net/url"
 	"sort"
@@ -20,6 +22,11 @@ var messageSearchScript []byte
 
 //go:embed message-search.css
 var messageSearchStylesheet []byte
+
+func messageSearchStylesheetURL() string {
+	digest := sha256.Sum256(messageSearchStylesheet)
+	return fmt.Sprintf("/ui/message-search.css?v=%x", digest[:8])
+}
 
 type messageSearchView struct {
 	Contacts                                                                     []engineapi.Contact
