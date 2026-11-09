@@ -56,3 +56,19 @@ Verification for this increment:
 - Dagger was not run in this side conversation while the main conversation was
   changing its runner. No shared engine, preview, CI session or tunnel was
   restarted.
+
+Integration verification at `9881d96` confirms `b158eda` is already part of the
+preview branch, `codex/message-previews`. An isolated archive of that committed
+revision passes `make check`, `live-chat.cjs`, `mentions.cjs` and the pending-only
+reply-compose checks. The running preview serves the pending bubble, inline
+retry and read-only receipt recovery code with HTTP 200.
+
+The full reply-compose fixture still fails in its separate room-controls flow.
+Its `roomControls` helper requires a hidden room-status panel when the room
+actions dialog is already open after refreshing a stale join intent. This run
+does not establish a passing full room-lifecycle suite. Integration logs are
+`/tmp/oie-pending-integration-check.log`, `/tmp/oie-pending-integration-live.log`,
+`/tmp/oie-pending-integration-mentions.log`,
+`/tmp/oie-pending-integration-reply-scoped.log` and
+`/tmp/oie-pending-integration-reply.log`. Shared UI changes and the concurrent
+Dagger runner work were preserved.
