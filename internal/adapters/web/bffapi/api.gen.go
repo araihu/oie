@@ -12,6 +12,24 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for BrowserEditIntentLang.
+const (
+	BrowserEditIntentLangEn   BrowserEditIntentLang = "en"
+	BrowserEditIntentLangPtBR BrowserEditIntentLang = "pt-BR"
+)
+
+// Valid indicates whether the value is a known member of the BrowserEditIntentLang enum.
+func (e BrowserEditIntentLang) Valid() bool {
+	switch e {
+	case BrowserEditIntentLangEn:
+		return true
+	case BrowserEditIntentLangPtBR:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConversationPreferenceIntentLang.
 const (
 	ConversationPreferenceIntentLangEn   ConversationPreferenceIntentLang = "en"
@@ -63,6 +81,24 @@ func (e PendingSubmissionTheme) Valid() bool {
 	case Light:
 		return true
 	case System:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetBrowserMessageEditTargetParamsLang.
+const (
+	GetBrowserMessageEditTargetParamsLangEn   GetBrowserMessageEditTargetParamsLang = "en"
+	GetBrowserMessageEditTargetParamsLangPtBR GetBrowserMessageEditTargetParamsLang = "pt-BR"
+)
+
+// Valid indicates whether the value is a known member of the GetBrowserMessageEditTargetParamsLang enum.
+func (e GetBrowserMessageEditTargetParamsLang) Valid() bool {
+	switch e {
+	case GetBrowserMessageEditTargetParamsLangEn:
+		return true
+	case GetBrowserMessageEditTargetParamsLangPtBR:
 		return true
 	default:
 		return false
@@ -121,6 +157,88 @@ func (e GetBrowserMessageSenderParamsLang) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// BrowserEditIntent Frozen command, never a mutation of a pending original send.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","csrf":"browser-csrf-token","engineId":"019a5df0-0000-7000-8000-000000000001","expectedRevisionId":"019a5df0-0000-7000-8000-000000000005","messageId":"019a5df0-0000-7000-8000-000000000004","operationKey":"019a5df0-0000-7000-8000-000000000006","originalText":"Corrected text"}
+type BrowserEditIntent struct {
+	// AccountId Owning account identity.
+	AccountId openapi_types.UUID `json:"accountId"`
+
+	// ConversationId Owning conversation identity.
+	ConversationId openapi_types.UUID `json:"conversationId"`
+
+	// Csrf Same-origin browser CSRF token.
+	Csrf string `json:"csrf"`
+
+	// EngineId Owning engine identity.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	EngineId openapi_types.UUID `json:"engineId"`
+
+	// ExpectedRevisionId Exact retained content head chosen while preparing the edit.
+	ExpectedRevisionId openapi_types.UUID `json:"expectedRevisionId"`
+
+	// Lang Presentation language.
+	Lang *BrowserEditIntentLang `json:"lang,omitempty"`
+
+	// MessageId Exact canonical source to correct.
+	MessageId openapi_types.UUID `json:"messageId"`
+
+	// OperationKey Immutable correction command identity.
+	OperationKey openapi_types.UUID `json:"operationKey"`
+
+	// OriginalText Exact replacement plain text, without modifying reply targets or mention selections.
+	OriginalText string `json:"originalText"`
+}
+
+// BrowserEditIntentLang Presentation language.
+type BrowserEditIntentLang string
+
+// BrowserEditResult Engine acceptance and provider dispatch state are separate evidence.
+//
+// Example: {"accepted":false,"message":"Acceptance remains unknown.","ok":false,"rejected":false}
+type BrowserEditResult struct {
+	// Accepted Owning engine retained this exact command, independently of provider dispatch.
+	Accepted bool `json:"accepted"`
+
+	// Code Stable error code when available.
+	Code *string `json:"code,omitempty"`
+
+	// Command Durable correction intent and its actual transmission state, separate from the original message send.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000002","createdAt":"2026-11-09T12:00:00Z","expectedRevisionId":"019a5df0-0000-7000-8000-000000000004","id":"019a5df0-0000-7000-8000-000000000005","messageId":"019a5df0-0000-7000-8000-000000000003","originalText":"Corrected text","revisionId":"019a5df0-0000-7000-8000-000000000006","state":"queued","updatedAt":"2026-11-09T12:00:00Z"}
+	Command *externalRef0.MessageEditCommand `json:"command,omitempty"`
+
+	// Message Localized status or recovery explanation.
+	Message string `json:"message"`
+
+	// Ok A matching engine command was obtained.
+	Ok bool `json:"ok"`
+
+	// Rejected This submission was definitively rejected; unknown acceptance never sets this flag.
+	Rejected bool `json:"rejected"`
+}
+
+// BrowserEditTarget Browser-scoped engine edit preparation.
+//
+// Example: {"engineId":"019a5df0-0000-7000-8000-000000000001","operationKey":"019a5df0-0000-7000-8000-000000000006","target":{"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","currentRevisionId":"019a5df0-0000-7000-8000-000000000005","eligible":true,"messageId":"019a5df0-0000-7000-8000-000000000004","originalText":"Hello"}}
+type BrowserEditTarget struct {
+	// EngineId Owning engine identity.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	EngineId openapi_types.UUID `json:"engineId"`
+
+	// OperationKey Fresh key for a new explicit command.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000006
+	OperationKey openapi_types.UUID `json:"operationKey"`
+
+	// Target Current canonical text and advisory eligibility for a distinct sent-message correction.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000002","currentRevisionId":"019a5df0-0000-7000-8000-000000000004","eligible":true,"messageId":"019a5df0-0000-7000-8000-000000000003","originalText":"Text to correct"}
+	Target externalRef0.MessageEditTarget `json:"target"`
 }
 
 // ConversationPreferenceIntent Browser command scoped to one engine and one owning account.
@@ -351,6 +469,27 @@ type SubmissionReceipt struct {
 	State string `json:"state"`
 }
 
+// GetBrowserMessageEditTargetParams defines parameters for GetBrowserMessageEditTarget.
+type GetBrowserMessageEditTargetParams struct {
+	// EngineId Owning engine identity.
+	EngineId openapi_types.UUID `form:"engineId" json:"engineId"`
+
+	// AccountId Owning account identity.
+	AccountId openapi_types.UUID `form:"accountId" json:"accountId"`
+
+	// ConversationId Owning conversation identity.
+	ConversationId openapi_types.UUID `form:"conversationId" json:"conversationId"`
+
+	// MessageId Optional exact own message to recheck.
+	MessageId *openapi_types.UUID `form:"messageId,omitempty" json:"messageId,omitempty"`
+
+	// Lang Presentation language.
+	Lang *GetBrowserMessageEditTargetParamsLang `form:"lang,omitempty" json:"lang,omitempty"`
+}
+
+// GetBrowserMessageEditTargetParamsLang defines parameters for GetBrowserMessageEditTarget.
+type GetBrowserMessageEditTargetParamsLang string
+
 // GetBrowserMessageEditHistoryParams defines parameters for GetBrowserMessageEditHistory.
 type GetBrowserMessageEditHistoryParams struct {
 	// EngineId Identity of the selected owning engine.
@@ -431,6 +570,12 @@ type UpdateBrowserConversationPreferencesFormdataRequestBody = ConversationPrefe
 
 // RenderDocumentMarkdownJSONRequestBody defines body for RenderDocumentMarkdown for application/json ContentType.
 type RenderDocumentMarkdownJSONRequestBody = MarkdownSource
+
+// SubmitBrowserMessageEditFormdataRequestBody defines body for SubmitBrowserMessageEdit for application/x-www-form-urlencoded ContentType.
+type SubmitBrowserMessageEditFormdataRequestBody = BrowserEditIntent
+
+// ReconcileBrowserMessageEditFormdataRequestBody defines body for ReconcileBrowserMessageEdit for application/x-www-form-urlencoded ContentType.
+type ReconcileBrowserMessageEditFormdataRequestBody = BrowserEditIntent
 
 // ReconcileBrowserSubmissionFormdataRequestBody defines body for ReconcileBrowserSubmission for application/x-www-form-urlencoded ContentType.
 type ReconcileBrowserSubmissionFormdataRequestBody = PendingSubmission

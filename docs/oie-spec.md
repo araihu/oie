@@ -799,3 +799,43 @@ Opening or paging history does not mark messages read or contact the provider.
 Sending corrections remains a separate protocol operation with its own durable
 command/outbox design. This increment does not implement it or turn the proposed
 15-minute edit window into an agreed policy.
+
+### Outbound text correction increment
+
+**AGREED:** offer an Edit message action. With an empty composer, ArrowUp prepares
+the most recently sent own message for editing. Typing, IME composition and open
+pickers keep their normal keyboard behavior.
+
+**IMPLEMENTATION SCOPE:** the first outgoing correction supports the latest own
+plain text message sent by this engine in the current verified XMPP connection.
+Room corrections also require the original own echo with verified occupant
+identity and the same active room session. Imported messages, prior connections,
+replies and structured mentions remain ineligible in this increment. Choosing
+the latest original engine transmission uses a durable monotonic dispatch marker,
+not authored timestamps, UUID ordering or the mounted timeline page. It never
+silently skips an ineligible latest transmission to edit an older one. Originals
+never dispatched do not establish transmission order. Imported own messages
+remain inspectable as ineligible through the message-specific API.
+
+Prepare the current source and content revision through read-only APIs. Preserve
+the normal device draft while editing, and restore it on cancellation or success.
+Before submission, Escape and Cancel leave the sent message unchanged. A durable
+correction accepted by the engine is a separate command, not a pending change to
+the original send. Freeze its scope, body, original sender wire identifier and
+operation UUID. Enforce content revision, latest-message and identity/session
+preconditions again at acceptance and dispatch.
+
+Keep the correction outbox separate from the original message outbox. Definite
+non-transmission may retry; interrupted or ambiguous transmission becomes
+Unknown and must not retry blindly. Read the retained command receipt after a
+lost response. Incorporate submitted or verified echoed content through the
+existing canonical revision history, preserving the original message UUID,
+creation time, source versions, stars and read state. Submitted still means
+written to the connection, not confirmed delivery to the recipient.
+
+[XEP-0308](https://xmpp.org/extensions/xep-0308.html) requires repeated corrections
+to target the original sender stanza ID. The adapter checks the current sending
+identity; a server feature advertisement alone does not authorize a correction.
+The proposed R18 fifteen-minute window remains a recommendation. No such limit
+is imposed by this increment. Editing earlier own messages, prior sessions, reply
+payloads or structured mentions requires a later implementation increment.

@@ -21,6 +21,9 @@ func messageActions(v view, id string) []dropdown.Section {
 		{ID: "star-message-" + id, Icon: glyph(heroicons.Icon16SolidStar), Label: v.starLabel(id), OnClick: "void 0", Disabled: !v.StarsKnown, Tooltip: v.Text.StarUnavailable},
 		{ID: "reply-message-" + id, Icon: glyph(heroicons.Icon16SolidArrowUturnLeft), Label: v.Text.ReplyMessage, OnClick: "void 0", Disabled: !v.replyAllowed(), Tooltip: v.Text.ReplyUnavailable},
 	}}}
+	if v.editableMessage(id) {
+		sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "edit-message-" + id, Icon: glyph(heroicons.Icon16SolidPencilSquare), Label: v.Text.EditMessage, Href: v.editTargetHref(id)}}})
+	}
 	for _, message := range v.Messages {
 		if message.Id == id && message.IsOwn && message.SendState == "queued" && !v.Preview {
 			sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "cancel-message-" + id, Label: v.Text.CancelSend, Icon: glyph(heroicons.Icon16SolidXMark), OnClick: "$dispatch('oie:cancel-message', {id: '" + id + "'})"}}})

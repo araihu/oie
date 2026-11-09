@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie browser presentation API
-  version: 0.2.0
+  version: 0.3.0
   description: Browser-only presentation operations. Engine data and protocol operations remain in the engine API.
   contact:
     name: Arai Hû
@@ -17,6 +17,90 @@ tags:
 - name: Messages
   description: Browser submission receipt recovery
 paths:
+  /ui/message-edit-target:
+    get:
+      operationId: getBrowserMessageEditTarget
+      tags: [Messages]
+      summary: Prepare editing of the latest own sent text
+      description: Read-only eligibility lookup. Omitting messageId asks the engine for its latest own canonical message, independently of the rendered timeline window. An ineligible latest message never falls back to an older message. Explicit messageId rechecks that source. Returns JSON for enhanced composition or a native read-only preparation form. Does not create or dispatch a correction.
+      parameters:
+      - {in: query, name: engineId, required: true, description: Owning engine identity., schema: {type: string, format: uuid}}
+      - {in: query, name: accountId, required: true, description: Owning account identity., schema: {type: string, format: uuid}}
+      - {in: query, name: conversationId, required: true, description: Owning conversation identity., schema: {type: string, format: uuid}}
+      - {in: query, name: messageId, description: Optional exact own message to recheck., schema: {type: string, format: uuid}}
+      - {in: query, name: lang, description: Presentation language., schema: {type: string, enum: [en, pt-BR]}}
+      responses:
+        '200':
+          description: Scoped engine eligibility and a fresh key for a distinct explicit edit
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BrowserEditTarget'}
+              example: {engineId: 019a5df0-0000-7000-8000-000000000001, operationKey: 019a5df0-0000-7000-8000-000000000006, target: {messageId: 019a5df0-0000-7000-8000-000000000004, accountId: 019a5df0-0000-7000-8000-000000000002, conversationId: 019a5df0-0000-7000-8000-000000000003, currentRevisionId: 019a5df0-0000-7000-8000-000000000005, originalText: Hello, eligible: true}}
+            text/html:
+              schema: {type: string}
+              example: '<form method="post"></form>'
+        '400': {description: Invalid scope}
+        '404': {description: No retained own message in this scope}
+        '409': {description: Engine identity changed}
+        '503': {description: Eligibility temporarily unavailable}
+  /ui/messages/edit:
+    post:
+      operationId: submitBrowserMessageEdit
+      tags: [Messages]
+      summary: Submit an immutable sent-text correction
+      description: Requires CSRF and exact engine/account/conversation/message scope. Only the latest own engine-origin plain text without replies or mention selections is eligible in this increment. Expected content revision, text and operation key remain frozen after first submission. Matching existing receipt is checked before attempting a new command. Engine acceptance does not prove provider delivery. Native forms receive an HTML recovery view; enhanced callers receive JSON.
+      requestBody:
+        required: true
+        description: Exact scoped correction intent retained across uncertain acceptance.
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/BrowserEditIntent'}
+            example: {csrf: browser-csrf-token, engineId: 019a5df0-0000-7000-8000-000000000001, accountId: 019a5df0-0000-7000-8000-000000000002, conversationId: 019a5df0-0000-7000-8000-000000000003, messageId: 019a5df0-0000-7000-8000-000000000004, expectedRevisionId: 019a5df0-0000-7000-8000-000000000005, operationKey: 019a5df0-0000-7000-8000-000000000006, originalText: Corrected text}
+      responses:
+        '200':
+          description: Matching command accepted by its owning engine
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BrowserEditResult'}
+              example: {ok: false, accepted: false, rejected: false, message: Acceptance remains unknown.}
+            text/html:
+              schema: {type: string}
+              example: '<form method="post"></form>'
+        '400': {description: Invalid form encoding}
+        '403': {description: CSRF rejected before engine mutation}
+        '404': {description: Source is absent}
+        '409': {description: 'Content revision, latest source, eligibility, engine or operation intent changed'}
+        '422': {description: Invalid correction intent}
+        '503': {description: Acceptance is unknown; preserve exact intent and reconcile}
+  /ui/messages/edit-receipt:
+    post:
+      operationId: reconcileBrowserMessageEdit
+      tags: [Messages]
+      summary: Read the receipt for one immutable correction
+      description: Read-only engine GET by the original command UUID. POST keeps original text out of browser URLs and applies the same CSRF/scope rules as submission. Verifies the complete frozen intent before exposing a command. Never creates, retries or dispatches a correction. A missing receipt does not prove the original submission cannot arrive later.
+      requestBody:
+        required: true
+        description: Same immutable intent as the first correction submission.
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/BrowserEditIntent'}
+            example: {csrf: browser-csrf-token, engineId: 019a5df0-0000-7000-8000-000000000001, accountId: 019a5df0-0000-7000-8000-000000000002, conversationId: 019a5df0-0000-7000-8000-000000000003, messageId: 019a5df0-0000-7000-8000-000000000004, expectedRevisionId: 019a5df0-0000-7000-8000-000000000005, operationKey: 019a5df0-0000-7000-8000-000000000006, originalText: Corrected text}
+      responses:
+        '200':
+          description: Matching existing command and actual dispatch state
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BrowserEditResult'}
+              example: {ok: false, accepted: false, rejected: false, message: Acceptance remains unknown.}
+            text/html:
+              schema: {type: string}
+              example: '<form method="post"></form>'
+        '400': {description: Invalid form encoding}
+        '403': {description: CSRF rejected}
+        '404': {description: Receipt absent; acceptance remains unknown}
+        '409': {description: Engine or frozen intent mismatch}
+        '422': {description: Invalid frozen intent}
+        '503': {description: Receipt evidence temporarily unavailable}
   /ui/message-history:
     get:
       operationId: getBrowserMessageEditHistory
@@ -318,6 +402,45 @@ paths:
           description: Rendering capacity is occupied
 components:
   schemas:
+    BrowserEditTarget:
+      example: {engineId: 019a5df0-0000-7000-8000-000000000001, operationKey: 019a5df0-0000-7000-8000-000000000006, target: {messageId: 019a5df0-0000-7000-8000-000000000004, accountId: 019a5df0-0000-7000-8000-000000000002, conversationId: 019a5df0-0000-7000-8000-000000000003, currentRevisionId: 019a5df0-0000-7000-8000-000000000005, originalText: Hello, eligible: true}}
+      type: object
+      additionalProperties: false
+      description: Browser-scoped engine edit preparation.
+      required: [engineId, target, operationKey]
+      properties:
+        engineId: {type: string, format: uuid, description: Owning engine identity., example: 019a5df0-0000-7000-8000-000000000001}
+        target: {$ref: './openapi.yaml#/components/schemas/MessageEditTarget'}
+        operationKey: {type: string, format: uuid, description: Fresh key for a new explicit command., example: 019a5df0-0000-7000-8000-000000000006}
+    BrowserEditIntent:
+      example: {csrf: browser-csrf-token, engineId: 019a5df0-0000-7000-8000-000000000001, accountId: 019a5df0-0000-7000-8000-000000000002, conversationId: 019a5df0-0000-7000-8000-000000000003, messageId: 019a5df0-0000-7000-8000-000000000004, expectedRevisionId: 019a5df0-0000-7000-8000-000000000005, operationKey: 019a5df0-0000-7000-8000-000000000006, originalText: Corrected text}
+      type: object
+      additionalProperties: false
+      description: Frozen command, never a mutation of a pending original send.
+      required: [csrf, engineId, accountId, conversationId, messageId, expectedRevisionId, operationKey, originalText]
+      properties:
+        csrf: {type: string, description: Same-origin browser CSRF token.}
+        engineId: {type: string, format: uuid, description: Owning engine identity., example: 019a5df0-0000-7000-8000-000000000001}
+        accountId: {type: string, format: uuid, description: Owning account identity.}
+        conversationId: {type: string, format: uuid, description: Owning conversation identity.}
+        messageId: {type: string, format: uuid, description: Exact canonical source to correct.}
+        expectedRevisionId: {type: string, format: uuid, description: Exact retained content head chosen while preparing the edit.}
+        operationKey: {type: string, format: uuid, description: Immutable correction command identity.}
+        originalText: {type: string, minLength: 1, maxLength: 16384, description: "Exact replacement plain text, without modifying reply targets or mention selections."}
+        lang: {type: string, enum: [en, pt-BR], description: Presentation language.}
+    BrowserEditResult:
+      example: {ok: false, accepted: false, rejected: false, message: Acceptance remains unknown.}
+      type: object
+      additionalProperties: false
+      description: Engine acceptance and provider dispatch state are separate evidence.
+      required: [ok, accepted, rejected, message]
+      properties:
+        ok: {type: boolean, description: A matching engine command was obtained.}
+        accepted: {type: boolean, description: "Owning engine retained this exact command, independently of provider dispatch."}
+        rejected: {type: boolean, description: This submission was definitively rejected; unknown acceptance never sets this flag.}
+        message: {type: string, description: Localized status or recovery explanation.}
+        code: {type: string, description: Stable error code when available.}
+        command: {$ref: './openapi.yaml#/components/schemas/MessageEditCommand'}
     ConversationPreferenceIntent:
       type: object
       additionalProperties: false

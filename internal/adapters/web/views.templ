@@ -83,6 +83,7 @@ templ page(v view) {
 <script src="/ui/sender.js" defer></script>
 <script src="/ui/message-history.js" defer></script>
 <link rel="stylesheet" href="/ui/message-history.css"/>
+<link rel="stylesheet" href="/ui/message-correction.css"/>
 <script src="/ui/conversation-preferences.js" defer></script>
 <script src="/ui/message-search.js" defer></script>
 <script src="/ui/conversation-search.js" defer></script>
@@ -366,10 +367,11 @@ func messageSide(own bool) chatbubble.Side {
 func selectedAccountID(v view)string{if v.Selected!=nil{return v.Selected.AccountId};return ""}
 
 templ composer(v view){
-<form id="send-message-form" action="/ui/messages/send" method="post" data-oie-action="send" data-send-allowed={strconv.FormatBool(v.sendAllowed())} data-compose-allowed={strconv.FormatBool(v.composeAllowed())} data-reply-allowed={strconv.FormatBool(v.replyAllowed())}>
+<form id="send-message-form" action="/ui/messages/send" method="post" data-oie-action="send" data-send-allowed={strconv.FormatBool(v.sendAllowed())} data-compose-allowed={strconv.FormatBool(v.composeAllowed())} data-reply-allowed={strconv.FormatBool(v.replyAllowed())} data-edit-allowed={strconv.FormatBool(v.messagingImplemented("send_corrections"))} data-edit-target-url={v.editTargetHref("")} data-latest-edit-message={v.latestEditMessage()}>
 @mutationFields(v,"send",sendKey(v))
 <input type="hidden" name="conversationId" value={v.ChatID}/><input type="hidden" name="accountId" value={selectedAccountID(v)}/>
 <input type="hidden" name="replyToMessageId" value=""/>
+@composerEdit(v)
 @composerReply(v)
 @pendingSendTemplate(v)
 <div class="oie-composer">
@@ -379,6 +381,7 @@ templ composer(v view){
 @emojiPicker(v)
 @button.Button(button.WithType("submit"),button.WithRootClass("oie-icon-button oie-send"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Send,"data-send-message":"","disabled":!v.sendAllowed()})){@glyph(heroicons.Icon16SolidArrowUp)}
 </div>
+<div class="oie-edit-status" data-edit-last-status role="status" aria-live="polite" hidden><span data-edit-last-copy></span> @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-edit-last-check":""})){<span>{v.Text.EditCheckStatus}</span>}</div>
 <div class="oie-composer-feedback" data-form-feedback role="status" aria-live="polite"></div>
 </form>
 }
@@ -551,7 +554,7 @@ templ liveCopy(v view){
 <div id="oie-live-copy" hidden data-reply-unavailable={v.Text.ReplyUnavailable} data-reply-preparing={v.Text.ReplyPreparing} data-reply-locked={v.Text.ReplyLocked} data-room-command-unknown={v.Text.RoomCommandUnknown} data-saving={v.Text.Saving} data-invalid-message={v.Text.InvalidMessage} data-pending={v.Text.PendingAcceptance} data-storage-unavailable={v.Text.DraftStorageUnavailable} data-locked={v.Text.DraftLocked} data-retry={v.Text.RetrySubmission} data-send={v.Text.Send} data-live-ready={v.Text.LiveReady} data-live-retry={v.Text.LiveRetry} data-live-connecting={v.Text.LiveConnecting} data-latest={v.Text.JumpToLatest} data-new-messages={v.Text.NewMessages} data-engine-changed={v.Text.EngineChanged} data-today={v.Text.Today}></div>
 }
 templ liveRegions(v view){
-<div id="oie-live-regions" data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
+<div id="oie-live-regions" data-edit-message={v.latestEditMessage()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
 @avatarData(v)
 if v.Section!="media"{
 @starData(v)

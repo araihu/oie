@@ -5,7 +5,7 @@ window.OieRuntime.register('mentions',life=>{
  const field=form.elements.namedItem('mentions'),list=root.querySelector('#oie-mention-options'),status=root.querySelector('[data-mention-status]'),retry=root.querySelector('[data-mention-retry]'),partial=root.querySelector('[data-mention-partial]'),template=form.querySelector('[data-mention-option-template]');
  if(!field||!list||!template)return;
  const scope={engineId:root.dataset.engineId,accountId:root.dataset.accountId,conversationId:root.dataset.conversationId};
- const fold=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase(document.documentElement.lang),points=value=>Array.from(value),writable=()=>input.isConnected&&!input.disabled&&!input.readOnly&&form.dataset.busy!=='true'&&form.dataset.composeAllowed==='true';
+ const fold=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase(document.documentElement.lang),points=value=>Array.from(value),writable=()=>input.isConnected&&!input.disabled&&!input.readOnly&&form.dataset.busy!=='true'&&form.dataset.editing!=='true'&&form.dataset.composeAllowed==='true';
  let previous=input.value,tokens=[],catalog=null,loadedAt=0,loading=false,failed=false,epoch=0,controller=null,visible=[],active=-1,composing=false,dismissed='',geometryFrame=false;
  function sync(){field.value=JSON.stringify(tokens.map(({participantId,begin,end})=>({participantId,begin,end})));}
  function restore(){
