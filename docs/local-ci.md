@@ -7,6 +7,28 @@ Silent CLI mode did not prevent the failure. The direct client omits those
 subscriptions, captures command output per stage, and treats execution,
 artifact-export and session-close errors as failures.
 
+The Go container limits `GOMAXPROCS` to four, which also bounds the Go command's
+default package/build parallelism on shared runners. Concurrent unrestricted runs
+on the 12-CPU development runner caused the real FFmpeg fixture to exceed its
+five-second deadline during race tests. The decoder now caps PNG output encoding
+threads as well as decoding threads; the application deadline stays unchanged.
+Thirty local extractions before and after the output cap produced identical PNG
+sizes, with observed peak threads falling from 15 to 5. This measurement explains
+the resource change, rather than claiming a general performance benchmark.
+
+Each concurrent session should select its own artifact directory:
+
+```sh
+OIE_CI_SSH_HOST=dagger-vm \
+OIE_CI_ARTIFACTS=tests/browser/artifacts/my-run make ci
+```
+
+Relative artifact paths resolve against the repository before the runner creates
+its temporary source snapshot. The default remains `tests/browser/artifacts/ci`.
+Seven shell lifecycle tests cover defaults, absolute/relative overrides, failure
+evidence and exit-status preservation. Separate paths prevent one session from
+overwriting another session's stage logs.
+
 The same engine and SSH tunnel passed two uncached FFmpeg installations with
 clean client exits in 44 and 37 seconds. An intentional container exit of 23 and
 cancellation of a running command both returned errors and closed their sessions.
