@@ -41,7 +41,7 @@ func TestCapabilityMatrixSeparatesImplementationProtocolAndEvidence(t *testing.T
 	if upload.AppSupport != "unsupported" || upload.ProtocolSupport != "supported" || upload.ServerSupport != "supported" {
 		t.Fatal("server support enabled unimplemented operation", upload)
 	}
-	if byID["account_history"].ServerSupport != "unknown" || byID["reactions"].ServerSupport != "scope_dependent" || byID["message_stars"].ServerSupport != "not_required" {
+	if byID["account_history"].ServerSupport != "unknown" || byID["reactions"].ServerSupport != "scope_dependent" || byID["message_stars"].ServerSupport != "not_required" || byID["message_search"].AppSupport != "supported" || byID["message_search"].ServerSupport != "not_required" || byID["message_search"].ProtocolSupport != "not_required" {
 		t.Fatal("unknown/client/local scope confused", byID)
 	}
 	repeat, err := client.GetAccountCapabilitiesWithResponse(t.Context(), string(c.AccountID))

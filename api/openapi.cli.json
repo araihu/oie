@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.20.0",
+    "version": "0.21.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.",
     "contact": {
       "name": "Arai Hû",
@@ -50,6 +50,96 @@
     }
   ],
   "paths": {
+    "/api/v1/messages/search": {
+      "get": {
+        "tags": [
+          "Messages"
+        ],
+        "operationId": "searchMessages",
+        "summary": "Search retained message text and available metadata",
+        "description": "Search the complete retained engine history before pagination, without network retrieval, enrichment or read-state changes. Matching follows shared-content accent/case folding, word prefixes and bounded typing-error tolerance. Current canonical message content is searched by default. Include edit history adds separately labelled verified earlier content revisions, never transport-state revisions or independent correction aliases. Current associated URLs, filenames and cached page titles/descriptions are searched only while their catalog source is current. Metadata coverage can lag immediate message-text coverage. Order is newest original message timestamp at UTC millisecond precision and UUID first, current hit before earlier content revisions, then newest revision timestamp and UUID. New arrivals or corrections can change subsequent results; pages are not a frozen snapshot.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "Trimmed nonblank UTF-8 search text, at most 200 Unicode code points; NUL is invalid.",
+            "example": "software livre",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "accountId",
+            "in": "query",
+            "description": "Restrict to one owning account, or omit for all accounts.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "query",
+            "description": "Restrict to one conversation. A supplied account must own it.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          },
+          {
+            "name": "includeEditHistory",
+            "in": "query",
+            "description": "Include retained verified earlier content revisions with explicit historical labels.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque keyset cursor bound to this engine, trimmed query, account, conversation and history filter. Reuse with changed scope is invalid.",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum returned hits. Filtering is applied before this limit.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded message hits and current metadata coverage, including an empty page when nothing matches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSearchPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/shared-content": {
       "get": {
         "tags": [
@@ -3483,6 +3573,7 @@
               "formatting",
               "e2ee",
               "message_stars",
+              "message_search",
               "schedules",
               "sync"
             ]
@@ -4068,6 +4159,113 @@
             "maxLength": 40,
             "description": "Stable failure key. Failed extraction is retried only on explicit request.",
             "example": "frame_unavailable"
+          }
+        }
+      },
+      "MessageSearchHit": {
+        "type": "object",
+        "description": "A matching current or verified earlier content revision with current canonical navigation context. Multiple hits for one message occur only with explicit edit history.",
+        "additionalProperties": false,
+        "required": [
+          "message",
+          "accountLabel",
+          "conversationTitle",
+          "matchedRevisionId",
+          "matchedAt",
+          "historical",
+          "matchKind",
+          "excerpt"
+        ],
+        "properties": {
+          "message": {
+            "$ref": "#/components/schemas/Message"
+          },
+          "accountLabel": {
+            "type": "string",
+            "description": "Current owning account label."
+          },
+          "conversationTitle": {
+            "type": "string",
+            "description": "Current source conversation title."
+          },
+          "matchedRevisionId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "matchedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC creation time of the retained matching content revision."
+          },
+          "historical": {
+            "type": "boolean",
+            "description": "True only for an earlier content revision. Independent of message.historical, which describes archive provenance. Message always contains current canonical content; use its id for navigation."
+          },
+          "matchKind": {
+            "type": "string",
+            "description": "Whether retained text or current associated metadata supplied the match.",
+            "enum": [
+              "text",
+              "metadata"
+            ]
+          },
+          "excerpt": {
+            "type": "string",
+            "maxLength": 512,
+            "description": "Bounded plain text from matching content or metadata. Never HTML; clients must escape it. Earlier content is represented here, rather than by the current message text."
+          }
+        }
+      },
+      "MessageSearchPage": {
+        "type": "object",
+        "description": "Retained message search results. Message text is immediate; metadata indexing coverage is reported separately.",
+        "additionalProperties": false,
+        "required": [
+          "query",
+          "includeEditHistory",
+          "items",
+          "metadataIndexing"
+        ],
+        "example": {
+          "query": "software livre",
+          "includeEditHistory": false,
+          "items": [],
+          "metadataIndexing": {
+            "state": "complete",
+            "indexedMessages": 0,
+            "totalMessages": 0
+          }
+        },
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Search query after trimming surrounding whitespace."
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "conversationId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "includeEditHistory": {
+            "type": "boolean",
+            "description": "Applied earlier-content filter."
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "description": "Current and explicitly requested historical hits in stable chronological keyset order.",
+            "items": {
+              "$ref": "#/components/schemas/MessageSearchHit"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "maxLength": 2048,
+            "description": "Opaque cursor for the next matching page, absent at the end."
+          },
+          "metadataIndexing": {
+            "$ref": "#/components/schemas/SharedContentIndexing"
           }
         }
       },

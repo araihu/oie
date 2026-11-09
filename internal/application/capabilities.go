@@ -24,7 +24,7 @@ func implementedFeatures() []domain.CapabilityFeature {
 		{"read_receipts", "unsupported", "peer"}, {"typing", "unsupported", "peer"},
 		{"presence", "partial", "peer"}, {"profile_images", "partial", "peer"},
 		{"formatting", "partial", "peer"}, {"e2ee", "unsupported", "peer"},
-		{"message_stars", "supported", "local"}, {"schedules", "unsupported", "local"},
+		{"message_stars", "supported", "local"}, {"message_search", "supported", "local"}, {"schedules", "unsupported", "local"},
 		{"sync", "unsupported", "local"},
 	} {
 		row := domain.CapabilityFeature{ID: v.id, AppSupport: v.app, Scope: v.scope, ProtocolSupport: "unknown", ServerSupport: "unknown"}

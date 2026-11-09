@@ -44,7 +44,7 @@ paths:
         revisions or independent correction aliases. Current associated URLs, filenames
         and cached page titles/descriptions are searched only while their catalog source
         is current. Metadata coverage can lag immediate message-text coverage.
-        Order is newest original message timestamp and UUID first, current hit before
+        Order is newest original message timestamp at UTC millisecond precision and UUID first, current hit before
         earlier content revisions, then newest revision timestamp and UUID. New arrivals
         or corrections can change subsequent results; pages are not a frozen snapshot.
       parameters:
@@ -2388,7 +2388,7 @@ components:
       properties:
         id:
           type: string
-          enum: [direct_text, account_history, saved_rooms, room_history, room_discovery, room_messaging, file_upload, image_previews, link_previews, received_replies, send_replies, mentions, edit_messages, retract_messages, reactions, read_receipts, typing, presence, profile_images, formatting, e2ee, message_stars, schedules, sync]
+          enum: [direct_text, account_history, saved_rooms, room_history, room_discovery, room_messaging, file_upload, image_previews, link_previews, received_replies, send_replies, mentions, edit_messages, retract_messages, reactions, read_receipts, typing, presence, profile_images, formatting, e2ee, message_stars, message_search, schedules, sync]
         appSupport:
           $ref: '#/components/schemas/SupportState'
         protocolSupport:

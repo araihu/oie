@@ -121,6 +121,11 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err != nil || !bytes.Contains(output, []byte(`"sendState": "cancelled"`)) {
 		t.Fatalf("CLI retained timeline: %v %s", err, output)
 	}
+	output, err = run("", "messages", "search-messages", "--q", "olá generated", "--account-id", account.Id, "--conversation-id", conversation.Id, "--include-edit-history", "--limit", "1")
+	var search engineapi.MessageSearchPage
+	if err != nil || json.Unmarshal(output, &search) != nil || len(search.Items) != 1 || search.Items[0].Message.Id != message.Id || search.Items[0].Historical || search.Items[0].Message.SendState != "cancelled" || !search.IncludeEditHistory {
+		t.Fatalf("CLI retained content search: %v %s", err, output)
+	}
 	output, err = run("", "messages", "get-message-context", "--conversation-id", conversation.Id, "--message-id", message.Id, "--limit", "1")
 	var window engineapi.MessageContext
 	if err != nil || json.Unmarshal(output, &window) != nil || window.TargetId != message.Id || len(window.Items) != 1 || window.HasOlder || window.HasNewer {
