@@ -1,0 +1,129 @@
+package web
+
+import (
+	"github.com/araihu/goshtoso/components/badge"
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/drawer"
+	"github.com/araihu/goshtoso/components/head"
+	"github.com/araihu/goshtoso/components/link"
+	"github.com/araihu/goshtoso/components/panel"
+	"github.com/araihu/goshtoso/components/spinner"
+	"strconv"
+)
+
+templ messageHistoryDrawer(v view) {
+	if v.Selected!=nil {
+		@drawer.Drawer(drawer.Config{ID: "message-history", Title: v.Text.EditHistory, PanelClass: "oie-message-history-drawer"}) {
+			<div id="message-history-content" class="oie-message-history-content" data-history-unavailable={ v.Text.EditHistoryUnavailable } data-history-changed={ v.Text.EditHistoryChanged }>
+				<div data-history-loading class="oie-history-feedback" role="status" hidden>@spinner.Spinner(spinner.Config{Size: spinner.SizeSM})<span>{ v.Text.EditHistoryLoading }</span></div>
+				<div data-history-error role="status" aria-live="polite" hidden></div>
+				<div class="oie-history-recovery">
+					@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-history-retry": "", "hidden": true})) {
+						<span>{ v.Text.Retry }</span>
+					}
+					@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-history-restart": "", "hidden": true})) {
+						<span>{ v.Text.Retry }</span>
+					}
+				</div>
+				<div data-history-results></div>
+			</div>
+		}
+	}
+}
+
+templ messageHistoryError(v view, changed bool) {
+	<p role="status">
+		if changed {
+			{ v.Text.EditHistoryChanged }
+		} else {
+			{ v.Text.EditHistoryUnavailable }
+		}
+	</p>
+}
+
+templ messageHistoryPage(v view, h historyPageView) {
+	<section data-message-history-page data-history-engine={ h.EngineID } data-history-account={ h.Page.AccountId } data-history-conversation={ h.Page.ConversationId } data-history-message={ h.Page.MessageId } data-history-requested={ h.Page.RequestedMessageId } data-history-snapshot={ h.Page.Snapshot } data-history-current-revision={ h.Page.CurrentRevisionId } data-history-cursor={ h.Cursor } data-history-next={ h.nextHref() } tabindex="-1" aria-label={ v.Text.EditHistory }>
+		if len(h.Items)==0 {
+			<p>{ v.Text.EditHistoryEmpty }</p>
+		} else {
+			<ol class="oie-history-versions">
+				for _,item:=range h.Items {
+					<li data-history-revision={ item.RevisionId } data-history-source={ item.SourceMessageId } data-history-is-current={ strconv.FormatBool(item.IsCurrent) } data-history-is-original={ strconv.FormatBool(item.IsOriginal) }>
+						@panel.Panel(panel.Config{Header: messageHistoryHeading(v, item), Density: panel.DensityCompact, RootClass: "oie-history-version"}) {
+							<div class="oie-rendered-message">
+								if item.Formatted!=nil {
+									@item.Formatted
+								} else {
+									<div class="oie-plain-fallback">{ item.OriginalText }</div>
+								}
+							</div>
+							<div class="oie-original-message">{ item.OriginalText }</div>
+						}
+					</li>
+				}
+			</ol>
+		}
+		<nav class="oie-history-pagination" aria-label={ v.Text.EditHistory }>
+			@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-history-newer": "", "hidden": true})) {
+				<span>{ v.Text.EditHistoryNewer }</span>
+			}
+			if next:=h.nextHref();next!="" {
+				@link.Link(next, link.WithAttrs(templ.Attributes{"data-history-next": ""})) {
+					<span>{ v.Text.EditHistoryMore }</span>
+				}
+			}
+		</nav>
+	</section>
+}
+
+templ messageHistoryHeading(v view, item historyItemView) {
+	<div class="oie-history-version-heading">
+		<div class="oie-history-version-labels">
+			if item.IsCurrent {
+				@badge.Badge(badge.Config{Label: v.Text.EditHistoryCurrent, Tone: badge.ToneSuccess, Size: badge.SizeSM})
+			}
+			if item.IsOriginal {
+				@badge.Badge(badge.Config{Label: v.Text.EditHistoryOriginal, Size: badge.SizeSM})
+			} else if !item.IsCurrent {
+				<span>{ v.Text.EditHistoryPrevious }</span>
+			}
+		</div>
+		<strong>
+			if item.Sender.DisplayName!="" {
+				{ item.Sender.DisplayName }
+			} else {
+				{ v.Text.UnknownParticipant }
+			}
+		</strong>
+		<time data-history-date datetime={ item.CreatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ item.CreatedAt.UTC().Format("2006-01-02 15:04 UTC") }</time>
+	</div>
+}
+
+// Native links remain a styled read-only document, without mounting the chat
+// runtime, starting live subscriptions or replacing an existing conversation.
+templ messageHistoryDocument(v view, h historyPageView) {
+	<!DOCTYPE html>
+	<html lang={ v.Locale } data-mode={ v.Theme } data-message-markdown="true" class={ templ.KV("dark", v.Theme == "dark") }>
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ v.Text.EditHistory }</title>
+			@head.Dependencies(head.WithLocalRuntime())
+			<link rel="stylesheet" href="/ui/app.css"/>
+			<link rel="stylesheet" href="/ui/message-history.css"/>
+			<script src="/ui/theme.js"></script>
+			<script src="/ui/message-history.js" defer></script>
+		</head>
+		<body>
+			<main class="oie-history-document" data-message-history-native>
+				<header>
+					<h1>{ v.Text.EditHistory }</h1>
+					@link.Link(v.href("section", "chats", "account", h.Page.AccountId, "chat", h.Page.ConversationId, "message", h.Page.MessageId, "lang", v.Locale, "theme", v.Theme)) {
+						<span>{ v.Text.Back }</span>
+					}
+				</header>
+				@messageHistoryPage(v, h)
+			</main>
+		</body>
+	</html>
+}

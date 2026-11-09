@@ -81,6 +81,8 @@ templ page(v view) {
 <script src="/ui/actions.js" defer></script>
 <script src="/ui/stars.js" defer></script>
 <script src="/ui/sender.js" defer></script>
+<script src="/ui/message-history.js" defer></script>
+<link rel="stylesheet" href="/ui/message-history.css"/>
 <script src="/ui/conversation-preferences.js" defer></script>
 <script src="/ui/message-search.js" defer></script>
 <script src="/ui/conversation-search.js" defer></script>
@@ -723,7 +725,7 @@ for _,item:=range v.messageVideos(m.Id) {
 }
 </div>
 if messageEdited(m) {
-<small class="oie-message-edited" data-message-edited data-edited-at={messageEditedAt(m)}>{v.Text.Edited}</small>
+@link.Link(v.editHistoryHref(m),link.WithRootClass("oie-message-edited"),link.WithAttrs(templ.Attributes{"data-message-edited":"","data-open-message-history":"","data-edited-at":messageEditedAt(m),"aria-label":v.Text.ViewEditHistory})){<span>{v.Text.Edited}</span>}
 }
 }
 

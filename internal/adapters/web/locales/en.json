@@ -476,5 +476,16 @@
   "SenderInfoLoading": "Loading user information…",
   "SenderInfoUnavailable": "User information is unavailable. Try again.",
   "SenderConversation": "Conversation",
-  "SenderAccount": "Account"
+  "SenderAccount": "Account",
+  "ViewEditHistory": "View edit history",
+  "EditHistory": "Edit history",
+  "EditHistoryLoading": "Loading edit history…",
+  "EditHistoryUnavailable": "Edit history is unavailable. Try again.",
+  "EditHistoryEmpty": "No retained versions are available.",
+  "EditHistoryOriginal": "Original version",
+  "EditHistoryCurrent": "Current version",
+  "EditHistoryPrevious": "Previous version",
+  "EditHistoryMore": "Older versions",
+  "EditHistoryNewer": "Newer versions",
+  "EditHistoryChanged": "The edit history changed. Refresh to see its current versions."
 }

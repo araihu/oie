@@ -255,7 +255,7 @@ window.OieRuntime.register('live', life => {
   function localizeTimes() {
     const locale=document.documentElement.lang || undefined;
     const clock=new Intl.DateTimeFormat(locale,{hour:'2-digit',minute:'2-digit'});
-    for (const time of document.querySelectorAll('time[datetime]:not([data-day])')) {
+    for (const time of document.querySelectorAll('time[datetime]:not([data-day]):not([data-history-date])')) {
       const date=new Date(time.dateTime);if(!Number.isNaN(date.getTime()))time.textContent=time.matches('[data-viewer-date],[data-capability-date],[data-details-date],[data-shared-source-date]')?new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(date):clock.format(date);
     }
     for(const label of document.querySelectorAll('[data-message-edited][data-edited-at]')){const at=new Date(label.dataset.editedAt);if(!Number.isNaN(at.getTime()))label.title=new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(at);}

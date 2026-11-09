@@ -52,7 +52,7 @@
   if(link)window.htmx.process(link);
  },true);
  function infoReady(starGeneration){const root=document.getElementById('chat-info-content');if(!root)return;upgrade(root);document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root,generation:starGeneration}}));const body=document.getElementById('details-body');if(root.dataset.infoView){if(body)body.scrollTop=0;root.querySelector('[data-info-heading]')?.focus({preventScroll:true})}else{if(body)body.scrollTop=infoReturnScroll;const kind=new URL(location.href).searchParams.get('infoFocus');root.querySelector(`[data-info-entry="${CSS.escape(kind||'media')}"]`)?.focus({preventScroll:true})}}
- function closeOverlays(){for(const id of ['oie-image-viewer','oie-document-viewer']){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id}}));const dialog=document.getElementById(id);if(dialog?.open)dialog.close()}for(const id of ['details','accounts','settings','newchat','sender'])window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id}}));}
+ function closeOverlays(){for(const id of ['oie-image-viewer','oie-document-viewer']){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id}}));const dialog=document.getElementById(id);if(dialog?.open)dialog.close()}for(const id of ['details','accounts','settings','newchat','sender','message-history'])window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id}}));}
  document.addEventListener('htmx:before:request',event=>{
   const ctx=event.detail.ctx;if(ctx?.target?.id==='shared-search-results'){epoch++;document.getElementById('shared-content-scroll')?.removeAttribute('aria-busy')}if(!ctx||!kinds.includes(ctx.target?.id))return;
   ctx.oieEpoch=++epoch;ctx.oieKind=ctx.target.id;

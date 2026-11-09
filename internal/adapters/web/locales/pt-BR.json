@@ -476,5 +476,16 @@
   "SenderInfoLoading": "Carregando informações do usuário…",
   "SenderInfoUnavailable": "Não foi possível carregar as informações do usuário. Tente novamente.",
   "SenderConversation": "Conversa",
-  "SenderAccount": "Conta"
+  "SenderAccount": "Conta",
+  "ViewEditHistory": "Ver histórico de edições",
+  "EditHistory": "Histórico de edições",
+  "EditHistoryLoading": "Carregando histórico de edições…",
+  "EditHistoryUnavailable": "Não foi possível carregar o histórico de edições. Tente novamente.",
+  "EditHistoryEmpty": "Nenhuma versão guardada está disponível.",
+  "EditHistoryOriginal": "Versão original",
+  "EditHistoryCurrent": "Versão atual",
+  "EditHistoryPrevious": "Versão anterior",
+  "EditHistoryMore": "Versões anteriores",
+  "EditHistoryNewer": "Versões mais recentes",
+  "EditHistoryChanged": "O histórico de edições mudou. Atualize para ver as versões atuais."
 }

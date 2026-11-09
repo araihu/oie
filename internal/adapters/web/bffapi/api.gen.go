@@ -69,6 +69,24 @@ func (e PendingSubmissionTheme) Valid() bool {
 	}
 }
 
+// Defines values for GetBrowserMessageEditHistoryParamsLang.
+const (
+	GetBrowserMessageEditHistoryParamsLangEn   GetBrowserMessageEditHistoryParamsLang = "en"
+	GetBrowserMessageEditHistoryParamsLangPtBR GetBrowserMessageEditHistoryParamsLang = "pt-BR"
+)
+
+// Valid indicates whether the value is a known member of the GetBrowserMessageEditHistoryParamsLang enum.
+func (e GetBrowserMessageEditHistoryParamsLang) Valid() bool {
+	switch e {
+	case GetBrowserMessageEditHistoryParamsLangEn:
+		return true
+	case GetBrowserMessageEditHistoryParamsLangPtBR:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SearchBrowserMessagesParamsLang.
 const (
 	SearchBrowserMessagesParamsLangEn   SearchBrowserMessagesParamsLang = "en"
@@ -332,6 +350,30 @@ type SubmissionReceipt struct {
 	// Example: queued
 	State string `json:"state"`
 }
+
+// GetBrowserMessageEditHistoryParams defines parameters for GetBrowserMessageEditHistory.
+type GetBrowserMessageEditHistoryParams struct {
+	// EngineId Identity of the selected owning engine.
+	EngineId openapi_types.UUID `form:"engineId" json:"engineId"`
+
+	// AccountId Owning account, checked against canonical message scope.
+	AccountId openapi_types.UUID `form:"accountId" json:"accountId"`
+
+	// ConversationId Conversation containing this retained message.
+	ConversationId openapi_types.UUID `form:"conversationId" json:"conversationId"`
+
+	// MessageId Requested retained source, allowing engine-validated canonical aliases.
+	MessageId openapi_types.UUID `form:"messageId" json:"messageId"`
+
+	// Cursor Engine-issued older-page cursor for the exact history snapshot.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Lang Preferred presentation language.
+	Lang *GetBrowserMessageEditHistoryParamsLang `form:"lang,omitempty" json:"lang,omitempty"`
+}
+
+// GetBrowserMessageEditHistoryParamsLang defines parameters for GetBrowserMessageEditHistory.
+type GetBrowserMessageEditHistoryParamsLang string
 
 // SearchBrowserMessagesParams defines parameters for SearchBrowserMessages.
 type SearchBrowserMessagesParams struct {

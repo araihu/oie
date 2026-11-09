@@ -1,0 +1,16 @@
+.oie-message-history-content{padding:16px;min-width:0;overflow-wrap:anywhere}
+.oie-message-history-content [hidden]{display:none!important}
+.oie-history-feedback{display:flex;align-items:center;gap:8px;font-size:.85rem}
+.oie-history-recovery{display:flex;gap:8px}
+.oie-history-versions{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.oie-history-version-heading{display:flex;flex-direction:column;gap:6px;min-width:0;font-size:.85rem}
+.oie-history-version-labels{display:flex;flex-wrap:wrap;gap:6px}
+.oie-history-version-heading time{font-size:.75rem;color:var(--oie-muted)}
+.oie-history-version{min-width:0}
+.oie-history-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;font-size:.85rem}
+a.oie-message-edited{font-weight:400;text-decoration:none}
+a.oie-message-edited:hover,a.oie-message-edited:focus-visible{text-decoration:underline}
+
+.oie-history-document{width:min(100%,48rem);margin:0 auto;padding:24px 16px}
+.oie-history-document>header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+.oie-history-document h1{font-size:1.3rem;font-weight:600}

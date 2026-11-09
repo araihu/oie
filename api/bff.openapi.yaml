@@ -17,6 +17,56 @@ tags:
 - name: Messages
   description: Browser submission receipt recovery
 paths:
+  /ui/message-history:
+    get:
+      operationId: getBrowserMessageEditHistory
+      tags: [Messages]
+      summary: Render one retained message history page
+      description: Returns escaped, scoped content-history HTML without provider, profile or media requests or read-state changes. Requires one engine, account, conversation and retained message. Pages belong to one exact history snapshot; changed history requires restarting at the first page. Does not submit sends or edits.
+      parameters:
+      - in: query
+        name: engineId
+        required: true
+        description: Identity of the selected owning engine.
+        schema: {type: string, format: uuid}
+      - in: query
+        name: accountId
+        required: true
+        description: Owning account, checked against canonical message scope.
+        schema: {type: string, format: uuid}
+      - in: query
+        name: conversationId
+        required: true
+        description: Conversation containing this retained message.
+        schema: {type: string, format: uuid}
+      - in: query
+        name: messageId
+        required: true
+        description: Requested retained source, allowing engine-validated canonical aliases.
+        schema: {type: string, format: uuid}
+      - in: query
+        name: cursor
+        description: Engine-issued older-page cursor for the exact history snapshot.
+        schema: {type: string, maxLength: 2048}
+      - in: query
+        name: lang
+        description: Preferred presentation language.
+        schema: {type: string, enum: [en, pt-BR]}
+      responses:
+        '200':
+          description: One bounded history page, with engine/account/conversation/message/snapshot metadata for safe replacement
+          content:
+            text/html:
+              schema: {type: string}
+              example: '<section data-message-history-page></section>'
+        '400':
+          description: Invalid or foreign scope or cursor
+        '404':
+          description: Retained message unavailable in requested account/conversation
+        '409':
+          description: Engine or observed history changed; clear old versions and restart
+        '503':
+          description: Retained history temporarily unavailable; retry the same read
   /ui/sender:
     get:
       operationId: getBrowserMessageSender

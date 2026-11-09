@@ -776,3 +776,26 @@ composer. Both have native GET fallbacks and reject stale query/scope responses.
 Offline search, document
 extraction, retraction and deletion remain outside this increment. See
 [retained message search](message-search.md).
+
+### Retained edit-history browsing increment
+
+**IMPLEMENTATION SCOPE:** View edit history opens a separate drawer from an
+edited message's actions or Edited label. Read observed original, current and
+previous content versions through a bounded, paginated engine API. Preserve the
+canonical message and source revision UUIDs, authored UTC dates and verified
+ancestry. The current/original markers are explicit; timestamp order alone does
+not establish either. An orphan correction is not labelled as an original whose
+source was never obtained.
+
+Exclude delivery-state transitions and unverified or ambiguous relationships.
+Resolve retained correction aliases within the owning engine, account and
+conversation. Bind page cursors to the exact content-history snapshot; a changed
+snapshot requires restarting the history read, while a delivery-state change
+alone does not invalidate it. The browser keeps one revision page mounted,
+preserving the conversation, draft, timeline position and focus. Plain-source
+and safe Markdown presentation do not load external previews, files or profiles.
+Opening or paging history does not mark messages read or contact the provider.
+
+Sending corrections remains a separate protocol operation with its own durable
+command/outbox design. This increment does not implement it or turn the proposed
+15-minute edit window into an agreed policy.

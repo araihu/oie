@@ -27,6 +27,12 @@ func messageActions(v view, id string) []dropdown.Section {
 			break
 		}
 	}
+	for _, message := range v.Messages {
+		if message.Id == id && messageEdited(message) {
+			sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "history-message-" + id, Icon: glyph(heroicons.Icon16SolidClock), Label: v.Text.ViewEditHistory, Href: v.editHistoryHref(message)}}})
+			break
+		}
+	}
 	if images := v.imagePreviews(id); len(images) == 1 {
 		sections = append(sections, imageActions(v, images[0])...)
 	}
