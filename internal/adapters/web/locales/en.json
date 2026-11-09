@@ -176,6 +176,7 @@
   "ImageType": "File type",
   "ImageSize": "File size",
   "ImageNotDownloaded": "The image has not been downloaded.",
+  "MessageStarred": "Starred message",
   "StarMessage": "Star message",
   "UnstarMessage": "Unstar message",
   "RetryStar": "Retry star change",

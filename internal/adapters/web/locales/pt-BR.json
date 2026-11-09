@@ -176,6 +176,7 @@
   "ImageType": "Tipo do arquivo",
   "ImageSize": "Tamanho do arquivo",
   "ImageNotDownloaded": "A imagem ainda não foi baixada.",
+  "MessageStarred": "Mensagem com estrela",
   "StarMessage": "Marcar mensagem com estrela",
   "UnstarMessage": "Remover estrela da mensagem",
   "RetryStar": "Tentar alteração da estrela novamente",

@@ -143,6 +143,7 @@ type view struct {
 }
 
 type copy struct {
+	MessageStarred                                                                                                string
 	AutoVideoThumbnails, AutoVideoThumbnailsHelp, VideoThumbnailLoad, VideoThumbnailLoading, VideoThumbnailFailed string
 	ReadFailed                                                                                                    string
 	TimelineOlder, TimelineNewer, TimelineLoading, TimelineFailed, TimelinePaused                                 string
