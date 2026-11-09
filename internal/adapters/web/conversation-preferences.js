@@ -53,6 +53,7 @@ window.OieRuntime.register('conversation-preferences',life=>{
   const form=event.target;if(!forms.includes(form))return;event.preventDefault();
   if(busy||blocked||!current||body.dataset.engineId!==engine||body.dataset.accountId!==account||body.dataset.conversationId!==conversation)return;
   const name=form.dataset.conversationPreference;if(intent&&intent.field!==name)return;
+  if(!window.OieNavigation?.pinConversation(conversation))return;
   if(!intent)save({engineId:engine,accountId:account,conversationId:conversation,operationKey:form.elements.operationKey.value,expectedRevisionId:current.revisionId,field:name,desired:!current[name]});
   if(!valid(intent)){clear();announce(copy.unavailable);return}
   const revision=current.revisionId,values=new URLSearchParams(new FormData(form));

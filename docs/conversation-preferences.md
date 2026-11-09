@@ -37,6 +37,8 @@ Explicit `false` remains distinct from an omitted field.
 The header menu uses public Goshtoso dropdown items. Native POST forms remain
 reachable with JavaScript disabled. Successful changes refresh canonical state
 while retaining the selected conversation, draft, timeline and list position.
+An implicitly selected desktop conversation is pinned into the current URL's
+history entry before mutation, so filtered row removal cannot retarget live reads.
 
 | State or action | Required outcome |
 | --- | --- |

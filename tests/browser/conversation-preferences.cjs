@@ -10,7 +10,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const chats=Array.from({length:26},(_,n)=>({id:id(100+n),revisionId:id(300+n),accountId:n===25?foreign:account,kind:'direct',address:'peer'+n+'@fixture',title:'Conversation '+n,lastMessage:'Retained text '+n,updatedAt:new Date(Date.UTC(2026,10,9,12,n)).toISOString(),unreadCount:n===0?3:0,archived:n>=20&&n<25,favorite:n===19}));
  const [chat,sibling,nativeChat]=[chats[0],chats[6],chats[2]];
  const messages=new Map(chats.map((conversation,n)=>[conversation.id,Array.from({length:36},(_,index)=>({id:id(1000+n*100+index),revisionId:id(5),accountId:conversation.accountId,conversationId:conversation.id,sender:{id:id(8),displayName:'Peer'},originalText:'Retained message '+index+'\nPreserve the reading position and exact draft.',createdAt:new Date(Date.UTC(2026,10,9,12,index)).toISOString(),isOwn:false,sendState:'received',historical:true}))]));
- const emit=conversation=>{state.sequence++;for(const stream of streams)stream.write(`id: ${state.engine}:${state.sequence}\nevent: conversation.updated\ndata: ${JSON.stringify({type:'conversation.updated',conversation})}\n\n`)};
+ const emit=(conversation,type='conversation.updated',message)=>{state.sequence++;for(const stream of streams)stream.write(`id: ${state.engine}:${state.sequence}\nevent: ${type}\ndata: ${JSON.stringify({type,conversation,message})}\n\n`)};
  const revise=(conversation,flags)=>{Object.assign(conversation,flags,{revisionId:id(++state.revision)});return conversation};
  const api=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(code,value)=>{res.statusCode=code;res.end(JSON.stringify(value))};
@@ -77,6 +77,33 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const settled=async(page,field,value)=>until(async()=>await currentFlag(page,field)===String(value)&&await form(page,field).locator('[name="expectedRevisionId"]').inputValue()===chat.revisionId,'canonical '+field+'='+value);
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
+  // A desktop inbox without ?chat= still owns its implicit first selection.
+  // Changing placement must pin that source before a later refresh chooses B.
+  const implicit=await fresh();page=implicit;await implicit.goto(base+'/?account='+account+'&lang=en&theme=dark');
+  await until(async()=>await implicit.evaluate(()=>document.body.dataset.conversationId)===chat.id,'implicit first conversation selection');
+  const implicitDraft='Keep the implicitly selected conversation draft';await implicit.locator('#message-composer').fill(implicitDraft);
+  await implicit.evaluate(()=>{window.implicitPreferenceNodes={pane:document.getElementById('conversation-pane'),timeline:document.getElementById('message-timeline'),composer:document.getElementById('message-composer'),app:document.getElementById('oie-app')};window.implicitDocumentToken=Math.random()});
+  const implicitToken=await implicit.evaluate(()=>window.implicitDocumentToken),implicitOriginal=structuredClone(chat),implicitMessageCount=messages.get(chat.id).length;
+  const implicitHistory=await implicit.evaluate(()=>({length:history.length,generation:window.OieRuntime.generation,params:Object.fromEntries(new URL(location.href).searchParams)}));
+  await clickAction(implicit,'archived');await settled(implicit,'archived',true);
+  await until(async()=>await implicit.locator('[data-conversation-row="'+chat.id+'"]').count()===0,'implicit archived source leaves the ordinary list');
+  assert(await implicit.locator('[data-conversation-row="'+chats[1].id+'"]').count(),'a different conversation is now the first ordinary candidate');
+  const incoming={id:id(9000),revisionId:id(9001),accountId:account,conversationId:chat.id,sender:{id:id(8),displayName:'Peer'},originalText:'Live arrival for the implicitly selected archived conversation',createdAt:'2026-11-09T12:59:00Z',isOwn:false,sendState:'received'};
+  messages.get(chat.id).push(incoming);revise(chat,{lastMessage:incoming.originalText,updatedAt:incoming.createdAt,unreadCount:4});emit(chat,'message.created',incoming);
+  await until(async()=>await implicit.locator('[data-message-id="'+incoming.id+'"]').count()===1,'implicit archived source keeps receiving live messages');
+  await settled(implicit,'archived',true);
+  const pinnedURL=new URL(implicit.url());assert.equal(pinnedURL.searchParams.get('chat'),chat.id,'placement change pins the implicit source in its addressable URL');
+  for(const field of ['account','lang','theme','filter'])assert.equal(pinnedURL.searchParams.get(field),implicitHistory.params[field]??null,'pinning preserves the existing '+field+' query scope');
+  assert.equal(await implicit.evaluate(()=>history.length),implicitHistory.length,'pinning replaces the existing history entry');
+  assert.equal(await implicit.evaluate(()=>window.OieRuntime.generation),implicitHistory.generation,'pinning and live updates keep the existing runtime scope');
+  assert.equal(await implicit.evaluate(()=>document.body.dataset.conversationId),chat.id);
+  assert.equal(await implicit.evaluate(()=>window.implicitDocumentToken),implicitToken,'pinning uses the existing document');
+  assert(await implicit.evaluate(()=>{const n=window.implicitPreferenceNodes;return n.pane===document.getElementById('conversation-pane')&&n.timeline===document.getElementById('message-timeline')&&n.composer===document.getElementById('message-composer')&&n.app===document.getElementById('oie-app')}),'implicit source updates preserve the selected workspace nodes');
+  assert.equal(await implicit.locator('#message-composer').inputValue(),implicitDraft);
+  await clickAction(implicit,'archived');await settled(implicit,'archived',false);
+  await implicit.context().close();messages.get(chat.id).splice(implicitMessageCount);revise(chat,{lastMessage:implicitOriginal.lastMessage,updatedAt:implicitOriginal.updatedAt,unreadCount:implicitOriginal.unreadCount});
+  findings.push('Archiving an implicitly selected desktop conversation pins its source URL and retains live message/canonical updates, draft and workspace after another row becomes the first inbox candidate');
+
   page=await fresh();await page.goto(url());await page.locator('#message-composer').waitFor({state:'visible'});
   const observer=await fresh();await observer.goto(url(chat,'&section=archived'));await observer.locator('#conversation-list').waitFor({state:'attached'});assert.equal(await observer.locator('[data-conversation-row="'+chat.id+'"]').count(),0);
   const draft='Keep this exact draft while preferences change 😀';await page.locator('#message-composer').fill(draft);

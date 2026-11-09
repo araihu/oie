@@ -100,8 +100,21 @@
   const kind=sharedRoute(url)?'shared-content-scroll':conversationRoute(url)?'conversation-pane':'oie-app';
   return window.htmx.ajax('GET',url.pathname+url.search,{source:app(),target:document.getElementById(kind),swap:swapFor(kind),select:selectFor(kind),push:history?'false':url.pathname+url.search,headers:{'X-Oie-Fragment':fragment(kind),...(history?{'HX-History-Restore-Request':'true'}:{})}});
  }
+ // Turn an implicitly selected desktop conversation into an addressable one
+ // before a command can remove its row from the current list. This is the same
+ // view and history entry, so keep its mounted nodes, scroll and runtime.
+ function pinConversation(id){
+  const pane=document.getElementById('conversation-pane'),root=app(),url=new URL(location.href);
+  if(!id||url.pathname!=='/'||!pane||pane.dataset.conversationId!==id||document.body.dataset.conversationId!==id)return false;
+  const selected=url.searchParams.get('chat');if(selected)return selected===id;
+  remember();const saved=positions.get(currentURL);positions.delete(currentURL);
+  url.searchParams.set('chat',id);history.replaceState(history.state,'',url.pathname+url.search+url.hash);currentURL=location.href;if(saved)positions.set(currentURL,saved);
+  pane.dataset.openChat='true';document.getElementById('workspace')?.classList.add('oie-chat-open');
+  if(root)for(const row of root.querySelectorAll('#conversation-list a[data-conversation-id]'))row.setAttribute('aria-current',String(row.dataset.conversationId===id));
+  return true;
+ }
  document.addEventListener('htmx:before:history:restore',event=>{event.preventDefault();go(event.detail.path,true);});
- window.OieNavigation={go};
+ window.OieNavigation={go,pinConversation};
  document.addEventListener('oie:navigation-upgrade',()=>upgrade(app()));
  document.addEventListener('oie:shared-search-settled',()=>{currentURL=location.href;});
  reducedMotion.addEventListener('change',()=>upgrade(app()));
