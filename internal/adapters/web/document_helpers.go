@@ -19,7 +19,9 @@ func documentFormat(item engineapi.SharedContentItem) string {
 	switch extension {
 	case ".pdf":
 		return "pdf"
-	case ".txt", ".log", ".md", ".csv", ".json", ".xml":
+	case ".md":
+		return "markdown"
+	case ".txt", ".log", ".csv", ".json", ".xml":
 		return "text"
 	default:
 		return "unsupported"

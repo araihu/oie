@@ -10,6 +10,7 @@ generate:
 	$(CODEGEN) sqlc generate
 	$(CODEGEN) oapi-codegen --config api/codegen.yaml api/openapi.yaml
 	$(CODEGEN) oapi-codegen --config api/ui-preview.codegen.yaml api/ui-preview.openapi.yaml
+	$(CODEGEN) oapi-codegen --config api/bff.codegen.yaml api/bff.openapi.yaml
 	$(CODEGEN) templ generate
 	$(VACUUM) bundle --composed ../../api/openapi.yaml ../../api/openapi.bundle.yaml
 	$(VACUUM) apply-overlay --fail-on-warnings ../../api/openapi.bundle.yaml ../../api/cli.overlay.yaml ../../api/openapi.cli.yaml
@@ -20,6 +21,7 @@ generate:
 lint:
 	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn ../../api/openapi.yaml
 	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn ../../api/ui-preview.openapi.yaml
+	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn ../../api/bff.openapi.yaml
 
 lint-go:
 	$(CODEGEN) golangci-lint run

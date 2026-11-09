@@ -1,14 +1,14 @@
 window.OieRuntime.register('documents', life => {
  'use strict';
  const dialog=document.getElementById('oie-document-viewer');if(!dialog)return;
- const labels=document.querySelector('[data-document-copy]')?.dataset||{},status=dialog.querySelector('[data-document-status]'),text=dialog.querySelector('[data-document-text]'),canvas=dialog.querySelector('[data-document-canvas]'),layer=dialog.querySelector('[data-document-text-layer]'),sheet=dialog.querySelector('[data-document-pdf-page]'),controls=dialog.querySelector('[data-document-pdf-controls]'),scroll=dialog.querySelector('[data-document-scroll]'),counter=dialog.querySelector('[data-document-page]'),retry=dialog.querySelector('[data-document-retry]');
+ const labels=document.querySelector('[data-document-copy]')?.dataset||{},status=dialog.querySelector('[data-document-status]'),text=dialog.querySelector('[data-document-text]'),markdown=dialog.querySelector('[data-document-markdown]'),canvas=dialog.querySelector('[data-document-canvas]'),layer=dialog.querySelector('[data-document-text-layer]'),sheet=dialog.querySelector('[data-document-pdf-page]'),controls=dialog.querySelector('[data-document-pdf-controls]'),scroll=dialog.querySelector('[data-document-scroll]'),counter=dialog.querySelector('[data-document-page]'),retry=dialog.querySelector('[data-document-retry]');
  const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
  let current=null,opener=null,origin='',generation=0,renderGeneration=0,request,loadingTask,pdf,renderTask,textLayer,page=1,zoom=1,pdfjs;
  function feedback(key,state){status.textContent=labels[key]||'';status.dataset.state=state;status.setAttribute('role',state==='failed'?'alert':'status')}
  function reset(){
   generation++;renderGeneration++;request?.abort();request=null;renderTask?.cancel();renderTask=null;textLayer?.cancel();textLayer=null;
   const task=loadingTask,document=pdf;loadingTask=null;pdf=null;if(task)task.destroy().catch(()=>{});else document?.destroy().catch(()=>{});
-  text.textContent='';text.hidden=true;layer.replaceChildren();canvas.width=0;canvas.height=0;canvas.style.width='';canvas.style.height='';sheet.hidden=true;sheet.style.width='';sheet.style.height='';controls.hidden=true;counter.textContent='';delete counter.dataset.current;delete counter.dataset.total;retry.hidden=true;page=1;zoom=1;scroll.scrollTop=0;scroll.scrollLeft=0;
+  text.textContent='';text.hidden=true;markdown.replaceChildren();markdown.hidden=true;layer.replaceChildren();canvas.width=0;canvas.height=0;canvas.style.width='';canvas.style.height='';sheet.hidden=true;sheet.style.width='';sheet.style.height='';controls.hidden=true;counter.textContent='';delete counter.dataset.current;delete counter.dataset.total;retry.hidden=true;page=1;zoom=1;scroll.scrollTop=0;scroll.scrollLeft=0;
  }
  function validSource(card){
   const data=card.dataset;if(![data.documentItem,data.documentEngine,data.documentAccount,data.documentConversation,data.documentMessage].every(uuid)||data.documentEngine!==document.body.dataset.engineId)return null;
@@ -17,13 +17,22 @@ window.OieRuntime.register('documents', life => {
   let original='';try{const url=new URL(data.documentUrl);if(['http:','https:'].includes(url.protocol)&&!url.username&&!url.password)original=url.href}catch{}
   return {id:data.documentItem,engine:data.documentEngine,format:data.documentFormat,filename:data.documentFilename||labels.page||'',source:source.pathname+source.search,original};
  }
- function failure(unsupported=false){text.hidden=true;sheet.hidden=true;controls.hidden=true;feedback(unsupported?'unsupported':'failed','failed');retry.hidden=!current||current.format==='unsupported'}
+ function failure(unsupported=false){text.hidden=true;markdown.hidden=true;sheet.hidden=true;controls.hidden=true;feedback(unsupported?'unsupported':'failed','failed');retry.hidden=!current||current.format==='unsupported'}
  function decode(bytes){
   if(bytes.length>=4&&((bytes[0]===0&&bytes[1]===0&&bytes[2]===254&&bytes[3]===255)||(bytes[0]===255&&bytes[1]===254&&bytes[2]===0&&bytes[3]===0)))throw Error('encoding');
   let encoding='utf-8',offset=0;if(bytes[0]===255&&bytes[1]===254){encoding='utf-16le';offset=2}else if(bytes[0]===254&&bytes[1]===255){encoding='utf-16be';offset=2}
   let result;try{result=new TextDecoder(encoding,{fatal:true}).decode(bytes.subarray(offset))}catch{throw Error('encoding')}if(result.includes('\u0000'))throw Error('encoding');return result;
  }
  async function readText(response){const limit=2*1024*1024;if(Number(response.headers.get('Content-Length'))>limit)throw Error('large');const reader=response.body?.getReader();if(!reader){const body=new Uint8Array(await response.arrayBuffer());if(body.length>limit)throw Error('large');return decode(body)}const chunks=[];let size=0;try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>limit){await reader.cancel();throw Error('large')}chunks.push(value)}}finally{reader.releaseLock()}const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length}return decode(bytes)}
+ async function renderMarkdown(source,signal,preview=false){
+  const response=await life.fetch('/ui/document-markdown',{method:'POST',credentials:'same-origin',cache:'no-store',redirect:'error',headers:{'Content-Type':'application/json'},body:JSON.stringify({source}),signal});
+  if(!response.ok)throw Error('markdown');const result=await response.json();if(typeof result.html!=='string'||result.html.length>8*1024*1024)throw Error('markdown');
+  // This fragment is Margo output filtered by the BFF into static host HTML.
+  // Never initialize Alpine or document runtimes for attachment contents.
+  const template=document.createElement('template');template.innerHTML=result.html;
+  if(preview)for(const link of template.content.querySelectorAll('a'))link.replaceWith(...link.childNodes);
+  return template.content;
+ }
  async function pdfStyles(){
   const key='document-pdf-style';if(window.OieRuntime.memory.has(key))return window.OieRuntime.memory.get(key);
   const promise=new Promise((resolve,reject)=>{let link=document.querySelector('link[data-document-pdf-style]');if(link?.sheet){resolve();return}if(!link){link=document.createElement('link');link.rel='stylesheet';link.href='/ui/pdfjs/web/pdf_viewer.css';link.dataset.documentPdfStyle=''}link.addEventListener('load',resolve,{once:true});link.addEventListener('error',()=>{link.remove();window.OieRuntime.memory.delete(key);reject(Error('style'))},{once:true});if(!link.isConnected)document.head.append(link)});window.OieRuntime.memory.set(key,promise);return promise;
@@ -47,7 +56,9 @@ window.OieRuntime.register('documents', life => {
   if(current.format==='pdf'){
    try{await pdfStyles();pdfjs=await import('/ui/pdfjs/build/pdf.mjs');if(token!==generation)return;pdfjs.GlobalWorkerOptions.workerSrc='/ui/pdfjs/build/pdf.worker.mjs';loadingTask=pdfjs.getDocument({url:current.source,cMapUrl:'/ui/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:'/ui/pdfjs/standard_fonts/',wasmUrl:'/ui/pdfjs/wasm/',iccUrl:'/ui/pdfjs/iccs/',isEvalSupported:false,enableXfa:false,useSystemFonts:true,canvasMaxAreaInBytes:67108864});const document=await loadingTask.promise;if(token!==generation){document.destroy().catch(()=>{});return}pdf=document;await renderPage(token)}catch(error){if(token===generation&&!life.signal.aborted&&error.name!=='AbortException')failure()}
   }else{
-   request=new AbortController();try{const response=await life.fetch(current.source,{credentials:'same-origin',cache:'no-store',redirect:'error',signal:request.signal});if(!response.ok)throw Error(response.status===413?'large':'unavailable');if(response.headers.get('Content-Type')?.split(';')[0].trim()!=='text/plain')throw Error('encoding');const body=await readText(response);if(token!==generation)return;text.textContent=body;text.hidden=false;feedback(body?'':'empty','ready')}catch(error){if(token===generation&&!life.signal.aborted&&error.name!=='AbortError')failure(['encoding','large'].includes(error.message))}
+   request=new AbortController();try{const response=await life.fetch(current.source,{credentials:'same-origin',cache:'no-store',redirect:'error',signal:request.signal});if(!response.ok)throw Error(response.status===413?'large':'unavailable');if(response.headers.get('Content-Type')?.split(';')[0].trim()!=='text/plain')throw Error('encoding');const body=await readText(response);if(token!==generation)return;if(current.format==='markdown'){
+    try{const fragment=await renderMarkdown(body,request.signal);if(token!==generation)return;markdown.replaceChildren(fragment);markdown.hidden=false;feedback(body?'':'empty','ready');return}catch(error){if(token!==generation||request.signal.aborted)return}
+   }text.textContent=body;text.hidden=false;feedback(body?'':'empty','ready')}catch(error){if(token===generation&&!life.signal.aborted&&error.name!=='AbortError')failure(['encoding','large'].includes(error.message))}
   }
  }
  // Card previews only read bounded bytes for visible documents. Originals still
@@ -68,13 +79,17 @@ window.OieRuntime.register('documents', life => {
  }
  async function paintPreview(card,record,controller){
   const target=card.querySelector('[data-document-preview]');if(!target)return;
-  const initial=await previewRange(record,0,previewChunk,controller,record.format==='text');if(controller.signal.aborted||!card.isConnected)return;
-  if(record.format==='text'){
+  const initial=await previewRange(record,0,previewChunk,controller,record.format!=='pdf');if(controller.signal.aborted||!card.isConnected)return;
+  if(record.format!=='pdf'){
    // A range can end inside a UTF-8 sequence. Decode incrementally without
    // flushing that final incomplete code point into a replacement character.
    let bytes=initial.bytes,encoding='utf-8';if(bytes[0]===255&&bytes[1]===254){encoding='utf-16le';bytes=bytes.subarray(2)}else if(bytes[0]===254&&bytes[1]===255){encoding='utf-16be';bytes=bytes.subarray(2)}
    const excerpt=new TextDecoder(encoding,{fatal:true}).decode(bytes,{stream:initial.total>initial.bytes.length});if(excerpt.includes('\u0000'))throw Error('encoding');
-   const node=document.createElement('span');node.dataset.documentExcerpt='';node.textContent=excerpt.slice(0,1800)||labels.empty||'';target.replaceChildren(node);card.dataset.documentPreviewState='ready';return;
+   const node=document.createElement('span');
+   if(record.format==='markdown'){
+    try{const fragment=await renderMarkdown(excerpt,controller.signal,true);if(controller.signal.aborted||!card.isConnected)return;node.dataset.documentMarkdownPreview='';node.className='oie-document-markdown';node.append(fragment)}catch(error){if(controller.signal.aborted)return;node.dataset.documentExcerpt='';node.textContent=excerpt.slice(0,1800)||labels.empty||''}
+   }else{node.dataset.documentExcerpt='';node.textContent=excerpt.slice(0,1800)||labels.empty||''}
+   target.replaceChildren(node);card.dataset.documentPreviewState='ready';return;
   }
   if(!Number.isSafeInteger(initial.total)||initial.total>128*1024*1024)throw Error('large');
   const library=await import('/ui/pdfjs/build/pdf.mjs');if(controller.signal.aborted)return;library.GlobalWorkerOptions.workerSrc='/ui/pdfjs/build/pdf.worker.mjs';
@@ -99,7 +114,7 @@ window.OieRuntime.register('documents', life => {
   while(previewActive<2&&previewQueue.length&&!life.signal.aborted){const card=previewQueue.shift(),record=validSource(card);if(!record||!card.isConnected)continue;previewActive++;const controller=new AbortController();previewRequests.add(controller);const timeout=life.timeout(()=>controller.abort(),12000);card.dataset.documentPreviewState='loading';paintPreview(card,record,controller).catch(()=>{if(card.isConnected)card.dataset.documentPreviewState='unavailable'}).finally(()=>{clearTimeout(timeout);controller.abort();previewRequests.delete(controller);if(card.isConnected&&card.dataset.documentPreviewState==='loading')card.dataset.documentPreviewState='unavailable';previewActive--;drainPreviews()})}
  }
  const previewObserver=typeof IntersectionObserver==='function'?new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){previewObserver.unobserve(entry.target);previewQueue.push(entry.target)}drainPreviews()},{rootMargin:'120px'}):null;
- function observePreviews(){for(const card of document.querySelectorAll('[data-document-item]'))if(!previewSeen.has(card)&&['pdf','text'].includes(card.dataset.documentFormat)){previewSeen.add(card);previewObserver?.observe(card)}}
+ function observePreviews(){for(const card of document.querySelectorAll('[data-document-item]'))if(!previewSeen.has(card)&&['pdf','text','markdown'].includes(card.dataset.documentFormat)){previewSeen.add(card);previewObserver?.observe(card)}}
  observePreviews();life.on(document,'oie:previews-refresh',observePreviews);life.on(document,'oie:shared-append',observePreviews);life.on(document,'oie:info-shared-search-settled',observePreviews);
  life.cleanup(()=>{previewObserver?.disconnect();previewQueue.length=0;for(const controller of previewRequests)controller.abort();previewRequests.clear()});
  function close(){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id:'oie-document-viewer'}}))}

@@ -1,0 +1,75 @@
+openapi: 3.0.3
+info:
+  title: Oie browser presentation API
+  version: 0.1.0
+  description: Browser-only presentation operations. Engine data and protocol operations remain in the engine API.
+  contact:
+    name: Arai Hû
+    url: https://github.com/araihu/oie
+servers:
+- url: http://127.0.0.1:8080
+security: []
+tags:
+- name: Documents
+  description: Static document presentation
+paths:
+  /ui/document-markdown:
+    post:
+      operationId: renderDocumentMarkdown
+      tags: [Documents]
+      summary: Render a bounded Markdown document fragment
+      description: Read-only rendering through Margo. No provider URLs are fetched. Active HTML, document runtimes and image fetching are excluded. Input is limited to 2 MiB of UTF-8 and output to 8 MiB. Preview callers send only their bounded prefix. Oversized or invalid documents retain the plain-text viewer fallback.
+      requestBody:
+        description: Bounded caller-supplied Markdown for static presentation.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkdownSource'
+            example:
+              source: '# Release notes'
+      responses:
+        '200':
+          description: Static HTML fragment for the document surface
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarkdownFragment'
+              example:
+                html: '<h1>Release notes</h1>'
+        '400':
+          description: Invalid JSON or source encoding
+        '413':
+          description: Input exceeds the byte limit
+        '422':
+          description: Document cannot be rendered within the presentation policy
+        '503':
+          description: Rendering capacity is occupied
+components:
+  schemas:
+    MarkdownSource:
+      description: Authored source text for a static Markdown document.
+      example:
+        source: '# Release notes'
+      type: object
+      additionalProperties: false
+      required: [source]
+      properties:
+        source:
+          type: string
+          maxLength: 2097152
+          description: Authored Markdown text, never a URL to fetch.
+          example: '# Release notes'
+    MarkdownFragment:
+      description: Static presentation fragment filtered by the host.
+      example:
+        html: '<h1>Release notes</h1>'
+      type: object
+      additionalProperties: false
+      required: [html]
+      properties:
+        html:
+          type: string
+          maxLength: 8388608
+          description: Static host-filtered HTML without resource-loading elements or document IDs.
+          example: '<h1>Release notes</h1>'

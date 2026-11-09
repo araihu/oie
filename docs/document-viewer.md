@@ -1,14 +1,24 @@
 # Document viewer
 
 The Documents catalog and a conversation's Documents panel can open PDF and
-plain-text attachments inside Oie. TXT, LOG, Markdown, CSV, JSON and XML appear
-as plain text. Their content never becomes HTML or executable JavaScript.
+text attachments inside Oie. Markdown uses Margo semantic rendering in its card
+preview and expanded viewer. TXT, LOG, CSV, JSON and XML remain plain text.
+A static host projection excludes resource-loading elements, scripts, document
+IDs, authored attributes and document runtimes. External links open explicitly.
+If Margo cannot render a source, the readable original remains available as
+plain text. Markdown image references currently trigger this fallback under
+Margo's offline image policy.
 Other document types retain an action to open the original provider address.
 
 Visible document cards show a text excerpt or the first PDF page. The preview
 and filename form one keyboard-accessible control that opens the viewer.
 Previews read through the existing scoped engine route, with two concurrent
-jobs and a 12-second timeout. Text reads at most a 64 KiB prefix. PDF previews
+jobs and a 12-second timeout. Text and Markdown read at most a 64 KiB prefix.
+The browser sends Markdown text to the BFF-only `/ui/document-markdown`
+presentation operation, specified in `api/bff.openapi.yaml` with generated
+models. It performs no engine reads or writes and accepts no fetch address.
+Rendering has two concurrent slots, a two-second context deadline, a 2 MiB
+UTF-8 input limit and an 8 MiB HTML output limit. PDF previews
 request 64 KiB ranges with a 2 MiB total budget. Unsupported, unavailable or
 over-budget documents keep a filename and icon that still open the viewer.
 Each PDF serializes its range reads, so PDF.js request bursts cannot exhaust
@@ -18,7 +28,10 @@ Opening the viewer explicitly starts its independent original-file read.
 Text is limited to 2 MiB and PDF to 100 MiB. The engine
 checks the retained canonical reference, extension, media type and complete
 resource size before exposing it. Byte ranges, cancellation and the existing
-public-network policy apply. There is no arbitrary provider-URL proxy.
+public-network policy apply. Codeberg Markdown source-page links resolve to
+the same repository's raw file before those checks. The retained catalog URL
+and original-address action still identify the shared source page. There is
+no arbitrary provider-URL proxy.
 
 The viewer uses a compact filename header with download, original-address and
 close actions. Text supports UTF-8 and UTF-16 with a byte-order mark. Invalid
@@ -99,3 +112,26 @@ library fetches before activation, no mutations and no JavaScript errors. The
 log is `/tmp/oie-documents-live.log` and screenshot is
 `/tmp/oie-documents-live.png`. See
 [the frontend development loop](frontend-development.md) for supervisor usage.
+
+The Markdown increment reuses Margo's public Compile, Render and RenderHTML APIs.
+The host enables intermediate authored HTML so placeholders such as `<user>` do
+not reject an entire changelog, then applies its static HTML allowlist before
+any content reaches the browser. It never serves the intermediate fragment or
+initializes its runtimes. No dependency update or upstream change is required.
+
+The Markdown implementation passes `make check`, including lint, OpenAPI
+validation and generated-model drift checks. The document browser suite passes
+rendered Markdown headings/lists/code, plain-text fallback, unchanged original
+downloads, PDF regressions, abort/retry, drawer focus and EN/PT accessibility.
+Native tests verify static HTML projection, active-content removal, bounded
+inputs and Codeberg URL identity handling. Read-only live checks render the
+shared Tusky CHANGELOG in the card and viewer at 390 and 1211 pixels, with 84
+viewer headings and no browser errors or engine mutations. An index-only
+source export also builds and passes the complete document browser fixture,
+independently of other pending UI changes. A consistent SQLite
+backup preceded the local engine update; no migration was needed.
+
+The Dagger run completed checks, race tests and application/CLI/mock builds in
+the remote engine logs. Its client timed out after 180 seconds with exit 124,
+so this is not a successful client completion. Evidence is recorded in
+`/tmp/oie-markdown-dagger.log` and `/tmp/oie-markdown-dagger-remote.log`.

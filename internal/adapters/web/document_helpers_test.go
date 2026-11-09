@@ -36,7 +36,7 @@ func TestDocumentCardPreviewIsScopedAndEscapesMetadata(t *testing.T) {
 	}
 }
 func TestDocumentFormatAndSourceDoNotUseRemoteURLAsProxyInput(t *testing.T) {
-	for _, tc := range []struct{ address, want string }{{"https://files.example.test/file.pdf", "pdf"}, {"https://files.example.test/file.XML?query=.pdf", "text"}, {"https://files.example.test/file.md", "text"}, {"https://files.example.test/file.txt", "text"}, {"https://files.example.test/file.log", "text"}, {"https://files.example.test/file.json", "text"}, {"https://files.example.test/file.csv", "text"}, {"https://files.example.test/file.docx", "unsupported"}} {
+	for _, tc := range []struct{ address, want string }{{"https://files.example.test/file.pdf", "pdf"}, {"https://files.example.test/file.XML?query=.pdf", "text"}, {"https://files.example.test/file.md", "markdown"}, {"https://files.example.test/file.txt", "text"}, {"https://files.example.test/file.log", "text"}, {"https://files.example.test/file.json", "text"}, {"https://files.example.test/file.csv", "text"}, {"https://files.example.test/file.docx", "unsupported"}} {
 		if got := documentFormat(engineapi.SharedContentItem{Url: tc.address}); got != tc.want {
 			t.Errorf("format %s: %s", tc.address, got)
 		}

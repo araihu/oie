@@ -1,0 +1,4 @@
+package: bffapi
+generate:
+  models: true
+output: internal/adapters/web/bffapi/api.gen.go

@@ -495,6 +495,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if s.serveDevReload(w, r) || s.servePDFJS(w, r) {
 		return
 	}
+	if r.URL.Path == "/ui/document-markdown" {
+		s.documentMarkdown(w, r)
+		return
+	}
 	if isMutationPath(r.URL.Path) && r.Method != http.MethodPost {
 		w.Header().Set("Allow", "POST")
 		w.WriteHeader(405)
