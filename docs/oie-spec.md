@@ -225,6 +225,8 @@ Star or unstar a retained source message from the timeline or its image viewer.
 All images attached to that message share its star. This is app-owned metadata,
 independent of protocol support, conversation favorites, and message content edits.
 
+**AGREED:** inside chat bubbles, show a passive star beside the message time only when the message is starred. The indicator is not clickable or keyboard-focusable. Star and unstar actions in the chat are accessed through the message-actions chevron; the image viewer retains its separate action.
+
 The message-actions chevron sits inside the upper-right corner of its own bubble,
 with space reserved so it does not cover the sender, timestamp or message content.
 It remains available through keyboard focus and touch, and the opened menu stays

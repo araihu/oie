@@ -306,7 +306,10 @@ if !m.IsOwn && !grouped {
 }
 
 if m.IsOwn {
-<div class="oie-message-meta"><time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
+<div class="oie-message-meta">
+if m.Attachment!=nil {
+<time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
+}
 if m.SendState!="submitted" {
 <span data-message-status title={statusHint(v,m.SendState)}>{v.stateLabel(m.SendState)}</span>
 }
@@ -658,19 +661,18 @@ templ messageBubbleBody(v view,m messageView,grouped bool){
 @dropdown.Dropdown(dropdown.Config{ID:"message-menu-"+m.Id,Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,m.Id),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:messageActions(v,m.Id)})
 </div>
 if !m.IsOwn && !grouped {
-<div class="oie-message-heading"><strong>{m.Sender.DisplayName}</strong><time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time></div>
+<div class="oie-message-heading"><strong>{m.Sender.DisplayName}</strong></div>
 }
 @messageBody(v,m)
-<div class="oie-message-star-footer">
-@messageStarButton(v,m.Id)
+<div class="oie-message-stamp">
+@messageStarIndicator(v,m.Id)
+<time data-message-time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
 </div>
 </div>
 }
 
-templ messageStarButton(v view,id string){
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithRootClass("oie-star-message oie-message-star-control"),button.WithAttrs(templ.Attributes{"data-star-message":id,"data-message-star-indicator":"","data-starred":strconv.FormatBool(v.Stars[id].Starred),"aria-label":v.starLabel(id),"title":v.starLabel(id),"aria-pressed":strconv.FormatBool(v.Stars[id].Starred),"hidden":!v.StarsKnown,"disabled":!v.StarsKnown})){
-@glyph(heroicons.Icon16SolidStar)
-}
+templ messageStarIndicator(v view,id string){
+<span class="oie-message-star-indicator" data-message-star-indicator hidden?={!v.StarsKnown||!v.Stars[id].Starred} role="img" aria-label={v.Text.MessageStarred} title={v.Text.MessageStarred}>@glyph(heroicons.Icon16SolidStar)</span>
 }
 
 // Rendered and original projections share one public ChatBubble content slot.

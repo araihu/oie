@@ -143,6 +143,7 @@ type view struct {
 }
 
 type copy struct {
+	MessageStarred                                                                string
 	ReadFailed                                                                    string
 	TimelineOlder, TimelineNewer, TimelineLoading, TimelineFailed, TimelinePaused string
 	SharedItemActions                                                             string
