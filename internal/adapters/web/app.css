@@ -223,7 +223,7 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-rendered-message{white-space:normal;overflow-wrap:anywhere}
 .oie-rendered-message p{margin:0 0 .45em}
 .oie-rendered-message p:last-child{margin-bottom:0}
-.oie-rendered-message blockquote{border-left:3px solid currentColor;margin:.35em 0;padding:.15em 0 .15em .65em;opacity:.9}
+.oie-rendered-message blockquote{border-left:3px solid currentColor;border-radius:5px;background:#0001;margin:0 0 8px;padding:12px;font-size:12px;line-height:1.4}
 .oie-rendered-message ul,.oie-rendered-message ol{margin:.35em 0;padding-left:1.5em}
 .oie-rendered-message ul{list-style:disc}.oie-rendered-message ol{list-style:decimal}
 .oie-rendered-message pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:.4em 0;padding:.55em;border-radius:6px;background:#0002}
