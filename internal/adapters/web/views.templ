@@ -33,7 +33,8 @@ func navigation(v view, id string) sidebar.Config {
 		Logo: brand(v), LogoHref: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), DisableSkipLink: true, RootClass: "oie-navigation", FooterSlot: footer,
 		Items: []sidebar.Item{
 			{ID: "chats", Label: v.Text.Chats, Href: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidQueueList), Active: v.Section == "chats", LinkAttrs: applicationNavigationAttrs()},
-			{ID: "media", Label: v.Text.SharedMedia, Href: v.href("section", "media", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidRectangleGroup), Active: v.Section == "media", LinkAttrs: applicationNavigationAttrs()},
+			{ID:"message-search",Label:v.Text.SearchMessages,Href:v.messageSearchHref(v.AccountFilter,""),Icon:glyph(heroicons.Icon16SolidMagnifyingGlass),Active:v.NativeMessageSearch,LinkAttrs:templ.Attributes{"data-open-message-search":""}},
+            {ID: "media", Label: v.Text.SharedMedia, Href: v.href("section", "media", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidRectangleGroup), Active: v.Section == "media", LinkAttrs: applicationNavigationAttrs()},
 			{ID: "archived", Label: v.Text.Archived, Href: v.href("section", "archived", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidFolder), Active: v.Section == "archived", LinkAttrs: applicationNavigationAttrs()},
 			{ID: "favorites", Label: v.Text.Favorites, Href: v.href("section", "favorites", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidStar), Active: v.Section == "favorites", LinkAttrs: applicationNavigationAttrs()},
 		},
@@ -70,6 +71,7 @@ templ page(v view) {
 <script src="/ui/formatting.js"></script>
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href="/ui/app.css"/>
+<link rel="stylesheet" href="/ui/message-search.css"/>
 			<link rel="stylesheet" href="/ui/shared-actions.css"/><link rel="stylesheet" href="/ui/message-star.css"/>
 <link rel="stylesheet" href="/ui/timeline.css"/>
 <link rel="stylesheet" href="/ui/video.css"/>
@@ -78,6 +80,7 @@ templ page(v view) {
 <script src="/ui/actions.js" defer></script>
 <script src="/ui/stars.js" defer></script>
 <script src="/ui/conversation-preferences.js" defer></script>
+<script src="/ui/message-search.js" defer></script>
 <script src="/ui/previews.js" defer></script>
 <script src="/ui/videos.js" defer></script>
 <script src="/ui/video-thumbnails.js" defer></script>
@@ -130,6 +133,7 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 @newConversation(v)
 @imageViewer(v)
 @documentViewer(v)
+@messageSearchDrawer(v)
 
 
 if v.Section=="media" {
@@ -191,7 +195,9 @@ if v.AccountFilter!="" && connectionState(v,v.AccountFilter)!="not_connected" &&
 }
 
 templ workspace(v view) {
-if v.Section=="media"{
+if v.NativeMessageSearch {
+@messageSearchWorkspace(v)
+}else if v.Section=="media"{
 @sharedWorkspace(v)
 }else{
 	<div id="workspace" class={ "oie-workspace",templ.KV("oie-chat-open",v.ChatOpen) }>
@@ -212,7 +218,10 @@ if v.Section=="media"{
 							{ v.Text.Chats }
 					}
 				</h2>
-				<div x-data="{}">
+				<div>
+@link.Link(v.messageSearchHref(v.AccountFilter,""),link.WithRootClass("oie-icon-button"),link.WithAttrs(templ.Attributes{"data-open-message-search":"","aria-label":v.Text.SearchMessages,"title":v.Text.SearchMessages})){@glyph(heroicons.Icon16SolidMagnifyingGlass)}
+</div>
+<div x-data="{}">
 					@button.Button(button.WithRootClass("oie-icon-button oie-new-chat"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.NewChat, "title": v.Text.NewChat,"data-new-conversation":""}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'newchat'})"})) {
 						@glyph(heroicons.Icon16SolidPlus)
 					}
@@ -286,6 +295,7 @@ if len(v.Accounts)>1 {
 templ chatHeader(v view) {
 	<header class="oie-chat-header" id="chat-header" data-version={v.headerVersion()} x-data="{}">
 @conversationPreferenceData(v)
+<noscript>@link.Link(v.messageSearchHref(v.Selected.AccountId,v.Selected.Id)){ {v.Text.SearchMessages} }</noscript>
 		@link.Link(v.href("chat", ""), link.WithRootClass("oie-back-button"), link.WithAttrs(templ.Attributes{"aria-label": v.Text.Back})) {
 			@glyph(heroicons.Icon16SolidChevronLeft)
 		}
@@ -294,7 +304,7 @@ templ chatHeader(v view) {
 		@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Details, "title": v.Text.Details,"data-open-details":""}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'details'})"})) {
 			@glyph(heroicons.Icon16SolidInformationCircle)
 		}
-{{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{Label:v.Text.Details,OnClick:"$dispatch('drawer:open', {id: 'details'})"}}},v.conversationPreferenceSection()} }}
+{{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{Label:v.Text.Details,OnClick:"$dispatch('drawer:open', {id: 'details'})"}}},v.conversationPreferenceSection(),{Items:[]dropdown.Item{{ID:"chat-search-messages",Label:v.Text.SearchMessages,Icon:glyph(heroicons.Icon16SolidMagnifyingGlass),OnClick:"$dispatch('oie:message-search-open')"}}}} }}
 if v.Selected.Kind=="room" {
 {{ sections=append(sections,dropdown.Section{Items:[]dropdown.Item{{ID:"chat-leave-room",Label:v.Text.LeaveRoom,Icon:glyph(heroicons.Icon16SolidArrowTopRightOnSquare),OnClick:"$dispatch('oie:leave-room')",Disabled:v.RoomSession==nil||!v.RoomSession.Active||!v.messagingImplemented("room_messaging")}}}) }}
 }

@@ -39,6 +39,7 @@ default:
 <div class="oie-conversation-details">
 <div id="conversation-details-identity" data-version={v.detailsVersion("identity")}>@detailsIdentity(v)</div>
 <nav class="oie-info-rows" aria-label={v.Text.InfoSharedContent}>
+@link.Link(v.messageSearchHref(v.Selected.AccountId,v.Selected.Id),link.WithRootClass("oie-info-row"),link.WithAttrs(templ.Attributes{"data-open-message-search":"","data-search-conversation":v.Selected.Id,"data-search-conversation-title":v.Selected.Title})){@glyph(heroicons.Icon16SolidMagnifyingGlass) {v.Text.SearchMessages}}
 @infoEntry(v,"media",v.Text.SharedMediaTab,heroicons.Icon16SolidRectangleGroup)
 @infoEntry(v,"links",v.Text.SharedLinksTab,heroicons.Icon16SolidLink)
 @infoEntry(v,"documents",v.Text.SharedDocsTab,heroicons.Icon16SolidDocumentText)

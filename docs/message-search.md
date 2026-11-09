@@ -19,8 +19,8 @@ The selected Goshtoso version is `v0.6.2-0.20261109092607-b79c3a7a8527`.
 Public `search.Search` provides a client-ranked command palette and JSON item
 loading, which does not own the engine-scoped history cursor contract. Compose
 `drawer`, `textinput`, searchable `combobox`, `checkbox`, `link`, `button`,
-`badge`, `panel` and `emptystate` instead. Native account selection uses the
-public Select inside a noscript slot. No dependency internals or copied
+`badge`, `spinner` and `emptystate` instead. Native account selection uses public
+Radio inputs inside a noscript fieldset. No dependency internals or copied
 component DOM are used. App-owned code owns debounce, request scope, history and
 bounded result pagination.
 
@@ -30,7 +30,7 @@ bounded result pagination.
 |---|---|---|---|
 | Blank query | Open or clear search | Local empty state; no search operation or enrichment; workspace/draft stay mounted | 0 |
 | Valid query | Type, submit or change scope | Scoped retained results; initiating input/caret and one live stream remain | 0 |
-| History off | Search a corrected message | Only current canonical revision matches | 0 |
+| History off | Search a corrected message | Only current retained content matches | 0 |
 | History on | Search a retained earlier version | Prior-version label and matched excerpt; link opens canonical message UUID | 0 |
 | Historical source jump | Activate result | Close overlay; bounded canonical context, never install old text in current bubble | 0 search effects |
 | Foreign or stale cursor | Request next page | In-shell error with restart/retry; no foreign or unscoped hits | 0 |
@@ -53,3 +53,29 @@ Required checks include scoped BFF/HTTP tests, independent browser fixtures,
 keyboard/touch, real transport failure, stale requests, bounded cursor loading,
 source Back navigation, no horizontal overflow and axe scans. Results and
 unavailable checks are recorded by the implementation handoff after verification.
+
+The matched content revision can differ from the canonical transport revision
+after sending or cancellation. The explicit historical flag identifies earlier
+content. Result ordering follows engine UTC millisecond precision, then UUID.
+
+The browser keeps search request state separate from inbox `q`. Account selection
+uses the public `combobox:load` event. The native account radio fieldset is disabled
+when JavaScript initializes, including after HTMX parses a full application
+fragment. Only `/search` accepts `nativeAccountId`; fragments always use the
+explicit `accountId` contract.
+
+Source navigation carries an engine-bound pending search intent through a pane
+swap when the user immediately reopens search. New typing and scope choices win.
+Closing search cancels pending reads and pagination, and ignores the native
+search-input clear event that follows Escape. No deferred restore can reopen a
+closed drawer. Engine replacement requires the explicit restart action before
+rebinding the search page.
+
+Focused validation: web package tests and race tests pass. Scoped
+`golangci-lint` passes. Independent browser QA verified global/account/chat
+queries, paginated results, prior-version labels with canonical bounded source
+jumps, Back, held older queries, transport failure and retry, Escape cancellation,
+rapid source navigation, explicit engine recovery and native GET. Eight actual
+drawer layouts passed axe at 390px and 1440px in both designs and light/dark.
+Mobile and desktop screenshots were reviewed. The coordinator records full
+Dagger CI and the isolated development-XMPP integration result separately.

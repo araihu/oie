@@ -100,7 +100,7 @@ func (v view) capabilityLabel(id string) string {
 		"retract_messages": v.Text.CapabilityRetractMessages, "reactions": v.Text.CapabilityReactions,
 		"read_receipts": v.Text.CapabilityReadReceipts, "typing": v.Text.CapabilityTyping, "presence": v.Text.CapabilityPresence,
 		"profile_images": v.Text.CapabilityProfileImages, "formatting": v.Text.CapabilityFormatting, "e2ee": v.Text.CapabilityE2EE,
-		"message_stars": v.Text.CapabilityStars, "schedules": v.Text.CapabilitySchedules, "sync": v.Text.CapabilitySync,
+		"message_search": v.Text.SearchMessages, "message_stars": v.Text.CapabilityStars, "schedules": v.Text.CapabilitySchedules, "sync": v.Text.CapabilitySync,
 	}
 	if label := labels[id]; label != "" {
 		return label
