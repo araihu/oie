@@ -18,7 +18,11 @@ assert (source / 'current.go').read_text() == 'current edit'
 assert not (source / 'data').exists()
 if os.environ.get('CI_TEST_RESIST_TERM'):
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
-Path(os.environ['CI_TEST_CAPTURE']).write_text(json.dumps({'args': args, 'source': str(source), 'pid': os.getpid(), 'runner': os.environ.get('_EXPERIMENTAL_DAGGER_RUNNER_HOST')}))
+Path(os.environ['CI_TEST_CAPTURE']).write_text(json.dumps({'args': args, 'source': str(source), 'pid': os.getpid(), 'runner': os.environ.get('_EXPERIMENTAL_DAGGER_RUNNER_HOST'), 'artifacts_env': os.environ.get('OIE_CI_ARTIFACTS')}))
+if os.environ.get('CI_TEST_WRITE_ARTIFACTS'):
+    artifacts = Path(args[args.index('-artifacts')+1])
+    artifacts.mkdir(parents=True, exist_ok=True)
+    (artifacts / 'fixture.log').write_text('retained failure evidence')
 if os.environ.get('CI_TEST_SLEEP'):
     time.sleep(30)
 sys.exit(int(os.environ.get('CI_TEST_EXIT', '0')))
@@ -53,6 +57,8 @@ class RunnerLifecycleTest(unittest.TestCase):
         self.env = {**os.environ, 'PATH': str(self.bin)+os.pathsep+os.environ['PATH'],
                     'CI_TEST_CAPTURE': str(self.capture), 'TMPDIR': str(self.base)}
         self.env.pop('OIE_CI_SSH_HOST', None)
+        self.env.pop('OIE_CI_ARTIFACTS', None)
+        self.env.pop('CI_TEST_WRITE_ARTIFACTS', None)
         self.env.pop('CI_TEST_SLEEP', None)
         self.env.pop('CI_TEST_EXIT', None)
         self.env.pop('CI_TEST_RESIST_TERM', None)
@@ -66,6 +72,26 @@ class RunnerLifecycleTest(unittest.TestCase):
             record = json.loads(self.capture.read_text())
             self.assertFalse(Path(record['source']).parent.exists())
             self.assertEqual(record['args'][record['args'].index('-mode')+1], 'checks')
+
+    def test_artifact_destination_survives_failure_and_snapshot_cleanup(self):
+        destinations = [
+            (None, self.root / 'tests/browser/artifacts/ci'),
+            (str(self.base / 'separate evidence'), self.base / 'separate evidence'),
+            ('proof/named run', self.root / 'proof/named run'),
+        ]
+        for configured, expected in destinations:
+            with self.subTest(configured=configured):
+                env = {**self.env, 'CI_TEST_EXIT': '23', 'CI_TEST_WRITE_ARTIFACTS': '1'}
+                if configured is not None:
+                    env['OIE_CI_ARTIFACTS'] = configured
+                result = subprocess.run(self.command, env=env, capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 23, result.stderr)
+                record = json.loads(self.capture.read_text())
+                actual = record['args'][record['args'].index('-artifacts')+1]
+                self.assertEqual(actual, str(expected))
+                self.assertEqual(record['artifacts_env'], actual)
+                self.assertEqual((expected / 'fixture.log').read_text(), 'retained failure evidence')
+                self.assertFalse(Path(record['source']).parent.exists())
 
     def test_independent_tunnel_is_closed_even_when_checks_fail(self):
         ssh = self.bin / 'ssh'

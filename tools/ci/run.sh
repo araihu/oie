@@ -4,6 +4,8 @@ umask 077
 mode=${1:-all}
 case "$mode" in all|checks) ;; *) echo 'usage: tools/ci/run.sh [all|checks]' >&2; exit 2;; esac
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+ci_artifacts=${OIE_CI_ARTIFACTS:-"$root/tests/browser/artifacts/ci"}
+case "$ci_artifacts" in /*) ;; *) ci_artifacts="$root/$ci_artifacts" ;; esac
 python3 -m unittest discover -s "$root/tools/ci" -p '*_test.py'
 task_tmp=$(mktemp -d)
 ssh_pid=
@@ -74,7 +76,7 @@ if [ -n "${OIE_CI_SSH_HOST:-}" ]; then
 fi
 cd "$task_tmp/source"
 export OIE_CI_MODE="$mode" OIE_CI_RUN_ID="$(date -u +%Y%m%dT%H%M%S)-$$"
-export OIE_CI_ARTIFACTS="$root/tests/browser/artifacts/ci" DAGGER_NO_NAG=1
+export OIE_CI_ARTIFACTS="$ci_artifacts" DAGGER_NO_NAG=1
 "$task_tmp/oie-ci" -mode "$mode" -source "$task_tmp/source" \
   -artifacts "$OIE_CI_ARTIFACTS" -timeout "${OIE_CI_TIMEOUT:-30m}" &
 runner_pid=$!
