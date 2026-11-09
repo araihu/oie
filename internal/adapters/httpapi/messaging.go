@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/araihu/oie/internal/application"
@@ -193,7 +194,17 @@ func (s *Server) ListMessages(ctx context.Context, r engineapi.ListMessagesReque
 	if r.Params.Cursor != nil {
 		cursor = domain.ID(*r.Params.Cursor)
 	}
-	list, err := s.engine.Messages(ctx, domain.ID(r.ConversationId), cursor, limit)
+	if r.Params.Direction != nil && !r.Params.Direction.Valid() {
+		return nil, application.ErrInvalid
+	}
+	newer := r.Params.Direction != nil && *r.Params.Direction == engineapi.Newer
+	var list []domain.Message
+	var err error
+	if newer {
+		list, err = s.engine.NewerMessages(ctx, domain.ID(r.ConversationId), cursor, limit)
+	} else {
+		list, err = s.engine.Messages(ctx, domain.ID(r.ConversationId), cursor, limit)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -202,6 +213,9 @@ func (s *Server) ListMessages(ctx context.Context, r engineapi.ListMessagesReque
 		next := string(list[limit-1].ID)
 		page.NextCursor = &next
 		list = list[:limit]
+	}
+	if newer {
+		slices.Reverse(list)
 	}
 	for _, m := range list {
 		page.Items = append(page.Items, message(m))

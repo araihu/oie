@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.16.0
+  version: 0.17.0
   description: Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
     are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.
@@ -1567,7 +1567,11 @@ paths:
       tags:
       - Messages
       summary: Read retained messages
-      description: Returns retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages.
+      description: Returns a bounded page of retained text newest-first by original UTC timestamp at millisecond
+        precision, with a UUID tie-break. Includes serially recovered archive messages. The default direction is older;
+        without a cursor it reads the latest page. Newer requires a cursor and reads the nearest messages after that
+        retained conversation-scoped anchor, without skipping to the latest page. Both directions return newest-first.
+        nextCursor continues in the requested direction. Reads never fetch provider history or mark messages as read.
       responses:
         '200':
           description: Current resource
@@ -1586,9 +1590,16 @@ paths:
       parameters:
       - name: cursor
         in: query
-        description: Read records chronologically older than this nextCursor message UUID (timestamp and UUID tie-break).
+        description: Retained message UUID anchoring this conversation-scoped page. Excludes the anchor. Use the oldest returned item for older and the newest returned item for newer. Required for newer.
         schema:
           $ref: '#/components/schemas/ID'
+      - name: direction
+        in: query
+        description: Chronological direction from the retained cursor. Newer requires a cursor.
+        schema:
+          type: string
+          enum: [older, newer]
+          default: older
       - name: limit
         in: query
         description: Maximum page size.
@@ -2973,6 +2984,8 @@ components:
       type: object
       description: Bounded retained timeline window. Neighbor availability is relative to the returned extremes.
         Validated correction-source aliases resolve to the original logical message UUID returned as targetId.
+        Page outward through listMessages using the oldest item UUID with direction older and the newest item UUID
+        with direction newer. Neighbor flags describe availability beyond these returned extremes.
       additionalProperties: false
       required: [targetId, items, hasOlder, hasNewer]
       properties:
@@ -3075,7 +3088,7 @@ components:
       type: object
       description: Logical messages newest first by original UTC creation time and UUID tie-break. Validated
         correction sources are retained as revisions rather than additional timeline items. Use nextCursor for
-        older records; render the page in reverse for a chronological timeline.
+        records in the requested direction; render each page in reverse for a chronological timeline. For newer pages, nextCursor is the newest returned UUID, while older pages use the oldest returned UUID.
       additionalProperties: false
       required:
       - items

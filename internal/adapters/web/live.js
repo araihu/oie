@@ -279,10 +279,10 @@ window.OieRuntime.register('live', life => {
       const history=document.querySelector('#history-status'),newHistory=page.querySelector('#live-history-status');if(history&&newHistory&&history.innerHTML!==newHistory.innerHTML)mutateDOM(history,newHistory.innerHTML);
       const list = document.querySelector('#conversation-list');
       const nextList = page.querySelector('#live-list');
-      if (list && nextList && list.innerHTML !== nextList.innerHTML) {
+      if (list && nextList && list.dataset.version !== nextList.dataset.version) {
         const scroll = list.scrollTop;
         const focused = list.contains(document.activeElement) ? document.activeElement?.closest('[data-conversation-id]')?.dataset.conversationId : '';
-        mutateDOM(list,nextList.innerHTML); list.scrollTop = scroll;
+        mutateDOM(list,nextList.innerHTML); list.dataset.version=nextList.dataset.version; list.scrollTop = scroll;
         if (focused) list.querySelector(`[data-conversation-id="${CSS.escape(focused)}"]`)?.focus({preventScroll:true});
       }
       if (regions.dataset.conversationId === body.dataset.conversationId) {

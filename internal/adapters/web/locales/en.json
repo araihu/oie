@@ -1,5 +1,11 @@
 {
   "ReadFailed": "Could not save read status.",
+  "SharedItemActions": "Item actions",
+  "SharedCopyLink": "Copy link",
+  "SharedDownload": "Download",
+  "SharedActionFailed": "This action could not be completed. Try again.",
+  "SharedLinkCopied": "Link copied.",
+  "SharedDownloading": "Preparing download…",
   "RefreshPreview": "Refresh link preview",
   "RefreshPreviewFailed": "The preview could not be refreshed. Try again.",
   "AppName": "Oiê",

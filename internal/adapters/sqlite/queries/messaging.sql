@@ -47,3 +47,11 @@ UPDATE engine_identity SET singleton=1 WHERE singleton=1;
 
 -- name: ReconcileMessageAuthor :exec
 UPDATE messages SET revision_id=?,is_own=1,state='submitted',payload=? WHERE id=? AND is_own=0;
+
+-- name: ListMessagesAfter :many
+SELECT m.* FROM messages AS m
+JOIN messages AS anchor ON anchor.id=sqlc.arg(cursor_id) AND anchor.conversation_id=sqlc.arg(conversation_id)
+WHERE m.conversation_id=sqlc.arg(conversation_id)
+AND (m.created_at_ms,m.id)>(anchor.created_at_ms,anchor.id)
+AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
+ORDER BY m.created_at_ms ASC,m.id ASC LIMIT sqlc.arg(page_limit);

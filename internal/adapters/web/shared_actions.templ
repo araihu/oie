@@ -1,0 +1,19 @@
+package web
+
+import (
+ "github.com/araihu/goshtoso/components/button"
+ "github.com/araihu/goshtoso/components/dropdown"
+ "github.com/araihu/goshtoso/components/icon/heroicons"
+ "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+)
+
+templ sharedItemActions(v view,item engineapi.SharedContentItem){
+<div class="oie-shared-actions" data-shared-actions={item.Id} data-shared-engine={v.EngineID} data-shared-account={item.Message.AccountId} data-shared-conversation={item.Message.ConversationId} data-shared-message={item.Message.Id} data-shared-kind={string(item.Kind)} data-shared-url={safePreviewURL(item.Url)} data-shared-preview={sharedActionPreview(item)} data-shared-file={sharedActionFile(item)} data-shared-download={sharedActionDownload(v,item)} data-shared-name={v.sharedTitle(item)}>
+@dropdown.Dropdown(dropdown.Config{ID:sharedActionID(v,item,"menu"),Label:v.Text.SharedItemActions,Trigger:sharedActionTrigger(v,item),RootClass:"oie-shared-menu",MenuAlign:dropdown.AlignEnd,Sections:sharedActions(v,item)})
+</div>
+<p class="oie-shared-action-status" data-shared-action-status role="status" aria-live="polite" hidden></p>
+}
+
+templ sharedActionTrigger(v view,item engineapi.SharedContentItem){
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-shared-menu-trigger"),button.WithAttrs(templ.Attributes{"data-shared-menu-trigger":item.Id,"aria-label":v.Text.SharedItemActions,"title":v.Text.SharedItemActions})){@glyph(heroicons.Icon16SolidChevronDown)}
+}

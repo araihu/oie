@@ -290,6 +290,8 @@ Search matches the latest message revision by default. **Include edit history** 
 
 Allow media sharing when effective protocol/server capabilities permit. Expose known upload limits and meaningful transfer errors through the uniform API.
 
+**AGREED:** pasting clipboard images/files into the active conversation, or dragging and dropping files onto its chat pane, starts media-message composition. Open an attachment preview where the user can add a caption, remove selected files, or cancel, preserving any existing text draft. Ordinary text paste keeps its normal composer behavior. Pasting or dropping files never sends a message automatically; sending requires explicit activation of Send. Respect the selected account/conversation's effective capabilities and known upload limits, with clear feedback when attachments cannot be sent. Upload staging and multi-attachment delivery semantics remain open under O09.
+
 Incoming images **download automatically as they enter view** by default, configurable per device. Turning automatic image downloads off keeps supplied small previews automatic and full originals on demand; in that mode, do not download an original merely to generate a thumbnail. Other file types keep small previews automatic and full files on demand.
 
 Downloaded-file retention is configurable per device and defaults to **retain until explicit deletion**. The PWA's evictable message cache is a separate policy; it does not silently authorize downloaded-original eviction.
@@ -398,11 +400,13 @@ Separate devices notify independently even if another device is active. Activity
 
 Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screenshots. On wide screens, use navigation, a searchable/filterable conversation list, and the active conversation workspace. Include account identity, message bubbles, composer, media/link cards, room/contact details, and settings.
 
+**AGREED:** general app settings have one entry in the main navigation footer beside the account switcher. On mobile, use that same footer inside the navigation menu. Do not repeat general settings in the conversation-list footer, chat actions, or Media and Links header. Account connection management remains available through the account switcher.
+
 **AGREED:** the default conversation wallpaper uses subtle outline doodles of a hammer, sickle, GNU mascot, Brazil outline, Christ the Redeemer, football, mobile phone, paper plane, speech balloon, stars and Go gopher. Keep the repeating artwork readable in light and dark themes without competing with message content.
 
 **AGREED:** keep conversation information in a sidebar/drawer, using the supplied group-info reference for identity, description/topic, available participants and access to that conversation's media, links, documents and starred messages. Content subviews stay within the drawer and provide a way back to chat information. Source-message stars are distinct from favorite conversations. Show only available operations and authoritative counts; an observed occupant list is not a persistent membership roster.
 
-**AGREED:** ordinary in-app navigation and filtering should use HTMX fragment swaps rather than full-document reloads. Preserve addressable URLs, browser Back/Forward, account/conversation isolation, drafts and meaningful focus/scroll. Keep native links/forms as a fallback. Dispose obsolete listeners, timers and live subscriptions when a fragment replaces their owning screen; stale responses must not overwrite a newer screen or repeat a mutation.
+**AGREED:** ordinary in-app navigation and filtering should use HTMX fragment swaps rather than full-document reloads. Selecting a conversation within the same inbox replaces only the conversation region, preserving the navigation and conversation-list DOM, unfinished search input and list scroll. Preserve addressable URLs, browser Back/Forward, account/conversation isolation, drafts and meaningful focus/scroll. Keep native links/forms as a fallback. Dispose obsolete listeners, timers and live subscriptions when a fragment replaces their owning screen; stale responses must not overwrite a newer screen or repeat a mutation.
 
 Alpha is responsive: on phones, show one primary panel at a time with access to the other views. The screenshots do not require native window controls or add stories, calls, AI, communities, or recording features.
 

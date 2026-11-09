@@ -91,6 +91,15 @@ func (v view) sharedSourceHref(item engineapi.SharedContentItem) string {
 	}
 	return v.href("section", "chats", "chat", item.Message.ConversationId, "message", item.Message.Id, "account", item.Message.AccountId, "q", "", "filter", "all", "contentType", "", "contentCursor", "", "contentConversation", "", "lang", v.Locale, "theme", v.Theme)
 }
+
+// Preview metadata refreshes independently from the canonical catalog item.
+func sharedItemVersion(item engineapi.SharedContentItem) string {
+	item.Preview = nil
+	data, _ := json.Marshal(item)
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:])
+}
+
 func (v view) sharedVersion() string {
 	if v.SharedContent == nil {
 		return "unavailable"

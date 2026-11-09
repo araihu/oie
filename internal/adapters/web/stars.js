@@ -23,7 +23,7 @@ window.OieRuntime.register('stars', life => {
   function render(){
     for(const row of document.querySelectorAll('[data-message-id][data-message-source]')){
       const value=states.get(row.dataset.messageId),starred=!!value?.known&&!!value.starred;row.dataset.starred=String(starred);
-      const indicator=row.querySelector('[data-message-star-indicator]');if(indicator)indicator.hidden=!starred;
+      const indicator=row.querySelector('[data-message-star-indicator]');if(indicator&&!indicator.matches('button[data-star-message]'))indicator.hidden=!starred;
     }
     for(const button of document.querySelectorAll('[data-star-message],[id^="star-message-"]')){
       if(button.id?.startsWith('star-message-'))button.dataset.starMessage=button.id.slice(13);
@@ -31,7 +31,10 @@ window.OieRuntime.register('stars', life => {
       button.hidden=!known;button.disabled=!known||busy.has(id);
       const label=pending?labels.retry:current?.starred?labels.unstar:labels.star;
       button.setAttribute('aria-label',label||'');button.title=label||'';
-      if(button.id?.startsWith('star-message-')){button.setAttribute('role','menuitem');button.removeAttribute('aria-pressed');button.textContent=label||'';}else button.setAttribute('aria-pressed',known?String(current.starred):'mixed');
+      if(button.id?.startsWith('star-message-')){button.setAttribute('role','menuitem');button.removeAttribute('aria-pressed');
+        let text=button.querySelector('[data-star-label]');
+        if(!text){text=document.createElement('span');text.dataset.starLabel='';const icon=button.querySelector('svg');button.replaceChildren(...(icon?[icon]:[]),text);}
+        text.textContent=label||'';}else button.setAttribute('aria-pressed',known?String(current.starred):'mixed');
       button.dataset.starred=String(!!current?.starred);button.dataset.starPending=String(!!pending);
       const text=button.querySelector('[data-star-label]');if(text)text.textContent=label||'';
     }

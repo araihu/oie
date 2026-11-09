@@ -2,7 +2,7 @@
 
 The unread counter previously increased on incoming live messages but had no read operation. Opening or viewing a conversation could not reduce it.
 
-Engine API 0.16 adds GET and POST `/api/v1/conversations/{conversationId}/read-state`. POST accepts at most 100 exact message UUIDs with an `Idempotency-Key`. The engine merges those identities transactionally. Own and historical messages are ignored; other conversations are rejected as a whole. A later message remains unread even if its timestamp precedes an observed message. Reading never changes message content, the latest-message preview, activity ordering or outbox work.
+Engine API 0.17 adds GET and POST `/api/v1/conversations/{conversationId}/read-state`. POST accepts at most 100 exact message UUIDs with an `Idempotency-Key`. The engine merges those identities transactionally. Own and historical messages are ignored; other conversations are rejected as a whole. A later message remains unread even if its timestamp precedes an observed message. Reading never changes message content, the latest-message preview, activity ordering or outbox work.
 
 Migration 11 adds independent read revisions, a current conversation read head and per-message read evidence. It preserves existing accounts, messages, unread counters, media and pending sends. The first read batch computes the retained unread count using incoming, non-historical logical messages and recorded read evidence. Verified correction aliases resolve to their canonical message for both reads and counting. Read batches and receipts survive engine restart. Repeating an acknowledged batch emits no extra event; retrying a previously committed operation returns its original receipt snapshot.
 

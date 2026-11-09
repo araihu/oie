@@ -164,8 +164,45 @@ window.OieRuntime.register('previews', life => {
   }
   life.on(document,'oie:previews-refresh',event=>{synchronize(event.detail);trackImages();});
   life.on(document,'oie:info-content',event=>{synchronize(event.detail.root);trackImages();});
+  // Catalog Save shares the image ensure pipeline, including queued originals.
+  // Targeted status reads also cover items beyond the refreshed gallery page.
+  const saving=new Set();
+  const pause=ms=>new Promise(resolve=>{let timer;const done=()=>{clearTimeout(timer);life.signal.removeEventListener('abort',done);resolve();};timer=life.timeout(done,ms);life.signal.addEventListener('abort',done,{once:true});});
+  life.on(document,'oie:preview-save-request',async event=>{
+    const request=event.detail||{},id=request.id;
+    const matches=p=>p&&p.id===id&&p.kind==='image'&&p.accountId===request.accountId&&p.conversationId===request.conversationId&&p.messageId===request.messageId&&p.url===request.url;
+    const active=()=>!life.signal.aborted&&request.engineId===document.body.dataset.engineId&&request.alive?.();
+    const notify=status=>{if(active())request.onState?.(status);};
+    const scope=findAll(id||'')[0];
+    if(!active())return;
+    if(!scope||scope.dataset.previewKind!=='image'||scope.dataset.previewMessage!==request.messageId||scope.dataset.previewUrl!==request.url){notify('failed');return;}
+    if(saving.has(id)){request.onState?.('cancelled');return;}saving.add(id);notify('loading');
+    const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),60000);
+    try{
+      if(!scope.dataset.previewFile&&!['queued','downloading'].includes(scope.dataset.previewDownload)&&!await download(scope))throw Error('ensure_failed');
+      let delay=300;
+      while(active()&&!controller.signal.aborted){
+        const current=findAll(id)[0];if(!current)throw Error('preview_missing');
+        const file=current.dataset.previewFile;
+        if(/^\/ui\/media\/[0-9a-f]{64}$/.test(file||'')){
+          saving.delete(id);
+          const anchor=document.createElement('a');anchor.href=file+'?download='+encodeURIComponent(current.dataset.previewName||'image');anchor.download=current.dataset.previewName||'image';document.body.append(anchor);anchor.click();anchor.remove();notify('saved');return;
+        }
+        if(current.dataset.previewDownload==='failed')throw Error('download_failed');
+        const response=await life.fetch('/api/v1/previews/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store',headers:{'X-Oie-Engine-ID':request.engineId},signal:controller.signal});
+        const preview=await response.json();if(!active())return;
+        if(!response.ok||!matches(preview))throw Error('invalid_preview');
+        for(const matching of findAll(id))apply(matching,{previewFile:preview.downloadState==='ready'?source(preview.fileHash):'',previewImage:source(preview.imageHash),previewDownload:preview.downloadState,previewRevision:preview.revisionId});
+        if(preview.downloadState==='failed')throw Error('download_failed');
+        if(preview.downloadState==='ready'&&source(preview.fileHash))continue;
+        await pause(delay);delay=Math.min(2000,Math.round(delay*1.5));
+      }
+      if(active())throw Error('download_timeout');
+    }catch{notify('failed');}finally{clearTimeout(timeout);saving.delete(id);if(!active())request.onState?.('cancelled');}
+  });
+  life.on(document,'oie:preview-refresh-request',event=>{const scope=findAll(event.detail?.id||'')[0];if(scope?.dataset.previewKind==='link')refreshLink(scope);});
   async function download(scope) {
-    const id=scope.dataset.previewId;if(downloading.has(id))return;
+    const id=scope.dataset.previewId;if(downloading.has(id))return true;
     downloading.add(id);for(const matching of findAll(id))if(state(matching))state(matching).previewBusy=true;
     const feedback=scope.querySelector('[data-preview-feedback]');if(feedback)feedback.textContent=labels.loading || '';
     const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),12000);
@@ -179,12 +216,14 @@ window.OieRuntime.register('previews', life => {
       const p=result.preview;
       if(p&&p.id===id)for(const matching of findAll(id))apply(matching,{previewUrl:p.url||'',previewName:p.title||scope.dataset.previewName||'',previewMime:p.fileMimeType||'',previewSize:p.fileSize===undefined?'':String(p.fileSize),previewTitle:p.title||'',previewDescription:p.description||'',previewSite:p.siteName||'',previewImage:source(p.imageHash),previewFile:p.downloadState==='ready'?source(p.fileHash):'',previewState:p.state,previewDownload:p.downloadState,previewRevision:p.revisionId,previewStatus:result.message||''});
       if(feedback)feedback.textContent='';
+      return true;
     } catch(error) {
       if(life.signal.aborted)return;
       const current=find(id)||scope,feedback=current.querySelector('[data-preview-feedback]');
       const message=failure;
       if(feedback)feedback.textContent=message || '';
       if(viewing===id&&state(viewer))state(viewer).viewerStatus=message || '';
+      return false;
     } finally {
       clearTimeout(timeout);if(life.signal.aborted)return;downloading.delete(id);for(const matching of findAll(id))if(state(matching))state(matching).previewBusy=false;
     }
@@ -203,7 +242,7 @@ window.OieRuntime.register('previews', life => {
       for(const matching of findAll(id))apply(matching,{previewTitle:p.title||'',previewDescription:p.description||'',previewSite:p.siteName||'',previewImage:source(p.imageHash),previewFavicon:source(p.faviconHash),previewState:p.state,previewRevision:p.revisionId,previewStatus:result.message||''});
       if(feedback)feedback.textContent=result.message||'';document.dispatchEvent(new CustomEvent('oie:refresh-request'));
     }catch{scope.dataset.previewRefreshing='false';if(!life.signal.aborted&&feedback)feedback.textContent=labels.refreshFailed||'';}
-    finally{refreshing.delete(id);if(button)button.disabled=scope.dataset.previewState==='queued';}
+    finally{refreshing.delete(id);if(button)button.disabled=scope.dataset.previewState==='queued';if(!life.signal.aborted)document.dispatchEvent(new CustomEvent('oie:actions-refreshed'));}
   }
   life.on(document,'click',event=>{const button=event.target.closest('[id^="refresh-preview-"]');if(!button)return;const scope=button.closest('[data-preview-id]');if(!scope||scope.dataset.previewKind!=='link')return;event.preventDefault();refreshLink(scope)});
   life.on(document,'click',event=>{

@@ -73,6 +73,7 @@ type Querier interface {
 	ListConversationMessageStars(ctx context.Context, arg ListConversationMessageStarsParams) ([]ListConversationMessageStarsRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
+	ListMessagesAfter(ctx context.Context, arg ListMessagesAfterParams) ([]Message, error)
 	ListRoomIntents(ctx context.Context) ([]RoomIntent, error)
 	ListSharedContent(ctx context.Context, arg ListSharedContentParams) ([]ListSharedContentRow, error)
 	ListStarredMessages(ctx context.Context, arg ListStarredMessagesParams) ([]ListStarredMessagesRow, error)

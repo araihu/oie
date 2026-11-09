@@ -210,6 +210,9 @@ func build15(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("query", "cursor", &params.Cursor); err != nil {
 		return nil, err
 	}
+	if err := input.Decode("query", "direction", &params.Direction); err != nil {
+		return nil, err
+	}
 	if err := input.Decode("query", "limit", &params.Limit); err != nil {
 		return nil, err
 	}
