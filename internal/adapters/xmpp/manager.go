@@ -602,6 +602,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		if err := decoder.Decode(&presence); err != nil {
 			return err
 		}
+		captureRoomMentionPresence(e, presence)
 		if m.captureRoomPresence(ctx, e, presence) {
 			return nil
 		}

@@ -23,6 +23,13 @@ func conversation(c domain.Conversation) engineapi.Conversation {
 }
 func message(m domain.Message) engineapi.Message {
 	out := engineapi.Message{Id: string(m.ID), RevisionId: string(m.RevisionID), AccountId: string(m.AccountID), ConversationId: string(m.ConversationID), Sender: engineapi.Sender{Id: string(m.Sender.ID), DisplayName: m.Sender.DisplayName}, OriginalText: m.OriginalText, CreatedAt: m.CreatedAt, IsOwn: m.IsOwn, SendState: engineapi.MessageSendState(m.SendState)}
+	if len(m.Mentions) > 0 {
+		mentions := make([]engineapi.MessageMention, 0, len(m.Mentions))
+		for _, mention := range m.Mentions {
+			mentions = append(mentions, engineapi.MessageMention{ParticipantId: mention.ParticipantID, Begin: mention.Begin, End: mention.End, ReferenceMode: engineapi.MessageMentionReferenceMode(mention.ReferenceMode)})
+		}
+		out.Mentions = &mentions
+	}
 	if m.OutboundReply != nil {
 		target := string(m.OutboundReply.TargetID)
 		out.ReplyToMessageId = &target
@@ -164,7 +171,13 @@ func (s *Server) SendMessage(ctx context.Context, r engineapi.SendMessageRequest
 	if r.Body.ReplyToMessageId != nil {
 		target = domain.ID(*r.Body.ReplyToMessageId)
 	}
-	result, err := s.engine.SendMessageWithReply(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.ConversationId), r.Body.OriginalText, target)
+	mentions := []domain.MentionSelection{}
+	if r.Body.Mentions != nil {
+		for _, mention := range *r.Body.Mentions {
+			mentions = append(mentions, domain.MentionSelection{ParticipantID: mention.ParticipantId, Begin: mention.Begin, End: mention.End})
+		}
+	}
+	result, err := s.engine.SendMessageWithMentions(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.ConversationId), r.Body.OriginalText, target, mentions)
 	if errors.Is(err, application.ErrRoomNotJoined) {
 		if current, readErr := s.engine.RoomSession(ctx, domain.ID(r.ConversationId)); readErr == nil {
 			return nil, application.RoomStateConflict{Current: current}

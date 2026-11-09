@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -55,6 +56,14 @@ func quotedReplyBody(plan *domain.OutboundReply) string {
 }
 func outgoingMessage(m domain.Message, c domain.Conversation) Outgoing {
 	out := Outgoing{ID: m.ID, Address: c.Address, OriginalText: m.OriginalText, Kind: c.Kind}
+	out.Mentions = slices.Clone(m.Mentions)
+	if m.OutboundReply != nil {
+		offset := utf8.RuneCountInString(m.OriginalText) - utf8.RuneCountInString(m.OutboundReply.BodyText)
+		for i := range out.Mentions {
+			out.Mentions[i].Begin += offset
+			out.Mentions[i].End += offset
+		}
+	}
 	if m.OutboundReply != nil && m.OutboundReply.Reference != nil {
 		out.Reply = &domain.ReplyReference{Target: *m.OutboundReply.Reference, Fallback: append([]domain.TextRange(nil), m.OutboundReply.Fallback...)}
 	}

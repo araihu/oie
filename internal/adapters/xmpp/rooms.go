@@ -21,12 +21,13 @@ const maxRoomSessions = 256
 const maxOwnRoomMessages = 512
 
 type roomSlot struct {
-	conversation domain.Conversation
-	snapshot     domain.RoomSession
-	session      *mx.Session
-	requestID    string
-	joinDeadline time.Time
-	leaving      bool
+	conversation     domain.Conversation
+	snapshot         domain.RoomSession
+	session          *mx.Session
+	requestID        string
+	joinDeadline     time.Time
+	leaving          bool
+	mentionOccupants map[string]observedMention
 }
 type ownRoomMessage struct{ address, body string }
 type roomSessionHost interface {
@@ -39,6 +40,7 @@ type mucUser struct {
 	} `xml:"http://jabber.org/protocol/muc#user status"`
 	Item struct {
 		Nickname    string `xml:"nick,attr"`
+		JID         string `xml:"jid,attr"`
 		Affiliation string `xml:"affiliation,attr"`
 		Role        string `xml:"role,attr"`
 	} `xml:"http://jabber.org/protocol/muc#user item"`

@@ -23,6 +23,12 @@ import (
 )
 
 type sentReplyWire struct {
+	Mentions []struct {
+		Type  string `xml:"type,attr"`
+		URI   string `xml:"uri,attr"`
+		Begin int    `xml:"begin,attr"`
+		End   int    `xml:"end,attr"`
+	} `xml:"urn:xmpp:reference:0 reference"`
 	stanza.Message
 	Body   string `xml:"jabber:client body"`
 	Origin struct {
@@ -105,7 +111,7 @@ func TestExplicitRoomJoinReplyWireReconnectAndLeave(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("fixture room owner did not join")
 	}
-	configuration := `<query xmlns="http://jabber.org/protocol/muc#owner"><x xmlns="jabber:x:data" type="submit"><field var="FORM_TYPE" type="hidden"><value>http://jabber.org/protocol/muc#roomconfig</value></field><field var="muc#roomconfig_roomname"><value>Reply integration fixture</value></field><field var="muc#roomconfig_publicroom"><value>1</value></field><field var="muc#roomconfig_membersonly"><value>0</value></field><field var="muc#roomconfig_persistentroom"><value>0</value></field></x></query>`
+	configuration := `<query xmlns="http://jabber.org/protocol/muc#owner"><x xmlns="jabber:x:data" type="submit"><field var="FORM_TYPE" type="hidden"><value>http://jabber.org/protocol/muc#roomconfig</value></field><field var="muc#roomconfig_roomname"><value>Reply integration fixture</value></field><field var="muc#roomconfig_publicroom"><value>1</value></field><field var="muc#roomconfig_whois"><value>anyone</value></field><field var="muc#roomconfig_membersonly"><value>0</value></field><field var="muc#roomconfig_persistentroom"><value>0</value></field></x></query>`
 	response, err := seed.SendIQ(ctx, stanza.IQ{To: room, Type: stanza.SetIQ}.Wrap(xml.NewDecoder(strings.NewReader(configuration))))
 	if err != nil {
 		t.Fatal(err)
@@ -256,6 +262,33 @@ func TestExplicitRoomJoinReplyWireReconnectAndLeave(t *testing.T) {
 		session, err = engine.RoomSession(ctx, conversation.ID)
 		return err == nil && session.Active && session.State == "joined"
 	})
+
+	// The room explicitly discloses real JIDs. Verify an actual XEP-0372 stanza
+	// against Prosody rather than inferring support from a discovery flag alone.
+	var mention domain.MentionCandidate
+	eventually(t, func() bool {
+		candidates, err := engine.MentionCandidates(ctx, conversation.ID)
+		if err != nil {
+			return false
+		}
+		for _, candidate := range candidates.Items {
+			if candidate.InsertText == "@Fixture Bob" && candidate.ReferenceMode == "structured" {
+				mention = candidate
+				return true
+			}
+		}
+		return false
+	})
+	mentionBody := "😀 " + mention.InsertText
+	chosen := []domain.MentionSelection{{ParticipantID: mention.ID, Begin: 2, End: utf8.RuneCountInString(mentionBody)}}
+	acceptedMention, err := engine.SendMessageWithMentions(ctx, id(), conversation.ID, mentionBody, "", chosen)
+	if err != nil || len(acceptedMention.Message.Mentions) != 1 {
+		t.Fatal("mention acceptance", acceptedMention, err)
+	}
+	mentionWire := awaitWire(mentionBody)
+	if len(mentionWire.Mentions) != 1 || mentionWire.Mentions[0].Type != "mention" || mentionWire.Mentions[0].URI != "xmpp:bob@localhost" || mentionWire.Mentions[0].Begin != 2 || mentionWire.Mentions[0].End != utf8.RuneCountInString(mentionBody) {
+		t.Fatal("XEP-0372 mention was not preserved by the room", mentionWire)
+	}
 	original := "Original 🧑🏽‍💻 & café\nsecond line"
 	clientID := "owner-client-" + string(id())
 	payload := `<body>` + stanzaText(original) + `</body><origin-id xmlns="urn:xmpp:sid:0" id="` + clientID + `"/>`

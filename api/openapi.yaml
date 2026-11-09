@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.18.0
+  version: 0.19.0
   description: Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
     are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.
@@ -1558,6 +1558,33 @@ paths:
           $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /api/v1/conversations/{conversationId}/mention-candidates:
+    parameters:
+    - $ref: '#/components/parameters/ConversationID'
+    get:
+      tags: [Conversations]
+      operationId: getMentionCandidates
+      summary: Read observed room mention candidates
+      description: >-
+        Read a bounded, account-scoped snapshot of visible room occupants. This
+        never joins a room or discovers hidden personal identities. Candidates
+        supply exact readable insertion text. Structured references are available
+        only when the protocol adapter has a valid disclosed target; otherwise
+        sending preserves the same readable text without protocol metadata.
+      responses:
+        '200':
+          description: Available room candidates and explicit observation state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MentionCandidates'
+              example: {conversationId: '019a5df0-0000-7000-8000-000000000001', accountId: '019a5df0-0000-7000-8000-000000000002', state: known, items: [{id: 'room@conference.example/Juliet', displayName: Juliet, insertText: '@Juliet', referenceMode: text}], truncated: false}
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /api/v1/conversations/{conversationId}/details:
     parameters:
     - $ref: '#/components/parameters/ConversationID'
@@ -2226,7 +2253,7 @@ components:
       properties:
         id:
           type: string
-          enum: [direct_text, account_history, saved_rooms, room_history, room_discovery, room_messaging, file_upload, image_previews, link_previews, received_replies, send_replies, edit_messages, retract_messages, reactions, read_receipts, typing, presence, profile_images, formatting, e2ee, message_stars, schedules, sync]
+          enum: [direct_text, account_history, saved_rooms, room_history, room_discovery, room_messaging, file_upload, image_previews, link_previews, received_replies, send_replies, mentions, edit_messages, retract_messages, reactions, read_receipts, typing, presence, profile_images, formatting, e2ee, message_stars, schedules, sync]
         appSupport:
           $ref: '#/components/schemas/SupportState'
         protocolSupport:
@@ -3141,6 +3168,12 @@ components:
           $ref: '#/components/schemas/ID'
         sender:
           $ref: '#/components/schemas/Sender'
+        mentions:
+          type: array
+          maxItems: 32
+          description: Frozen selected mentions with Unicode ranges in authored text, excluding any reply compatibility prefix.
+          items:
+            $ref: '#/components/schemas/MessageMention'
         reply:
           $ref: '#/components/schemas/MessageReply'
         replyToMessageId:
@@ -3268,6 +3301,89 @@ components:
           $ref: '#/components/schemas/NullableRevisionID'
       example:
         expectedRevisionId: 019a5df0-0000-7000-8000-000000000003
+    MentionSelection:
+      type: object
+      description: A user-selected, account-and-room-scoped participant with an authored Unicode text span.
+      additionalProperties: false
+      required: [participantId, begin, end]
+      properties:
+        participantId:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          description: Opaque candidate identifier scoped to the sending account and room.
+        begin:
+          type: integer
+          minimum: 0
+          maximum: 16384
+          description: Inclusive Unicode code-point offset in authored originalText, before a reply compatibility prefix.
+        end:
+          type: integer
+          minimum: 1
+          maximum: 16384
+          description: Exclusive Unicode code-point offset. The selected span must equal the candidate insertion text.
+    MessageMention:
+      type: object
+      description: Accepted mention selection with frozen text or structured delivery mode; protocol targets remain private to the engine.
+      additionalProperties: false
+      required: [participantId, begin, end, referenceMode]
+      properties:
+        participantId:
+          type: string
+          maxLength: 1024
+        begin:
+          type: integer
+          minimum: 0
+        end:
+          type: integer
+          minimum: 1
+        referenceMode:
+          type: string
+          enum: [text, structured]
+          description: Frozen delivery mode; structured adds adapter-validated protocol metadata while retaining the text.
+    MentionCandidate:
+      type: object
+      description: A currently observed room occupant with readable insertion text and effective reference mode.
+      additionalProperties: false
+      required: [id, displayName, insertText, referenceMode]
+      properties:
+        id:
+          type: string
+          maxLength: 1024
+          description: Opaque account-and-room-scoped identifier, never a verified personal identity.
+        displayName:
+          type: string
+          maxLength: 300
+        insertText:
+          type: string
+          maxLength: 1100
+          description: Exact readable text to insert, including the leading at sign.
+        referenceMode:
+          type: string
+          enum: [text, structured]
+    MentionCandidates:
+      type: object
+      description: Bounded visible-occupant choices without personal protocol identifiers or a completeness claim.
+      additionalProperties: false
+      required: [conversationId, accountId, state, items, truncated]
+      properties:
+        conversationId:
+          $ref: '#/components/schemas/ID'
+        accountId:
+          $ref: '#/components/schemas/ID'
+        state:
+          type: string
+          enum: [known, partial, unavailable, not_connected]
+          example: known
+        items:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/MentionCandidate'
+          example: [{id: 'room@conference.example.org/Juliet', displayName: Juliet, insertText: '@Juliet', referenceMode: text}]
+        truncated:
+          type: boolean
+          example: false
     SendMessage:
       type: object
       description: >-
@@ -3291,6 +3407,12 @@ components:
             rejected.
           minLength: 1
           maxLength: 16384
+        mentions:
+          type: array
+          maxItems: 32
+          description: Selected room mentions in authored text. Sorted, nonoverlapping spans are part of the immutable send intent and idempotency fingerprint. The engine freezes references before enqueueing; clients cannot submit protocol URIs.
+          items:
+            $ref: '#/components/schemas/MentionSelection'
         replyToMessageId:
           allOf:
           - $ref: '#/components/schemas/ID'

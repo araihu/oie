@@ -50,6 +50,7 @@ type Outgoing struct {
 	Kind                  string
 	RoomIntentRevisionID  domain.ID
 	Reply                 *domain.ReplyReference
+	Mentions              []domain.MessageMention
 }
 
 // Outcomes distinguish definitely unsent failures from ambiguous external effects.
@@ -250,6 +251,13 @@ func (e *Engine) SendMessage(ctx context.Context, key, conversationID domain.ID,
 	return e.SendMessageWithReply(ctx, key, conversationID, text, "")
 }
 func (e *Engine) SendMessageWithReply(ctx context.Context, key, conversationID domain.ID, text string, replyTo domain.ID) (MessageResult, error) {
+	return e.SendMessageWithMentions(ctx, key, conversationID, text, replyTo, nil)
+}
+
+func (e *Engine) SendMessageWithMentions(ctx context.Context, key, conversationID domain.ID, text string, replyTo domain.ID, mentions []domain.MentionSelection) (MessageResult, error) {
+	if err := validateMentionSelections(text, mentions); err != nil {
+		return MessageResult{}, err
+	}
 	if !validID(key) || !validID(conversationID) || !validMessage(text) || (replyTo != "" && !validID(replyTo)) {
 		return MessageResult{}, ErrInvalid
 	}
@@ -257,7 +265,7 @@ func (e *Engine) SendMessageWithReply(ctx context.Context, key, conversationID d
 	if replyTo != "" {
 		parts = append(parts, string(replyTo))
 	}
-	requestFingerprint := fingerprint("send_message", parts)
+	requestFingerprint := fingerprint("send_message", mentionFingerprint(parts, mentions))
 	repo, err := e.messaging()
 	if err != nil {
 		return MessageResult{}, err
@@ -294,6 +302,10 @@ func (e *Engine) SendMessageWithReply(ctx context.Context, key, conversationID d
 	if err != nil {
 		return MessageResult{}, err
 	}
+	frozenMentions, err := e.freezeMentions(ctx, a, c, text, mentions)
+	if err != nil {
+		return MessageResult{}, err
+	}
 	var plan *domain.OutboundReply
 	if replyTo != "" {
 		target, err := repo.Message(ctx, replyTo)
@@ -318,7 +330,7 @@ func (e *Engine) SendMessageWithReply(ctx context.Context, key, conversationID d
 		return MessageResult{}, err
 	}
 	now := e.now().UTC()
-	m := domain.Message{ID: id, RevisionID: rev, AccountID: c.AccountID, ConversationID: c.ID, Sender: domain.Sender{ID: a.ID, DisplayName: a.Address}, OriginalText: text, CreatedAt: now, IsOwn: true, SendState: "queued", ProviderID: string(id), OutboundReply: plan}
+	m := domain.Message{ID: id, RevisionID: rev, AccountID: c.AccountID, ConversationID: c.ID, Sender: domain.Sender{ID: a.ID, DisplayName: a.Address}, OriginalText: text, CreatedAt: now, IsOwn: true, SendState: "queued", ProviderID: string(id), OutboundReply: plan, Mentions: frozenMentions}
 	if plan != nil {
 		m.OriginalText = quotedReplyBody(plan)
 		m.Reply = &domain.MessageReply{MessageID: plan.TargetID, Available: true, SenderName: plan.SenderName, Excerpt: plan.Excerpt, BodyText: plan.BodyText}

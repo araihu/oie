@@ -25,6 +25,13 @@ type outboundFallbackRange struct {
 	Start int `xml:"start,attr"`
 	End   int `xml:"end,attr"`
 }
+type outboundMentionElement struct {
+	XMLName xml.Name `xml:"urn:xmpp:reference:0 reference"`
+	Type    string   `xml:"type,attr"`
+	URI     string   `xml:"uri,attr"`
+	Begin   int      `xml:"begin,attr"`
+	End     int      `xml:"end,attr"`
+}
 type outboundMessage struct {
 	stanza.Message
 	Body   string `xml:"body"`
@@ -32,6 +39,7 @@ type outboundMessage struct {
 		XMLName xml.Name `xml:"urn:xmpp:sid:0 origin-id"`
 		ID      string   `xml:"id,attr"`
 	}
+	Mentions []outboundMentionElement `xml:",omitempty"`
 	Reply    *outboundReplyElement    `xml:",omitempty"`
 	Fallback *outboundFallbackElement `xml:",omitempty"`
 }
@@ -93,6 +101,26 @@ func buildOutgoing(a domain.Account, out application.Outgoing) (outboundMessage,
 	}
 	payload := outboundMessage{Message: stanza.Message{To: to.Bare(), Type: kind, ID: string(out.ID)}, Body: out.OriginalText}
 	payload.Origin.ID = string(out.ID)
+	if out.Kind == "room" {
+		total, last := utf8.RuneCountInString(out.OriginalText), 0
+		if len(out.Mentions) > 32 {
+			return outboundMessage{}, application.ErrInvalid
+		}
+		for _, mention := range out.Mentions {
+			if mention.Begin < last || mention.End <= mention.Begin || mention.End > total {
+				return outboundMessage{}, application.ErrInvalid
+			}
+			last = mention.End
+			if mention.ReferenceMode != "structured" {
+				continue
+			}
+			uri, ok := mentionTargetURI(mention.URI, out.Address)
+			if !ok {
+				return outboundMessage{}, application.ErrInvalid
+			}
+			payload.Mentions = append(payload.Mentions, outboundMentionElement{Type: "mention", URI: uri, Begin: mention.Begin, End: mention.End})
+		}
+	}
 	ref := out.Reply
 	if ref == nil || !usableID(ref.Target.ID) {
 		return payload, nil

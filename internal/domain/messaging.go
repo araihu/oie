@@ -32,6 +32,7 @@ type Message struct {
 	ID, RevisionID, AccountID, ConversationID ID
 	Sender                                    Sender
 	OriginalText                              string
+	Mentions                                  []MessageMention   `json:",omitempty"`
 	MediaThumbnails                           []MediaThumbnail   `json:",omitempty"`
 	Edited                                    bool               `json:",omitempty"`
 	EditedAt                                  time.Time          `json:",omitempty"`
