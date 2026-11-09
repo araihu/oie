@@ -37,3 +37,11 @@ but the later held-request scenario times out waiting for a conversation to
 settle with both the previous binary and the corrected dependency. This fixture
 is not recorded as passing. Logs are `/tmp/oie-popover-conversation-final.log`
 and `/tmp/oie-popover-conversation-baseline.log`.
+
+Dagger was attempted twice. The first attempt timed out before starting a
+remote session. The retry ran the checks container after installing FFmpeg,
+but the client timed out and canceled it before race tests and remaining builds
+were confirmed complete. No complete Dagger pass is claimed. Evidence is saved
+in `/tmp/oie-popover-dagger-retry.log` and
+`/tmp/oie-popover-dagger-remote-proof.log`. The host `make check` result and
+isolated browser passes above are separate from these incomplete Dagger runs.
