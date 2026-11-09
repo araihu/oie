@@ -14,7 +14,7 @@ window.OieRuntime.register('videos', life => {
   releasing.delete(video);
  }
  function releaseTree(root){if(root.matches?.(playerSelector))release(root);for(const video of root.querySelectorAll?.(playerSelector)||[])release(video)}
- function failure(card,unsupported=false){failed.add(card.querySelector(playerSelector));status(card,unsupported?'videoUnsupported':'videoUnavailable','failed');card.querySelector('[data-video-retry]').hidden=false}
+ function failure(card,unsupported=false){failed.add(card.querySelector(playerSelector));status(card,unsupported?'videoUnsupported':'videoUnavailable','failed');card.querySelector('[data-video-retry]').hidden=false;if(card.hasAttribute('data-video-compact')){card.querySelector(playerSelector).hidden=true;card.querySelector('[data-video-cover]').hidden=false;}}
  function start(card){
   const video=card.querySelector(playerSelector);let source;
   try{source=new URL(card.dataset.videoSource,location.href)}catch{failure(card);return}
