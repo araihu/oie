@@ -13,6 +13,7 @@ import (
  "github.com/araihu/goshtoso/components/sidebar"
  "github.com/araihu/goshtoso/components/spinner"
  "github.com/araihu/goshtoso/components/textinput"
+ "github.com/araihu/goshtoso/components/tooltip"
  "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
@@ -66,7 +67,10 @@ for _,a:=range v.Accounts {
 <span>{v.Text.SearchScope}: <strong data-message-search-scope-name>{v.MessageSearch.ConversationTitle}</strong></span>
 @link.Link(v.messageSearchAllHref(),link.WithAttrs(templ.Attributes{"data-message-search-clear-scope":""})){ {v.Text.SearchAllConversations} }
 </div>
-@checkbox.Checkbox(checkbox.Config{ID:"message-search-history",Name:"includeEditHistory",Value:"true",Label:v.Text.IncludeEditHistory,Checked:v.MessageSearch.IncludeHistory,HelperText:v.Text.SearchHistoryHelp,HelperTextID:"message-search-history-help"})
+<div class="oie-search-history-option">
+@checkbox.Checkbox(checkbox.Config{ID:"message-search-history",Name:"includeEditHistory",Value:"true",Label:v.Text.IncludeEditHistory,Checked:v.MessageSearch.IncludeHistory})
+@tooltip.Tooltip("message-search-history-help",v.Text.IncludeEditHistory,tooltip.WithDescription(v.Text.SearchHistoryHelp),tooltip.WithTrigger(searchHistoryInfo(v)),tooltip.WithPortal(true),tooltip.WithPosition(tooltip.PositionBottom))
+</div>
 <noscript>@button.Button(button.WithType("submit")){ {v.Text.SearchMessages} }</noscript>
 </form>
 <div class="oie-message-search-feedback" data-message-search-loading hidden role="status">@spinner.Spinner(spinner.Config{Size:spinner.SizeSM})<span>{v.Text.SearchLoading}</span></div>
@@ -169,5 +173,12 @@ if v.MessageSearch.ContactsLimited {
 <p class="oie-message-search-help">{v.Text.SearchContactsLimited}</p>
 }
 </section>
+}
+}
+
+// Keep the help action outside the checkbox label so it never toggles the filter.
+templ searchHistoryInfo(v view){
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithRootClass("oie-search-history-info"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.IncludeEditHistory})){
+@glyph(heroicons.Icon16SolidInformationCircle)
 }
 }
