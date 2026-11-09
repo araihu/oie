@@ -61,59 +61,11 @@ window.OieRuntime.register('documents', life => {
    }text.textContent=body;text.hidden=false;feedback(body?'':'empty','ready')}catch(error){if(token===generation&&!life.signal.aborted&&error.name!=='AbortError')failure(['encoding','large'].includes(error.message))}
   }
  }
- // Keep only generated PNG thumbnails, never original PDF bytes. Runtime memory
- // survives fragment navigation; IndexedDB also survives document reloads.
- const cacheName='oie.pdf-previews.v1',cacheStore='thumbnails',cacheTTL=7*24*60*60*1000;
- const cache=window.OieRuntime.memory.get(cacheName)||{entries:new Map(),bytes:0,database:null};window.OieRuntime.memory.set(cacheName,cache);
- function validThumbnail(entry){return entry&&entry.blob instanceof Blob&&entry.blob.type==='image/png'&&entry.blob.size>0&&entry.blob.size<=1024*1024&&Number.isFinite(entry.createdAt)&&entry.createdAt<=Date.now()&&Date.now()-entry.createdAt<cacheTTL&&Number.isFinite(entry.usedAt)&&Number.isFinite(entry.width)&&entry.width>0&&entry.width<=400.01&&Number.isFinite(entry.height)&&entry.height>0&&entry.height<=180.01&&Number.isInteger(entry.pixelsWide)&&entry.pixelsWide>0&&entry.pixelsWide<=801&&Number.isInteger(entry.pixelsHigh)&&entry.pixelsHigh>0&&entry.pixelsHigh<=361}
- async function thumbnailKey(record){
-  // Include ownership, source/revision and output density. A changed message,
-  // catalog entry or renderer can never reuse another source's thumbnail.
-  const identity=JSON.stringify(['pdfjs-6.5.438-400x180-v1',record.engine,record.account,record.conversation,record.message,record.id,record.revision,record.messageRevision,record.original,Math.min(devicePixelRatio||1,2)]);
-  if(!globalThis.crypto?.subtle)return identity;
-  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(identity));return Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('');
- }
- function rememberThumbnail(entry){
-  const old=cache.entries.get(entry.key);if(old){cache.bytes-=old.blob.size;cache.entries.delete(entry.key)}
-  cache.entries.set(entry.key,entry);cache.bytes+=entry.blob.size;
-  while(cache.entries.size>16||cache.bytes>4*1024*1024){const key=cache.entries.keys().next().value;cache.bytes-=cache.entries.get(key).blob.size;cache.entries.delete(key)}
- }
- async function thumbnailDatabase(){
-  if(!globalThis.indexedDB)return null;
-  if(!cache.database)cache.database=new Promise(resolve=>{
-   let settled=false;const done=value=>{if(settled){value?.close();return}settled=true;resolve(value)};
-   try{const request=indexedDB.open(cacheName,1);request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(cacheStore))request.result.createObjectStore(cacheStore,{keyPath:'key'})};request.onsuccess=()=>{const db=request.result;db.onversionchange=()=>{db.close();cache.database=null};done(db)};request.onerror=()=>done(null);request.onblocked=()=>done(null)}catch{done(null)}
-  });return cache.database;
- }
- async function readThumbnail(key){
-  const hot=cache.entries.get(key);if(validThumbnail(hot)){hot.usedAt=Date.now();rememberThumbnail(hot);void persistThumbnail(hot);return hot}
-  const db=await thumbnailDatabase();if(!db)return null;
-  const entry=await new Promise(resolve=>{try{const tx=db.transaction(cacheStore,'readonly'),request=tx.objectStore(cacheStore).get(key);request.onsuccess=()=>resolve(request.result);request.onerror=()=>resolve(null);tx.onabort=()=>resolve(null)}catch{resolve(null)}});
-  if(!validThumbnail(entry)){if(entry)void forgetThumbnail(key);return null}entry.usedAt=Date.now();rememberThumbnail(entry);void persistThumbnail(entry);return entry;
- }
- async function persistThumbnail(entry){
-  const db=await thumbnailDatabase();if(!db)return;
-  await new Promise(resolve=>{try{const tx=db.transaction(cacheStore,'readwrite'),store=tx.objectStore(cacheStore);store.put(entry);const all=store.getAll();all.onsuccess=()=>{let bytes=0,count=0;for(const item of all.result.sort((a,b)=>b.usedAt-a.usedAt)){if(!validThumbnail(item)||++count>64||(bytes+=item.blob.size)>16*1024*1024)store.delete(item.key)}};tx.oncomplete=resolve;tx.onabort=resolve;tx.onerror=()=>{}}catch{resolve()}});
- }
- async function forgetThumbnail(key){
-  const entry=cache.entries.get(key);if(entry){cache.bytes-=entry.blob.size;cache.entries.delete(key)}
-  const db=await thumbnailDatabase();if(db)try{const tx=db.transaction(cacheStore,'readwrite');tx.objectStore(cacheStore).delete(key);tx.onerror=()=>{}}catch{}
- }
- async function paintThumbnail(card,target,entry,controller){
-  let bitmap,url;
-  try{
-   if(typeof createImageBitmap==='function')bitmap=await createImageBitmap(entry.blob);
-   else{url=URL.createObjectURL(entry.blob);bitmap=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=reject;image.src=url})}
-   if(controller.signal.aborted||!card.isConnected)return;
-   if(bitmap.width!==entry.pixelsWide||bitmap.height!==entry.pixelsHigh)throw Error('thumbnail');
-   const node=document.createElement('canvas');node.width=entry.pixelsWide;node.height=entry.pixelsHigh;node.style.width='100%';node.style.height='100%';node.getContext('2d').drawImage(bitmap,0,0);target.replaceChildren(node);card.dataset.documentPreviewState='ready';card.dataset.documentPreviewCache='hit';
-  }finally{bitmap?.close?.();if(url)URL.revokeObjectURL(url)}
- }
  // Card previews only read bounded bytes for visible documents. Originals still
  // use the existing explicit viewer path, independently of preview failures.
  const previewChunk=64*1024,previewBudget=2*1024*1024,previewQueue=[],previewSeen=new WeakSet(),previewRequests=new Set();let previewActive=0;
  async function previewRange(record,start,end,controller,partial=false){
-  const response=await life.fetch(record.source,{credentials:'same-origin',cache:'no-store',redirect:'error',headers:{Range:`bytes=${start}-${end-1}`},signal:controller.signal});
+  const response=await life.fetch(record.source,{credentials:'same-origin',cache:'default',redirect:'error',headers:{Range:`bytes=${start}-${end-1}`},signal:controller.signal});
   if(!response.ok)throw Error('unavailable');
   const kind=response.headers.get('Content-Type')?.split(';')[0].trim();if(kind!==(record.format==='pdf'?'application/pdf':'text/plain'))throw Error('type');
   const header=response.headers.get('Content-Range'),range=header&&/^bytes (\d+)-(\d+)\/(\d+)$/.exec(header),length=Number(response.headers.get('Content-Length'));
@@ -125,28 +77,23 @@ window.OieRuntime.register('documents', life => {
   if(range&&size!==Number(range[2])-start+1)throw Error('range');
   return {bytes,total:range?Number(range[3]):size,range:!!range};
  }
- async function paintPreview(card,record,controller){
-  const target=card.querySelector('[data-document-preview]');if(!target)return;
-  let cacheKey;
-  if(record.format==='pdf'){
-   cacheKey=await thumbnailKey(record);const entry=await readThumbnail(cacheKey);if(controller.signal.aborted||!card.isConnected)return;
-   if(entry){try{await paintThumbnail(card,target,entry,controller);return}catch{await forgetThumbnail(cacheKey);if(controller.signal.aborted||!card.isConnected)return}}
-  }
-  const initial=await previewRange(record,0,previewChunk,controller,record.format!=='pdf');if(controller.signal.aborted||!card.isConnected)return;
+ async function producePreview(record,{signal}){
+  const controller=new AbortController(),cancel=()=>controller.abort();signal.addEventListener('abort',cancel,{once:true});if(signal.aborted)controller.abort();
+  try{return await renderDocumentPreview(record,controller)}finally{signal.removeEventListener('abort',cancel);controller.abort()}
+ }
+ async function renderDocumentPreview(record,controller){
+  const initial=await previewRange(record,0,previewChunk,controller,record.format!=='pdf');if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
   if(record.format!=='pdf'){
    // A range can end inside a UTF-8 sequence. Decode incrementally without
    // flushing that final incomplete code point into a replacement character.
    let bytes=initial.bytes,encoding='utf-8';if(bytes[0]===255&&bytes[1]===254){encoding='utf-16le';bytes=bytes.subarray(2)}else if(bytes[0]===254&&bytes[1]===255){encoding='utf-16be';bytes=bytes.subarray(2)}
    const excerpt=new TextDecoder(encoding,{fatal:true}).decode(bytes,{stream:initial.total>initial.bytes.length});if(excerpt.includes('\u0000'))throw Error('encoding');
-   const node=document.createElement('span');
-   if(record.format==='markdown'){
-    try{const fragment=await renderMarkdown(excerpt,controller.signal,true);if(controller.signal.aborted||!card.isConnected)return;node.dataset.documentMarkdownPreview='';node.className='oie-document-markdown';node.append(fragment)}catch(error){if(controller.signal.aborted)return;node.dataset.documentExcerpt='';node.textContent=excerpt.slice(0,1800)||labels.empty||''}
-   }else{node.dataset.documentExcerpt='';node.textContent=excerpt.slice(0,1800)||labels.empty||''}
-   target.replaceChildren(node);card.dataset.documentPreviewState='ready';return;
+   if(record.format==='markdown'){try{const fragment=await renderMarkdown(excerpt,controller.signal,true),node=document.createElement('div');node.append(fragment);return {kind:'markdown',html:node.innerHTML}}catch(error){if(controller.signal.aborted)throw error}}
+   return {kind:'text',text:excerpt.slice(0,1800)};
   }
   if(!Number.isSafeInteger(initial.total)||initial.total>128*1024*1024)throw Error('large');
-  const library=await import('/ui/pdfjs/build/pdf.mjs');if(controller.signal.aborted)return;library.GlobalWorkerOptions.workerSrc='/ui/pdfjs/build/pdf.worker.mjs';
-  let spent=initial.bytes.length,task,failed,rangeQueue=Promise.resolve();const failure=new Promise((_,reject)=>failed=reject);controller.signal.addEventListener('abort',()=>failed(Error('aborted')),{once:true});
+  const library=await import('/ui/pdfjs/build/pdf.mjs');if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');library.GlobalWorkerOptions.workerSrc='/ui/pdfjs/build/pdf.worker.mjs';
+  let spent=initial.bytes.length,task,failed,rangeQueue=Promise.resolve();const failure=new Promise((_,reject)=>failed=reject);const cancel=()=>failed(new DOMException('Aborted','AbortError'));controller.signal.addEventListener('abort',cancel,{once:true});
   class PreviewTransport extends library.PDFDataRangeTransport{
    requestDataRange(begin,end){
     if(controller.signal.aborted)return;
@@ -160,10 +107,28 @@ window.OieRuntime.register('documents', life => {
   try{
    const range=new PreviewTransport(initial.total,initial.bytes,initial.bytes.length===initial.total);
    task=library.getDocument({range,rangeChunkSize:previewChunk,disableAutoFetch:true,disableStream:true,cMapUrl:'/ui/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:'/ui/pdfjs/standard_fonts/',wasmUrl:'/ui/pdfjs/wasm/',iccUrl:'/ui/pdfjs/iccs/',isEvalSupported:false,enableXfa:false,useSystemFonts:true,canvasMaxAreaInBytes:4194304});
-   await Promise.race([(async()=>{const pdf=await task.promise,first=await pdf.getPage(1);if(controller.signal.aborted||!card.isConnected)return;const base=first.getViewport({scale:1}),scale=Math.min(400/base.width,180/base.height),viewport=first.getViewport({scale}),output=Math.min(devicePixelRatio||1,2);const node=document.createElement('canvas');node.width=Math.ceil(viewport.width*output);node.height=Math.ceil(viewport.height*output);node.style.width='100%';node.style.height='100%';await first.render({canvasContext:node.getContext('2d'),viewport,transform:output===1?null:[output,0,0,output,0,0],annotationMode:library.AnnotationMode.DISABLE}).promise;if(!controller.signal.aborted&&card.isConnected){target.replaceChildren(node);card.dataset.documentPreviewState='ready';card.dataset.documentPreviewCache='miss';
-    const blob=await new Promise(resolve=>node.toBlob(resolve,'image/png'));if(blob&&cacheKey&&!controller.signal.aborted&&card.isConnected){const entry={key:cacheKey,blob,width:viewport.width,height:viewport.height,pixelsWide:node.width,pixelsHigh:node.height,createdAt:Date.now(),usedAt:Date.now()};if(validThumbnail(entry)){rememberThumbnail(entry);await persistThumbnail(entry);if(card.isConnected)card.dataset.documentPreviewStored='true'}}
-   }})(),failure]);
-  }finally{if(task)await task.destroy().catch(()=>{})}
+   return await Promise.race([(async()=>{const pdf=await task.promise,first=await pdf.getPage(1);if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');const base=first.getViewport({scale:1}),scale=Math.min(400/base.width,180/base.height),viewport=first.getViewport({scale}),output=record.output;const node=document.createElement('canvas');node.width=Math.ceil(viewport.width*output);node.height=Math.ceil(viewport.height*output);node.style.width=viewport.width+'px';node.style.height=viewport.height+'px';await first.render({canvasContext:node.getContext('2d'),viewport,transform:output===1?null:[output,0,0,output,0,0],annotationMode:library.AnnotationMode.DISABLE}).promise;if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');const blob=await new Promise(resolve=>node.toBlob(resolve,'image/png'));if(!blob)throw Error('preview_encoding');return {kind:'image',blob,width:viewport.width,height:viewport.height}})(),failure]);
+  }finally{controller.signal.removeEventListener('abort',cancel);if(task)await task.destroy().catch(()=>{})}
+ }
+ async function validStoredPreview(value,record){
+  if(value?.kind!=='image'||!(value.blob instanceof Blob)||value.blob.type!=='image/png'||value.blob.size<24||value.blob.size>1024*1024||!(value.width>0&&value.width<=400.01&&value.height>0&&value.height<=180.01))return false;
+  let bitmap;try{bitmap=await createImageBitmap(value.blob);return bitmap.width===Math.ceil(value.width*record.output)&&bitmap.height===Math.ceil(value.height*record.output)}catch{return false}finally{bitmap?.close()}
+ }
+ const cachedPreview=window.OieCache.decorate({namespace:'document-preview-pdfjs6.5.438-margo1-v2',key:record=>[record.engine,record.account,record.conversation,record.message,record.id,record.revision,record.messageRevision,record.original,record.format,record.output],load:producePreview,ttl:(value,record)=>record.format==='markdown'&&value.kind==='text'?30000:30*60*1000,size:value=>value.kind==='image'?value.blob.size:(value.text??value.html).length*2,storage:window.OieCache.indexedDBStore({name:'oie.pdf-previews.v1',store:'thumbnails'}),persist:record=>record.format==='pdf',validate:validStoredPreview});
+ async function paintPreview(card,record,controller){
+  record={...record,output:Math.min(devicePixelRatio||1,2)};
+  let hit=false,stored=false;const preview=await cachedPreview(record,{signal:controller.signal,onHit:()=>hit=true,onStored:()=>stored=true});
+  if(controller.signal.aborted||!card.isConnected)return;
+  const target=card.querySelector('[data-document-preview]');if(!target)return;
+  if(preview.kind==='markdown'){const node=document.createElement('span');node.dataset.documentMarkdownPreview='';node.className='oie-document-markdown';node.innerHTML=preview.html;target.replaceChildren(node)}
+  else if(preview.kind==='text'){const node=document.createElement('span');node.dataset.documentExcerpt='';node.textContent=preview.text||labels.empty||'';target.replaceChildren(node)}
+  else{
+   const node=document.createElement('img'),source=URL.createObjectURL(preview.blob);let released=false;
+   const release=()=>{if(released)return;released=true;URL.revokeObjectURL(source);controller.signal.removeEventListener('abort',release);node.onload=null;node.onerror=null};
+   const loaded=new Promise((resolve,reject)=>{const cancel=()=>{release();reject(new DOMException('Aborted','AbortError'))};controller.signal.addEventListener('abort',cancel,{once:true});node.onload=()=>{controller.signal.removeEventListener('abort',cancel);resolve()};node.onerror=()=>{controller.signal.removeEventListener('abort',cancel);reject(Error('preview_image'))}});
+   node.alt='';node.width=Math.ceil(preview.width);node.height=Math.ceil(preview.height);node.style.width='100%';node.style.height='100%';node.dataset.documentPdfPreview='';node.src=source;target.replaceChildren(node);try{await loaded}finally{release()}
+  }
+  card.dataset.documentPreviewCache=hit?'hit':'miss';if(stored)card.dataset.documentPreviewStored='true';card.dataset.documentPreviewState='ready';
  }
  async function drainPreviews(){
   while(previewActive<2&&previewQueue.length&&!life.signal.aborted){const card=previewQueue.shift(),record=validSource(card);if(!record||!card.isConnected)continue;previewActive++;const controller=new AbortController();previewRequests.add(controller);const timeout=life.timeout(()=>controller.abort(),12000);card.dataset.documentPreviewState='loading';paintPreview(card,record,controller).catch(()=>{if(card.isConnected)card.dataset.documentPreviewState='unavailable'}).finally(()=>{clearTimeout(timeout);controller.abort();previewRequests.delete(controller);if(card.isConnected&&card.dataset.documentPreviewState==='loading')card.dataset.documentPreviewState='unavailable';previewActive--;drainPreviews()})}

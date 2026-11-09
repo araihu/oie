@@ -1,0 +1,77 @@
+openapi: 3.0.3
+info:
+  title: Oie browser cache contract
+  version: 0.1.0
+  description: Browser representation policies. Engine originals retain their own no-store policy. Business handlers authorize and validate resources before the HTTP decorator considers a conditional response. Dynamic screens, commands, event streams, account state and errors are not cached.
+  contact:
+    name: Arai Hû
+    url: https://github.com/araihu/oie
+servers:
+- url: http://127.0.0.1:8080
+security: []
+tags:
+- name: BrowserCache
+  description: Private resource caching and conditional reads
+paths:
+  /ui/shared-content/{itemId}/content:
+    get:
+      operationId: readBrowserSharedContent
+      tags: [BrowserCache]
+      summary: Stream a scoped catalog reference to the browser
+      description: With a valid engineId, a provider ETag and no download selector, successful reads use private, no-cache and support If-None-Match after the owning engine is checked. Byte ranges retain the original representation validator. Without a validator or engine scope, and for explicit downloads or failures, responses remain no-store. Conditional 304 ends the upstream stream without transferring its body. Cache freshness is never inferred from a mutable provider URL.
+      parameters:
+      - name: itemId
+        description: Retained catalog UUID, never a provider URL.
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+      - name: engineId
+        description: Owning engine UUID, checked before conditional response handling.
+        in: query
+        schema: {type: string, format: uuid}
+      - name: download
+        description: Explicit original download; disables browser storage.
+        in: query
+        schema: {type: string, enum: ['1']}
+      - name: Range
+        description: A single original byte range.
+        in: header
+        schema: {type: string, maxLength: 128}
+      - name: If-Range
+        description: Validator controlling whether the original byte range remains valid.
+        in: header
+        schema: {type: string, maxLength: 1024}
+      - name: If-None-Match
+        description: Entity tag list for a conditional browser read.
+        in: header
+        schema: {type: string, maxLength: 8192}
+      responses:
+        '200':
+          description: Complete validated reference
+          headers:
+            Cache-Control:
+              schema: {type: string}
+              description: private, no-cache when scoped and validated; no-store otherwise.
+            ETag:
+              schema: {type: string}
+              description: Provider validator. This does not assert a verified file hash.
+          content:
+            application/octet-stream:
+              schema: {type: string, format: binary}
+        '206':
+          description: Validated byte range with the original ETag and the same cache policy as 200.
+          content:
+            application/octet-stream:
+              schema: {type: string, format: binary}
+        '304':
+          description: The current scoped representation matches; no body or Content-Range is returned.
+        '400':
+          description: Invalid selector or range
+        '404':
+          description: Catalog reference unavailable
+        '409':
+          description: The engine identity changed
+        '502':
+          description: Provider representation rejected
+        '503':
+          description: Owning engine unavailable

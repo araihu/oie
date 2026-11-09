@@ -103,7 +103,6 @@ func (s *Server) avatarImage(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = response.Body.Close() }()
 	cache := func() {
-		w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 		w.Header().Set("ETag", `"`+hash+`"`)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 	}

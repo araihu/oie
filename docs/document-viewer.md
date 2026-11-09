@@ -32,8 +32,8 @@ Generated first-page PDF previews are cached as PNG thumbnails in IndexedDB.
 Keys include engine, account, conversation, source message/catalog revisions,
 source address, pixel density and renderer version. Reusing a valid thumbnail
 performs no PDF range reads or PDF.js page rendering. The persistent cache uses
-LRU eviction with 64 entries, 16 MiB and seven-day expiry; a separate memory
-fallback holds at most 16 entries and 4 MiB. Storage failures leave preview
+library-managed LRU eviction with 64 entries, 16 MiB and seven-day expiry.
+The shared RAM tier holds at most 128 entries and 16 MiB, with 30-minute TTL. Storage failures leave preview
 rendering usable. Invalid thumbnails are discarded and regenerated through the
 existing bounded reader. These disposable caches contain no original PDF bytes
 and do not change downloaded-original retention. Opening the full viewer still
@@ -184,3 +184,13 @@ but the client timed out after 180 seconds with exit 124. This is not a clean
 client completion. Logs are `/tmp/oie-document-context-dagger.log`,
 `/tmp/oie-document-context-dagger-retry.log` and
 `/tmp/oie-document-context-dagger-remote.log`.
+
+## Shared cache policy
+
+Preview reuse now goes through the generic cache decorators described in
+[cache decorators](cache.md). The RAM tier uses `lru-cache` with shared byte/count
+limits and TTL; the existing PDF IndexedDB retention is isolated in a generic
+storage adapter. TXT and Markdown previews also reuse their rendered results
+across fragment navigation. Scoped original streams with provider validators
+permit private browser storage with revalidation. Explicit downloads stay
+`no-store`. Original documents are never stored in the preview cache.

@@ -1,0 +1,10 @@
+{
+  "package": "lru-cache",
+  "version": "11.2.6",
+  "archive": "https://registry.npmjs.org/lru-cache/-/lru-cache-11.2.6.tgz",
+  "integrity": "sha512-ESL2CrkS/2wTPfuend7Zhkzo2u0daGJ/A2VucJOgQ/C48S/zB8MMeMHSGKYpXhIjbPxfuezITkaBH1wqv00DDQ==",
+  "source": "package/dist/esm/index.min.js",
+  "sourceSHA256": "f32514830fc9bd1f47f418089f6dbfa8c7b9037192a7955fadf60fe062cf13cf",
+  "sha256": "d1385e0728da81bc4b3e5d16aef5e3d344900da3fd774d6e5b95ae83c0d32f32",
+  "license": "BlueOak-1.0.0"
+}

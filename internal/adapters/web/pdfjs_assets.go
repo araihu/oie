@@ -2,9 +2,8 @@ package web
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"embed"
-	"fmt"
+	"github.com/araihu/oie/internal/adapters/cachehttp"
 	"io/fs"
 	"net/http"
 	"path"
@@ -57,8 +56,9 @@ func (s *Server) servePDFJS(w http.ResponseWriter, r *http.Request) bool {
 	}
 	w.Header().Set("Content-Type", kind)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("ETag", fmt.Sprintf(`"%x"`, sha256.Sum256(data)))
-	http.ServeContent(w, r, path.Base(name), time.Time{}, bytes.NewReader(data))
+	w.Header().Set("ETag", cachehttp.Digest(data))
+	cachehttp.Revalidate.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, path.Base(name), time.Time{}, bytes.NewReader(data))
+	})).ServeHTTP(w, r)
 	return true
 }

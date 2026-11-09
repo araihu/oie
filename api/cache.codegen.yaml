@@ -1,0 +1,7 @@
+package: cacheapi
+generate:
+  models: true
+  embedded-spec: true
+output-options:
+  skip-prune: true
+output: internal/adapters/web/cacheapi/api.gen.go

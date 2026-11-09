@@ -16,6 +16,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/araihu/goshtoso/expressions"
+	"github.com/araihu/oie/internal/adapters/cachehttp"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 
 	"golang.org/x/text/language"
@@ -524,14 +525,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}{
 		"/ui/mentions.js": {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
 		"/ui/timeline.js": {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
-		"/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
+		"/ui/cache.js": {"text/javascript", cacheScript}, "/ui/cache/LICENSE.md": {"text/plain; charset=utf-8", cacheLibraryLicense}, "/ui/cache/lru-cache.min.mjs": {"text/javascript", cacheLibrary}, "/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
 		"/ui/video-thumbnails.js": {"text/javascript", videoThumbnailsScript}, "/ui/videos.js": {"text/javascript", videosScript}, "/ui/video.css": {"text/css", videosStylesheet},
 		"/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/read-state.js": {"text/javascript", readStateScript}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
 	}
 	if asset, ok := assets[r.URL.Path]; ok {
 		w.Header().Set("Content-Type", asset.mime)
-		w.Header().Set("Cache-Control", "no-store")
-		_, _ = w.Write(asset.body)
+		w.Header().Set("ETag", cachehttp.Digest(asset.body))
+		cachehttp.Revalidate.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write(asset.body) })).ServeHTTP(w, r)
 		return
 	}
 	if r.URL.Path == "/ui/timeline" {
@@ -551,7 +552,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/ui/media/") {
-		s.mediaImage(w, r)
+		cachehttp.PrivateImmutable.Wrap(http.HandlerFunc(s.mediaImage)).ServeHTTP(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/v1/shared-content/") && strings.HasSuffix(r.URL.Path, "/thumbnail") {
@@ -559,11 +560,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/ui/shared-content/") {
-		s.sharedMediaContent(w, r)
+		handler := http.Handler(http.HandlerFunc(s.sharedMediaContent))
+		if validOperationKey(r.URL.Query().Get("engineId")) && !r.URL.Query().Has("download") {
+			handler = cachehttp.PrivateRevalidate.Wrap(handler)
+		}
+		handler.ServeHTTP(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/ui/avatars/") {
-		s.avatarImage(w, r)
+		cachehttp.PrivateImmutable.Wrap(http.HandlerFunc(s.avatarImage)).ServeHTTP(w, r)
 		return
 	}
 	if r.URL.Path == "/ui/events" {
@@ -1024,3 +1029,12 @@ func (v view) historyCaption(id string) string {
 
 //go:embed video-thumbnails.js
 var videoThumbnailsScript []byte
+
+//go:embed cache.js
+var cacheScript []byte
+
+//go:embed cache_vendor/lru-cache.min.mjs
+var cacheLibrary []byte
+
+//go:embed cache_vendor/LICENSE.md
+var cacheLibraryLicense []byte

@@ -18,3 +18,10 @@ included. Missing standard sans-serif font data uses the browser's system fonts.
 Run `python3 tools/vendor-pdfjs.py` to verify the assets without network access.
 Use `python3 tools/vendor-pdfjs.py --update` to restore the exact pinned package.
 The tool verifies its SHA-512 package integrity before writing selected assets.
+
+## lru-cache browser runtime
+
+`lru-cache` 11.2.6 is distributed under the Blue Oak Model License 1.0.0.
+The browser ESM build is served locally. The license and pinned archive/source
+checksums are in `internal/adapters/web/cache_vendor`. Reproduce the asset with
+`python3 tools/vendor-lru-cache.py`. Project: https://github.com/isaacs/node-lru-cache.

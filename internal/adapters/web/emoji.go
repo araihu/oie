@@ -2,6 +2,7 @@ package web
 
 import (
 	"embed"
+	"github.com/araihu/oie/internal/adapters/cachehttp"
 	"net/http"
 )
 
@@ -35,8 +36,8 @@ func serveEmojiAsset(w http.ResponseWriter, r *http.Request) bool {
 	}
 	w.Header().Set("Content-Type", mime)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write(data)
+	w.Header().Set("ETag", cachehttp.Digest(data))
+	cachehttp.Revalidate.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write(data) })).ServeHTTP(w, r)
 	return true
 }
 
