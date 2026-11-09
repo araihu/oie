@@ -129,7 +129,8 @@ func (d *Decoder) frame(parent context.Context, path, mime string) ([]byte, erro
 	if format == "mov" {
 		args = append(args, "-enable_drefs", "0", "-use_absolute_path", "0")
 	}
-	args = append(args, "-i", path, "-map", "0:v:0", "-an", "-sn", "-dn", "-vf", "thumbnail=12,scale=w='min(640,iw)':h=-2", "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "pipe:1")
+	// Output codec options are separate from the input decoder thread limit.
+	args = append(args, "-i", path, "-map", "0:v:0", "-an", "-sn", "-dn", "-vf", "thumbnail=12,scale=w='min(640,iw)':h=-2", "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-threads", "1", "pipe:1")
 	command := exec.CommandContext(ctx, d.binary, args...)
 	var output limitedOutput
 	command.Stdout = &output
