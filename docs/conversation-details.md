@@ -42,3 +42,16 @@ The dedicated chat-info fixture verifies canonical account/conversation scope, d
 An online backup preceded the live update. Source IDs and exact message bodies, revisions, stars, outbox and engine identity remained intact; schema 7 is unchanged. The existing real account returned room name, description and 106 visible occupants; no topic was advertised in that observation. A read-only browser check confirmed the live participant list, initials-only participant avatars, separate account/room states, scrolling and accessibility, with no browser mutations.
 
 The bounded full `make ci` attempt timed out after 180 seconds with exit 124 before returning Dagger stage results. Successful native and browser checks are not a claim of full Dagger completion.
+
+## Participant copy cleanup on 2026-11-09
+
+Removed the participant helper notice and visible observation-state label. Scope
+and state attributes still identify the participant group. `make check` passes,
+and read-only live inspection confirms that entries remain visible without the
+two labels. The general details browser fixture reaches its accessibility matrix
+but fails `aria-allowed-attr` on `span[aria-controls="oie-emoji-picker-panel"]` at
+390px in Goshtoso/light/English. The preceding exported binary reproduces the
+same failure. Logs are `/tmp/oie-participant-state-browser.log` and
+`/tmp/oie-participant-state-browser-baseline.log`. The Dagger client times out
+with exit 124 after 60 seconds, without a completed CI result, recorded in
+`/tmp/oie-participant-state-dagger.log`.

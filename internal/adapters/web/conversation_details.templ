@@ -138,7 +138,7 @@ templ detailsParticipants(v view){
 if v.Selected.Kind=="room" {
 @panel.Panel(panel.Config{Header:detailsHeading(v.Text.Participants),RootClass:"oie-details-panel"}){
 if d:=v.ConversationInfo;d!=nil {
-<p data-participant-state={string(d.Participants.State)} data-participant-scope={string(d.Participants.Scope)}>{v.detailState(string(d.Participants.State))}</p>
+<div data-participant-state={string(d.Participants.State)} data-participant-scope={string(d.Participants.Scope)}>
 @detailsObservedAt(v,d.Participants.CheckedAt)
 if d.Participants.Truncated {
 <p data-participants-truncated>{v.Text.DetailsParticipantsTruncated}</p>
@@ -166,6 +166,7 @@ if p.Source=="discovery" {
 }else{
 <p data-participants-empty>{v.Text.DetailsNoParticipants}</p>
 }
+</div>
 }else{
 <p data-participants-empty>{v.Text.DetailsNoParticipants}</p>
 }
