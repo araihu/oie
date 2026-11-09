@@ -93,7 +93,6 @@ if item.Kind=="video" {
 <footer class="oie-shared-source">
 <strong>{item.ConversationTitle}</strong><small>{v.sharedAccountLabel(item)} · {item.Message.Sender.DisplayName}</small>
 <time data-shared-source-date datetime={item.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{item.Message.CreatedAt.Format("2006-01-02 15:04")}</time>
-@link.Link(v.sharedSourceHref(item),link.WithID("shared-source-"+item.Id),link.WithAttrs(templ.Attributes{"data-shared-source":item.Message.Id})){ {v.Text.SharedGoToMessage} }
 </footer>
 </article>
 }
