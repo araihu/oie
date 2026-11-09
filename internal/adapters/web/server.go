@@ -155,7 +155,7 @@ type view struct {
 }
 
 type copy struct {
-	SearchContacts, SearchContactsPartial, SearchContactsLimited string
+	SearchContactsCoverage, SearchContacts, SearchContactsPartial, SearchContactsLimited string
 
 	SearchEverything, SearchConversations, SearchMessagesGroup, SearchConversationsLimited                                         string
 	ConversationSearchOlder, ConversationSearchNewer, ConversationSearchClose, ConversationSearchResult, ConversationSearchMissing string

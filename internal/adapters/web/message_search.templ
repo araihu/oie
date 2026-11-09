@@ -85,6 +85,11 @@ for _,a:=range v.Accounts {
 templ messageSearchResponse(v view){
 <div data-message-search-response data-search-engine={v.EngineID} data-search-query={v.MessageSearch.Query} data-search-account={v.MessageSearch.AccountID} data-search-conversation={v.MessageSearch.ConversationID} data-search-history={strconv.FormatBool(v.MessageSearch.IncludeHistory)} data-search-cursor={v.MessageSearch.Cursor} data-search-state={v.MessageSearch.State} data-search-next={v.messageSearchNext()}>
 <div data-message-search-items>
+if v.MessageSearch.ConversationID==""&&v.MessageSearch.Query!=""&&v.MessageSearch.Page!=nil&&len(v.MessageSearch.Page.Items)==0&&len(v.MessageSearch.Conversations)==0&&len(v.MessageSearch.Contacts)==0&&!v.MessageSearch.ContactsKnown {
+<p class="oie-message-search-help" data-message-search-contact-coverage>{v.Text.SearchContactsCoverage}</p>
+@link.Link(v.messageSearchNativeHref(""),link.WithAttrs(templ.Attributes{"data-message-search-retry":""})){ {v.Text.Retry} }
+}
+
 @messageSearchContacts(v)
 @messageSearchConversations(v)
 if v.MessageSearch.State=="blank" {

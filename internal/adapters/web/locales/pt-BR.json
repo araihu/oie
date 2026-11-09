@@ -469,5 +469,6 @@
   "ConversationSearchMissing": "Mensagem indisponível nesta conversa",
   "SearchContacts": "Contatos",
   "SearchContactsPartial": "Os contatos salvos estão indisponíveis para algumas contas.",
-  "SearchContactsLimited": "Os resultados de contatos são limitados. Refine sua pesquisa."
+  "SearchContactsLimited": "Os resultados de contatos são limitados. Refine sua pesquisa.",
+  "SearchContactsCoverage": "Os resultados incluem os dados salvos disponíveis. Alguns contatos salvos estão indisponíveis."
 }

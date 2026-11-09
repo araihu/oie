@@ -233,3 +233,23 @@ func TestSearchNavigationSeparatesGlobalAndConversationScopes(t *testing.T) {
 		t.Fatal("category did not use the existing scoped catalog")
 	}
 }
+
+func TestEmptyGlobalSearchQualifiesUnavailableContactCoverage(t *testing.T) {
+	catalogs, err := loadCatalogs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, known := range []bool{false, true} {
+		v := view{Locale: "en", Text: catalogs["en"], EngineID: testEngine, MessageSearch: messageSearchView{Query: "needle", State: "ready", ContactsKnown: known, Page: &engineapi.MessageSearchPage{Items: []engineapi.MessageSearchHit{}, MetadataIndexing: engineapi.SharedContentIndexing{State: "complete"}}}}
+		var out strings.Builder
+		if err := messageSearchResponse(v).Render(presentationContext(t.Context(), v), &out); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(out.String(), "data-message-search-contact-coverage") == known {
+			t.Fatalf("unknown contacts became a complete empty result: known=%v %s", known, out.String())
+		}
+		if strings.Contains(out.String(), "data-message-search-contacts") {
+			t.Fatal("fabricated contacts group for an empty directory")
+		}
+	}
+}
