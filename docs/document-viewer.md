@@ -11,6 +11,8 @@ Previews read through the existing scoped engine route, with two concurrent
 jobs and a 12-second timeout. Text reads at most a 64 KiB prefix. PDF previews
 request 64 KiB ranges with a 2 MiB total budget. Unsupported, unavailable or
 over-budget documents keep a filename and icon that still open the viewer.
+Each PDF serializes its range reads, so PDF.js request bursts cannot exhaust
+the engine's four concurrent media readers while two previews are active.
 
 Opening the viewer explicitly starts its independent original-file read.
 Text is limited to 2 MiB and PDF to 100 MiB. The engine
@@ -54,7 +56,8 @@ A 4,195,385-byte PDF preview used 66,617 bytes in two range reads. Another PDF
 that needed more content stopped below the 2 MiB budget and retained its
 clickable fallback. The fixture recorded zero unexpected mutations, browser
 errors or external browser requests. The live catalog also rendered text
-excerpts without the separate Open document button.
+excerpts and a first-page PDF thumbnail without the separate Open document
+button, using only scoped GET requests.
 The final card-preview source passes `make check`, the full native race suite
 and local Dagger checks, including application, CLI and mock builds.
 

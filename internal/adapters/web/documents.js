@@ -78,12 +78,14 @@ window.OieRuntime.register('documents', life => {
   }
   if(!Number.isSafeInteger(initial.total)||initial.total>128*1024*1024)throw Error('large');
   const library=await import('/ui/pdfjs/build/pdf.mjs');if(controller.signal.aborted)return;library.GlobalWorkerOptions.workerSrc='/ui/pdfjs/build/pdf.worker.mjs';
-  let spent=initial.bytes.length,task,failed;const failure=new Promise((_,reject)=>failed=reject);controller.signal.addEventListener('abort',()=>failed(Error('aborted')),{once:true});
+  let spent=initial.bytes.length,task,failed,rangeQueue=Promise.resolve();const failure=new Promise((_,reject)=>failed=reject);controller.signal.addEventListener('abort',()=>failed(Error('aborted')),{once:true});
   class PreviewTransport extends library.PDFDataRangeTransport{
    requestDataRange(begin,end){
     if(controller.signal.aborted)return;
     if(!Number.isSafeInteger(begin)||!Number.isSafeInteger(end)||begin<0||end<=begin||end>initial.total||(spent+=end-begin)>previewBudget){failed(Error('large'));return}
-    previewRange(record,begin,end,controller).then(part=>{if(!controller.signal.aborted){if(part.total!==initial.total)throw Error('changed');this.onDataRange(begin,part.bytes)}}).catch(error=>{if(!controller.signal.aborted)failed(error)});
+    // PDF.js can request several disjoint objects at once. Serialize each
+    // document's ranges so two preview jobs still use at most two HTTP readers.
+    rangeQueue=rangeQueue.then(async()=>{if(controller.signal.aborted)return;const part=await previewRange(record,begin,end,controller);if(!controller.signal.aborted){if(part.total!==initial.total)throw Error('changed');this.onDataRange(begin,part.bytes)}}).catch(error=>{if(!controller.signal.aborted)failed(error)});
    }
    abort(){controller.abort()}
   }
