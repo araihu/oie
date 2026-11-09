@@ -106,6 +106,16 @@ Recover available account, peer and room profile images from the protocol. Cache
 images locally and use initials when an image is absent or inaccessible. Room
 speaker nicknames alone do not establish a person's identity for image lookup.
 
+**IMPLEMENTATION SCOPE:** the sender drawer reads published XMPP vCard `FN`,
+with structured `N` as fallback, through a bounded account/session cache. A
+profile's self-declared `JABBERID` never establishes the author. Personal
+addresses are retained separately from message content when authenticated MAM
+metadata discloses them, or when a fresh message matches authorized presence in
+a confirmed non-anonymous room. Contradictory evidence suppresses identity.
+Older messages without such evidence remain undisclosed until verified archive
+re-observation; opening a profile does not force archive recovery. Published
+full names are optional and are not verified legal identities.
+
 Use a profile control at the bottom of the navigation for account switching, following the supplied X account-switcher reference. Its popover lists account names/addresses, marks the active account, shows available unread counts, and offers adding an existing account and managing connections. Account connection status appears on the avatar with a localized tooltip and accessible label, and updates without closing the switcher. Retain an All accounts inbox option. Switching the inbox account does not disconnect other protocol sessions, transfer drafts, or change pending-send ownership. Oiê uses Disconnect for an XMPP session; built-in application login/logout remains backlogged. Account management starts with a compact account list and opens only one account’s connection details at a time. The account detail avatar also carries connection status, replacing a separate status panel. Connected or connecting accounts offer Disconnect without the connection form; disconnected accounts and failed connections offer the connection form. Live refreshes update these actions while preserving unfinished connection fields when the state stays the same. Adding an existing account is a separate screen; server/port overrides live under advanced connection settings. In the account-list drawer, Add account remains at the bottom while the account list scrolls independently above it.
 
 An Oiê contact can group multiple protocol identities. Link identity and Unlink identity are manual, reversible operations. Each account/protocol conversation retains its own timeline; linking does not merge histories or retarget pending sends.

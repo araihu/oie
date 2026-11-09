@@ -10,7 +10,7 @@ log = { { levels = { min = "info" }; to = "console" } }
 
 modules_enabled = {
   "disco"; "roster"; "saslauth"; "tls"; "smacks"; "carbons";
-  "mam"; "pep"; "ping"; "websocket";
+  "mam"; "pep"; "vcard_legacy"; "ping"; "websocket";
 }
 modules_disabled = { "s2s" }
 allow_registration = false
