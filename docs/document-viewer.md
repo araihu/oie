@@ -10,7 +10,11 @@ plain text. Markdown image references currently trigger this fallback under
 Margo's offline image policy.
 Other document types retain an action to open the original provider address.
 
-Visible document cards show a text excerpt or the first PDF page. The preview
+Document cards use compact rows with a small contained thumbnail, filename and
+up to five lines of associated message context beside it. A file address or
+filename alone is not context. Source excerpts use at most 600 source Unicode
+characters plus an ellipsis when clipped, omit the matching reference, and leave retained message text intact.
+Visible thumbnails show a text excerpt or the first PDF page. The preview
 and filename form one keyboard-accessible control that opens the viewer.
 Previews read through the existing scoped engine route, with two concurrent
 jobs and a 12-second timeout. Text and Markdown read at most a 64 KiB prefix.
@@ -162,3 +166,21 @@ Dagger's engine completed checks, race tests and application/CLI/mock builds.
 The client timed out after 180 seconds with exit 124, so CLI completion is not
 claimed. Evidence is `/tmp/oie-pdf-preview-cache-dagger.log` and
 `/tmp/oie-pdf-preview-cache-dagger-remote.log`.
+
+The compact-row increment passes `make check` and the complete document browser
+suite, also from an index-only source build. Checks cover bounded source-text
+extraction, reference-only omission, unchanged message text, row geometry and
+the existing PDF cache/viewer and Markdown behavior. Read-only live inspection
+of `proposta-pl.pdf` confirms a 112x96 thumbnail at 1211px and an 88x88 thumbnail
+at 390px, with associated message text beside it and no engine mutations.
+Evidence is `/tmp/oie-document-context-browser.log`,
+`/tmp/oie-document-context-index-browser.log` and
+`/tmp/oie-document-context-proof.log`.
+
+The first Dagger attempt failed to connect through the shared tunnel with
+`only one connection allowed`. A retry through an independent SSH tunnel
+completed checks, race tests and application/CLI/mock builds in engine logs,
+but the client timed out after 180 seconds with exit 124. This is not a clean
+client completion. Logs are `/tmp/oie-document-context-dagger.log`,
+`/tmp/oie-document-context-dagger-retry.log` and
+`/tmp/oie-document-context-dagger-remote.log`.

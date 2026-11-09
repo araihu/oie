@@ -45,3 +45,28 @@ func TestDocumentFormatAndSourceDoNotUseRemoteURLAsProxyInput(t *testing.T) {
 		t.Fatal("raw URL accepted as source identity")
 	}
 }
+
+func TestDocumentCaptionUsesOnlySourceContextBeyondTheReference(t *testing.T) {
+	address := "https://files.example.test/report.pdf"
+	for _, tc := range []struct{ source, want string }{
+		{address, ""}, {"report.pdf\n" + address, ""},
+		{"[report.pdf](" + address + ")", ""},
+		{"Proposta para discussão\n" + address, "Proposta para discussão"},
+		{"Veja: <" + address + ">", "Veja:"},
+		{"A função foo() compara x<>y\n" + address, "A função foo() compara x<>y"},
+		{"Um outro arquivo: " + address + "?v=2\n" + address, "Um outro arquivo: " + address + "?v=2"},
+		{"<script>alert(1)</script>\n" + address, "<script>alert(1)</script>"},
+	} {
+		item := engineapi.SharedContentItem{Url: address, FileName: "report.pdf", Message: engineapi.Message{OriginalText: tc.source}}
+		if got := documentCaption(item); got != tc.want {
+			t.Errorf("source %q got %q want %q", tc.source, got, tc.want)
+		}
+		if item.Message.OriginalText != tc.source {
+			t.Fatal("source changed")
+		}
+	}
+	item := engineapi.SharedContentItem{Url: address, Message: engineapi.Message{OriginalText: strings.Repeat("😀", 601)}}
+	if got := documentCaption(item); len([]rune(got)) != 601 || !strings.HasSuffix(got, "…") {
+		t.Fatal("excerpt is not bounded by Unicode characters")
+	}
+}

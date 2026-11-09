@@ -15,9 +15,17 @@ templ documentCard(v view,item engineapi.SharedContentItem){
 </section>
 }
 templ documentCardAction(v view,item engineapi.SharedContentItem){
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-document-primary"),button.WithAttrs(templ.Attributes{"data-document-open":"","aria-label":v.Text.DocumentOpen+": "+v.sharedTitle(item)})){
+{{ caption:=documentCaption(item) }}
+{{ attrs:=templ.Attributes{"data-document-open":"","aria-label":v.Text.DocumentOpen+": "+v.sharedTitle(item)} }}
+{{ if caption!="" { attrs["aria-describedby"]=sharedActionID(v,item,"document-caption") } }}
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-document-primary"),button.WithAttrs(attrs)){
 <span class="oie-document-thumbnail" data-document-preview aria-hidden="true"><span data-document-placeholder>@glyph(heroicons.Icon16SolidDocumentText)</span></span>
+<span class="oie-document-summary">
 <span class="oie-document-name">@glyph(heroicons.Icon16SolidDocumentText)<span>{v.sharedTitle(item)}</span></span>
+if caption!="" {
+<span class="oie-document-caption" data-document-caption id={sharedActionID(v,item,"document-caption")}>{caption}</span>
+}
+</span>
 }
 }
 
