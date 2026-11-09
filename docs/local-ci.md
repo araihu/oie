@@ -1,5 +1,25 @@
 # Local CI loop
 
+The CI graph runs through Dagger's public Go engine client and SDK, in the
+isolated `tools/ci` module. The CLI's telemetry subscriptions could leave both
+completed queries and session shutdown waiting indefinitely on this runner.
+Silent CLI mode did not prevent the failure. The direct client omits those
+subscriptions, captures command output per stage, and treats execution,
+artifact-export and session-close errors as failures.
+
+The same engine and SSH tunnel passed two uncached FFmpeg installations with
+clean client exits in 44 and 37 seconds. An intentional container exit of 23 and
+cancellation of a running command both returned errors and closed their sessions.
+These probes did not require restarting the shared engine or preview processes.
+
+On 2026-11-09, `make check` and `OIE_CI_SSH_HOST=dagger-vm make ci-check` passed
+with clean exit 0, including a repeat with cached stages. An intentionally expired
+`OIE_CI_TIMEOUT=1ms` returned a failing status promptly. The full runner also
+exported genuine browser-test failures and returned a failing status after
+passing checks, races, builds and isolated XMPP integration. These are separate
+from a green full-suite result. Earlier timeout reports in this document describe
+the previous CLI runner.
+
 The video playback increment passes native `make check`, backend/BFF race tests,
 real native WebM playback/lifecycle checks and the 16-case shared-content browser
 regression. Isolated committed-source web/API tests also pass. Dagger passed the
@@ -54,22 +74,36 @@ The fragment-navigation increment on 2026-11-08 passes native checks and all hos
 Keep Oie increments as local commits. Open a pull request when there is a version
 ready for alpha v0.0.1. Existing draft requests remain historical review points.
 
-Use Dagger v0.21.9 and a running engine, plus Make, Git and Python 3 on the host:
+Use Go 1.27.3, Make, Git, Python 3 and Docker on the host. The runner pins Dagger
+v0.21.9. It honors `_EXPERIMENTAL_DAGGER_RUNNER_HOST`; without an override it
+provisions the pinned engine image through Dagger's container driver:
 
 ```sh
 make ci-check  # Contracts, generation drift, golangci-lint, vet, unit/race tests, builds
 make ci        # Also isolated Prosody integration and all browser workflows
 ```
 
-The Dagger Shell definitions and runner are under `tools/ci`. Build tools remain
-outside the root application module. Images are pinned by digest. Go modules,
+The Dagger Go graph and shell entrypoint are under `tools/ci`. Dagger dependencies
+remain separate from the root application and generation-tool modules. Images
+are pinned by digest. Go modules,
 Go compilation, golangci-lint results, npm packages and Playwright browsers have
 persistent engine caches.
-The runner prints plain stage progress so cache/session failures and test output
-remain visible during the local loop.
+The runner prints stage progress every 30 seconds and saves command output under
+`tests/browser/artifacts/ci`. Browser evidence is under its `browser` subdirectory.
+`OIE_CI_TIMEOUT` sets the overall execution deadline, defaulting to 30 minutes.
+Failure and interruption preserve a failing exit status and clean only the
+snapshot, runner process and optional SSH tunnel owned by that invocation.
 `make check` includes golangci-lint v2.13.1 pinned in the tools module.
 Its standard linters include errcheck, govet, ineffassign, staticcheck and unused.
 The first run populates those caches; later runs reuse them.
+
+`make check-ci-tools` checks the CI module and shell lifecycle regressions and is
+part of `make check`. The CI module uses the `http2legacy` build tag for Dagger's
+gRPC dependency on Go 1.27. Its `distconsts` replacement points to the exact
+Dagger v0.21.9 commit because the published root module requires an unpublished
+nested-module tag. Neither workaround changes the application or generator
+dependency graphs. System packages install before source is added to the graph,
+so a source edit reuses the FFmpeg installation layer.
 
 The runner materializes current tracked and untracked source, including local
 edits. It excludes Git internals, data directories, credentials, binaries, browser

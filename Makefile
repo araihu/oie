@@ -47,13 +47,20 @@ test-race:
 check-generated:
 	sh scripts/check-generated.sh
 
-check: lint lint-go check-generated
+check: lint lint-go check-generated check-ci-tools
 	@test -z "$$(gofmt -l cmd internal api/spec.go tests tools/cmd)" || { echo 'Go formatting drift'; exit 1; }
 	GOWORK=off $(GO) vet ./...
 	GOWORK=off $(GO) -C cli vet ./...
 	GOWORK=off $(GO) -C tools vet ./cmd/...
 	$(MAKE) test
 	$(COMPOSE) config --quiet
+
+.PHONY: check-ci-tools
+check-ci-tools:
+	@test -z "$$(gofmt -l tools/ci/*.go)" || { echo 'CI Go formatting drift'; exit 1; }
+	GOWORK=off $(GO) -C tools/ci vet -tags=http2legacy ./...
+	GOWORK=off $(GO) -C tools/ci test -tags=http2legacy ./...
+	python3 -m unittest discover -s tools/ci -p '*_test.py'
 
 dev-up:
 	$(COMPOSE) up --build -d --wait
