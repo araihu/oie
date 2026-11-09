@@ -79,14 +79,15 @@ for _,item:=range v.SharedContent.Items {
 }
 }
 templ sharedItem(v view,item engineapi.SharedContentItem){
-<article class="oie-shared-item" data-shared-item={item.Id} data-shared-created-at={item.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-shared-created-ms={strconv.FormatInt(item.Message.CreatedAt.UnixMilli(),10)} data-shared-conversation={item.Message.ConversationId}>
+<article class="oie-shared-item" data-shared-item={item.Id} data-shared-record-version={sharedItemVersion(item)} data-shared-created-at={item.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-shared-created-ms={strconv.FormatInt(item.Message.CreatedAt.UnixMilli(),10)} data-shared-conversation={item.Message.ConversationId}>
 @sharedViewerSource(v,item)
+@sharedItemActions(v,item)
 if item.Kind=="video" {
 @videoCard(v,item)
 }else if item.Kind=="document" {
 @documentCard(v,item)
 }else if item.Preview!=nil {
-@messagePreview(v,*item.Preview)
+@messagePreview(sharedCardView(v),*item.Preview)
 }else{
 @card.Card(card.Config{Title:v.sharedTitle(item),TitlePrefix:sharedKindIcon(string(item.Kind)),Body:sharedReference(v,item),Density:card.DensityCompact,RootClass:"oie-shared-reference"})
 }

@@ -69,7 +69,8 @@ templ page(v view) {
 <script src="/ui/formatting.js"></script>
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href="/ui/app.css"/>
-			<link rel="stylesheet" href="/ui/video.css"/>
+			<link rel="stylesheet" href="/ui/shared-actions.css"/><link rel="stylesheet" href="/ui/message-star.css"/>
+<link rel="stylesheet" href="/ui/video.css"/>
 <link rel="stylesheet" href="/ui/document.css"/>
 <link rel="stylesheet" href="/ui/emoji-picker.css"/>
 <script src="/ui/actions.js" defer></script>
@@ -78,6 +79,7 @@ templ page(v view) {
 <script src="/ui/videos.js" defer></script>
 <script src="/ui/documents.js" defer></script>
 <script src="/ui/shared-content.js" defer></script>
+<script src="/ui/shared-actions.js" defer></script>
 <script src="/ui/live.js" defer></script>
 <script src="/ui/emoji-picker.js" defer></script>
 <script src="/ui/navigation.js"></script>
@@ -97,6 +99,7 @@ templ appFragment(v view) {
 <div id="oie-app" hx-history-elt data-route-loading={v.Text.NavLoading} data-route-error={v.Text.NavFailed} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
 <p class="oie-live-status" data-navigation-status role="status" aria-live="polite" hidden></p>
 @liveCopy(v)
+<div data-shared-action-copy hidden data-failed={v.Text.SharedActionFailed} data-copied={v.Text.SharedLinkCopied} data-downloading={v.Text.SharedDownloading}></div>
 if v.Section=="media" {
 @avatarData(v)
 }
@@ -304,13 +307,14 @@ if !m.IsOwn && !grouped {
 @profileAvatar(v,m.AccountId,v.messageAvatarAddress(m),avatar.Config{Name:m.Sender.DisplayName,Initials:initials(m.Sender.DisplayName),Size:avatar.SizeSM})
 }
 @chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),Message:m.OriginalText,MessageContent:messageBubbleBody(v,m,grouped),RootClass:"oie-bubble",Grouped:grouped})
-<span class="oie-message-star-indicator" data-message-star-indicator hidden?={!v.StarsKnown||!v.Stars[m.Id].Starred} role="img" aria-label={v.Text.StarMessage}>@glyph(heroicons.Icon16SolidStar)</span>
 </div>
 }
 
 if m.IsOwn {
 <div class="oie-message-meta"><time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
+if m.SendState!="submitted" {
 <span data-message-status title={statusHint(v,m.SendState)}>{v.stateLabel(m.SendState)}</span>
+}
 if m.SendState=="queued" && !v.Preview {
 @form.Form(form.Config{ID:"cancel-"+m.Id,Action:"/ui/messages/cancel",Method:"post",RootClass:"oie-cancel-form",RootAttrs:templ.Attributes{"data-oie-action":"cancel","data-cancel-message":""}}){
 @mutationFields(v,"cancel-"+m.Id,newOperationKey())
@@ -668,7 +672,16 @@ if !m.IsOwn && !grouped {
 <div class="oie-message-heading"><strong>{m.Sender.DisplayName}</strong><time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time></div>
 }
 @messageBody(v,m)
+<div class="oie-message-star-footer">
+@messageStarButton(v,m.Id)
 </div>
+</div>
+}
+
+templ messageStarButton(v view,id string){
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithRootClass("oie-star-message oie-message-star-control"),button.WithAttrs(templ.Attributes{"data-star-message":id,"data-message-star-indicator":"","data-starred":strconv.FormatBool(v.Stars[id].Starred),"aria-label":v.starLabel(id),"title":v.starLabel(id),"aria-pressed":strconv.FormatBool(v.Stars[id].Starred),"hidden":!v.StarsKnown,"disabled":!v.StarsKnown})){
+@glyph(heroicons.Icon16SolidStar)
+}
 }
 
 // Rendered and original projections share one public ChatBubble content slot.

@@ -14,7 +14,9 @@ templ linkFallbackCard(v view,p engineapi.MessagePreview){
 @link.Link(safePreviewURL(p.Url),link.WithRootClass("oie-link-preview"),link.WithAttrs(templ.Attributes{"target":"_blank","rel":"noopener noreferrer","data-preview-page":""})){
 @card.Card(card.Config{Body:linkFallbackBody(v,p),Density:card.DensityCompact,RootClass:"oie-preview-card oie-link-fallback-card"})
 }
+if !v.SharedCard {
 @dropdown.Dropdown(dropdown.Config{ID:"link-options-"+p.Id,Label:v.Text.More,Trigger:linkPreviewOptions(v),RootClass:"oie-link-options",MenuAlign:dropdown.AlignEnd,Sections:[]dropdown.Section{{Items:[]dropdown.Item{{ID:"refresh-preview-"+p.Id,Label:v.Text.RefreshPreview,OnClick:"void 0",Disabled:p.State=="queued"}}}}})
+}
 <p class="oie-link-refresh-feedback" data-link-refresh-feedback role="status" aria-live="polite"></p>
 </div>
 }

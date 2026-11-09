@@ -109,6 +109,7 @@ type view struct {
 	SharedType, SharedCursor, SharedConversation          string
 	SharedContent                                         *engineapi.SharedContentPage
 	SharedInvalid                                         bool
+	SharedCard                                            bool
 	Locale, Theme, Role                                   string
 	Text                                                  copy
 	Avatars                                               map[avatarIdentity]string
@@ -138,6 +139,12 @@ type view struct {
 }
 
 type copy struct {
+	SharedItemActions          string
+	SharedCopyLink             string
+	SharedDownload             string
+	SharedActionFailed         string
+	SharedLinkCopied           string
+	SharedDownloading          string
 	RoomActions                string
 	DocumentOpen               string
 	DocumentViewer             string
@@ -428,6 +435,15 @@ var previewsScript []byte
 //go:embed runtime.js
 var runtimeScript []byte
 
+//go:embed shared-actions.js
+var sharedActionsScript []byte
+
+//go:embed message-star.css
+var messageStarStylesheet []byte
+
+//go:embed shared-actions.css
+var sharedActionsStylesheet []byte
+
 //go:embed navigation.js
 var navigationScript []byte
 
@@ -482,7 +498,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}{
 		"/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
 		"/ui/videos.js": {"text/javascript", videosScript}, "/ui/video.css": {"text/css", videosStylesheet},
-		"/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
+		"/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
 	}
 	if asset, ok := assets[r.URL.Path]; ok {
 		w.Header().Set("Content-Type", asset.mime)

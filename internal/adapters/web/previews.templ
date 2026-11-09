@@ -18,7 +18,7 @@ if p.Kind=="link" {
 @linkFallbackCard(v,p)
 }else{
 <div class="oie-image-preview">
-if len(v.imagePreviews(p.MessageId))>1 {
+if !v.SharedCard && len(v.imagePreviews(p.MessageId))>1 {
 @dropdown.Dropdown(dropdown.Config{ID:"image-menu-"+p.Id,Label:v.Text.ImageActions,Trigger:imageMenuTrigger(v,p.Id),RootClass:"oie-image-menu",MenuAlign:dropdown.AlignEnd,Sections:imageActions(v,p)})
 }
 @previewThumbnail(v,p)

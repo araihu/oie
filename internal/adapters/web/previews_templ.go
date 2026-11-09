@@ -299,7 +299,7 @@ func messagePreview(v view, p engineapi.MessagePreview) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if len(v.imagePreviews(p.MessageId)) > 1 {
+			if !v.SharedCard && len(v.imagePreviews(p.MessageId)) > 1 {
 				templ_7745c5c3_Err = dropdown.Dropdown(dropdown.Config{ID: "image-menu-" + p.Id, Label: v.Text.ImageActions, Trigger: imageMenuTrigger(v, p.Id), RootClass: "oie-image-menu", MenuAlign: dropdown.AlignEnd, Sections: imageActions(v, p)}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err

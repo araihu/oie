@@ -1,4 +1,10 @@
 {
+  "SharedItemActions": "Ações do item",
+  "SharedCopyLink": "Copiar link",
+  "SharedDownload": "Baixar",
+  "SharedActionFailed": "Não foi possível concluir esta ação. Tente novamente.",
+  "SharedLinkCopied": "Link copiado.",
+  "SharedDownloading": "Preparando download…",
   "RefreshPreview": "Atualizar prévia do link",
   "RefreshPreviewFailed": "Não foi possível atualizar a prévia. Tente novamente.",
   "AppName": "Oiê",

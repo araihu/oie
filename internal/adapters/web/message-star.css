@@ -1,0 +1,12 @@
+.oie-message-star-footer{display:flex;justify-content:flex-end;align-items:center;min-height:24px;margin-top:2px}
+.oie-message-body-compact>.oie-message-star-footer{margin-inline-end:-22px}
+.oie-message-star-footer:has(.oie-message-star-control[hidden]){display:none}
+.oie-message-star-control{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;min-width:24px;min-height:24px;flex-shrink:0;margin:0;padding:4px;border:0;border-radius:50%;color:var(--oie-muted);opacity:0;transition:opacity .12s}
+.oie-message-star-control[data-starred=true]{color:#d6a72b;opacity:1}
+.oie-message:hover .oie-message-star-control,.oie-message:focus-within .oie-message-star-control,.oie-message-star-control[data-star-pending=true]{opacity:1}
+.oie-message-star-control[data-star-pending=true]{opacity:.7}
+.oie-message-star-control:hover{background:var(--oie-raised)}
+.oie-message-star-control:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:2px}
+.oie-message-star-control[hidden]{display:none}
+@media(hover:none),(pointer:coarse){.oie-message-star-control{opacity:1}}
+@media(prefers-reduced-motion:reduce){.oie-message-star-control{transition:none}}

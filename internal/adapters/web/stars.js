@@ -23,7 +23,7 @@ window.OieRuntime.register('stars', life => {
   function render(){
     for(const row of document.querySelectorAll('[data-message-id][data-message-source]')){
       const value=states.get(row.dataset.messageId),starred=!!value?.known&&!!value.starred;row.dataset.starred=String(starred);
-      const indicator=row.querySelector('[data-message-star-indicator]');if(indicator)indicator.hidden=!starred;
+      const indicator=row.querySelector('[data-message-star-indicator]');if(indicator&&!indicator.matches('button[data-star-message]'))indicator.hidden=!starred;
     }
     for(const button of document.querySelectorAll('[data-star-message],[id^="star-message-"]')){
       if(button.id?.startsWith('star-message-'))button.dataset.starMessage=button.id.slice(13);
