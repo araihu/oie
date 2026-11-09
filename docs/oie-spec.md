@@ -663,6 +663,7 @@ Manual link stars/export, separate threads, automatic protocol relaying, multi-e
 | **B18** | Built-in Oiê application authentication. No external authentication provider is selected in its place. |
 | **B19** | Sticker selection, packs and sending. |
 | **B20** | GIF search, selection and sending. Existing ordinary media behavior does not imply a GIF discovery service. |
+| **B21** | Returning to Conversations from another navigation section restores the previously selected conversation in the same engine/account context, if it still exists and is accessible. |
 
 A separate native daemon is an accepted future option. Wails is a possible desktop host. Matrix, IRC, and Nostr are likely future protocol candidates. These do not require alpha daemon/native-shell implementations or implement all candidate protocols now.
 
