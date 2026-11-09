@@ -1,4 +1,5 @@
 {
+  "ReadFailed": "Could not save read status.",
   "RefreshPreview": "Refresh link preview",
   "RefreshPreviewFailed": "The preview could not be refreshed. Try again.",
   "AppName": "Oiê",

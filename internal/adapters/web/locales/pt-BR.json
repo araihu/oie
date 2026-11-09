@@ -1,4 +1,5 @@
 {
+  "ReadFailed": "Não foi possível registrar a leitura.",
   "RefreshPreview": "Atualizar prévia do link",
   "RefreshPreviewFailed": "Não foi possível atualizar a prévia. Tente novamente.",
   "AppName": "Oiê",

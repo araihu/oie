@@ -78,7 +78,7 @@ templ page(v view) {
 <script src="/ui/videos.js" defer></script>
 <script src="/ui/documents.js" defer></script>
 <script src="/ui/shared-content.js" defer></script>
-<script src="/ui/live.js" defer></script>
+<script src="/ui/live.js" defer></script><script src="/ui/read-state.js" defer></script>
 <script src="/ui/emoji-picker.js" defer></script>
 <script src="/ui/navigation.js"></script>
 if v.DevBuildID!="" {
@@ -97,6 +97,7 @@ templ appFragment(v view) {
 <div id="oie-app" hx-history-elt data-route-loading={v.Text.NavLoading} data-route-error={v.Text.NavFailed} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
 <p class="oie-live-status" data-navigation-status role="status" aria-live="polite" hidden></p>
 @liveCopy(v)
+<p class="oie-live-status" data-read-status data-read-failed={v.Text.ReadFailed} role="status" aria-live="polite" hidden></p>
 if v.Section!="media"{
 @starData(v)
 }
@@ -330,7 +331,7 @@ if v.Selected.Kind=="room" {
 }
 
 templ message(v view,m messageView,grouped bool){
-<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-grouped",grouped)} tabindex="-1" data-message-id={m.Id} data-starred={strconv.FormatBool(v.StarsKnown&&v.Stars[m.Id].Starred)} data-send-state={string(m.SendState)} data-created-at={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-message-source={originalMessageJSON(m.OriginalText)}>
+<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-grouped",grouped)} tabindex="-1" data-message-id={m.Id} data-read-eligible={strconv.FormatBool(!m.IsOwn&&(m.Historical==nil||!*m.Historical))} data-starred={strconv.FormatBool(v.StarsKnown&&v.Stars[m.Id].Starred)} data-send-state={string(m.SendState)} data-created-at={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-message-source={originalMessageJSON(m.OriginalText)}>
 @viewerSource(v,m)
 if m.Attachment!=nil {
 <div class="oie-media-message">@card.Card(card.Config{Image:m.Attachment.PreviewUrl,ImageAlt:m.Attachment.Title,Title:m.Attachment.Title,Description:m.Attachment.Description,Density:card.DensityCompact,RootClass:"oie-media-card"})</div>
