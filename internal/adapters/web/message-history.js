@@ -8,7 +8,7 @@
  'use strict';
  const root=document.getElementById('message-history-content');if(!root)return;
  const results=root.querySelector('[data-history-results]'),loading=root.querySelector('[data-history-loading]'),error=root.querySelector('[data-history-error]'),retry=root.querySelector('[data-history-retry]'),restart=root.querySelector('[data-history-restart]');
- let generation=0,request=null,scope=null,snapshot='',currentRevision='',canonical='',pages=[],position=-1,lastRequest=null,active=false,opener=null,observed=null;
+ let generation=0,request=null,scope=null,snapshot='',currentRevision='',canonical='',pages=[],position=-1,lastRequest=null,active=false,opener=null,openerKind='edited',observed=null;
  const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
  const digest=value=>typeof value==='string'&&/^[0-9a-f]{64}$/.test(value);
  function scopedURL(value,wanted=null){
@@ -20,9 +20,16 @@
  }
  function sourceVersion(id){const row=id&&document.querySelector(`#message-timeline [data-message-id="${CSS.escape(id)}"][data-message-source]`);return row?JSON.stringify([row.dataset.messageSource,row.querySelector('[data-message-edited]')?.dataset.editedAt||'']):null;}
  function cancel(){generation++;request?.abort();request=null;loading.hidden=true;root.removeAttribute('aria-busy');}
+ function currentOpener(){
+  if(opener?.isConnected)return opener;
+  const id=canonical||scope?.url.searchParams.get('messageId');if(!uuid(id))return null;
+  const row=document.querySelector(`#message-timeline [data-message-id="${CSS.escape(id)}"]`);if(!row)return null;
+  const trigger=row.querySelector('[data-message-menu-trigger]');
+  return openerKind==='menu'?trigger:row.querySelector('[data-open-message-history][data-message-edited]')||trigger;
+ }
  function close(restore=true){
   const wasActive=active;active=false;cancel();results.replaceChildren();
-  if(restore&&wasActive)life.timeout(()=>{if(!life.signal.aborted&&opener?.isConnected)opener.focus({preventScroll:true})},0);
+  if(restore&&wasActive)life.timeout(()=>{if(!life.signal.aborted)currentOpener()?.focus({preventScroll:true})},0);
  }
  life.cleanup(()=>close(false));
  life.on(window,'drawer:close',event=>{if(event.detail?.id==='message-history')close()});
@@ -71,7 +78,7 @@
   if(action&&!event.defaultPrevented&&event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey){
    const url=scopedURL(action.href);if(!url)return;
    event.preventDefault();event.stopPropagation();close(false);active=true;scope={url};snapshot='';currentRevision='';canonical='';pages=[];position=-1;observed=sourceVersion(url.searchParams.get('messageId'));
-   const menuID=action.id?.startsWith('history-message-')?action.id.slice(16):'';opener=menuID?document.getElementById('message-menu-'+menuID)?.querySelector('button')||action:action;opener?.focus({preventScroll:true});
+   const menuID=action.id?.startsWith('history-message-')?action.id.slice(16):'';openerKind=menuID?'menu':'edited';opener=menuID?document.getElementById('message-menu-'+menuID)?.querySelector('button')||action:action;opener?.focus({preventScroll:true});
    window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'message-history'}}));load(url,[url.href],0);return;
   }
   if(!active)return;
