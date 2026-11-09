@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/a-h/templ v0.3.1100
-	github.com/araihu/goshtoso v0.6.2-0.20261109091343-3effe13c3369
+	github.com/araihu/goshtoso v0.6.2-0.20261109092607-b79c3a7a8527
 	github.com/araihu/margo v0.0.36-0.20261108235149-ff44a5fe5052
 	github.com/getkin/kin-openapi v0.152.0
 	github.com/gofrs/flock v0.13.1

@@ -8,10 +8,9 @@ conversation, sender and timestamp without repeating that navigation link.
 The footer-removal increment passes the catalog-action, shared-content,
 gallery-scroll, native-video and bounded-timeline browser fixtures. Live HTML
 contains 50 cards, zero footer links and 50 source-menu actions. `make check`
-and Dagger checks pass. The broader fragment-navigation fixture passes desktop
-and source-menu navigation but times out in its final mobile Back-to-sidebar
-case. That run is not a complete fragment-navigation pass; its log is
-`/tmp/oie-gallery-footer-fragment-navigation-final.log`.
+and Dagger checks pass. The subsequent [mobile popover correction](mobile-popover-navigation.md)
+resolves the broader fixture's Back-to-sidebar failure. The complete fragment
+navigation fixture now passes against the pinned corrected dependency.
 
 The menu uses the catalog item's engine, account, conversation and source-message identity. Source navigation keeps the existing HTMX route contract. Copy writes the original URL as plain text. Video and document downloads use the existing same-origin, resource-scoped streaming endpoint with `download=1`; opening a menu never starts playback or a file download.
 
