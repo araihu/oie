@@ -21,6 +21,8 @@ github.com/araihu/goshtoso v0.6.2-0.20261108214005-3c5adf6acc24 h1:r0ZoVEPfYVM8j
 github.com/araihu/goshtoso v0.6.2-0.20261108214005-3c5adf6acc24/go.mod h1:H/vLd+4wvpzNIjDnW81Sk44+4670WIe7x6DUE57Kg/8=
 github.com/araihu/goshtoso v0.6.2-0.20261108232401-14f588cfc5a5 h1:WjA23q3evJoTruzlBG1Fu+BCQfpOm5xTuI6h2nhTs58=
 github.com/araihu/goshtoso v0.6.2-0.20261108232401-14f588cfc5a5/go.mod h1:H/vLd+4wvpzNIjDnW81Sk44+4670WIe7x6DUE57Kg/8=
+github.com/araihu/goshtoso v0.6.2-0.20261109091343-3effe13c3369 h1:+NNnBa9VU8zrU+X7/+ftyfwM3kc7JJXUqHE8RF3j/JQ=
+github.com/araihu/goshtoso v0.6.2-0.20261109091343-3effe13c3369/go.mod h1:H/vLd+4wvpzNIjDnW81Sk44+4670WIe7x6DUE57Kg/8=
 github.com/araihu/margo v0.0.36-0.20261108131344-c6676eea4fe0 h1:GNXQRDJfMeiFmqM6yKB/4VwinRbvn6+kOybyThl0Cmw=
 github.com/araihu/margo v0.0.36-0.20261108131344-c6676eea4fe0/go.mod h1:Cvt4KcHzu/OLH9Dy8XvdiqlOneGffUw1CaK7A9f2bd0=
 github.com/araihu/margo v0.0.36-0.20261108235149-ff44a5fe5052 h1:aA/5OmFLV8sNmlMbRWMIzNd6RJAc8nCePSWPSwGI/jA=
