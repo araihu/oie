@@ -22,7 +22,13 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    if(url.pathname===prefix)return send(state.fail&&chat===a?503:200,chat);
    if(url.pathname===prefix+'/messages'){
     if(chat===a&&state.hold)await new Promise(resolve=>state.release=resolve);
-    return send(200,{items:chat===c?Array.from({length:60},(_,index)=>({...message(chat),id:id(2000+index),originalText:'Long conversation message '+index})):[message(chat)]});
+    const all=chat===c?Array.from({length:60},(_,index)=>({...message(chat),id:id(2000+index),originalText:'Long conversation message '+index})):[message(chat)];
+    const limit=Number(url.searchParams.get('limit')||50),direction=url.searchParams.get('direction')||'older',cursor=url.searchParams.get('cursor'),index=cursor?all.findIndex(item=>item.id===cursor):all.length;
+    if(!Number.isInteger(limit)||limit<1||limit>100||!['older','newer'].includes(direction))return send(400,{status:400});
+    if(index<0)return send(409,{status:409,code:'invalid_cursor'});
+    const start=direction==='newer'?index+1:Math.max(0,index-limit),end=direction==='newer'?Math.min(all.length,start+limit):index,items=all.slice(start,end).reverse();
+    const nextCursor=direction==='newer'?(end<all.length?items[0]?.id:undefined):(start>0?items.at(-1)?.id:undefined);
+    return send(200,{items,nextCursor});
    }
    if(url.pathname===prefix+'/details')return send(200,{conversationId:chat.id,accountId:chat.accountId,kind:'direct',address:chat.address,state:'known',checkedAt:chat.updatedAt,accountConnection:{accountId:chat.accountId,state:'connected',updatedAt:chat.updatedAt},participants:{scope:'peer',state:'unknown',items:[]},features:[]});
   }

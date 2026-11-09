@@ -34,7 +34,15 @@ function thumbnail(color){
   if(u.pathname==='/api/v1/conversations')return send(200,{items:conversations});
   for(const c of conversations){
    if(u.pathname===`/api/v1/conversations/${c.id}`)return send(200,c);
-   if(u.pathname===`/api/v1/conversations/${c.id}/messages`)return send(200,{items:Array.from({length:80},(_,i)=>({id:id(100+i),revisionId:revision,accountId:account,conversationId:c.id,sender:{id:id(500+i%2),displayName:c.kind==='room'?'room@fixture':'Bob'},originalText:'Retained message '+i,createdAt:new Date(Date.UTC(2026,10,8,12,i)).toISOString(),isOwn:false,sendState:'received'})).reverse()});
+   if(u.pathname===`/api/v1/conversations/${c.id}/messages`){
+    const all=Array.from({length:80},(_,i)=>({id:id(100+i),revisionId:revision,accountId:account,conversationId:c.id,sender:{id:id(500+i%2),displayName:c.kind==='room'?'room@fixture':'Bob'},originalText:'Retained message '+i,createdAt:new Date(Date.UTC(2026,10,8,12,i)).toISOString(),isOwn:false,sendState:'received'}));
+    const limit=Number(u.searchParams.get('limit')||50),direction=u.searchParams.get('direction')||'older',cursor=u.searchParams.get('cursor'),index=cursor?all.findIndex(message=>message.id===cursor):all.length;
+    if(!Number.isInteger(limit)||limit<1||limit>100||!['older','newer'].includes(direction))return send(400,{status:400});
+    if(index<0)return send(409,{status:409,code:'invalid_cursor'});
+    const start=direction==='newer'?index+1:Math.max(0,index-limit),end=direction==='newer'?Math.min(all.length,start+limit):index,items=all.slice(start,end).reverse();
+    const nextCursor=direction==='newer'?(end<all.length?items[0]?.id:undefined):(start>0?items.at(-1)?.id:undefined);
+    return send(200,{items,nextCursor});
+   }
   }
   if(u.pathname.startsWith('/api/v1/avatars/')){const hash=u.pathname.split('/').at(-1),n=hashes.indexOf(hash);if(n<0)return send(404,{status:404});res.setHeader('Content-Type','image/png');res.end(images[n]);return}
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
@@ -43,11 +51,14 @@ function thumbnail(color){
  api.listen(0,'127.0.0.1');await once(api,'listening');
  const socket=http.createServer();socket.listen(0,'127.0.0.1');await once(socket,'listening');const port=socket.address().port;await new Promise(r=>socket.close(r));
  const child=spawn(process.env.OIE_WEB_BINARY||path.resolve(__dirname,'../../bin/oie-avatar-ui'),['--role','bff','--listen','127.0.0.1:'+port,'--engine-url','http://127.0.0.1:'+api.address().port],{stdio:['ignore','ignore','pipe']});
+ let childLog='',childExit=null,childError=null,startupProbe=null;
+ child.stderr.on('data',chunk=>{childLog=(childLog+chunk.toString()).slice(-65536)});
+ child.on('error',error=>{childError=error.message});child.on('exit',(code,signal)=>{childExit={code,signal}});
  const base='http://127.0.0.1:'+port,browser=await chromium.launch({headless:true});const findings=[],errors=[];
- const until=async(fn,label)=>{for(let i=0;i<160;i++){if(await fn())return;await new Promise(r=>setTimeout(r,50))}throw Error('Timed out: '+label)};
+ const until=async(fn,label)=>{for(let i=0;i<160;i++){if(childError||childExit)throw Error('BFF exited: '+JSON.stringify({childError,childExit,startupProbe})+'\n'+childLog);if(await fn())return;await new Promise(r=>setTimeout(r,50))}throw Error('Timed out: '+label+' '+JSON.stringify({startupProbe,childExit,childError})+'\n'+childLog)};
  const set=(a,address,hash)=>state.avatars.set(JSON.stringify([a,address]),hash);
  try{
-  await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
+  await until(async()=>{try{const response=await fetch(base),body=await response.text();startupProbe={status:response.status,body:body.slice(0,300)};return response.ok}catch(error){startupProbe={error:error.message};return false}},'BFF startup');
   const noScripts=await browser.newContext({javaScriptEnabled:false,viewport:{width:1440,height:900}});const initial=await noScripts.newPage();await initial.goto(`${base}/?account=${account}&chat=${direct}&lang=en`);assert.equal(await initial.locator('[data-avatar-account] img').count(),0);assert(await initial.locator('#chat-header [data-avatar-initials]').isVisible());await noScripts.close();findings.push('Before Alpine, initials-only avatars contain no rendered image element or broken-image outline');
   const context=await browser.newContext({viewport:{width:1440,height:900},locale:'en'}),page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
   await page.goto(`${base}/?account=${account}&chat=${direct}&lang=en&theme=dark`);
