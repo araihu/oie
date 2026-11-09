@@ -51,6 +51,24 @@ func (v view) messageAvatarAddress(m messageView) string {
 	return ""
 }
 
+// Room nicknames are scoped to their room for color only, never photo lookup.
+func (v view) messageAvatarBorder(m messageView) string {
+	identity := v.messageAvatarAddress(m)
+	if identity == "" {
+		scope := m.ConversationId
+		if v.Selected != nil {
+			scope = v.Selected.Address
+		}
+		identity = scope + "/" + m.Sender.DisplayName
+	}
+	colors := [...]string{
+		"oie-avatar-user-blue", "oie-avatar-user-purple", "oie-avatar-user-pink", "oie-avatar-user-orange",
+		"oie-avatar-user-olive", "oie-avatar-user-green", "oie-avatar-user-teal", "oie-avatar-user-indigo",
+	}
+	hash := sha256.Sum256([]byte(identity))
+	return colors[int(hash[0])%len(colors)]
+}
+
 func (s *Server) loadAvatars(ctx context.Context, v *view, account string) {
 	limit := 100
 	params := &engineapi.ListAccountAvatarsParams{Limit: &limit}

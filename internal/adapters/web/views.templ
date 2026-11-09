@@ -325,7 +325,7 @@ if m.Attachment!=nil {
 }else{
 <div class="oie-message-content">
 if !m.IsOwn && !grouped {
-@profileAvatar(v,m.AccountId,v.messageAvatarAddress(m),avatar.Config{Name:m.Sender.DisplayName,Initials:initials(m.Sender.DisplayName),Size:avatar.SizeSM})
+@profileAvatar(v,m.AccountId,v.messageAvatarAddress(m),avatar.Config{Name:m.Sender.DisplayName,Initials:initials(m.Sender.DisplayName),Size:avatar.SizeSM,Border:true,BorderColor:v.messageAvatarBorder(m)})
 }
 @chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),Message:m.OriginalText,MessageContent:messageBubbleBody(v,m,grouped),RootClass:"oie-bubble",Grouped:grouped})
 </div>
@@ -742,7 +742,7 @@ templ messageMenuTrigger(v view,id string){
 templ viewerSource(v view,m messageView){
 <template data-viewer-source={m.Id}>
 <div class="oie-viewer-source" data-viewer-source-id={m.Id}>
-@profileAvatar(v,m.AccountId,v.messageAvatarAddress(m),avatar.Config{Name:m.Sender.DisplayName,Initials:initials(m.Sender.DisplayName),Size:avatar.SizeXS})
+@profileAvatar(v,m.AccountId,v.messageAvatarAddress(m),avatar.Config{Name:m.Sender.DisplayName,Initials:initials(m.Sender.DisplayName),Size:avatar.SizeXS,Border:true,BorderColor:v.messageAvatarBorder(m)})
 <div class="oie-viewer-sender"><strong title={m.Sender.DisplayName}>{m.Sender.DisplayName}</strong><time data-viewer-date datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("2006-01-02 15:04")}</time></div>
 </div>
 </template>

@@ -2454,7 +2454,7 @@ func message(v view, m messageView, grouped bool) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if !m.IsOwn && !grouped {
-				templ_7745c5c3_Err = profileAvatar(v, m.AccountId, v.messageAvatarAddress(m), avatar.Config{Name: m.Sender.DisplayName, Initials: initials(m.Sender.DisplayName), Size: avatar.SizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = profileAvatar(v, m.AccountId, v.messageAvatarAddress(m), avatar.Config{Name: m.Sender.DisplayName, Initials: initials(m.Sender.DisplayName), Size: avatar.SizeSM, Border: true, BorderColor: v.messageAvatarBorder(m)}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -6383,7 +6383,7 @@ func viewerSource(v view, m messageView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = profileAvatar(v, m.AccountId, v.messageAvatarAddress(m), avatar.Config{Name: m.Sender.DisplayName, Initials: initials(m.Sender.DisplayName), Size: avatar.SizeXS}).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = profileAvatar(v, m.AccountId, v.messageAvatarAddress(m), avatar.Config{Name: m.Sender.DisplayName, Initials: initials(m.Sender.DisplayName), Size: avatar.SizeXS, Border: true, BorderColor: v.messageAvatarBorder(m)}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

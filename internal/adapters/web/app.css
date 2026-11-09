@@ -223,6 +223,14 @@ html{color-scheme:light}html.dark{color-scheme:dark}
 .oie-expanded-image{display:block;max-height:70dvh;max-width:100%;width:auto;object-fit:contain}
 
 .oie-avatar-initials{display:flex}
+.oie-avatar-user-blue{border-color:#57a6d9}
+.oie-avatar-user-purple{border-color:#c987e8}
+.oie-avatar-user-pink{border-color:#de8fae}
+.oie-avatar-user-orange{border-color:#dc9d62}
+.oie-avatar-user-olive{border-color:#b5b85c}
+.oie-avatar-user-green{border-color:#6ebc8a}
+.oie-avatar-user-teal{border-color:#65b9b4}
+.oie-avatar-user-indigo{border-color:#9da3ed}
 .oie-device-toggle{width:100%;justify-content:space-between;gap:12px}
 /* Margo's static chat profile needs no document runtime or global stylesheet. */
 .oie-original-message{display:none;white-space:pre-wrap;overflow-wrap:anywhere}
