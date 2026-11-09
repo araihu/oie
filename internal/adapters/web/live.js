@@ -445,7 +445,7 @@ window.OieRuntime.register('live', life => {
         if(!sending)scheduleRefresh();
       } else {
         if(roomCommand)keepRoomOperation(null);
-        feedback(form,result.message || '');
+        feedback(form,sending ? '' : result.message || '');
         if (sending && result.accepted) {
           const submittedKey = values.get('operationKey');
           clearDraft(submittedKey);input.value='';submissionKey.value=result.nextKey;lockComposer(false);forceBottom=true;
