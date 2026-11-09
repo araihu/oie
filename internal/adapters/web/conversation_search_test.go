@@ -111,3 +111,50 @@ func TestConversationSearchDoesNotRenderWithoutSelectedConversation(t *testing.T
 		t.Fatal("toolbar exposes an unscoped search")
 	}
 }
+
+func TestConversationSearchDetailsLinkHasLocalizedVisibleName(t *testing.T) {
+	catalogs, err := loadCatalogs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, locale := range []string{"en", "pt-BR"} {
+		t.Run(locale, func(t *testing.T) {
+			v := view{EngineID: testEngine, Locale: locale, Theme: "dark", Text: catalogs[locale], Selected: &engineapi.Conversation{Id: testChat, AccountId: testAccount, Title: "Saved conversation", Kind: "direct"}}
+			var out strings.Builder
+			if err := chatInfoContent(v).Render(t.Context(), &out); err != nil {
+				t.Fatal(err)
+			}
+			document, err := html.Parse(strings.NewReader(out.String()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			link := paginationContractNode(document, "data-open-conversation-search")
+			if link == nil || link.Data != "a" {
+				t.Fatal("missing native conversation search link")
+			}
+			var visible strings.Builder
+			var collect func(*html.Node)
+			collect = func(node *html.Node) {
+				for _, attr := range node.Attr {
+					if attr.Key == "aria-hidden" && attr.Val == "true" {
+						return
+					}
+				}
+				if node.Type == html.TextNode {
+					visible.WriteString(node.Data)
+				}
+				for child := node.FirstChild; child != nil; child = child.NextSibling {
+					collect(child)
+				}
+			}
+			collect(link)
+			if strings.TrimSpace(visible.String()) != v.Text.SearchMessages || v.Text.SearchMessages == "" {
+				t.Fatalf("search link lost its visible localized name: %q", visible.String())
+			}
+			address, err := url.Parse(paginationContractAttrs(link)["href"])
+			if err != nil || address.Query().Get("accountId") != testAccount || address.Query().Get("conversationId") != testChat {
+				t.Fatal("native search link lost its owning conversation scope", address, err)
+			}
+		})
+	}
+}
