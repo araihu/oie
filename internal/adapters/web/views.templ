@@ -366,16 +366,7 @@ templ settings(v view) {
 					{ v.Text.Dark }
 				}
 			</div>
-			<h2>{ v.Text.Languages }</h2>
-			<p>{ v.Text.LanguageHelp }</p>
-			<div class="oie-settings-links" aria-label={ v.Text.Languages }>
-				@link.Link(v.href("lang", "en")) {
-					{ v.Text.English }
-				}
-				@link.Link(v.href("lang", "pt-BR")) {
-					{ v.Text.Portuguese }
-				}
-			</div>
+			@languageSettings(v)
 			<h2>{v.Text.DevicePreferences}</h2>
 @toggle.Toggle(toggle.Config{ID:"render-markdown",Label:v.Text.RenderMarkdown,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-render-markdown":"","aria-describedby":"render-markdown-help"}})
 <p id="render-markdown-help">{v.Text.RenderMarkdownHelp}</p>

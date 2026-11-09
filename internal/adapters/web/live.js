@@ -480,7 +480,7 @@ window.OieRuntime.register('live', life => {
   life.interval(() => { if (!mock && !document.hidden) {scheduleRefresh();retryPending();} },15000);
   life.on(window,'online', () => {scheduleRefresh();retryPending();});
   const open = new URLSearchParams(location.search).get('open') || body.dataset.openDrawer;
-  if (open === 'accounts' || open === 'newchat' || open === 'details') {
+  if (open === 'accounts' || open === 'newchat' || open === 'details' || open === 'settings') {
     const show = () => {
       dispatchEvent(new CustomEvent('drawer:open',{detail:{id:open}}));
       if(open==='accounts')life.timeout(()=>{

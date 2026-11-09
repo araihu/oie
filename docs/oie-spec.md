@@ -484,6 +484,8 @@ Device preferences remain meaningful with a hosted engine. Browser/site-data rem
 
 Internationalization is required from the start. Ship **English (`en`) and Brazilian Portuguese (`pt-BR`)**. Follow device/browser language unless explicitly overridden on that device; fall back to English when no supported language matches.
 
+**AGREED:** settings use a language selector with a leading flag emoji in each option and in the selected value.
+
 Use and expand reusable Goshtoso expression support rather than hardcoding user-facing expressions. Oiê owns product copy, locale selection, complete parameterized/plural messages, and locale-aware date/time/number/size formatting. Cover labels, statuses, errors, notifications, accessibility text, and offline UI.
 
 Do not mutate a process-global locale for a hosted engine's devices. Full-page rendering, HTMX fragments, SSE-driven rendering, and cached offline presentation need the same resolved device locale.
