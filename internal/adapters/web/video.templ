@@ -50,7 +50,12 @@ if v.Section!="media" && !v.SharedInDetails {
 
 templ videoThumbnailControls(v view,item engineapi.SharedContentItem){
 <div data-video-thumbnail-controls hidden?={v.Section=="media"||v.SharedInDetails}>
-<p data-video-thumbnail-status role="status" aria-live="polite" hidden></p>
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-video-thumbnail-load":"","hidden":videoThumbnailState(item)==""||videoPoster(item)!=""})){ {v.Text.VideoThumbnailLoad} }
+<p data-video-thumbnail-status role="status" aria-live="polite" hidden if v.Section=="media"||v.SharedInDetails {class="sr-only"}></p>
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithRootClass("oie-video-thumbnail-action"),button.WithAttrs(templ.Attributes{"aria-label":videoThumbnailActionLabel(v,item),"title":videoThumbnailActionLabel(v,item),"data-video-thumbnail-load":"","data-thumbnail-load-label":v.Text.VideoThumbnailLoad,"data-thumbnail-retry-label":v.Text.Retry,"hidden":videoThumbnailState(item)==""||videoPoster(item)!=""})){
+if v.Section=="media"||v.SharedInDetails {
+@glyph(heroicons.Icon16SolidArrowPath)
+}
+<span data-video-thumbnail-action-label if v.Section=="media"||v.SharedInDetails {class="sr-only"}>{videoThumbnailActionLabel(v,item)}</span>
+}
 </div>
 }

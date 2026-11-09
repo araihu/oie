@@ -15,12 +15,13 @@ async function until(fn, label) { for(let n=0;n<180;n++){if(await fn())return;aw
  const video=await fs.readFile(path.join(__dirname,'fixtures/tiny-video.webm'));
  const hash=createHash('sha256').update(png).digest('hex');
  const engine=id(1),account=id(2),chat=id(3),revision=id(4),itemID=id(20),messageID=id(30),previewID=id(40);
- const message={id:messageID,revisionId:revision,accountId:account,conversationId:chat,sender:{id:id(9),displayName:'Bob'},originalText:'Video source https://files.example.test/clip.webm',createdAt:'2026-11-08T12:00:00Z',isOwn:false,sendState:'received'};
+ const message={id:messageID,revisionId:revision,accountId:account,conversationId:chat,sender:{id:id(9),displayName:'Bob'},originalText:'Video source https://files.example.test/clip.webm https://files.example.test/photo.png',createdAt:'2026-11-08T12:00:00Z',isOwn:false,sendState:'received'};
  const conversation={id:chat,revisionId:revision,accountId:account,kind:'direct',address:'bob@fixture',title:'Bob',lastMessage:'Video source',updatedAt:message.createdAt,unreadCount:0,archived:false,favorite:false};
  const state={status:'not_requested',ensures:0,media:0,posters:0,fail:false,seq:0};
  const streams=new Set(),errors=[];
  const preview=()=>({id:previewID,revisionId:id(50+state.seq),sharedContentId:itemID,accountId:account,conversationId:chat,messageId:messageID,url:'https://files.example.test/clip.webm',kind:'video',state:state.status,updatedAt:message.createdAt,...(state.status==='ready'?{imageHash:hash}:{})});
  const item=()=>({id:itemID,revisionId:revision,kind:'video',url:preview().url,fileName:'Preview sample.webm',accountLabel:'Fixture account',conversationTitle:'Bob',message,thumbnail:preview()});
+ const imageItem={id:id(21),revisionId:revision,kind:'image',url:'https://files.example.test/photo.png',fileName:'Photo.png',accountLabel:'Fixture account',conversationTitle:'Bob',message,preview:{id:id(41),revisionId:revision,accountId:account,conversationId:chat,messageId:messageID,url:'https://files.example.test/photo.png',kind:'image',state:'ready',downloadState:'ready',imageHash:hash,fileHash:hash,updatedAt:message.createdAt}};
  const api=http.createServer((req,res)=>{
   const url=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');
   const send=(status,body)=>{res.statusCode=status;res.end(JSON.stringify(body))};
@@ -32,7 +33,7 @@ async function until(fn, label) { for(let n=0;n<180;n++){if(await fn())return;aw
   if(url.pathname==='/api/v1/conversations')return send(200,{items:[conversation]});
   if(url.pathname==='/api/v1/conversations/'+chat)return send(200,conversation);
   if(url.pathname.endsWith('/messages'))return send(200,{items:[message]});
-  if(url.pathname==='/api/v1/shared-content')return send(200,{items:[item()],indexing:{state:'complete',indexedMessages:1,totalMessages:1}});
+  if(url.pathname==='/api/v1/shared-content')return send(200,{items:[item(),imageItem],indexing:{state:'complete',indexedMessages:1,totalMessages:1}});
   if(url.pathname==='/api/v1/shared-content/'+itemID+'/thumbnail'){
    if(req.method==='POST'){state.ensures++;state.seq++;state.status='queued';send(202,preview());setTimeout(()=>{state.status=state.fail?'unavailable':'ready';state.seq++},100);return}
    return send(200,preview());
@@ -58,9 +59,17 @@ async function until(fn, label) { for(let n=0;n<180;n++){if(await fn())return;aw
   await page.goto(base+'/?section=media&lang=en&theme=dark');
   const card=page.locator('[data-video-item="'+itemID+'"]');
   await until(()=>card.locator('[data-video-poster-image]').evaluate(image=>image.naturalWidth===64&&!image.hidden),'cached poster displayed');
-  assert.equal(state.ensures,1);assert.equal(state.media,0);assert.equal(await card.locator('video').getAttribute('src'),null);assert((await card.locator('video').getAttribute('poster')).endsWith('/ui/media/'+hash));
+  assert.equal(await card.locator('[data-video-thumbnail-load]').isVisible(),false,'default previews must not need a Load action');assert.equal(state.ensures,1);assert.equal(state.media,0);assert.equal(await card.locator('video').getAttribute('src'),null);assert((await card.locator('video').getAttribute('poster')).endsWith('/ui/media/'+hash));
   await page.screenshot({path:path.join(__dirname,'artifacts/video-thumbnail.png')});
   await page.reload();await until(()=>card.locator('[data-video-poster-image]').evaluate(image=>image.naturalWidth===64),'poster reused after reload');assert.equal(state.ensures,1);assert.equal(state.media,0);
+  for(const width of [390,1211,1440])for(const theme of ['light','dark']){
+   await page.setViewportSize({width,height:900});await page.goto(base+'/?section=media&lang=en&theme='+theme);
+   await until(()=>page.locator('.oie-shared-item .oie-preview-thumbnail').evaluate(image=>image.naturalWidth===64),'image preview ready');
+   const sizes=await page.evaluate(()=>{const rect=selector=>{const r=document.querySelector(selector).getBoundingClientRect();return{width:r.width,height:r.height}};return{image:rect('.oie-shared-item .oie-image-preview'),video:rect('.oie-shared-item .oie-video-stage'),overflow:document.documentElement.scrollWidth>innerWidth}});
+   assert(Math.abs(sizes.image.width-sizes.video.width)<1,JSON.stringify({width,theme,sizes}));assert(Math.abs(sizes.image.height-sizes.video.height)<1,JSON.stringify({width,theme,sizes}));assert(Math.abs(sizes.image.width/sizes.image.height-4/3)<.01,JSON.stringify(sizes));assert.equal(sizes.overflow,false);assert.equal(state.ensures,1,'cached catalog posters must not queue again');assert.equal(state.media,0,'uniform previews must not load the original video');
+   const frame=await card.locator('.oie-video-stage').boundingBox();await card.locator('[data-video-play]').click();await until(()=>card.locator('video').evaluate(video=>video.videoWidth===64&&video.currentTime>0.05),'matrix native playback');const playing=await card.locator('.oie-video-stage').boundingBox();assert(Math.abs(frame.height-playing.height)<1,'playback must retain the gallery frame');state.media=0;
+  }
+  await page.setViewportSize({width:1100,height:850});await page.goto(base+'/?section=media&lang=en&theme=dark');
   await card.locator('[data-video-play]').click();await until(()=>card.locator('video').evaluate(video=>video.videoWidth===64&&video.currentTime>0.05),'explicit native playback');assert(state.media>0);
   await context.close();
   state.status='not_requested';state.ensures=0;state.media=0;
@@ -72,8 +81,8 @@ async function until(fn, label) { for(let n=0;n<180;n++){if(await fn())return;aw
   await phone.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await phone.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);
   await manual.close();
   state.status='unavailable';state.ensures=0;
-  const failed=await browser.newContext({viewport:{width:1100,height:850}}),failurePage=await failed.newPage();await failurePage.goto(base+'/?section=media&lang=en');await sleep(400);assert.equal(state.ensures,0,'failed previews must not retry just because a route opens');
+  const failed=await browser.newContext({viewport:{width:1100,height:850}}),failurePage=await failed.newPage();await failurePage.goto(base+'/?section=media&lang=en');await sleep(400);assert.equal(state.ensures,0,'failed previews must not retry just because a route opens');assert.equal((await failurePage.locator('[data-video-thumbnail-load]').textContent()).trim(),'Try again');assert.match(await failurePage.locator('[data-video-thumbnail-status]').textContent(),/unavailable/);const failedStage=await failurePage.locator('.oie-video-stage').boundingBox(),failedImage=await failurePage.locator('.oie-image-preview').boundingBox();assert(Math.abs(failedStage.height-failedImage.height)<1,'failure must retain the common preview frame');
   await failurePage.locator('[data-video-thumbnail-load]').click();await until(()=>failurePage.locator('[data-video-poster-image]').evaluate(image=>image.naturalWidth===64),'explicit failed-preview retry');assert.equal(state.ensures,1);await failed.close();
-  assert.deepEqual(errors,[]);console.log('PASS: demand-bounded posters, cached reload, explicit playback, per-device opt-out/manual keyboard load, failed-preview retry and mobile accessibility');
+  assert.deepEqual(errors,[]);console.log('PASS: default automatic previews, uniform 4:3 image/video frames, stable playback, cache reuse, manual opt-out, failed-preview retry and mobile accessibility');
  }catch(error){console.error(log);throw error}finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(resolve=>api.close(resolve))}
 })().catch(error=>{console.error(error);process.exitCode=1});

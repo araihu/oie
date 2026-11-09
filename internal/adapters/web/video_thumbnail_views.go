@@ -23,3 +23,10 @@ func videoThumbnailState(item engineapi.SharedContentItem) string {
 	}
 	return string(p.State)
 }
+
+func videoThumbnailActionLabel(v view, item engineapi.SharedContentItem) string {
+	if videoThumbnailState(item) == "unavailable" {
+		return v.Text.Retry
+	}
+	return v.Text.VideoThumbnailLoad
+}

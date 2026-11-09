@@ -13,6 +13,7 @@ window.OieRuntime.register('video-thumbnails', life => {
  let automatic=true;try{automatic=localStorage.getItem(preference)!=='false'}catch{automatic=window.OieRuntime.memory.get(preference)!==false}
  function controls(card,failed=false){const container=card.querySelector('[data-video-thumbnail-controls]');if(container&&card.hasAttribute('data-video-compact'))container.hidden=!!card.dataset.videoPoster||automatic&&card.dataset.videoThumbnailState!=='unavailable'&&!failed}
  function preferences(){for(const control of document.querySelectorAll('[data-auto-video-thumbnails]'))control.checked=automatic;for(const card of cards())controls(card)}
+ function actionLabel(card,failed){const button=card.querySelector('[data-video-thumbnail-load]');if(!button)return;const label=failed?button.dataset.thumbnailRetryLabel:button.dataset.thumbnailLoadLabel;const text=button.querySelector('[data-video-thumbnail-action-label]');if(text)text.textContent=label;else button.textContent=label;button.setAttribute('aria-label',label);button.title=failed?card.dataset.videoThumbnailFailed+' '+label:label;}
  function message(card,value){const region=card.querySelector('[data-video-thumbnail-status]');if(region){region.textContent=value;region.hidden=!value}}
  function validate(p,card){return p&&p.kind==='video'&&p.sharedContentId===card.dataset.videoItem&&[p.id,p.revisionId,p.sharedContentId,p.accountId,p.conversationId,p.messageId].every(uuid)&&p.accountId===card.dataset.videoAccount&&p.conversationId===card.dataset.videoConversation&&p.messageId===card.dataset.videoMessage&&['not_requested','queued','ready','unavailable'].includes(p.state)&&(!p.imageHash||hash(p.imageHash))}
  function apply(p){for(const card of same(p.sharedContentId)){
@@ -23,9 +24,9 @@ window.OieRuntime.register('video-thumbnails', life => {
   const image=card.querySelector('[data-video-poster-image]');if(image){if(poster){image.src=poster;image.hidden=false}else{image.removeAttribute('src');image.hidden=true}}
   const player=card.querySelector('[data-video-player]');if(player&&poster)player.poster=poster;
   const button=card.querySelector('[data-video-thumbnail-load]');if(button){button.hidden=!!poster||p.state==='queued';button.disabled=p.state==='queued'}
-  controls(card);message(card,p.state==='queued'?card.dataset.videoThumbnailLoading:p.state==='unavailable'?card.dataset.videoThumbnailFailed:'');
+  actionLabel(card,p.state==='unavailable');controls(card);message(card,p.state==='queued'?card.dataset.videoThumbnailLoading:p.state==='unavailable'?card.dataset.videoThumbnailFailed:'');
  }}
- function fail(item){for(const card of same(item)){controls(card,true);message(card,card.dataset.videoThumbnailFailed);const button=card.querySelector('[data-video-thumbnail-load]');if(button){button.hidden=false;button.disabled=false}}}
+ function fail(item){for(const card of same(item)){actionLabel(card,true);controls(card,true);message(card,card.dataset.videoThumbnailFailed);const button=card.querySelector('[data-video-thumbnail-load]');if(button){button.hidden=false;button.disabled=false}}}
  async function request(card,manual=false){
   const item=card.dataset.videoItem;if(!uuid(item)||card.dataset.videoEngine!==engine||active.has(item)||!manual&&(requested.has(item)||card.dataset.videoThumbnailState==='unavailable')||card.dataset.videoPoster)return;
   requested.add(item);const token={};active.set(item,token);message(card,card.dataset.videoThumbnailLoading);
@@ -52,7 +53,7 @@ window.OieRuntime.register('video-thumbnails', life => {
  }
  const observed=new WeakSet(),near=new Set();
  const observer=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting){near.add(entry.target);const card=entry.target,item=card.dataset.videoItem;if(card.dataset.videoThumbnailState==='queued'&&!active.has(item)){const token={};active.set(item,token);poll(item,token,card,0)}else if(automatic)request(card)}else near.delete(entry.target)}},{rootMargin:'100px'});
- function observe(){for(const card of cards())if(!observed.has(card)){observed.add(card);controls(card);observer.observe(card);const p=card.dataset.videoPoster;if(/^\/ui\/media\/[0-9a-f]{64}$/.test(p||''))card.querySelector('[data-video-player]')?.setAttribute('poster',p)}}
+ function observe(){for(const card of cards())if(!observed.has(card)){observed.add(card);const failed=card.dataset.videoThumbnailState==='unavailable';actionLabel(card,failed);if(failed)message(card,card.dataset.videoThumbnailFailed);controls(card);observer.observe(card);const p=card.dataset.videoPoster;if(/^\/ui\/media\/[0-9a-f]{64}$/.test(p||''))card.querySelector('[data-video-player]')?.setAttribute('poster',p)}}
  const changes=new MutationObserver(observe);changes.observe(document.querySelector('#oie-app')||document.body,{childList:true,subtree:true});
  life.on(document,'click',event=>{const button=event.target.closest('[data-video-thumbnail-load]');if(!button)return;event.preventDefault();request(button.closest('[data-video-item]'),true)});
  life.on(document,'change',event=>{if(!event.target.matches('[data-auto-video-thumbnails]'))return;automatic=event.target.checked;window.OieRuntime.memory.set(preference,automatic);try{localStorage.setItem(preference,String(automatic))}catch{}preferences();if(automatic)for(const card of near)if(card.isConnected)request(card)});
