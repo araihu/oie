@@ -34,3 +34,17 @@ response bodies in the pinned release, which would interrupt long media and
 live-event streams. The browser talks directly to the BFF's normal HTTP server.
 See the [Air configuration and proxy documentation](https://github.com/air-verse/air/tree/v1.67.4)
 for the upstream tool's behavior.
+
+## Overlapping rebuilds
+
+On 2026-11-09, several overlapping builds started two BFF processes. One kept
+port 8080 while subsequent launches failed with `address already in use`.
+The surviving process was still Air's direct child. Inspection of the pinned
+runner suggests a race in its shared build and process handles; changing shell
+`exec` or Go's shutdown timeout would not address that ownership problem.
+
+The preview was recovered by verifying and gracefully stopping only the stale
+BFF, then triggering a new source rebuild. The engine stayed running. A later
+automatic reload with an open event stream passed. This recovery does not fix
+Air's overlapping-build race. Coalescing rapid edits may reduce its frequency;
+an upstream ownership fix remains development-tool follow-up work.
