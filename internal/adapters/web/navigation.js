@@ -33,7 +33,7 @@
  function fragment(kind){return kind==='conversation-pane'?'conversation':kind==='chat-info-content'?'info':'app';}
  function showError(){const region=document.querySelector('[data-navigation-status]');if(region){region.textContent=app()?.dataset.routeError||'';region.hidden=false}}
  function upgrade(root=document){if(!root)return;for(const node of root.querySelectorAll('a[href],form')){
-  if(node.matches('a[download],a[target]:not([target="_self"])')||node.hasAttribute('hx-get')||node.hasAttribute('hx-post'))continue;
+  if(node.matches('[data-global-search-form],a[download],a[target]:not([target="_self"])')||node.hasAttribute('hx-get')||node.hasAttribute('hx-post'))continue;
   const form=node.tagName==='FORM';if(form&&(node.method||'get').toLowerCase()!=='get')continue;
   let url;try{url=new URL(form?node.action:node.href,location.href)}catch{continue}
   if(url.origin!==location.origin||!['/','/search'].includes(url.pathname)||(!form&&(node.getAttribute('href')||'').startsWith('#')))continue;

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	nethtml "golang.org/x/net/html"
 )
 
 func searchTestPage() engineapi.MessageSearchPage {
@@ -276,5 +277,95 @@ func TestLiveRefreshDoesNotRequeryGlobalSearch(t *testing.T) {
 	ui.ServeHTTP(w, httptest.NewRequest("GET", "/ui/refresh?searchMode=messages&searchQuery=needle", nil))
 	if w.Code != 200 {
 		t.Fatalf("live refresh failed: %d", w.Code)
+	}
+}
+
+func TestUnifiedGlobalFormSubmitsNativeScopedSearch(t *testing.T) {
+	catalogs, err := loadCatalogs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := view{Section: "chats", Filter: "all", AccountFilter: testAccount, Locale: "en", Theme: "light", Text: catalogs["en"], EngineID: testEngine, MessageSearch: messageSearchView{Limit: 30, State: "blank"}}
+	var markup strings.Builder
+	if err := workspace(v).Render(presentationContext(t.Context(), v), &markup); err != nil {
+		t.Fatal(err)
+	}
+	document, err := nethtml.Parse(strings.NewReader(markup.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	attr := func(n *nethtml.Node, key string) string {
+		for _, a := range n.Attr {
+			if a.Key == key {
+				return a.Val
+			}
+		}
+		return ""
+	}
+	var form *nethtml.Node
+	var findForm func(*nethtml.Node)
+	findForm = func(n *nethtml.Node) {
+		if n.Type == nethtml.ElementNode && n.Data == "form" && attr(n, "id") == "conversation-filter-form" {
+			form = n
+			return
+		}
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
+			findForm(child)
+		}
+	}
+	findForm(document)
+	if form == nil || attr(form, "action") != "/search" || attr(form, "method") != "get" {
+		t.Fatal("the only global field did not reach the unified native search")
+	}
+	values := url.Values{}
+	var fields func(*nethtml.Node)
+	fields = func(n *nethtml.Node) {
+		if n.Type == nethtml.ElementNode && n.Data == "input" && attr(n, "name") != "" {
+			values.Set(attr(n, "name"), attr(n, "value"))
+		}
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
+			fields(child)
+		}
+	}
+	fields(form)
+	values.Set("q", "needle")
+	if values.Get("accountId") != testAccount {
+		t.Fatal("native global search lost the current account scope")
+	}
+	searches := 0
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Errorf("native search caused an API write: %s %s", r.Method, r.URL)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/engine":
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": testEngine, "role": "hosted", "apiVersion": "0.22.0", "eventCursor": testEngine + ":0"})
+		case "/api/v1/accounts", "/api/v1/conversations":
+			_, _ = w.Write([]byte(`{"items":[]}`))
+		case "/api/v1/contacts":
+			_ = json.NewEncoder(w).Encode(engineapi.ContactPage{Items: []engineapi.Contact{}, Sources: []engineapi.ContactSource{{AccountId: testAccount, State: "known"}}})
+		case "/api/v1/messages/search":
+			searches++
+			if r.URL.Query().Get("q") != "needle" || r.URL.Query().Get("accountId") != testAccount {
+				t.Errorf("native search changed the submitted query/scope: %s", r.URL)
+			}
+			page := searchTestPage()
+			page.AccountId = &v.AccountFilter
+			_ = json.NewEncoder(w).Encode(page)
+		default:
+			t.Errorf("native search attempted an unrelated operation: %s", r.URL)
+			w.WriteHeader(500)
+		}
+	}))
+	defer backend.Close()
+	ui, err := New(backend.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	ui.ServeHTTP(response, httptest.NewRequest("GET", attr(form, "action")+"?"+values.Encode(), nil))
+	if response.Code != 200 || searches != 1 || !strings.Contains(response.Body.String(), `data-search-account="`+testAccount+`"`) || !strings.Contains(response.Body.String(), `data-message-search-hit="`) {
+		t.Fatalf("native form did not render scoped message results: status%d searches%d %s", response.Code, searches, response.Body.String())
 	}
 }
