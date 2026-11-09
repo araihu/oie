@@ -55,5 +55,8 @@ func sharedActions(v view, item engineapi.SharedContentItem) []dropdown.Section 
 	if item.Kind == "link" && sharedActionPreview(item) != "" {
 		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "refresh"), Label: v.Text.RefreshPreview, OnClick: "void 0", Icon: glyph(heroicons.Icon16SolidArrowPath), Disabled: item.Preview.State == "queued"})
 	}
+	if item.Kind == "video" && videoThumbnailState(item) != "" && videoPoster(item) == "" {
+		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "thumbnail"), Label: videoThumbnailActionLabel(v, item), OnClick: "void 0", Icon: glyph(heroicons.Icon16SolidArrowPath)})
+	}
 	return []dropdown.Section{{Items: items}}
 }

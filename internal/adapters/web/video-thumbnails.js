@@ -11,9 +11,10 @@ window.OieRuntime.register('video-thumbnails', life => {
   try{const response=await life.fetch(url,{...options,signal:controller.signal});const text=await response.text();if(text.length>32768)throw Error('thumbnail_invalid');return {ok:response.ok,data:JSON.parse(text)}}finally{clearTimeout(timer)}
  }
  let automatic=true;try{automatic=localStorage.getItem(preference)!=='false'}catch{automatic=window.OieRuntime.memory.get(preference)!==false}
- function controls(card,failed=false){const container=card.querySelector('[data-video-thumbnail-controls]');if(container&&card.hasAttribute('data-video-compact'))container.hidden=!!card.dataset.videoPoster||automatic&&card.dataset.videoThumbnailState!=='unavailable'&&!failed}
+ function menuAction(card){return card.closest('[data-shared-item]')?.querySelector('[id^="shared-thumbnail-"]')}
+ function controls(card,failed=false){const button=menuAction(card);if(button){button.hidden=!!card.dataset.videoPoster;button.disabled=!failed&&(active.has(card.dataset.videoItem)||card.dataset.videoThumbnailState==='queued')}}
  function preferences(){for(const control of document.querySelectorAll('[data-auto-video-thumbnails]'))control.checked=automatic;for(const card of cards())controls(card)}
- function actionLabel(card,failed){const button=card.querySelector('[data-video-thumbnail-load]');if(!button)return;const label=failed?button.dataset.thumbnailRetryLabel:button.dataset.thumbnailLoadLabel;const text=button.querySelector('[data-video-thumbnail-action-label]');if(text)text.textContent=label;else button.textContent=label;button.setAttribute('aria-label',label);button.title=failed?card.dataset.videoThumbnailFailed+' '+label:label;}
+ function actionLabel(card,failed){for(const button of [card.querySelector('[data-video-thumbnail-load]'),menuAction(card)]){if(!button)continue;const label=failed?card.dataset.thumbnailRetryLabel:card.dataset.thumbnailLoadLabel;const text=button.querySelector('[data-video-thumbnail-action-label],span.block');if(text)text.textContent=label;else button.textContent=label;button.setAttribute('aria-label',label);button.title=failed?card.dataset.videoThumbnailFailed+' '+label:label;}}
  function message(card,value){const region=card.querySelector('[data-video-thumbnail-status]');if(region){region.textContent=value;region.hidden=!value}}
  function validate(p,card){return p&&p.kind==='video'&&p.sharedContentId===card.dataset.videoItem&&[p.id,p.revisionId,p.sharedContentId,p.accountId,p.conversationId,p.messageId].every(uuid)&&p.accountId===card.dataset.videoAccount&&p.conversationId===card.dataset.videoConversation&&p.messageId===card.dataset.videoMessage&&['not_requested','queued','ready','unavailable'].includes(p.state)&&(!p.imageHash||hash(p.imageHash))}
  function apply(p){for(const card of same(p.sharedContentId)){
@@ -26,10 +27,10 @@ window.OieRuntime.register('video-thumbnails', life => {
   const button=card.querySelector('[data-video-thumbnail-load]');if(button){button.hidden=!!poster||p.state==='queued';button.disabled=p.state==='queued'}
   actionLabel(card,p.state==='unavailable');controls(card);message(card,p.state==='queued'?card.dataset.videoThumbnailLoading:p.state==='unavailable'?card.dataset.videoThumbnailFailed:'');
  }}
- function fail(item){for(const card of same(item)){actionLabel(card,true);controls(card,true);message(card,card.dataset.videoThumbnailFailed);const button=card.querySelector('[data-video-thumbnail-load]');if(button){button.hidden=false;button.disabled=false}}}
+ function fail(item){for(const card of same(item)){card.dataset.videoThumbnailState="unavailable";actionLabel(card,true);controls(card,true);message(card,card.dataset.videoThumbnailFailed);const button=card.querySelector('[data-video-thumbnail-load]');if(button){button.hidden=false;button.disabled=false}}}
  async function request(card,manual=false){
   const item=card.dataset.videoItem;if(!uuid(item)||card.dataset.videoEngine!==engine||active.has(item)||!manual&&(requested.has(item)||card.dataset.videoThumbnailState==='unavailable')||card.dataset.videoPoster)return;
-  requested.add(item);const token={};active.set(item,token);message(card,card.dataset.videoThumbnailLoading);
+  requested.add(item);const token={};active.set(item,token);for(const current of same(item))controls(current);message(card,card.dataset.videoThumbnailLoading);
   try{
    const body=new URLSearchParams({csrf,engineId:engine,itemId:item,returnTo:location.pathname+location.search});
    const response=await jsonRequest('/ui/videos/thumbnail',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json'},body});
@@ -38,7 +39,7 @@ window.OieRuntime.register('video-thumbnails', life => {
    apply(result.thumbnail);
    if(result.thumbnail.state==='queued'){poll(item,token,card,0);return}
   }catch{if(!life.signal.aborted)fail(item)}
-  if(active.get(item)===token)active.delete(item);
+  if(active.get(item)===token)active.delete(item);for(const current of same(item))controls(current);
  }
  async function poll(item,token,origin,attempt){
   if(life.signal.aborted||active.get(item)!==token)return;
@@ -47,7 +48,7 @@ window.OieRuntime.register('video-thumbnails', life => {
    const response=await jsonRequest('/api/v1/shared-content/'+item+'/thumbnail',{credentials:'same-origin',cache:'no-store',headers:{'X-Oie-Engine-ID':engine}});
    const p=response.data;if(life.signal.aborted||active.get(item)!==token)return;
    if(!response.ok||!validate(p,origin))throw Error('thumbnail_unavailable');apply(p);
-   if(p.state!=='queued'){active.delete(item);return}
+   if(p.state!=='queued'){active.delete(item);for(const current of same(item))controls(current);return}
   }catch{if(!life.signal.aborted){active.delete(item);fail(item)}return}
   life.timeout(()=>poll(item,token,origin,attempt+1),1000);
  }
@@ -55,7 +56,7 @@ window.OieRuntime.register('video-thumbnails', life => {
  const observer=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting){near.add(entry.target);const card=entry.target,item=card.dataset.videoItem;if(card.dataset.videoThumbnailState==='queued'&&!active.has(item)){const token={};active.set(item,token);poll(item,token,card,0)}else if(automatic)request(card)}else near.delete(entry.target)}},{rootMargin:'100px'});
  function observe(){for(const card of cards())if(!observed.has(card)){observed.add(card);const failed=card.dataset.videoThumbnailState==='unavailable';actionLabel(card,failed);if(failed)message(card,card.dataset.videoThumbnailFailed);controls(card);observer.observe(card);const p=card.dataset.videoPoster;if(/^\/ui\/media\/[0-9a-f]{64}$/.test(p||''))card.querySelector('[data-video-player]')?.setAttribute('poster',p)}}
  const changes=new MutationObserver(observe);changes.observe(document.querySelector('#oie-app')||document.body,{childList:true,subtree:true});
- life.on(document,'click',event=>{const button=event.target.closest('[data-video-thumbnail-load]');if(!button)return;event.preventDefault();request(button.closest('[data-video-item]'),true)});
+ life.on(document,'click',event=>{const button=event.target.closest('[data-video-thumbnail-load],[id^="shared-thumbnail-"]');if(!button||button.disabled)return;const card=button.closest('[data-video-item]')||button.closest('[data-shared-item]')?.querySelector('[data-video-item]');if(!card)return;event.preventDefault();button.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));request(card,true)});
  life.on(document,'change',event=>{if(!event.target.matches('[data-auto-video-thumbnails]'))return;automatic=event.target.checked;window.OieRuntime.memory.set(preference,automatic);try{localStorage.setItem(preference,String(automatic))}catch{}preferences();if(automatic)for(const card of near)if(card.isConnected)request(card)});
  life.on(window,'storage',event=>{if(event.key!==preference)return;automatic=event.newValue!=='false';preferences();if(automatic)for(const card of near)if(card.isConnected)request(card)});
  life.cleanup(()=>{observer.disconnect();changes.disconnect();near.clear();active.clear()});preferences();observe();

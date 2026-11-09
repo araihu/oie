@@ -11,7 +11,7 @@ import (
 // Native controls receive a same-origin source only after an explicit gesture.
 // Initial markup has neither src nor source children, including in galleries.
 templ videoCard(v view,item engineapi.SharedContentItem){
-<section class="oie-video-card" data-video-compact?={v.Section=="media"||v.SharedInDetails} data-video-thumbnail-state={videoThumbnailState(item)} data-video-poster={videoPoster(item)} data-video-thumbnail-loading={v.Text.VideoThumbnailLoading} data-video-thumbnail-failed={v.Text.VideoThumbnailFailed} data-video-item={item.Id} data-video-engine={v.EngineID} data-video-account={item.Message.AccountId} data-video-conversation={item.Message.ConversationId} data-video-message={item.Message.Id} data-video-source={"/ui/shared-content/"+item.Id+"/content?engineId="+v.EngineID} data-video-loading={v.Text.VideoLoading} data-video-playing={v.Text.VideoPlaying} data-video-paused={v.Text.VideoPaused} data-video-ready={v.Text.VideoReady} data-video-unavailable={v.Text.VideoUnavailable} data-video-unsupported={v.Text.VideoUnsupported}>
+<section class="oie-video-card" data-video-compact?={v.Section=="media"||v.SharedInDetails} data-video-thumbnail-state={videoThumbnailState(item)} data-video-poster={videoPoster(item)} data-thumbnail-load-label={v.Text.VideoThumbnailLoad} data-thumbnail-retry-label={v.Text.Retry} data-video-thumbnail-loading={v.Text.VideoThumbnailLoading} data-video-thumbnail-failed={v.Text.VideoThumbnailFailed} data-video-item={item.Id} data-video-engine={v.EngineID} data-video-account={item.Message.AccountId} data-video-conversation={item.Message.ConversationId} data-video-message={item.Message.Id} data-video-source={"/ui/shared-content/"+item.Id+"/content?engineId="+v.EngineID} data-video-loading={v.Text.VideoLoading} data-video-playing={v.Text.VideoPlaying} data-video-paused={v.Text.VideoPaused} data-video-ready={v.Text.VideoReady} data-video-unavailable={v.Text.VideoUnavailable} data-video-unsupported={v.Text.VideoUnsupported}>
 if v.Section=="media"||v.SharedInDetails {
 @panel.Panel(panel.Config{Body:videoGalleryMedia(v,item),BodyClass:"oie-video-media",Appearance:panel.AppearancePlain,Density:panel.DensityCompact,RootClass:"oie-video-surface"})
 }else{
@@ -49,13 +49,12 @@ if v.Section!="media" && !v.SharedInDetails {
 
 
 templ videoThumbnailControls(v view,item engineapi.SharedContentItem){
-<div data-video-thumbnail-controls hidden?={v.Section=="media"||v.SharedInDetails}>
+<div data-video-thumbnail-controls if v.Section=="media"||v.SharedInDetails {class="sr-only"}>
 <p data-video-thumbnail-status role="status" aria-live="polite" hidden if v.Section=="media"||v.SharedInDetails {class="sr-only"}></p>
+if v.Section!="media" && !v.SharedInDetails {
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithRootClass("oie-video-thumbnail-action"),button.WithAttrs(templ.Attributes{"aria-label":videoThumbnailActionLabel(v,item),"title":videoThumbnailActionLabel(v,item),"data-video-thumbnail-load":"","data-thumbnail-load-label":v.Text.VideoThumbnailLoad,"data-thumbnail-retry-label":v.Text.Retry,"hidden":videoThumbnailState(item)==""||videoPoster(item)!=""})){
-if v.Section=="media"||v.SharedInDetails {
-@glyph(heroicons.Icon16SolidArrowPath)
+<span data-video-thumbnail-action-label>{videoThumbnailActionLabel(v,item)}</span>
 }
-<span data-video-thumbnail-action-label if v.Section=="media"||v.SharedInDetails {class="sr-only"}>{videoThumbnailActionLabel(v,item)}</span>
 }
 </div>
 }

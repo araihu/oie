@@ -20,9 +20,4 @@
 
 [data-video-thumbnail-controls][hidden]{display:none}.oie-video-card[data-video-compact] [data-video-thumbnail-controls]:not([hidden]){padding:10px}
 
-/* Manual and failed-preview actions stay within the shared media frame. */
-.oie-video-card[data-video-compact]{position:relative}
-.oie-video-card[data-video-compact] [data-video-thumbnail-controls]:not([hidden]){position:absolute;inset-inline-start:8px;top:8px;z-index:2;padding:0;display:flex}
-.oie-video-card[data-video-compact] .oie-video-thumbnail-action{width:28px;height:28px;min-width:28px;min-height:28px;padding:5px;border:1px solid #ffffff80;border-radius:50%;background:#000b;color:#fff}
-.oie-video-card[data-video-compact] .oie-video-thumbnail-action:hover{background:#000e;color:#fff}
-.oie-video-thumbnail-action .oie-icon{width:16px;height:16px}
+.oie-shared-actions [id^="shared-thumbnail-"][hidden]{display:none}
