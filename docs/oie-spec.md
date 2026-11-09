@@ -290,6 +290,8 @@ Search matches the latest message revision by default. **Include edit history** 
 
 Allow media sharing when effective protocol/server capabilities permit. Expose known upload limits and meaningful transfer errors through the uniform API.
 
+**AGREED:** pasting clipboard images/files into the active conversation, or dragging and dropping files onto its chat pane, starts media-message composition. Open an attachment preview where the user can add a caption, remove selected files, or cancel, preserving any existing text draft. Ordinary text paste keeps its normal composer behavior. Pasting or dropping files never sends a message automatically; sending requires explicit activation of Send. Respect the selected account/conversation's effective capabilities and known upload limits, with clear feedback when attachments cannot be sent. Upload staging and multi-attachment delivery semantics remain open under O09.
+
 Incoming images **download automatically as they enter view** by default, configurable per device. Turning automatic image downloads off keeps supplied small previews automatic and full originals on demand; in that mode, do not download an original merely to generate a thumbnail. Other file types keep small previews automatic and full files on demand.
 
 Downloaded-file retention is configurable per device and defaults to **retain until explicit deletion**. The PWA's evictable message cache is a separate policy; it does not silently authorize downloaded-original eviction.
