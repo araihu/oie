@@ -527,6 +527,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 				} `xml:"items"`
 			} `xml:"http://jabber.org/protocol/pubsub#event event"`
 			Delay struct {
+				From  string `xml:"from,attr"`
 				Stamp string `xml:"stamp,attr"`
 			} `xml:"urn:xmpp:delay delay"`
 		}
@@ -573,7 +574,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			return m.host.Reject(ctx, application.Rejected{AccountID: e.account.ID, MessageID: msg.ID, Address: address, FromServer: fromServer, FromParticipant: msg.From.Resourcepart() != ""})
 		}
 		if msg.Type == stanza.GroupChatMessage {
-			return m.receiveRoomMessage(ctx, e, msg.Message, msg.replyMetadata, msg.Body, msg.Delay.Stamp, msg.fileSharingMetadata, msg.correctionMetadata)
+			return m.receiveRoomMessage(ctx, e, msg.Message, msg.replyMetadata, msg.Body, msg.Delay.Stamp, msg.Delay.From, msg.fileSharingMetadata, msg.correctionMetadata)
 		}
 		if msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage {
 			return nil

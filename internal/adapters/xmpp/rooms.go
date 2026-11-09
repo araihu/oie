@@ -427,7 +427,7 @@ func (m *Manager) resetRoomSessions(ctx context.Context, e *entry, s *mx.Session
 	}
 }
 
-func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.Message, meta replyMetadata, body, stamp string, files fileSharingMetadata, operations ...correctionMetadata) error {
+func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.Message, meta replyMetadata, body, stamp, delayFrom string, files fileSharingMetadata, operations ...correctionMetadata) error {
 	if strings.TrimSpace(body) == "" || msg.From.Localpart() == "" || msg.From.Resourcepart() == "" {
 		return nil
 	}
@@ -461,14 +461,19 @@ func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.M
 		provider = string(canonical)
 	}
 	created := time.Now().UTC()
+	historical := false
 	if delayed, err := time.Parse(time.RFC3339Nano, stamp); err == nil {
 		created = delayed.UTC()
+		// XEP-0045 room history is stamped by the room itself. A timestamp
+		// alone also occurs on other delayed traffic and is not proof of history.
+		from, parseErr := jid.Parse(delayFrom)
+		historical = parseErr == nil && from.Resourcepart() == "" && from.Equal(msg.From.Bare())
 	}
 	var correction *domain.MessageCorrection
 	if len(operations) == 1 {
 		correction = decodeCorrectionMetadata(operations[0], msg, true, occupantVerified)
 	}
-	err := m.host.Receive(ctx, application.Incoming{MediaThumbnails: decodeFileThumbnails(files), AccountID: e.account.ID, Address: address, Kind: "room", SenderName: msg.From.Resourcepart(), ProviderID: provider, OriginalText: body, CreatedAt: created, IsOwn: own, References: refs, Reply: reply, CanonicalID: canonical, Correction: correction})
+	err := m.host.Receive(ctx, application.Incoming{MediaThumbnails: decodeFileThumbnails(files), AccountID: e.account.ID, Address: address, Kind: "room", SenderName: msg.From.Resourcepart(), ProviderID: provider, OriginalText: body, CreatedAt: created, Historical: historical, IsOwn: own, References: refs, Reply: reply, CanonicalID: canonical, Correction: correction})
 	if errors.Is(err, application.ErrInvalid) {
 		return nil
 	}
