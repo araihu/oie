@@ -24,6 +24,17 @@ over-budget documents keep a filename and icon that still open the viewer.
 Each PDF serializes its range reads, so PDF.js request bursts cannot exhaust
 the engine's four concurrent media readers while two previews are active.
 
+Generated first-page PDF previews are cached as PNG thumbnails in IndexedDB.
+Keys include engine, account, conversation, source message/catalog revisions,
+source address, pixel density and renderer version. Reusing a valid thumbnail
+performs no PDF range reads or PDF.js page rendering. The persistent cache uses
+LRU eviction with 64 entries, 16 MiB and seven-day expiry; a separate memory
+fallback holds at most 16 entries and 4 MiB. Storage failures leave preview
+rendering usable. Invalid thumbnails are discarded and regenerated through the
+existing bounded reader. These disposable caches contain no original PDF bytes
+and do not change downloaded-original retention. Opening the full viewer still
+reads the original independently of the preview cache.
+
 Opening the viewer explicitly starts its independent original-file read.
 Text is limited to 2 MiB and PDF to 100 MiB. The engine
 checks the retained canonical reference, extension, media type and complete
@@ -135,3 +146,19 @@ The Dagger run completed checks, race tests and application/CLI/mock builds in
 the remote engine logs. Its client timed out after 180 seconds with exit 124,
 so this is not a successful client completion. Evidence is recorded in
 `/tmp/oie-markdown-dagger.log` and `/tmp/oie-markdown-dagger-remote.log`.
+
+The PDF preview-cache increment passes `make check` and the document browser
+suite, including an index-only source build. Browser checks cover fragment and
+reload reuse without PDF range reads, account/revision isolation, corrupt PNG
+recovery, byte/count/expiry eviction and storage-denied memory fallback. The
+existing viewer, PDF, Markdown, download and accessibility checks still pass.
+Read-only inspection of the real shared PDF confirms identical cached pixels
+and zero additional source reads after reload and fragment navigation. Logs
+are `/tmp/oie-pdf-preview-cache-browser.log`,
+`/tmp/oie-pdf-preview-cache-index-browser.log` and
+`/tmp/oie-pdf-preview-cache-live.log`.
+
+Dagger's engine completed checks, race tests and application/CLI/mock builds.
+The client timed out after 180 seconds with exit 124, so CLI completion is not
+claimed. Evidence is `/tmp/oie-pdf-preview-cache-dagger.log` and
+`/tmp/oie-pdf-preview-cache-dagger-remote.log`.

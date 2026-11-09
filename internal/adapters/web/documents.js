@@ -15,7 +15,7 @@ window.OieRuntime.register('documents', life => {
   let source;try{source=new URL(data.documentSource,location.href)}catch{return null}
   if(source.origin!==location.origin||source.pathname!=='/ui/shared-content/'+data.documentItem+'/content'||source.username||source.password||source.hash||source.searchParams.get('engineId')!==data.documentEngine||[...source.searchParams.keys()].length!==1)return null;
   let original='';try{const url=new URL(data.documentUrl);if(['http:','https:'].includes(url.protocol)&&!url.username&&!url.password)original=url.href}catch{}
-  return {id:data.documentItem,engine:data.documentEngine,format:data.documentFormat,filename:data.documentFilename||labels.page||'',source:source.pathname+source.search,original};
+  return {id:data.documentItem,engine:data.documentEngine,account:data.documentAccount,conversation:data.documentConversation,message:data.documentMessage,revision:data.documentRevision,messageRevision:data.documentMessageRevision,format:data.documentFormat,filename:data.documentFilename||labels.page||'',source:source.pathname+source.search,original};
  }
  function failure(unsupported=false){text.hidden=true;markdown.hidden=true;sheet.hidden=true;controls.hidden=true;feedback(unsupported?'unsupported':'failed','failed');retry.hidden=!current||current.format==='unsupported'}
  function decode(bytes){
@@ -61,6 +61,54 @@ window.OieRuntime.register('documents', life => {
    }text.textContent=body;text.hidden=false;feedback(body?'':'empty','ready')}catch(error){if(token===generation&&!life.signal.aborted&&error.name!=='AbortError')failure(['encoding','large'].includes(error.message))}
   }
  }
+ // Keep only generated PNG thumbnails, never original PDF bytes. Runtime memory
+ // survives fragment navigation; IndexedDB also survives document reloads.
+ const cacheName='oie.pdf-previews.v1',cacheStore='thumbnails',cacheTTL=7*24*60*60*1000;
+ const cache=window.OieRuntime.memory.get(cacheName)||{entries:new Map(),bytes:0,database:null};window.OieRuntime.memory.set(cacheName,cache);
+ function validThumbnail(entry){return entry&&entry.blob instanceof Blob&&entry.blob.type==='image/png'&&entry.blob.size>0&&entry.blob.size<=1024*1024&&Number.isFinite(entry.createdAt)&&entry.createdAt<=Date.now()&&Date.now()-entry.createdAt<cacheTTL&&Number.isFinite(entry.usedAt)&&Number.isFinite(entry.width)&&entry.width>0&&entry.width<=400.01&&Number.isFinite(entry.height)&&entry.height>0&&entry.height<=180.01&&Number.isInteger(entry.pixelsWide)&&entry.pixelsWide>0&&entry.pixelsWide<=801&&Number.isInteger(entry.pixelsHigh)&&entry.pixelsHigh>0&&entry.pixelsHigh<=361}
+ async function thumbnailKey(record){
+  // Include ownership, source/revision and output density. A changed message,
+  // catalog entry or renderer can never reuse another source's thumbnail.
+  const identity=JSON.stringify(['pdfjs-6.5.438-400x180-v1',record.engine,record.account,record.conversation,record.message,record.id,record.revision,record.messageRevision,record.original,Math.min(devicePixelRatio||1,2)]);
+  if(!globalThis.crypto?.subtle)return identity;
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(identity));return Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('');
+ }
+ function rememberThumbnail(entry){
+  const old=cache.entries.get(entry.key);if(old){cache.bytes-=old.blob.size;cache.entries.delete(entry.key)}
+  cache.entries.set(entry.key,entry);cache.bytes+=entry.blob.size;
+  while(cache.entries.size>16||cache.bytes>4*1024*1024){const key=cache.entries.keys().next().value;cache.bytes-=cache.entries.get(key).blob.size;cache.entries.delete(key)}
+ }
+ async function thumbnailDatabase(){
+  if(!globalThis.indexedDB)return null;
+  if(!cache.database)cache.database=new Promise(resolve=>{
+   let settled=false;const done=value=>{if(settled){value?.close();return}settled=true;resolve(value)};
+   try{const request=indexedDB.open(cacheName,1);request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(cacheStore))request.result.createObjectStore(cacheStore,{keyPath:'key'})};request.onsuccess=()=>{const db=request.result;db.onversionchange=()=>{db.close();cache.database=null};done(db)};request.onerror=()=>done(null);request.onblocked=()=>done(null)}catch{done(null)}
+  });return cache.database;
+ }
+ async function readThumbnail(key){
+  const hot=cache.entries.get(key);if(validThumbnail(hot)){hot.usedAt=Date.now();rememberThumbnail(hot);void persistThumbnail(hot);return hot}
+  const db=await thumbnailDatabase();if(!db)return null;
+  const entry=await new Promise(resolve=>{try{const tx=db.transaction(cacheStore,'readonly'),request=tx.objectStore(cacheStore).get(key);request.onsuccess=()=>resolve(request.result);request.onerror=()=>resolve(null);tx.onabort=()=>resolve(null)}catch{resolve(null)}});
+  if(!validThumbnail(entry)){if(entry)void forgetThumbnail(key);return null}entry.usedAt=Date.now();rememberThumbnail(entry);void persistThumbnail(entry);return entry;
+ }
+ async function persistThumbnail(entry){
+  const db=await thumbnailDatabase();if(!db)return;
+  await new Promise(resolve=>{try{const tx=db.transaction(cacheStore,'readwrite'),store=tx.objectStore(cacheStore);store.put(entry);const all=store.getAll();all.onsuccess=()=>{let bytes=0,count=0;for(const item of all.result.sort((a,b)=>b.usedAt-a.usedAt)){if(!validThumbnail(item)||++count>64||(bytes+=item.blob.size)>16*1024*1024)store.delete(item.key)}};tx.oncomplete=resolve;tx.onabort=resolve;tx.onerror=()=>{}}catch{resolve()}});
+ }
+ async function forgetThumbnail(key){
+  const entry=cache.entries.get(key);if(entry){cache.bytes-=entry.blob.size;cache.entries.delete(key)}
+  const db=await thumbnailDatabase();if(db)try{const tx=db.transaction(cacheStore,'readwrite');tx.objectStore(cacheStore).delete(key);tx.onerror=()=>{}}catch{}
+ }
+ async function paintThumbnail(card,target,entry,controller){
+  let bitmap,url;
+  try{
+   if(typeof createImageBitmap==='function')bitmap=await createImageBitmap(entry.blob);
+   else{url=URL.createObjectURL(entry.blob);bitmap=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=reject;image.src=url})}
+   if(controller.signal.aborted||!card.isConnected)return;
+   if(bitmap.width!==entry.pixelsWide||bitmap.height!==entry.pixelsHigh)throw Error('thumbnail');
+   const node=document.createElement('canvas');node.width=entry.pixelsWide;node.height=entry.pixelsHigh;node.style.width=entry.width+'px';node.style.height=entry.height+'px';node.getContext('2d').drawImage(bitmap,0,0);target.replaceChildren(node);card.dataset.documentPreviewState='ready';card.dataset.documentPreviewCache='hit';
+  }finally{bitmap?.close?.();if(url)URL.revokeObjectURL(url)}
+ }
  // Card previews only read bounded bytes for visible documents. Originals still
  // use the existing explicit viewer path, independently of preview failures.
  const previewChunk=64*1024,previewBudget=2*1024*1024,previewQueue=[],previewSeen=new WeakSet(),previewRequests=new Set();let previewActive=0;
@@ -79,6 +127,11 @@ window.OieRuntime.register('documents', life => {
  }
  async function paintPreview(card,record,controller){
   const target=card.querySelector('[data-document-preview]');if(!target)return;
+  let cacheKey;
+  if(record.format==='pdf'){
+   cacheKey=await thumbnailKey(record);const entry=await readThumbnail(cacheKey);if(controller.signal.aborted||!card.isConnected)return;
+   if(entry){try{await paintThumbnail(card,target,entry,controller);return}catch{await forgetThumbnail(cacheKey);if(controller.signal.aborted||!card.isConnected)return}}
+  }
   const initial=await previewRange(record,0,previewChunk,controller,record.format!=='pdf');if(controller.signal.aborted||!card.isConnected)return;
   if(record.format!=='pdf'){
    // A range can end inside a UTF-8 sequence. Decode incrementally without
@@ -107,7 +160,9 @@ window.OieRuntime.register('documents', life => {
   try{
    const range=new PreviewTransport(initial.total,initial.bytes,initial.bytes.length===initial.total);
    task=library.getDocument({range,rangeChunkSize:previewChunk,disableAutoFetch:true,disableStream:true,cMapUrl:'/ui/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:'/ui/pdfjs/standard_fonts/',wasmUrl:'/ui/pdfjs/wasm/',iccUrl:'/ui/pdfjs/iccs/',isEvalSupported:false,enableXfa:false,useSystemFonts:true,canvasMaxAreaInBytes:4194304});
-   await Promise.race([(async()=>{const pdf=await task.promise,first=await pdf.getPage(1);if(controller.signal.aborted||!card.isConnected)return;const base=first.getViewport({scale:1}),scale=Math.min(400/base.width,180/base.height),viewport=first.getViewport({scale}),output=Math.min(devicePixelRatio||1,2);const node=document.createElement('canvas');node.width=Math.ceil(viewport.width*output);node.height=Math.ceil(viewport.height*output);node.style.width=viewport.width+'px';node.style.height=viewport.height+'px';await first.render({canvasContext:node.getContext('2d'),viewport,transform:output===1?null:[output,0,0,output,0,0],annotationMode:library.AnnotationMode.DISABLE}).promise;if(!controller.signal.aborted&&card.isConnected){target.replaceChildren(node);card.dataset.documentPreviewState='ready'}})(),failure]);
+   await Promise.race([(async()=>{const pdf=await task.promise,first=await pdf.getPage(1);if(controller.signal.aborted||!card.isConnected)return;const base=first.getViewport({scale:1}),scale=Math.min(400/base.width,180/base.height),viewport=first.getViewport({scale}),output=Math.min(devicePixelRatio||1,2);const node=document.createElement('canvas');node.width=Math.ceil(viewport.width*output);node.height=Math.ceil(viewport.height*output);node.style.width=viewport.width+'px';node.style.height=viewport.height+'px';await first.render({canvasContext:node.getContext('2d'),viewport,transform:output===1?null:[output,0,0,output,0,0],annotationMode:library.AnnotationMode.DISABLE}).promise;if(!controller.signal.aborted&&card.isConnected){target.replaceChildren(node);card.dataset.documentPreviewState='ready';card.dataset.documentPreviewCache='miss';
+    const blob=await new Promise(resolve=>node.toBlob(resolve,'image/png'));if(blob&&cacheKey&&!controller.signal.aborted&&card.isConnected){const entry={key:cacheKey,blob,width:viewport.width,height:viewport.height,pixelsWide:node.width,pixelsHigh:node.height,createdAt:Date.now(),usedAt:Date.now()};if(validThumbnail(entry)){rememberThumbnail(entry);await persistThumbnail(entry);if(card.isConnected)card.dataset.documentPreviewStored='true'}}
+   }})(),failure]);
   }finally{if(task)await task.destroy().catch(()=>{})}
  }
  async function drainPreviews(){

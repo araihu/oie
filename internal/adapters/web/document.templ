@@ -10,7 +10,7 @@ import (
 )
 
 templ documentCard(v view,item engineapi.SharedContentItem){
-<section class="oie-document-card" data-document-item={item.Id} data-document-engine={v.EngineID} data-document-account={item.Message.AccountId} data-document-conversation={item.Message.ConversationId} data-document-message={item.Message.Id} data-document-filename={v.sharedTitle(item)} data-document-format={documentFormat(item)} data-document-source={documentSource(v,item)} data-document-url={safePreviewURL(item.Url)}>
+<section class="oie-document-card" data-document-item={item.Id} data-document-revision={item.RevisionId} data-document-message-revision={item.Message.RevisionId} data-document-engine={v.EngineID} data-document-account={item.Message.AccountId} data-document-conversation={item.Message.ConversationId} data-document-message={item.Message.Id} data-document-filename={v.sharedTitle(item)} data-document-format={documentFormat(item)} data-document-source={documentSource(v,item)} data-document-url={safePreviewURL(item.Url)}>
 @card.Card(card.Config{Body:documentCardAction(v,item),Density:card.DensityCompact,RootClass:"oie-document-card-surface"})
 </section>
 }
