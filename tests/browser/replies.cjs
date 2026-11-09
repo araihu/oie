@@ -12,7 +12,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const emit=()=>{state.seq++;for(const stream of streams)stream.write(`id: ${engine}:${state.seq}\nevent: message.updated\ndata: {}\n\n`)};
  const api=http.createServer((req,res)=>{const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(code,data)=>{res.statusCode=code;res.end(JSON.stringify(data))};if(!['GET','HEAD'].includes(req.method)){state.mutations++;return send(500,{code:'unexpected_mutation'})}
   if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.7.0',eventCursor:engine+':'+state.seq});
-  if(u.pathname==='/api/v1/accounts')return send(200,{items:[{id:account,revisionId:revision,address:'alice@fixture',label:'Alice',protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z',connectionState:'connected'}]});
+  if(u.pathname==='/api/v1/accounts'||u.pathname===`/api/v1/accounts/${account}`){const value={id:account,revisionId:revision,address:'alice@fixture',label:'Alice',protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z',connectionState:'connected'};return send(200,u.pathname==='/api/v1/accounts'?{items:[value]}:value);}
   if(u.pathname.endsWith('/avatars'))return send(200,{items:[]});if(u.pathname.endsWith('/connection'))return send(200,{accountId:account,state:'connected',updatedAt:'2026-11-08T12:00:00Z'});
   if(u.pathname.endsWith('/history'))return send(200,{accountId:account,state:'complete',retainedMessages:messages.length,conversations:1,updatedAt:'2026-11-08T12:00:00Z'});
   const conversation={id:chat,revisionId:revision,accountId:account,kind:'direct',address:'bob@fixture',title:'Bob',lastMessage:'Reply',updatedAt:'2026-11-08T12:00:00Z',unreadCount:0,archived:false,favorite:false};
@@ -22,7 +22,15 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(u.pathname==='/api/v1/media/'+imageHash){res.setHeader('Content-Type','image/png');res.end(image);return}
   const context=u.pathname.match(/^\/api\/v1\/conversations\/([^/]+)\/messages\/([^/]+)\/context$/);
   if(context){state.contexts.push(context[2]);assert.equal(u.searchParams.get('limit'),'50');const index=messages.findIndex(m=>m.id===context[2]);if(context[1]!==chat||index<0)return send(404,{code:'not_found',status:404});const start=Math.max(0,index-24),end=Math.min(messages.length,start+50);return send(200,{targetId:context[2],items:messages.slice(start,end).map(project).reverse(),hasOlder:start>0,hasNewer:end<messages.length})}
-  if(u.pathname===`/api/v1/conversations/${chat}/messages`)return send(200,{items:messages.slice(-50).map(project).reverse()});
+  const retained=u.pathname.match(/^\/api\/v1\/messages\/([^/]+)$/);if(retained){const message=messages.find(m=>m.id===retained[1]);return message?send(200,project(message)):send(404,{status:404,code:'not_found'});}
+  if(u.pathname===`/api/v1/conversations/${chat}/messages`){
+   const compare=(a,b)=>Date.parse(a.createdAt)-Date.parse(b.createdAt)||a.id.localeCompare(b.id),all=[...messages].sort(compare),limit=Number(u.searchParams.get('limit')||50),cursor=u.searchParams.get('cursor'),direction=u.searchParams.get('direction')||'older';
+   if(!Number.isInteger(limit)||limit<1||limit>100||!['older','newer'].includes(direction)||direction==='newer'&&!cursor)return send(400,{status:400,code:'invalid_request'});
+   const index=cursor?all.findIndex(m=>m.id===cursor):all.length;if(index<0)return send(409,{status:409,code:'invalid_cursor'});
+   const start=direction==='newer'?index+1:Math.max(0,index-limit),end=direction==='newer'?Math.min(all.length,start+limit):index,items=all.slice(start,end).reverse().map(project),more=direction==='newer'?end<all.length:start>0;
+   return send(200,{items,nextCursor:more?(direction==='newer'?items[0].id:items.at(-1).id):undefined});
+  }
+  if(u.pathname==='/api/v1/shared-content')return send(200,{items:[],indexing:{state:'complete',indexedMessages:messages.length,totalMessages:messages.length}});
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
   send(404,{code:'not_found',status:404});
  });api.listen(0,'127.0.0.1');await once(api,'listening');const allocation=http.createServer();allocation.listen(0,'127.0.0.1');await once(allocation,'listening');const port=allocation.address().port;await new Promise(r=>allocation.close(r));

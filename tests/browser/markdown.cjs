@@ -19,14 +19,22 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const emit=()=>{seq++;for(const s of streams)s.write(`id: ${engine}:${seq}\nevent: message.created\ndata: {}\n\n`)};
  const api=http.createServer((req,res)=>{const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(code,data)=>{res.statusCode=code;res.end(JSON.stringify(data))};
   if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.5.0',eventCursor:engine+':'+seq});
-  if(u.pathname==='/api/v1/accounts')return send(200,{items:[{id:account,revisionId:revision,address:'alice@fixture',label:'Alice',protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z',connectionState:'connected'}]});
+  if(u.pathname==='/api/v1/accounts'||u.pathname===`/api/v1/accounts/${account}`){const value={id:account,revisionId:revision,address:'alice@fixture',label:'Alice',protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z',connectionState:'connected'};return send(200,u.pathname==='/api/v1/accounts'?{items:[value]}:value);}
   if(u.pathname.endsWith('/avatars'))return send(200,{items:[]});
   if(u.pathname.endsWith('/connection'))return send(200,{accountId:account,state:'connected',updatedAt:'2026-11-08T12:00:00Z'});
   if(u.pathname.endsWith('/history'))return send(200,{accountId:account,state:'complete',retainedMessages:messages.length,conversations:1,updatedAt:'2026-11-08T12:00:00Z'});
   const c={id:chat,revisionId:revision,accountId:account,kind:'direct',address:'bob@fixture',title:'Bob',lastMessage:'Latest',updatedAt:'2026-11-08T12:00:00Z',unreadCount:0,archived:false,favorite:false};
   if(u.pathname==='/api/v1/conversations')return send(200,{items:[c]});if(u.pathname===`/api/v1/conversations/${chat}`)return send(200,c);
-  if(u.pathname.endsWith('/messages'))return send(200,{items:[...messages].reverse()});
-  if(u.pathname.endsWith('/previews'))return send(200,{items:[{id:id(500),revisionId:revision,accountId:account,conversationId:chat,messageId:messages[3].id,url:'https://example.test/article',kind:'link',state:'ready',downloadState:'not_downloaded',title:'Structured card stays separate',updatedAt:'2026-11-08T12:00:00Z'}]});
+  const retained=u.pathname.match(/^\/api\/v1\/messages\/([^/]+)$/);if(retained){const message=messages.find(m=>m.id===retained[1]);return message?send(200,message):send(404,{status:404,code:'not_found'});}
+  if(u.pathname===`/api/v1/conversations/${chat}/messages`){
+   const compare=(a,b)=>Date.parse(a.createdAt)-Date.parse(b.createdAt)||a.id.localeCompare(b.id),all=[...messages].sort(compare),limit=Number(u.searchParams.get('limit')||50),cursor=u.searchParams.get('cursor'),direction=u.searchParams.get('direction')||'older';
+   if(!Number.isInteger(limit)||limit<1||limit>100||!['older','newer'].includes(direction)||direction==='newer'&&!cursor)return send(400,{status:400,code:'invalid_request'});
+   const index=cursor?all.findIndex(m=>m.id===cursor):all.length;if(index<0)return send(409,{status:409,code:'invalid_cursor'});
+   const start=direction==='newer'?index+1:Math.max(0,index-limit),end=direction==='newer'?Math.min(all.length,start+limit):index,items=all.slice(start,end).reverse(),more=direction==='newer'?end<all.length:start>0;
+   return send(200,{items,nextCursor:more?(direction==='newer'?items[0].id:items.at(-1).id):undefined});
+  }
+  if(u.pathname.endsWith('/previews'))return send(200,{items:!u.searchParams.has('messageId')||u.searchParams.getAll('messageId').includes(messages[3].id)?[{id:id(500),revisionId:revision,accountId:account,conversationId:chat,messageId:messages[3].id,url:'https://example.test/article',kind:'link',state:'ready',downloadState:'not_downloaded',title:'Structured card stays separate',updatedAt:'2026-11-08T12:00:00Z'}]:[]});
+  if(u.pathname==='/api/v1/shared-content')return send(200,{items:[],indexing:{state:'complete',indexedMessages:messages.length,totalMessages:messages.length}});
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}send(404,{status:404});
  });api.listen(0,'127.0.0.1');await once(api,'listening');
  const allocation=http.createServer();allocation.listen(0,'127.0.0.1');await once(allocation,'listening');const port=allocation.address().port;await new Promise(r=>allocation.close(r));

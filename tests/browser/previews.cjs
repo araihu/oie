@@ -32,13 +32,26 @@ function thumbnail(color,width=8,height=8){
   const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(code,data)=>{res.statusCode=code;res.end(JSON.stringify(data))};
   if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.5.0',eventCursor:engine+':'+state.seq});
   if(u.pathname==='/api/v1/accounts')return send(200,{items:[accountData]});
+  if(u.pathname===`/api/v1/accounts/${account}`)return send(200,accountData);
   if(u.pathname===`/api/v1/accounts/${account}/avatars`)return send(200,{items:[]});
   if(u.pathname===`/api/v1/accounts/${account}/connection`)return send(200,{accountId:account,state:'connected',updatedAt:'2026-11-08T12:00:00Z'});
   if(u.pathname===`/api/v1/accounts/${account}/history`)return send(200,{accountId:account,state:'complete',retainedMessages:messages.length,conversations:1,updatedAt:'2026-11-08T12:00:00Z'});
   if(u.pathname==='/api/v1/conversations')return send(200,{items:[conversation()]});
   if(u.pathname===`/api/v1/conversations/${chat}`)return send(200,conversation());
-  if(u.pathname===`/api/v1/conversations/${chat}/messages`)return send(200,{items:[...messages].reverse()});
-  if(u.pathname===`/api/v1/conversations/${chat}/previews`){state.batchReads++;assert(u.searchParams.getAll('messageId').length===messages.length);return send(200,{items:previews})}
+  if(u.pathname.startsWith('/api/v1/messages/')){const message=messages.find(item=>item.id===u.pathname.split('/').at(-1));return message?send(200,message):send(404,{status:404})}
+  if(u.pathname===`/api/v1/conversations/${chat}/messages`){
+   const all=[...messages].sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
+   const limit=Number(u.searchParams.get('limit')||50),direction=u.searchParams.get('direction')||'older',cursor=u.searchParams.get('cursor'),index=cursor?all.findIndex(item=>item.id===cursor):all.length;
+   if(!Number.isInteger(limit)||limit<1||limit>100||!['older','newer'].includes(direction))return send(400,{status:400});
+   if(index<0)return send(409,{status:409,code:'invalid_cursor'});
+   const start=direction==='newer'?index+1:Math.max(0,index-limit),end=direction==='newer'?Math.min(all.length,start+limit):index,items=all.slice(start,end).reverse();
+   const nextCursor=direction==='newer'?(end<all.length?items[0]?.id:undefined):(start>0?items.at(-1)?.id:undefined);
+   return send(200,{items,nextCursor});
+  }
+  if(u.pathname===`/api/v1/conversations/${chat}/previews`){
+   state.batchReads++;const ids=u.searchParams.getAll('messageId');assert(ids.length>0&&ids.length<=50);assert.equal(new Set(ids).size,ids.length);assert(ids.every(value=>messages.some(message=>message.id===value)));
+   return send(200,{items:previews.filter(item=>ids.includes(item.messageId))});
+  }
   for(const p of previews){
    if(u.pathname===`/api/v1/previews/${p.id}`)return send(200,p);
    if(u.pathname===`/api/v1/previews/${p.id}/download`){
