@@ -116,7 +116,7 @@ func TestContactDirectoryFiltersBeforePagingAndBindsScope(t *testing.T) {
 	}
 }
 
-func TestContactObservationRollsBackFactoryFailureAndRejectsStaleSnapshots(t *testing.T) {
+func TestContactObservationRollsBackFactoryFailureAndPreservesCausalClockRollback(t *testing.T) {
 	s, e, c := outboxFixture(t)
 	base := time.Now().UTC()
 	allocated := 0
@@ -137,11 +137,16 @@ func TestContactObservationRollsBackFactoryFailureAndRejectsStaleSnapshots(t *te
 	if err = e.ContactsReceived(t.Context(), c.AccountID, []application.ContactInput{{Address: "a@localhost", DisplayName: "New", Subscription: "none"}}); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.ObserveContacts(t.Context(), application.ContactObservation{AccountID: c.AccountID, Available: true, ObservedAt: base.Add(-time.Hour), NewID: func() (domain.ID, error) { return migrationID(), nil }}); err != nil {
+	previous, _ := e.Contacts(t.Context(), domain.ContactQuery{Limit: 100})
+	if err = s.ObserveContacts(t.Context(), application.ContactObservation{AccountID: c.AccountID, Available: true, ObservedAt: base.Add(-time.Hour), NewID: func() (domain.ID, error) { return migrationID(), nil }, Items: []application.ContactInput{{Address: "a@localhost", DisplayName: "Clock moved back", Subscription: "none", Groups: []string{}}}}); err != nil {
 		t.Fatal(err)
 	}
 	page, _ = e.Contacts(t.Context(), domain.ContactQuery{Limit: 100})
-	if len(page.Items) != 1 || page.Items[0].DisplayName != "New" {
-		t.Fatal("old observation erased current directory", page)
+	if len(page.Items) != 1 || page.Items[0].DisplayName != "Clock moved back" || page.Items[0].ID != previous.Items[0].ID || !page.Items[0].UpdatedAt.Before(previous.Items[0].UpdatedAt) {
+		t.Fatal("wall clock overrode causal observation order", page)
+	}
+	var parents string
+	if err = s.db.QueryRow("SELECT parents FROM contact_revisions WHERE id=?", page.Items[0].RevisionID).Scan(&parents); err != nil || parents != jsonText([]domain.ID{previous.Items[0].RevisionID}) {
+		t.Fatal("clock rollback lost revision ancestry", parents, err)
 	}
 }

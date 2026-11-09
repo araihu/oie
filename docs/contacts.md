@@ -36,8 +36,10 @@ their own lifecycle.
 ## Validation
 
 SQLite and HTTP tests cover scope-bound paging, Unicode/hostile text, filtering
-before limits, stable revisions, removal, unavailable caches, rollback, stale
-observations, restart and absence of messaging effects. The generated CLI is
+before limits, stable revisions, removal, unavailable caches, transaction and
+clock rollback, restart and absence of messaging effects. Session ownership
+rejects obsolete workers; wall-clock time never overrides observation ancestry.
+The generated CLI is
 exercised against the real engine store.
 
 Independent Mellium tests cover push authorization, limits, cancellation and

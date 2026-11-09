@@ -26,9 +26,9 @@ func (s *Store) ObserveContacts(ctx context.Context, in application.ContactObser
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	if source.UpdatedAt > stamp(in.ObservedAt) {
-		return tx.Commit()
-	}
+	// The adapter proves current session ownership and serializes observations.
+	// Wall-clock timestamps describe observations; clock rollback must not make
+	// a causally later provider snapshot lose to its predecessor.
 	state := "unavailable"
 	checked := source.CheckedAt
 	if in.Available {
