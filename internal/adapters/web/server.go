@@ -450,6 +450,10 @@ var videosStylesheet []byte
 var liveScript []byte
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/api/v1/previews/") {
+		s.previewStatus(w, r)
+		return
+	}
 	if s.serveDevReload(w, r) || s.servePDFJS(w, r) {
 		return
 	}
