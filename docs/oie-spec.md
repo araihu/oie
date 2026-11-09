@@ -112,6 +112,13 @@ An Oiê contact can group multiple protocol identities. Link identity and Unlink
 
 Support per-account contact add/remove and contact-request acceptance/decline where the protocol permits. Removing a contact preserves retained conversation history. Provider contact/presence subscriptions remain distinct from app-owned aliases and identity grouping.
 
+**IMPLEMENTATION SCOPE:** global search reads saved per-account XMPP roster
+contacts. The native adapter refreshes this cache on connection and authorized
+roster pushes; searching itself makes no provider request. Cache identities and
+observed revisions persist through reconnect/restart, and removal preserves saved
+chat history. Contact mutation controls, identity linking and app sync remain
+separate work. See [saved protocol contacts](contacts.md).
+
 Allow starting a direct chat by address without first adding a contact, where permitted, with the sending account clearly selected. Neither sending nor receiving a message automatically adds a contact, requests presence access, or links identities.
 
 Incoming non-contact chats appear in the normal conversation list with a localized **Not in contacts** label. Blocking/unblocking is backlogged; conversation muting is not a protocol block.
@@ -273,6 +280,17 @@ Keep retrieved history until explicit user deletion, even after the provider exp
 **RECOMMENDED R08:** a bounded, paced backfill queue with checkpoints, resumable pages, backoff, foreground/live-message priority, and explicit partial-history status. Scope serialization and limits deliberately rather than launching one unbounded worker per room.
 
 Search across accounts/sources in the selected engine and within a direct/group conversation. Alpha indexes message text, captions, filenames, URLs, page titles/descriptions, and available media metadata. Document-body extraction, image OCR, and audio transcription are backlogged.
+
+**AGREED:** use the existing conversation-list search field as one unified global
+search. Remove the separate message-search navigation item and heading action.
+Group matching conversations, contacts and messages, with access to matching
+shared content. Use the supplied two-search reference for presentation. Global
+search shows results in the conversation-list column, alongside the selected
+conversation. Search within a conversation uses a bar above its timeline, with
+navigation between matching messages and safe highlights of matching text.
+Keep the global and conversation queries independent so both can remain active.
+Opening a result uses bounded retained-history context rather than loading the
+complete conversation into the DOM.
 
 **AGREED:** shared-content search updates while typing, without requiring Enter, and tolerates limited typing errors. Changing a filter also applies the search immediately; these views have no separate Search button. Preserve the text field, focus and caret while replacing results; stale responses must not replace a newer query or screen. Search the retained engine catalog before pagination, rather than only the currently loaded browser page.
 
@@ -726,3 +744,22 @@ Header actions use fragment/live updates while preserving the selected conversat
 draft and visible position; native forms remain available. These preferences are
 shared by clients of the same hosted engine. Independent-engine replication remains
 separate work. See [conversation preferences](conversation-preferences.md).
+
+### Retained message search increment
+
+**IMPLEMENTATION SCOPE:** search retained message text and available associated
+URL, filename and cached link metadata globally, per account or within a
+conversation. Filter before bounded keyset pagination. Current canonical content
+is the default; **Include edit history** adds labelled hits from verified retained
+earlier content revisions, without exposing transport-state changes as edits.
+Historical hits navigate to the canonical message's current timeline context.
+
+Search is a read-only engine operation. It does not retrieve provider history,
+fetch previews or files, mark messages read, or create send operations. Report
+pending metadata coverage separately from immediately searchable saved text.
+Global results preserve the conversation workspace and its draft. A separate
+conversation search bar navigates bounded message context without replacing the
+composer. Both have native GET fallbacks and reject stale query/scope responses.
+Offline search, document
+extraction, retraction and deletion remain outside this increment. See
+[retained message search](message-search.md).

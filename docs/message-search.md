@@ -3,14 +3,14 @@
 This increment searches the selected engine's retained message text and available
 metadata. It does not claim complete provider history, offline device coverage,
 OCR, document extraction, transcription, retraction support or live enrichment.
-Conversation-list title filtering remains separate.
+One global field groups conversation names, saved protocol contacts and messages.
 
 ## Surface brief
 
 Primary task: find a saved message, inspect its source and open its current
 canonical message in the bounded timeline. The existing Oiê identity, system
-font, compact rows and semantic color tokens stay in use. The existing conversation-list search input opens global results in that same
-column. Conversation-title matches and saved-message matches share the query.
+font, compact rows and semantic color tokens stay in use. The existing
+conversation-list search input opens global results in that same column. Conversation-title matches and saved-message matches share the query.
 The original filter controls and list remain mounted while hidden and return
 when search closes. A separate toolbar above the timeline searches only the
 current conversation. Both queries can remain active together. `/search` keeps
@@ -35,14 +35,14 @@ bounded result pagination.
 | Valid query | Type, submit or change scope | Scoped retained results; initiating input/caret and one live stream remain | 0 |
 | History off | Search a corrected message | Only current retained content matches | 0 |
 | History on | Search a retained earlier version | Prior-version label and matched excerpt; link opens canonical message UUID | 0 |
-| Historical source jump | Activate result | Close overlay; bounded canonical context, never install old text in current bubble | 0 search effects |
+| Historical source jump | Activate result | Keep global results visible; bounded canonical context, never install old text in current bubble | 0 search effects |
 | Foreign or stale cursor | Request next page | In-shell error with restart/retry; no foreign or unscoped hits | 0 |
 | Held older query | Type a newer query/filter | Older response rejected before swap; current controls and results agree | 0 |
 | Transport failure | Search or load another page | Visible retry; valid filters/query and already shown pages retained | 0 |
 | Engine changed | Receive an old search response | Clear old results and reject stale scope; no automatic engine fallback | 0 |
 | Search navigation | Source then Back | Query/history/account/conversation restored from addressable search context | 0 search effects |
 | Native browser | GET `/search` and submit | Localized shell, controls, source links and explicit retry remain usable | 0 |
-| Search active | Inspect results | Results do not emit read receipts or request provider history/profile/media | 0 |
+| Search active | Inspect results | Search does not issue reads or provider/media requests; normal visibility tracking remains independent in the displayed chat | 0 search effects |
 
 Queries are limited to 200 Unicode code points. Include edit history is off by
 default and independent of archive provenance. Excerpts are escaped plain text,
@@ -71,23 +71,23 @@ Source navigation carries an engine-bound pending search intent through a pane
 swap when the user immediately reopens search. New typing and scope choices win.
 Closing global search cancels pending reads and pagination and restores the
 original title filter. Escape prevents the browser search-input clear event from
-reopening search. No deferred restore can reopen a closed search. Engine replacement requires the explicit restart action before
-rebinding the search page.
+reopening search. No deferred restore can reopen a closed search. Engine replacement requires the
+explicit restart action before rebinding the search page.
 
 Focused validation: web package tests and race tests pass. Scoped
 `golangci-lint` passes. Independent browser QA verified global/account/chat
 queries, paginated results, prior-version labels with canonical bounded source
 jumps, Back, held older queries, transport failure and retry, Escape cancellation,
-rapid source navigation, explicit engine recovery and native GET. The earlier drawer prototype passed eight
-layouts through axe before the two-search reference refinement. Updated column
-and toolbar acceptances are recorded by independent browser QA.
-Mobile and desktop screenshots are reviewed for each accepted layout. The coordinator records full
-Dagger CI and the isolated development-XMPP integration result separately.
+rapid source navigation, explicit engine recovery and native GET. Independent
+column/toolbar acceptance passes eight responsive theme layouts through axe.
+Mobile and desktop screenshots are reviewed for each accepted layout. The full
+isolated development-XMPP browser workflow also passes with simultaneous queries.
+The coordinator records whole-pipeline Dagger evidence separately.
 
 ## Unified global field and conversation toolbar
 
 The existing `conversation-search` field opens global search on focus or typing.
-It keeps the native conversation-title GET form as its fallback. Global mode
+It uses the native unified `/search` GET page as its fallback. Global mode
 shows categories for the existing media, links and documents catalog, matching
 saved roster contacts, bounded conversation-title matches and saved messages.
 It leaves the original conversation list, title query, filter controls and scroll
