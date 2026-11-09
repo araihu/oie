@@ -48,6 +48,7 @@ OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/fragment-navigation.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/timeline-scroll.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/read-state.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/conversation-navigation.cjs
+OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/conversation-preferences.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/reply-compose.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/emoji-picker.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/mentions.cjs

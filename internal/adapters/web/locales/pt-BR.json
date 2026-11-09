@@ -427,5 +427,15 @@
   "MentionEmpty": "Nenhum participante encontrado",
   "MentionFailed": "Não foi possível carregar os participantes. Você ainda pode digitar um nome.",
   "MentionPartial": "Apenas os participantes disponíveis estão listados.",
-  "CapabilityMentions": "Menções na sala"
+  "CapabilityMentions": "Menções na sala",
+  "ArchiveConversation": "Arquivar conversa",
+  "UnarchiveConversation": "Desarquivar conversa",
+  "FavoriteConversation": "Adicionar às favoritas",
+  "UnfavoriteConversation": "Remover das favoritas",
+  "RetryConversationPreference": "Tentar alteração novamente",
+  "ConversationPreferenceUpdated": "Conversa atualizada.",
+  "ConversationPreferenceConflict": "Esta conversa mudou. Confira o estado atual antes de tentar novamente.",
+  "ConversationPreferenceUncertain": "Não foi possível confirmar a alteração. Tente a mesma alteração novamente.",
+  "ConversationPreferenceUnavailable": "Não foi possível atualizar esta conversa.",
+  "ConversationPreferenceStorageUnavailable": "Não é possível salvar alterações neste dispositivo. Mantenha esta página aberta para repetir uma alteração não confirmada."
 }

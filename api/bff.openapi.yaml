@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie browser presentation API
-  version: 0.1.0
+  version: 0.2.0
   description: Browser-only presentation operations. Engine data and protocol operations remain in the engine API.
   contact:
     name: Arai Hû
@@ -12,9 +12,62 @@ security: []
 tags:
 - name: Documents
   description: Static document presentation
+- name: Conversations
+  description: Browser conversation preference commands
 - name: Messages
   description: Browser submission receipt recovery
 paths:
+  /ui/conversations/preferences:
+    post:
+      operationId: updateBrowserConversationPreferences
+      tags: [Conversations]
+      summary: Archive or favorite one conversation
+      description: Requires CSRF and the owning engine, account and conversation. The exact desired Boolean, expected revision and operation key are immutable during retry. No protocol action, room membership change or message submission occurs. Success and replay return a fresh canonical read, never the historical operation snapshot. Transport uncertainty retains the original intent even when current flags happen to match it. Native forms receive PRG on success or an HTML recovery page on failure.
+      requestBody:
+        required: true
+        description: One explicit preference command, not a toggle.
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ConversationPreferenceIntent'
+      responses:
+        '200':
+          description: Matching command accepted and current conversation reread
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationPreferenceResult'
+        '303':
+          description: Native form success redirects to its safe application route
+          headers:
+            Location:
+              description: Same-origin application route retaining the selected conversation.
+              schema:
+                type: string
+        '400':
+          description: Invalid form or account scope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationPreferenceResult'
+        '403':
+          description: CSRF rejected before engine mutation
+        '404':
+          description: Conversation no longer exists
+        '409':
+          description: Revision, operation intent or engine changed; a fresh explicit action is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationPreferenceResult'
+        '422':
+          description: Invalid or ambiguous explicit preference command
+        '503':
+          description: Acceptance or canonical current state remains unknown; retry the same immutable command
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationPreferenceResult'
   /ui/messages/reconcile:
     post:
       operationId: reconcileBrowserSubmission
@@ -95,6 +148,98 @@ paths:
           description: Rendering capacity is occupied
 components:
   schemas:
+    ConversationPreferenceIntent:
+      type: object
+      additionalProperties: false
+      description: Browser command scoped to one engine and one owning account.
+      required: [csrf, engineId, accountId, conversationId, operationKey, expectedRevisionId]
+      oneOf:
+      - required: [archived]
+      - required: [favorite]
+      properties:
+        csrf:
+          type: string
+          description: Browser CSRF token.
+          example: browser-csrf-token
+        engineId:
+          type: string
+          format: uuid
+          description: Engine that owns the conversation.
+          example: 019a5df0-0000-7000-8000-000000000001
+        accountId:
+          type: string
+          format: uuid
+          description: Owning account UUID.
+          example: 019a5df0-0000-7000-8000-000000000002
+        conversationId:
+          type: string
+          format: uuid
+          description: Conversation UUID.
+          example: 019a5df0-0000-7000-8000-000000000003
+        operationKey:
+          type: string
+          format: uuid
+          description: Immutable idempotency key, retained across uncertain retries.
+          example: 019a5df0-0000-7000-8000-000000000004
+        expectedRevisionId:
+          type: string
+          format: uuid
+          description: Exact original compare-and-swap revision.
+          example: 019a5df0-0000-7000-8000-000000000005
+        archived:
+          type: boolean
+          description: Explicit archive state; send exactly this or favorite.
+          example: true
+        favorite:
+          type: boolean
+          description: Explicit conversation favorite state, independent of message stars.
+          example: true
+        returnTo:
+          type: string
+          description: Safe application route retained by native PRG.
+          example: /?chat=019a5df0-0000-7000-8000-000000000003
+        formTarget:
+          type: string
+          description: Browser form identity for native recovery.
+          example: conversation-preferences-019a5df0-0000-7000-8000-000000000003-archive
+        lang:
+          type: string
+          enum: [en, pt-BR]
+          description: Result locale.
+          example: en
+    ConversationPreferenceResult:
+      type: object
+      additionalProperties: false
+      description: Verified current state and command acceptance are distinct evidence.
+      required: [ok, message]
+      properties:
+        ok:
+          type: boolean
+          description: Matching operation accepted and canonical conversation available.
+          example: true
+        message:
+          type: string
+          description: Localized outcome or recovery explanation.
+          example: Conversation updated.
+        conversation:
+          $ref: './openapi.yaml#/components/schemas/Conversation'
+        code:
+          type: string
+          description: Stable failure code.
+          example: state_conflict
+        rejected:
+          type: boolean
+          description: Definitive rejection permits a fresh explicit intent.
+          example: false
+        preferencesPending:
+          type: boolean
+          description: Preserve and retry the same immutable intent.
+          example: false
+        nextKey:
+          type: string
+          format: uuid
+          description: New key for a distinct explicit action after resolution.
+          example: 019a5df0-0000-7000-8000-000000000006
     PendingSubmission:
       example:
         csrf: browser-csrf-token

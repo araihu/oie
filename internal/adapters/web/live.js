@@ -319,11 +319,33 @@ window.OieRuntime.register('live', life => {
       if(response.ok){const result=await response.json();if(!life.signal.aborted&&journal?.key===key&&composer.dataset.busy!=='true'&&result.ok)completeSubmission(result);}
     }catch{/* Keep the frozen submission and explicit retry on missing evidence. */}
   }
+  function reconcileConversationList(list,fresh){
+    const scroll=list.scrollTop,rect=list.getBoundingClientRect(),rows=[...list.querySelectorAll('[data-conversation-row]')];
+    const anchors=rows.filter(row=>row.getBoundingClientRect().bottom>=rect.top&&row.getBoundingClientRect().top<rect.bottom).map(row=>({id:row.dataset.conversationRow,top:row.getBoundingClientRect().top}));
+    const focused=list.contains(document.activeElement)?document.activeElement.closest('[data-conversation-id]')?.dataset.conversationId:'';
+    const existing=list.querySelector('ul.oie-conversations'),incoming=fresh.querySelector('ul.oie-conversations');
+    if(existing&&incoming){
+      const known=new Map(rows.map(row=>[row.dataset.conversationRow,row])),wanted=new Set();
+      for(const next of incoming.children){
+        const id=next.dataset.conversationRow;if(!id)continue;wanted.add(id);let row=known.get(id);
+        if(!row){row=next.cloneNode(true);mutateDOMNode(()=>{existing.append(row);window.Alpine?.initTree(row)})}
+        else if(row.dataset.version!==next.dataset.version){mutateDOM(row,next.innerHTML);row.dataset.version=next.dataset.version}
+        // Appending an unchanged node moves it without replacing its identity.
+        if(existing.children[wanted.size-1]!==row)mutateDOMNode(()=>existing.insertBefore(row,existing.children[wanted.size-1]||null));
+      }
+      for(const row of rows)if(!wanted.has(row.dataset.conversationRow))mutateDOMNode(()=>{window.Alpine?.destroyTree(row);row.remove()});
+    }else mutateDOM(list,fresh.innerHTML);
+    const anchor=anchors.find(anchor=>list.querySelector(`[data-conversation-row="${CSS.escape(anchor.id)}"]`)),surviving=anchor&&list.querySelector(`[data-conversation-row="${CSS.escape(anchor.id)}"]`);
+    list.scrollTop=surviving?scroll+surviving.getBoundingClientRect().top-anchor.top:scroll;
+    if(focused){const target=list.querySelector(`[data-conversation-id="${CSS.escape(focused)}"]`);if(target)target.focus({preventScroll:true});else document.querySelector('#chat-options button')?.focus({preventScroll:true})}
+  }
+  function mutateDOMNode(fn){if(window.Alpine?.mutateDom)window.Alpine.mutateDom(fn);else fn()}
   async function refresh() {
     if (stopped || mock) return;
     if (pendingRequests || refreshing) { refreshAgain = true; return; }
     refreshing = true;
     const starGeneration=Number(body.dataset.starGeneration||0);
+    const preferenceGeneration=Number(body.dataset.conversationPreferenceGeneration||0);
     const requestedSearch=location.search;
     const controller = new AbortController(); const timeout = life.timeout(() => controller.abort(), 12000);
     try {
@@ -358,24 +380,22 @@ window.OieRuntime.register('live', life => {
         restoreRoomOperation();renderReply();syncRoomLeave();
       }
       const history=document.querySelector('#history-status'),newHistory=page.querySelector('#live-history-status');if(history&&newHistory&&history.innerHTML!==newHistory.innerHTML)mutateDOM(history,newHistory.innerHTML);
-      const list = document.querySelector('#conversation-list');
-      const nextList = page.querySelector('#live-list');
-      if (list && nextList && list.dataset.version !== nextList.dataset.version) {
-        const scroll = list.scrollTop;
-        const focused = list.contains(document.activeElement) ? document.activeElement?.closest('[data-conversation-id]')?.dataset.conversationId : '';
-        mutateDOM(list,nextList.innerHTML); list.dataset.version=nextList.dataset.version; list.scrollTop = scroll;
-        if (focused) list.querySelector(`[data-conversation-id="${CSS.escape(focused)}"]`)?.focus({preventScroll:true});
-      }
+      const preferencesCurrent=preferenceGeneration===Number(body.dataset.conversationPreferenceGeneration||0);
+      const list = document.querySelector('#conversation-list'),nextList=page.querySelector('#live-list');
+      if(preferencesCurrent&&list&&nextList&&list.dataset.version!==nextList.dataset.version){
+        reconcileConversationList(list,nextList);list.dataset.version=nextList.dataset.version;
+      }else if(!preferencesCurrent)refreshAgain=true;
       if (regions.dataset.conversationId === body.dataset.conversationId) {
         const timeline = document.querySelector('#message-timeline'), next = page.querySelector('#live-timeline');
         if (timeline && next && window.OieTimeline) {window.OieTimeline.refresh(page,forceBottom);forceBottom=false;}
         const header = document.querySelector('#chat-header'), nextHeader = page.querySelector('#live-header');
-        if (header && nextHeader?.firstElementChild && header.dataset.version !== nextHeader.dataset.version && !header.contains(document.activeElement)) {
+        if (preferencesCurrent && header && nextHeader?.firstElementChild && header.dataset.version !== nextHeader.dataset.version && !header.contains(document.activeElement)) {
           const replacement = nextHeader.firstElementChild.cloneNode(true);
           const apply = () => { window.Alpine?.destroyTree(header); header.replaceWith(replacement); window.Alpine?.initTree(replacement); };
           if (window.Alpine?.mutateDom) window.Alpine.mutateDom(apply); else apply();
         }
       }
+      if(preferencesCurrent)document.dispatchEvent(new CustomEvent('oie:conversation-preferences-refreshed',{detail:{page}}));
       for (const fresh of page.querySelectorAll('#live-account-blocks [data-account-id]')) {
         if (!fresh.matches('section[data-account-id]')) continue;
         const existing = document.querySelector(`#account-blocks>section[data-account-id="${CSS.escape(fresh.dataset.accountId)}"]`);

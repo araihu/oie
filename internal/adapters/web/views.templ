@@ -77,6 +77,7 @@ templ page(v view) {
 <link rel="stylesheet" href="/ui/emoji-picker.css"/><link rel="stylesheet" href="/ui/mentions.css"/>
 <script src="/ui/actions.js" defer></script>
 <script src="/ui/stars.js" defer></script>
+<script src="/ui/conversation-preferences.js" defer></script>
 <script src="/ui/previews.js" defer></script>
 <script src="/ui/videos.js" defer></script>
 <script src="/ui/video-thumbnails.js" defer></script>
@@ -114,6 +115,9 @@ if v.Section=="media" {
 if v.ErrorMessage!="" {
 <div class="oie-native-error" role="alert" tabindex="-1" data-native-error>
 {v.ErrorMessage}
+if v.PreferenceRecovery {
+@nativeConversationPreferenceRecovery(v)
+}
 if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 @nativeRecovery(v)
 }
@@ -257,7 +261,7 @@ templ filterLink(v view, key, label string) {
 }
 
 templ conversationRow(v view, c engineapi.Conversation) {
-	<li>
+	<li data-conversation-row={c.Id} data-version={v.conversationRowVersion(c)}>
 		@link.Link(v.href("chat", c.Id,"message","","infoView","","infoType","","infoCursor","","infoQuery","","infoFocus","","lang",v.Locale,"theme",v.Theme), link.WithRootClass("oie-chat-link"), link.WithAttrs(templ.Attributes{"data-conversation-id": c.Id, "aria-current": strconv.FormatBool(v.Selected != nil && v.Selected.Id == c.Id)})) {
 			@profileAvatar(v,c.AccountId,c.Address,avatar.Config{Name: c.Title, Initials: chatInitials(c), Size: avatar.SizeSM, RootClass: "oie-chat-avatar"})
 			<div class="oie-row-content">
@@ -266,7 +270,8 @@ templ conversationRow(v view, c engineapi.Conversation) {
 					<span>{ c.LastMessage }</span>
 					if c.UnreadCount>0 {
 						<span class="oie-unread-count" aria-label={ v.Text.Unread + ": " + strconv.Itoa(c.UnreadCount) }>{ strconv.Itoa(c.UnreadCount) }</span>
-					} else if c.Favorite {
+					}
+                    if c.Favorite {
 						<span class="oie-pin" title={ v.Text.Favorites }>@glyph(heroicons.Icon16SolidStar)</span>
 					}
 				</div>
@@ -280,6 +285,7 @@ if len(v.Accounts)>1 {
 
 templ chatHeader(v view) {
 	<header class="oie-chat-header" id="chat-header" data-version={v.headerVersion()} x-data="{}">
+@conversationPreferenceData(v)
 		@link.Link(v.href("chat", ""), link.WithRootClass("oie-back-button"), link.WithAttrs(templ.Attributes{"aria-label": v.Text.Back})) {
 			@glyph(heroicons.Icon16SolidChevronLeft)
 		}
@@ -288,7 +294,7 @@ templ chatHeader(v view) {
 		@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Details, "title": v.Text.Details,"data-open-details":""}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'details'})"})) {
 			@glyph(heroicons.Icon16SolidInformationCircle)
 		}
-{{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{Label:v.Text.Details,OnClick:"$dispatch('drawer:open', {id: 'details'})"}}}} }}
+{{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{Label:v.Text.Details,OnClick:"$dispatch('drawer:open', {id: 'details'})"}}},v.conversationPreferenceSection()} }}
 if v.Selected.Kind=="room" {
 {{ sections=append(sections,dropdown.Section{Items:[]dropdown.Item{{ID:"chat-leave-room",Label:v.Text.LeaveRoom,Icon:glyph(heroicons.Icon16SolidArrowTopRightOnSquare),OnClick:"$dispatch('oie:leave-room')",Disabled:v.RoomSession==nil||!v.RoomSession.Active||!v.messagingImplemented("room_messaging")}}}) }}
 }

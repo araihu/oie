@@ -4,21 +4,44 @@
 package bffapi
 
 import (
+	"encoding/json"
+	"fmt"
+
+	externalRef0 "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ConversationPreferenceIntentLang.
+const (
+	ConversationPreferenceIntentLangEn   ConversationPreferenceIntentLang = "en"
+	ConversationPreferenceIntentLangPtBR ConversationPreferenceIntentLang = "pt-BR"
+)
+
+// Valid indicates whether the value is a known member of the ConversationPreferenceIntentLang enum.
+func (e ConversationPreferenceIntentLang) Valid() bool {
+	switch e {
+	case ConversationPreferenceIntentLangEn:
+		return true
+	case ConversationPreferenceIntentLangPtBR:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PendingSubmissionLang.
 const (
-	En   PendingSubmissionLang = "en"
-	PtBR PendingSubmissionLang = "pt-BR"
+	PendingSubmissionLangEn   PendingSubmissionLang = "en"
+	PendingSubmissionLangPtBR PendingSubmissionLang = "pt-BR"
 )
 
 // Valid indicates whether the value is a known member of the PendingSubmissionLang enum.
 func (e PendingSubmissionLang) Valid() bool {
 	switch e {
-	case En:
+	case PendingSubmissionLangEn:
 		return true
-	case PtBR:
+	case PendingSubmissionLangPtBR:
 		return true
 	default:
 		return false
@@ -44,6 +67,114 @@ func (e PendingSubmissionTheme) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// ConversationPreferenceIntent Browser command scoped to one engine and one owning account.
+type ConversationPreferenceIntent struct {
+	// AccountId Owning account UUID.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000002
+	AccountId openapi_types.UUID `json:"accountId"`
+
+	// Archived Explicit archive state; send exactly this or favorite.
+	//
+	// Example: true
+	Archived *bool `json:"archived,omitempty"`
+
+	// ConversationId Conversation UUID.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000003
+	ConversationId openapi_types.UUID `json:"conversationId"`
+
+	// Csrf Browser CSRF token.
+	//
+	// Example: browser-csrf-token
+	Csrf string `json:"csrf"`
+
+	// EngineId Engine that owns the conversation.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	EngineId openapi_types.UUID `json:"engineId"`
+
+	// ExpectedRevisionId Exact original compare-and-swap revision.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000005
+	ExpectedRevisionId openapi_types.UUID `json:"expectedRevisionId"`
+
+	// Favorite Explicit conversation favorite state, independent of message stars.
+	//
+	// Example: true
+	Favorite *bool `json:"favorite,omitempty"`
+
+	// FormTarget Browser form identity for native recovery.
+	//
+	// Example: conversation-preferences-019a5df0-0000-7000-8000-000000000003-archive
+	FormTarget *string `json:"formTarget,omitempty"`
+
+	// Lang Result locale.
+	//
+	// Example: en
+	Lang *ConversationPreferenceIntentLang `json:"lang,omitempty"`
+
+	// OperationKey Immutable idempotency key, retained across uncertain retries.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000004
+	OperationKey openapi_types.UUID `json:"operationKey"`
+
+	// ReturnTo Safe application route retained by native PRG.
+	//
+	// Example: /?chat=019a5df0-0000-7000-8000-000000000003
+	ReturnTo *string `json:"returnTo,omitempty"`
+	union    json.RawMessage
+}
+
+// ConversationPreferenceIntentLang Result locale.
+//
+// Example: en
+type ConversationPreferenceIntentLang string
+
+// ConversationPreferenceIntent0 defines model for ConversationPreferenceIntent.0.
+type ConversationPreferenceIntent0 = interface{}
+
+// ConversationPreferenceIntent1 defines model for ConversationPreferenceIntent.1.
+type ConversationPreferenceIntent1 = interface{}
+
+// ConversationPreferenceResult Verified current state and command acceptance are distinct evidence.
+type ConversationPreferenceResult struct {
+	// Code Stable failure code.
+	//
+	// Example: state_conflict
+	Code *string `json:"code,omitempty"`
+
+	// Conversation One account-scoped conversation. Direct conversations support text sending; saved rooms and authorized room archives are recovered read-only in this increment.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","address":"bob@localhost","archived":false,"favorite":false,"id":"019a5df0-0000-7000-8000-000000000001","kind":"direct","lastMessage":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","title":"bob@localhost","unreadCount":0,"updatedAt":"2026-11-07T12:00:00Z"}
+	Conversation *externalRef0.Conversation `json:"conversation,omitempty"`
+
+	// Message Localized outcome or recovery explanation.
+	//
+	// Example: Conversation updated.
+	Message string `json:"message"`
+
+	// NextKey New key for a distinct explicit action after resolution.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000006
+	NextKey *openapi_types.UUID `json:"nextKey,omitempty"`
+
+	// Ok Matching operation accepted and canonical conversation available.
+	//
+	// Example: true
+	Ok bool `json:"ok"`
+
+	// PreferencesPending Preserve and retry the same immutable intent.
+	//
+	// Example: false
+	PreferencesPending *bool `json:"preferencesPending,omitempty"`
+
+	// Rejected Definitive rejection permits a fresh explicit intent.
+	//
+	// Example: false
+	Rejected *bool `json:"rejected,omitempty"`
 }
 
 // MarkdownFragment Static presentation fragment filtered by the host.
@@ -166,8 +297,235 @@ type SubmissionReceipt struct {
 	State string `json:"state"`
 }
 
+// UpdateBrowserConversationPreferencesFormdataRequestBody defines body for UpdateBrowserConversationPreferences for application/x-www-form-urlencoded ContentType.
+type UpdateBrowserConversationPreferencesFormdataRequestBody = ConversationPreferenceIntent
+
 // RenderDocumentMarkdownJSONRequestBody defines body for RenderDocumentMarkdown for application/json ContentType.
 type RenderDocumentMarkdownJSONRequestBody = MarkdownSource
 
 // ReconcileBrowserSubmissionFormdataRequestBody defines body for ReconcileBrowserSubmission for application/x-www-form-urlencoded ContentType.
 type ReconcileBrowserSubmissionFormdataRequestBody = PendingSubmission
+
+// AsConversationPreferenceIntent0 returns the union data inside the ConversationPreferenceIntent as a ConversationPreferenceIntent0
+func (t ConversationPreferenceIntent) AsConversationPreferenceIntent0() (ConversationPreferenceIntent0, error) {
+	var body ConversationPreferenceIntent0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromConversationPreferenceIntent0 overwrites any union data inside the ConversationPreferenceIntent as the provided ConversationPreferenceIntent0
+func (t *ConversationPreferenceIntent) FromConversationPreferenceIntent0(v ConversationPreferenceIntent0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeConversationPreferenceIntent0 performs a merge with any union data inside the ConversationPreferenceIntent, using the provided ConversationPreferenceIntent0
+func (t *ConversationPreferenceIntent) MergeConversationPreferenceIntent0(v ConversationPreferenceIntent0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsConversationPreferenceIntent1 returns the union data inside the ConversationPreferenceIntent as a ConversationPreferenceIntent1
+func (t ConversationPreferenceIntent) AsConversationPreferenceIntent1() (ConversationPreferenceIntent1, error) {
+	var body ConversationPreferenceIntent1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromConversationPreferenceIntent1 overwrites any union data inside the ConversationPreferenceIntent as the provided ConversationPreferenceIntent1
+func (t *ConversationPreferenceIntent) FromConversationPreferenceIntent1(v ConversationPreferenceIntent1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeConversationPreferenceIntent1 performs a merge with any union data inside the ConversationPreferenceIntent, using the provided ConversationPreferenceIntent1
+func (t *ConversationPreferenceIntent) MergeConversationPreferenceIntent1(v ConversationPreferenceIntent1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ConversationPreferenceIntent) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	object := make(map[string]json.RawMessage)
+	if t.union != nil {
+		err = json.Unmarshal(b, &object)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	object["accountId"], err = json.Marshal(t.AccountId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'accountId': %w", err)
+	}
+
+	if t.Archived != nil {
+		object["archived"], err = json.Marshal(t.Archived)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'archived': %w", err)
+		}
+	}
+
+	object["conversationId"], err = json.Marshal(t.ConversationId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'conversationId': %w", err)
+	}
+
+	object["csrf"], err = json.Marshal(t.Csrf)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'csrf': %w", err)
+	}
+
+	object["engineId"], err = json.Marshal(t.EngineId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'engineId': %w", err)
+	}
+
+	object["expectedRevisionId"], err = json.Marshal(t.ExpectedRevisionId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'expectedRevisionId': %w", err)
+	}
+
+	if t.Favorite != nil {
+		object["favorite"], err = json.Marshal(t.Favorite)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'favorite': %w", err)
+		}
+	}
+
+	if t.FormTarget != nil {
+		object["formTarget"], err = json.Marshal(t.FormTarget)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'formTarget': %w", err)
+		}
+	}
+
+	if t.Lang != nil {
+		object["lang"], err = json.Marshal(t.Lang)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'lang': %w", err)
+		}
+	}
+
+	object["operationKey"], err = json.Marshal(t.OperationKey)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'operationKey': %w", err)
+	}
+
+	if t.ReturnTo != nil {
+		object["returnTo"], err = json.Marshal(t.ReturnTo)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'returnTo': %w", err)
+		}
+	}
+	b, err = json.Marshal(object)
+	return b, err
+}
+
+func (t *ConversationPreferenceIntent) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	if err != nil {
+		return err
+	}
+	object := make(map[string]json.RawMessage)
+	err = json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["accountId"]; found {
+		err = json.Unmarshal(raw, &t.AccountId)
+		if err != nil {
+			return fmt.Errorf("error reading 'accountId': %w", err)
+		}
+	}
+
+	if raw, found := object["archived"]; found {
+		err = json.Unmarshal(raw, &t.Archived)
+		if err != nil {
+			return fmt.Errorf("error reading 'archived': %w", err)
+		}
+	}
+
+	if raw, found := object["conversationId"]; found {
+		err = json.Unmarshal(raw, &t.ConversationId)
+		if err != nil {
+			return fmt.Errorf("error reading 'conversationId': %w", err)
+		}
+	}
+
+	if raw, found := object["csrf"]; found {
+		err = json.Unmarshal(raw, &t.Csrf)
+		if err != nil {
+			return fmt.Errorf("error reading 'csrf': %w", err)
+		}
+	}
+
+	if raw, found := object["engineId"]; found {
+		err = json.Unmarshal(raw, &t.EngineId)
+		if err != nil {
+			return fmt.Errorf("error reading 'engineId': %w", err)
+		}
+	}
+
+	if raw, found := object["expectedRevisionId"]; found {
+		err = json.Unmarshal(raw, &t.ExpectedRevisionId)
+		if err != nil {
+			return fmt.Errorf("error reading 'expectedRevisionId': %w", err)
+		}
+	}
+
+	if raw, found := object["favorite"]; found {
+		err = json.Unmarshal(raw, &t.Favorite)
+		if err != nil {
+			return fmt.Errorf("error reading 'favorite': %w", err)
+		}
+	}
+
+	if raw, found := object["formTarget"]; found {
+		err = json.Unmarshal(raw, &t.FormTarget)
+		if err != nil {
+			return fmt.Errorf("error reading 'formTarget': %w", err)
+		}
+	}
+
+	if raw, found := object["lang"]; found {
+		err = json.Unmarshal(raw, &t.Lang)
+		if err != nil {
+			return fmt.Errorf("error reading 'lang': %w", err)
+		}
+	}
+
+	if raw, found := object["operationKey"]; found {
+		err = json.Unmarshal(raw, &t.OperationKey)
+		if err != nil {
+			return fmt.Errorf("error reading 'operationKey': %w", err)
+		}
+	}
+
+	if raw, found := object["returnTo"]; found {
+		err = json.Unmarshal(raw, &t.ReturnTo)
+		if err != nil {
+			return fmt.Errorf("error reading 'returnTo': %w", err)
+		}
+	}
+
+	return err
+}

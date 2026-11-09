@@ -59,20 +59,22 @@ func validCSRF(r *http.Request) bool {
 }
 
 type mutationResult struct {
-	Thumbnail   *engineapi.VideoThumbnail `json:"thumbnail,omitempty"`
-	RoomSession *engineapi.RoomSession    `json:"roomSession,omitempty"`
-	Star        *engineapi.MessageStar    `json:"star,omitempty"`
-	StarPending bool                      `json:"starPending,omitempty"`
-	Preview     *engineapi.MessagePreview `json:"preview,omitempty"`
-	OK          bool                      `json:"ok"`
-	Message     string                    `json:"message"`
-	Code        string                    `json:"code,omitempty"`
-	Redirect    string                    `json:"redirect,omitempty"`
-	MessageID   string                    `json:"messageId,omitempty"`
-	State       string                    `json:"state,omitempty"`
-	Accepted    bool                      `json:"accepted,omitempty"`
-	Rejected    bool                      `json:"rejected,omitempty"`
-	NextKey     string                    `json:"nextKey,omitempty"`
+	Conversation       *engineapi.Conversation   `json:"conversation,omitempty"`
+	PreferencesPending bool                      `json:"preferencesPending,omitempty"`
+	Thumbnail          *engineapi.VideoThumbnail `json:"thumbnail,omitempty"`
+	RoomSession        *engineapi.RoomSession    `json:"roomSession,omitempty"`
+	Star               *engineapi.MessageStar    `json:"star,omitempty"`
+	StarPending        bool                      `json:"starPending,omitempty"`
+	Preview            *engineapi.MessagePreview `json:"preview,omitempty"`
+	OK                 bool                      `json:"ok"`
+	Message            string                    `json:"message"`
+	Code               string                    `json:"code,omitempty"`
+	Redirect           string                    `json:"redirect,omitempty"`
+	MessageID          string                    `json:"messageId,omitempty"`
+	State              string                    `json:"state,omitempty"`
+	Accepted           bool                      `json:"accepted,omitempty"`
+	Rejected           bool                      `json:"rejected,omitempty"`
+	NextKey            string                    `json:"nextKey,omitempty"`
 }
 
 func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
@@ -87,8 +89,13 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 		s.mutationResponse(w, r, 400, mutationResult{Message: text.InvalidForm, Code: "invalid_request", Rejected: true})
 		return
 	}
+	if r.URL.Path == "/ui/conversations/preferences" {
+		if localized, ok := s.catalogs[r.Form.Get("lang")]; ok {
+			text = localized
+		}
+	}
 	if !validCSRF(r) {
-		s.mutationResponse(w, r, 403, mutationResult{Message: text.CSRFError, Code: "csrf"})
+		s.mutationResponse(w, r, 403, mutationResult{Message: text.CSRFError, Code: "csrf", Rejected: r.URL.Path == "/ui/conversations/preferences"})
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
@@ -96,6 +103,10 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 	engine, err := s.client.GetEngineWithResponse(ctx)
 	if err != nil || engine.JSON200 == nil {
 		message := text.PendingAcceptance
+		if r.URL.Path == "/ui/conversations/preferences" {
+			s.mutationResponse(w, r, 503, mutationResult{Message: text.ConversationPreferenceUncertain, Code: "unavailable", PreferencesPending: true})
+			return
+		}
 		if r.URL.Path == "/ui/messages/star" {
 			message = text.StarUncertain
 		}
@@ -110,7 +121,7 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Form.Get("engineId") != engine.JSON200.Id {
-		s.mutationResponse(w, r, 409, mutationResult{Message: text.EngineChanged, Code: "engine_changed"})
+		s.mutationResponse(w, r, 409, mutationResult{Message: text.EngineChanged, Code: "engine_changed", Rejected: r.URL.Path == "/ui/conversations/preferences"})
 		return
 	}
 	result := mutationResult{OK: true, NextKey: newOperationKey()}
@@ -120,6 +131,8 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 		status, result = s.changeRoom(ctx, r, text, false)
 	case "/ui/rooms/leave":
 		status, result = s.changeRoom(ctx, r, text, true)
+	case "/ui/conversations/preferences":
+		status, result = s.changeConversationPreferences(ctx, r, text)
 	case "/ui/messages/star":
 		status, result = s.setStar(ctx, r, text)
 	case "/ui/videos/thumbnail":
@@ -402,18 +415,25 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 		if target == "" {
 			target = safeReturn(r.Form.Get("returnTo"))
 		}
+		if r.URL.Path == "/ui/conversations/preferences" {
+			target = preferenceDestination(r)
+		}
 		http.Redirect(w, r, target, http.StatusSeeOther)
 		return
 	}
 	target := safeReturn(r.Form.Get("returnTo"))
+	if r.URL.Path == "/ui/conversations/preferences" {
+		target = preferenceDestination(r)
+	}
 	u, _ := url.Parse(target)
 	clone := r.Clone(r.Context())
 	clone.URL = u
 	v := s.baseView(clone)
 	v.CSRF = csrfToken(w, r)
 	v.ErrorMessage = result.Message
+	v.PreferenceRecovery = r.URL.Path == "/ui/conversations/preferences" && result.PreferencesPending
 	v.FormTarget = r.Form.Get("formTarget")
-	for _, key := range []string{"address", "label", "endpoint", "accountId", "conversationId", "originalText", "operationKey"} {
+	for _, key := range []string{"address", "label", "endpoint", "accountId", "conversationId", "originalText", "operationKey", "expectedRevisionId", "archived", "favorite", "lang"} {
 		v.Values[key] = r.Form.Get(key)
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -432,7 +452,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 
 func isMutationPath(path string) bool {
 	switch path {
-	case "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
+	case "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
 		return true
 	}
 	return false

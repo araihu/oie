@@ -1,0 +1,48 @@
+package web
+
+import (
+ "strconv"
+ "github.com/araihu/goshtoso/components/button"
+)
+
+// Native submit buttons stay reachable without a JavaScript-only menu or drawer.
+// With scripting, the menu submits these same forms through the scoped controller.
+templ conversationPreferenceForms(v view){
+if v.Selected!=nil {
+<div data-conversation-preference-forms>
+for _,field:=range []string{"archived","favorite"} {
+<form id={preferenceFormID(v.Selected.Id,field)} action="/ui/conversations/preferences" method="post" data-conversation-preference={field}>
+@mutationFields(v,preferenceFormID(v.Selected.Id,field),newOperationKey())
+<input type="hidden" name="lang" value={v.Locale}/>
+<input type="hidden" name="accountId" value={v.Selected.AccountId}/><input type="hidden" name="conversationId" value={v.Selected.Id}/><input type="hidden" name="expectedRevisionId" value={v.Selected.RevisionId}/>
+<input type="hidden" name={field} value={v.preferenceDesired(field)}/>
+<noscript>@button.Button(button.WithType("submit"),button.WithAttrs(templ.Attributes{"disabled":v.Preview}),button.WithAppearance(button.AppearancePlain)){ {v.conversationPreferenceLabel(field)} }</noscript>
+</form>
+}
+</div>
+<p id="conversation-preference-status" class="oie-context-notice" role="status" aria-live="polite" hidden></p>
+<p id="conversation-preference-storage-warning" class="oie-storage-warning" role="status" hidden>{v.Text.ConversationPreferenceStorageUnavailable}</p>
+<div data-conversation-preference-copy hidden data-archive={v.Text.ArchiveConversation} data-unarchive={v.Text.UnarchiveConversation} data-favorite={v.Text.FavoriteConversation} data-unfavorite={v.Text.UnfavoriteConversation} data-retry={v.Text.RetryConversationPreference} data-uncertain={v.Text.ConversationPreferenceUncertain} data-conflict={v.Text.ConversationPreferenceConflict} data-unavailable={v.Text.ConversationPreferenceUnavailable}></div>
+}
+}
+
+templ conversationPreferenceData(v view){
+if v.Selected!=nil {
+<div data-conversation-preference-state hidden data-conversation={v.Selected.Id} data-account={v.Selected.AccountId} data-revision={v.Selected.RevisionId} data-archived={strconv.FormatBool(v.Selected.Archived)} data-favorite={strconv.FormatBool(v.Selected.Favorite)}></div>
+}
+}
+
+templ nativeConversationPreferenceRecovery(v view){
+<form action="/ui/conversations/preferences" method="post" class="oie-native-recovery">
+@mutationFields(v,v.FormTarget,v.field("operationKey"))
+for _,key:=range []string{"accountId","conversationId","expectedRevisionId","lang"} {
+<input type="hidden" name={key} value={v.field(key)}/>
+}
+for _,field:=range []string{"archived","favorite"} {
+if value:=v.field(field);value!="" {
+<input type="hidden" name={field} value={value}/>
+}
+}
+@button.Button(button.WithType("submit")){ {v.Text.RetryConversationPreference} }
+</form>
+}

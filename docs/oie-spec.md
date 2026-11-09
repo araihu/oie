@@ -715,3 +715,14 @@ The supplied screenshots remain the visual reference. Do not reuse their private
 **IMPLEMENTATION SCOPE:** interpret validated incoming XMPP XEP-0308 corrections as retained revisions of a logical message, rather than duplicate timeline bubbles. Keep the original canonical UUID and creation time, display the selected content with an Edited label, and retain the source bodies and revision ancestry. Resolve only explicit protocol references in the same account, conversation and verified sender scope. Similar text, display names and close timestamps never establish an edit.
 
 For archived room corrections, require matching room-scoped occupant identity from a room advertising XEP-0421, in addition to the full occupant address. Unsupported, ambiguous or unverified relationships remain separate messages. Replay previously imported archives through their existing aliases to recover discarded correction metadata. This increment receives corrections; sending corrections and the edit-history browsing interface remain outside this increment.
+
+### Conversation archive and favorite increment
+
+**IMPLEMENTATION SCOPE:** persist archive/unarchive and favorite/unfavorite in the
+owning engine through an API-first, revision-guarded field patch. Record immutable
+revisions and durable operation receipts atomically, preserving activity ordering,
+history, unread state and outbox. New arrivals keep archived conversations archived.
+Header actions use fragment/live updates while preserving the selected conversation,
+draft and visible position; native forms remain available. These preferences are
+shared by clients of the same hosted engine. Independent-engine replication remains
+separate work. See [conversation preferences](conversation-preferences.md).

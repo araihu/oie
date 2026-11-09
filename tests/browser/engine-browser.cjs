@@ -322,6 +322,51 @@ const {chromium} = require('playwright');
     await until(async()=>timeline.evaluate(el=>el.scrollHeight-el.scrollTop-el.clientHeight<80),'jump to latest loads the current end and follows it');
     evidence.workflows.push('Real incoming message preserves older scroll position and exposes a working jump-to-latest action');
 
+    // Exercise the preference wiring through the real rendered menu, BFF,
+    // HTTP contract and SQLite, independently of the isolated HTTP fixture.
+    const preferenceDraft='Keep this draft while this conversation is archived '+nonce;
+    await alicePage.locator('#message-composer').fill(preferenceDraft);
+    await alicePage.evaluate(()=>{window.preferenceComposer=document.getElementById('message-composer');window.preferenceTimeline=document.getElementById('message-timeline');window.preferencePane=document.getElementById('conversation-pane')});
+    const retainedBefore=await api('/api/v1/conversations/'+aliceConversation.id+'/messages?limit=100');
+    const recipientBeforePreferences=await api('/api/v1/conversations/'+bobConversation.id+'/messages?limit=100');
+    const historyBeforePreferences=await Promise.all([alice,bob].map(account=>api('/api/v1/accounts/'+account.id+'/history')));
+    const connectionsBeforePreferences=await Promise.all([alice,bob].map(account=>api('/api/v1/accounts/'+account.id+'/connection')));
+    const preference=async(field,value)=>{
+      await until(async()=>{
+        const current=await api('/api/v1/conversations/'+aliceConversation.id);
+        return await alicePage.locator('#chat-header [data-conversation-preference-state]').getAttribute('data-revision')===current.revisionId;
+      },'current conversation revision before '+field);
+      const prefix=field==='archived'?(value?'archive':'unarchive'):(value?'favorite':'unfavorite');
+      await alicePage.locator('#chat-options button').first().click();
+      await alicePage.locator('#'+prefix+'-conversation-'+aliceConversation.id+':visible').click();
+      await until(async()=>{
+        const current=await api('/api/v1/conversations/'+aliceConversation.id);
+        return current[field]===value&&await alicePage.locator('#chat-header [data-conversation-preference-state]').getAttribute('data-'+field)===String(value);
+      },'real retained '+field+'='+value);
+    };
+    await preference('favorite',true);
+    await preference('archived',true);
+    await until(async()=>await alicePage.locator('#conversation-list a[data-conversation-id="'+aliceConversation.id+'"]').count()===0,'archived source leaves the ordinary real inbox');
+    assert(await alicePage.evaluate(()=>window.preferenceComposer===document.getElementById('message-composer')&&window.preferenceTimeline===document.getElementById('message-timeline')&&window.preferencePane===document.getElementById('conversation-pane')),'archiving preserves the selected conversation workspace');
+    assert.equal(await alicePage.locator('#message-composer').inputValue(),preferenceDraft);
+    assert.deepEqual(await api('/api/v1/conversations/'+aliceConversation.id+'/messages?limit=100'),retainedBefore,'preferences do not create or change source messages');
+    assert.deepEqual(await api('/api/v1/conversations/'+bobConversation.id+'/messages?limit=100'),recipientBeforePreferences,'preferences do not produce a recipient protocol effect');
+    for(const [index,account] of [alice,bob].entries()){
+      assert.equal((await api('/api/v1/accounts/'+account.id+'/history')).retainedMessages,historyBeforePreferences[index].retainedMessages,'preferences preserve account history');
+      assert.equal((await api('/api/v1/accounts/'+account.id+'/connection')).state,connectionsBeforePreferences[index].state,'preferences do not change protocol connection state');
+    }
+    const archivedIncoming='A real incoming message while the conversation is archived '+nonce;
+    await send(bobPage,archivedIncoming);
+    await until(async()=>(await api('/api/v1/conversations/'+aliceConversation.id+'/messages')).items.some(message=>message.originalText===archivedIncoming&&!message.isOwn),'actual XMPP arrival in an archived conversation');
+    const stillArchived=await api('/api/v1/conversations/'+aliceConversation.id);
+    assert(stillArchived.archived&&stillArchived.favorite,'new protocol traffic preserves both app-owned preferences');
+    assert.equal(await alicePage.locator('#message-composer').inputValue(),preferenceDraft);
+    await preference('archived',false);
+    await preference('favorite',false);
+    await until(async()=>await alicePage.locator('#conversation-list a[data-conversation-id="'+aliceConversation.id+'"]').count()===1,'unarchive restores the real inbox row');
+    await alicePage.locator('#message-composer').fill('');
+    evidence.workflows.push('Real menu archive/favorite writes persist through BFF/API/SQLite without message or connection effects, retain the selected workspace/draft, and stay archived on a new XMPP arrival before explicit reset');
+
     await alicePage.screenshot({path: 'artifacts/' + prefix + '-alice-desktop.png', fullPage: true});
     await bobPage.setViewportSize({width: 390, height: 844});
     await bobPage.goto(base + '/?chat=' + bobConversation.id + '&account=' + bob.id + '&theme=dark&lang=pt-BR');

@@ -427,5 +427,15 @@
   "MentionEmpty": "No matching participants",
   "MentionFailed": "Participants could not be loaded. You can still type a name.",
   "MentionPartial": "Only the available participants are listed.",
-  "CapabilityMentions": "Room mentions"
+  "CapabilityMentions": "Room mentions",
+  "ArchiveConversation": "Archive conversation",
+  "UnarchiveConversation": "Unarchive conversation",
+  "FavoriteConversation": "Add to favorites",
+  "UnfavoriteConversation": "Remove from favorites",
+  "RetryConversationPreference": "Retry conversation change",
+  "ConversationPreferenceUpdated": "Conversation updated.",
+  "ConversationPreferenceConflict": "This conversation changed. Review its current state before trying again.",
+  "ConversationPreferenceUncertain": "The change could not be confirmed. Retry the same change.",
+  "ConversationPreferenceUnavailable": "This conversation could not be updated.",
+  "ConversationPreferenceStorageUnavailable": "Changes cannot be saved on this device. Keep this page open to retry an unconfirmed change."
 }
