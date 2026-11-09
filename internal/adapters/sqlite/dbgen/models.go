@@ -49,6 +49,33 @@ type Change struct {
 	Kind       string
 }
 
+type Contact struct {
+	ID           string
+	RevisionID   string
+	AccountID    string
+	Address      string
+	DisplayName  string
+	Subscription string
+	GroupsJson   string
+	Active       int64
+	Payload      string
+}
+
+type ContactRevision struct {
+	ID        string
+	EntityID  string
+	Parents   string
+	Payload   string
+	CreatedAt string
+}
+
+type ContactSource struct {
+	AccountID string
+	State     string
+	CheckedAt string
+	UpdatedAt string
+}
+
 type Conversation struct {
 	ID               string
 	RevisionID       string

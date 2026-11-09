@@ -63,6 +63,14 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err != nil || json.Unmarshal(output, &capabilities) != nil || capabilities.Discovery.State != "not_connected" || len(capabilities.Features) == 0 || len(capabilities.Discovery.Services) != 0 {
 		t.Fatalf("CLI capability diagnostics: %v %s", err, output)
 	}
+	if err = engine.ContactsReceived(t.Context(), domain.ID(account.Id), []application.ContactInput{{Address: "bob@localhost", DisplayName: "Generated Café", Subscription: "none"}}); err != nil {
+		t.Fatal(err)
+	}
+	output, err = run("", "accounts", "list-contacts", "--q", "cafe", "--account-id", account.Id)
+	var contacts engineapi.ContactPage
+	if err != nil || json.Unmarshal(output, &contacts) != nil || len(contacts.Items) != 1 || contacts.Items[0].Address != "bob@localhost" || contacts.Items[0].AccountId != account.Id || len(contacts.Sources) != 1 || contacts.Sources[0].State != "known" {
+		t.Fatalf("CLI saved contacts: %v %s", err, output)
+	}
 	output = registration
 	replay, err := run(body, "accounts", "register-account", "--idempotency-key", string(key), "--body-stdin")
 	if err != nil || !bytes.Equal(output, replay) {

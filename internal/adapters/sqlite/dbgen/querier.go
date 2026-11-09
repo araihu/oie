@@ -23,6 +23,7 @@ type Querier interface {
 	GetAccount(ctx context.Context, id string) (string, error)
 	GetArchiveAlias(ctx context.Context, arg GetArchiveAliasParams) (string, error)
 	GetArchiveCheckpoint(ctx context.Context, arg GetArchiveCheckpointParams) (string, error)
+	GetContactSource(ctx context.Context, accountID string) (ContactSource, error)
 	GetContentHead(ctx context.Context, canonicalID string) (MessageContentHead, error)
 	GetConversation(ctx context.Context, id string) (Conversation, error)
 	GetConversationReadHead(ctx context.Context, conversationID string) (GetConversationReadHeadRow, error)
@@ -45,6 +46,7 @@ type Querier interface {
 	InsertAvatar(ctx context.Context, arg InsertAvatarParams) error
 	InsertAvatarRevision(ctx context.Context, arg InsertAvatarRevisionParams) error
 	InsertChange(ctx context.Context, arg InsertChangeParams) (int64, error)
+	InsertContactRevision(ctx context.Context, arg InsertContactRevisionParams) error
 	InsertConversation(ctx context.Context, arg InsertConversationParams) error
 	InsertConversationRevision(ctx context.Context, arg InsertConversationRevisionParams) error
 	InsertCorrectionFact(ctx context.Context, arg InsertCorrectionFactParams) (int64, error)
@@ -70,6 +72,8 @@ type Querier interface {
 	ListAvatars(ctx context.Context, arg ListAvatarsParams) ([]Avatar, error)
 	ListCanonicalMessageReferences(ctx context.Context, canonicalID string) ([]ListCanonicalMessageReferencesRow, error)
 	ListChanges(ctx context.Context, arg ListChangesParams) ([]Change, error)
+	ListContactRecords(ctx context.Context, accountID string) ([]Contact, error)
+	ListContactSources(ctx context.Context, accountID string) ([]ListContactSourcesRow, error)
 	ListConversationMessageStars(ctx context.Context, arg ListConversationMessageStarsParams) ([]ListConversationMessageStarsRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
@@ -84,6 +88,8 @@ type Querier interface {
 	PreviewJobs(ctx context.Context, arg PreviewJobsParams) ([]MessagePreview, error)
 	PutArchiveCheckpoint(ctx context.Context, arg PutArchiveCheckpointParams) error
 	PutCanonicalAlias(ctx context.Context, arg PutCanonicalAliasParams) error
+	PutContact(ctx context.Context, arg PutContactParams) error
+	PutContactSource(ctx context.Context, arg PutContactSourceParams) error
 	PutContentHead(ctx context.Context, arg PutContentHeadParams) error
 	PutConversationReadHead(ctx context.Context, arg PutConversationReadHeadParams) error
 	PutHistoryStatus(ctx context.Context, arg PutHistoryStatusParams) error
@@ -92,6 +98,7 @@ type Querier interface {
 	PutSharedContent(ctx context.Context, arg PutSharedContentParams) error
 	ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error
 	ResolveMessageAlias(ctx context.Context, aliasID string) (string, error)
+	SearchContacts(ctx context.Context, arg SearchContactsParams) ([]SearchContactsRow, error)
 	SearchMessages(ctx context.Context, arg SearchMessagesParams) ([]SearchMessagesRow, error)
 	SetOperationResult(ctx context.Context, arg SetOperationResultParams) error
 	SetRoomObservation(ctx context.Context, arg SetRoomObservationParams) error

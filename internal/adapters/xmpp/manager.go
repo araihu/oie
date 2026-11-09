@@ -59,6 +59,7 @@ type entry struct {
 	avatarMu         sync.Mutex
 	avatarTargets    map[string]string
 	avatarDirty      map[string]string
+	contactsWake     chan struct{}
 }
 type Manager struct {
 	dir         string
@@ -310,6 +311,8 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.mu.Lock()
 			e.session = session
 			e.raw = raw
+			e.contactsWake = make(chan struct{}, 1)
+			contactsWake := e.contactsWake
 			e.mu.Unlock()
 			if ctx.Err() != nil {
 				_ = raw.Close()
@@ -325,6 +328,10 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 				detailsWake := e.detailsWake
 				e.mu.RUnlock()
 				go func() { defer m.workers.Done(); m.detailsLoop(historyCtx, e, session, detailsWake) }()
+				if _, ok := m.host.(application.ContactHost); ok {
+					m.workers.Add(1)
+					go func() { defer m.workers.Done(); m.contactsLoop(historyCtx, e, session, contactsWake) }()
+				}
 				delay = time.Second
 				err = session.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
 					return m.handle(ctx, e, tokens, start)
@@ -624,11 +631,15 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			return nil
 		}
 		var query struct {
-			Ping  *struct{}        `xml:"urn:xmpp:ping ping"`
-			Disco *disco.InfoQuery `xml:"http://jabber.org/protocol/disco#info query"`
+			Ping   *struct{}             `xml:"urn:xmpp:ping ping"`
+			Disco  *disco.InfoQuery      `xml:"http://jabber.org/protocol/disco#info query"`
+			Roster *contactRosterPayload `xml:"jabber:iq:roster query"`
 		}
 		if err = decoder.Decode(&query); err != nil {
 			return err
+		}
+		if query.Roster != nil {
+			return m.rosterPush(e, iq, *query.Roster, t)
 		}
 		reply := iq.Error(stanza.Error{Type: stanza.Cancel, Condition: stanza.ServiceUnavailable})
 		if query.Ping != nil && iq.Type == stanza.GetIQ {

@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.21.0",
+    "version": "0.22.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.",
     "contact": {
       "name": "Arai Hû",
@@ -50,6 +50,76 @@
     }
   ],
   "paths": {
+    "/api/v1/contacts": {
+      "get": {
+        "tags": [
+          "Accounts"
+        ],
+        "operationId": "listContacts",
+        "summary": "Search saved protocol contacts",
+        "description": "Read the retained per-account contact directory without fetching a roster, changing subscriptions, adding contacts or opening conversations. Unknown and unavailable sources are distinct from an observed empty roster. Cached contacts remain searchable while disconnected. Results are ordered by stable contact UUID and filtered before pagination.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Optional trimmed UTF-8 text, at most 200 Unicode code points. Matches saved name, address, groups and account label.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "accountId",
+            "in": "query",
+            "description": "Restrict contacts to one owning account.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque position bound to the engine, account and trimmed query.",
+            "schema": {
+              "type": "string",
+              "maxLength": 512
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of contacts returned.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved contacts with independent provider observation coverage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/messages/search": {
       "get": {
         "tags": [
@@ -4159,6 +4229,127 @@
             "maxLength": 40,
             "description": "Stable failure key. Failed extraction is retried only on explicit request.",
             "example": "frame_unavailable"
+          }
+        }
+      },
+      "Contact": {
+        "type": "object",
+        "description": "A retained protocol roster entry, separate from inferred peers, room occupants and future app-owned identity linking.",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "revisionId",
+          "accountId",
+          "accountLabel",
+          "address",
+          "displayName",
+          "groups",
+          "subscription"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "revisionId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "accountLabel": {
+            "type": "string",
+            "description": "Current label of the owning account."
+          },
+          "address": {
+            "type": "string",
+            "description": "Canonical protocol contact address."
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Saved provider roster name, or address when no name was supplied."
+          },
+          "groups": {
+            "type": "array",
+            "description": "Provider roster categories, not chat-room membership.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subscription": {
+            "type": "string",
+            "description": "Provider-observed presence subscription, without changing it.",
+            "enum": [
+              "none",
+              "to",
+              "from",
+              "both"
+            ]
+          },
+          "conversationId": {
+            "$ref": "#/components/schemas/ID"
+          }
+        }
+      },
+      "ContactSource": {
+        "type": "object",
+        "description": "Last observed roster coverage for one account. A known snapshot remains cached when disconnected.",
+        "additionalProperties": false,
+        "required": [
+          "accountId",
+          "state"
+        ],
+        "properties": {
+          "accountId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "state": {
+            "type": "string",
+            "description": "Unknown before a successful observation; unavailable after a failed refresh, preserving cached entries.",
+            "enum": [
+              "unknown",
+              "known",
+              "unavailable"
+            ]
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC time of the last successful complete roster observation."
+          }
+        }
+      },
+      "ContactPage": {
+        "type": "object",
+        "description": "Bounded saved contact results and observation coverage.",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "sources"
+        ],
+        "example": {
+          "items": [],
+          "sources": []
+        },
+        "properties": {
+          "items": {
+            "type": "array",
+            "description": "Matching contacts in stable UUID order.",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/Contact"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "maxLength": 512,
+            "description": "Opaque next matching page, absent at the end."
+          },
+          "sources": {
+            "type": "array",
+            "description": "Observation status of accounts in the requested scope.",
+            "items": {
+              "$ref": "#/components/schemas/ContactSource"
+            }
           }
         }
       },
