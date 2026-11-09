@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.23.0
+  version: 0.24.0
   description: Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
     are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.
@@ -1943,6 +1943,51 @@ paths:
               $ref: '#/components/schemas/SendMessage'
             example:
               originalText: Hello from Oie!
+  /api/v1/messages/{messageId}/edit-history:
+    parameters:
+    - $ref: '#/components/parameters/MessageID'
+    get:
+      operationId: getMessageEditHistory
+      tags: [Messages]
+      summary: Read observed content revisions of one retained message
+      description: Read-only bounded history of canonical content sources. Resolves retained aliases and excludes delivery-state revisions and unverified correction relationships. Versions never observed cannot be recovered by this query. Newest authored timestamp first with revision UUID tie-breaking; isCurrent is authoritative regardless of timestamp order. Cursor binds engine, account, conversation, canonical message and the exact observed-history snapshot. No provider history/profile/media requests, read receipts, sends or mutations occur.
+      parameters:
+      - in: query
+        name: limit
+        description: Maximum content revisions in this page.
+        schema: {type: integer, minimum: 1, maximum: 50, default: 20}
+      - in: query
+        name: cursor
+        description: Opaque position bound to the exact retained-history snapshot and owning scopes.
+        schema: {type: string, maxLength: 2048}
+      responses:
+        '200':
+          description: Scoped retained content revisions and optional older-page cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageEditHistoryPage'
+              example:
+                requestedMessageId: 019a5df0-0000-7000-8000-000000000003
+                messageId: 019a5df0-0000-7000-8000-000000000003
+                accountId: 019a5df0-0000-7000-8000-000000000001
+                conversationId: 019a5df0-0000-7000-8000-000000000002
+                currentRevisionId: 019a5df0-0000-7000-8000-000000000004
+                snapshot: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+                items: []
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Observed content history changed; restart at the first page
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example: {type: 'urn:oie:problem:history_changed', title: Conflict, status: 409, code: history_changed}
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /api/v1/messages/{messageId}/sender-profile:
     parameters:
     - $ref: '#/components/parameters/MessageID'
@@ -2669,6 +2714,7 @@ components:
           - idempotency_conflict
           - account_exists
           - invalid_cursor
+          - history_changed
           - unavailable
           - state_conflict
           - protocol_unavailable
@@ -3439,6 +3485,76 @@ components:
           description: Opaque engine-scoped activity cursor.
       example:
         items: []
+    MessageEditHistoryItem:
+      type: object
+      description: One immutable observed content version, not a transport-state transition.
+      additionalProperties: false
+      required: [revisionId, sourceMessageId, createdAt, originalText, sender, isCurrent, isOriginal, parentRevisionIds]
+      properties:
+        revisionId:
+          $ref: '#/components/schemas/ID'
+        sourceMessageId:
+          $ref: '#/components/schemas/ID'
+        createdAt:
+          type: string
+          format: date-time
+          description: Observed authored UTC instant; ordering does not establish causality.
+          example: '2026-11-09T12:00:00Z'
+        originalText:
+          type: string
+          description: Exact retained source text including authored Markdown and compatibility fallback.
+          example: Corrected text
+        sender:
+          $ref: '#/components/schemas/Sender'
+        isCurrent:
+          type: boolean
+          description: This is the selected content head, independently of timestamp order.
+          example: true
+        isOriginal:
+          type: boolean
+          description: Verified original or ordinary initial source; false for an orphan correction whose earlier source was never observed.
+          example: false
+        parentRevisionIds:
+          type: array
+          maxItems: 128
+          description: Verified observed content ancestry; omitted ancestors are not inferred.
+          items:
+            $ref: '#/components/schemas/ID'
+          example: []
+    MessageEditHistoryPage:
+      type: object
+      description: A bounded page from an exact snapshot of one canonical message's observed content history.
+      additionalProperties: false
+      required: [requestedMessageId, messageId, accountId, conversationId, currentRevisionId, snapshot, items]
+      properties:
+        requestedMessageId:
+          $ref: '#/components/schemas/ID'
+        messageId:
+          $ref: '#/components/schemas/ID'
+        accountId:
+          $ref: '#/components/schemas/ID'
+        conversationId:
+          $ref: '#/components/schemas/ID'
+        currentRevisionId:
+          $ref: '#/components/schemas/ID'
+        snapshot:
+          type: string
+          minLength: 64
+          maxLength: 64
+          pattern: '^[a-f0-9]{64}$'
+          description: Digest of scoped content history and selected head; delivery-state changes do not invalidate it.
+          example: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        items:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/MessageEditHistoryItem'
+          example: []
+        nextCursor:
+          type: string
+          maxLength: 2048
+          description: Present only when older observed versions remain in the same snapshot.
+          example: opaque-history-cursor
     MessageSenderProfile:
       type: object
       description: Published profile data for a retained source author. Optional values never imply a verified legal name.

@@ -4,12 +4,15 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/xml"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/httpapi"
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/araihu/oie/internal/adapters/sqlite"
 	adapter "github.com/araihu/oie/internal/adapters/xmpp"
 	"github.com/araihu/oie/internal/application"
@@ -137,8 +140,62 @@ func TestReceivedCorrectionWirePreservesLogicalMessage(t *testing.T) {
 	if err != nil || replay.RevisionID != current.RevisionID || replay.OriginalText != corrected {
 		t.Fatal("wire replay created another correction revision", err)
 	}
+	handler, err := httpapi.New(engine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := httptest.NewServer(handler)
+	defer api.Close()
+	client, err := engineapi.NewClientWithResponses(api.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	limit := 1
+	first, err := client.GetMessageEditHistoryWithResponse(ctx, string(source.ID), &engineapi.GetMessageEditHistoryParams{Limit: &limit})
+	if err != nil || first.JSON200 == nil || len(first.JSON200.Items) != 1 || first.JSON200.NextCursor == nil {
+		t.Fatal("bounded observed history unavailable", err)
+	}
+	page := first.JSON200
+	if page.MessageId != string(source.ID) || page.RequestedMessageId != string(source.ID) || page.AccountId != string(registered.Account.ID) || page.ConversationId != string(conversation.ID) || page.CurrentRevisionId != string(current.RevisionID) || len(page.Snapshot) != 64 {
+		t.Fatal("history lost canonical source scope")
+	}
+	older, err := client.GetMessageEditHistoryWithResponse(ctx, string(source.ID), &engineapi.GetMessageEditHistoryParams{Limit: &limit, Cursor: page.NextCursor})
+	if err != nil || older.JSON200 == nil || len(older.JSON200.Items) != 1 || older.JSON200.NextCursor != nil || older.JSON200.Snapshot != page.Snapshot {
+		t.Fatal("bounded older history unavailable", err)
+	}
+	seen := map[string]engineapi.MessageEditHistoryItem{}
+	for _, version := range append(page.Items, older.JSON200.Items...) {
+		seen[version.OriginalText] = version
+	}
+	if len(seen) != 2 || !seen[original].IsOriginal || seen[original].IsCurrent || !seen[corrected].IsCurrent || seen[corrected].IsOriginal {
+		t.Fatal("observed original/current labels or retained source bodies lost")
+	}
+	if seen[corrected].RevisionId != page.CurrentRevisionId || len(seen[corrected].ParentRevisionIds) != 1 || seen[corrected].ParentRevisionIds[0] != seen[original].RevisionId {
+		t.Fatal("content ancestry missing")
+	}
+	// A retained correction alias resolves to the same logical source history.
+	alias := seen[corrected].SourceMessageId
+	aliased, err := client.GetMessageEditHistoryWithResponse(ctx, alias, &engineapi.GetMessageEditHistoryParams{})
+	if err != nil || aliased.JSON200 == nil || aliased.JSON200.MessageId != string(source.ID) || aliased.JSON200.RequestedMessageId != alias || aliased.JSON200.Snapshot != page.Snapshot {
+		t.Fatal("correction alias did not resolve scoped history", err)
+	}
+	// Every correction uses the original client stanza ID, including later edits.
+	secondBody := strings.Replace(corrected, "Corrected XEP-0308", "Second correction", 1)
+	send("correction-second-"+string(id()), secondBody, originalID)
+	eventually(t, func() bool {
+		next, err := engine.Message(ctx, source.ID)
+		return err == nil && next.OriginalText == secondBody
+	})
+	stale, err := client.GetMessageEditHistoryWithResponse(ctx, string(source.ID), &engineapi.GetMessageEditHistoryParams{Limit: &limit, Cursor: page.NextCursor})
+	if err != nil || stale.StatusCode() != 409 {
+		t.Fatal("changed content history accepted stale cursor", err)
+	}
+	fresh, err := client.GetMessageEditHistoryWithResponse(ctx, string(source.ID), &engineapi.GetMessageEditHistoryParams{})
+	if err != nil || fresh.JSON200 == nil || len(fresh.JSON200.Items) != 3 || fresh.JSON200.Snapshot == page.Snapshot {
+		t.Fatal("new observed correction did not refresh history", err)
+	}
 	pending, err := store.PendingMessages(ctx, time.Now().Add(time.Hour))
 	if err != nil || len(pending) != 0 {
-		t.Fatal("received correction created outbox work", err)
+		t.Fatal("received correction/history read created outbox work", err)
 	}
 }

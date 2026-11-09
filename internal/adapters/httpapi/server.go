@@ -80,6 +80,8 @@ func WriteProblem(w http.ResponseWriter, err error) {
 		status, code = http.StatusConflict, "state_conflict"
 	case errors.Is(err, application.ErrProtocolUnavailable):
 		status, code = http.StatusServiceUnavailable, "protocol_unavailable"
+	case errors.Is(err, application.ErrHistoryChanged):
+		status, code = http.StatusConflict, "history_changed"
 	case errors.Is(err, application.ErrInvalidCursor):
 		status, code = http.StatusConflict, "invalid_cursor"
 	}
@@ -168,7 +170,7 @@ func (s *Server) GetEngine(ctx context.Context, _ engineapi.GetEngineRequestObje
 	}
 	return engineapi.GetEngine200JSONResponse{
 		Id: string(state.ID), Role: engineapi.EngineRole(state.Role),
-		ApiVersion: "0.23.0", EventCursor: cursor(state.ID, state.Sequence),
+		ApiVersion: "0.24.0", EventCursor: cursor(state.ID, state.Sequence),
 	}, nil
 }
 
