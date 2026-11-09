@@ -57,23 +57,29 @@ const {chromium} = require('playwright');
   const send = async (page, text) => {
     const form = page.locator('#send-message-form');
     await form.locator('#message-composer').fill(text);
+    const operation=await form.locator('[name="operationKey"]').inputValue();
     await form.locator('[data-send-message]').click();
-    await until(async () => (await form.locator('#message-composer').inputValue()) === '', 'composer clears after engine acceptance');
+    await until(async () => (await form.locator('#message-composer').getAttribute('aria-readonly')) === 'false' && (await form.locator('[name="operationKey"]').inputValue()) !== operation && (await form.getAttribute('data-busy')) !== 'true', 'engine acceptance settles the pending journal and unlocks a fresh operation');
+    assert.equal((await api('/api/v1/operations/'+operation)).kind,'send_message','real engine stores the accepted send receipt');
+    assert.equal(await form.locator('#message-composer').inputValue(),'','composer is empty after engine acceptance');
   };
   const pickAccount = async (page, label) => {
     await page.locator('[data-account-switcher]:visible').first().click();
     const choice=page.locator('[data-switch-account]:visible').filter({hasText:label});
     const account=await choice.getAttribute('data-switch-account');
+    const generation=await page.evaluate(()=>window.OieRuntime.generation);
     await choice.click();
     await page.waitForURL(url => (url.searchParams.get('account') || '') === account);
     assert.equal(await page.locator('[data-account-switcher]:visible').textContent().then(t=>t.includes(label)),true);
-    await until(async()=>page.evaluate(expectedAccount=>{
-      if(document.readyState!=='complete'||document.body.dataset.accountId!==expectedAccount)return false;
+    await until(async()=>page.evaluate(({expectedAccount,generation})=>{
+      if(document.readyState!=='complete'||document.body.dataset.accountId!==expectedAccount||window.OieRuntime.generation<=generation)return false;
+      const pane=document.getElementById('conversation-pane');
+      if(!pane||pane.dataset.accountId!==expectedAccount||pane.dataset.engineId!==document.body.dataset.engineId||pane.dataset.conversationId!==document.body.dataset.conversationId)return false;
       const input=document.querySelector('#message-composer');if(!input)return false;
       const key=['oie.draft.v1',document.body.dataset.engineId,expectedAccount,document.body.dataset.conversationId].join(':');
       const raw=localStorage.getItem(key),saved=raw?JSON.parse(raw):null;
       return input.value===(saved?.text||'');
-    },account),'initialized account-scoped device draft for '+label);
+    },{expectedAccount:account,generation}),'initialized account-scoped device draft for '+label);
 
   };
   try {
@@ -128,28 +134,54 @@ const {chromium} = require('playwright');
     }, 'Alice conversation created');
     await bobPage.goto(base + '/?theme=dark&lang=en&account=' + bob.id);
     const originalOperation = await alicePage.locator('#send-message-form [name="operationKey"]').inputValue();
-    let replyLost = false;
+    let replyLost = false, acceptedMessageId;
     const loseReply = async route => {
       const response = await route.fetch();
       assert.equal(response.status(),200);
       const result = await response.json();
       assert(result.ok && result.accepted, 'injected loss occurs only AFTER real engine acceptance');
+      acceptedMessageId = result.messageId;
       await route.abort('failed');
       replyLost = true;
     };
     expectedLostReply = true;
+    // Keep automatic reconciliation unavailable until the explicit retry.
+    const loseReconciliation = route => route.abort('failed');
+    await alicePage.route('**/ui/messages/reconcile',loseReconciliation);
     await alicePage.route('**/ui/messages/send',loseReply);
     await alicePage.locator('#message-composer').fill(firstText);
     await alicePage.locator('[data-send-message]').click();
     await until(async () => alicePage.locator('#message-composer').getAttribute('aria-readonly').then(value=>value==='true'), 'uncertain submission locks original body');
     await until(async () => replyLost, 'discarded the real successful browser response');
     await until(async () => (await api('/api/v1/operations/' + originalOperation)).kind === 'send_message', 'real acceptance receipt despite lost browser response');
-    assert.equal(await alicePage.locator('#message-composer').inputValue(),firstText);
+    const uncertain = alicePage.locator('[data-pending-send][data-pending-state="uncertain"]');
+    await uncertain.waitFor({state:'visible'});
+    assert.equal(await uncertain.locator('[data-pending-send-text]').textContent(),firstText, 'pending bubble retains the immutable original body');
+    assert.equal(await alicePage.locator('#message-composer').inputValue(),'','pending body moves out of the composer');
+    assert.equal(await alicePage.locator('[data-send-message]').isDisabled(),true,'a pending send cannot be resubmitted through the composer');
     assert.equal(await alicePage.locator('#send-message-form [name="operationKey"]').inputValue(),originalOperation);
+    const retained = await alicePage.evaluate(() => {
+      const key=['oie.draft.v1',document.body.dataset.engineId,document.body.dataset.accountId,document.body.dataset.conversationId].join(':');
+      return JSON.parse(localStorage.getItem(key));
+    });
+    assert.equal(retained.text,firstText,'device journal retains the lost-response body');
+    assert.equal(retained.key,originalOperation,'device journal retains the original operation key');
+    assert.equal(retained.pending,true,'uncertain submission remains pending');
     await until(async () => (await alicePage.locator('#send-message-form').getAttribute('data-busy')) !== 'true', 'lost response shows retry state');
     await alicePage.unroute('**/ui/messages/send',loseReply);
-    await alicePage.locator('[data-send-message]').click();
-    await until(async () => (await alicePage.locator('#message-composer').inputValue()) === '', 'same-key retry reconciles accepted send');
+    const [retryResponse] = await Promise.all([
+      alicePage.waitForResponse(r=>r.url().endsWith('/ui/messages/send')&&r.request().method()==='POST'),
+      uncertain.locator('[data-pending-send-retry]').click(),
+    ]);
+    const retryBody=new URLSearchParams(retryResponse.request().postData());
+    assert.equal(retryBody.get('operationKey'),originalOperation,'explicit retry reuses the immutable operation key');
+    assert.equal(retryBody.get('originalText'),firstText,'explicit retry reuses the immutable body');
+    const retryResult=await retryResponse.json();
+    assert(retryResult.ok&&retryResult.accepted,'real engine accepts the explicit retry');
+    assert.equal(retryResult.messageId,acceptedMessageId,'retry returns the original canonical message');
+    await alicePage.unroute('**/ui/messages/reconcile',loseReconciliation);
+    await until(async () => (await alicePage.locator('#message-composer').getAttribute('aria-readonly')) === 'false' && (await alicePage.locator('#send-message-form [name="operationKey"]').inputValue()) !== originalOperation, 'same-key retry reconciles accepted send and unlocks a fresh operation');
+    assert.equal(await alicePage.locator('#message-composer').inputValue(),'');
     expectedLostReply = false;
     evidence.workflows.push('Drop the actual successful browser response, retain locked body/key, reconcile/retry once without a second engine/provider effect');
     let bobConversation;
@@ -172,6 +204,9 @@ const {chromium} = require('playwright');
     await pickAccount(alicePage,'Bob development');
     assert.equal(await alicePage.locator('#message-composer').inputValue(),'','Alice draft must not move to Bob');
     await pickAccount(alicePage,'Alice development');
+    // Archive recovery can make another conversation the account's latest.
+    await alicePage.locator('a[data-conversation-id="'+aliceConversation.id+'"]').click();
+    await until(async()=>alicePage.evaluate(({conversation,draft})=>document.body.dataset.conversationId===conversation&&document.querySelector('#message-composer')?.value===draft,{conversation:aliceConversation.id,draft}),'the original conversation restores its device draft');
     assert.equal(await alicePage.locator('#message-composer').inputValue(),draft,'switching back restores the account-scoped draft');
     await alicePage.locator('#message-composer').fill('');
     evidence.workflows.push('Bob replies; Alice receives automatically without losing her unsent draft; profile switching keeps drafts isolated');
@@ -221,14 +256,29 @@ const {chromium} = require('playwright');
       evidence.workflows.push('Real source star/unstar through message menus, two-tab SSE, independent content revisions, account isolation and preserved draft/focus with no new protocol send');
     } finally { await starPeer.close(); }
 
+    await alicePage.locator('a[href*="section=media"]:visible').first().click();
+    await alicePage.locator('#shared-content-scroll').waitFor({state:'visible'});
+    assert.equal(await alicePage.locator('#message-timeline').count(),0,'Alice has left the conversation before Bob sends the unread message');
+    const unreadText='Unread while Alice is away '+nonce;
+    await send(bobPage,unreadText);
+    let unreadState;
+    await until(async () => {
+      unreadState=await api('/api/v1/conversations/'+aliceConversation.id+'/read-state');
+      return unreadState.unreadCount>0;
+    },'real incoming XMPP message remains unread while Alice browses shared content');
     await alicePage.locator('[data-account-switcher]:visible').click();
     const menu=alicePage.getByRole('dialog',{name:'Switch account',exact:true});
+    const accountUnread=async ()=>(await api('/api/v1/conversations?accountId='+alice.id)).items.reduce((total,conversation)=>total+conversation.unreadCount,0);
+    await until(async () => Number(await menu.locator('[data-account-unread="'+alice.id+'"]').textContent())===await accountUnread(),'profile unread badge agrees with aggregate account read state');
     const unread=Number(await menu.locator('[data-account-unread="'+alice.id+'"]').textContent());
     assert(unread>0,'profile shows actual unread messages for the account');
+    assert.equal(unread,await accountUnread(),'rendered account unread count matches all retained conversations');
     await menu.locator('form[data-oie-action="disconnect"] button[type="submit"]').click();
     await until(async () => (await api('/api/v1/accounts/' + alice.id + '/connection')).state === 'not_connected', 'explicit profile disconnect');
     assert.equal((await api('/api/v1/accounts/'+bob.id+'/connection')).state,'connected','disconnect targets only the selected account');
     await alicePage.keyboard.press('Escape');await menu.waitFor({state:'hidden'});
+    await alicePage.goto(base+'/?chat='+aliceConversation.id+'&account='+alice.id+'&lang=en&theme=dark');
+    await alicePage.locator('#message-composer').waitFor({state:'visible'});
     const cancelledText = 'Cancel this queued message ' + nonce;
     await send(alicePage, cancelledText);
     let cancelled;
@@ -254,14 +304,21 @@ const {chromium} = require('playwright');
     await bobPage.locator('[data-message-id]').filter({hasText: longText}).waitFor({state:'attached'});
     const timeline=bobPage.locator('#message-timeline');
     await until(async()=>timeline.evaluate(el=>el.scrollHeight>el.clientHeight+500),'long real message gives a scrollable timeline');
-    await timeline.evaluate(el=>{el.scrollTop=0;el.dispatchEvent(new Event('scroll'));});
+    await timeline.evaluate(el=>{el.scrollTop=el.scrollHeight-el.clientHeight-400;el.dispatchEvent(new Event('scroll'));});
+    const readingRow=bobPage.locator('[data-message-id]').filter({hasText:longText});
+    const readingAnchor=await readingRow.evaluate(row=>({id:row.dataset.messageId,top:row.getBoundingClientRect().top-document.getElementById('message-timeline').getBoundingClientRect().top}));
     const whileReading='A new message while you read earlier history '+nonce;
     await send(alicePage,whileReading);
-    await bobPage.locator('[data-message-id]').filter({hasText:whileReading}).waitFor({state:'attached'});
-    assert(await timeline.evaluate(el=>el.scrollTop<80),'incoming message preserves position away from bottom');
+    await until(async () => (await api('/api/v1/conversations/'+bobConversation.id+'/messages')).items.some(message=>message.originalText===whileReading&&!message.isOwn),'the real recipient receives while Bob reads earlier history');
+    await until(async () => (await bobPage.locator('a[data-conversation-id="'+bobConversation.id+'"]').textContent()).includes(whileReading),'live inbox observes the new message while the timeline may retain an older window');
+    const anchorRow=timeline.locator('[data-message-id="'+readingAnchor.id+'"]');
+    assert(await anchorRow.count(),'the reading anchor stays mounted');
+    const anchorTop=await anchorRow.evaluate(row=>row.getBoundingClientRect().top-document.getElementById('message-timeline').getBoundingClientRect().top);
+    assert(Math.abs(anchorTop-readingAnchor.top)<3,'incoming message preserves the visible reading anchor');
     await bobPage.locator('[data-jump-latest]').waitFor({state:'visible'});
     await bobPage.locator('[data-jump-latest]').click();
-    assert(await timeline.evaluate(el=>el.scrollHeight-el.scrollTop-el.clientHeight<80),'jump to latest follows the current end');
+    await bobPage.locator('[data-message-id]').filter({hasText:whileReading}).waitFor({state:'attached'});
+    await until(async()=>timeline.evaluate(el=>el.scrollHeight-el.scrollTop-el.clientHeight<80),'jump to latest loads the current end and follows it');
     evidence.workflows.push('Real incoming message preserves older scroll position and exposes a working jump-to-latest action');
 
     await alicePage.screenshot({path: 'artifacts/' + prefix + '-alice-desktop.png', fullPage: true});
