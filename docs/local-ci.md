@@ -8,9 +8,9 @@ subscriptions, captures command output per stage, and treats execution,
 artifact-export and session-close errors as failures.
 
 The Go container limits `GOMAXPROCS` to four, which also bounds the Go command's
-default package/build parallelism on shared runners. Concurrent unrestricted runs
-on the 12-CPU development runner caused the real FFmpeg fixture to exceed its
-five-second deadline during race tests. The decoder now caps PNG output encoding
+default package/build parallelism on shared runners. The real FFmpeg fixture
+exceeded its five-second deadline during concurrent unrestricted race runs on
+the 12-CPU development runner. The decoder now caps PNG output encoding
 threads as well as decoding threads; the application deadline stays unchanged.
 Thirty local extractions before and after the output cap produced identical PNG
 sizes, with observed peak threads falling from 15 to 5. This measurement explains
