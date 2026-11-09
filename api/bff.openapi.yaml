@@ -17,6 +17,80 @@ tags:
 - name: Messages
   description: Browser submission receipt recovery
 paths:
+  /ui/message-search:
+    get:
+      operationId: searchBrowserMessages
+      tags: [Messages]
+      summary: Render scoped retained message search results
+      description: Returns escaped plain-text result HTML only. Blank queries do not call engine message search. No read receipt, provider operation, profile/media download or preview enrichment is triggered. Query and cursor are scoped to one engine, account, conversation and explicit edit-history choice. This fragment is separate from conversation-title filtering. Native GET /search accepts the same search fields and renders the application shell.
+      parameters:
+      - in: query
+        name: engineId
+        required: true
+        description: Engine identity that owns this browser search session.
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: q
+        description: Retained text/metadata query, trimmed before engine search. Empty means the local initial state.
+        schema:
+          type: string
+          maxLength: 200
+      - in: query
+        name: accountId
+        description: Optional owning account scope.
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: conversationId
+        description: Optional conversation scope, validated within account when both are supplied.
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: includeEditHistory
+        description: Include retained earlier content versions, explicitly labelled as prior versions.
+        schema:
+          type: boolean
+          default: false
+      - in: query
+        name: cursor
+        description: Opaque cursor bound to the exact normalized query and scopes.
+        schema:
+          type: string
+          maxLength: 2048
+      - in: query
+        name: limit
+        description: Maximum returned hits; browser requests use 30.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      - in: query
+        name: lang
+        description: Result locale.
+        schema:
+          type: string
+          enum: [en, pt-BR]
+      responses:
+        '200':
+          description: Scoped HTML results or local blank-query state, with engine/query/scope/cursor metadata for safe swaps
+          content:
+            text/html:
+              schema:
+                type: string
+              example: '<div id="message-search-page" data-search-state="ready"></div>'
+        '400':
+          description: Invalid query or stale/foreign cursor; render in-shell recovery
+        '404':
+          description: Account/conversation scope unavailable
+        '409':
+          description: The requested engine identity changed; old results must be cleared
+        '503':
+          description: Retained search unavailable; same scoped request can be retried
   /ui/conversations/preferences:
     post:
       operationId: updateBrowserConversationPreferences

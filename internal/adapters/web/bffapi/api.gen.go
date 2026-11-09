@@ -69,6 +69,24 @@ func (e PendingSubmissionTheme) Valid() bool {
 	}
 }
 
+// Defines values for SearchBrowserMessagesParamsLang.
+const (
+	SearchBrowserMessagesParamsLangEn   SearchBrowserMessagesParamsLang = "en"
+	SearchBrowserMessagesParamsLangPtBR SearchBrowserMessagesParamsLang = "pt-BR"
+)
+
+// Valid indicates whether the value is a known member of the SearchBrowserMessagesParamsLang enum.
+func (e SearchBrowserMessagesParamsLang) Valid() bool {
+	switch e {
+	case SearchBrowserMessagesParamsLangEn:
+		return true
+	case SearchBrowserMessagesParamsLangPtBR:
+		return true
+	default:
+		return false
+	}
+}
+
 // ConversationPreferenceIntent Browser command scoped to one engine and one owning account.
 type ConversationPreferenceIntent struct {
 	// AccountId Owning account UUID.
@@ -296,6 +314,36 @@ type SubmissionReceipt struct {
 	// Example: queued
 	State string `json:"state"`
 }
+
+// SearchBrowserMessagesParams defines parameters for SearchBrowserMessages.
+type SearchBrowserMessagesParams struct {
+	// EngineId Engine identity that owns this browser search session.
+	EngineId openapi_types.UUID `form:"engineId" json:"engineId"`
+
+	// Q Retained text/metadata query, trimmed before engine search. Empty means the local initial state.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// AccountId Optional owning account scope.
+	AccountId *openapi_types.UUID `form:"accountId,omitempty" json:"accountId,omitempty"`
+
+	// ConversationId Optional conversation scope, validated within account when both are supplied.
+	ConversationId *openapi_types.UUID `form:"conversationId,omitempty" json:"conversationId,omitempty"`
+
+	// IncludeEditHistory Include retained earlier content versions, explicitly labelled as prior versions.
+	IncludeEditHistory *bool `form:"includeEditHistory,omitempty" json:"includeEditHistory,omitempty"`
+
+	// Cursor Opaque cursor bound to the exact normalized query and scopes.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Maximum returned hits; browser requests use 30.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Lang Result locale.
+	Lang *SearchBrowserMessagesParamsLang `form:"lang,omitempty" json:"lang,omitempty"`
+}
+
+// SearchBrowserMessagesParamsLang defines parameters for SearchBrowserMessages.
+type SearchBrowserMessagesParamsLang string
 
 // UpdateBrowserConversationPreferencesFormdataRequestBody defines body for UpdateBrowserConversationPreferences for application/x-www-form-urlencoded ContentType.
 type UpdateBrowserConversationPreferencesFormdataRequestBody = ConversationPreferenceIntent
