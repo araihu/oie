@@ -73,7 +73,7 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-chat-identity{flex:1;min-width:0}.oie-chat-identity h2{font-weight:650;font-size:14px;margin:0 0 3px}.oie-chat-identity p{font-size:11px;color:var(--oie-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0}
 .oie-back-button{display:none;color:var(--oie-text)}
 .oie-preview-note{margin:0;padding:7px 20px;text-align:center;font-size:11px;color:var(--oie-muted);background:var(--oie-panel);border-bottom:1px solid var(--oie-border)}
-.oie-timeline{flex:1;min-height:0;overflow-y:auto;padding:22px clamp(20px,3vw,64px) 28px;background-image:url('/ui/chat-pattern.svg');background-size:360px 360px;scrollbar-width:thin;scrollbar-color:var(--oie-border) transparent;outline-offset:-3px}
+.oie-timeline{flex:1;min-height:0;overflow-y:auto;padding:22px clamp(20px,3vw,64px) 28px;background-image:url('/ui/chat-pattern.svg');background-size:480px 480px;scrollbar-width:thin;scrollbar-color:var(--oie-border) transparent;outline-offset:-3px}
 .oie-day-divider{display:flex;justify-content:center;margin:0 0 22px}.oie-day-divider span{background:var(--oie-panel);border:1px solid var(--oie-border);padding:4px 12px;border-radius:7px;font-size:11px;color:var(--oie-muted)}
 .oie-message{margin-bottom:9px;max-width:min(88%,620px);font-size:13px;line-height:1.45}
 .oie-message-own{margin-left:auto;--color-primary:#e1eef5;--color-on-primary:#274c5e;--color-primary-dark:#24495c;--color-on-primary-dark:#eff7fb}
@@ -123,6 +123,15 @@ html.dark .oie-brand-logo-dark{display:block}
 #send-message-form{flex-shrink:0;background:var(--oie-panel)}
 .oie-message-meta{display:flex;gap:7px;align-items:center;justify-content:flex-end;flex-wrap:wrap;font-size:10px;color:var(--oie-muted);margin-top:4px}
 .oie-message[data-send-state=failed] [data-message-status],.oie-message[data-send-state=unknown] [data-message-status]{color:light-dark(#9e2626,#ffb4ab)}
+/* Keep pending messages subdued while retaining readable text and timestamps. */
+.oie-message-own[data-send-state=queued]>.oie-message-content,.oie-message-own[data-send-state=dispatching]>.oie-message-content,.oie-message-own[data-send-state=queued]>.oie-media-message,.oie-message-own[data-send-state=dispatching]>.oie-media-message,.oie-message[data-pending-send]>.oie-message-content{opacity:.8}
+.oie-message-own:is([data-send-state=queued],[data-send-state=dispatching],[data-pending-send]) .oie-message-stamp{color:inherit}
+.oie-message[data-pending-send]:not([data-pending-state=uncertain])>.oie-message-meta{margin-top:0}
+.oie-message-meta:empty{display:none}
+/* Enhanced cancellation lives in the message menu; keep the native form for
+   browsers without scripting, without adding a transient row during dispatch. */
+body[data-oie-live-ready] .oie-cancel-form{display:none}
+body[data-oie-live-ready] .oie-message-meta:has(>.oie-cancel-form):not(:has(>[data-message-status])){margin-top:0}
 .oie-cancel-form{display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
 .oie-cancel-form button{font-size:10px;padding:2px 5px}
 .oie-chat-pane{position:relative}

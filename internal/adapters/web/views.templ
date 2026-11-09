@@ -18,6 +18,8 @@ import (
 	"github.com/araihu/goshtoso/components/sidebar"
 	"github.com/araihu/goshtoso/components/textarea"
 	"github.com/araihu/goshtoso/components/textinput"
+	"github.com/araihu/goshtoso/components/toast"
+ "github.com/araihu/goshtoso/expressions"
  "github.com/araihu/goshtoso/components/toggle"
 "github.com/araihu/goshtoso/components/form"
 selectfield "github.com/araihu/goshtoso/components/select"
@@ -101,6 +103,7 @@ if v.DevBuildID!="" {
 templ appFragment(v view) {
 <div id="oie-app" hx-history-elt data-route-loading={v.Text.NavLoading} data-route-error={v.Text.NavFailed} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
 <p class="oie-live-status" data-navigation-status role="status" aria-live="polite" hidden></p>
+@toast.ToastContainer(toast.ContainerConfig{}).WithExpressions(expressions.Toast{DismissLabel:v.Text.Close,DismissAriaLabel:v.Text.Close})
 @liveCopy(v)
 <p class="oie-live-status" data-read-status data-read-failed={v.Text.ReadFailed} role="status" aria-live="polite" hidden></p>
 <div data-shared-action-copy hidden data-failed={v.Text.SharedActionFailed} data-copied={v.Text.SharedLinkCopied} data-downloading={v.Text.SharedDownloading}></div>
@@ -312,7 +315,7 @@ if m.IsOwn {
 if m.Attachment!=nil {
 <time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
 }
-if m.SendState!="submitted" {
+if m.SendState=="failed" || m.SendState=="unknown" || m.SendState=="cancelled" {
 <span data-message-status title={statusHint(v,m.SendState)}>{v.stateLabel(m.SendState)}</span>
 }
 if m.SendState=="queued" && !v.Preview {
@@ -360,19 +363,7 @@ func sendKey(v view)string{if v.FormTarget=="send"&&v.field("operationKey")!=""{
 templ settings(v view) {
 	@drawer.Drawer(drawer.Config{ID: "settings", Title: v.Text.Settings}) {
 		<div class="oie-settings">
-			<h2>{ v.Text.Appearance }</h2>
-			<p>{ v.Text.ThemeHelp }</p>
-			<div class="oie-settings-links" aria-label={ v.Text.Appearance }>
-				@link.Link(v.href("theme", "system")) {
-					{ v.Text.System }
-				}
-				@link.Link(v.href("theme", "light")) {
-					{ v.Text.Light }
-				}
-				@link.Link(v.href("theme", "dark")) {
-					{ v.Text.Dark }
-				}
-			</div>
+			@appearanceSettings(v)
 			@languageSettings(v)
 			<h2>{v.Text.DevicePreferences}</h2>
 @toggle.Toggle(toggle.Config{ID:"render-markdown",Label:v.Text.RenderMarkdown,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-render-markdown":"","aria-describedby":"render-markdown-help"}})

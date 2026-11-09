@@ -3,6 +3,7 @@ package web
 import (
  "github.com/araihu/goshtoso/components/badge"
  "github.com/araihu/goshtoso/components/button"
+ "github.com/araihu/goshtoso/components/card"
  "github.com/araihu/goshtoso/components/chatbubble"
  "github.com/araihu/goshtoso/components/dropdown"
  "github.com/araihu/goshtoso/components/icon/heroicons"
@@ -18,9 +19,9 @@ templ pendingSendTemplate(v view) {
    </div>
    <div class="oie-message-meta">
     <span role="status" aria-live="polite" aria-atomic="true" data-pending-send-status>
-     <span data-pending-state="sending">@badge.Badge(badge.Config{Label:v.Text.SendPending,Size:badge.SizeSM,Appearance:badge.AppearanceSoft,Icon:glyph(heroicons.Icon16SolidClock)})</span>
+     <span class="sr-only" data-pending-state="sending">{v.Text.SendPending}</span>
      <span data-pending-state="uncertain" hidden>@badge.Badge(badge.Config{Label:v.Text.SendUnconfirmed,Size:badge.SizeSM,Appearance:badge.AppearanceSoft,Icon:glyph(heroicons.Icon16SolidExclamationCircle)})</span>
-     <span data-pending-state="accepted" hidden>@badge.Badge(badge.Config{Label:v.Text.SendAccepted,Size:badge.SizeSM,Appearance:badge.AppearanceSoft,Icon:glyph(heroicons.Icon16SolidCheck)})</span>
+     <span class="sr-only" data-pending-state="accepted" hidden>{v.Text.SendAccepted}</span>
     </span>
     <span data-pending-send-shortcut hidden>
      @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-pending-send-retry":"","title":v.Text.RetrySubmission})){
@@ -38,7 +39,14 @@ templ pendingSendBody(v view) {
   <div class="oie-message-menu-slot">
    @dropdown.Dropdown(dropdown.Config{ID:"pending-send-menu",Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,"pending-send"),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:[]dropdown.Section{{Items:[]dropdown.Item{{ID:"retry-pending-send",Label:v.Text.RetrySubmission,Icon:glyph(heroicons.Icon16SolidArrowPath),OnClick:"void 0"}}}}})
   </div>
-  <div class="oie-reply-card" data-pending-send-reply hidden><strong data-pending-send-sender></strong><div data-pending-send-excerpt></div></div>
+  <div data-pending-send-reply hidden>
+   @card.Card(card.Config{Body:pendingSendReplyExcerpt(),Density:card.DensityCompact,RootClass:"oie-reply-card"})
+  </div>
   <div class="oie-plain-fallback" data-pending-send-text></div>
+  <div class="oie-message-stamp"><time data-pending-send-time></time></div>
  </div>
+}
+
+templ pendingSendReplyExcerpt() {
+ <p class="oie-reply-excerpt" data-pending-send-excerpt></p>
 }

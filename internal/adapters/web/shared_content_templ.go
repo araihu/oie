@@ -19,6 +19,7 @@ import (
 	"github.com/araihu/goshtoso/components/sidebar"
 	"github.com/araihu/goshtoso/components/textinput"
 	"github.com/araihu/goshtoso/components/toolbar"
+	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"strconv"
 )
@@ -47,7 +48,7 @@ func sharedWorkspace(v view) templ.Component {
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.SharedMedia).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 18, Col: 83}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 19, Col: 83}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
@@ -68,7 +69,7 @@ func sharedWorkspace(v view) templ.Component {
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.SharedMedia)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 21, Col: 23}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 22, Col: 23}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 		if templ_7745c5c3_Err != nil {
@@ -81,7 +82,7 @@ func sharedWorkspace(v view) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.SharedType).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 25, Col: 110}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 26, Col: 110}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
@@ -94,7 +95,7 @@ func sharedWorkspace(v view) templ.Component {
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.SharedConversation).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 25, Col: 188}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 26, Col: 188}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {
@@ -107,7 +108,7 @@ func sharedWorkspace(v view) templ.Component {
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Locale).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 25, Col: 239}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 26, Col: 239}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 		if templ_7745c5c3_Err != nil {
@@ -120,7 +121,7 @@ func sharedWorkspace(v view) templ.Component {
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Theme).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 25, Col: 290}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 26, Col: 290}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 		if templ_7745c5c3_Err != nil {
@@ -141,7 +142,7 @@ func sharedWorkspace(v view) templ.Component {
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Query).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 28, Col: 92}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 29, Col: 92}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 		if templ_7745c5c3_Err != nil {
@@ -154,7 +155,7 @@ func sharedWorkspace(v view) templ.Component {
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.SharedContentTypes).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 29, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 30, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 		if templ_7745c5c3_Err != nil {
@@ -196,7 +197,7 @@ func sharedWorkspace(v view) templ.Component {
 				var templ_7745c5c3_Var11 string
 				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.SharedAllChats)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 35, Col: 132}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 36, Col: 132}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 				if templ_7745c5c3_Err != nil {
@@ -216,7 +217,7 @@ func sharedWorkspace(v view) templ.Component {
 		var templ_7745c5c3_Var12 string
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.SharedMedia).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 37, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 38, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 		if templ_7745c5c3_Err != nil {
@@ -237,7 +238,7 @@ func sharedWorkspace(v view) templ.Component {
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.sharedVersion()).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 39, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 40, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 		if templ_7745c5c3_Err != nil {
@@ -250,7 +251,7 @@ func sharedWorkspace(v view) templ.Component {
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.SharedType).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 39, Col: 97}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 40, Col: 97}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 		if templ_7745c5c3_Err != nil {
@@ -297,7 +298,8 @@ func sharedSearch(v view) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = textinput.TextInput(textinput.Config{ID: "shared-search", Name: "q", Value: v.Query, Type: textinput.TypeSearch, Label: v.Text.SharedSearch, Placeholder: v.Text.SharedSearch, InputAttrs: templ.Attributes{"hx-get": "/", "hx-trigger": "oie:shared-search", "hx-include": "#shared-content-search", "hx-target": "#shared-search-results", "hx-select": "#shared-search-results", "hx-swap": "outerHTML show:none", "hx-sync": "closest form:replace", "hx-push-url": "false", "hx-replace-url": "true", "aria-controls": "shared-search-results"}}).Render(ctx, templ_7745c5c3_Buffer)
+		ctx = expressions.With(ctx, expressions.Set{TextInput: expressions.TextInput{SearchAriaLabel: v.Text.SharedSearch}})
+		templ_7745c5c3_Err = textinput.TextInput(textinput.Config{ID: "shared-search", Name: "q", Value: v.Query, Type: textinput.TypeSearch, Placeholder: v.Text.SharedSearch, InputAttrs: templ.Attributes{"hx-get": "/", "hx-trigger": "oie:shared-search", "hx-include": "#shared-content-search", "hx-target": "#shared-search-results", "hx-select": "#shared-search-results", "hx-swap": "outerHTML show:none", "hx-sync": "closest form:replace", "hx-push-url": "false", "hx-replace-url": "true", "aria-controls": "shared-search-results"}}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -363,7 +365,7 @@ func sharedTab(v view, kind, label string) templ.Component {
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 53, Col: 223}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 55, Col: 223}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
@@ -404,7 +406,7 @@ func sharedStatus(v view) templ.Component {
 			var templ_7745c5c3_Var21 string
 			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.UnavailableBody)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 57, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 59, Col: 26}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 			if templ_7745c5c3_Err != nil {
@@ -429,7 +431,7 @@ func sharedStatus(v view) templ.Component {
 				var templ_7745c5c3_Var23 string
 				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.Retry)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 58, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 60, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 				if templ_7745c5c3_Err != nil {
@@ -449,7 +451,7 @@ func sharedStatus(v view) templ.Component {
 			var templ_7745c5c3_Var24 string
 			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.SharedPageUnavailable)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 60, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 62, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 			if templ_7745c5c3_Err != nil {
@@ -474,7 +476,7 @@ func sharedStatus(v view) templ.Component {
 				var templ_7745c5c3_Var26 string
 				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.SharedNewest)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 61, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 63, Col: 66}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 				if templ_7745c5c3_Err != nil {
@@ -494,7 +496,7 @@ func sharedStatus(v view) templ.Component {
 			var templ_7745c5c3_Var27 string
 			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.SharedUnavailable)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 63, Col: 28}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 65, Col: 28}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 			if templ_7745c5c3_Err != nil {
@@ -519,7 +521,7 @@ func sharedStatus(v view) templ.Component {
 				var templ_7745c5c3_Var29 string
 				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.Retry)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 64, Col: 98}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 66, Col: 98}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 				if templ_7745c5c3_Err != nil {
@@ -539,7 +541,7 @@ func sharedStatus(v view) templ.Component {
 			var templ_7745c5c3_Var30 string
 			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.SharedFinding)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 66, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 68, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 			if templ_7745c5c3_Err != nil {
@@ -552,7 +554,7 @@ func sharedStatus(v view) templ.Component {
 			var templ_7745c5c3_Var31 string
 			templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.FormatInt(v.SharedContent.Indexing.IndexedMessages, 10))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 66, Col: 116}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 68, Col: 116}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 			if templ_7745c5c3_Err != nil {
@@ -565,7 +567,7 @@ func sharedStatus(v view) templ.Component {
 			var templ_7745c5c3_Var32 string
 			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.FormatInt(v.SharedContent.Indexing.TotalMessages, 10))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 66, Col: 181}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 68, Col: 181}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 			if templ_7745c5c3_Err != nil {
@@ -640,7 +642,7 @@ func sharedItem(v view, item engineapi.SharedContentItem) templ.Component {
 		var templ_7745c5c3_Var35 string
 		templ_7745c5c3_Var35, templ_7745c5c3_Err = templruntime.NewAttributeExpression(item.Id).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 81, Col: 58}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 83, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
 		if templ_7745c5c3_Err != nil {
@@ -653,7 +655,7 @@ func sharedItem(v view, item engineapi.SharedContentItem) templ.Component {
 		var templ_7745c5c3_Var36 string
 		templ_7745c5c3_Var36, templ_7745c5c3_Err = templruntime.NewAttributeExpression(sharedItemVersion(item)).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 81, Col: 111}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 83, Col: 111}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
 		if templ_7745c5c3_Err != nil {
@@ -666,7 +668,7 @@ func sharedItem(v view, item engineapi.SharedContentItem) templ.Component {
 		var templ_7745c5c3_Var37 string
 		templ_7745c5c3_Var37, templ_7745c5c3_Err = templruntime.NewAttributeExpression(item.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 81, Col: 195}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 83, Col: 195}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 		if templ_7745c5c3_Err != nil {
@@ -679,7 +681,7 @@ func sharedItem(v view, item engineapi.SharedContentItem) templ.Component {
 		var templ_7745c5c3_Var38 string
 		templ_7745c5c3_Var38, templ_7745c5c3_Err = templruntime.NewAttributeExpression(strconv.FormatInt(item.Message.CreatedAt.UnixMilli(), 10)).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 81, Col: 277}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 83, Col: 277}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 		if templ_7745c5c3_Err != nil {
@@ -692,7 +694,7 @@ func sharedItem(v view, item engineapi.SharedContentItem) templ.Component {
 		var templ_7745c5c3_Var39 string
 		templ_7745c5c3_Var39, templ_7745c5c3_Err = templruntime.NewAttributeExpression(item.Message.ConversationId).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 81, Col: 332}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 83, Col: 332}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
 		if templ_7745c5c3_Err != nil {
@@ -738,7 +740,7 @@ func sharedItem(v view, item engineapi.SharedContentItem) templ.Component {
 		var templ_7745c5c3_Var40 string
 		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(item.ConversationTitle)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 94, Col: 31}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 96, Col: 31}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 		if templ_7745c5c3_Err != nil {
@@ -751,7 +753,7 @@ func sharedItem(v view, item engineapi.SharedContentItem) templ.Component {
 		var templ_7745c5c3_Var41 string
 		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(v.sharedAccountLabel(item))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 94, Col: 75}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 96, Col: 75}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 		if templ_7745c5c3_Err != nil {
@@ -764,7 +766,7 @@ func sharedItem(v view, item engineapi.SharedContentItem) templ.Component {
 		var templ_7745c5c3_Var42 string
 		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(item.Message.Sender.DisplayName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 94, Col: 112}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 96, Col: 112}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 		if templ_7745c5c3_Err != nil {
@@ -777,7 +779,7 @@ func sharedItem(v view, item engineapi.SharedContentItem) templ.Component {
 		var templ_7745c5c3_Var43 string
 		templ_7745c5c3_Var43, templ_7745c5c3_Err = templruntime.NewAttributeExpression(item.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 95, Col: 98}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 97, Col: 98}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
 		if templ_7745c5c3_Err != nil {
@@ -790,7 +792,7 @@ func sharedItem(v view, item engineapi.SharedContentItem) templ.Component {
 		var templ_7745c5c3_Var44 string
 		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(item.Message.CreatedAt.Format("2006-01-02 15:04"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 95, Col: 150}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 97, Col: 150}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 		if templ_7745c5c3_Err != nil {
@@ -871,7 +873,7 @@ func sharedReference(v view, item engineapi.SharedContentItem) templ.Component {
 		var templ_7745c5c3_Var47 string
 		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(v.sharedKindLabel(string(item.Kind)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 112, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 114, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 		if templ_7745c5c3_Err != nil {
@@ -896,7 +898,7 @@ func sharedReference(v view, item engineapi.SharedContentItem) templ.Component {
 			var templ_7745c5c3_Var49 string
 			templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.SharedOpenLink)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 113, Col: 167}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 115, Col: 167}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 			if templ_7745c5c3_Err != nil {
@@ -961,7 +963,7 @@ func sharedViewerSource(v view, item engineapi.SharedContentItem) templ.Componen
 		var templ_7745c5c3_Var52 string
 		templ_7745c5c3_Var52, templ_7745c5c3_Err = templruntime.NewAttributeExpression(item.Message.Id).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 119, Col: 45}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 121, Col: 45}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var52)
 		if templ_7745c5c3_Err != nil {
@@ -974,7 +976,7 @@ func sharedViewerSource(v view, item engineapi.SharedContentItem) templ.Componen
 		var templ_7745c5c3_Var53 string
 		templ_7745c5c3_Var53, templ_7745c5c3_Err = templruntime.NewAttributeExpression(item.Message.Id).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 120, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 122, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var53)
 		if templ_7745c5c3_Err != nil {
@@ -995,7 +997,7 @@ func sharedViewerSource(v view, item engineapi.SharedContentItem) templ.Componen
 		var templ_7745c5c3_Var54 string
 		templ_7745c5c3_Var54, templ_7745c5c3_Err = templruntime.NewAttributeExpression(item.Message.Sender.DisplayName).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 122, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 124, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var54)
 		if templ_7745c5c3_Err != nil {
@@ -1008,7 +1010,7 @@ func sharedViewerSource(v view, item engineapi.SharedContentItem) templ.Componen
 		var templ_7745c5c3_Var55 string
 		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(item.Message.Sender.DisplayName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 122, Col: 111}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 124, Col: 111}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 		if templ_7745c5c3_Err != nil {
@@ -1021,7 +1023,7 @@ func sharedViewerSource(v view, item engineapi.SharedContentItem) templ.Componen
 		var templ_7745c5c3_Var56 string
 		templ_7745c5c3_Var56, templ_7745c5c3_Err = templruntime.NewAttributeExpression(item.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 122, Col: 212}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 124, Col: 212}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var56)
 		if templ_7745c5c3_Err != nil {
@@ -1034,7 +1036,7 @@ func sharedViewerSource(v view, item engineapi.SharedContentItem) templ.Componen
 		var templ_7745c5c3_Var57 string
 		templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(item.Message.CreatedAt.Format("2006-01-02 15:04"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 122, Col: 264}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 124, Col: 264}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
 		if templ_7745c5c3_Err != nil {

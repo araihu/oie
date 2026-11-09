@@ -58,6 +58,9 @@ const engine=id(1),account=id(2),chat=id(3);
  const until=async(fn,name)=>{for(let i=0;i<160;i++){if(await fn())return;await new Promise(r=>setTimeout(r,50))}throw Error('Timed out: '+name)};
  try{
   for(let i=0;i<50;i++){try{if((await fetch(base)).ok)break}catch{}await new Promise(r=>setTimeout(r,100))}
+  if(process.env.OIE_SEND_GEOMETRY_ONLY==='1'){
+    await require('./send-geometry.cjs')({browser,base,chat,state,emit,until,id});return;
+  }
   const context=await browser.newContext({viewport:{width:1440,height:900},locale:'en',timezoneId:'America/Sao_Paulo'});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(base+'/?chat='+chat+'&lang=en&theme=dark');await page.locator('#message-composer').waitFor();
   await page.locator('[data-account-switcher]:visible').click();
@@ -82,7 +85,7 @@ const engine=id(1),account=id(2),chat=id(3);
   await page.route('**/ui/messages/send',async route=>{if(!dropped){dropped=true;await gate;await route.abort('connectionreset')}else if(allowRetry)await route.continue();else await route.abort('connectionreset')});
   const composerBounds=()=>page.locator('.oie-composer').evaluate(node=>{const box=node.getBoundingClientRect();return {top:box.top,height:box.height,bottom:box.bottom}});
   const beforeSend=await composerBounds();
-  await page.locator('[data-send-message]').click();await until(async()=>await page.locator('#send-message-form').getAttribute('data-busy')==='true','in-flight submission');assert(await page.locator('[data-send-message]').isDisabled());assert.equal(await page.locator('[data-pending-send-text]').textContent(),draft);assert(await page.locator('#retry-pending-send').isDisabled());assert.deepEqual(await composerBounds(),beforeSend,'in-flight send preserves composer geometry');await page.evaluate(()=>document.querySelector('#send-message-form').requestSubmit());await new Promise(r=>setTimeout(r,100));assert.equal(state.effects,0);release();await until(async()=>await page.locator('[data-pending-send][data-pending-state=uncertain]').count()===1,'visible lost-response recovery');
+  await page.locator('[data-send-message]').click();await until(async()=>await page.locator('#send-message-form').getAttribute('data-busy')==='true','in-flight submission');assert(await page.locator('[data-send-message]').isDisabled());assert.equal(await page.locator('[data-pending-send-text]').textContent(),draft);assert(await page.locator('#retry-pending-send').isDisabled());assert.equal(await page.locator('[data-pending-send] .oie-message-content').evaluate(e=>getComputedStyle(e).opacity),'0.8');assert(await page.locator('[data-pending-send] [data-pending-state=sending]').evaluate(e=>e.getBoundingClientRect().width<=1&&e.getBoundingClientRect().height<=1),'sending label is screen-reader only');assert.deepEqual(await composerBounds(),beforeSend,'in-flight send preserves composer geometry');await page.evaluate(()=>document.querySelector('#send-message-form').requestSubmit());await new Promise(r=>setTimeout(r,100));assert.equal(state.effects,0);release();await until(async()=>await page.locator('[data-pending-send][data-pending-state=uncertain]').count()===1,'visible lost-response recovery');
   assert.equal(state.effects,0);assert.equal(await page.locator('#message-composer').inputValue(),'');assert(await page.locator('#message-composer').evaluate(e=>e.readOnly));assert.equal(await page.locator('#send-message-form [data-form-feedback]').textContent(),'');assert.deepEqual(await composerBounds(),beforeSend,'uncertain send preserves composer geometry');
   const frozenProbe=await page.evaluate(async()=>{
     const form=document.querySelector('#send-message-form'),journal=JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.startsWith('oie.draft.v1'))));
@@ -105,6 +108,8 @@ const engine=id(1),account=id(2),chat=id(3);
   await page.reload();await until(async()=>await page.locator('[data-pending-send][data-pending-state=uncertain]').count()===1&&await page.locator('#send-message-form').getAttribute('data-busy')==='false','pending bubble restored after reload');assert.equal(await page.locator('[data-pending-send-text]').textContent(),draft);
   allowRetry=true;await page.locator('[data-pending-send-retry]').focus();await page.keyboard.press('Enter');await until(async()=>!await page.locator('#message-composer').evaluate(e=>e.readOnly),'receipt reconciliation');assert.equal(state.effects,1);assert.equal(await page.locator('#send-message-form [data-form-feedback]').textContent(),'');assert.equal(await page.locator('.oie-list-footer').count(),0);
   await until(async()=>await page.locator('[data-pending-send]').count()===0,'canonical message replaces local placeholder');
+  const outgoing=page.locator('[data-message-id="'+state.messages[0].id+'"]');assert.equal(await outgoing.locator('.oie-message-content').evaluate(e=>getComputedStyle(e).opacity),'0.8');assert.equal(await outgoing.locator('[data-message-status]').count(),0,'queued bubble has no visible progress label');
+  assert.equal(await outgoing.locator('[data-cancel-message]').isVisible(),false,'queued cancellation stays in the menu without a layout row');
   assert.deepEqual(await composerBounds(),beforeSend,'accepted send preserves composer geometry');
   await page.unroute('**/ui/messages/reconcile');
   const receipts=await page.evaluate(async frozen=>{
@@ -115,9 +120,17 @@ const engine=id(1),account=id(2),chat=id(3);
   assert.equal(receipts.same.status,200);assert(receipts.same.body.accepted);assert.equal(receipts.foreign.status,409);assert.equal(receipts.changed.status,409);assert.equal(receipts.csrf.status,403);assert.equal(receipts.absent.status,404);assert.equal(state.effects,1,'receipt probes never create messages');
   findings.push('Pending bubble, below-bubble retry, reload recovery and one canonical message; no composer layout shift across sending, uncertain and accepted states');
   await until(async()=>await page.locator('[data-cancel-message]').count()===1,'queued cancellation control');
-  state.messages[0].sendState='submitted';state.messages[0].revisionId=id(999);
-  await page.locator('[data-cancel-message] button[type=submit]').click();await until(async()=>await page.locator('[data-live-status]').textContent().then(t=>t.includes('Cancellation was not applied')),'cancel conflict announced');assert(await page.locator('[data-live-status]').isVisible());assert.equal(state.cancelEffects,0);
+  await page.route('**/ui/messages/cancel',async route=>{state.messages[0].sendState='submitted';state.messages[0].revisionId=id(999);await route.continue()});
+  await outgoing.locator('[data-message-menu-trigger]').click();await outgoing.locator('[id^="cancel-message-"]').click();await until(async()=>await page.locator('[data-live-status]').textContent().then(t=>t.includes('Cancellation was not applied')),'cancel conflict announced');assert(await page.locator('[data-live-status]').isVisible());assert.equal(state.cancelEffects,0);
   await until(async()=>await page.locator('[data-message-id="'+state.messages[0].id+'"][data-send-state=submitted]').count()===1,'actual submitted projection');
+  for(const [sendState,opacity,showStatus]of [['dispatching','0.8',false],['failed','1',true],['unknown','1',true],['submitted','1',false]]){
+    state.messages[0].sendState=sendState;state.messages[0].revisionId=id(1100+state.seq);emit('message.updated',state.messages[0]);
+    await until(async()=>await outgoing.getAttribute('data-send-state')===sendState,'send state '+sendState);
+    assert.equal(await outgoing.locator('.oie-message-content').evaluate(e=>getComputedStyle(e).opacity),opacity);
+    assert.equal(await outgoing.locator('[data-message-status]').count(),Number(showStatus));
+    if(showStatus){const status=await outgoing.locator('[data-message-status]').boundingBox(),bubble=await outgoing.locator('.oie-message-content').boundingBox();assert(status.y>=bubble.y+bubble.height,'failure or uncertain state appears below the bubble');}
+  }
+  findings.push('Pending bubbles are faded without visible progress labels; submitted bubbles return to normal, failures and uncertain outcomes remain below the bubble');
   findings.push('Stale queued cancel is rejected, announces submitted state, and makes zero cancellation effects');
   state.connection='not_connected';emit('account.connection_changed');await page.locator('[data-account-switcher]:visible').click();await page.locator('[data-open-accounts]:visible').click();await page.locator('[data-manage-account="'+account+'"]').click();const connect=page.locator('[data-connect-account]');await connect.locator('[name=password]').fill('never-journal-this-secret');await connect.locator('button[type=submit]').click();
   await until(async()=>await page.getByText('Authentication failed. Check the password.',{exact:true}).count()>0,'actual authentication error');assert.equal(await connect.locator('[name=password]').inputValue(),'');

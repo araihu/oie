@@ -1,6 +1,7 @@
 window.OieRuntime.register('live', life => {
   'use strict';
   const body = document.body;
+  body.dataset.oieLiveReady='true';
   const labels = document.querySelector('#oie-live-copy')?.dataset || {};
   const text = key => labels[key] || '';
   const status = document.querySelector('[data-live-status]');
@@ -97,13 +98,17 @@ window.OieRuntime.register('live', life => {
     const timeline=document.querySelector('#message-timeline'),template=composer?.querySelector('[data-pending-send-template]');
     if(!timeline||!template)return;
     if(!pendingBubble){
+      if(!journal.submittedAt||Number.isNaN(Date.parse(journal.submittedAt)))saveDraft({...journal,submittedAt:new Date().toISOString()});
       pendingBubble=template.content.firstElementChild.cloneNode(true);
       pendingBubble.dataset.operationKey=journal.key;
+      pendingBubble.dataset.createdAt=journal.submittedAt;
       pendingBubble.querySelector('[data-pending-send-text]').textContent=journal.text;
       const quote=pendingBubble.querySelector('[data-pending-send-reply]');quote.hidden=!journal.reply;
-      pendingBubble.querySelector('[data-pending-send-sender]').textContent=journal.reply?.senderName||'';
+      quote.querySelector('h3').textContent=journal.reply?.senderName||'';
       pendingBubble.querySelector('[data-pending-send-excerpt]').textContent=journal.reply?.excerpt||'';
-      timeline.append(pendingBubble);window.Alpine?.initTree(pendingBubble);
+      pendingBubble.querySelector('[data-pending-send-time]').dateTime=journal.submittedAt;
+      timeline.insertBefore(pendingBubble,timeline.querySelector('[data-timeline-edge="newer"]'));window.Alpine?.initTree(pendingBubble);
+      localizeTimes();
       // Submitting is an explicit intent to view this outgoing message.
       timeline.scrollTop=timeline.scrollHeight;
     }
@@ -126,6 +131,15 @@ window.OieRuntime.register('live', life => {
   }
   life.cleanup(()=>{for(const node of [...acceptedBubbles,pendingBubble])if(node){window.Alpine?.destroyTree(node);node.remove();}});
   life.on(document,'oie:timeline-content',retireAcceptedBubbles);
+  life.on(document,'oie:cancel-message',event=>{
+    const id=event.detail?.id;if(!canonicalID(id))return;
+    const form=document.getElementById('cancel-'+id);
+    if(form?.matches('[data-cancel-message]')&&form.dataset.busy!=='true'){
+      event.target.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+      life.raf(()=>form.closest('[data-message-id]')?.focus({preventScroll:true}));
+      form.requestSubmit();
+    }
+  });
   life.on(document,'click',event=>{
     const action=event.target.closest('[data-pending-send-retry],#retry-pending-send');
     if(!action||!pendingBubble?.contains(action)||action.disabled||!journal?.pending)return;
@@ -249,7 +263,7 @@ window.OieRuntime.register('live', life => {
     for(const divider of timeline.querySelectorAll('.oie-day-divider'))divider.remove();
     const key=date=>[date.getFullYear(),date.getMonth(),date.getDate()].join('-');
     const today=key(new Date());let previous='';
-    for(const row of timeline.querySelectorAll(':scope>[data-message-id]')){
+    for(const row of timeline.querySelectorAll(':scope>[data-message-id],:scope>[data-pending-send]')){
       const date=new Date(row.dataset.createdAt);if(Number.isNaN(date.getTime()))continue;
       const current=key(date);if(current===previous)continue;previous=current;
       const divider=document.createElement('div');divider.className='oie-day-divider';

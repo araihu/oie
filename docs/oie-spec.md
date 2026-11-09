@@ -181,6 +181,8 @@ Keep these milestones distinct:
 
 Missing optional delivery/read receipts must not trigger indefinite resending of an otherwise accepted message.
 
+**AGREED:** pending outgoing bubbles are faded, without a visible progress label. Restore normal opacity when protocol submission is confirmed. Show failures and uncertain outcomes below the bubble, retaining their recovery actions. Engine acceptance alone does not imply protocol submission or recipient delivery.
+
 ### 5.2 Mutation cutoff and races
 
 | State/evidence | Cancel, edit pending content, or reschedule |

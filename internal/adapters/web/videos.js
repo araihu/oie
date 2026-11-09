@@ -6,7 +6,7 @@ window.OieRuntime.register('videos', life => {
  const identity=card=>JSON.stringify(['videoEngine','videoAccount','videoConversation','videoMessage','videoItem'].map(key=>card.dataset[key]||''));
  const cards=root=>[...(root.matches?.(selector)?[root]:[]),...root.querySelectorAll(selector)];
  const isLoaded=card=>!!card.querySelector(playerSelector)?.getAttribute('src');
- function status(card,key,state){const region=card.querySelector('[data-video-status]'),compact=card.hasAttribute('data-video-compact'),silent=state==='ready'||compact&&state!=='failed';if(region){region.textContent=silent?'':card.dataset[key]||'';region.hidden=silent;region.dataset.state=state;region.setAttribute('role',state==='failed'?'alert':'status')}const metadata=card.querySelector('[data-video-metadata]');if(metadata&&compact)metadata.hidden=state!=='failed'}
+ function status(card,key,state){const region=card.querySelector('[data-video-status]'),compact=card.hasAttribute('data-video-compact'),silent=state==='ready'||state==='failed'||compact;if(region){region.textContent=silent?'':card.dataset[key]||'';region.hidden=silent;region.dataset.state=state;region.setAttribute('role','status')}const metadata=card.querySelector('[data-video-metadata]');if(metadata&&compact)metadata.hidden=state!=='failed'}
  function release(video){
   if(!video)return;generations.set(video,(generations.get(video)||0)+1);releasing.add(video);loaded.delete(video);failed.delete(video);
   video.pause();video.removeAttribute('src');video.load();video.hidden=true;
@@ -14,7 +14,7 @@ window.OieRuntime.register('videos', life => {
   releasing.delete(video);
  }
  function releaseTree(root){if(root.matches?.(playerSelector))release(root);for(const video of root.querySelectorAll?.(playerSelector)||[])release(video)}
- function failure(card,unsupported=false){failed.add(card.querySelector(playerSelector));status(card,unsupported?'videoUnsupported':'videoUnavailable','failed');card.querySelector('[data-video-retry]').hidden=false;if(card.hasAttribute('data-video-compact')){card.querySelector(playerSelector).hidden=true;card.querySelector('[data-video-cover]').hidden=false;}}
+ function failure(card,unsupported=false){const video=card.querySelector(playerSelector);if(failed.has(video))return;failed.add(video);const key=unsupported?'videoUnsupported':'videoUnavailable';status(card,key,'failed');card.querySelector('[data-video-retry]').hidden=false;if(card.hasAttribute('data-video-compact')){card.querySelector(playerSelector).hidden=true;card.querySelector('[data-video-cover]').hidden=false;}window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:card.dataset[key]||''}}))}
  function start(card){
   const video=card.querySelector(playerSelector);let source;
   try{source=new URL(card.dataset.videoSource,location.href)}catch{failure(card);return}

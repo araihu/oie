@@ -10,6 +10,7 @@ import (
  "github.com/araihu/goshtoso/components/combobox"
  "github.com/araihu/goshtoso/components/textinput"
  "github.com/araihu/goshtoso/components/toolbar"
+ "github.com/araihu/goshtoso/expressions"
  "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
  "strconv"
 )
@@ -43,7 +44,8 @@ if v.SharedConversation!="" {
 </section>
 }
 templ sharedSearch(v view){
-@textinput.TextInput(textinput.Config{ID:"shared-search",Name:"q",Value:v.Query,Type:textinput.TypeSearch,Label:v.Text.SharedSearch,Placeholder:v.Text.SharedSearch,InputAttrs:templ.Attributes{"hx-get":"/","hx-trigger":"oie:shared-search","hx-include":"#shared-content-search","hx-target":"#shared-search-results","hx-select":"#shared-search-results","hx-swap":"outerHTML show:none","hx-sync":"closest form:replace","hx-push-url":"false","hx-replace-url":"true","aria-controls":"shared-search-results"}})
+{{ ctx=expressions.With(ctx,expressions.Set{TextInput:expressions.TextInput{SearchAriaLabel:v.Text.SharedSearch}}) }}
+@textinput.TextInput(textinput.Config{ID:"shared-search",Name:"q",Value:v.Query,Type:textinput.TypeSearch,Placeholder:v.Text.SharedSearch,InputAttrs:templ.Attributes{"hx-get":"/","hx-trigger":"oie:shared-search","hx-include":"#shared-content-search","hx-target":"#shared-search-results","hx-select":"#shared-search-results","hx-swap":"outerHTML show:none","hx-sync":"closest form:replace","hx-push-url":"false","hx-replace-url":"true","aria-controls":"shared-search-results"}})
 }
 templ sharedAccountFilter(v view){
 {{ cfg:=sharedAccountCombobox(v) }}
