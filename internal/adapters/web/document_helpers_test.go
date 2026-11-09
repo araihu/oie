@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestDocumentCardIsDeferredScopedAndEscapesMetadata(t *testing.T) {
+func TestDocumentCardPreviewIsScopedAndEscapesMetadata(t *testing.T) {
 	catalogs, err := loadCatalogs()
 	if err != nil {
 		t.Fatal(err)
@@ -22,9 +22,9 @@ func TestDocumentCardIsDeferredScopedAndEscapesMetadata(t *testing.T) {
 				t.Fatal(err)
 			}
 			html := out.String()
-			for _, want := range []string{`data-document-item="` + testMessage + `"`, `data-document-engine="` + testEngine + `"`, `data-document-account="` + testAccount + `"`, `data-document-conversation="` + testChat + `"`, `data-document-message="` + testRevision + `"`, `data-document-format="pdf"`, `data-document-source="/ui/shared-content/` + testMessage + `/content?engineId=` + testEngine + `"`, catalogs[locale].DocumentOpen, "&lt;script&gt;report.pdf"} {
+			for _, want := range []string{`data-document-item="` + testMessage + `"`, `data-document-engine="` + testEngine + `"`, `data-document-account="` + testAccount + `"`, `data-document-conversation="` + testChat + `"`, `data-document-message="` + testRevision + `"`, `data-document-format="pdf"`, `data-document-source="/ui/shared-content/` + testMessage + `/content?engineId=` + testEngine + `"`, catalogs[locale].DocumentOpen, `data-document-preview`, `data-document-open`, `oie-document-name`, "&lt;script&gt;report.pdf"} {
 				if !strings.Contains(html, want) {
-					t.Errorf("missing safe deferred document markup %q", want)
+					t.Errorf("missing safe document preview markup %q", want)
 				}
 			}
 			for _, forbidden := range []string{"<script>", "<iframe", "<object", "<embed", "<canvas", "pdf.mjs", "pdf.worker.mjs", "<pre"} {

@@ -5,9 +5,15 @@ plain-text attachments inside Oie. TXT, LOG, Markdown, CSV, JSON and XML appear
 as plain text. Their content never becomes HTML or executable JavaScript.
 Other document types retain an action to open the original provider address.
 
-Opening a supported document explicitly starts its read through the engine.
-Mounting a card, loading another catalog page or receiving a live update does
-not fetch the original. Text is limited to 2 MiB and PDF to 100 MiB. The engine
+Visible document cards show a text excerpt or the first PDF page. The preview
+and filename form one keyboard-accessible control that opens the viewer.
+Previews read through the existing scoped engine route, with two concurrent
+jobs and a 12-second timeout. Text reads at most a 64 KiB prefix. PDF previews
+request 64 KiB ranges with a 2 MiB total budget. Unsupported, unavailable or
+over-budget documents keep a filename and icon that still open the viewer.
+
+Opening the viewer explicitly starts its independent original-file read.
+Text is limited to 2 MiB and PDF to 100 MiB. The engine
 checks the retained canonical reference, extension, media type and complete
 resource size before exposing it. Byte ranges, cancellation and the existing
 public-network policy apply. There is no arbitrary provider-URL proxy.
@@ -31,7 +37,7 @@ The selected Goshtoso version supplies public `modal.Dialog`, `card`, `button`
 and `link` components. Oie composes their slots with application-owned document
 content. Goshtoso does not provide a PDF decoder in the selected version.
 Mozilla PDF.js 6.5.438 supplies its public display API, worker and text layer.
-Its assets load from the BFF only after a PDF is opened. No PDF scripting
+Its assets load from the BFF when a PDF preview enters view or a PDF is opened. No PDF scripting
 sandbox or third-party CDN is used. The selected assets, licenses and pinned
 checksums are described in [the third-party notices](../THIRD_PARTY_NOTICES.md).
 
@@ -40,6 +46,15 @@ worker reclassifies retained LOG, JSON and XML links as documents while
 preserving their catalog UUIDs. No SQLite migration is needed.
 
 ## Verification and rollout
+
+The card-preview increment passes the document browser suite, including actual
+painted PDF thumbnails, escaped text excerpts, primary-control activation,
+viewer actions, focus restoration and English/Portuguese accessibility.
+A 4,195,385-byte PDF preview used 66,617 bytes in two range reads. Another PDF
+that needed more content stopped below the 2 MiB budget and retained its
+clickable fallback. The fixture recorded zero unexpected mutations, browser
+errors or external browser requests. The live catalog also rendered text
+excerpts without the separate Open document button.
 
 `make check` passes on the final dependency pin, with Vacuum's rule timeout
 set to 30 seconds. The final web package also passes the race detector in

@@ -300,7 +300,7 @@ SQLite stores attachment references, metadata, and media integrity hashes; binar
 
 Use an advertised supported expected digest where available and verify it against a complete download. If none is available, compute a local hash on full download. Distinguish expected-and-verified from computed-only: a first-download fingerprint does not independently verify the sender's original. Preview and original-file digests are separate.
 
-**AGREED:** open PDF and web-friendly text documents inside the app from the shared-content catalog and conversation details. Display TXT, LOG, Markdown, CSV, JSON and XML as plain text, with a download-original action. Retrieve originals only after explicit activation. Unsupported document formats retain an action to open their provider address. Document-text extraction into search remains backlogged.
+**AGREED:** open PDF and web-friendly text documents inside the app from the shared-content catalog and conversation details. Display TXT, LOG, Markdown, CSV, JSON and XML as plain text, with a download-original action. Show a bounded first-page PDF preview or text excerpt when a document card enters view; clicking the preview or filename opens the document without a separate large button. Automatic previews have byte and concurrency limits; files that exceed those limits remain available for explicit opening. Unsupported document formats retain an action to open their provider address. Document-text extraction into search remains backlogged.
 
 Support audio-file attachments and inline playback in alpha where the format is supported. Inline player display does not force a full-file automatic download. Voice recording and calls are backlogged.
 
