@@ -389,6 +389,54 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]M
 	return items, nil
 }
 
+const listMessagesAfter = `-- name: ListMessagesAfter :many
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms FROM messages AS m
+JOIN messages AS anchor ON anchor.id=?1 AND anchor.conversation_id=?2
+WHERE m.conversation_id=?2
+AND (m.created_at_ms,m.id)>(anchor.created_at_ms,anchor.id)
+AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
+ORDER BY m.created_at_ms ASC,m.id ASC LIMIT ?3
+`
+
+type ListMessagesAfterParams struct {
+	CursorID       string
+	ConversationID string
+	PageLimit      int64
+}
+
+func (q *Queries) ListMessagesAfter(ctx context.Context, arg ListMessagesAfterParams) ([]Message, error) {
+	rows, err := q.db.QueryContext(ctx, listMessagesAfter, arg.CursorID, arg.ConversationID, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.RevisionID,
+			&i.AccountID,
+			&i.ConversationID,
+			&i.ProviderID,
+			&i.IsOwn,
+			&i.State,
+			&i.Payload,
+			&i.CreatedAtMs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pendingMessages = `-- name: PendingMessages :many
 SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms FROM outbox o JOIN messages m ON o.message_id=m.id WHERE o.state='queued' AND o.next_attempt_at<=? ORDER BY o.next_attempt_at,m.id LIMIT 100
 `
