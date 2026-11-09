@@ -13,6 +13,22 @@ cancellation of a running command both returned errors and closed their sessions
 These probes did not require restarting the shared engine or preview processes.
 
 On 2026-11-09, `OIE_CI_SSH_HOST=dagger-vm make ci` completed with exit 0 on
+`da7a27e1b1d119c9aa8a76e880d983f53a0b2626`, including conversation archive and
+favorites. Checks, lint, generation, race tests, builds, isolated XMPP integration
+and all 38 browser workflows passed. Checks took 53s, XMPP integration 34s and
+the browser stage 8m23s. Logs, the real-engine report and exact source/exit record
+are under the ignored `tests/browser/artifacts/ci-conversation-preferences`
+directory. Native `make check` also passed during this increment.
+
+The new fixture covers scoped archive/favorite mutations, canonical state after
+receipt replay, uncertain retries, revision conflicts, native forms and retained
+drafts, timeline and list position. Its implicit-selection regression fails the
+previous binary and passes the fix. The real-engine workflow verifies persisted
+preferences and an incoming XMPP message that leaves its conversation archived.
+The full run also passed the existing modifier-key and middle-click navigation
+checks without changing their assertions or timeout.
+
+An earlier full run on the same date completed with exit 0 on
 `45e4f147553039332b01e177f57edfc2c6f202ca`, including all current app changes.
 The previously uncommitted appearance, pending-send, media feedback and wallpaper
 work is integrated in `9f794e0`; no app edits were excluded. Checks, lint,

@@ -57,3 +57,18 @@ field isolation, transaction rollback, concurrent arrivals/reads, no-op behavior
 receipt replay and restart. A real generated CLI test covers omitted values,
 explicit false and the replay header. Browser and full pipeline results are
 recorded in [local CI](local-ci.md).
+
+The complete Dagger pipeline passed on `da7a27e`, including all 38 browser
+workflows and actual two-way XMPP messaging against its disposable Prosody
+service. The implicitly selected conversation regression first failed the older
+binary and then passed the URL-pinning fix.
+
+The live-preview engine was upgraded from API 0.19 to 0.20 after a consistent
+SQLite backup. Its engine identity and all existing account, conversation,
+message, revision and operation IDs were retained. The schema remains at clean
+migration 11, and the previously connected account reconnected. No preference
+mutation was tested against live user conversations.
+Read-only BFF checks confirmed the new controls and navigation scripts. A stale
+Air child had retained the preview port after earlier rebuilds; it was stopped
+gracefully and the supervisor rebuilt the current source. A subsequent automatic
+reload also passed with an event stream open, without restarting the engine.
