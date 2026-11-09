@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.24.0",
+    "version": "0.25.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.",
     "contact": {
       "name": "Arai Hû",
@@ -2832,6 +2832,191 @@
         }
       }
     },
+    "/api/v1/messages/{messageId}/edit-target": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MessageID"
+        }
+      ],
+      "get": {
+        "operationId": "getMessageEditTarget",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Inspect eligibility and current content before editing",
+        "description": "Read-only eligibility for the canonical message. Initially only the latest own plain text message sent by this engine in the current verified protocol session can be corrected. Reply and mention payloads remain ineligible. Eligibility is advisory and rechecked atomically at acceptance and dispatch. No arbitrary time window is imposed.",
+        "responses": {
+          "200": {
+            "description": "Scoped current edit target and eligibility",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageEditTarget"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversationId}/edit-target": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationID"
+        }
+      ],
+      "get": {
+        "operationId": "getConversationEditTarget",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Inspect the latest own retained message for keyboard editing",
+        "description": "Uses a durable transmission ordinal for original sends by this engine, independently of device clocks and the visible timeline page. Returns the latest own original transmission candidate even when it is ineligible; never silently skips it to edit an older one. Queued or cancelled originals which never reached dispatch, imported own messages and correction commands do not establish this order. Returns 404 when there is no retained engine transmission. Read-only and does not mark messages read or fetch provider history.",
+        "responses": {
+          "200": {
+            "description": "Latest original engine transmission and current eligibility",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageEditTarget"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/messages/{messageId}/edits": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MessageID"
+        }
+      ],
+      "post": {
+        "operationId": "editMessage",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Accept a durable correction of a sent message",
+        "description": "Atomically persists a distinct correction command and operation receipt with an optimistic content revision precondition. The original send and content remain unchanged while queued or in flight. Submitted means written to the protocol connection, not confirmed recipient delivery. Unknown outcomes are not blindly retried. A frozen original sender wire ID is used for every correction. Read the command receipt after a lost response before considering another operation key.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Stable command UUID retained across retries and receipt lookup.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Corrected plain text and the exact observed content revision.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditMessage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Correction command committed without claiming delivery",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageEditCommand"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The same correction command was already accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageEditCommand"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/message-edits/{editId}": {
+      "parameters": [
+        {
+          "name": "editId",
+          "in": "path",
+          "required": true,
+          "description": "Correction command UUID, equal to its submission Idempotency-Key.",
+          "schema": {
+            "$ref": "#/components/schemas/ID"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getMessageEdit",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Reconcile a correction command by its stable UUID",
+        "description": "Read-only durable receipt. A 404 does not authorize changing the key after an uncertain submission; repeat the same frozen request if needed. No provider calls or dispatch occur in this query.",
+        "responses": {
+          "200": {
+            "description": "Retained correction command and actual dispatch state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageEditCommand"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/messages/{messageId}/edit-history": {
       "parameters": [
         {
@@ -3763,6 +3948,7 @@
               "send_replies",
               "mentions",
               "edit_messages",
+              "send_corrections",
               "retract_messages",
               "reactions",
               "read_receipts",
@@ -5270,6 +5456,172 @@
         },
         "example": {
           "items": []
+        }
+      },
+      "MessageEditTarget": {
+        "type": "object",
+        "description": "Current canonical text and advisory eligibility for a distinct sent-message correction.",
+        "additionalProperties": false,
+        "required": [
+          "messageId",
+          "accountId",
+          "conversationId",
+          "currentRevisionId",
+          "originalText",
+          "eligible"
+        ],
+        "example": {
+          "messageId": "019a5df0-0000-7000-8000-000000000003",
+          "accountId": "019a5df0-0000-7000-8000-000000000001",
+          "conversationId": "019a5df0-0000-7000-8000-000000000002",
+          "currentRevisionId": "019a5df0-0000-7000-8000-000000000004",
+          "originalText": "Text to correct",
+          "eligible": true
+        },
+        "properties": {
+          "messageId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "conversationId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "currentRevisionId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "originalText": {
+            "type": "string",
+            "description": "Exact current source text. For an eligible target this is plain text without reply or mention payloads.",
+            "example": "Text to correct"
+          },
+          "eligible": {
+            "type": "boolean",
+            "example": true
+          },
+          "reason": {
+            "type": "string",
+            "description": "Stable reason when the target is not currently eligible.",
+            "enum": [
+              "not_own",
+              "not_latest",
+              "not_submitted",
+              "foreign_source",
+              "unsupported_payload",
+              "session_changed",
+              "edit_pending",
+              "protocol_unavailable",
+              "history_unavailable"
+            ],
+            "example": "not_latest"
+          }
+        }
+      },
+      "EditMessage": {
+        "type": "object",
+        "description": "Immutable correction intent; changing either field requires a new operation after a definitive outcome.",
+        "additionalProperties": false,
+        "required": [
+          "expectedRevisionId",
+          "originalText"
+        ],
+        "example": {
+          "expectedRevisionId": "019a5df0-0000-7000-8000-000000000004",
+          "originalText": "Corrected text"
+        },
+        "properties": {
+          "expectedRevisionId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "originalText": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384,
+            "example": "Corrected text"
+          }
+        }
+      },
+      "MessageEditCommand": {
+        "type": "object",
+        "description": "Durable correction intent and its actual transmission state, separate from the original message send.",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "revisionId",
+          "messageId",
+          "accountId",
+          "conversationId",
+          "expectedRevisionId",
+          "originalText",
+          "state",
+          "createdAt",
+          "updatedAt"
+        ],
+        "example": {
+          "id": "019a5df0-0000-7000-8000-000000000005",
+          "revisionId": "019a5df0-0000-7000-8000-000000000006",
+          "messageId": "019a5df0-0000-7000-8000-000000000003",
+          "accountId": "019a5df0-0000-7000-8000-000000000001",
+          "conversationId": "019a5df0-0000-7000-8000-000000000002",
+          "expectedRevisionId": "019a5df0-0000-7000-8000-000000000004",
+          "originalText": "Corrected text",
+          "state": "queued",
+          "createdAt": "2026-11-09T12:00:00Z",
+          "updatedAt": "2026-11-09T12:00:00Z"
+        },
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "revisionId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "messageId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "conversationId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "expectedRevisionId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "originalText": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384,
+            "example": "Corrected text"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "dispatching",
+              "submitted",
+              "unknown",
+              "failed"
+            ],
+            "example": "queued"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-11-09T12:00:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-11-09T12:00:00Z"
+          },
+          "lastErrorCode": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Stable failure or uncertainty code, never a raw provider error.",
+            "example": "state_conflict"
+          }
         }
       },
       "MessageEditHistoryItem": {

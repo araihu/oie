@@ -164,6 +164,18 @@ type MessageCorrectionFact struct {
 	SourceRevisionID string
 }
 
+type MessageEditCommand struct {
+	ID             string
+	RevisionID     string
+	MessageID      string
+	AccountID      string
+	ConversationID string
+	State          string
+	Payload        string
+	AttemptCount   int64
+	NextAttemptAt  string
+}
+
 type MessagePreview struct {
 	ID             string
 	RevisionID     string
@@ -235,6 +247,12 @@ type Operation struct {
 	Result      string
 	CreatedAt   string
 	Kind        string
+}
+
+type OriginalTransmissionOrder struct {
+	Ordinal        int64
+	MessageID      string
+	ConversationID string
 }
 
 type Outbox struct {

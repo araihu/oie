@@ -52,6 +52,7 @@ type Outgoing struct {
 	RoomIntentRevisionID  domain.ID
 	Reply                 *domain.ReplyReference
 	Mentions              []domain.MessageMention
+	Correction            *domain.OutgoingCorrection
 }
 
 // Outcomes distinguish definitely unsent failures from ambiguous external effects.
@@ -120,6 +121,12 @@ type MessagingRepository interface {
 	InterruptedMessages(context.Context) ([]domain.Message, error)
 	TransitionMessage(context.Context, domain.ID, string, string, domain.ID, time.Time, time.Time) (domain.Message, error)
 	RecordConnection(context.Context, domain.Connection) error
+}
+
+// Physical sources retain the body addressed by a client wire identity. A
+// canonical projection may already display a different, corrected body.
+type MessageSourceRepository interface {
+	MessageSource(context.Context, domain.ID) (domain.Message, error)
 }
 
 func (e *Engine) SetProtocols(p Protocols) { e.protocols = p } // Configure once, before serving.
@@ -406,6 +413,9 @@ func (e *Engine) Receive(ctx context.Context, in Incoming) error {
 	}
 	if in.CanonicalID != "" && validID(in.CanonicalID) {
 		existing, lookupErr := r.Message(ctx, in.CanonicalID)
+		if sources, ok := e.repo.(MessageSourceRepository); ok {
+			existing, lookupErr = sources.MessageSource(ctx, in.CanonicalID)
+		}
 		if lookupErr != nil && !errors.Is(lookupErr, ErrNotFound) {
 			return lookupErr
 		}
@@ -416,6 +426,23 @@ func (e *Engine) Receive(ctx context.Context, in Incoming) error {
 			}
 			if chat.Address == address && chat.Kind == in.Kind {
 				in.ProviderID = string(existing.ID)
+			}
+		}
+		if errors.Is(lookupErr, ErrNotFound) && in.IsOwn {
+			if edits, ok := e.repo.(MessageEditRepository); ok {
+				pending, editErr := edits.MessageEdit(ctx, in.CanonicalID)
+				if editErr != nil && !errors.Is(editErr, ErrNotFound) {
+					return editErr
+				}
+				if editErr == nil && pending.Command.AccountID == a.ID && pending.Command.OriginalText == in.OriginalText {
+					chat, err := r.Conversation(ctx, pending.Command.ConversationID)
+					if err != nil {
+						return err
+					}
+					if chat.Address == address && chat.Kind == in.Kind {
+						in.ProviderID = string(in.CanonicalID)
+					}
+				}
 			}
 		}
 	}
@@ -460,7 +487,13 @@ func (e *Engine) Receive(ctx context.Context, in Incoming) error {
 		m.Sender.ID = a.ID
 		m.SendState = "submitted"
 	}
-	return r.ReceiveMessage(ctx, c, m, ids[5])
+	if err = r.ReceiveMessage(ctx, c, m, ids[5]); err != nil {
+		return err
+	}
+	if edits, ok := e.repo.(MessageEditRepository); ok && in.IsOwn && in.Correction != nil {
+		return edits.ObserveMessageEdit(ctx, a.ID, in.ProviderID, *in.Correction, in.OriginalText, ids[5], now)
+	}
+	return nil
 }
 func (e *Engine) ConnectionChanged(ctx context.Context, c domain.Connection) error {
 	r, err := e.messaging()
@@ -500,6 +533,9 @@ func (e *Engine) runOutbox(ctx context.Context) error {
 		if _, err = r.TransitionMessage(ctx, m.ID, "dispatching", "unknown", rev, now, now); err != nil {
 			return err
 		}
+	}
+	if err := e.recoverMessageEdits(ctx); err != nil {
+		return err
 	}
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
@@ -582,6 +618,11 @@ func (e *Engine) runOutbox(ctx context.Context) error {
 				}
 			}
 		}
+		if e.protocols != nil {
+			if err := e.dispatchMessageEdits(ctx); err != nil {
+				return err
+			}
+		}
 		select {
 		case <-ctx.Done():
 			return nil
@@ -597,6 +638,32 @@ func (e *Engine) Reject(ctx context.Context, in Rejected) error {
 	id, err := domain.ParseID(in.MessageID)
 	if err != nil {
 		return nil
+	}
+	if edits, ok := e.repo.(MessageEditRepository); ok {
+		pending, lookupErr := edits.MessageEdit(ctx, id)
+		if lookupErr == nil {
+			if pending.Command.AccountID != in.AccountID {
+				return nil
+			}
+			c, err := e.Conversation(ctx, pending.Command.ConversationID)
+			if err != nil {
+				return err
+			}
+			if c.Kind == "room" && in.FromParticipant {
+				return nil
+			}
+			if !in.FromServer && c.Address != in.Address {
+				return nil
+			}
+			revision, err := e.newID()
+			if err != nil {
+				return err
+			}
+			return edits.RejectMessageEdit(ctx, id, revision, e.now().UTC())
+		}
+		if !errors.Is(lookupErr, ErrNotFound) {
+			return lookupErr
+		}
 	}
 	m, err := e.Message(ctx, id)
 	if errors.Is(err, ErrNotFound) {

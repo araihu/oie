@@ -35,32 +35,35 @@ type configuration struct {
 	Enabled            bool
 }
 type entry struct {
-	account          domain.Account
-	config           configuration
-	cancel           context.CancelFunc
-	mu               sync.RWMutex
-	sendMu           sync.Mutex
-	roomNotifyMu     sync.Mutex
-	rooms            map[string]*roomSlot
-	ownRoomMessages  map[string]ownRoomMessage
-	state            domain.Connection
-	session          *mx.Session
-	raw              net.Conn
-	historyMu        sync.Mutex
-	archive          *archiveQuery
-	sidScopes        map[string]bool
-	occupantScopes   map[string]bool
-	discovery        domain.CapabilityDiscovery
-	discoveryPartial bool
-	detailsWake      chan struct{}
-	details          map[domain.ID]*detailSlot
-	peerPresence     map[string]map[string]peerResource
-	avatarWake       chan struct{}
-	avatarMu         sync.Mutex
-	avatarTargets    map[string]string
-	avatarDirty      map[string]string
-	contactsWake     chan struct{}
-	profiles         map[string]*profileSlot
+	account           domain.Account
+	config            configuration
+	cancel            context.CancelFunc
+	mu                sync.RWMutex
+	sendMu            sync.Mutex
+	roomNotifyMu      sync.Mutex
+	rooms             map[string]*roomSlot
+	ownRoomMessages   map[string]ownRoomMessage
+	correctionSession string
+	correctionSources map[string]ownCorrectionSource
+	correctionLatest  map[string]domain.ID
+	state             domain.Connection
+	session           *mx.Session
+	raw               net.Conn
+	historyMu         sync.Mutex
+	archive           *archiveQuery
+	sidScopes         map[string]bool
+	occupantScopes    map[string]bool
+	discovery         domain.CapabilityDiscovery
+	discoveryPartial  bool
+	detailsWake       chan struct{}
+	details           map[domain.ID]*detailSlot
+	peerPresence      map[string]map[string]peerResource
+	avatarWake        chan struct{}
+	avatarMu          sync.Mutex
+	avatarTargets     map[string]string
+	avatarDirty       map[string]string
+	contactsWake      chan struct{}
+	profiles          map[string]*profileSlot
 }
 type Manager struct {
 	dir         string
@@ -312,6 +315,9 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.mu.Lock()
 			e.session = session
 			e.raw = raw
+			e.correctionSession = randomQueryID()
+			e.correctionSources = map[string]ownCorrectionSource{}
+			e.correctionLatest = map[string]domain.ID{}
 			e.contactsWake = make(chan struct{}, 1)
 			contactsWake := e.contactsWake
 			e.mu.Unlock()
@@ -344,6 +350,9 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.mu.Lock()
 			e.session = nil
 			e.raw = nil
+			e.correctionSession = ""
+			e.correctionSources = nil
+			e.correctionLatest = nil
 			e.mu.Unlock()
 		}
 		if ctx.Err() != nil {
@@ -454,11 +463,24 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	}
 	e.sendMu.Lock()
 	defer e.sendMu.Unlock()
+	e.mu.Lock()
+	if e.session != session || e.raw != raw || e.state.State != "connected" {
+		e.mu.Unlock()
+		return application.NotSent
+	}
+	if out.Correction != nil && !validFrozenCorrection(e, a, out) {
+		e.mu.Unlock()
+		return application.Failed
+	}
+	e.mu.Unlock()
 	if out.Kind == "room" {
 		e.mu.Lock()
 		slot := e.rooms[out.Address]
 		if slot == nil || slot.session != session || slot.snapshot.State != "joined" || slot.snapshot.IntentRevisionID != out.RoomIntentRevisionID {
 			e.mu.Unlock()
+			if out.Correction != nil {
+				return application.Failed
+			}
 			return application.NotSent
 		}
 		if e.ownRoomMessages == nil {
@@ -483,6 +505,9 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	}
 	_ = raw.SetWriteDeadline(deadline)
 	defer func() { _ = raw.SetWriteDeadline(time.Time{}) }()
+	e.mu.Lock()
+	trackCorrectionSource(e, a, out)
+	e.mu.Unlock()
 
 	if err = session.Encode(ctx, payload); err != nil {
 		_ = raw.Close()

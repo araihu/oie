@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
+	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 )
 
@@ -172,6 +173,24 @@ func reconcileCorrections(ctx context.Context, q *dbgen.Queries, seed domain.Mes
 		if target, ok := byRemote[node.fact.TargetID]; ok {
 			parents[id] = target
 		}
+	}
+	for id, node := range nodes {
+		root, parent, local, err := localCorrectionParent(ctx, q, node.message, node.fact.Scope, node.fact.Author, node.fact.RemoteID, node.fact.TargetID)
+		if err != nil {
+			return err
+		}
+		if !local {
+			continue
+		}
+		original, rootKnown := nodes[root]
+		_, parentKnown := nodes[parent]
+		if !rootKnown || !parentKnown {
+			continue
+		}
+		if original.fact.RemoteID != node.fact.TargetID || original.fact.TargetID != "" {
+			return application.ErrProtocolUnavailable
+		}
+		parents[id] = parent
 	}
 	for id := range nodes {
 		seen := map[domain.ID]bool{}

@@ -168,6 +168,13 @@ func TestSenderIdentityMigrationPreservesVersionTwelveSources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	editDown, err := migrations.ReadFile("migrations/000015_message_edit_commands.down.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.db.Exec(string(editDown)); err != nil {
+		t.Fatal(err)
+	}
 	indexDown, err := migrations.ReadFile("migrations/000014_message_revision_index.down.sql")
 	if err != nil {
 		t.Fatal(err)

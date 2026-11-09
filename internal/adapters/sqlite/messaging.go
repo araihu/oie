@@ -399,6 +399,9 @@ func updateMessage(ctx context.Context, q *dbgen.Queries, m domain.Message, stat
 	increment := int64(0)
 	if state == "dispatching" {
 		increment = 1
+		if err := q.RecordOriginalTransmission(ctx, string(m.ID)); err != nil {
+			return m, err
+		}
 	}
 	if err := q.UpdateOutbox(ctx, dbgen.UpdateOutboxParams{State: state, NextAttemptAt: stamp(next), AttemptIncrement: increment, MessageID: string(m.ID)}); err != nil {
 		return m, err

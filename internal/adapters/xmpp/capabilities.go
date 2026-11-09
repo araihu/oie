@@ -226,7 +226,7 @@ func (m *Manager) CapabilityEvidence(_ context.Context, a domain.Account) (domai
 	for _, id := range []string{"direct_text", "presence", "send_replies"} {
 		add(id, "not_required")
 	}
-	for _, id := range []string{"received_replies", "mentions", "edit_messages", "retract_messages", "reactions", "read_receipts", "typing", "profile_images", "formatting", "e2ee"} {
+	for _, id := range []string{"received_replies", "mentions", "edit_messages", "send_corrections", "retract_messages", "reactions", "read_receipts", "typing", "profile_images", "formatting", "e2ee"} {
 		add(id, "scope_dependent")
 	}
 	add("account_history", featureEvidence(d, "account", mamNS))

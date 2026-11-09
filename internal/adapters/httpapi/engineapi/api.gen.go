@@ -151,6 +151,7 @@ const (
 	CapabilityFeatureIdRoomMessaging   CapabilityFeatureId = "room_messaging"
 	CapabilityFeatureIdSavedRooms      CapabilityFeatureId = "saved_rooms"
 	CapabilityFeatureIdSchedules       CapabilityFeatureId = "schedules"
+	CapabilityFeatureIdSendCorrections CapabilityFeatureId = "send_corrections"
 	CapabilityFeatureIdSendReplies     CapabilityFeatureId = "send_replies"
 	CapabilityFeatureIdSync            CapabilityFeatureId = "sync"
 	CapabilityFeatureIdTyping          CapabilityFeatureId = "typing"
@@ -202,6 +203,8 @@ func (e CapabilityFeatureId) Valid() bool {
 	case CapabilityFeatureIdSavedRooms:
 		return true
 	case CapabilityFeatureIdSchedules:
+		return true
+	case CapabilityFeatureIdSendCorrections:
 		return true
 	case CapabilityFeatureIdSendReplies:
 		return true
@@ -790,6 +793,72 @@ func (e MessageSendState) Valid() bool {
 	case MessageSendStateSubmitted:
 		return true
 	case MessageSendStateUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageEditCommandState.
+const (
+	MessageEditCommandStateDispatching MessageEditCommandState = "dispatching"
+	MessageEditCommandStateFailed      MessageEditCommandState = "failed"
+	MessageEditCommandStateQueued      MessageEditCommandState = "queued"
+	MessageEditCommandStateSubmitted   MessageEditCommandState = "submitted"
+	MessageEditCommandStateUnknown     MessageEditCommandState = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the MessageEditCommandState enum.
+func (e MessageEditCommandState) Valid() bool {
+	switch e {
+	case MessageEditCommandStateDispatching:
+		return true
+	case MessageEditCommandStateFailed:
+		return true
+	case MessageEditCommandStateQueued:
+		return true
+	case MessageEditCommandStateSubmitted:
+		return true
+	case MessageEditCommandStateUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageEditTargetReason.
+const (
+	MessageEditTargetReasonEditPending         MessageEditTargetReason = "edit_pending"
+	MessageEditTargetReasonForeignSource       MessageEditTargetReason = "foreign_source"
+	MessageEditTargetReasonHistoryUnavailable  MessageEditTargetReason = "history_unavailable"
+	MessageEditTargetReasonNotLatest           MessageEditTargetReason = "not_latest"
+	MessageEditTargetReasonNotOwn              MessageEditTargetReason = "not_own"
+	MessageEditTargetReasonNotSubmitted        MessageEditTargetReason = "not_submitted"
+	MessageEditTargetReasonProtocolUnavailable MessageEditTargetReason = "protocol_unavailable"
+	MessageEditTargetReasonSessionChanged      MessageEditTargetReason = "session_changed"
+	MessageEditTargetReasonUnsupportedPayload  MessageEditTargetReason = "unsupported_payload"
+)
+
+// Valid indicates whether the value is a known member of the MessageEditTargetReason enum.
+func (e MessageEditTargetReason) Valid() bool {
+	switch e {
+	case MessageEditTargetReasonEditPending:
+		return true
+	case MessageEditTargetReasonForeignSource:
+		return true
+	case MessageEditTargetReasonHistoryUnavailable:
+		return true
+	case MessageEditTargetReasonNotLatest:
+		return true
+	case MessageEditTargetReasonNotOwn:
+		return true
+	case MessageEditTargetReasonNotSubmitted:
+		return true
+	case MessageEditTargetReasonProtocolUnavailable:
+		return true
+	case MessageEditTargetReasonSessionChanged:
+		return true
+	case MessageEditTargetReasonUnsupportedPayload:
 		return true
 	default:
 		return false
@@ -1804,6 +1873,19 @@ type DiscoveredServiceScope string
 // DiscoveredServiceState defines model for DiscoveredService.State.
 type DiscoveredServiceState string
 
+// EditMessage Immutable correction intent; changing either field requires a new operation after a definitive outcome.
+//
+// Example: {"expectedRevisionId":"019a5df0-0000-7000-8000-000000000004","originalText":"Corrected text"}
+type EditMessage struct {
+	// ExpectedRevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	ExpectedRevisionId ID `json:"expectedRevisionId"`
+
+	// OriginalText Example: Corrected text
+	OriginalText string `json:"originalText"`
+}
+
 // Engine Persistent engine identity and event boundary.
 //
 // Example: {"apiVersion":"0.12.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:1","id":"019a5df0-0000-7000-8000-000000000003","role":"local"}
@@ -2089,6 +2171,61 @@ type MessageContext struct {
 	TargetId ID `json:"targetId"`
 }
 
+// MessageEditCommand Durable correction intent and its actual transmission state, separate from the original message send.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000002","createdAt":"2026-11-09T12:00:00Z","expectedRevisionId":"019a5df0-0000-7000-8000-000000000004","id":"019a5df0-0000-7000-8000-000000000005","messageId":"019a5df0-0000-7000-8000-000000000003","originalText":"Corrected text","revisionId":"019a5df0-0000-7000-8000-000000000006","state":"queued","updatedAt":"2026-11-09T12:00:00Z"}
+type MessageEditCommand struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	AccountId ID `json:"accountId"`
+
+	// ConversationId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	ConversationId ID `json:"conversationId"`
+
+	// CreatedAt Example: 2026-11-09T12:00:00Z
+	CreatedAt time.Time `json:"createdAt"`
+
+	// ExpectedRevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	ExpectedRevisionId ID `json:"expectedRevisionId"`
+
+	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	Id ID `json:"id"`
+
+	// LastErrorCode Stable failure or uncertainty code, never a raw provider error.
+	//
+	// Example: state_conflict
+	LastErrorCode *string `json:"lastErrorCode,omitempty"`
+
+	// MessageId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	MessageId ID `json:"messageId"`
+
+	// OriginalText Example: Corrected text
+	OriginalText string `json:"originalText"`
+
+	// RevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	RevisionId ID `json:"revisionId"`
+
+	// State Example: queued
+	State MessageEditCommandState `json:"state"`
+
+	// UpdatedAt Example: 2026-11-09T12:00:00Z
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// MessageEditCommandState Example: queued
+type MessageEditCommandState string
+
 // MessageEditHistoryItem One immutable observed content version, not a transport-state transition.
 type MessageEditHistoryItem struct {
 	// CreatedAt Observed authored UTC instant; ordering does not establish causality.
@@ -2172,6 +2309,49 @@ type MessageEditHistoryPage struct {
 	// Example: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 	Snapshot string `json:"snapshot"`
 }
+
+// MessageEditTarget Current canonical text and advisory eligibility for a distinct sent-message correction.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000002","currentRevisionId":"019a5df0-0000-7000-8000-000000000004","eligible":true,"messageId":"019a5df0-0000-7000-8000-000000000003","originalText":"Text to correct"}
+type MessageEditTarget struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	AccountId ID `json:"accountId"`
+
+	// ConversationId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	ConversationId ID `json:"conversationId"`
+
+	// CurrentRevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	CurrentRevisionId ID `json:"currentRevisionId"`
+
+	// Eligible Example: true
+	Eligible bool `json:"eligible"`
+
+	// MessageId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	MessageId ID `json:"messageId"`
+
+	// OriginalText Exact current source text. For an eligible target this is plain text without reply or mention payloads.
+	//
+	// Example: Text to correct
+	OriginalText string `json:"originalText"`
+
+	// Reason Stable reason when the target is not currently eligible.
+	//
+	// Example: not_latest
+	Reason *MessageEditTargetReason `json:"reason,omitempty"`
+}
+
+// MessageEditTargetReason Stable reason when the target is not currently eligible.
+//
+// Example: not_latest
+type MessageEditTargetReason string
 
 // MessageMention Accepted mention selection with frozen text or structured delivery mode; protocol targets remain private to the engine.
 type MessageMention struct {
@@ -3031,6 +3211,12 @@ type GetMessageEditHistoryParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// EditMessageParams defines parameters for EditMessage.
+type EditMessageParams struct {
+	// IdempotencyKey Stable command UUID retained across retries and receipt lookup.
+	IdempotencyKey ID `json:"Idempotency-Key"`
+}
+
 // SetMessageStarParams defines parameters for SetMessageStar.
 type SetMessageStarParams struct {
 	// IdempotencyKey Stable UUID for this exact star operation, retained across retries.
@@ -3114,6 +3300,9 @@ type LeaveRoomJSONRequestBody = LeaveRoom
 
 // CancelMessageJSONRequestBody defines body for CancelMessage for application/json ContentType.
 type CancelMessageJSONRequestBody = CancelMessage
+
+// EditMessageJSONRequestBody defines body for EditMessage for application/json ContentType.
+type EditMessageJSONRequestBody = EditMessage
 
 // SetMessageStarJSONRequestBody defines body for SetMessageStar for application/json ContentType.
 type SetMessageStarJSONRequestBody = SetMessageStar
@@ -3356,6 +3545,13 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/conversations/{conversationId}/details (the `GetConversationDetails` operationId).
 	GetConversationDetails(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetConversationEditTarget Inspect the latest own retained message for keyboard editing
+	//
+	// Uses a durable transmission ordinal for original sends by this engine, independently of device clocks and the visible timeline page. Returns the latest own original transmission candidate even when it is ineligible; never silently skips it to edit an older one. Queued or cancelled originals which never reached dispatch, imported own messages and correction commands do not establish this order. Returns 404 when there is no retained engine transmission. Read-only and does not mark messages read or fetch provider history.
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId}/edit-target (the `GetConversationEditTarget` operationId).
+	GetConversationEditTarget(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetMentionCandidates Read observed room mention candidates
 	//
 	// Read a bounded, account-scoped snapshot of visible room occupants. This never joins a room or discovers hidden personal identities. Candidates supply exact readable insertion text. Structured references are available only when the protocol adapter has a valid disclosed target; otherwise sending preserves the same readable text without protocol metadata.
@@ -3510,6 +3706,13 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/media/{hash} (the `GetMediaImage` operationId).
 	GetMediaImage(ctx context.Context, hash string, params *GetMediaImageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetMessageEdit Reconcile a correction command by its stable UUID
+	//
+	// Read-only durable receipt. A 404 does not authorize changing the key after an uncertain submission; repeat the same frozen request if needed. No provider calls or dispatch occur in this query.
+	//
+	// Corresponds with GET /api/v1/message-edits/{editId} (the `GetMessageEdit` operationId).
+	GetMessageEdit(ctx context.Context, editId ID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// SearchMessages Search retained message text and available metadata
 	//
 	// Search the complete retained engine history before pagination, without network retrieval, enrichment or read-state changes. Matching follows shared-content accent/case folding, word prefixes and bounded typing-error tolerance. Current canonical message content is searched by default. Include edit history adds separately labelled verified earlier content revisions, never transport-state revisions or independent correction aliases. Current associated URLs, filenames and cached page titles/descriptions are searched only while their catalog source is current. Metadata coverage can lag immediate message-text coverage. Order is newest original message timestamp at UTC millisecond precision and UUID first, current hit before earlier content revisions, then newest revision timestamp and UUID. New arrivals or corrections can change subsequent results; pages are not a frozen snapshot.
@@ -3548,6 +3751,31 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/messages/{messageId}/edit-history (the `GetMessageEditHistory` operationId).
 	GetMessageEditHistory(ctx context.Context, messageId MessageID, params *GetMessageEditHistoryParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetMessageEditTarget Inspect eligibility and current content before editing
+	//
+	// Read-only eligibility for the canonical message. Initially only the latest own plain text message sent by this engine in the current verified protocol session can be corrected. Reply and mention payloads remain ineligible. Eligibility is advisory and rechecked atomically at acceptance and dispatch. No arbitrary time window is imposed.
+	//
+	// Corresponds with GET /api/v1/messages/{messageId}/edit-target (the `GetMessageEditTarget` operationId).
+	GetMessageEditTarget(ctx context.Context, messageId MessageID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// EditMessageWithBody Accept a durable correction of a sent message
+	//
+	// Atomically persists a distinct correction command and operation receipt with an optimistic content revision precondition. The original send and content remain unchanged while queued or in flight. Submitted means written to the protocol connection, not confirmed recipient delivery. Unknown outcomes are not blindly retried. A frozen original sender wire ID is used for every correction. Read the command receipt after a lost response before considering another operation key.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/messages/{messageId}/edits (the `EditMessage` operationId).
+	EditMessageWithBody(ctx context.Context, messageId MessageID, params *EditMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// EditMessage Accept a durable correction of a sent message
+	//
+	// Atomically persists a distinct correction command and operation receipt with an optimistic content revision precondition. The original send and content remain unchanged while queued or in flight. Submitted means written to the protocol connection, not confirmed recipient delivery. Unknown outcomes are not blindly retried. A frozen original sender wire ID is used for every correction. Read the command receipt after a lost response before considering another operation key.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/messages/{messageId}/edits (the `EditMessage` operationId).
+	EditMessage(ctx context.Context, messageId MessageID, params *EditMessageParams, body EditMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetMessageSenderProfile Read the author's available published profile
 	//
@@ -4009,6 +4237,23 @@ func (c *Client) GetConversationDetails(ctx context.Context, conversationId Conv
 	return c.Client.Do(req)
 }
 
+// GetConversationEditTarget Inspect the latest own retained message for keyboard editing
+//
+// Uses a durable transmission ordinal for original sends by this engine, independently of device clocks and the visible timeline page. Returns the latest own original transmission candidate even when it is ineligible; never silently skips it to edit an older one. Queued or cancelled originals which never reached dispatch, imported own messages and correction commands do not establish this order. Returns 404 when there is no retained engine transmission. Read-only and does not mark messages read or fetch provider history.
+//
+// Corresponds with GET /api/v1/conversations/{conversationId}/edit-target (the `GetConversationEditTarget` operationId).
+func (c *Client) GetConversationEditTarget(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetConversationEditTargetRequest(c.Server, conversationId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetMentionCandidates Read observed room mention candidates
 //
 // Read a bounded, account-scoped snapshot of visible room occupants. This never joins a room or discovers hidden personal identities. Candidates supply exact readable insertion text. Structured references are available only when the protocol adapter has a valid disclosed target; otherwise sending preserves the same readable text without protocol metadata.
@@ -4353,6 +4598,23 @@ func (c *Client) GetMediaImage(ctx context.Context, hash string, params *GetMedi
 	return c.Client.Do(req)
 }
 
+// GetMessageEdit Reconcile a correction command by its stable UUID
+//
+// Read-only durable receipt. A 404 does not authorize changing the key after an uncertain submission; repeat the same frozen request if needed. No provider calls or dispatch occur in this query.
+//
+// Corresponds with GET /api/v1/message-edits/{editId} (the `GetMessageEdit` operationId).
+func (c *Client) GetMessageEdit(ctx context.Context, editId ID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMessageEditRequest(c.Server, editId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // SearchMessages Search retained message text and available metadata
 //
 // Search the complete retained engine history before pagination, without network retrieval, enrichment or read-state changes. Matching follows shared-content accent/case folding, word prefixes and bounded typing-error tolerance. Current canonical message content is searched by default. Include edit history adds separately labelled verified earlier content revisions, never transport-state revisions or independent correction aliases. Current associated URLs, filenames and cached page titles/descriptions are searched only while their catalog source is current. Metadata coverage can lag immediate message-text coverage. Order is newest original message timestamp at UTC millisecond precision and UUID first, current hit before earlier content revisions, then newest revision timestamp and UUID. New arrivals or corrections can change subsequent results; pages are not a frozen snapshot.
@@ -4432,6 +4694,61 @@ func (c *Client) CancelMessage(ctx context.Context, messageId MessageID, params 
 // Corresponds with GET /api/v1/messages/{messageId}/edit-history (the `GetMessageEditHistory` operationId).
 func (c *Client) GetMessageEditHistory(ctx context.Context, messageId MessageID, params *GetMessageEditHistoryParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetMessageEditHistoryRequest(c.Server, messageId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetMessageEditTarget Inspect eligibility and current content before editing
+//
+// Read-only eligibility for the canonical message. Initially only the latest own plain text message sent by this engine in the current verified protocol session can be corrected. Reply and mention payloads remain ineligible. Eligibility is advisory and rechecked atomically at acceptance and dispatch. No arbitrary time window is imposed.
+//
+// Corresponds with GET /api/v1/messages/{messageId}/edit-target (the `GetMessageEditTarget` operationId).
+func (c *Client) GetMessageEditTarget(ctx context.Context, messageId MessageID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMessageEditTargetRequest(c.Server, messageId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// EditMessageWithBody Accept a durable correction of a sent message
+//
+// Atomically persists a distinct correction command and operation receipt with an optimistic content revision precondition. The original send and content remain unchanged while queued or in flight. Submitted means written to the protocol connection, not confirmed recipient delivery. Unknown outcomes are not blindly retried. A frozen original sender wire ID is used for every correction. Read the command receipt after a lost response before considering another operation key.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/messages/{messageId}/edits (the `EditMessage` operationId).
+func (c *Client) EditMessageWithBody(ctx context.Context, messageId MessageID, params *EditMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewEditMessageRequestWithBody(c.Server, messageId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// EditMessage Accept a durable correction of a sent message
+//
+// Atomically persists a distinct correction command and operation receipt with an optimistic content revision precondition. The original send and content remain unchanged while queued or in flight. Submitted means written to the protocol connection, not confirmed recipient delivery. Unknown outcomes are not blindly retried. A frozen original sender wire ID is used for every correction. Read the command receipt after a lost response before considering another operation key.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/messages/{messageId}/edits (the `EditMessage` operationId).
+func (c *Client) EditMessage(ctx context.Context, messageId MessageID, params *EditMessageParams, body EditMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewEditMessageRequest(c.Server, messageId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5534,6 +5851,40 @@ func NewGetConversationDetailsRequest(server string, conversationId Conversation
 	return req, nil
 }
 
+// NewGetConversationEditTargetRequest constructs an http.Request for the GetConversationEditTarget method
+func NewGetConversationEditTargetRequest(server string, conversationId ConversationID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/conversations/%s/edit-target", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetMentionCandidatesRequest constructs an http.Request for the GetMentionCandidates method
 func NewGetMentionCandidatesRequest(server string, conversationId ConversationID) (*http.Request, error) {
 	var err error
@@ -6296,6 +6647,40 @@ func NewGetMediaImageRequest(server string, hash string, params *GetMediaImagePa
 	return req, nil
 }
 
+// NewGetMessageEditRequest constructs an http.Request for the GetMessageEdit method
+func NewGetMessageEditRequest(server string, editId ID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "editId", editId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/message-edits/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewSearchMessagesRequest constructs an http.Request for the SearchMessages method
 func NewSearchMessagesRequest(server string, params *SearchMessagesParams) (*http.Request, error) {
 	var err error
@@ -6568,6 +6953,100 @@ func NewGetMessageEditHistoryRequest(server string, messageId MessageID, params 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetMessageEditTargetRequest constructs an http.Request for the GetMessageEditTarget method
+func NewGetMessageEditTargetRequest(server string, messageId MessageID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "messageId", messageId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/messages/%s/edit-target", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewEditMessageRequest calls the generic EditMessage builder with application/json body
+func NewEditMessageRequest(server string, messageId MessageID, params *EditMessageParams, body EditMessageJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewEditMessageRequestWithBody(server, messageId, params, "application/json", bodyReader)
+}
+
+// NewEditMessageRequestWithBody constructs an http.Request for the EditMessage method, with any body, and a specified content type
+func NewEditMessageRequestWithBody(server string, messageId MessageID, params *EditMessageParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "messageId", messageId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/messages/%s/edits", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: "uuid"})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
 	}
 
 	return req, nil
@@ -7413,6 +7892,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/conversations/{conversationId}/details (the `GetConversationDetails` operationId).
 	GetConversationDetailsWithResponse(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*GetConversationDetailsResponse, error)
 
+	// GetConversationEditTargetWithResponse Inspect the latest own retained message for keyboard editing
+	//
+	// Uses a durable transmission ordinal for original sends by this engine, independently of device clocks and the visible timeline page. Returns the latest own original transmission candidate even when it is ineligible; never silently skips it to edit an older one. Queued or cancelled originals which never reached dispatch, imported own messages and correction commands do not establish this order. Returns 404 when there is no retained engine transmission. Read-only and does not mark messages read or fetch provider history.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId}/edit-target (the `GetConversationEditTarget` operationId).
+	GetConversationEditTargetWithResponse(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*GetConversationEditTargetResponse, error)
+
 	// GetMentionCandidatesWithResponse Read observed room mention candidates
 	//
 	// Read a bounded, account-scoped snapshot of visible room occupants. This never joins a room or discovers hidden personal identities. Candidates supply exact readable insertion text. Structured references are available only when the protocol adapter has a valid disclosed target; otherwise sending preserves the same readable text without protocol metadata.
@@ -7589,6 +8077,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/media/{hash} (the `GetMediaImage` operationId).
 	GetMediaImageWithResponse(ctx context.Context, hash string, params *GetMediaImageParams, reqEditors ...RequestEditorFn) (*GetMediaImageResponse, error)
 
+	// GetMessageEditWithResponse Reconcile a correction command by its stable UUID
+	//
+	// Read-only durable receipt. A 404 does not authorize changing the key after an uncertain submission; repeat the same frozen request if needed. No provider calls or dispatch occur in this query.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/message-edits/{editId} (the `GetMessageEdit` operationId).
+	GetMessageEditWithResponse(ctx context.Context, editId ID, reqEditors ...RequestEditorFn) (*GetMessageEditResponse, error)
+
 	// SearchMessagesWithResponse Search retained message text and available metadata
 	//
 	// Search the complete retained engine history before pagination, without network retrieval, enrichment or read-state changes. Matching follows shared-content accent/case folding, word prefixes and bounded typing-error tolerance. Current canonical message content is searched by default. Include edit history adds separately labelled verified earlier content revisions, never transport-state revisions or independent correction aliases. Current associated URLs, filenames and cached page titles/descriptions are searched only while their catalog source is current. Metadata coverage can lag immediate message-text coverage. Order is newest original message timestamp at UTC millisecond precision and UUID first, current hit before earlier content revisions, then newest revision timestamp and UUID. New arrivals or corrections can change subsequent results; pages are not a frozen snapshot.
@@ -7633,6 +8130,33 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/messages/{messageId}/edit-history (the `GetMessageEditHistory` operationId).
 	GetMessageEditHistoryWithResponse(ctx context.Context, messageId MessageID, params *GetMessageEditHistoryParams, reqEditors ...RequestEditorFn) (*GetMessageEditHistoryResponse, error)
+
+	// GetMessageEditTargetWithResponse Inspect eligibility and current content before editing
+	//
+	// Read-only eligibility for the canonical message. Initially only the latest own plain text message sent by this engine in the current verified protocol session can be corrected. Reply and mention payloads remain ineligible. Eligibility is advisory and rechecked atomically at acceptance and dispatch. No arbitrary time window is imposed.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/messages/{messageId}/edit-target (the `GetMessageEditTarget` operationId).
+	GetMessageEditTargetWithResponse(ctx context.Context, messageId MessageID, reqEditors ...RequestEditorFn) (*GetMessageEditTargetResponse, error)
+
+	// EditMessageWithBodyWithResponse Accept a durable correction of a sent message
+	//
+	// Atomically persists a distinct correction command and operation receipt with an optimistic content revision precondition. The original send and content remain unchanged while queued or in flight. Submitted means written to the protocol connection, not confirmed recipient delivery. Unknown outcomes are not blindly retried. A frozen original sender wire ID is used for every correction. Read the command receipt after a lost response before considering another operation key.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/messages/{messageId}/edits (the `EditMessage` operationId).
+	EditMessageWithBodyWithResponse(ctx context.Context, messageId MessageID, params *EditMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EditMessageResponse, error)
+
+	// EditMessageWithResponse Accept a durable correction of a sent message
+	//
+	// Atomically persists a distinct correction command and operation receipt with an optimistic content revision precondition. The original send and content remain unchanged while queued or in flight. Submitted means written to the protocol connection, not confirmed recipient delivery. Unknown outcomes are not blindly retried. A frozen original sender wire ID is used for every correction. Read the command receipt after a lost response before considering another operation key.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/messages/{messageId}/edits (the `EditMessage` operationId).
+	EditMessageWithResponse(ctx context.Context, messageId MessageID, params *EditMessageParams, body EditMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*EditMessageResponse, error)
 
 	// GetMessageSenderProfileWithResponse Read the author's available published profile
 	//
@@ -8781,6 +9305,68 @@ func (r GetConversationDetailsResponse) ContentType() string {
 	return ""
 }
 
+type GetConversationEditTargetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MessageEditTarget
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetConversationEditTargetResponse) GetJSON200() *MessageEditTarget {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetConversationEditTargetResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetConversationEditTargetResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetConversationEditTargetResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetConversationEditTargetResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetConversationEditTargetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetConversationEditTargetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetConversationEditTargetResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetMentionCandidatesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9712,6 +10298,68 @@ func (r GetMediaImageResponse) ContentType() string {
 	return ""
 }
 
+type GetMessageEditResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MessageEditCommand
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetMessageEditResponse) GetJSON200() *MessageEditCommand {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetMessageEditResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetMessageEditResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetMessageEditResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetMessageEditResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMessageEditResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMessageEditResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetMessageEditResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type SearchMessagesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9968,6 +10616,144 @@ func (r GetMessageEditHistoryResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetMessageEditHistoryResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetMessageEditTargetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MessageEditTarget
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetMessageEditTargetResponse) GetJSON200() *MessageEditTarget {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetMessageEditTargetResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetMessageEditTargetResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetMessageEditTargetResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetMessageEditTargetResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMessageEditTargetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMessageEditTargetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetMessageEditTargetResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type EditMessageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MessageEditCommand
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *MessageEditCommand
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Conflict
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r EditMessageResponse) GetJSON200() *MessageEditCommand {
+	return r.JSON200
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r EditMessageResponse) GetJSON202() *MessageEditCommand {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r EditMessageResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r EditMessageResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r EditMessageResponse) GetApplicationproblemJSON409() *Conflict {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r EditMessageResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r EditMessageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r EditMessageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r EditMessageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r EditMessageResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -11141,6 +11927,21 @@ func (c *ClientWithResponses) GetConversationDetailsWithResponse(ctx context.Con
 	return ParseGetConversationDetailsResponse(rsp)
 }
 
+// GetConversationEditTargetWithResponse Inspect the latest own retained message for keyboard editing
+//
+// Uses a durable transmission ordinal for original sends by this engine, independently of device clocks and the visible timeline page. Returns the latest own original transmission candidate even when it is ineligible; never silently skips it to edit an older one. Queued or cancelled originals which never reached dispatch, imported own messages and correction commands do not establish this order. Returns 404 when there is no retained engine transmission. Read-only and does not mark messages read or fetch provider history.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/conversations/{conversationId}/edit-target (the `GetConversationEditTarget` operationId).
+func (c *ClientWithResponses) GetConversationEditTargetWithResponse(ctx context.Context, conversationId ConversationID, reqEditors ...RequestEditorFn) (*GetConversationEditTargetResponse, error) {
+	rsp, err := c.GetConversationEditTarget(ctx, conversationId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetConversationEditTargetResponse(rsp)
+}
+
 // GetMentionCandidatesWithResponse Read observed room mention candidates
 //
 // Read a bounded, account-scoped snapshot of visible room occupants. This never joins a room or discovers hidden personal identities. Candidates supply exact readable insertion text. Structured references are available only when the protocol adapter has a valid disclosed target; otherwise sending preserves the same readable text without protocol metadata.
@@ -11431,6 +12232,21 @@ func (c *ClientWithResponses) GetMediaImageWithResponse(ctx context.Context, has
 	return ParseGetMediaImageResponse(rsp)
 }
 
+// GetMessageEditWithResponse Reconcile a correction command by its stable UUID
+//
+// Read-only durable receipt. A 404 does not authorize changing the key after an uncertain submission; repeat the same frozen request if needed. No provider calls or dispatch occur in this query.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/message-edits/{editId} (the `GetMessageEdit` operationId).
+func (c *ClientWithResponses) GetMessageEditWithResponse(ctx context.Context, editId ID, reqEditors ...RequestEditorFn) (*GetMessageEditResponse, error) {
+	rsp, err := c.GetMessageEdit(ctx, editId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMessageEditResponse(rsp)
+}
+
 // SearchMessagesWithResponse Search retained message text and available metadata
 //
 // Search the complete retained engine history before pagination, without network retrieval, enrichment or read-state changes. Matching follows shared-content accent/case folding, word prefixes and bounded typing-error tolerance. Current canonical message content is searched by default. Include edit history adds separately labelled verified earlier content revisions, never transport-state revisions or independent correction aliases. Current associated URLs, filenames and cached page titles/descriptions are searched only while their catalog source is current. Metadata coverage can lag immediate message-text coverage. Order is newest original message timestamp at UTC millisecond precision and UUID first, current hit before earlier content revisions, then newest revision timestamp and UUID. New arrivals or corrections can change subsequent results; pages are not a frozen snapshot.
@@ -11504,6 +12320,51 @@ func (c *ClientWithResponses) GetMessageEditHistoryWithResponse(ctx context.Cont
 		return nil, err
 	}
 	return ParseGetMessageEditHistoryResponse(rsp)
+}
+
+// GetMessageEditTargetWithResponse Inspect eligibility and current content before editing
+//
+// Read-only eligibility for the canonical message. Initially only the latest own plain text message sent by this engine in the current verified protocol session can be corrected. Reply and mention payloads remain ineligible. Eligibility is advisory and rechecked atomically at acceptance and dispatch. No arbitrary time window is imposed.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/messages/{messageId}/edit-target (the `GetMessageEditTarget` operationId).
+func (c *ClientWithResponses) GetMessageEditTargetWithResponse(ctx context.Context, messageId MessageID, reqEditors ...RequestEditorFn) (*GetMessageEditTargetResponse, error) {
+	rsp, err := c.GetMessageEditTarget(ctx, messageId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMessageEditTargetResponse(rsp)
+}
+
+// EditMessageWithBodyWithResponse Accept a durable correction of a sent message
+//
+// Atomically persists a distinct correction command and operation receipt with an optimistic content revision precondition. The original send and content remain unchanged while queued or in flight. Submitted means written to the protocol connection, not confirmed recipient delivery. Unknown outcomes are not blindly retried. A frozen original sender wire ID is used for every correction. Read the command receipt after a lost response before considering another operation key.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/messages/{messageId}/edits (the `EditMessage` operationId).
+func (c *ClientWithResponses) EditMessageWithBodyWithResponse(ctx context.Context, messageId MessageID, params *EditMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EditMessageResponse, error) {
+	rsp, err := c.EditMessageWithBody(ctx, messageId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseEditMessageResponse(rsp)
+}
+
+// EditMessageWithResponse Accept a durable correction of a sent message
+//
+// Atomically persists a distinct correction command and operation receipt with an optimistic content revision precondition. The original send and content remain unchanged while queued or in flight. Submitted means written to the protocol connection, not confirmed recipient delivery. Unknown outcomes are not blindly retried. A frozen original sender wire ID is used for every correction. Read the command receipt after a lost response before considering another operation key.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/messages/{messageId}/edits (the `EditMessage` operationId).
+func (c *ClientWithResponses) EditMessageWithResponse(ctx context.Context, messageId MessageID, params *EditMessageParams, body EditMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*EditMessageResponse, error) {
+	rsp, err := c.EditMessage(ctx, messageId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseEditMessageResponse(rsp)
 }
 
 // GetMessageSenderProfileWithResponse Read the author's available published profile
@@ -12526,6 +13387,53 @@ func ParseGetConversationDetailsResponse(rsp *http.Response) (*GetConversationDe
 	return response, nil
 }
 
+// ParseGetConversationEditTargetResponse parses an HTTP response from a GetConversationEditTargetWithResponse call
+func ParseGetConversationEditTargetResponse(rsp *http.Response) (*GetConversationEditTargetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetConversationEditTargetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MessageEditTarget
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetMentionCandidatesResponse parses an HTTP response from a GetMentionCandidatesWithResponse call
 func ParseGetMentionCandidatesResponse(rsp *http.Response) (*GetMentionCandidatesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -13247,6 +14155,53 @@ func ParseGetMediaImageResponse(rsp *http.Response) (*GetMediaImageResponse, err
 	return response, nil
 }
 
+// ParseGetMessageEditResponse parses an HTTP response from a GetMessageEditWithResponse call
+func ParseGetMessageEditResponse(rsp *http.Response) (*GetMessageEditResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMessageEditResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MessageEditCommand
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseSearchMessagesResponse parses an HTTP response from a SearchMessagesWithResponse call
 func ParseSearchMessagesResponse(rsp *http.Response) (*SearchMessagesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -13432,6 +14387,114 @@ func ParseGetMessageEditHistoryResponse(rsp *http.Response) (*GetMessageEditHist
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetMessageEditTargetResponse parses an HTTP response from a GetMessageEditTargetWithResponse call
+func ParseGetMessageEditTargetResponse(rsp *http.Response) (*GetMessageEditTargetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMessageEditTargetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MessageEditTarget
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseEditMessageResponse parses an HTTP response from a EditMessageWithResponse call
+func ParseEditMessageResponse(rsp *http.Response) (*EditMessageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &EditMessageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MessageEditCommand
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest MessageEditCommand
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -14253,6 +15316,9 @@ type ServerInterface interface {
 	// GetConversationDetails Read scoped conversation details
 	// (GET /api/v1/conversations/{conversationId}/details)
 	GetConversationDetails(w http.ResponseWriter, r *http.Request, conversationId ConversationID)
+	// GetConversationEditTarget Inspect the latest own retained message for keyboard editing
+	// (GET /api/v1/conversations/{conversationId}/edit-target)
+	GetConversationEditTarget(w http.ResponseWriter, r *http.Request, conversationId ConversationID)
 	// GetMentionCandidates Read observed room mention candidates
 	// (GET /api/v1/conversations/{conversationId}/mention-candidates)
 	GetMentionCandidates(w http.ResponseWriter, r *http.Request, conversationId ConversationID)
@@ -14298,6 +15364,9 @@ type ServerInterface interface {
 	// GetMediaImage Read a retained preview or original image
 	// (GET /api/v1/media/{hash})
 	GetMediaImage(w http.ResponseWriter, r *http.Request, hash string, params GetMediaImageParams)
+	// GetMessageEdit Reconcile a correction command by its stable UUID
+	// (GET /api/v1/message-edits/{editId})
+	GetMessageEdit(w http.ResponseWriter, r *http.Request, editId ID)
 	// SearchMessages Search retained message text and available metadata
 	// (GET /api/v1/messages/search)
 	SearchMessages(w http.ResponseWriter, r *http.Request, params SearchMessagesParams)
@@ -14310,6 +15379,12 @@ type ServerInterface interface {
 	// GetMessageEditHistory Read observed content revisions of one retained message
 	// (GET /api/v1/messages/{messageId}/edit-history)
 	GetMessageEditHistory(w http.ResponseWriter, r *http.Request, messageId MessageID, params GetMessageEditHistoryParams)
+	// GetMessageEditTarget Inspect eligibility and current content before editing
+	// (GET /api/v1/messages/{messageId}/edit-target)
+	GetMessageEditTarget(w http.ResponseWriter, r *http.Request, messageId MessageID)
+	// EditMessage Accept a durable correction of a sent message
+	// (POST /api/v1/messages/{messageId}/edits)
+	EditMessage(w http.ResponseWriter, r *http.Request, messageId MessageID, params EditMessageParams)
 	// GetMessageSenderProfile Read the author's available published profile
 	// (GET /api/v1/messages/{messageId}/sender-profile)
 	GetMessageSenderProfile(w http.ResponseWriter, r *http.Request, messageId MessageID)
@@ -15056,6 +16131,32 @@ func (siw *ServerInterfaceWrapper) GetConversationDetails(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// GetConversationEditTarget operation middleware
+func (siw *ServerInterfaceWrapper) GetConversationEditTarget(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", r.PathValue("conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetConversationEditTarget(w, r, conversationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMentionCandidates operation middleware
 func (siw *ServerInterfaceWrapper) GetMentionCandidates(w http.ResponseWriter, r *http.Request) {
 
@@ -15672,6 +16773,32 @@ func (siw *ServerInterfaceWrapper) GetMediaImage(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// GetMessageEdit operation middleware
+func (siw *ServerInterfaceWrapper) GetMessageEdit(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "editId" -------------
+	var editId ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "editId", r.PathValue("editId"), &editId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "editId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMessageEdit(w, r, editId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SearchMessages operation middleware
 func (siw *ServerInterfaceWrapper) SearchMessages(w http.ResponseWriter, r *http.Request) {
 
@@ -15896,6 +17023,86 @@ func (siw *ServerInterfaceWrapper) GetMessageEditHistory(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMessageEditHistory(w, r, messageId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMessageEditTarget operation middleware
+func (siw *ServerInterfaceWrapper) GetMessageEditTarget(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "messageId" -------------
+	var messageId MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "messageId", r.PathValue("messageId"), &messageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "messageId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMessageEditTarget(w, r, messageId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EditMessage operation middleware
+func (siw *ServerInterfaceWrapper) EditMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "messageId" -------------
+	var messageId MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "messageId", r.PathValue("messageId"), &messageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "messageId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params EditMessageParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey ID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EditMessage(w, r, messageId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16582,6 +17789,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/conversations/{conversationId}", wrapper.UpdateConversationPreferences)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/conversations/{conversationId}/messages", wrapper.ListMessages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/conversations/{conversationId}/messages", wrapper.SendMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/messages/{messageId}/edit-target", wrapper.GetMessageEditTarget)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/conversations/{conversationId}/edit-target", wrapper.GetConversationEditTarget)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/messages/{messageId}/edits", wrapper.EditMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/message-edits/{editId}", wrapper.GetMessageEdit)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/messages/{messageId}/edit-history", wrapper.GetMessageEditHistory)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/messages/{messageId}/sender-profile", wrapper.GetMessageSenderProfile)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/messages/{messageId}", wrapper.GetMessage)
@@ -17813,6 +19024,76 @@ func (response GetConversationDetails404ApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type GetConversationEditTargetRequestObject struct {
+	ConversationId ConversationID `json:"conversationId"`
+}
+
+type GetConversationEditTargetResponseObject interface {
+	VisitGetConversationEditTargetResponse(w http.ResponseWriter) error
+}
+
+type GetConversationEditTarget200JSONResponse MessageEditTarget
+
+func (response GetConversationEditTarget200JSONResponse) VisitGetConversationEditTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetConversationEditTarget400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response GetConversationEditTarget400ApplicationProblemPlusJSONResponse) VisitGetConversationEditTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetConversationEditTarget404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetConversationEditTarget404ApplicationProblemPlusJSONResponse) VisitGetConversationEditTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetConversationEditTarget503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response GetConversationEditTarget503ApplicationProblemPlusJSONResponse) VisitGetConversationEditTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMentionCandidatesRequestObject struct {
 	ConversationId ConversationID `json:"conversationId"`
 }
@@ -18998,6 +20279,76 @@ func (response GetMediaImage503ApplicationProblemPlusJSONResponse) VisitGetMedia
 	return err
 }
 
+type GetMessageEditRequestObject struct {
+	EditId ID `json:"editId"`
+}
+
+type GetMessageEditResponseObject interface {
+	VisitGetMessageEditResponse(w http.ResponseWriter) error
+}
+
+type GetMessageEdit200JSONResponse MessageEditCommand
+
+func (response GetMessageEdit200JSONResponse) VisitGetMessageEditResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessageEdit400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessageEdit400ApplicationProblemPlusJSONResponse) VisitGetMessageEditResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessageEdit404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessageEdit404ApplicationProblemPlusJSONResponse) VisitGetMessageEditResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessageEdit503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessageEdit503ApplicationProblemPlusJSONResponse) VisitGetMessageEditResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SearchMessagesRequestObject struct {
 	Params SearchMessagesParams
 }
@@ -19300,6 +20651,178 @@ type GetMessageEditHistory503ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetMessageEditHistory503ApplicationProblemPlusJSONResponse) VisitGetMessageEditHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessageEditTargetRequestObject struct {
+	MessageId MessageID `json:"messageId"`
+}
+
+type GetMessageEditTargetResponseObject interface {
+	VisitGetMessageEditTargetResponse(w http.ResponseWriter) error
+}
+
+type GetMessageEditTarget200JSONResponse MessageEditTarget
+
+func (response GetMessageEditTarget200JSONResponse) VisitGetMessageEditTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessageEditTarget400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessageEditTarget400ApplicationProblemPlusJSONResponse) VisitGetMessageEditTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessageEditTarget404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessageEditTarget404ApplicationProblemPlusJSONResponse) VisitGetMessageEditTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessageEditTarget503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessageEditTarget503ApplicationProblemPlusJSONResponse) VisitGetMessageEditTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditMessageRequestObject struct {
+	MessageId MessageID `json:"messageId"`
+	Params    EditMessageParams
+	Body      *EditMessageJSONRequestBody
+}
+
+type EditMessageResponseObject interface {
+	VisitEditMessageResponse(w http.ResponseWriter) error
+}
+
+type EditMessage200JSONResponse MessageEditCommand
+
+func (response EditMessage200JSONResponse) VisitEditMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditMessage202JSONResponse MessageEditCommand
+
+func (response EditMessage202JSONResponse) VisitEditMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditMessage400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response EditMessage400ApplicationProblemPlusJSONResponse) VisitEditMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditMessage404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response EditMessage404ApplicationProblemPlusJSONResponse) VisitEditMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditMessage409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response EditMessage409ApplicationProblemPlusJSONResponse) VisitEditMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditMessage503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response EditMessage503ApplicationProblemPlusJSONResponse) VisitEditMessageResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -20848,6 +22371,9 @@ type StrictServerInterface interface {
 	// GetConversationDetails Read scoped conversation details
 	// (GET /api/v1/conversations/{conversationId}/details)
 	GetConversationDetails(ctx context.Context, request GetConversationDetailsRequestObject) (GetConversationDetailsResponseObject, error)
+	// GetConversationEditTarget Inspect the latest own retained message for keyboard editing
+	// (GET /api/v1/conversations/{conversationId}/edit-target)
+	GetConversationEditTarget(ctx context.Context, request GetConversationEditTargetRequestObject) (GetConversationEditTargetResponseObject, error)
 	// GetMentionCandidates Read observed room mention candidates
 	// (GET /api/v1/conversations/{conversationId}/mention-candidates)
 	GetMentionCandidates(ctx context.Context, request GetMentionCandidatesRequestObject) (GetMentionCandidatesResponseObject, error)
@@ -20893,6 +22419,9 @@ type StrictServerInterface interface {
 	// GetMediaImage Read a retained preview or original image
 	// (GET /api/v1/media/{hash})
 	GetMediaImage(ctx context.Context, request GetMediaImageRequestObject) (GetMediaImageResponseObject, error)
+	// GetMessageEdit Reconcile a correction command by its stable UUID
+	// (GET /api/v1/message-edits/{editId})
+	GetMessageEdit(ctx context.Context, request GetMessageEditRequestObject) (GetMessageEditResponseObject, error)
 	// SearchMessages Search retained message text and available metadata
 	// (GET /api/v1/messages/search)
 	SearchMessages(ctx context.Context, request SearchMessagesRequestObject) (SearchMessagesResponseObject, error)
@@ -20905,6 +22434,12 @@ type StrictServerInterface interface {
 	// GetMessageEditHistory Read observed content revisions of one retained message
 	// (GET /api/v1/messages/{messageId}/edit-history)
 	GetMessageEditHistory(ctx context.Context, request GetMessageEditHistoryRequestObject) (GetMessageEditHistoryResponseObject, error)
+	// GetMessageEditTarget Inspect eligibility and current content before editing
+	// (GET /api/v1/messages/{messageId}/edit-target)
+	GetMessageEditTarget(ctx context.Context, request GetMessageEditTargetRequestObject) (GetMessageEditTargetResponseObject, error)
+	// EditMessage Accept a durable correction of a sent message
+	// (POST /api/v1/messages/{messageId}/edits)
+	EditMessage(ctx context.Context, request EditMessageRequestObject) (EditMessageResponseObject, error)
 	// GetMessageSenderProfile Read the author's available published profile
 	// (GET /api/v1/messages/{messageId}/sender-profile)
 	GetMessageSenderProfile(ctx context.Context, request GetMessageSenderProfileRequestObject) (GetMessageSenderProfileResponseObject, error)
@@ -21429,6 +22964,32 @@ func (sh *strictHandler) GetConversationDetails(w http.ResponseWriter, r *http.R
 	}
 }
 
+// GetConversationEditTarget operation middleware
+func (sh *strictHandler) GetConversationEditTarget(w http.ResponseWriter, r *http.Request, conversationId ConversationID) {
+	var request GetConversationEditTargetRequestObject
+
+	request.ConversationId = conversationId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetConversationEditTarget(ctx, request.(GetConversationEditTargetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetConversationEditTarget")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetConversationEditTargetResponseObject); ok {
+		if err := validResponse.VisitGetConversationEditTargetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetMentionCandidates operation middleware
 func (sh *strictHandler) GetMentionCandidates(w http.ResponseWriter, r *http.Request, conversationId ConversationID) {
 	var request GetMentionCandidatesRequestObject
@@ -21853,6 +23414,32 @@ func (sh *strictHandler) GetMediaImage(w http.ResponseWriter, r *http.Request, h
 	}
 }
 
+// GetMessageEdit operation middleware
+func (sh *strictHandler) GetMessageEdit(w http.ResponseWriter, r *http.Request, editId ID) {
+	var request GetMessageEditRequestObject
+
+	request.EditId = editId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMessageEdit(ctx, request.(GetMessageEditRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMessageEdit")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMessageEditResponseObject); ok {
+		if err := validResponse.VisitGetMessageEditResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // SearchMessages operation middleware
 func (sh *strictHandler) SearchMessages(w http.ResponseWriter, r *http.Request, params SearchMessagesParams) {
 	var request SearchMessagesRequestObject
@@ -21959,6 +23546,66 @@ func (sh *strictHandler) GetMessageEditHistory(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetMessageEditHistoryResponseObject); ok {
 		if err := validResponse.VisitGetMessageEditHistoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMessageEditTarget operation middleware
+func (sh *strictHandler) GetMessageEditTarget(w http.ResponseWriter, r *http.Request, messageId MessageID) {
+	var request GetMessageEditTargetRequestObject
+
+	request.MessageId = messageId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMessageEditTarget(ctx, request.(GetMessageEditTargetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMessageEditTarget")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMessageEditTargetResponseObject); ok {
+		if err := validResponse.VisitGetMessageEditTargetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EditMessage operation middleware
+func (sh *strictHandler) EditMessage(w http.ResponseWriter, r *http.Request, messageId MessageID, params EditMessageParams) {
+	var request EditMessageRequestObject
+
+	request.MessageId = messageId
+	request.Params = params
+
+	var body EditMessageJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EditMessage(ctx, request.(EditMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EditMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EditMessageResponseObject); ok {
+		if err := validResponse.VisitEditMessageResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -22292,407 +23939,429 @@ func (sh *strictHandler) ListStarredMessages(w http.ResponseWriter, r *http.Requ
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"pw//3wA=",
+	"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",
+	"lAffuZ2YVy9ErbjQh58+/H8DAA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

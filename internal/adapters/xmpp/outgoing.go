@@ -39,9 +39,15 @@ type outboundMessage struct {
 		XMLName xml.Name `xml:"urn:xmpp:sid:0 origin-id"`
 		ID      string   `xml:"id,attr"`
 	}
-	Mentions []outboundMentionElement `xml:",omitempty"`
-	Reply    *outboundReplyElement    `xml:",omitempty"`
-	Fallback *outboundFallbackElement `xml:",omitempty"`
+	Mentions   []outboundMentionElement   `xml:",omitempty"`
+	Reply      *outboundReplyElement      `xml:",omitempty"`
+	Fallback   *outboundFallbackElement   `xml:",omitempty"`
+	Correction *outboundCorrectionElement `xml:",omitempty"`
+}
+
+type outboundCorrectionElement struct {
+	XMLName xml.Name `xml:"urn:xmpp:message-correct:0 replace"`
+	ID      string   `xml:"id,attr"`
 }
 
 func (m *Manager) SelectReplyReference(a domain.Account, c domain.Conversation, target domain.Message) (domain.MessageReference, bool) {
@@ -101,6 +107,12 @@ func buildOutgoing(a domain.Account, out application.Outgoing) (outboundMessage,
 	}
 	payload := outboundMessage{Message: stanza.Message{To: to.Bare(), Type: kind, ID: string(out.ID)}, Body: out.OriginalText}
 	payload.Origin.ID = string(out.ID)
+	if out.Correction != nil {
+		if !validCorrectionPayload(a, out) {
+			return outboundMessage{}, application.ErrInvalid
+		}
+		payload.Correction = &outboundCorrectionElement{ID: out.Correction.OriginalWireID}
+	}
 	if out.Kind == "room" {
 		total, last := utf8.RuneCountInString(out.OriginalText), 0
 		if len(out.Mentions) > 32 {

@@ -20,6 +20,7 @@ func implementedFeatures() []domain.CapabilityFeature {
 		{"file_upload", "unsupported", "service"}, {"image_previews", "supported", "local"},
 		{"link_previews", "supported", "local"}, {"received_replies", "supported", "peer"},
 		{"send_replies", "supported", "peer"}, {"mentions", "supported", "room"}, {"edit_messages", "partial", "peer"},
+		{"send_corrections", "partial", "peer"},
 		{"retract_messages", "unsupported", "peer"}, {"reactions", "unsupported", "peer"},
 		{"read_receipts", "unsupported", "peer"}, {"typing", "unsupported", "peer"},
 		{"presence", "partial", "peer"}, {"profile_images", "partial", "peer"},

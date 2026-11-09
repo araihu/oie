@@ -15,12 +15,20 @@ import (
 // ReadMessageEditHistory reads the immutable first content of physical source
 // messages. Ordinary send-state revisions never become visible content history.
 func (s *Store) ReadMessageEditHistory(ctx context.Context, requested domain.ID) (domain.MessageEditHistoryPage, error) {
-	page := domain.MessageEditHistoryPage{RequestedMessageID: requested, Items: []domain.MessageEditHistoryItem{}}
 	tx, q, err := begin(ctx, s)
+	if err != nil {
+		return domain.MessageEditHistoryPage{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	page, err := readMessageEditHistory(ctx, q, requested)
 	if err != nil {
 		return page, err
 	}
-	defer func() { _ = tx.Rollback() }()
+	return page, tx.Commit()
+}
+
+func readMessageEditHistory(ctx context.Context, q *dbgen.Queries, requested domain.ID) (domain.MessageEditHistoryPage, error) {
+	page := domain.MessageEditHistoryPage{RequestedMessageID: requested, Items: []domain.MessageEditHistoryItem{}}
 	requestedRow, err := q.GetMessage(ctx, string(requested))
 	if err != nil {
 		return page, notFound(err)
@@ -90,7 +98,7 @@ func (s *Store) ReadMessageEditHistory(ctx context.Context, requested domain.ID)
 		}
 		page.CurrentRevisionID = original.item.RevisionID
 		page.Items = append(page.Items, original.item)
-		return page, tx.Commit()
+		return page, nil
 	}
 	if len(proofs) > 128 || len(proofs) != len(nodes) {
 		return page, application.ErrProtocolUnavailable
@@ -116,10 +124,25 @@ func (s *Store) ReadMessageEditHistory(ctx context.Context, requested domain.ID)
 	if selected == nil || selected.proof.SourceRevisionID != head.RevisionID {
 		return page, application.ErrProtocolUnavailable
 	}
+	parentsBySource := map[domain.ID]domain.ID{}
+	for id, node := range nodes {
+		parentsBySource[id] = byRemote[node.proof.TargetID]
+		root, parent, local, err := localCorrectionParent(ctx, q, node.source, node.proof.Scope, node.proof.Author, node.proof.RemoteID, node.proof.TargetID)
+		if err != nil {
+			return page, err
+		}
+		if !local {
+			continue
+		}
+		if root != canonical || nodes[parent] == nil {
+			return page, application.ErrProtocolUnavailable
+		}
+		parentsBySource[id] = parent
+	}
 	revisions := make([]domain.Revision, 0, len(nodes))
 	for id, node := range nodes {
 		parents := []domain.ID{}
-		if parentID := byRemote[node.proof.TargetID]; parentID != "" {
+		if parentID := parentsBySource[id]; parentID != "" {
 			parent := nodes[parentID]
 			node.item.ParentRevisionIDs = append(node.item.ParentRevisionIDs, parent.item.RevisionID)
 			parents = append(parents, domain.ID(parent.proof.SourceRevisionID))
@@ -131,7 +154,7 @@ func (s *Store) ReadMessageEditHistory(ctx context.Context, requested domain.ID)
 				return page, application.ErrProtocolUnavailable
 			}
 			seen[at] = true
-			parent := byRemote[nodes[at].proof.TargetID]
+			parent := parentsBySource[at]
 			if parent == "" {
 				break
 			}
@@ -150,7 +173,7 @@ func (s *Store) ReadMessageEditHistory(ctx context.Context, requested domain.ID)
 		return page, application.ErrProtocolUnavailable
 	}
 	page.CurrentRevisionID = selected.item.RevisionID
-	return page, tx.Commit()
+	return page, nil
 }
 
 type historyNode struct {
