@@ -62,6 +62,21 @@ type Conversation struct {
 	Favorite         int64
 }
 
+type ConversationReadRevision struct {
+	ID             string
+	ConversationID string
+	Parents        string
+	Payload        string
+	MessageIds     string
+	CreatedAt      string
+}
+
+type ConversationReadState struct {
+	ConversationID string
+	RevisionID     string
+	UpdatedAt      string
+}
+
 type ConversationRevision struct {
 	ID        string
 	EntityID  string
@@ -133,6 +148,11 @@ type MessagePreview struct {
 	DownloadState  string
 	UpdatedAt      string
 	Payload        string
+}
+
+type MessageRead struct {
+	MessageID  string
+	RevisionID string
 }
 
 type MessageReference struct {

@@ -13,6 +13,7 @@ type Querier interface {
 	ClearCanonicalAliases(ctx context.Context, ids string) error
 	ClearContentHeads(ctx context.Context, ids string) error
 	CorrectionNeighbors(ctx context.Context, arg CorrectionNeighborsParams) ([]CorrectionNeighborsRow, error)
+	CountConversationUnread(ctx context.Context, conversationID string) (int64, error)
 	DeleteObsoleteSharedContent(ctx context.Context, arg DeleteObsoleteSharedContentParams) error
 	FindAvatar(ctx context.Context, arg FindAvatarParams) (Avatar, error)
 	FindConversation(ctx context.Context, arg FindConversationParams) (Conversation, error)
@@ -24,6 +25,7 @@ type Querier interface {
 	GetArchiveCheckpoint(ctx context.Context, arg GetArchiveCheckpointParams) (string, error)
 	GetContentHead(ctx context.Context, canonicalID string) (MessageContentHead, error)
 	GetConversation(ctx context.Context, id string) (Conversation, error)
+	GetConversationReadHead(ctx context.Context, conversationID string) (GetConversationReadHeadRow, error)
 	GetCorrectionFacts(ctx context.Context, messageID string) ([]MessageCorrectionFact, error)
 	GetHistoryCounts(ctx context.Context, ownerID string) (GetHistoryCountsRow, error)
 	GetHistoryStatus(ctx context.Context, accountID string) (string, error)
@@ -36,6 +38,7 @@ type Querier interface {
 	GetOperation(ctx context.Context, id string) (Operation, error)
 	GetRoomIntent(ctx context.Context, conversationID string) (RoomIntent, error)
 	GetSharedContentItem(ctx context.Context, arg GetSharedContentItemParams) (GetSharedContentItemRow, error)
+	HasMessageRead(ctx context.Context, canonicalID string) (bool, error)
 	InsertAccount(ctx context.Context, arg InsertAccountParams) error
 	InsertAccountRevision(ctx context.Context, arg InsertAccountRevisionParams) error
 	InsertArchiveAlias(ctx context.Context, arg InsertArchiveAliasParams) error
@@ -49,6 +52,7 @@ type Querier interface {
 	InsertMediaFile(ctx context.Context, arg InsertMediaFileParams) error
 	InsertMessage(ctx context.Context, arg InsertMessageParams) error
 	InsertMessagePreview(ctx context.Context, arg InsertMessagePreviewParams) (int64, error)
+	InsertMessageRead(ctx context.Context, arg InsertMessageReadParams) (int64, error)
 	InsertMessageReference(ctx context.Context, arg InsertMessageReferenceParams) (int64, error)
 	InsertMessageReply(ctx context.Context, arg InsertMessageReplyParams) (int64, error)
 	InsertMessageRevision(ctx context.Context, arg InsertMessageRevisionParams) error
@@ -56,6 +60,7 @@ type Querier interface {
 	InsertOperation(ctx context.Context, arg InsertOperationParams) (int64, error)
 	InsertOutbox(ctx context.Context, arg InsertOutboxParams) error
 	InsertPreviewRevision(ctx context.Context, arg InsertPreviewRevisionParams) error
+	InsertReadRevision(ctx context.Context, arg InsertReadRevisionParams) error
 	InterruptedMessages(ctx context.Context) ([]Message, error)
 	InterruptedPreviewJobs(ctx context.Context, limit int64) ([]MessagePreview, error)
 	InvalidateSharedContent(ctx context.Context, messageID string) error
@@ -79,6 +84,7 @@ type Querier interface {
 	PutArchiveCheckpoint(ctx context.Context, arg PutArchiveCheckpointParams) error
 	PutCanonicalAlias(ctx context.Context, arg PutCanonicalAliasParams) error
 	PutContentHead(ctx context.Context, arg PutContentHeadParams) error
+	PutConversationReadHead(ctx context.Context, arg PutConversationReadHeadParams) error
 	PutHistoryStatus(ctx context.Context, arg PutHistoryStatusParams) error
 	PutMessageStar(ctx context.Context, arg PutMessageStarParams) error
 	PutRoomIntent(ctx context.Context, arg PutRoomIntentParams) error

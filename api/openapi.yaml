@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.15.0
+  version: 0.16.0
   description: Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
     are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.
@@ -427,6 +427,66 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MessageStar'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/conversations/{conversationId}/read-state:
+    parameters:
+    - $ref: '#/components/parameters/ConversationID'
+    get:
+      operationId: getConversationReadState
+      tags: [Conversations]
+      summary: Read retained conversation read state
+      description: Reads app-owned read state without changing messages or sending provider receipts.
+      responses:
+        '200':
+          description: Current read state and unread count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationReadState'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      operationId: markConversationMessagesRead
+      tags: [Conversations]
+      summary: Mark specifically observed incoming messages read
+      description: Atomically merges the listed retained message identities into app-owned read state. Other
+        messages, including later arrivals, remain unread. Lists are bounded and must belong to this conversation.
+        Own and historical messages are ignored. Repeated batches are safe; retries with the same key return the
+        original committed snapshot. Read revisions and operation receipts are durable. Reading does not bump
+        conversation activity, edit content or send protocol receipts. This alpha operation records local engine
+        read evidence; receipt emission and independent-engine synchronization remain deferred.
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        description: Stable UUID for this exact read batch, reused after an uncertain response.
+        schema:
+          $ref: '#/components/schemas/ID'
+      requestBody:
+        required: true
+        description: Message identities observed in the active focused conversation.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkMessagesRead'
+      responses:
+        '200':
+          description: Committed read state or original operation snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationReadState'
         '400':
           $ref: '#/components/responses/Invalid'
         '404':
@@ -1780,6 +1840,47 @@ components:
       pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$
       example: 019a5df0-0000-7000-8000-000000000004
       description: Canonical UUIDv7 of app-owned state; null means no revision has been created.
+    MarkMessagesRead:
+      description: Exact message identities observed by the requesting client.
+      type: object
+      additionalProperties: false
+      required: [messageIds]
+      properties:
+        messageIds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          example: [019a5df0-0000-7000-8000-000000000004]
+          items:
+            $ref: '#/components/schemas/ID'
+      example:
+        messageIds: [019a5df0-0000-7000-8000-000000000004]
+    ConversationReadState:
+      description: Durable app-owned read revision with the current retained unread count.
+      type: object
+      additionalProperties: false
+      required: [conversationId, accountId, revisionId, updatedAt, unreadCount]
+      properties:
+        conversationId:
+          $ref: '#/components/schemas/ID'
+        accountId:
+          $ref: '#/components/schemas/ID'
+        revisionId:
+          $ref: '#/components/schemas/NullableRevisionID'
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        unreadCount:
+          type: integer
+          minimum: 0
+      example:
+        conversationId: 019a5df0-0000-7000-8000-000000000003
+        accountId: 019a5df0-0000-7000-8000-000000000002
+        revisionId: null
+        updatedAt: null
+        unreadCount: 3
     MessageStar:
       type: object
       description: App-owned source message star, keyed by messageId with its own revision history. Never a message edit.
