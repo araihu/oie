@@ -30,3 +30,14 @@ Focused validation covers XML room-history ingestion, invalid authorities,
 normal live traffic and direct offline delivery. Existing SQLite history and
 read-evidence tests verify that historical messages do not add unread counts
 and that unseen/new messages remain unread.
+
+`make check` passes, including generation checks, lint, vet, application/CLI
+tests and Compose validation. The initial host attempt hit a cache/temp-space
+error; rerunning with task-owned temporary and lint caches passed.
+
+The Dagger engine completed `make check test-race build build-cli` and the mock
+build without errors. Its client connection failed health checks and the local
+command subsequently timed out with exit 124, so this is not a successful CLI
+completion. The run's engine evidence is saved in
+`/tmp/oie-room-history-unread-dagger-engine.log`, and its client output is
+`/tmp/oie-room-history-unread-dagger-final.log`.
