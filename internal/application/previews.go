@@ -386,6 +386,9 @@ func (e *Engine) runPreviews(ctx context.Context) error {
 	return nil
 }
 func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p domain.MessagePreview) error {
+	if p.Kind == "video" {
+		return e.processVideoThumbnail(ctx, r, p)
+	}
 	if knownNonPreviewFile(p.URL) {
 		old := p.RevisionID
 		var err error

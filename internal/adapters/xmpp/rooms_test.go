@@ -123,7 +123,7 @@ func TestRoomOwnEchoHintsCanonicalSourceAndUsesRoomSID(t *testing.T) {
 	}
 	// Another occupant cannot nominate an own-message UUID even if it copies origin-id.
 	from, _ := jid.Parse(slot.conversation.Address + "/Other")
-	err := m.receiveRoomMessage(t.Context(), e, structMessage(from), replyMetadata{Origins: []wireID{{ID: string(outID)}}}, "my text", "")
+	err := m.receiveRoomMessage(t.Context(), e, structMessage(from), replyMetadata{Origins: []wireID{{ID: string(outID)}}}, "my text", "", fileSharingMetadata{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestRoomOwnEchoHintsCanonicalSourceAndUsesRoomSID(t *testing.T) {
 	// A retained room is not membership: groupchat before self confirmation is ignored.
 	slot.snapshot.State = "not_joined"
 	before := len(host.received)
-	_ = m.receiveRoomMessage(t.Context(), e, structMessage(from), replyMetadata{}, "ignored", "")
+	_ = m.receiveRoomMessage(t.Context(), e, structMessage(from), replyMetadata{}, "ignored", "", fileSharingMetadata{})
 	if len(host.received) != before {
 		t.Fatal("unjoined room accepted live traffic")
 	}

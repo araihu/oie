@@ -54,7 +54,9 @@ func New() (*cobra.Command, error) {
 		"RefreshMessagePreview":        build35,
 		"ListSharedContent":            build36,
 		"GetSharedContentMedia":        build37,
-		"ListStarredMessages":          build38,
+		"GetVideoThumbnail":            build38,
+		"RequestVideoThumbnail":        build39,
+		"ListStarredMessages":          build40,
 	})
 }
 func build0(server string, input cliruntime.Input) (*http.Request, error) {
@@ -430,6 +432,20 @@ func build37(server string, input cliruntime.Input) (*http.Request, error) {
 	return api.NewGetSharedContentMediaRequest(server, path0, &params)
 }
 func build38(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.ID
+	if err := input.Decode("path", "itemId", &path0); err != nil {
+		return nil, err
+	}
+	return api.NewGetVideoThumbnailRequest(server, path0)
+}
+func build39(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.ID
+	if err := input.Decode("path", "itemId", &path0); err != nil {
+		return nil, err
+	}
+	return api.NewRequestVideoThumbnailRequest(server, path0)
+}
+func build40(server string, input cliruntime.Input) (*http.Request, error) {
 	var params api.ListStarredMessagesParams
 	if err := input.Decode("query", "accountId", &params.AccountId); err != nil {
 		return nil, err

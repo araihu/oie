@@ -39,8 +39,13 @@ func (s *Server) ListSharedContent(ctx context.Context, r engineapi.ListSharedCo
 	for _, item := range page.Items {
 		value := engineapi.SharedContentItem{Id: string(item.ID), RevisionId: string(item.RevisionID), Kind: engineapi.SharedContentItemKind(item.Kind), Url: item.URL, FileName: item.FileName, AccountLabel: item.AccountLabel, ConversationTitle: item.ConversationTitle, Message: message(item.Message)}
 		if item.Preview != nil {
-			p := preview(*item.Preview)
-			value.Preview = &p
+			if item.Preview.Kind == "video" {
+				p := videoThumbnail(*item.Preview)
+				value.Thumbnail = &p
+			} else {
+				p := preview(*item.Preview)
+				value.Preview = &p
+			}
 		}
 		out.Items = append(out.Items, value)
 	}

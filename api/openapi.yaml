@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.17.0
+  version: 0.18.0
   description: Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
     are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.
@@ -116,6 +116,64 @@ paths:
           $ref: '#/components/responses/Invalid'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/shared-content/{itemId}/thumbnail:
+    parameters:
+    - name: itemId
+      in: path
+      required: true
+      description: Retained video reference UUID. Arbitrary provider addresses are not accepted.
+      schema:
+        $ref: '#/components/schemas/ID'
+    get:
+      tags: [Previews]
+      operationId: getVideoThumbnail
+      summary: Read a retained video thumbnail state
+      description: Reads local cache state for a current video reference without retrieving provider bytes. A missing cache record is represented as not_requested. Removed references return 404.
+      responses:
+        '200':
+          description: Current source-linked thumbnail metadata, including not requested or unavailable state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoThumbnail'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags: [Previews]
+      operationId: requestVideoThumbnail
+      summary: Ensure a cached video thumbnail
+      description: >-
+        Queues bounded frame extraction for a current retained video reference. Concurrent requests share work;
+        a ready thumbnail is reused. A failed extraction can be explicitly retried. A retained HTTP(S) thumbnail
+        supplied in XMPP file metadata is preferred (at most 1 MiB). Otherwise background extraction reads at most
+        4 MiB from the beginning and 1 MiB from the end, with a 15 second job deadline, and never retains an original
+        video. Small source videos may fit entirely within that budget. The source is revalidated before publication.
+        Does not send messages or start playback. Missing both a supplied thumbnail and decoder capability returns 503 without provider retrieval.
+      responses:
+        '200':
+          description: Thumbnail already retained
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoThumbnail'
+        '202':
+          description: Thumbnail extraction queued or in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoThumbnail'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/Unavailable'
   /api/v1/shared-content/{itemId}/content:
@@ -2532,6 +2590,52 @@ components:
         title: Shared article
         siteName: Example
         updatedAt: '2026-11-08T12:00:00Z'
+    VideoThumbnail:
+      type: object
+      description: Cached frame metadata for one canonical retained video reference. A ready imageHash is a normalized static thumbnail; original video bytes are never retained by this operation.
+      additionalProperties: false
+      required: [id, revisionId, sharedContentId, accountId, conversationId, messageId, url, kind, state, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/ID'
+        revisionId:
+          $ref: '#/components/schemas/ID'
+        sharedContentId:
+          $ref: '#/components/schemas/ID'
+        accountId:
+          $ref: '#/components/schemas/ID'
+        conversationId:
+          $ref: '#/components/schemas/ID'
+        messageId:
+          $ref: '#/components/schemas/ID'
+        url:
+          type: string
+          format: uri
+          maxLength: 4096
+          description: Retained source reference for identity checks, never an image source.
+          example: https://files.example/clip.mp4
+        kind:
+          type: string
+          enum: [video]
+          example: video
+        state:
+          type: string
+          enum: [not_requested, queued, ready, unavailable]
+          example: queued
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2026-11-08T12:00:00Z'
+        imageHash:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          description: Local normalized PNG or JPEG digest for a ready thumbnail.
+          example: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        lastErrorCode:
+          type: string
+          maxLength: 40
+          description: Stable failure key. Failed extraction is retried only on explicit request.
+          example: frame_unavailable
     SharedContentItem:
       type: object
       description: One shared URL reference with its exact retained source message and current owning labels.
@@ -2561,6 +2665,8 @@ components:
           $ref: '#/components/schemas/Message'
         preview:
           $ref: '#/components/schemas/MessagePreview'
+        thumbnail:
+          $ref: '#/components/schemas/VideoThumbnail'
     SharedContentIndexing:
       type: object
       description: Local source-message indexing progress, scoped by account/conversation but independent of tab/search.

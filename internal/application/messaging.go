@@ -25,6 +25,7 @@ func (e StateConflict) Unwrap() error { return ErrStateConflict }
 
 type ConnectionInput struct{ Password, Endpoint string }
 type Incoming struct {
+	MediaThumbnails                           []domain.MediaThumbnail
 	AccountID                                 domain.ID
 	Address, ProviderID, OriginalText         string
 	CreatedAt                                 time.Time
@@ -424,7 +425,7 @@ func (e *Engine) Receive(ctx context.Context, in Incoming) error {
 		created = now
 	}
 	c := domain.Conversation{ID: ids[0], RevisionID: ids[1], PeerID: ids[2], AccountID: a.ID, Kind: in.Kind, Address: address, Title: address, UpdatedAt: created}
-	m := domain.Message{ID: ids[3], RevisionID: ids[4], AccountID: a.ID, Sender: domain.Sender{DisplayName: address}, OriginalText: in.OriginalText, CreatedAt: created, IsOwn: in.IsOwn, SendState: "received", ProviderID: in.ProviderID, ArchiveScope: in.ArchiveScope, ArchiveID: in.ArchiveID, Historical: in.Historical, References: in.References, ReplyReference: in.Reply, Correction: in.Correction}
+	m := domain.Message{ID: ids[3], RevisionID: ids[4], AccountID: a.ID, Sender: domain.Sender{DisplayName: address}, OriginalText: in.OriginalText, CreatedAt: created, IsOwn: in.IsOwn, SendState: "received", ProviderID: in.ProviderID, ArchiveScope: in.ArchiveScope, ArchiveID: in.ArchiveID, Historical: in.Historical, MediaThumbnails: normalizeMediaThumbnails(in.OriginalText, in.MediaThumbnails), References: in.References, ReplyReference: in.Reply, Correction: in.Correction}
 	if in.SenderName != "" {
 		m.Sender.DisplayName = in.SenderName
 	}

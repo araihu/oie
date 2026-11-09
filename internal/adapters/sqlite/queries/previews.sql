@@ -10,7 +10,7 @@ UPDATE message_previews SET revision_id=?,state=?,download_state=?,updated_at=?,
 -- name: InsertPreviewRevision :exec
 INSERT INTO preview_revisions(id,entity_id,parents,payload,created_at) VALUES(?,?,?,?,?);
 -- name: PreviewJobs :many
-SELECT * FROM message_previews WHERE state='queued' OR download_state='queued' OR (state='unavailable' AND updated_at<sqlc.arg(retry_before))
+SELECT * FROM message_previews WHERE state='queued' OR download_state='queued' OR (state='unavailable' AND coalesce(json_extract(payload,'$.Kind'),'')<>'video' AND updated_at<sqlc.arg(retry_before))
 ORDER BY CASE WHEN download_state='queued' THEN 0 ELSE 1 END,updated_at,id LIMIT sqlc.arg(job_limit);
 -- name: InterruptedPreviewJobs :many
 SELECT * FROM message_previews WHERE download_state='downloading' ORDER BY id LIMIT ?;

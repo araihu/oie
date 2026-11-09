@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 )
 
@@ -52,6 +53,9 @@ func (s *Server) ListConversationPreviews(ctx context.Context, r engineapi.ListC
 }
 func (s *Server) GetMessagePreview(ctx context.Context, r engineapi.GetMessagePreviewRequestObject) (engineapi.GetMessagePreviewResponseObject, error) {
 	p, err := s.engine.Preview(ctx, domain.ID(r.PreviewId))
+	if err == nil && p.Kind == "video" {
+		return nil, application.ErrNotFound
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -112,4 +116,33 @@ func (s *Server) RefreshMessagePreview(ctx context.Context, r engineapi.RefreshM
 		return nil, err
 	}
 	return engineapi.RefreshMessagePreview202JSONResponse(preview(p)), nil
+}
+
+func (s *Server) GetVideoThumbnail(ctx context.Context, r engineapi.GetVideoThumbnailRequestObject) (engineapi.GetVideoThumbnailResponseObject, error) {
+	p, err := s.engine.VideoThumbnail(ctx, domain.ID(r.ItemId))
+	if err != nil {
+		return nil, err
+	}
+	return engineapi.GetVideoThumbnail200JSONResponse(videoThumbnail(p)), nil
+}
+func (s *Server) RequestVideoThumbnail(ctx context.Context, r engineapi.RequestVideoThumbnailRequestObject) (engineapi.RequestVideoThumbnailResponseObject, error) {
+	p, err := s.engine.RequestVideoThumbnail(ctx, domain.ID(r.ItemId))
+	if err != nil {
+		return nil, err
+	}
+	if p.State == "ready" {
+		return engineapi.RequestVideoThumbnail200JSONResponse(videoThumbnail(p)), nil
+	}
+	return engineapi.RequestVideoThumbnail202JSONResponse(videoThumbnail(p)), nil
+}
+
+func videoThumbnail(p domain.MessagePreview) engineapi.VideoThumbnail {
+	out := engineapi.VideoThumbnail{Id: string(p.ID), RevisionId: string(p.RevisionID), SharedContentId: string(p.SharedContentID), AccountId: string(p.AccountID), ConversationId: string(p.ConversationID), MessageId: string(p.MessageID), Url: p.URL, Kind: "video", State: engineapi.VideoThumbnailState(p.State), UpdatedAt: p.UpdatedAt}
+	if p.ImageHash != "" {
+		out.ImageHash = &p.ImageHash
+	}
+	if p.LastErrorCode != "" {
+		out.LastErrorCode = &p.LastErrorCode
+	}
+	return out
 }

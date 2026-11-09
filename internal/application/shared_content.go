@@ -139,6 +139,14 @@ func (e *Engine) SharedContent(ctx context.Context, q domain.SharedContentQuery)
 	}
 	for i := range page.Items {
 		item := &page.Items[i]
+		if item.Kind == "video" {
+			p, videoErr := e.ensureVideoPreview(ctx, previews, *item)
+			if videoErr != nil {
+				return empty, videoErr
+			}
+			item.Preview = &p
+			continue
+		}
 		if item.Kind != "image" && item.Kind != "link" {
 			item.Preview = nil
 			continue

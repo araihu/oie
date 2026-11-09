@@ -21,10 +21,18 @@ type Sender struct {
 	ID          ID
 	DisplayName string
 }
+
+// MediaThumbnail binds an advertised small preview to its exact source URL.
+type MediaThumbnail struct {
+	URL          string
+	ThumbnailURL string
+}
+
 type Message struct {
 	ID, RevisionID, AccountID, ConversationID ID
 	Sender                                    Sender
 	OriginalText                              string
+	MediaThumbnails                           []MediaThumbnail   `json:",omitempty"`
 	Edited                                    bool               `json:",omitempty"`
 	EditedAt                                  time.Time          `json:",omitempty"`
 	ProjectionSourceID                        ID                 `json:"-"`

@@ -198,6 +198,21 @@ func (f *Fetcher) Image(ctx context.Context, address string) ([]byte, error) {
 	}
 	return readBounded(response, mediafiles.MaxOriginal)
 }
+
+// SmallThumbnail uses the same public-address and redirect policy as previews.
+// Bound advertised images separately from originals.
+func (f *Fetcher) SmallThumbnail(ctx context.Context, address string) ([]byte, error) {
+	response, err := f.get(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	mediaType, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
+	if !imageMIME(mediaType) {
+		return nil, application.PreviewFailure{Code: "unsupported"}
+	}
+	return readBounded(response, 1<<20)
+}
 func (f *Fetcher) smallImage(ctx context.Context, address string) []byte {
 	response, err := f.get(ctx, address)
 	if err != nil {

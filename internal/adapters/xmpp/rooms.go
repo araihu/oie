@@ -425,7 +425,7 @@ func (m *Manager) resetRoomSessions(ctx context.Context, e *entry, s *mx.Session
 	}
 }
 
-func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.Message, meta replyMetadata, body, stamp string, operations ...correctionMetadata) error {
+func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.Message, meta replyMetadata, body, stamp string, files fileSharingMetadata, operations ...correctionMetadata) error {
 	if strings.TrimSpace(body) == "" || msg.From.Localpart() == "" || msg.From.Resourcepart() == "" {
 		return nil
 	}
@@ -466,7 +466,7 @@ func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.M
 	if len(operations) == 1 {
 		correction = decodeCorrectionMetadata(operations[0], msg, true, occupantVerified)
 	}
-	err := m.host.Receive(ctx, application.Incoming{AccountID: e.account.ID, Address: address, Kind: "room", SenderName: msg.From.Resourcepart(), ProviderID: provider, OriginalText: body, CreatedAt: created, IsOwn: own, References: refs, Reply: reply, CanonicalID: canonical, Correction: correction})
+	err := m.host.Receive(ctx, application.Incoming{MediaThumbnails: decodeFileThumbnails(files), AccountID: e.account.ID, Address: address, Kind: "room", SenderName: msg.From.Resourcepart(), ProviderID: provider, OriginalText: body, CreatedAt: created, IsOwn: own, References: refs, Reply: reply, CanonicalID: canonical, Correction: correction})
 	if errors.Is(err, application.ErrInvalid) {
 		return nil
 	}

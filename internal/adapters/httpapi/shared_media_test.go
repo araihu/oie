@@ -133,13 +133,13 @@ func TestSharedMediaHTTPRangesScopeAndNoSpeculation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if p.State == "unavailable" && p.LastErrorCode == "unsupported" {
+		if p.Kind == "video" && p.State == "not_requested" {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 	retired, err := e.Preview(t.Context(), legacy.ID)
-	if err != nil || retired.State != "unavailable" || preview.links.Load() != 0 || preview.images.Load() != 0 {
+	if err != nil || (retired.Kind != "video" || retired.State != "not_requested") || preview.links.Load() != 0 || preview.images.Load() != 0 {
 		t.Fatal("legacy job contacted provider", retired, err)
 	}
 	first := page.Items[0]

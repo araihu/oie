@@ -516,6 +516,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 	case "message":
 		var msg struct {
 			stanza.Message
+			fileSharingMetadata
 			replyMetadata
 			correctionMetadata
 			Body        string         `xml:"jabber:client body"`
@@ -572,7 +573,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			return m.host.Reject(ctx, application.Rejected{AccountID: e.account.ID, MessageID: msg.ID, Address: address, FromServer: fromServer, FromParticipant: msg.From.Resourcepart() != ""})
 		}
 		if msg.Type == stanza.GroupChatMessage {
-			return m.receiveRoomMessage(ctx, e, msg.Message, msg.replyMetadata, msg.Body, msg.Delay.Stamp, msg.correctionMetadata)
+			return m.receiveRoomMessage(ctx, e, msg.Message, msg.replyMetadata, msg.Body, msg.Delay.Stamp, msg.fileSharingMetadata, msg.correctionMetadata)
 		}
 		if msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage {
 			return nil
@@ -588,7 +589,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		if len(msg.Origins) == 0 && usableID(msg.ID) {
 			refs = append(refs, domain.MessageReference{Scope: "sender:" + msg.From.Bare().String(), ID: msg.ID, Author: msg.From.Bare().String()})
 		}
-		err := m.host.Receive(ctx, application.Incoming{AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID, OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address, References: refs, Reply: reply, Correction: decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, false, false)})
+		err := m.host.Receive(ctx, application.Incoming{MediaThumbnails: decodeFileThumbnails(msg.fileSharingMetadata), AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID, OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address, References: refs, Reply: reply, Correction: decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, false, false)})
 		if errors.Is(err, application.ErrInvalid) {
 			return nil
 		}

@@ -194,7 +194,7 @@ func (q *Queries) InterruptedPreviewJobs(ctx context.Context, limit int64) ([]Me
 }
 
 const previewJobs = `-- name: PreviewJobs :many
-SELECT id, revision_id, account_id, conversation_id, message_id, url, state, download_state, updated_at, payload FROM message_previews WHERE state='queued' OR download_state='queued' OR (state='unavailable' AND updated_at<?1)
+SELECT id, revision_id, account_id, conversation_id, message_id, url, state, download_state, updated_at, payload FROM message_previews WHERE state='queued' OR download_state='queued' OR (state='unavailable' AND coalesce(json_extract(payload,'$.Kind'),'')<>'video' AND updated_at<?1)
 ORDER BY CASE WHEN download_state='queued' THEN 0 ELSE 1 END,updated_at,id LIMIT ?2
 `
 

@@ -121,3 +121,31 @@ func TestBoundedMetadataAndOriginalImageSeparation(t *testing.T) {
 		t.Fatal("unbounded HTML accepted", err)
 	}
 }
+
+func TestSuppliedThumbnailHasSmallLimitAndPublicDestinationPolicy(t *testing.T) {
+	f, count := fixtureFetcher(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		if r.URL.Path == "/huge" {
+			w.Header().Set("Content-Length", "1048577")
+			return
+		}
+		if r.URL.Path == "/redirect" {
+			http.Redirect(w, r, "http://internal.example/poster", http.StatusFound)
+			return
+		}
+		_, _ = fmt.Fprint(w, "small-image-placeholder")
+	})
+	if _, err := f.SmallThumbnail(t.Context(), "http://public.example/huge"); failCode(err) != "too_large" {
+		t.Fatal(err)
+	}
+	if _, err := f.SmallThumbnail(t.Context(), "http://public.example/redirect"); failCode(err) != "blocked" {
+		t.Fatal(err)
+	}
+	before := count.Load()
+	if _, err := f.SmallThumbnail(t.Context(), "http://127.0.0.1/private"); failCode(err) != "blocked" || count.Load() != before {
+		t.Fatal("local destination fetched", err)
+	}
+	if data, err := f.SmallThumbnail(t.Context(), "http://public.example/small"); err != nil || len(data) == 0 {
+		t.Fatal(err)
+	}
+}

@@ -22,6 +22,7 @@ import (
 	"github.com/araihu/oie/internal/adapters/mediafiles"
 	"github.com/araihu/oie/internal/adapters/previewfetch"
 	"github.com/araihu/oie/internal/adapters/sqlite"
+	"github.com/araihu/oie/internal/adapters/videothumb"
 	"github.com/araihu/oie/internal/adapters/web"
 	xmpadapter "github.com/araihu/oie/internal/adapters/xmpp"
 	"github.com/araihu/oie/internal/application"
@@ -46,6 +47,7 @@ func run() error {
 	role := flag.String("role", "local", "local, hosted, or bff")
 	dataDir := flag.String("data-dir", "./data", "engine database and media directory")
 	engineURL := flag.String("engine-url", "", "engine base URL (required for bff role)")
+	ffmpeg := flag.String("ffmpeg", "ffmpeg", "FFmpeg executable for optional video thumbnails")
 	devReload := flag.Bool("dev-reload", false, "reload the development browser after BFF restarts (bff role only)")
 	xmppCA := flag.String("xmpp-ca-file", "", "additional trusted CA certificate PEM for XMPP TLS (development/private servers)")
 	flag.Parse()
@@ -89,6 +91,7 @@ func run() error {
 		fetcher := previewfetch.New()
 		engine.SetPreviewServices(fetcher, mediafiles.New(filepath.Join(*dataDir, "media", "images")))
 		engine.SetMediaReader(fetcher)
+		engine.SetVideoThumbnailer(videothumb.New(*ffmpeg))
 		roots, err := x509.SystemCertPool()
 		if err != nil {
 			roots = x509.NewCertPool()

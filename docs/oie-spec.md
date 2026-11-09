@@ -294,6 +294,8 @@ Allow media sharing when effective protocol/server capabilities permit. Expose k
 
 Incoming images **download automatically as they enter view** by default, configurable per device. Turning automatic image downloads off keeps supplied small previews automatic and full originals on demand; in that mode, do not download an original merely to generate a thumbnail. Other file types keep small previews automatic and full files on demand.
 
+**AGREED:** video cards show a cached static frame behind a centered play control when a preview is available. Prefer a usable small thumbnail supplied with the source message; otherwise the native engine may extract a frame with an optional FFmpeg executable. Generation reads a bounded sample, never retains the original video, and does not start playback. Device settings can disable automatic video preview requests; explicit preview loading remains available. Failure leaves playback usable and retry explicit. Preview cache retention and quotas remain open under O09.
+
 Downloaded-file retention is configurable per device and defaults to **retain until explicit deletion**. The PWA's evictable message cache is a separate policy; it does not silently authorize downloaded-original eviction.
 
 SQLite stores attachment references, metadata, and media integrity hashes; binary previews and full files are stored outside SQLite in native deployments. The phrase “only media hash” excludes media blobs from SQLite, not the retrieval/verification metadata the application needs.
