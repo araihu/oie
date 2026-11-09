@@ -1,6 +1,7 @@
 package web
 
 import (
+ "strings"
  "github.com/araihu/goshtoso/components/avatar"
  "github.com/araihu/goshtoso/components/drawer"
  "github.com/araihu/goshtoso/components/link"
@@ -35,7 +36,7 @@ if p.Presence!=nil {
 </header>
 <dl class="oie-sender-context">
 <dt>{v.Text.SenderConversation}</dt><dd>{v.infoTitle()}</dd>
-if v.Selected.Kind=="room" {
+if v.Selected.Kind=="room" && strings.TrimSpace(v.infoTitle())!=strings.TrimSpace(v.Selected.Address) {
 <dd>{v.Selected.Address}</dd>
 }
 <dt>{v.Text.SenderAccount}</dt><dd>{v.accountLabel(p.Message.AccountId)}</dd>
