@@ -2037,7 +2037,7 @@ func chatHeader(v view) templ.Component {
 		}
 		sections := []dropdown.Section{{Items: []dropdown.Item{{Label: v.Text.Details, OnClick: "$dispatch('drawer:open', {id: 'details'})"}}}}
 		if v.Selected.Kind == "room" {
-			sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "chat-room-actions", Label: v.Text.RoomActions, OnClick: "$dispatch('modal:open', {id: 'room-session-dialog'})"}, {ID: "chat-leave-room", Label: v.Text.LeaveRoom, Icon: glyph(heroicons.Icon16SolidArrowTopRightOnSquare), OnClick: "$dispatch('oie:leave-room')", Disabled: v.RoomSession == nil || !v.RoomSession.Active || !v.messagingImplemented("room_messaging")}}})
+			sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "chat-leave-room", Label: v.Text.LeaveRoom, Icon: glyph(heroicons.Icon16SolidArrowTopRightOnSquare), OnClick: "$dispatch('oie:leave-room')", Disabled: v.RoomSession == nil || !v.RoomSession.Active || !v.messagingImplemented("room_messaging")}}})
 		}
 		templ_7745c5c3_Err = dropdown.Dropdown(dropdown.Config{ID: "chat-options", Label: v.Text.More, Trigger: menuTrigger(v.Text.More), MenuAlign: dropdown.AlignEnd, Sections: sections}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
