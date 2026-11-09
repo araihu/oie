@@ -96,7 +96,7 @@ func (v view) capabilityLabel(id string) string {
 		"room_discovery": v.Text.CapabilityRoomDiscovery, "room_messaging": v.Text.CapabilityRoomMessaging,
 		"file_upload": v.Text.CapabilityFileUpload, "image_previews": v.Text.CapabilityImagePreviews,
 		"link_previews": v.Text.CapabilityLinkPreviews, "received_replies": v.Text.CapabilityReceivedReplies,
-		"send_replies": v.Text.CapabilitySendReplies, "edit_messages": v.Text.CapabilityEditMessages,
+		"send_replies": v.Text.CapabilitySendReplies, "mentions": v.Text.CapabilityMentions, "edit_messages": v.Text.CapabilityEditMessages,
 		"retract_messages": v.Text.CapabilityRetractMessages, "reactions": v.Text.CapabilityReactions,
 		"read_receipts": v.Text.CapabilityReadReceipts, "typing": v.Text.CapabilityTyping, "presence": v.Text.CapabilityPresence,
 		"profile_images": v.Text.CapabilityProfileImages, "formatting": v.Text.CapabilityFormatting, "e2ee": v.Text.CapabilityE2EE,

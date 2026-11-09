@@ -48,5 +48,6 @@ OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/read-state.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/conversation-navigation.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/reply-compose.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/emoji-picker.cjs
+OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/mentions.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/corrections.cjs
 sh scripts/test-live-browser.sh

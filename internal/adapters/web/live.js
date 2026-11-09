@@ -43,6 +43,9 @@ window.OieRuntime.register('live', life => {
     ? ['oie.draft.v1', body.dataset.engineId, body.dataset.accountId, body.dataset.conversationId].join(':') : '';
   let journal,preparingReply=false,replyEpoch=0;
   const replyField=composer?.elements.namedItem('replyToMessageId');
+  const mentionField=composer?.elements.namedItem('mentions');
+  function readMentions(){try{const records=JSON.parse(mentionField?.value||'[]');return Array.isArray(records)&&records.length<=32?records:[]}catch{return []}}
+  function restoreMentions(records){if(!mentionField)return;mentionField.value=JSON.stringify(Array.isArray(records)?records:[]);composer.dispatchEvent(new CustomEvent('oie:mentions-restore'));}
   const replyBox=composer?.querySelector('[data-composer-reply]');
   const canonicalID=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
   function renderReply(){
@@ -52,7 +55,7 @@ window.OieRuntime.register('live', life => {
     for(const button of document.querySelectorAll('[id^="reply-message-"]'))button.disabled=!composer||composer.dataset.replyAllowed!=='true'||locked||preparingReply;
     const send=composer?.querySelector('[data-send-message]');if(send)send.disabled=stopped||preparingReply||composer.dataset.busy==='true'||(composer.dataset.sendAllowed!=='true'&&!locked);
   }
-  function draftRecord(pending=false){return {text:input?.value||'',key:submissionKey?.value||'',pending,reply:journal?.reply||null};}
+  function draftRecord(pending=false){return {text:input?.value||'',key:submissionKey?.value||'',pending,reply:journal?.reply||null,mentions:readMentions()};}
 
 
   function storageWarning() {
@@ -98,7 +101,7 @@ window.OieRuntime.register('live', life => {
   if (input && submissionKey && draftKey && !mock) {
     const saved = readDraft();
     if (saved && typeof saved.text === 'string' && (canonicalID(saved.key)||(saved.key===''&&!saved.pending)) && (!saved.reply || (canonicalID(saved.reply.messageId) && saved.reply.engineId===body.dataset.engineId && saved.reply.accountId===body.dataset.accountId && saved.reply.conversationId===body.dataset.conversationId && typeof saved.reply.senderName==='string' && typeof saved.reply.excerpt==='string' && Array.from(saved.reply.excerpt).length<=512))) {
-      journal = {...saved,key:canonicalID(saved.key)?saved.key:submissionKey.value}; input.value = saved.text; submissionKey.value = journal.key;
+      journal = {...saved,key:canonicalID(saved.key)?saved.key:submissionKey.value}; input.value = saved.text; submissionKey.value = journal.key; restoreMentions(saved.mentions);
       lockComposer(saved.pending === true);
       if (saved.pending) feedback(composer, text('pending'), true);
     }
@@ -404,14 +407,15 @@ window.OieRuntime.register('live', life => {
       const value = journal?.pending ? journal.text : input.value;
       if (!value.trim() || Array.from(value).length > 16384) { feedback(form,text('invalidMessage'),true);input.focus();return; }
       if (journal?.pending) { input.value=journal.text; submissionKey.value=journal.key; }
-      saveDraft({text:value,key:submissionKey.value,pending:true,reply:journal?.reply||null});lockComposer(true);renderReply();
+      const mentions=journal?.pending?(journal.mentions||[]):readMentions();
+      saveDraft({text:value,key:submissionKey.value,pending:true,reply:journal?.reply||null,mentions});restoreMentions(mentions);lockComposer(true);renderReply();
     }
     const values = new URLSearchParams(new FormData(form));
     const roomCommand=form.dataset.roomCommand;
     const roomMenuSubmit=roomCommand==='leave'&&form.dataset.roomMenuSubmit==='true';
     if(roomCommand){if(roomOperation){for(const key of ['operationKey','expectedRevisionId','nickname','conversationId','accountId'])values.set(key,roomOperation[key]||'')}else keepRoomOperation({command:roomCommand,operationKey:values.get('operationKey'),expectedRevisionId:values.get('expectedRevisionId'),nickname:values.get('nickname')||'',conversationId:values.get('conversationId'),accountId:values.get('accountId')})}
 
-    if(sending){values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');}
+    if(sending){values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');values.set('mentions',JSON.stringify(journal.mentions||[]));}
     const buttons = [...form.querySelectorAll('input:not([type=hidden]),textarea,select,button')];
     const disabled = buttons.map(button => button.disabled);
     form.dataset.busy = 'true'; form.setAttribute('aria-busy','true'); buttons.forEach(button => button.disabled = true);syncRoomLeave();
@@ -435,7 +439,7 @@ window.OieRuntime.register('live', life => {
         feedback(form,sending ? '' : result.message || '');
         if (sending && result.accepted) {
           const submittedKey = values.get('operationKey');
-          clearDraft(submittedKey);input.value='';submissionKey.value=result.nextKey;lockComposer(false);forceBottom=true;
+          clearDraft(submittedKey);input.value='';restoreMentions([]);submissionKey.value=result.nextKey;lockComposer(false);forceBottom=true;
           input.focus({preventScroll:true});renderReply();
         } else if (form.dataset.oieAction === 'register' || form.dataset.oieAction === 'open') {
           if (result.redirect) { if(window.OieNavigation)window.OieNavigation.go(result.redirect);else location.assign(result.redirect); return; }

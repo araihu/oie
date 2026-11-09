@@ -270,10 +270,14 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 	if !validOperationKey(key) || !validOperationKey(conversation) || !validOperationKey(account) || strings.TrimSpace(body) == "" || len([]rune(body)) > 16384 || (target != "" && !validOperationKey(target)) {
 		return 422, mutationResult{Message: text.InvalidMessage, Code: "invalid_request", Rejected: true}
 	}
+	mentions, mentionErr := parseMentionSelections(r.Form.Get("mentions"), body)
+	if mentionErr != nil {
+		return 422, mutationResult{Message: text.InvalidMessage, Code: "invalid_request", Rejected: true}
+	}
 	receipt, evidence := s.sendReceipt(ctx, key)
 	switch evidence {
 	case "found":
-		if matchingSend(*receipt, conversation, account, body, target) {
+		if matchingSend(*receipt, conversation, account, body, target, mentions) {
 			return acceptedResult(text, *receipt)
 		}
 		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
@@ -325,10 +329,14 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 		}
 		targetID = &target
 	}
-	response, err := s.client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, engineapi.SendMessage{OriginalText: body, ReplyToMessageId: targetID})
+	var selected *[]engineapi.MentionSelection
+	if len(mentions) > 0 {
+		selected = &mentions
+	}
+	response, err := s.client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, engineapi.SendMessage{OriginalText: body, ReplyToMessageId: targetID, Mentions: selected})
 	if err != nil {
 		message, _ := s.sendReceipt(ctx, key)
-		if message != nil && matchingSend(*message, conversation, account, body, target) {
+		if message != nil && matchingSend(*message, conversation, account, body, target, mentions) {
 			return acceptedResult(text, *message)
 		}
 		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
@@ -340,7 +348,7 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 	if message == nil {
 		return response.StatusCode(), problemResult(text, response.StatusCode(), response.Body)
 	}
-	if !matchingSend(*message, conversation, account, body, target) {
+	if !matchingSend(*message, conversation, account, body, target, mentions) {
 		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
 	}
 	return acceptedResult(text, *message)

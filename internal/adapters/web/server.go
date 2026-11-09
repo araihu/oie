@@ -143,6 +143,8 @@ type view struct {
 }
 
 type copy struct {
+	CapabilityMentions                                                                                            string
+	MentionUsers, MentionLoading, MentionEmpty, MentionFailed, MentionPartial                                     string
 	MessageStarred                                                                                                string
 	AutoVideoThumbnails, AutoVideoThumbnailsHelp, VideoThumbnailLoad, VideoThumbnailLoading, VideoThumbnailFailed string
 	ReadFailed                                                                                                    string
@@ -517,6 +519,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mime string
 		body []byte
 	}{
+		"/ui/mentions.js": {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
 		"/ui/timeline.js": {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
 		"/ui/video-thumbnails.js": {"text/javascript", videoThumbnailsScript}, "/ui/videos.js": {"text/javascript", videosScript}, "/ui/video.css": {"text/css", videosStylesheet},
@@ -530,6 +533,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/ui/timeline" {
 		s.timelinePage(w, r)
+		return
+	}
+	if r.URL.Path == "/ui/mentions" {
+		s.mentionCandidates(w, r)
 		return
 	}
 	if r.URL.Path == "/ui/reply-source" {

@@ -94,7 +94,14 @@ func (s *Server) prepareReply(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewEncoder(w).Encode(replyPreparation{EngineID: engine.JSON200.Id, MessageID: source.Id, RequestedMessageID: target, AccountID: source.AccountId, ConversationID: source.ConversationId, SenderName: source.Sender.DisplayName, Excerpt: quoteExcerpt(*source)})
 }
-func matchingSend(m engineapi.Message, conversation, account, body, target string) bool {
+func matchingSend(m engineapi.Message, conversation, account, body, target string, selected ...[]engineapi.MentionSelection) bool {
+	var mentions []engineapi.MentionSelection
+	if len(selected) > 0 {
+		mentions = selected[0]
+	}
+	if !matchingMentionSelections(m, mentions) {
+		return false
+	}
 	if m.ConversationId != conversation || m.AccountId != account {
 		return false
 	}

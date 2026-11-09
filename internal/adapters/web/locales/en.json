@@ -419,5 +419,11 @@
   "TimelineNewer": "Newer messages",
   "TimelineLoading": "Loading messages…",
   "TimelineFailed": "Messages could not be loaded. Try again.",
-  "TimelinePaused": "Pause playback or move away from the other edge, then try again."
+  "TimelinePaused": "Pause playback or move away from the other edge, then try again.",
+  "MentionUsers": "Mention a participant",
+  "MentionLoading": "Loading participants…",
+  "MentionEmpty": "No matching participants",
+  "MentionFailed": "Participants could not be loaded. You can still type a name.",
+  "MentionPartial": "Only the available participants are listed.",
+  "CapabilityMentions": "Room mentions"
 }

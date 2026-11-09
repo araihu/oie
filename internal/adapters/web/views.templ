@@ -72,7 +72,7 @@ templ page(v view) {
 <link rel="stylesheet" href="/ui/timeline.css"/>
 <link rel="stylesheet" href="/ui/video.css"/>
 <link rel="stylesheet" href="/ui/document.css"/>
-<link rel="stylesheet" href="/ui/emoji-picker.css"/>
+<link rel="stylesheet" href="/ui/emoji-picker.css"/><link rel="stylesheet" href="/ui/mentions.css"/>
 <script src="/ui/actions.js" defer></script>
 <script src="/ui/stars.js" defer></script>
 <script src="/ui/previews.js" defer></script>
@@ -83,7 +83,7 @@ templ page(v view) {
 <script src="/ui/shared-actions.js" defer></script>
 <script src="/ui/timeline.js" defer></script>
 <script src="/ui/live.js" defer></script><script src="/ui/read-state.js" defer></script>
-<script src="/ui/emoji-picker.js" defer></script>
+<script src="/ui/emoji-picker.js" defer></script><script src="/ui/mentions.js" defer></script>
 <script src="/ui/navigation.js"></script>
 if v.DevBuildID!="" {
 <script src="/ui/dev-reload.js" data-build-id={v.DevBuildID} defer></script>
@@ -346,6 +346,7 @@ templ composer(v view){
 <div class="oie-composer">
 @button.Button(button.Disabled(),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Attach,"title":v.Text.MediaUnavailable})){@glyph(heroicons.Icon16SolidPlus)}
 @textarea.Textarea(textarea.Config{ID:"message-composer",Name:"originalText",Value:v.field("originalText"),Rows:1,Placeholder:v.Text.Message,Disabled:!v.composeAllowed(),RootClass:"oie-composer-input",InputAttrs:templ.Attributes{"aria-label":v.Text.Message,"style":"resize:none;field-sizing:content;min-height:var(--oie-composer-control-size,2.75rem);line-height:1.25rem;padding-block:calc((var(--oie-composer-control-size,2.75rem) - 1.25rem - 2px)/2);max-height:min(12rem,30dvh);overflow-y:auto;background:var(--oie-raised);border-color:var(--oie-border);border-radius:1.5rem;color:var(--oie-text)"}})
+@mentionPicker(v)
 @emojiPicker(v)
 @button.Button(button.WithType("submit"),button.WithRootClass("oie-icon-button oie-send"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Send,"data-send-message":"","disabled":!v.sendAllowed()})){@glyph(heroicons.Icon16SolidArrowUp)}
 </div>

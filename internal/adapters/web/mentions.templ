@@ -1,0 +1,39 @@
+package web
+
+import (
+ "net/url"
+ "github.com/araihu/goshtoso/components/avatar"
+ "github.com/araihu/goshtoso/components/button"
+ "github.com/araihu/goshtoso/components/panel"
+)
+
+func mentionCandidatesURL(v view) string {
+ values:=url.Values{"engineId":{v.EngineID},"conversationId":{v.ChatID},"accountId":{selectedAccountID(v)}}
+ return "/ui/mentions?"+values.Encode()
+}
+
+// The existing textarea stays the input and focus owner. Public Panel, Button
+// and Avatar components compose the room-specific completion list around it.
+templ mentionPicker(v view) {
+ <input type="hidden" name="mentions" value="[]"/>
+ if v.Selected!=nil && v.Selected.Kind=="room" && !v.Preview {
+  <div id="oie-mention-picker" class="oie-mention-picker" hidden data-mention-picker data-mention-url={mentionCandidatesURL(v)} data-engine-id={v.EngineID} data-account-id={selectedAccountID(v)} data-conversation-id={v.ChatID} data-mention-loading={v.Text.MentionLoading} data-mention-empty={v.Text.MentionEmpty} data-mention-failed={v.Text.MentionFailed}>
+   @panel.Panel(panel.Config{Density:panel.DensityCompact,RootClass:"oie-mention-panel",RootAttrs:templ.Attributes{"tabindex":"0","role":"region","aria-label":v.Text.MentionUsers},BodyClass:"oie-mention-panel-body"}) {
+    <p class="oie-mention-status" data-mention-status role="status" aria-live="polite"></p>
+    <p class="oie-mention-partial" data-mention-partial hidden>{v.Text.MentionPartial}</p>
+    <div id="oie-mention-options" class="oie-mention-options" role="listbox" aria-label={v.Text.MentionUsers}></div>
+    @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithRootClass("oie-mention-retry"),button.WithAttrs(templ.Attributes{"data-mention-retry":"","hidden":true})){ {v.Text.Retry} }
+   }
+  </div>
+  <template data-mention-option-template>
+   @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-mention-option"),button.WithAttrs(templ.Attributes{"role":"option","tabindex":"-1","aria-selected":"false","data-mention-option":""})) {
+    <span class="oie-mention-avatar" aria-hidden="true">@avatar.Avatar(avatar.Config{Size:avatar.SizeXS,Shape:avatar.ShapeCircle,Icon:mentionInitials(),RootClass:"oie-mention-avatar-component"})</span>
+    <span class="oie-mention-identity"><span class="oie-mention-name" data-mention-name></span><span class="oie-mention-nick" data-mention-nick></span></span>
+   }
+  </template>
+ }
+}
+
+templ mentionInitials() {
+ <span data-mention-initials></span>
+}
