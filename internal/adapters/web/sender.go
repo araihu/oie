@@ -6,7 +6,10 @@ import (
 	_ "embed"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
@@ -17,7 +20,55 @@ var senderScript []byte
 type senderInfoView struct {
 	Message  messageView
 	Address  string
+	FullName string
 	Presence *engineapi.PresenceObservation
+}
+
+func (p senderInfoView) displayName() string {
+	if p.FullName != "" {
+		return p.FullName
+	}
+	return p.Message.Sender.DisplayName
+}
+
+func validProfileAddress(address string) bool {
+	if address == "" || !utf8.ValidString(address) || len(address) > 1024 || strings.Count(address, "@") != 1 || strings.ContainsAny(address, "/<>") {
+		return false
+	}
+	parts := strings.SplitN(address, "@", 2)
+	return parts[0] != "" && parts[1] != "" && strings.IndexFunc(address, func(r rune) bool { return unicode.IsControl(r) || unicode.IsSpace(r) }) < 0
+}
+
+// Profile identity comes from the engine's retained protocol evidence, never
+// from a browser nickname, profile text or a current same-name room occupant.
+func (s *Server) loadSenderProfile(ctx context.Context, result *senderInfoView) {
+	response, err := s.client.GetMessageSenderProfileWithResponse(ctx, result.Message.Id)
+	if err != nil || response.JSON200 == nil {
+		return
+	}
+	p := response.JSON200
+	if p.AccountId != result.Message.AccountId || p.ConversationId != result.Message.ConversationId || p.MessageId != result.Message.Id {
+		return
+	}
+	switch p.State {
+	case "known", "unavailable", "not_connected", "unsupported":
+	default:
+		return
+	}
+	address := ""
+	if p.PersonalAddress != nil {
+		address = *p.PersonalAddress
+	}
+	if !validProfileAddress(address) || (result.Address != "" && address != result.Address) {
+		return
+	}
+	result.Address = address
+	if p.State == "known" && p.FullName != nil {
+		name := strings.TrimSpace(*p.FullName)
+		if utf8.ValidString(name) && len([]rune(name)) <= 300 && strings.IndexFunc(name, unicode.IsControl) < 0 {
+			result.FullName = name
+		}
+	}
 }
 
 func (v view) senderHref(m messageView) string {
@@ -100,6 +151,7 @@ func (s *Server) loadSenderInformation(ctx context.Context, v *view, engine, acc
 	} else if c.Kind == "direct" {
 		result.Address = c.Address
 	}
+	s.loadSenderProfile(ctx, result)
 	if result.Address != "" {
 		s.loadAvatars(ctx, v, account)
 	}

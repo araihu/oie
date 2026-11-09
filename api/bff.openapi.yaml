@@ -22,7 +22,7 @@ paths:
       operationId: getBrowserMessageSender
       tags: [Messages]
       summary: Render the retained message author's information
-      description: Read-only HTML fragment scoped to engine, account, conversation and retained message. Direct peers may use the conversation address and cached avatar/presence. Room authors expose only their retained name and room context, never a nickname-based personal profile or inferred current presence. Does not join rooms, subscribe to presence, mark read or mutate contacts.
+      description: Read-only HTML fragment scoped to engine, account, conversation and retained message. Direct peers may use the conversation address and cached avatar/presence. Room authors may show a published name and personal address only from the scoped engine sender-profile operation backed by retained message-time identity evidence. Never resolve personal identity from a room nickname or infer current presence. Does not join rooms, subscribe to presence, mark read or mutate contacts.
       parameters:
       - in: query
         name: engineId

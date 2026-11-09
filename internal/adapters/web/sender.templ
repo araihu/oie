@@ -25,9 +25,12 @@ templ senderContent(v view){
 if p:=v.SenderInfo;p!=nil&&v.Selected!=nil {
 <section class="oie-sender-info" data-sender-info data-sender-engine={v.EngineID} data-sender-account={p.Message.AccountId} data-sender-conversation={p.Message.ConversationId} data-sender-message={p.Message.Id}>
 <header class="oie-details-identity oie-info-centered">
-@profileAvatar(v,p.Message.AccountId,p.Address,avatar.Config{Name:p.Message.Sender.DisplayName,Initials:initials(p.Message.Sender.DisplayName),Size:avatar.SizeXL,Border:true,BorderColor:v.messageAvatarBorder(p.Message)})
-<h2>{p.Message.Sender.DisplayName}</h2>
-if p.Address!="" {
+@profileAvatar(v,p.Message.AccountId,p.Address,avatar.Config{Name:p.displayName(),Initials:initials(p.displayName()),Size:avatar.SizeXL,Border:true,BorderColor:v.messageAvatarBorder(p.Message)})
+<h2 data-sender-name>{p.displayName()}</h2>
+if p.Message.Sender.DisplayName!=p.displayName() && p.Message.Sender.DisplayName!=p.Address {
+<p data-sender-nickname>{p.Message.Sender.DisplayName}</p>
+}
+if p.Address!="" && p.Address!=p.displayName() {
 <p data-sender-address>{p.Address}</p>
 }
 if p.Presence!=nil {
