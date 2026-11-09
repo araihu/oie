@@ -31,6 +31,9 @@ window.OieRuntime.register('emoji-picker', life => {
  function jumpTo(key){const section=sections.get(key);if(!section)return;scroll.scrollTop+=section.getBoundingClientRect().top-scroll.getBoundingClientRect().top;section.querySelector('h3').focus({preventScroll:true});updateFooter()}
  function render(){
   if(!catalog)return;
+  // A cached open can finish after ArrowDown already entered the results.
+  // Preserve the selected app-owned emoji when rebuilding that same grid.
+  const active=grid.contains(document.activeElement)?document.activeElement:null,glyph=active?.dataset.emojiPick,section=active?.closest('[data-emoji-section]')?.dataset.emojiSection;
   const terms=fold(search.value).split(/\s+/).filter(Boolean),exact=catalog.items.get(search.value.trim()),preferred=new Map();
   for(const glyph of recent){const item=catalog.items.get(glyph);if(item&&!preferred.has(item.family))preferred.set(item.family,item)}
   const candidates=[...catalog.families.values()].filter(family=>family.variants.some(item=>terms.every(term=>item.match.includes(term))));
@@ -47,7 +50,9 @@ window.OieRuntime.register('emoji-picker', life => {
    sections.set(key,section);fragment.append(section);
   }
   stopVariantGeometry();mutate(()=>{clear(grid);grid.append(fragment);window.Alpine?.initTree(grid)});
-  scroll.scrollTop=0;status.textContent=candidates.length?'':content.dataset.emojiEmpty;retry.hidden=true;updateFooter();
+  scroll.scrollTop=0;status.textContent=candidates.length?'':content.dataset.emojiEmpty;retry.hidden=true;
+  if(glyph){const replacement=[...grid.querySelectorAll('[data-emoji-pick]')].find(button=>button.dataset.emojiPick===glyph&&button.closest('[data-emoji-section]')?.dataset.emojiSection===section);(replacement||search).focus()}
+  updateFooter();
  }
  function prepare(data){
   if(!Array.isArray(data.items)||data.items.length>10000||data.locale!==document.documentElement.lang||!data.families||typeof data.families!=='object'||Array.isArray(data.families))throw Error('invalid_catalog');

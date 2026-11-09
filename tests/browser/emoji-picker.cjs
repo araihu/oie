@@ -65,7 +65,20 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const variantAxe=await page.evaluate(()=>window.axe.run(document.querySelector('#oie-emoji-picker-panel'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(variantAxe.violations.map(item=>({id:item.id,nodes:item.nodes.map(node=>node.target)})),[]);
   await page.keyboard.press('Escape');await variants.waitFor({state:'hidden'});assert(await search.isVisible(),'Escape must close only the subpicker');await until(async()=>await variantsToggle.evaluate(node=>node===document.activeElement),'subpicker restores its trigger focus');
   await variantsToggle.click();await variants.locator('[data-emoji-pick="👍🏽"]').hover();assert(!(await variants.locator('[data-emoji-pick="👍🏽"]').evaluate(node=>getComputedStyle(node).textDecorationLine)).includes('underline'));await variants.locator('[data-emoji-pick="👍🏽"]').click();assert((await input.inputValue()).includes('👍🏽'));assert(await input.evaluate(node=>node===document.activeElement));assert.equal(writes,0);
-  await trigger.click();await search.fill('👍🏽');await search.press('ArrowDown');assert(await page.locator('#emoji-grid .oie-emoji-grid > [data-emoji-family] > [data-emoji-pick]').first().evaluate(node=>node===document.activeElement));await page.keyboard.press('Enter');assert((await input.inputValue()).includes('👍🏽'));
+  // Hold the cached opener's deferred work while the user searches and arrows
+  // into a result. Releasing that work must preserve the user's focus intent.
+  await page.evaluate(()=>{
+   const raf=window.requestAnimationFrame,cancel=window.cancelAnimationFrame,pending=new Map();let next=-1;
+   window.requestAnimationFrame=callback=>{const id=next--;pending.set(id,callback);return id};
+   window.cancelAnimationFrame=id=>pending.delete(id)||cancel(id);
+   window.releaseEmojiOpenFrames=()=>{window.requestAnimationFrame=raf;window.cancelAnimationFrame=cancel;const callbacks=[...pending.values()];pending.clear();for(const callback of callbacks)callback(performance.now());return new Promise(resolve=>raf(()=>raf(resolve)))};
+  });
+  await trigger.click();await search.fill('👍🏽');await search.press('ArrowDown');
+  const keyboardChoice=page.locator('#emoji-grid .oie-emoji-grid > [data-emoji-family] > [data-emoji-pick]').first();
+  assert(await keyboardChoice.evaluate(node=>node===document.activeElement),'ArrowDown enters the filtered emoji result');
+  await page.evaluate(()=>window.releaseEmojiOpenFrames());
+  assert(await keyboardChoice.evaluate(node=>node.isConnected&&node===document.activeElement),'cached opener rendering preserves the focused emoji result');
+  await page.keyboard.press('Enter');assert((await input.inputValue()).includes('👍🏽'));
   await trigger.click();await search.fill('');await page.locator('[data-emoji-jump=recent]').click();assert(await page.locator('#emoji-section-recent [data-emoji-pick="👍🏽"]').isVisible());await page.locator('#emoji-section-recent [data-emoji-pick="👍🏽"]').hover();await picker.screenshot({path:path.join(__dirname,'artifacts','emoji-recent-hover.png')});await page.keyboard.press('Escape');await until(async()=>await trigger.evaluate(node=>node===document.activeElement),'Escape restores trigger focus');
   await trigger.click();await search.fill('no-such-emoji-qwerty');await page.getByText('No emojis found.',{exact:true}).waitFor({state:'visible'});assert(Math.abs(await picker.evaluate(node=>node.offsetHeight)-fullHeight)<2,'empty search collapsed the picker');await search.fill('');
   await input.evaluate(node=>{node.readOnly=true});await until(async()=>await trigger.isDisabled(),'uncertain send locks picker');await search.waitFor({state:'hidden'});await input.evaluate(node=>{node.readOnly=false});await until(async()=>await trigger.isEnabled(),'unlock');
