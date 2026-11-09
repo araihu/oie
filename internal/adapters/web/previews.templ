@@ -53,7 +53,7 @@ templ previewDescription(v view,p engineapi.MessagePreview){
 }
 
 templ previewImageActions(v view){
-<div class="oie-preview-image-actions">
+<div class="oie-preview-image-actions" if v.SharedCard { x-show="!previewImage || previewImageFailed" }>
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-preview-download":"","x-cloak":"","x-show":"!previewImage || previewImageFailed","x-bind:disabled":"previewBusy || previewDownload==='queued' || previewDownload==='downloading'"})){ {v.Text.LoadImage} }
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-preview-expand":"","x-cloak":"","x-show":"previewFile && (!previewImage || previewImageFailed)","x-bind:disabled":"previewBusy"})){ {v.Text.OpenImage} }
 <p data-preview-feedback role="status" aria-live="polite"></p>

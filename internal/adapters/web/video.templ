@@ -3,6 +3,7 @@ package web
 import (
  "github.com/araihu/goshtoso/components/button"
  "github.com/araihu/goshtoso/components/card"
+ "github.com/araihu/goshtoso/components/panel"
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
@@ -12,7 +13,7 @@ import (
 templ videoCard(v view,item engineapi.SharedContentItem){
 <section class="oie-video-card" data-video-compact?={v.Section=="media"||v.SharedInDetails} data-video-thumbnail-state={videoThumbnailState(item)} data-video-poster={videoPoster(item)} data-video-thumbnail-loading={v.Text.VideoThumbnailLoading} data-video-thumbnail-failed={v.Text.VideoThumbnailFailed} data-video-item={item.Id} data-video-engine={v.EngineID} data-video-account={item.Message.AccountId} data-video-conversation={item.Message.ConversationId} data-video-message={item.Message.Id} data-video-source={"/ui/shared-content/"+item.Id+"/content?engineId="+v.EngineID} data-video-loading={v.Text.VideoLoading} data-video-playing={v.Text.VideoPlaying} data-video-paused={v.Text.VideoPaused} data-video-ready={v.Text.VideoReady} data-video-unavailable={v.Text.VideoUnavailable} data-video-unsupported={v.Text.VideoUnsupported}>
 if v.Section=="media"||v.SharedInDetails {
-@card.Card(card.Config{Media:videoGalleryMedia(v,item),MediaClass:"oie-video-media",Density:card.DensityCompact,RootClass:"oie-video-surface"})
+@panel.Panel(panel.Config{Body:videoGalleryMedia(v,item),BodyClass:"oie-video-media",Appearance:panel.AppearancePlain,Density:panel.DensityCompact,RootClass:"oie-video-surface"})
 }else{
 @card.Card(card.Config{Media:videoPlayer(v,item),MediaClass:"oie-video-media",Body:videoMetadata(v,item),Density:card.DensityCompact,RootClass:"oie-video-surface"})
 }

@@ -11,3 +11,7 @@
 .oie-shared-item>.oie-document-card .oie-document-card-surface,.oie-shared-item>.oie-shared-reference{padding-inline-end:38px}
 @media(hover:none),(pointer:coarse){.oie-shared-menu-trigger{opacity:1}}
 @media(prefers-reduced-motion:reduce){.oie-shared-menu-trigger{transition:none}}
+
+/* Media tiles keep their natural height instead of stretching to the row. */
+.oie-shared-grid{align-items:start}
+.oie-shared-source{margin-top:0}
