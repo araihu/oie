@@ -52,6 +52,20 @@ The browser fixture also checks that the composer and visible inbox footer reach
 the viewport bottom for short and overflowing conversations, across desktop,
 tablet and mobile sizes. The timeline scrolls independently of the page.
 
-This change is isolated in its managed worktree. Its Air-supervised BFF preview
-runs on port 8082 against the existing engine. It has not been applied to the
-source worktree or its original preview.
+## Main-session integration
+
+Integrated into `codex/message-previews`, retaining the newer sidebar startup
+guard, conversation menu and emoji composer. Existing local gallery, preview,
+star and theme edits remain uncommitted with their original staging state.
+The overlapping template changes were merged and regenerated with templ.
+
+The combined source passes `make check`, Dagger `ci-check` and both conversation
+and full-fragment navigation browser fixtures. The first full-fragment run timed
+out waiting for a modifier-click popup; the baseline and a repeat combined run
+passed. No full browser-pipeline result is claimed.
+
+Air rebuilt the original BFF on port 8080. Read-only browser verification against
+that preview retained the same shell and inbox nodes across two conversation
+selections, made only one document request and kept the composer at the viewport
+bottom. The existing engine process and protocol sessions were retained. The
+separate development preview on port 8082 is also still available.
