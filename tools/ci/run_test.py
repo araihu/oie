@@ -18,11 +18,15 @@ assert (source / 'current.go').read_text() == 'current edit'
 assert not (source / 'data').exists()
 if os.environ.get('CI_TEST_RESIST_TERM'):
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
-Path(os.environ['CI_TEST_CAPTURE']).write_text(json.dumps({'args': args, 'source': str(source), 'pid': os.getpid(), 'runner': os.environ.get('_EXPERIMENTAL_DAGGER_RUNNER_HOST'), 'artifacts_env': os.environ.get('OIE_CI_ARTIFACTS')}))
 if os.environ.get('CI_TEST_WRITE_ARTIFACTS'):
     artifacts = Path(args[args.index('-artifacts')+1])
     artifacts.mkdir(parents=True, exist_ok=True)
     (artifacts / 'fixture.log').write_text('retained failure evidence')
+# Publish readiness only after initialization, as one complete filesystem update.
+capture = Path(os.environ['CI_TEST_CAPTURE'])
+pending = capture.with_suffix('.tmp')
+pending.write_text(json.dumps({'args': args, 'source': str(source), 'pid': os.getpid(), 'runner': os.environ.get('_EXPERIMENTAL_DAGGER_RUNNER_HOST'), 'artifacts_env': os.environ.get('OIE_CI_ARTIFACTS')}))
+pending.replace(capture)
 if os.environ.get('CI_TEST_SLEEP'):
     time.sleep(30)
 sys.exit(int(os.environ.get('CI_TEST_EXIT', '0')))
