@@ -24,6 +24,17 @@ func messageActions(v view, id string) []dropdown.Section {
 	if images := v.imagePreviews(id); len(images) == 1 {
 		sections = append(sections, imageActions(v, images[0])...)
 	}
+	if videos := v.messageVideos(id); len(videos) > 0 {
+		items := make([]dropdown.Item, 0, len(videos))
+		for _, video := range videos {
+			label := v.Text.SharedOpenLink
+			if len(videos) > 1 {
+				label += " · " + v.sharedTitle(video)
+			}
+			items = append(items, dropdown.Item{ID: "open-video-" + video.Id, Icon: glyph(heroicons.Icon16SolidArrowTopRightOnSquare), Label: label, Href: safePreviewURL(video.Url), Target: "_blank", Rel: "noopener noreferrer"})
+		}
+		sections = append(sections, dropdown.Section{Items: items})
+	}
 	return sections
 }
 func imageActions(v view, p engineapi.MessagePreview) []dropdown.Section {

@@ -4,7 +4,6 @@ import (
  "github.com/araihu/goshtoso/components/button"
  "github.com/araihu/goshtoso/components/card"
  "github.com/araihu/goshtoso/components/icon/heroicons"
- "github.com/araihu/goshtoso/components/link"
  "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
@@ -39,18 +38,11 @@ templ videoPlayer(v view,item engineapi.SharedContentItem){
 templ videoMetadata(v view,item engineapi.SharedContentItem){
 <div data-video-metadata hidden?={v.Section=="media"||v.SharedInDetails}>
 <strong data-video-label hidden?={v.Section=="media"||v.SharedInDetails}>{v.sharedTitle(item)}</strong>
-<p data-video-status role="status" aria-live="polite" data-state="ready">
-if v.Section!="media" && !v.SharedInDetails {
-{v.Text.VideoReady}
-}
-</p>
+<p data-video-status role="status" aria-live="polite" data-state="ready" hidden></p>
 if v.Section!="media" && !v.SharedInDetails {
 @videoThumbnailControls(v,item)
 }
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-video-retry":"","hidden":true})){ {v.Text.VideoRetry} }
-if v.Section!="media" && !v.SharedInDetails {
-@link.Link(safePreviewURL(item.Url),link.WithAttrs(templ.Attributes{"target":"_blank","rel":"noopener noreferrer","data-video-original":""})){ {v.Text.SharedOpenLink} }
-}
 </div>
 }
 
