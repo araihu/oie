@@ -61,6 +61,11 @@ func (s *Server) loadSharedContent(ctx context.Context, v *view) {
 		if (v.SharedType == "links" && item.Kind != "link") || (v.SharedType == "documents" && item.Kind != "document") || (v.SharedType == "media" && item.Kind != "image" && item.Kind != "audio" && item.Kind != "video") {
 			return
 		}
+		if p := item.Thumbnail; p != nil {
+			if item.Kind != "video" || !validVideoThumbnailStatus(*p, item.Id) || p.AccountId != m.AccountId || p.ConversationId != m.ConversationId || p.MessageId != m.Id || p.Url != item.Url {
+				return
+			}
+		}
 		if p := item.Preview; p != nil {
 			if p.MessageId != m.Id || p.AccountId != m.AccountId || p.ConversationId != m.ConversationId || p.Url != item.Url || ((item.Kind != "image" || p.Kind != "image") && (item.Kind != "link" || p.Kind != "link")) {
 				return
@@ -107,6 +112,7 @@ func (v view) sharedVersion() string {
 	items := append([]engineapi.SharedContentItem(nil), v.SharedContent.Items...)
 	for i := range items {
 		items[i].Preview = nil
+		items[i].Thumbnail = nil
 	}
 	data, _ := json.Marshal(items)
 	hash := sha256.Sum256(data)

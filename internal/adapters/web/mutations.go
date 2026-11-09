@@ -59,6 +59,7 @@ func validCSRF(r *http.Request) bool {
 }
 
 type mutationResult struct {
+	Thumbnail   *engineapi.VideoThumbnail `json:"thumbnail,omitempty"`
 	RoomSession *engineapi.RoomSession    `json:"roomSession,omitempty"`
 	Star        *engineapi.MessageStar    `json:"star,omitempty"`
 	StarPending bool                      `json:"starPending,omitempty"`
@@ -121,6 +122,8 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 		status, result = s.changeRoom(ctx, r, text, true)
 	case "/ui/messages/star":
 		status, result = s.setStar(ctx, r, text)
+	case "/ui/videos/thumbnail":
+		status, result = s.requestVideoThumbnail(ctx, r, text)
 	case "/ui/previews/download":
 		status, result = s.downloadPreview(ctx, r, text)
 	case "/ui/previews/refresh":
@@ -418,7 +421,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 
 func isMutationPath(path string) bool {
 	switch path {
-	case "/ui/previews/refresh", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/cancel":
+	case "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/cancel":
 		return true
 	}
 	return false

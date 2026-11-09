@@ -1,4 +1,9 @@
 {
+  "AutoVideoThumbnails": "Gerar prévias de vídeo automaticamente",
+  "AutoVideoThumbnailsHelp": "Lê uma amostra limitada, de até 5 MiB por vídeo, para guardar uma prévia. A reprodução completa começa ao pressionar Play.",
+  "VideoThumbnailLoad": "Carregar prévia do vídeo",
+  "VideoThumbnailLoading": "Preparando prévia do vídeo…",
+  "VideoThumbnailFailed": "Prévia indisponível. Você ainda pode reproduzir o vídeo.",
   "ReadFailed": "Não foi possível registrar a leitura.",
   "SharedItemActions": "Ações do item",
   "SharedCopyLink": "Copiar link",

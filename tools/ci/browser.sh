@@ -38,6 +38,7 @@ OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/language-settings.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/shared-content-scroll.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/link-fallbacks.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/video.cjs
+OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/video-thumbnails.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/documents.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/shared-search.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/chat-info.cjs

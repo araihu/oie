@@ -143,145 +143,146 @@ type view struct {
 }
 
 type copy struct {
-	ReadFailed                                                                    string
-	TimelineOlder, TimelineNewer, TimelineLoading, TimelineFailed, TimelinePaused string
-	SharedItemActions                                                             string
-	SharedCopyLink                                                                string
-	SharedDownload                                                                string
-	SharedActionFailed                                                            string
-	SharedLinkCopied                                                              string
-	SharedDownloading                                                             string
-	RoomActions                                                                   string
-	DocumentOpen                                                                  string
-	DocumentViewer                                                                string
-	DocumentDownload                                                              string
-	DocumentOriginal                                                              string
-	DocumentLoading                                                               string
-	DocumentLoadFailed                                                            string
-	DocumentRetry                                                                 string
-	DocumentUnsupported                                                           string
-	DocumentEmpty                                                                 string
-	DocumentPrevious                                                              string
-	DocumentNext                                                                  string
-	DocumentPage                                                                  string
-	DocumentFit                                                                   string
-	DocumentZoomIn                                                                string
-	DocumentZoomOut                                                               string
-	EmojiNoRecent                                                                 string
-	EmojiVariants                                                                 string
-	EmojiVariantsFor                                                              string
-	EmojiPicker                                                                   string
-	EmojiSearch                                                                   string
-	EmojiCategories                                                               string
-	EmojiAll                                                                      string
-	EmojiRecent                                                                   string
-	EmojiMore                                                                     string
-	EmojiLoading                                                                  string
-	EmojiEmpty                                                                    string
-	EmojiFailed                                                                   string
-	EmojiSmileys                                                                  string
-	EmojiPeople                                                                   string
-	EmojiAnimals                                                                  string
-	EmojiFood                                                                     string
-	EmojiTravel                                                                   string
-	EmojiActivities                                                               string
-	EmojiObjects                                                                  string
-	EmojiSymbols                                                                  string
-	EmojiFlags                                                                    string
-	RefreshPreview                                                                string
-	RefreshPreviewFailed                                                          string
-	SharedLoadingOlder                                                            string
-	SharedLoadFailed                                                              string
-	VideoPlay                                                                     string
-	VideoRetry                                                                    string
-	VideoLoading                                                                  string
-	VideoPlaying                                                                  string
-	VideoPaused                                                                   string
-	VideoReady                                                                    string
-	VideoUnavailable                                                              string
-	VideoUnsupported                                                              string
-	AppName                                                                       string
-	AppDescription                                                                string
-	CapabilityEditMessagesNote                                                    string
-	Edited                                                                        string
-	ReplyMessage                                                                  string
-	CancelReply                                                                   string
-	ReplyUnavailable                                                              string
-	ReplyPreparing                                                                string
-	ReplyLocked                                                                   string
-	RoomJoined                                                                    string
-	RoomJoining                                                                   string
-	RoomJoinFailed                                                                string
-	RoomJoinRequired                                                              string
-	JoinRoom                                                                      string
-	LeaveRoom                                                                     string
-	RoomNickname                                                                  string
-	RoomNicknameConflict                                                          string
-	RoomForbidden                                                                 string
-	RoomNotAuthorized                                                             string
-	RoomJoinTimeout                                                               string
-	RoomUnavailable                                                               string
-	RoomCommandUnknown                                                            string
-	RoomCommandFailed                                                             string
-	RoomConflict                                                                  string
-	RoomJoinRequested                                                             string
-	RoomLeaveRequested                                                            string
-	RoomQueueHint                                                                 string
-	NavLoading                                                                    string
-	NavFailed                                                                     string
-	InfoSharedContent                                                             string
-	InfoStarred                                                                   string
-	InfoConnection                                                                string
-	InfoBack                                                                      string
-	InfoGroup                                                                     string
-	InfoReportedOccupants                                                         string
-	InfoStarsUnavailable                                                          string
-	InfoStarsEmpty                                                                string
-	InfoNavigationFailed                                                          string
-	SharedAccount                                                                 string
-	SearchAccounts                                                                string
-	NoAccountsFound                                                               string
-	SharedTools                                                                   string
-	SharedContentTypes                                                            string
-	SharedMediaTab                                                                string
-	SharedLinksTab                                                                string
-	SharedDocsTab                                                                 string
-	SharedAllChats                                                                string
-	SharedSearch                                                                  string
-	SharedSearchAction                                                            string
-	SharedPageUnavailable                                                         string
-	SharedNewest                                                                  string
-	SharedUnavailable                                                             string
-	SharedFinding                                                                 string
-	SharedEmpty                                                                   string
-	SharedEmptyHelp                                                               string
-	SharedGoToMessage                                                             string
-	SharedOpenLink                                                                string
-	SharedNext                                                                    string
-	SharedImage                                                                   string
-	SharedAudio                                                                   string
-	SharedVideo                                                                   string
-	SharedDocument                                                                string
-	SharedLink                                                                    string
-	CapabilityPresenceNote                                                        string
-	DetailsRefresh                                                                string
-	DetailsOwningAccount                                                          string
-	DetailsObservation                                                            string
-	DetailsSnapshotHelp                                                           string
-	DetailsPending                                                                string
-	DetailsKnown                                                                  string
-	DetailsPartial                                                                string
-	DetailsForbidden                                                              string
-	DetailsUnavailable                                                            string
-	DetailsNotConnected                                                           string
-	DetailsUnsupported                                                            string
-	DetailsUnknown                                                                string
-	DetailsReadUnavailable                                                        string
-	DetailsRoomName                                                               string
-	DetailsDescription                                                            string
-	DetailsTopic                                                                  string
-	DetailsRoomSession                                                            string
-	RoomNotJoined                                                                 string
+	AutoVideoThumbnails, AutoVideoThumbnailsHelp, VideoThumbnailLoad, VideoThumbnailLoading, VideoThumbnailFailed string
+	ReadFailed                                                                                                    string
+	TimelineOlder, TimelineNewer, TimelineLoading, TimelineFailed, TimelinePaused                                 string
+	SharedItemActions                                                                                             string
+	SharedCopyLink                                                                                                string
+	SharedDownload                                                                                                string
+	SharedActionFailed                                                                                            string
+	SharedLinkCopied                                                                                              string
+	SharedDownloading                                                                                             string
+	RoomActions                                                                                                   string
+	DocumentOpen                                                                                                  string
+	DocumentViewer                                                                                                string
+	DocumentDownload                                                                                              string
+	DocumentOriginal                                                                                              string
+	DocumentLoading                                                                                               string
+	DocumentLoadFailed                                                                                            string
+	DocumentRetry                                                                                                 string
+	DocumentUnsupported                                                                                           string
+	DocumentEmpty                                                                                                 string
+	DocumentPrevious                                                                                              string
+	DocumentNext                                                                                                  string
+	DocumentPage                                                                                                  string
+	DocumentFit                                                                                                   string
+	DocumentZoomIn                                                                                                string
+	DocumentZoomOut                                                                                               string
+	EmojiNoRecent                                                                                                 string
+	EmojiVariants                                                                                                 string
+	EmojiVariantsFor                                                                                              string
+	EmojiPicker                                                                                                   string
+	EmojiSearch                                                                                                   string
+	EmojiCategories                                                                                               string
+	EmojiAll                                                                                                      string
+	EmojiRecent                                                                                                   string
+	EmojiMore                                                                                                     string
+	EmojiLoading                                                                                                  string
+	EmojiEmpty                                                                                                    string
+	EmojiFailed                                                                                                   string
+	EmojiSmileys                                                                                                  string
+	EmojiPeople                                                                                                   string
+	EmojiAnimals                                                                                                  string
+	EmojiFood                                                                                                     string
+	EmojiTravel                                                                                                   string
+	EmojiActivities                                                                                               string
+	EmojiObjects                                                                                                  string
+	EmojiSymbols                                                                                                  string
+	EmojiFlags                                                                                                    string
+	RefreshPreview                                                                                                string
+	RefreshPreviewFailed                                                                                          string
+	SharedLoadingOlder                                                                                            string
+	SharedLoadFailed                                                                                              string
+	VideoPlay                                                                                                     string
+	VideoRetry                                                                                                    string
+	VideoLoading                                                                                                  string
+	VideoPlaying                                                                                                  string
+	VideoPaused                                                                                                   string
+	VideoReady                                                                                                    string
+	VideoUnavailable                                                                                              string
+	VideoUnsupported                                                                                              string
+	AppName                                                                                                       string
+	AppDescription                                                                                                string
+	CapabilityEditMessagesNote                                                                                    string
+	Edited                                                                                                        string
+	ReplyMessage                                                                                                  string
+	CancelReply                                                                                                   string
+	ReplyUnavailable                                                                                              string
+	ReplyPreparing                                                                                                string
+	ReplyLocked                                                                                                   string
+	RoomJoined                                                                                                    string
+	RoomJoining                                                                                                   string
+	RoomJoinFailed                                                                                                string
+	RoomJoinRequired                                                                                              string
+	JoinRoom                                                                                                      string
+	LeaveRoom                                                                                                     string
+	RoomNickname                                                                                                  string
+	RoomNicknameConflict                                                                                          string
+	RoomForbidden                                                                                                 string
+	RoomNotAuthorized                                                                                             string
+	RoomJoinTimeout                                                                                               string
+	RoomUnavailable                                                                                               string
+	RoomCommandUnknown                                                                                            string
+	RoomCommandFailed                                                                                             string
+	RoomConflict                                                                                                  string
+	RoomJoinRequested                                                                                             string
+	RoomLeaveRequested                                                                                            string
+	RoomQueueHint                                                                                                 string
+	NavLoading                                                                                                    string
+	NavFailed                                                                                                     string
+	InfoSharedContent                                                                                             string
+	InfoStarred                                                                                                   string
+	InfoConnection                                                                                                string
+	InfoBack                                                                                                      string
+	InfoGroup                                                                                                     string
+	InfoReportedOccupants                                                                                         string
+	InfoStarsUnavailable                                                                                          string
+	InfoStarsEmpty                                                                                                string
+	InfoNavigationFailed                                                                                          string
+	SharedAccount                                                                                                 string
+	SearchAccounts                                                                                                string
+	NoAccountsFound                                                                                               string
+	SharedTools                                                                                                   string
+	SharedContentTypes                                                                                            string
+	SharedMediaTab                                                                                                string
+	SharedLinksTab                                                                                                string
+	SharedDocsTab                                                                                                 string
+	SharedAllChats                                                                                                string
+	SharedSearch                                                                                                  string
+	SharedSearchAction                                                                                            string
+	SharedPageUnavailable                                                                                         string
+	SharedNewest                                                                                                  string
+	SharedUnavailable                                                                                             string
+	SharedFinding                                                                                                 string
+	SharedEmpty                                                                                                   string
+	SharedEmptyHelp                                                                                               string
+	SharedGoToMessage                                                                                             string
+	SharedOpenLink                                                                                                string
+	SharedNext                                                                                                    string
+	SharedImage                                                                                                   string
+	SharedAudio                                                                                                   string
+	SharedVideo                                                                                                   string
+	SharedDocument                                                                                                string
+	SharedLink                                                                                                    string
+	CapabilityPresenceNote                                                                                        string
+	DetailsRefresh                                                                                                string
+	DetailsOwningAccount                                                                                          string
+	DetailsObservation                                                                                            string
+	DetailsSnapshotHelp                                                                                           string
+	DetailsPending                                                                                                string
+	DetailsKnown                                                                                                  string
+	DetailsPartial                                                                                                string
+	DetailsForbidden                                                                                              string
+	DetailsUnavailable                                                                                            string
+	DetailsNotConnected                                                                                           string
+	DetailsUnsupported                                                                                            string
+	DetailsUnknown                                                                                                string
+	DetailsReadUnavailable                                                                                        string
+	DetailsRoomName                                                                                               string
+	DetailsDescription                                                                                            string
+	DetailsTopic                                                                                                  string
+	DetailsRoomSession                                                                                            string
+	RoomNotJoined                                                                                                 string
 
 	DetailsOccupantCount                                                                                                                                                 string
 	DetailsRoomProperties                                                                                                                                                string
@@ -517,7 +518,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}{
 		"/ui/timeline.js": {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
-		"/ui/videos.js": {"text/javascript", videosScript}, "/ui/video.css": {"text/css", videosStylesheet},
+		"/ui/video-thumbnails.js": {"text/javascript", videoThumbnailsScript}, "/ui/videos.js": {"text/javascript", videosScript}, "/ui/video.css": {"text/css", videosStylesheet},
 		"/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/read-state.js": {"text/javascript", readStateScript}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
 	}
 	if asset, ok := assets[r.URL.Path]; ok {
@@ -540,6 +541,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/ui/media/") {
 		s.mediaImage(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/v1/shared-content/") && strings.HasSuffix(r.URL.Path, "/thumbnail") {
+		s.videoThumbnailStatus(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/ui/shared-content/") {
@@ -1005,3 +1010,6 @@ func (v view) historyCaption(id string) string {
 	}
 	return label + " · " + fmt.Sprintf(v.Text.HistoryCount, h.RetainedMessages)
 }
+
+//go:embed video-thumbnails.js
+var videoThumbnailsScript []byte
