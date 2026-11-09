@@ -8,7 +8,7 @@ templ timelineFragment(v view){
 @avatarData(v)
 <div id="live-timeline">@timeline(v)</div>
 for requested,m:=range v.TimelineAliases {
-<template data-timeline-alias={requested} data-canonical={m.Id}>@message(v,m,false)</template>
+<template data-timeline-alias={requested} data-canonical={m.Id}>@message(v,m,false,true)</template>
 }
 }
 

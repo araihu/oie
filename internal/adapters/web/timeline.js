@@ -15,6 +15,12 @@ window.OieRuntime.register('timeline',life=>{
   return {data,entries,scope};
  }
  function current(){return rows().map(node=>({id:node.dataset.messageId,ms:Number(node.dataset.createdMs),version:node.dataset.messageVersion,node}))}
+ function avatarGroups(){
+  const entries=rows();for(let i=0;i<entries.length;i++){const node=entries[i],next=entries[i+1];
+   const continues=next&&node.dataset.messageGroupable==='true'&&next.dataset.messageGroupable==='true'&&['messageAccount','messageConversation','messageSender','messageSenderName'].every(key=>node.dataset[key]===next.dataset[key])&&node.classList.contains('oie-message-own')===next.classList.contains('oie-message-own');
+   node.classList.toggle('oie-message-group-end',!continues);
+  }
+ }
  function interactionProtected(node){const selection=getSelection(),active=document.activeElement;return active!==node&&!active?.matches('[data-form-feedback]')&&node.contains(active)||!!node.querySelector('[aria-expanded="true"]')||[...node.querySelectorAll('video,audio')].some(media=>!media.paused&&!media.ended)||!!selection&&!selection.isCollapsed&&(node.contains(selection.anchorNode)||node.contains(selection.focusNode))}
  // A loaded video's reconciler preserves matching native players and releases
  // removed source references. That inner refresh is distinct from row eviction.
@@ -43,7 +49,7 @@ window.OieRuntime.register('timeline',life=>{
    for(const item of old)if(!keep.has(item.id)){window.OieVideos?.release(item.node);window.Alpine?.destroyTree(item.node);item.node.remove()}
    const after=edge('newer');for(const item of ordered){let node=existing.get(item.id);if(node?.isConnected){if(node.dataset.messageVersion!==item.version&&(!interactionProtected(node)||canReconcileVideo(node))&&!(item.node.dataset.messagePreviewsKnown!=='true'&&node.dataset.messageRevision===item.node.dataset.messageRevision)){const active=node.contains(document.activeElement)?document.activeElement:null,activeID=active?.id,protectedUpdate=interactionProtected(node),swapped=window.OieVideos?.swap(node,item.node.innerHTML);if(!swapped&&!protectedUpdate){for(const child of node.children)window.Alpine?.destroyTree(child);node.innerHTML=item.node.innerHTML;for(const child of node.children)window.Alpine?.initTree(child)}if(swapped||!protectedUpdate){for(const attribute of item.node.attributes)node.setAttribute(attribute.name,attribute.value);if(active&&!active.isConnected)(activeID&&node.querySelector('#'+CSS.escape(activeID))||node).focus({preventScroll:true})}}}else{node=item.node.cloneNode(true);const next=ordered.slice(ordered.indexOf(item)+1).map(value=>existing.get(value.id)).find(value=>value?.isConnected)||after;root.insertBefore(node,next);window.Alpine?.initTree(node);existing.set(item.id,node)}}
   };
-  if(window.Alpine?.mutateDom)window.Alpine.mutateDom(apply);else apply();
+  if(window.Alpine?.mutateDom)window.Alpine.mutateDom(apply);else apply();avatarGroups();
   if(trimmed.length){if(direction==='older'){newer=true;liveAttached=false}else older=true}
   for(const plan of aliases){if(anchor?.id===plan.previous)anchor.id=plan.record.id;if(document.body.dataset.focusMessage===plan.previous)document.body.dataset.focusMessage=plan.record.id;document.dispatchEvent(new CustomEvent('oie:timeline-alias',{detail:{requested:plan.previous,canonical:plan.record.id}}))}hooks(page.scope,starGeneration);correct();life.raf(correct);observe();return true;
  }
@@ -78,7 +84,7 @@ window.OieRuntime.register('timeline',life=>{
     if(focused||before.length===far.length){nextRequest={mode:'context',direction, target:(focused||far[0]).previous};return}
     if(far.some(plan=>{const item=before.find(value=>value.id===plan.previous);return item&&interactionProtected(item.node)})){failed='paused';return}
     capture();const retired=new Set(far.map(plan=>plan.previous));if(anchor&&retired.has(anchor.id)){const survivor=before.find(item=>!retired.has(item.id));anchor=survivor?{id:survivor.id,top:survivor.node.getBoundingClientRect().top}:null}
-    const apply=()=>{for(const item of before)if(retired.has(item.id)){window.OieVideos?.release(item.node);window.Alpine?.destroyTree(item.node);item.node.remove()}};if(window.Alpine?.mutateDom)window.Alpine.mutateDom(apply);else apply();
+    const apply=()=>{for(const item of before)if(retired.has(item.id)){window.OieVideos?.release(item.node);window.Alpine?.destroyTree(item.node);item.node.remove()}};if(window.Alpine?.mutateDom)window.Alpine.mutateDom(apply);else apply();avatarGroups();
     const removedOldest=retired.has(before[0].id);if(removedOldest)older=true;else{newer=true;liveAttached=false}correct();nextRequest={mode:'page',direction:removedOldest?'older':'newer'};return;
    }
    if(merge(page,{direction:mode==='page'?direction:'update',authoritative:mode==='window',followEnd:mode==='page'&&direction==='newer'&&liveAttached&&wasBottom,starGeneration,aliases})){
@@ -122,5 +128,5 @@ window.OieRuntime.register('timeline',life=>{
  life.on(document,'oie:actions-refreshed',()=>{if(!busy&&!failed)observe()});
  life.on(document,'keydown',event=>{if(event.key==='Escape'&&failed==='paused')life.timeout(()=>{failed='';controls();observe()},200)});
  life.cleanup(()=>{disposed=true;focusEpoch++;epoch++;controller?.abort();observer?.disconnect();resizer?.disconnect();if(window.OieTimeline===api)delete window.OieTimeline});
- controls();life.raf(()=>{capture();observe()});
+ avatarGroups();controls();life.raf(()=>{capture();observe()});
 });
