@@ -462,7 +462,7 @@ func conversationSearchBar(v view) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</noscript></form><p class=\"oie-conversation-search-excerpt\" data-conversation-search-excerpt hidden></p></section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</noscript></form><p class=\"oie-conversation-search-excerpt\" data-conversation-search-excerpt hidden></p><p class=\"oie-conversation-search-coverage\" data-conversation-search-coverage hidden></p></section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
