@@ -87,3 +87,21 @@ the local client ended with status 143 despite completed engine tasks. Logs
 are `/tmp/oie-preview-cache-dagger.log` and
 `/tmp/oie-preview-cache-dagger-remote.log`. This is not recorded as a clean
 Dagger client completion.
+
+## Integration into the primary development checkout
+
+Integrated into `codex/message-previews` in commit `904d4f7`, preserving local
+uncommitted UI and CI work. The compact document cards and source captions remain
+in place. `make check` and the cache browser suite pass on that checkout. The
+main preview on port 8080 serves the shared cache runtime and returns 304 for a
+matching ETag, with no page errors in the read-only startup check.
+
+The complete document browser fixture reaches its final assertion but reports
+`refreshInfo` in `stars.js` receiving an undefined page during the pending
+`navigation.js` fragment changes. The clean integration source passes that
+fixture. The primary checkout's pending CI-runner lifecycle tests also fail
+before Dagger starts, with status 5 instead of the expected runner status.
+These unrelated edits are retained outside the cache integration commit.
+Evidence: `/tmp/oie-cache-main-check.log`, `/tmp/oie-cache-main-browser.log`,
+`/tmp/oie-cache-main-documents.log`, `/tmp/oie-cache-main-live.log`,
+`/tmp/oie-cache-main-dagger.log` and `/tmp/oie-cache-integration-documents.log`.
