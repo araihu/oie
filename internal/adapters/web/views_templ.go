@@ -42,10 +42,10 @@ func navigation(v view, id string) sidebar.Config {
 	return sidebar.Config{
 		Logo: brand(v), LogoHref: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), DisableSkipLink: true, RootClass: "oie-navigation", FooterSlot: footer,
 		Items: []sidebar.Item{
-			{ID: "chats", Label: v.Text.Chats, Href: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidQueueList), Active: v.Section == "chats"},
-			{ID: "media", Label: v.Text.SharedMedia, Href: v.href("section", "media", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidRectangleGroup), Active: v.Section == "media"},
-			{ID: "archived", Label: v.Text.Archived, Href: v.href("section", "archived", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidFolder), Active: v.Section == "archived"},
-			{ID: "favorites", Label: v.Text.Favorites, Href: v.href("section", "favorites", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidStar), Active: v.Section == "favorites"},
+			{ID: "chats", Label: v.Text.Chats, Href: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidQueueList), Active: v.Section == "chats", LinkAttrs: applicationNavigationAttrs()},
+			{ID: "media", Label: v.Text.SharedMedia, Href: v.href("section", "media", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidRectangleGroup), Active: v.Section == "media", LinkAttrs: applicationNavigationAttrs()},
+			{ID: "archived", Label: v.Text.Archived, Href: v.href("section", "archived", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidFolder), Active: v.Section == "archived", LinkAttrs: applicationNavigationAttrs()},
+			{ID: "favorites", Label: v.Text.Favorites, Href: v.href("section", "favorites", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidStar), Active: v.Section == "favorites", LinkAttrs: applicationNavigationAttrs()},
 		},
 	}
 }
@@ -308,7 +308,7 @@ func page(v view) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<link rel=\"stylesheet\" href=\"/ui/app.css\"><link rel=\"stylesheet\" href=\"/ui/video.css\"><link rel=\"stylesheet\" href=\"/ui/document.css\"><link rel=\"stylesheet\" href=\"/ui/emoji-picker.css\"><script src=\"/ui/actions.js\" defer></script><script src=\"/ui/stars.js\" defer></script><script src=\"/ui/previews.js\" defer></script><script src=\"/ui/videos.js\" defer></script><script src=\"/ui/documents.js\" defer></script><script src=\"/ui/shared-content.js\" defer></script><script src=\"/ui/live.js\" defer></script><script src=\"/ui/emoji-picker.js\" defer></script><script src=\"/ui/navigation.js\" defer></script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<link rel=\"stylesheet\" href=\"/ui/app.css\"><link rel=\"stylesheet\" href=\"/ui/video.css\"><link rel=\"stylesheet\" href=\"/ui/document.css\"><link rel=\"stylesheet\" href=\"/ui/emoji-picker.css\"><script src=\"/ui/actions.js\" defer></script><script src=\"/ui/stars.js\" defer></script><script src=\"/ui/previews.js\" defer></script><script src=\"/ui/videos.js\" defer></script><script src=\"/ui/documents.js\" defer></script><script src=\"/ui/shared-content.js\" defer></script><script src=\"/ui/live.js\" defer></script><script src=\"/ui/emoji-picker.js\" defer></script><script src=\"/ui/navigation.js\"></script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
