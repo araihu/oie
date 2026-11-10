@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+python3 tools/generate-reaction-emoji-bases.py --check
 tmp=$(mktemp -d "./.codegen-check.XXXXXX")
 tmp=$(cd "$tmp" && pwd)
 trap 'rm -rf "$tmp"' EXIT

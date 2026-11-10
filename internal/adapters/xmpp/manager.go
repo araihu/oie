@@ -46,6 +46,8 @@ type entry struct {
 	correctionSession string
 	correctionSources map[string]ownCorrectionSource
 	correctionLatest  map[string]domain.ID
+	reactionLimits    map[string]reactionLimit
+	reactionCommands  map[string]reactionDestination
 	state             domain.Connection
 	session           *mx.Session
 	raw               net.Conn
@@ -293,6 +295,8 @@ func (m *Manager) publish(ctx context.Context, e *entry, state, code string) err
 		e.discoveryPartial = false
 		e.details = nil
 		e.peerPresence = nil
+		e.reactionLimits = nil
+		e.reactionCommands = nil
 	} else {
 		e.discovery = domain.CapabilityDiscovery{State: "pending", Services: []domain.DiscoveredService{}}
 		e.detailsWake = make(chan struct{}, 1)
@@ -318,6 +322,8 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.correctionSession = randomQueryID()
 			e.correctionSources = map[string]ownCorrectionSource{}
 			e.correctionLatest = map[string]domain.ID{}
+			e.reactionLimits = nil
+			e.reactionCommands = nil
 			e.contactsWake = make(chan struct{}, 1)
 			contactsWake := e.contactsWake
 			e.mu.Unlock()
@@ -472,6 +478,10 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 		e.mu.Unlock()
 		return application.Failed
 	}
+	if out.Reaction != nil && !validFrozenReaction(e, a, out) {
+		e.mu.Unlock()
+		return application.Failed
+	}
 	e.mu.Unlock()
 	if out.Kind == "room" {
 		e.mu.Lock()
@@ -483,16 +493,18 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 			}
 			return application.NotSent
 		}
-		if e.ownRoomMessages == nil {
+		if out.Reaction == nil && e.ownRoomMessages == nil {
 			e.ownRoomMessages = map[string]ownRoomMessage{}
 		}
-		if len(e.ownRoomMessages) >= maxOwnRoomMessages {
+		if out.Reaction == nil && len(e.ownRoomMessages) >= maxOwnRoomMessages {
 			for id := range e.ownRoomMessages {
 				delete(e.ownRoomMessages, id)
 				break
 			}
 		}
-		e.ownRoomMessages[string(out.ID)] = ownRoomMessage{address: out.Address, body: out.OriginalText}
+		if out.Reaction == nil {
+			e.ownRoomMessages[string(out.ID)] = ownRoomMessage{address: out.Address, body: out.OriginalText}
+		}
 		e.mu.Unlock()
 	}
 
@@ -506,7 +518,11 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	_ = raw.SetWriteDeadline(deadline)
 	defer func() { _ = raw.SetWriteDeadline(time.Time{}) }()
 	e.mu.Lock()
-	trackCorrectionSource(e, a, out)
+	if out.Reaction != nil {
+		trackReactionCommand(e, out)
+	} else {
+		trackCorrectionSource(e, a, out)
+	}
 	e.mu.Unlock()
 
 	if err = session.Encode(ctx, payload); err != nil {
@@ -552,6 +568,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			fileSharingMetadata
 			replyMetadata
 			correctionMetadata
+			reactionMetadata
 			Body        string         `xml:"jabber:client body"`
 			Archive     *archiveResult `xml:"urn:xmpp:mam:2 result"`
 			AvatarEvent *struct {
@@ -580,6 +597,9 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			return m.captureArchive(e, msg.Message, msg.Archive)
 		}
 		if msg.Type == stanza.ErrorMessage {
+			if handled, err := m.rejectReaction(ctx, e, msg.Message); handled {
+				return err
+			}
 			own, _ := jid.Parse(e.account.Address)
 			address := msg.From.Bare().String()
 			fromServer := msg.From.Equal(own.Domain())
@@ -605,6 +625,9 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 				}
 			}
 			return m.host.Reject(ctx, application.Rejected{AccountID: e.account.ID, MessageID: msg.ID, Address: address, FromServer: fromServer, FromParticipant: msg.From.Resourcepart() != ""})
+		}
+		if len(msg.Reactions) != 0 {
+			return m.receiveReaction(ctx, e, msg.Message, msg.reactionMetadata, msg.Delay.Stamp, msg.Delay.From)
 		}
 		if msg.Type == stanza.GroupChatMessage {
 			return m.receiveRoomMessage(ctx, e, msg.Message, msg.replyMetadata, msg.Body, msg.Delay.Stamp, msg.Delay.From, msg.fileSharingMetadata, msg.correctionMetadata)

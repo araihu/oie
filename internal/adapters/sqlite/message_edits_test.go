@@ -582,6 +582,7 @@ func TestSentEditMigrationFourteenPreservesTransmissionOrderAndData(t *testing.T
 		t.Fatal(err)
 	}
 	history := editHistory(t, e, first.ID, "", 20)
+	downReactionMigration(t, s)
 	down, err := migrations.ReadFile("migrations/000015_message_edit_commands.down.sql")
 	if err != nil {
 		t.Fatal(err)
@@ -623,7 +624,7 @@ func TestSentEditMigrationFourteenPreservesTransmissionOrderAndData(t *testing.T
 	}
 	var version int
 	var dirty bool
-	if err = reopened.db.QueryRow("SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != 15 || dirty {
+	if err = reopened.db.QueryRow("SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != 16 || dirty {
 		t.Fatal(version, dirty, err)
 	}
 	queuedEdit(t, upgraded, second.ID, "New correction after safe schema upgrade")

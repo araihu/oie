@@ -182,6 +182,7 @@ func TestSenderIdentityMigrationPreservesVersionTwelveSources(t *testing.T) {
 	if _, err = s.db.Exec(string(indexDown)); err != nil {
 		t.Fatal(err)
 	}
+	downReactionMigration(t, s)
 	down, err := migrations.ReadFile("migrations/000013_sender_identities.down.sql")
 	if err != nil {
 		t.Fatal(err)

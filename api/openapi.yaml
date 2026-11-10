@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.25.0
+  version: 0.26.0
   description: Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
     are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.
@@ -1943,6 +1943,129 @@ paths:
               $ref: '#/components/schemas/SendMessage'
             example:
               originalText: Hello from Oie!
+  /api/v1/messages/{messageId}/reactions:
+    parameters:
+    - $ref: '#/components/parameters/MessageID'
+    get:
+      operationId: getMessageReactions
+      tags: [Messages]
+      summary: Read retained reactions and current own mutation eligibility
+      description: Read-only canonical source snapshot. Missing revisions are null until an observed or submitted reaction set exists. Does not fetch provider data, mark read or allocate revisions.
+      responses:
+        '200':
+          description: Scoped retained reaction snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageReactions'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      operationId: setMessageReactions
+      tags: [Messages]
+      summary: Accept a durable replacement of the own reaction set
+      description: Persists a separate reaction command with an own-actor revision precondition. Empty emojis removes the own set. Other actors do not invalidate this precondition. At most one unresolved command per source is allowed. Submitted means written to the connection; unknown transmission is never blindly retried. Source content, activity, history, unread and original outbox stay unchanged.
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        description: Stable command UUID retained across retries and receipt lookup.
+        schema:
+          $ref: '#/components/schemas/ID'
+      requestBody:
+        required: true
+        description: Complete desired own emoji set and observed own revision.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetMessageReactions'
+      responses:
+        '202':
+          description: Durable reaction command committed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageReactionCommand'
+        '200':
+          description: Existing immutable command replayed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageReactionCommand'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/conversations/{conversationId}/reactions:
+    parameters:
+    - $ref: '#/components/parameters/ConversationID'
+    get:
+      operationId: listConversationReactions
+      tags: [Messages]
+      summary: Read bounded reactions for the mounted conversation messages
+      description: All requested retained messages must belong to this conversation. Canonicalizes aliases and returns each canonical source once. Does not retrieve history or change read state.
+      parameters:
+      - name: messageId
+        in: query
+        required: true
+        description: Message UUIDs in the mounted bounded page.
+        example: [019a5df0-0000-7000-8000-000000000003]
+        style: form
+        explode: true
+        schema:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/ID'
+      responses:
+        '200':
+          description: Scoped bounded reaction snapshots
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageReactionsList'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/message-reaction-commands/{commandId}:
+    parameters:
+    - name: commandId
+      in: path
+      required: true
+      description: Reaction command UUID equal to its Idempotency-Key.
+      schema:
+        $ref: '#/components/schemas/ID'
+    get:
+      operationId: getMessageReactionCommand
+      tags: [Messages]
+      summary: Read a durable reaction command receipt
+      description: Read-only reconciliation after lost responses. A missing receipt does not authorize a new key for the same uncertain intent. No provider call or dispatch is performed.
+      responses:
+        '200':
+          description: Immutable reaction intent and actual transmission state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageReactionCommand'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /api/v1/messages/{messageId}/edit-target:
     parameters:
     - $ref: '#/components/parameters/MessageID'
@@ -3596,6 +3719,157 @@ components:
           description: Opaque engine-scoped activity cursor.
       example:
         items: []
+    NullableReactionRevision:
+      type: string
+      format: uuid
+      x-go-type: string
+      pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$
+      nullable: true
+      description: Observed reaction revision UUID, or null before the first set.
+      example: 019a5df0-0000-7000-8000-000000000004
+    ReactionEmojiSet:
+      type: array
+      description: Complete desired set of at most eight distinct single Unicode emoji graphemes. Empty clears the set.
+      maxItems: 8
+      uniqueItems: true
+      items:
+        type: string
+        minLength: 1
+        maxLength: 32
+        example: '👍'
+      example: ['👍']
+    ReactionItem:
+      type: object
+      description: One emoji and its count across distinct verified actors.
+      additionalProperties: false
+      required: [emoji, count, own]
+      properties:
+        emoji:
+          type: string
+          example: '👍'
+        count:
+          type: integer
+          minimum: 1
+          example: 2
+        own:
+          type: boolean
+          example: true
+    MessageReactions:
+      type: object
+      example:
+        messageId: 019a5df0-0000-7000-8000-000000000003
+        accountId: 019a5df0-0000-7000-8000-000000000001
+        conversationId: 019a5df0-0000-7000-8000-000000000002
+        revisionId: null
+        ownRevisionId: null
+        ownEmojis: []
+        items: []
+        eligible: true
+        maxEmojis: 8
+      description: Canonical message reaction totals, own set and scoped mutation availability.
+      additionalProperties: false
+      required: [messageId, accountId, conversationId, revisionId, ownRevisionId, ownEmojis, items, eligible, maxEmojis]
+      properties:
+        messageId:
+          $ref: '#/components/schemas/ID'
+        accountId:
+          $ref: '#/components/schemas/ID'
+        conversationId:
+          $ref: '#/components/schemas/ID'
+        revisionId:
+          $ref: '#/components/schemas/NullableReactionRevision'
+        ownRevisionId:
+          $ref: '#/components/schemas/NullableReactionRevision'
+        ownEmojis:
+          $ref: '#/components/schemas/ReactionEmojiSet'
+        items:
+          type: array
+          example: []
+          items:
+            $ref: '#/components/schemas/ReactionItem'
+        eligible:
+          type: boolean
+          example: true
+        reason:
+          type: string
+          enum: [target_unavailable, session_changed, reaction_pending, protocol_unavailable]
+          example: session_changed
+        maxEmojis:
+          type: integer
+          minimum: 1
+          maximum: 8
+          description: Effective app and currently observed protocol limit.
+          example: 8
+        allowedEmojis:
+          type: array
+          maxItems: 256
+          description: Optional advertised allowed choices, independent of the smaller per-message selection limit.
+          example: ["👍", "❤️"]
+          items:
+            type: string
+            maxLength: 32
+            example: '👍'
+        pendingCommand:
+          $ref: '#/components/schemas/MessageReactionCommand'
+    MessageReactionsList:
+      type: object
+      example: {items: []}
+      description: Reaction snapshots for a bounded retained conversation page.
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/MessageReactions'
+    SetMessageReactions:
+      type: object
+      example: {expectedOwnRevisionId: null, emojis: ["👍"]}
+      description: Complete desired own reaction set guarded by the observed own revision.
+      additionalProperties: false
+      required: [expectedOwnRevisionId, emojis]
+      properties:
+        expectedOwnRevisionId:
+          $ref: '#/components/schemas/NullableReactionRevision'
+        emojis:
+          $ref: '#/components/schemas/ReactionEmojiSet'
+    MessageReactionCommand:
+      type: object
+      description: Durable immutable reaction intent and current transmission evidence.
+      additionalProperties: false
+      required: [id, revisionId, messageId, accountId, conversationId, expectedOwnRevisionId, emojis, state, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/ID'
+        revisionId:
+          $ref: '#/components/schemas/ID'
+        messageId:
+          $ref: '#/components/schemas/ID'
+        accountId:
+          $ref: '#/components/schemas/ID'
+        conversationId:
+          $ref: '#/components/schemas/ID'
+        expectedOwnRevisionId:
+          $ref: '#/components/schemas/NullableReactionRevision'
+        emojis:
+          $ref: '#/components/schemas/ReactionEmojiSet'
+        state:
+          type: string
+          enum: [queued, dispatching, submitted, unknown, failed]
+          example: queued
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-11-09T12:00:00Z'
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2026-11-09T12:00:00Z'
+        lastErrorCode:
+          type: string
+          maxLength: 100
+          example: session_changed
     MessageEditTarget:
       type: object
       description: Current canonical text and advisory eligibility for a distinct sent-message correction.

@@ -19,10 +19,12 @@ type Querier interface {
 	FindConversation(ctx context.Context, arg FindConversationParams) (Conversation, error)
 	FindMessagePreview(ctx context.Context, arg FindMessagePreviewParams) (MessagePreview, error)
 	FindProviderMessage(ctx context.Context, arg FindProviderMessageParams) (Message, error)
+	FindReactionObservation(ctx context.Context, arg FindReactionObservationParams) ([]MessageReactionObservation, error)
 	FindReplyTargets(ctx context.Context, arg FindReplyTargetsParams) ([]FindReplyTargetsRow, error)
 	FirstContentRevisionSource(ctx context.Context, id string) (string, error)
 	GetAccount(ctx context.Context, id string) (string, error)
 	GetActiveMessageEdit(ctx context.Context, messageID string) (MessageEditCommand, error)
+	GetActiveMessageReaction(ctx context.Context, messageID string) (MessageReactionCommand, error)
 	GetArchiveAlias(ctx context.Context, arg GetArchiveAliasParams) (string, error)
 	GetArchiveCheckpoint(ctx context.Context, arg GetArchiveCheckpointParams) (string, error)
 	GetContactSource(ctx context.Context, accountID string) (ContactSource, error)
@@ -36,6 +38,7 @@ type Querier interface {
 	GetMessage(ctx context.Context, id string) (Message, error)
 	GetMessageEditCommand(ctx context.Context, id string) (MessageEditCommand, error)
 	GetMessagePreview(ctx context.Context, id string) (MessagePreview, error)
+	GetMessageReactionCommand(ctx context.Context, id string) (MessageReactionCommand, error)
 	GetMessageReferences(ctx context.Context, arg GetMessageReferencesParams) ([]GetMessageReferencesRow, error)
 	GetMessageReply(ctx context.Context, arg GetMessageReplyParams) (string, error)
 	GetMessageStar(ctx context.Context, messageID string) (GetMessageStarRow, error)
@@ -58,6 +61,7 @@ type Querier interface {
 	InsertMessage(ctx context.Context, arg InsertMessageParams) error
 	InsertMessageEditCommand(ctx context.Context, arg InsertMessageEditCommandParams) error
 	InsertMessagePreview(ctx context.Context, arg InsertMessagePreviewParams) (int64, error)
+	InsertMessageReactionCommand(ctx context.Context, arg InsertMessageReactionCommandParams) error
 	InsertMessageRead(ctx context.Context, arg InsertMessageReadParams) (int64, error)
 	InsertMessageReference(ctx context.Context, arg InsertMessageReferenceParams) (int64, error)
 	InsertMessageReply(ctx context.Context, arg InsertMessageReplyParams) (int64, error)
@@ -67,8 +71,10 @@ type Querier interface {
 	InsertOperation(ctx context.Context, arg InsertOperationParams) (int64, error)
 	InsertOutbox(ctx context.Context, arg InsertOutboxParams) error
 	InsertPreviewRevision(ctx context.Context, arg InsertPreviewRevisionParams) error
+	InsertReactionObservation(ctx context.Context, arg InsertReactionObservationParams) error
 	InsertReadRevision(ctx context.Context, arg InsertReadRevisionParams) error
 	InterruptedMessageEditCommands(ctx context.Context) ([]MessageEditCommand, error)
+	InterruptedMessageReactionCommands(ctx context.Context) ([]MessageReactionCommand, error)
 	InterruptedMessages(ctx context.Context) ([]Message, error)
 	InterruptedPreviewJobs(ctx context.Context, limit int64) ([]MessagePreview, error)
 	InvalidateSharedContent(ctx context.Context, messageID string) error
@@ -96,6 +102,7 @@ type Querier interface {
 	MessagesAtOrBeforeTarget(ctx context.Context, arg MessagesAtOrBeforeTargetParams) ([]Message, error)
 	OriginalSendReceipt(ctx context.Context, resourceID string) (Operation, error)
 	PendingMessageEditCommands(ctx context.Context, nextAttemptAt string) ([]MessageEditCommand, error)
+	PendingMessageReactionCommands(ctx context.Context, nextAttemptAt string) ([]MessageReactionCommand, error)
 	PendingMessages(ctx context.Context, nextAttemptAt string) ([]Message, error)
 	PreviewJobs(ctx context.Context, arg PreviewJobsParams) ([]MessagePreview, error)
 	PutArchiveCheckpoint(ctx context.Context, arg PutArchiveCheckpointParams) error
@@ -108,6 +115,7 @@ type Querier interface {
 	PutMessageStar(ctx context.Context, arg PutMessageStarParams) error
 	PutRoomIntent(ctx context.Context, arg PutRoomIntentParams) error
 	PutSharedContent(ctx context.Context, arg PutSharedContentParams) error
+	ReactionObservationsForTargets(ctx context.Context, arg ReactionObservationsForTargetsParams) ([]ReactionObservationsForTargetsRow, error)
 	ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error
 	RecordOriginalTransmission(ctx context.Context, id string) error
 	ResolveMessageAlias(ctx context.Context, aliasID string) (string, error)
@@ -124,6 +132,7 @@ type Querier interface {
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) error
 	UpdateMessageEditCommand(ctx context.Context, arg UpdateMessageEditCommandParams) error
 	UpdateMessagePreview(ctx context.Context, arg UpdateMessagePreviewParams) (int64, error)
+	UpdateMessageReactionCommand(ctx context.Context, arg UpdateMessageReactionCommandParams) error
 	UpdateOutbox(ctx context.Context, arg UpdateOutboxParams) error
 }
 

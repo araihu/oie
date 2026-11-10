@@ -7,6 +7,7 @@ CLI_ARGS = --spec api/openapi.cli.json --name oiectl --module github.com/araihu/
 .PHONY: generate lint lint-go build build-cli run check test test-race check-generated dev-up dev-down test-xmpp test-engine-xmpp
 
 generate:
+	python3 tools/generate-reaction-emoji-bases.py
 	$(CODEGEN) sqlc generate
 	$(CODEGEN) oapi-codegen --config api/codegen.yaml api/openapi.yaml
 	$(CODEGEN) oapi-codegen --config api/ui-preview.codegen.yaml api/ui-preview.openapi.yaml

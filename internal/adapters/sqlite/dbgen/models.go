@@ -189,6 +189,36 @@ type MessagePreview struct {
 	Payload        string
 }
 
+type MessageReactionCommand struct {
+	ID             string
+	RevisionID     string
+	MessageID      string
+	AccountID      string
+	ConversationID string
+	State          string
+	Payload        string
+	NextAttemptAt  string
+}
+
+type MessageReactionObservation struct {
+	Ordinal      int64
+	ID           string
+	AccountID    string
+	Address      string
+	Kind         string
+	Actor        string
+	ProviderID   string
+	ArchiveScope string
+	ArchiveID    string
+	TargetID     string
+	TargetScope  string
+	TargetAuthor string
+	Fingerprint  string
+	OccurredAt   string
+	Payload      string
+	CommandID    string
+}
+
 type MessageRead struct {
 	MessageID  string
 	RevisionID string

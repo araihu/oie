@@ -25,3 +25,11 @@ The tool verifies its SHA-512 package integrity before writing selected assets.
 The browser ESM build is served locally. The license and pinned archive/source
 checksums are in `internal/adapters/web/cache_vendor`. Reproduce the asset with
 `python3 tools/vendor-lru-cache.py`. Project: https://github.com/isaacs/node-lru-cache.
+
+## Unicode emoji data
+
+The localized picker catalogs and protocol reaction validation bases derive from
+Unicode 17.0 and CLDR 48 data under Unicode-3.0. Copyright © 1991-2025 Unicode,
+Inc. The license is included at `internal/adapters/web/emoji/LICENSE.txt` and
+served at `/ui/emoji/LICENSE.txt`. Regenerate the validation base table with
+`python3 tools/generate-reaction-emoji-bases.py`.

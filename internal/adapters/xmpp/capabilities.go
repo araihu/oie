@@ -129,6 +129,7 @@ func (m *Manager) queryInfo(ctx context.Context, e *entry, s *mx.Session, addres
 		return disco.Info{}, errArchive
 	}
 	recordOccupantSupport(e, s, address, *result.Query)
+	recordReactionRestrictions(e, s, address, *result.Query)
 	return *result.Query, nil
 }
 

@@ -12,6 +12,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/oapi-codegen/nethttp-middleware v1.3.1
 	github.com/oapi-codegen/runtime v1.8.0
+	github.com/rivo/uniseg v0.4.7
 	golang.org/x/image v0.47.0
 	golang.org/x/net v0.62.0
 	golang.org/x/text v0.43.0

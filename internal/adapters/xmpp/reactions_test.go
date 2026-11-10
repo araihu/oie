@@ -1,0 +1,301 @@
+package xmpp
+
+import (
+	"bytes"
+	"context"
+	"encoding/xml"
+	"io"
+	"net"
+	"reflect"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/araihu/oie/internal/application"
+	"github.com/araihu/oie/internal/domain"
+	mx "mellium.im/xmpp"
+	"mellium.im/xmpp/disco"
+	"mellium.im/xmpp/jid"
+	"mellium.im/xmpp/stanza"
+	"mellium.im/xmpp/stream"
+)
+
+func feedReaction(t *testing.T, m *Manager, e *entry, raw string) {
+	t.Helper()
+	decoder := xml.NewDecoder(strings.NewReader(raw))
+	token, err := decoder.Token()
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := token.(xml.StartElement)
+	var sink bytes.Buffer
+	if err := m.handle(t.Context(), e, tokens{decoder, xml.NewEncoder(&sink)}, &start); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReactionControlsReplaceWholeSetAndDoNotCreateTextMessages(t *testing.T) {
+	host := &hostStub{}
+	m := New(t.TempDir(), nil)
+	m.host = host
+	e := &entry{account: domain.Account{ID: "019a5df0-0000-7000-8000-000000000001", Address: "alice@example.test"}}
+	for _, payload := range []string{`<reaction>👋</reaction><reaction>🧑🏽‍💻</reaction><reaction>👋</reaction>`, ``} {
+		feedReaction(t, m, e, `<message xmlns="jabber:client" type="chat" from="bob@example.test/phone" to="alice@example.test/oie" id="event"><body>must not become text</body><reactions xmlns="urn:xmpp:reactions:0" id="source">`+payload+`</reactions></message>`)
+	}
+	if len(host.received) != 2 {
+		t.Fatal("reaction controls not received", host.received)
+	}
+	for i, expected := range [][]string{{"👋", "🧑🏽‍💻"}, {}} {
+		in := host.received[i]
+		r := in.Reaction
+		if r == nil || in.AccountID != e.account.ID || in.OriginalText != "" || in.ProviderID != "" || r.Address != "bob@example.test" || r.Actor != "bob@example.test" || r.IsOwn || r.Kind != "direct" || r.Target.ID != "source" || r.Target.Scope != "" || !reflect.DeepEqual(r.Emojis, expected) {
+			t.Fatal("reaction control mixed with text or actor/target scope", in)
+		}
+	}
+	for _, payload := range []string{
+		`<reactions xmlns="urn:xmpp:reactions:0" id="one"/><reactions xmlns="urn:xmpp:reactions:0" id="two"/>`,
+		`<reactions xmlns="urn:xmpp:reactions:0"/>`,
+		`<reactions xmlns="urn:xmpp:reactions:0" id="source">junk</reactions>`,
+		`<reactions xmlns="urn:xmpp:reactions:0" id="source"><other/></reactions>`,
+		`<reactions xmlns="urn:xmpp:reactions:0" id="source"><reaction><nested/></reaction></reactions>`,
+		`<reactions xmlns="urn:xmpp:reactions:0" id="source"><reaction/></reactions>`,
+	} {
+		feedReaction(t, m, e, `<message xmlns="jabber:client" type="chat" from="bob@example.test/phone" id="event"><body>must not become text</body>`+payload+`</message>`)
+	}
+	if len(host.received) != 2 {
+		t.Fatal("malformed controls fell through to ordinary text")
+	}
+	feedReaction(t, m, e, `<message xmlns="jabber:client" type="chat" from="bob@example.test/phone" to="another@example.test" id="event"><reactions xmlns="urn:xmpp:reactions:0" id="source"/></message>`)
+	feedReaction(t, m, e, `<message xmlns="jabber:client" type="chat" from="bob@example.test/phone"><reactions xmlns="urn:xmpp:reactions:0" id="source"/></message>`)
+	if len(host.received) != 2 {
+		t.Fatal("foreign recipient or unstable event accepted")
+	}
+}
+
+func TestDirectArchivedReactionsCarryStableDelayAndOwnIdentity(t *testing.T) {
+	a := domain.Account{ID: "019a5df0-0000-7000-8000-000000000001", Address: "alice@example.test"}
+	var r archiveResult
+	r.ID = "archive-event"
+	r.Forwarded.Delay.Stamp = "2026-11-08T12:30:00Z"
+	for _, from := range []string{"bob@example.test/phone", "alice@example.test/laptop"} {
+		var msg archiveMessage
+		to := a.Address + "/oie"
+		if strings.HasPrefix(from, a.Address) {
+			to = "bob@example.test/phone"
+		}
+		if err := xml.Unmarshal([]byte(`<message xmlns="jabber:client" from="`+from+`" to="`+to+`" type="chat"><reactions xmlns="urn:xmpp:reactions:0" id="original"><reaction>❤️</reaction></reactions></message>`), &msg); err != nil {
+			t.Fatal(err)
+		}
+		r.Forwarded.Message = &msg
+		in, ok, err := archivedIncoming(a, a.Address, &r)
+		if err != nil || !ok || in.AccountID != a.ID || in.Reaction == nil || !in.Reaction.Historical || in.Reaction.ArchiveID != r.ID || in.Reaction.ArchiveScope != a.Address || in.Reaction.CreatedAt.Format(time.RFC3339) != r.Forwarded.Delay.Stamp || in.Reaction.Address != "bob@example.test" || !strings.HasPrefix(in.Reaction.ProviderID, "archive-reaction:") || in.Reaction.IsOwn != strings.HasPrefix(from, a.Address) {
+			t.Fatal("archive reaction lost identity/delay", in, ok, err)
+		}
+	}
+	r.Forwarded.Message.Type = stanza.GroupChatMessage
+	if _, ok, err := archivedIncoming(a, "room@conference.example.test", &r, true, true); err != nil || ok {
+		t.Fatal("archived room nickname/occupant metadata cannot establish reaction actor")
+	}
+}
+
+func reactionRoomFixture(t *testing.T) (*Manager, *entry, *roomSlot, *roomHostStub) {
+	t.Helper()
+	m, e, slot, host := roomFixture(t)
+	e.account.Protocol = "xmpp"
+	e.correctionSession = "reaction-session"
+	slot.snapshot.State = "joined"
+	raw, peer := net.Pipe()
+	t.Cleanup(func() { _ = raw.Close(); _ = peer.Close() })
+	e.raw = raw
+	e.details = map[domain.ID]*detailSlot{slot.conversation.ID: {conversation: slot.conversation, info: domain.ConversationInfo{State: "known", CheckedAt: time.Now().UTC(), Features: []string{"non_anonymous"}}}}
+	slot.mentionOccupants = map[string]observedMention{slot.conversation.Address + "/Oie": {present: true, uri: "xmpp:alice@example.test"}, slot.conversation.Address + "/Bob": {present: true, uri: "xmpp:bob@example.test"}}
+	return m, e, slot, host
+}
+
+func TestLiveRoomReactionRequiresCurrentVerifiedRealActorAndStableTargetScope(t *testing.T) {
+	m, e, slot, host := reactionRoomFixture(t)
+	raw := `<message xmlns="jabber:client" from="room@conference.example.test/Bob" type="groupchat" id="event"><reactions xmlns="urn:xmpp:reactions:0" id="room-source"><reaction>👍</reaction></reactions></message>`
+	feedReaction(t, m, e, raw)
+	if len(host.received) != 1 || host.received[0].Reaction == nil || host.received[0].Reaction.Actor != "bob@example.test" || host.received[0].Reaction.ActorName != "Bob" || host.received[0].Reaction.Target.Scope != "room:"+slot.conversation.Address {
+		t.Fatal("live room identity/reference invalid", host.received)
+	}
+	feedReaction(t, m, e, strings.Replace(raw, "<reactions", `<delay xmlns="urn:xmpp:delay" stamp="2026-11-08T12:00:00Z" from="room@conference.example.test"/><reactions`, 1))
+	delete(slot.mentionOccupants, slot.conversation.Address+"/Bob")
+	feedReaction(t, m, e, raw)
+	slot.mentionOccupants[slot.conversation.Address+"/Bob"] = observedMention{present: true, uri: "xmpp:bob@example.test"}
+	e.details[slot.conversation.ID].info.Features = []string{"anonymous"}
+	feedReaction(t, m, e, raw)
+	e.details[slot.conversation.ID].info.Features = []string{"non_anonymous"}
+	e.sidScopes[slot.conversation.Address] = false
+	feedReaction(t, m, e, raw)
+	if len(host.received) != 1 {
+		t.Fatal("delayed, unknown, anonymous or unstable room reaction associated")
+	}
+}
+
+func reactionTarget(e *entry, c domain.Conversation) domain.Message {
+	ref := domain.MessageReference{Scope: "sender:bob@example.test", ID: "direct-original", Author: "bob@example.test"}
+	if c.Kind == "room" {
+		ref = domain.MessageReference{Scope: "room:" + c.Address, ID: "room-assigned-original", Author: c.Address + "/Bob"}
+	}
+	return domain.Message{ID: "019a5df0-0000-7000-8000-000000000010", RevisionID: "019a5df0-0000-7000-8000-000000000011", AccountID: e.account.ID, ConversationID: c.ID, References: []domain.MessageReference{ref}}
+}
+
+func TestOutgoingReactionsUseCompleteSetAndNeverCarryMessageBody(t *testing.T) {
+	for _, kind := range []string{"direct", "room"} {
+		t.Run(kind, func(t *testing.T) {
+			m, e, slot, _ := reactionRoomFixture(t)
+			c := slot.conversation
+			if kind == "direct" {
+				c.Kind, c.Address = "direct", "bob@example.test"
+			}
+			target := reactionTarget(e, c)
+			plan, err := m.PrepareReaction(t.Context(), e.account, c, target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, emojis := range [][]string{{"👋", "🧑🏽‍💻"}, {}} {
+				out := application.Outgoing{ID: "019a5df0-0000-7000-8000-000000000012", Kind: c.Kind, Address: c.Address, Reaction: &plan, ReactionEmojis: emojis, RoomIntentRevisionID: plan.RoomIntentRevisionID}
+				payload, err := buildOutgoing(e.account, out)
+				if err != nil || !validFrozenReaction(e, e.account, out) {
+					t.Fatal("valid reaction rejected", err)
+				}
+				wire, err := xml.Marshal(payload)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if bytes.Contains(wire, []byte("<body")) || !bytes.Contains(wire, []byte(`xmlns="urn:xmpp:hints"`)) || payload.Reactions.ID != target.References[0].ID || len(payload.Reactions.Items) != len(emojis) {
+					t.Fatal("reaction set became text or lost source", string(wire))
+				}
+				out.OriginalText = "not allowed"
+				if _, err = buildOutgoing(e.account, out); err == nil {
+					t.Fatal("reaction plus message body accepted")
+				}
+			}
+			out := application.Outgoing{ID: "019a5df0-0000-7000-8000-000000000012", Kind: c.Kind, Address: c.Address, Reaction: &plan, ReactionEmojis: []string{"👋"}, RoomIntentRevisionID: plan.RoomIntentRevisionID}
+			e.correctionSession = "different-connection"
+			if validFrozenReaction(e, e.account, out) {
+				t.Fatal("frozen sender silently rebound after reconnect")
+			}
+		})
+	}
+}
+
+func TestReactionSendWritesBodylessWireWithoutChangingOriginalSendTracking(t *testing.T) {
+	for _, kind := range []string{"direct", "room"} {
+		t.Run(kind, func(t *testing.T) {
+			m, e, slot, _ := reactionRoomFixture(t)
+			c := slot.conversation
+			if kind == "direct" {
+				c.Kind, c.Address = "direct", "bob@example.test"
+			}
+			left, right := net.Pipe()
+			t.Cleanup(func() { _ = left.Close(); _ = right.Close() })
+			s, err := mx.NewSession(t.Context(), jid.MustParse("example.test"), jid.MustParse("alice@example.test/test"), left, mx.Ready, func(context.Context, *stream.Info, *stream.Info, *mx.Session, any) (mx.SessionState, io.ReadWriter, any, error) {
+				return mx.Ready, nil, nil, nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			e.raw, e.session, slot.session = left, s, s
+			plan, err := m.PrepareReaction(t.Context(), e.account, c, reactionTarget(e, c))
+			if err != nil {
+				t.Fatal(err)
+			}
+			command := domain.ID("019a5df0-0000-7000-8000-000000000012")
+			received := make(chan archiveMessage, 1)
+			go func() {
+				var wire archiveMessage
+				_ = right.SetReadDeadline(time.Now().Add(3 * time.Second))
+				if err := xml.NewDecoder(right).Decode(&wire); err != nil {
+					t.Error(err)
+				}
+				received <- wire
+			}()
+			out := application.Outgoing{ID: command, Kind: c.Kind, Address: c.Address, Reaction: &plan, ReactionEmojis: []string{"👋"}, RoomIntentRevisionID: plan.RoomIntentRevisionID}
+			if outcome := m.Send(t.Context(), e.account, out); outcome != application.Submitted {
+				t.Fatal("local wire write did not complete", outcome)
+			}
+			wire := <-received
+			if wire.ID != string(command) || wire.Body != "" || len(wire.Reactions) != 1 || wire.Reactions[0].ID != plan.Reference.ID || len(e.ownRoomMessages) != 0 || len(e.correctionLatest) != 0 || len(e.correctionSources) != 0 || len(e.reactionCommands) != 1 {
+				t.Fatal("reaction altered original message identity/tracking", wire, e)
+			}
+		})
+	}
+}
+
+func TestRestrictionFormsAreBoundedAndRecheckedBeforeDispatch(t *testing.T) {
+	parse := func(fields string) disco.Info {
+		var info disco.Info
+		if err := xml.Unmarshal([]byte(`<query xmlns="http://jabber.org/protocol/disco#info"><x xmlns="jabber:x:data" type="result"><field var="FORM_TYPE" type="hidden"><value>urn:xmpp:reactions:0:restrictions</value></field>`+fields+`</x></query>`), &info); err != nil {
+			t.Fatal(err)
+		}
+		return info
+	}
+	info := parse(`<field var="max_reactions_per_user"><value>1</value></field><field var="allowlist"><value>❤️</value><value>💜</value></field>`)
+	limit := restrictions(info)
+	if limit.max != 1 || !reflect.DeepEqual(limit.allowed, []string{"❤️", "💜"}) || withinReactionLimit([]string{"👋"}, limit) || withinReactionLimit([]string{"❤️", "💜"}, limit) || !withinReactionLimit(nil, limit) {
+		t.Fatal("restrictions not applied", limit)
+	}
+	for _, bad := range []string{`<field var="max_reactions_per_user"><value>-1</value></field>`, `<field var="max_reactions_per_user"><value>1</value><value>2</value></field>`, `<field var="max_reactions_per_user"><value>many</value></field>`, `<field var="FORM_TYPE" type="hidden"><value>urn:xmpp:reactions:0:restrictions</value></field>`, `<field var="max_reactions_per_user"><value>1</value></field><field var="max_reactions_per_user"><value>2</value></field>`} {
+		if limit := restrictions(parse(bad)); limit.allowed == nil || len(limit.allowed) != 0 || limit.max != 0 {
+			t.Fatal("invalid restrictions did not fail closed", limit)
+		}
+	}
+	m, e, slot, _ := reactionRoomFixture(t)
+	c := slot.conversation
+	plan, err := m.PrepareReaction(t.Context(), e.account, c, reactionTarget(e, c))
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := e.session
+	recordReactionRestrictions(e, e.session, c.Address, info)
+	out := application.Outgoing{ID: "019a5df0-0000-7000-8000-000000000012", Kind: c.Kind, Address: c.Address, Reaction: &plan, ReactionEmojis: []string{"👋"}, RoomIntentRevisionID: plan.RoomIntentRevisionID}
+	if validFrozenReaction(e, e.account, out) {
+		t.Fatal("newly observed restriction bypassed by old preparation")
+	}
+	out.ReactionEmojis = []string{"❤️"}
+	if !validFrozenReaction(e, e.account, out) {
+		t.Fatal("allowed reaction refused")
+	}
+	e.details[c.ID].info.Features = []string{"anonymous"}
+	if validFrozenReaction(e, e.account, out) {
+		t.Fatal("room identity change bypassed dispatch guard")
+	}
+	e.session = nil
+	recordReactionRestrictions(e, before, c.Address, disco.Info{})
+	if currentReactionLimit(e, c.Address).max != 1 {
+		t.Fatal("obsolete discovery changed current restrictions")
+	}
+}
+
+func TestReactionErrorAcceptsOnlyTrackedPeerOrRoomAuthority(t *testing.T) {
+	m, e, slot, host := reactionRoomFixture(t)
+	id := "019a5df0-0000-7000-8000-000000000012"
+	e.reactionCommands = map[string]reactionDestination{id: {address: "bob@example.test", kind: "direct"}}
+	from, _ := jid.Parse("bob@example.test/phone")
+	if handled, err := m.rejectReaction(t.Context(), e, stanza.Message{From: from, ID: id, Type: stanza.ErrorMessage}); err != nil || !handled || len(host.rejected) != 1 || host.rejected[0].FromParticipant || host.rejected[0].Address != "bob@example.test" {
+		t.Fatal("legitimate full-resource peer rejection lost", host.rejected, err)
+	}
+	e.reactionCommands[id] = reactionDestination{address: slot.conversation.Address, kind: "room"}
+	for _, address := range []string{slot.conversation.Address + "/Eve", "eve@example.test/phone"} {
+		from, _ = jid.Parse(address)
+		_, _ = m.rejectReaction(t.Context(), e, stanza.Message{From: from, ID: id})
+	}
+	if len(host.rejected) != 1 {
+		t.Fatal("participant forged room rejection")
+	}
+	from, _ = jid.Parse(slot.conversation.Address)
+	_, _ = m.rejectReaction(t.Context(), e, stanza.Message{From: from, ID: id})
+	if len(host.rejected) != 2 || host.rejected[1].Address != slot.conversation.Address {
+		t.Fatal("room authority rejection lost")
+	}
+	features := []string{}
+	for _, feature := range clientInfo().Features {
+		features = append(features, feature.Var)
+	}
+	if !slices.Contains(features, reactionsNS) {
+		t.Fatal("client does not advertise implemented reactions")
+	}
+}

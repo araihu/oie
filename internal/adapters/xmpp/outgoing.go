@@ -34,7 +34,7 @@ type outboundMentionElement struct {
 }
 type outboundMessage struct {
 	stanza.Message
-	Body   string `xml:"body"`
+	Body   string `xml:"body,omitempty"`
 	Origin struct {
 		XMLName xml.Name `xml:"urn:xmpp:sid:0 origin-id"`
 		ID      string   `xml:"id,attr"`
@@ -43,6 +43,8 @@ type outboundMessage struct {
 	Reply      *outboundReplyElement      `xml:",omitempty"`
 	Fallback   *outboundFallbackElement   `xml:",omitempty"`
 	Correction *outboundCorrectionElement `xml:",omitempty"`
+	Reactions  *outboundReactions         `xml:",omitempty"`
+	Store      *storeHint                 `xml:",omitempty"`
 }
 
 type outboundCorrectionElement struct {
@@ -107,6 +109,17 @@ func buildOutgoing(a domain.Account, out application.Outgoing) (outboundMessage,
 	}
 	payload := outboundMessage{Message: stanza.Message{To: to.Bare(), Type: kind, ID: string(out.ID)}, Body: out.OriginalText}
 	payload.Origin.ID = string(out.ID)
+	if out.Reaction != nil {
+		if !validReactionPayload(a, out) {
+			return outboundMessage{}, application.ErrInvalid
+		}
+		payload.Reactions = &outboundReactions{ID: out.Reaction.Reference.ID}
+		for _, emoji := range out.ReactionEmojis {
+			payload.Reactions.Items = append(payload.Reactions.Items, outboundReaction{Text: emoji})
+		}
+		payload.Store = &storeHint{}
+		return payload, nil
+	}
 	if out.Correction != nil {
 		if !validCorrectionPayload(a, out) {
 			return outboundMessage{}, application.ErrInvalid

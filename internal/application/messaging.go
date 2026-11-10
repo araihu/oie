@@ -25,6 +25,7 @@ func (e StateConflict) Unwrap() error { return ErrStateConflict }
 
 type ConnectionInput struct{ Password, Endpoint string }
 type Incoming struct {
+	Reaction                                  *IncomingReaction
 	SenderAddress                             string
 	MediaThumbnails                           []domain.MediaThumbnail
 	AccountID                                 domain.ID
@@ -46,6 +47,8 @@ type Rejected struct {
 }
 
 type Outgoing struct {
+	Reaction              *domain.OutgoingReaction
+	ReactionEmojis        []string
 	ID                    domain.ID
 	Address, OriginalText string
 	Kind                  string
@@ -396,6 +399,12 @@ func (e *Engine) CancelMessage(ctx context.Context, key, id, expected domain.ID)
 	return r.CancelMessage(ctx, CancelMutation{Operation: Operation{ID: key, ResourceID: id, CreatedAt: now, Kind: "cancel_message"}, Fingerprint: fingerprint("cancel_message", []domain.ID{id, expected}), MessageID: id, ExpectedRevisionID: expected, RevisionID: rev})
 }
 func (e *Engine) Receive(ctx context.Context, in Incoming) error {
+	if in.Reaction != nil {
+		if in.Reaction.AccountID != in.AccountID {
+			return ErrInvalid
+		}
+		return e.ReceiveReaction(ctx, *in.Reaction)
+	}
 	if !utf8.ValidString(in.OriginalText) || strings.TrimSpace(in.OriginalText) == "" || strings.ContainsRune(in.OriginalText, 0) || len(in.OriginalText) > (1<<20) || len(in.ProviderID) > (1<<20) {
 		return ErrInvalid
 	}
@@ -534,6 +543,9 @@ func (e *Engine) runOutbox(ctx context.Context) error {
 			return err
 		}
 	}
+	if err := e.recoverMessageReactions(ctx); err != nil {
+		return err
+	}
 	if err := e.recoverMessageEdits(ctx); err != nil {
 		return err
 	}
@@ -619,6 +631,9 @@ func (e *Engine) runOutbox(ctx context.Context) error {
 			}
 		}
 		if e.protocols != nil {
+			if err := e.dispatchMessageReactions(ctx); err != nil {
+				return err
+			}
 			if err := e.dispatchMessageEdits(ctx); err != nil {
 				return err
 			}
@@ -638,6 +653,32 @@ func (e *Engine) Reject(ctx context.Context, in Rejected) error {
 	id, err := domain.ParseID(in.MessageID)
 	if err != nil {
 		return nil
+	}
+	if reactions, ok := e.repo.(MessageReactionRepository); ok {
+		pending, lookupErr := reactions.MessageReactionCommand(ctx, id)
+		if lookupErr == nil {
+			if pending.Command.AccountID != in.AccountID {
+				return nil
+			}
+			c, err := e.Conversation(ctx, pending.Command.ConversationID)
+			if err != nil {
+				return err
+			}
+			if c.Kind == "room" && in.FromParticipant {
+				return nil
+			}
+			if !in.FromServer && c.Address != in.Address {
+				return nil
+			}
+			revision, err := e.newID()
+			if err != nil {
+				return err
+			}
+			return reactions.RejectMessageReaction(ctx, id, revision, e.now().UTC())
+		}
+		if !errors.Is(lookupErr, ErrNotFound) {
+			return lookupErr
+		}
 	}
 	if edits, ok := e.repo.(MessageEditRepository); ok {
 		pending, lookupErr := edits.MessageEdit(ctx, id)

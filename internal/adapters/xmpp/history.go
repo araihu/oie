@@ -29,6 +29,7 @@ type archiveMessage struct {
 	fileSharingMetadata
 	replyMetadata
 	correctionMetadata
+	reactionMetadata
 	Body  string `xml:"jabber:client body"`
 	Users []struct {
 		Items []struct {
@@ -96,6 +97,10 @@ func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResul
 }
 func archivedIncoming(account domain.Account, scope string, r *archiveResult, trusted ...bool) (application.Incoming, bool, error) {
 	msg := r.Forwarded.Message
+	if msg != nil && len(msg.Reactions) != 0 {
+		reaction, ok, err := archivedReaction(account, scope, r)
+		return application.Incoming{AccountID: account.ID, Reaction: reaction}, ok, err
+	}
 	if msg == nil || strings.TrimSpace(msg.Body) == "" {
 		return application.Incoming{}, false, nil
 	}
@@ -502,6 +507,9 @@ func (m *Manager) recoverArchive(ctx context.Context, host application.HistoryHo
 		}
 		for _, in := range query.Messages {
 			if err = m.host.Receive(ctx, in); err != nil {
+				if in.Reaction != nil && errors.Is(err, application.ErrInvalid) {
+					continue
+				}
 				return err
 			}
 		}
