@@ -12,7 +12,7 @@ GOFLAGS=-tags=server GOMAXPROCS=4 go test -race -p 1 ./internal/adapters/httpapi
 OIE_XMPP_CA_FILE=/path/to/development/localhost.crt \
 OIE_XMPP_ENDPOINT=127.0.0.1:5222 GOMAXPROCS=4 make test-cli-xmpp
 OIE_CI_SSH_HOST=dagger-vm \
-OIE_CI_ARTIFACTS=tests/browser/artifacts/ci-engine-api-cli make ci
+OIE_CI_ARTIFACTS=tests/browser/artifacts/ci-engine-api-cli-repro make ci
 ```
 
 The CLI proof is `TestCLIDataOnlyXMPP` in `tests/cli/engine_proof_test.go`.
@@ -102,9 +102,22 @@ repeated alone (9.776s) and in the serialized complete focused run (10.663s for
 host). The deadline was not increased; both the failure and passing logs are
 retained. No data race was reported.
 
-Dagger checks passed (4m6s), including lint, generation drift, compatibility,
-unit/race tests and builds. The complete graph continues with desktop, isolated
-XMPP/CLI and browser checks; its final exit will be recorded below.
-Native logs are retained in the ignored
-`tests/browser/artifacts/engine-api-cli-native`; full graph evidence uses
-`tests/browser/artifacts/ci-engine-api-cli`.
+The first Dagger run at `a42f7aa` passed checks and native build, then the
+WebView fixture received 404 because its three browser proxy requests still
+used the old engine paths. `6b35db7` updates only those fixture URLs; the scope,
+CSRF and response assertions remain intact.
+
+The complete Dagger rerun **passed with exit 0** on
+`1927d5ba5e02cf916749a374beec4d95416c8b86`. Its 994 materialized source files
+match that commit byte-for-byte. Checks (25s), desktop build/lint/vet/races
+(27s), Ubuntu amd64 WebView (38s), isolated XMPP plus CLI (59s), and the full
+browser stage (10m54s), including real-engine two-way XMPP, all completed.
+The WebView test includes actual GTK Save/Cancel and lifecycle behavior on
+Linux; this run does not claim new native macOS testing.
+
+Native logs are retained in `tests/browser/artifacts/engine-api-cli-native`.
+The first Dagger attempt is under `tests/browser/artifacts/ci-engine-api-cli`;
+the passing rerun is under `tests/browser/artifacts/ci-engine-api-cli-final`.
+Both have `source-snapshot.json`, `integration-receipt.json`, and stage logs.
+These ignored artifacts describe verified source and behavior, not release
+publication or coverage of deferred features.
