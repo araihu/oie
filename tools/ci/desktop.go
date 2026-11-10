@@ -19,8 +19,10 @@ func (r runner) desktop(ctx context.Context, source *dagger.Directory) error {
 		WithExec([]string{"sh", "-c", "apt-get update -qq && apt-get install -y --no-install-recommends build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev xvfb xauth xdotool dbus-x11 python3 ca-certificates curl && rm -rf /var/lib/apt/lists/*"}).
 		WithDirectory("/usr/local/go", toolchain.Directory("/usr/local/go")).
 		WithEnvVariable("PATH", "/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin").
+		WithEnvVariable("GOPATH", "/go").
 		WithMountedCache("/go/pkg/mod", r.client.CacheVolume("oie-ci-go-mod-v1")).
 		WithMountedCache("/root/.cache/go-build", r.client.CacheVolume("oie-ci-desktop-go-build-amd64-v1")).
+		WithMountedCache("/root/.cache/golangci-lint", r.client.CacheVolume("oie-ci-desktop-lint-amd64-v1")).
 		WithEnvVariable("GOMAXPROCS", "4").WithEnvVariable("GOWORK", "off").
 		WithEnvVariable("GOFLAGS", "").WithEnvVariable("CGO_ENABLED", "1")
 	base, err := r.stage(ctx, "desktop-setup-amd64", base)
