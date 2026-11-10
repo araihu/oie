@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Oiê
+GenericName=Chat
+GenericName[pt_BR]=Conversas
+Comment=Your conversations, together.
+Comment[pt_BR]=Suas conversas, juntas.
+Exec=@OIE_EXEC@
+Icon=org.araihu.oie
+Terminal=false
+Categories=Network;InstantMessaging;
+StartupWMClass=org.araihu.oie
