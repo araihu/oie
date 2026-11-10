@@ -264,7 +264,6 @@ type copy struct {
 	RoomJoinRequested                                                                                                                                                                                        string
 	RoomLeaveRequested                                                                                                                                                                                       string
 	RoomQueueHint                                                                                                                                                                                            string
-	NavLoading                                                                                                                                                                                               string
 	NavFailed                                                                                                                                                                                                string
 	InfoSharedContent                                                                                                                                                                                        string
 	InfoStarred                                                                                                                                                                                              string
@@ -738,7 +737,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	v.AccountUnread = s.accountUnread(ctx)
 	for _, a := range v.Accounts {
 		s.loadAvatars(ctx, v, a.Id)
-		if !v.Preview {
+		if !v.Preview && v.accountScreen() == "detail" && a.Id == v.managedAccountID() {
 			h, err := s.client.GetAccountHistoryWithResponse(ctx, a.Id, editor)
 			if err == nil && h.JSON200 != nil {
 				v.Histories[a.Id] = *h.JSON200

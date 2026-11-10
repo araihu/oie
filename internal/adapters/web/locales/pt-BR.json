@@ -360,7 +360,6 @@
   "InfoStarsUnavailable": "Não foi possível carregar as mensagens com estrela.",
   "InfoStarsEmpty": "Nenhuma mensagem com estrela nesta conversa.",
   "InfoNavigationFailed": "Não foi possível carregar esta visualização. Tente o link novamente.",
-  "NavLoading": "Abrindo…",
   "NavFailed": "Não foi possível abrir esta tela. Tente novamente.",
   "ReplyMessage": "Responder",
   "CancelReply": "Cancelar resposta",

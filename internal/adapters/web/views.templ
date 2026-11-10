@@ -138,16 +138,15 @@ if v.DevBuildID!="" {
 
 // Application state travels with each shell fragment; the head/runtime persists.
 templ appFragment(v view) {
-<div id="oie-app" hx-history-elt data-route-loading={v.Text.NavLoading} data-route-error={v.Text.NavFailed} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
-<p class="oie-live-status" data-navigation-status role="status" aria-live="polite" hidden></p>
+<div id="oie-app" hx-history-elt data-route-error={v.Text.NavFailed} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
 @toast.ToastContainer(toast.ContainerConfig{}).WithExpressions(expressions.Toast{DismissLabel:v.Text.Close,DismissAriaLabel:v.Text.Close})
 @liveCopy(v)
-<p class="oie-live-status" data-read-status data-read-failed={v.Text.ReadFailed} role="status" aria-live="polite" hidden></p>
+<p class="sr-only" data-read-status data-read-failed={v.Text.ReadFailed} role="status" aria-live="polite" hidden></p>
 <div data-shared-action-copy hidden data-failed={v.Text.SharedActionFailed} data-copied={v.Text.SharedLinkCopied} data-downloading={v.Text.SharedDownloading}></div>
 if v.Section=="media" {
 @avatarData(v)
 }
-<div class="oie-live-status" data-live-status role="status" aria-live="polite" hidden></div>
+<div class="sr-only" data-live-status role="status" aria-live="polite" hidden></div>
 if v.ErrorMessage!="" {
 <div class="oie-native-error" role="alert" tabindex="-1" data-native-error>
 {v.ErrorMessage}
@@ -278,7 +277,6 @@ if v.NativeMessageSearch {
 				@filterLink(v, "favorites", v.Text.Favorites)
 				@filterLink(v, "groups", v.Text.Groups)
 			</nav>
-<div id="history-status" class="oie-history-status" role="status">@historyBanner(v)</div>
 <div class="oie-conversation-scroll" id="conversation-list" data-version={v.conversationListVersion()}>
 @conversationList(v)
 </div>
@@ -606,7 +604,6 @@ if v.InfoView=="shared" || v.InfoView=="stars" {
 if v.Section=="media"{
 <div id="live-shared-content"><div id="live-shared-status">@sharedStatus(v)</div><div id="live-shared-results" data-version={v.sharedVersion()}>@sharedItems(v)</div><div id="live-shared-pagination">@sharedPagination(v)</div></div>
 }
-<div id="live-history-status">@historyBanner(v)</div>
 <div id="live-list" data-version={v.conversationListVersion()}>@conversationList(v)</div>
 <div id="live-timeline" data-version={v.timelineVersion()}>@timeline(v)</div>
 <div id="live-header" data-version={v.headerVersion()}>
@@ -670,18 +667,6 @@ templ nativeRecovery(v view){
 @textarea.Textarea(textarea.Config{ID:"native-retained-message",Name:"originalText",Label:v.Text.Message,Value:v.field("originalText"),ReadOnly:true,Rows:4})
 @button.Button(button.WithType("submit")){ {v.Text.RetrySubmission} }
 </form>
-}
-
-templ historyBanner(v view){
-if v.AccountFilter!="" {
-{v.historyCaption(v.AccountFilter)}
-}else{
-for _,a:=range v.Accounts {
-if h,ok:=v.Histories[a.Id];ok&&(h.State=="syncing"||h.State=="partial"||h.State=="error") {
-<p>{a.Label}: {v.historyCaption(a.Id)}</p>
-}
-}
-}
 }
 
 // The scope belongs to Oie. Avatar's public SrcExpr consumes a fixed expression;

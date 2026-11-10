@@ -360,7 +360,6 @@
   "InfoStarsUnavailable": "Starred messages could not be loaded.",
   "InfoStarsEmpty": "No starred messages in this conversation.",
   "InfoNavigationFailed": "This view could not be loaded. Try the link again.",
-  "NavLoading": "Opening…",
   "NavFailed": "Could not open this view. Try again.",
   "ReplyMessage": "Reply",
   "CancelReply": "Cancel reply",
