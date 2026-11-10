@@ -14,5 +14,5 @@
 
 .oie-composer-field{position:relative;flex:1;min-width:0}
 .oie-composer-field .oie-composer-input{width:100%}
-.oie-composer .oie-edit-cancel{position:absolute;inset-inline-end:2px;bottom:0}
+.oie-composer .oie-edit-cancel{position:absolute;inset-inline-end:0;bottom:0}
 .oie-edit-cancel[hidden]{display:none!important}
