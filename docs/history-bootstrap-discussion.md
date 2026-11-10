@@ -68,6 +68,37 @@ bundled by the Flatpak build requests up to 70 results per page by default.
 [query tracking](https://github.com/gajim/gajim/blob/048a2f3d986a68ca07bde52a2f6a22ef2926188b/src/gajim/common/modules/mam.py#L238-L246)
 and [nbxmpp page size](https://github.com/gajim/python-nbxmpp/blob/c3cc88b25e99a42bf936041800f59e478b3459cf/nbxmpp/modules/mam.py#L39-L53).
 
+## On-demand history and server search proposal
+
+XMPP MAM supports fetching archive pages by time and cursor. Full-text search
+is optional. XEP-0431 is Deferred and leaves matching semantics to the
+server. It defines a separate discovery feature for text search. Ejabberd
+25.07 added support, and MongooseIM 6.2.1 documents its own query field.
+Check capability and behavior for the specific archive before enabling remote
+search. [MAM](https://xmpp.org/extensions/xep-0313.html),
+[XEP-0431](https://xmpp.org/extensions/xep-0431.html),
+[ejabberd 25.07](https://www.process-one.net/blog/ejabberd-25-07/) and
+[MongooseIM](https://esl.github.io/MongooseDocs/6.2.1/modules/mod_mam/).
+
+The proposed hybrid model keeps the initial room target and retains new
+messages, fetched timeline pages and authorized search hits in SQLite. When
+scrolling reaches the end of the retained range, fetch the next archive page.
+Start room searches locally and add remote results where supported. Reuse
+historical ingestion and canonical IDs to deduplicate imported matches. Keep
+search hits separate from the checkpoints that describe contiguous archive
+coverage. Fetch surrounding messages on demand when opening a remote hit.
+
+Give explicit timeline and search requests priority over backfill in the
+server's queue. Bound remote searches and keep global search local initially.
+When only part of the archive is locally searchable, report that scope. For
+servers without full-text search, indexing older history locally extends
+coverage as pages arrive.
+
+The existing requirement is to recover all available authorized history in
+the background and retain imported messages. Replacing automatic recovery
+with on-demand fetching alone is an open product decision. It can leave older
+messages unsearchable and allow unvisited history to expire on the server.
+
 ## Open decisions for the next discussion
 
 - What page, message and time budgets keep a busy room from delaying the others?
