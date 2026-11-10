@@ -9,6 +9,7 @@ provenance are documented in [Branding](docs/branding.md).
 The alpha targets one owner with multiple protocol accounts. Device sync remains
 planned.
 
+- [Desktop installation on macOS and Linux](docs/installation.md)
 - [Live browser setup and development accounts](docs/live-preview.md)
 - [Local CI loop](docs/local-ci.md)
 - [Native desktop build and lifecycle](docs/desktop.md)
@@ -38,7 +39,7 @@ See [history recovery scope](docs/milestone-three-history.md). See [engine miles
 
 The Wails desktop command embeds this same engine and interface. Closing its
 window keeps the engine running; explicit Quit stops it. See the
-[native build instructions](docs/desktop.md). Release bundles and the installer
+[installation instructions](docs/installation.md). Release bundles and the installer
 for v0.0.1 are not published yet.
 
 Published account, peer and saved-room profile images now load into a local
