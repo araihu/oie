@@ -21,6 +21,9 @@ func messageActions(v view, id string) []dropdown.Section {
 		{ID: "star-message-" + id, Icon: glyph(heroicons.Icon16SolidStar), Label: v.starLabel(id), OnClick: "void 0", Disabled: !v.StarsKnown, Tooltip: v.Text.StarUnavailable},
 		{ID: "reply-message-" + id, Icon: glyph(heroicons.Icon16SolidArrowUturnLeft), Label: v.Text.ReplyMessage, OnClick: "void 0", Disabled: !v.replyAllowed(), Tooltip: v.Text.ReplyUnavailable},
 	}}}
+	if _, known := v.Reactions[id]; known {
+		sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "react-message-" + id, Icon: glyph(heroicons.Icon16SolidFaceSmile), Label: v.Text.ReactMessage, OnClick: "void 0", Disabled: !v.reactionAllowed(id), Tooltip: v.Text.ReactionUnavailable}}})
+	}
 	if v.editableMessage(id) {
 		sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "edit-message-" + id, Icon: glyph(heroicons.Icon16SolidPencilSquare), Label: v.Text.EditMessage, Href: v.editTargetHref(id)}}})
 	}

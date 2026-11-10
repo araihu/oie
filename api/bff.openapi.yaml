@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie browser presentation API
-  version: 0.3.0
+  version: 0.4.0
   description: Browser-only presentation operations. Engine data and protocol operations remain in the engine API.
   contact:
     name: Arai Hû
@@ -17,6 +17,76 @@ tags:
 - name: Messages
   description: Browser submission receipt recovery
 paths:
+  /ui/message-reactions:
+    get:
+      operationId: getBrowserMessageReactions
+      tags: [Messages]
+      summary: Read scoped reaction state and eligibility
+      description: Reads retained reaction state without provider discovery or mutation. Returns a fresh operation key for an explicit choice.
+      parameters:
+      - {in: query, name: engineId, required: true, description: Selected engine identity., schema: {type: string, format: uuid}}
+      - {in: query, name: accountId, required: true, description: Source account identity., schema: {type: string, format: uuid}}
+      - {in: query, name: conversationId, required: true, description: Source conversation identity., schema: {type: string, format: uuid}}
+      - {in: query, name: messageId, required: true, description: Canonical source message identity., schema: {type: string, format: uuid}}
+      - {in: query, name: lang, description: Presentation language., schema: {type: string, enum: [en, pt-BR]}}
+      responses:
+        '200':
+          description: Retained reaction snapshot and current sending eligibility
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BrowserReactionPreparation'}
+        '400': {description: Invalid scope}
+        '404': {description: Source unavailable}
+        '409': {description: Selected engine changed}
+        '503': {description: Reaction state temporarily unavailable}
+  /ui/messages/reactions:
+    post:
+      operationId: setBrowserMessageReactions
+      tags: [Messages]
+      summary: Submit one immutable own reaction set
+      description: Verifies the selected engine and source scope and checks an existing receipt before submitting a durable reaction command. A lost response preserves the same frozen intent and operation key.
+      requestBody:
+        required: true
+        description: Frozen selected reaction set and scope.
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/BrowserReactionIntent'}
+      responses:
+        '200':
+          description: Matching durable command and actual dispatch state
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BrowserReactionResult'}
+        '400': {description: Invalid form encoding}
+        '403': {description: CSRF rejected}
+        '404': {description: Source unavailable}
+        '409': {description: State or frozen intent conflict}
+        '422': {description: Invalid reaction set}
+        '503': {description: Acceptance remains unconfirmed}
+  /ui/messages/reaction-receipt:
+    post:
+      operationId: reconcileBrowserMessageReactions
+      tags: [Messages]
+      summary: Read a matching reaction command receipt
+      description: Performs only an engine receipt GET, verifying the complete frozen intent. Never creates or retransmits a reaction. A missing receipt leaves acceptance unresolved.
+      requestBody:
+        required: true
+        description: Identical immutable reaction intent.
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/BrowserReactionIntent'}
+      responses:
+        '200':
+          description: Matching durable command and actual state
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BrowserReactionResult'}
+        '400': {description: Invalid form encoding}
+        '403': {description: CSRF rejected}
+        '404': {description: Receipt absent and acceptance unresolved}
+        '409': {description: Engine or frozen intent conflict}
+        '422': {description: Invalid frozen intent}
+        '503': {description: Receipt temporarily unavailable}
   /ui/message-edit-target:
     get:
       operationId: getBrowserMessageEditTarget
@@ -402,6 +472,45 @@ paths:
           description: Rendering capacity is occupied
 components:
   schemas:
+    BrowserReactionPreparation:
+      description: Scoped read-only reaction eligibility and a fresh explicit-intent key.
+      example: {engineId: 019a5df0-0000-7000-8000-000000000001, operationKey: 019a5df0-0000-7000-8000-000000000006, snapshot: {messageId: 019a5df0-0000-7000-8000-000000000004, accountId: 019a5df0-0000-7000-8000-000000000002, conversationId: 019a5df0-0000-7000-8000-000000000003, revisionId: null, ownRevisionId: null, ownEmojis: [], items: [], eligible: true, maxEmojis: 8}}
+      type: object
+      additionalProperties: false
+      required: [engineId, snapshot, operationKey]
+      properties:
+        engineId: {type: string, format: uuid, description: Verified selected engine identity., example: 019a5df0-0000-7000-8000-000000000001}
+        operationKey: {type: string, format: uuid, description: Fresh UUID for one explicit reaction choice., example: 019a5df0-0000-7000-8000-000000000006}
+        snapshot: {$ref: './openapi.yaml#/components/schemas/MessageReactions'}
+    BrowserReactionIntent:
+      description: Complete immutable reaction choice retained for receipt reconciliation.
+      example: {csrf: browser-csrf-token, engineId: 019a5df0-0000-7000-8000-000000000001, accountId: 019a5df0-0000-7000-8000-000000000002, conversationId: 019a5df0-0000-7000-8000-000000000003, messageId: 019a5df0-0000-7000-8000-000000000004, operationKey: 019a5df0-0000-7000-8000-000000000006, expectedOwnRevisionId: '', emojis: '[]', lang: en}
+      type: object
+      additionalProperties: false
+      required: [csrf, engineId, accountId, conversationId, messageId, operationKey, emojis]
+      properties:
+        csrf: {type: string, description: Same-origin browser CSRF token.}
+        engineId: {type: string, format: uuid, description: Selected owning engine.}
+        accountId: {type: string, format: uuid, description: Source account.}
+        conversationId: {type: string, format: uuid, description: Source conversation.}
+        messageId: {type: string, format: uuid, description: Canonical retained source.}
+        operationKey: {type: string, format: uuid, description: Stable command UUID retained across uncertain acceptance.}
+        expectedOwnRevisionId: {type: string, description: Current own reaction revision UUID or empty when absent.}
+        emojis: {type: string, maxLength: 4096, description: JSON encoded complete own emoji set. An empty array clears it.}
+        lang: {type: string, enum: [en, pt-BR], description: Response presentation locale.}
+    BrowserReactionResult:
+      description: Verified acceptance and actual dispatch evidence for one reaction command.
+      example: {ok: false, accepted: false, rejected: false, message: Reaction unconfirmed}
+      type: object
+      additionalProperties: false
+      required: [ok, accepted, rejected, message]
+      properties:
+        ok: {type: boolean, description: A matching verified command was read.}
+        accepted: {type: boolean, description: Durable acceptance of the exact immutable intent is verified.}
+        rejected: {type: boolean, description: Definitive non-acceptance permits a new explicit intent.}
+        message: {type: string, description: Concise localized user status.}
+        code: {type: string, description: Stable failure code.}
+        command: {$ref: './openapi.yaml#/components/schemas/MessageReactionCommand'}
     BrowserEditTarget:
       example: {engineId: 019a5df0-0000-7000-8000-000000000001, operationKey: 019a5df0-0000-7000-8000-000000000006, target: {messageId: 019a5df0-0000-7000-8000-000000000004, accountId: 019a5df0-0000-7000-8000-000000000002, conversationId: 019a5df0-0000-7000-8000-000000000003, currentRevisionId: 019a5df0-0000-7000-8000-000000000005, originalText: Hello, eligible: true}}
       type: object

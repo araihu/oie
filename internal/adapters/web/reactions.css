@@ -1,0 +1,15 @@
+/* Reaction controls belong to the application-owned rich message slot. */
+.oie-reactions{display:flex;flex-wrap:wrap;align-items:center;gap:4px;max-width:100%;margin-top:4px;color:var(--oie-text)}
+.oie-reactions:empty{display:none}
+.oie-reaction-chip{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-height:25px;min-width:30px;padding:2px 6px;border:1px solid var(--oie-border);border-radius:14px;background:var(--oie-panel);color:var(--oie-text);font-size:15px;line-height:1}
+.oie-reaction-chip small{font-family:var(--font-body);font-size:10px}.oie-reaction-chip small:empty{display:none}
+.oie-reaction-chip[aria-pressed=true]{background:var(--oie-accent-soft);border-color:var(--oie-accent-text)}
+.oie-reaction-chip[aria-busy=true]{opacity:.7}.oie-reaction-chip:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:2px}.oie-reaction-chip:hover{text-decoration:none;background:var(--oie-selected)}
+.oie-reaction-chip .oie-icon,.oie-reaction-spinner{width:12px;height:12px}.oie-reaction-chip [hidden]{display:none!important}
+#oie-reaction-picker{width:min(360px,calc(100vw - 32px))}
+.oie-reaction-picker{display:flex;flex-direction:column;gap:10px;width:min(360px,calc(100vw - 32px));height:min(440px,65dvh);padding:14px;color:var(--oie-text);background:var(--oie-panel)}
+.oie-reaction-picker>header{display:flex;align-items:center;justify-content:space-between;gap:10px}.oie-reaction-picker>header strong{font-size:15px;font-weight:650}.oie-reaction-picker>header button{width:28px;height:28px;min-width:28px;min-height:28px}
+.oie-reaction-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));align-content:start;gap:2px;flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.oie-reaction-grid button{flex-shrink:0}.oie-reaction-grid [aria-pressed=true]{background:var(--oie-accent-soft);outline:1px solid var(--oie-accent-text);outline-offset:-2px}.oie-reaction-picker-status{margin:0;font-size:12px;color:var(--oie-muted)}.oie-reaction-picker-status:empty{display:none}
+[data-reaction-catalog-retry][hidden]{display:none!important}
+

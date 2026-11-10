@@ -1,4 +1,13 @@
 {
+  "Reactions": "Reações",
+  "ReactMessage": "Reagir",
+  "ReactionUnavailable": "Reações indisponíveis para esta mensagem.",
+  "ReactionPending": "Enviando reação",
+  "ReactionUnknown": "Reação não confirmada",
+  "ReactionFailed": "Não foi possível enviar a reação",
+  "ReactionCheck": "Verificar reação",
+  "ReactionRemove": "Remover reação",
+
   "AutoVideoThumbnails": "Gerar prévias de vídeo automaticamente",
   "AutoVideoThumbnailsHelp": "Lê uma amostra limitada, de até 5 MiB por vídeo, para guardar uma prévia. A reprodução completa começa ao pressionar Play.",
   "VideoThumbnailLoad": "Carregar prévia do vídeo",

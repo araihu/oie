@@ -82,6 +82,7 @@ templ page(v view) {
 <link rel="stylesheet" href="/ui/emoji-picker.css"/><link rel="stylesheet" href="/ui/mentions.css"/>
 <script src="/ui/actions.js" defer></script>
 <script src="/ui/stars.js" defer></script>
+<script src="/ui/reactions.js" defer></script><link rel="stylesheet" href="/ui/reactions.css"/>
 <script src="/ui/sender.js" defer></script>
 <script src="/ui/message-history.js" defer></script>
 <link rel="stylesheet" href="/ui/message-history.css"/>
@@ -141,6 +142,7 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 @newConversation(v)
 @imageViewer(v)
 @documentViewer(v)
+@reactionDialog(v)
 
 
 
@@ -705,6 +707,7 @@ if !m.IsOwn && !grouped {
 @messageStarIndicator(v,m.Id)
 <time data-message-time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
 </div>
+@messageReactions(v,m)
 </div>
 }
 

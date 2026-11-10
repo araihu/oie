@@ -859,3 +859,36 @@ identity; a server feature advertisement alone does not authorize a correction.
 The proposed R18 fifteen-minute window remains a recommendation. No such limit
 is imposed by this increment. Editing earlier own messages, prior sessions, reply
 payloads or structured mentions requires a later implementation increment.
+
+### Message reaction sets increment
+
+**IMPLEMENTATION SCOPE:** API 0.26 reads retained reaction snapshots for a bounded
+message page and accepts full own-set replacement or removal through a separate
+durable command. Its precondition guards the current account's reaction revision;
+other actors' updates do not invalidate it. Reactions preserve source UUID,
+content revisions, activity, unread state and original message outbox.
+
+XMPP follows XEP-0444. Direct targets use scoped original identifiers and verified
+correction aliases. Room targets require trusted room-issued stanza IDs. Room
+updates additionally require current, non-anonymous real actor identity. Uncertain
+anonymous or archived room associations are omitted. Bodyless reaction controls
+never become timeline messages. Retained observations deduplicate provider and
+archive identities, exclude conflicting identifiers and preserve newer actor sets
+when older history arrives. Unresolved original references can resolve when the
+source is subsequently retained.
+
+Freeze the desired set, operation UUID, target and sending session. Revalidate
+constraints at acceptance and dispatch. Known-unsent attempts may retry; ambiguous
+transmission remains Unknown until reconciled, without blind retransmission.
+Restart converts interrupted dispatch to Unknown. A changed sending session fails
+the frozen command rather than rebinding it. Verified provider rejection removes
+the rejected set without replacing a newer own update.
+
+The interface shows counts and own selection, with a searchable localized emoji
+picker. Clicking an own reaction removes it. A protocol maximum of one makes a
+different choice replace the old reaction. The implementation bounds each set to
+eight emojis and honors observed allowlists and smaller limits. This bound is not
+an agreed cardinality rule for every protocol. Pending indicators and recovery
+stay with the source message; eligibility checks do not shift the composer.
+Receipt recovery preserves the same operation and payload, including after a
+missing acceptance response. See [message reactions](reactions.md).

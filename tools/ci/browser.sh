@@ -57,4 +57,5 @@ OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/mentions.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/corrections.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/message-history.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/sent-corrections.cjs
+OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/reactions.cjs
 sh scripts/test-live-browser.sh

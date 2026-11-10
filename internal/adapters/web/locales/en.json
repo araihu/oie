@@ -1,4 +1,13 @@
 {
+  "Reactions": "Reactions",
+  "ReactMessage": "React",
+  "ReactionUnavailable": "Reactions are unavailable for this message.",
+  "ReactionPending": "Sending reaction",
+  "ReactionUnknown": "Reaction unconfirmed",
+  "ReactionFailed": "Reaction could not be sent",
+  "ReactionCheck": "Check reaction status",
+  "ReactionRemove": "Remove reaction",
+
   "AutoVideoThumbnails": "Generate video previews automatically",
   "AutoVideoThumbnailsHelp": "Reads a limited sample, up to 5 MiB per video, to cache a preview. Full playback still starts only when you press Play.",
   "VideoThumbnailLoad": "Load video preview",

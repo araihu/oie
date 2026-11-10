@@ -30,6 +30,24 @@ func (e BrowserEditIntentLang) Valid() bool {
 	}
 }
 
+// Defines values for BrowserReactionIntentLang.
+const (
+	BrowserReactionIntentLangEn   BrowserReactionIntentLang = "en"
+	BrowserReactionIntentLangPtBR BrowserReactionIntentLang = "pt-BR"
+)
+
+// Valid indicates whether the value is a known member of the BrowserReactionIntentLang enum.
+func (e BrowserReactionIntentLang) Valid() bool {
+	switch e {
+	case BrowserReactionIntentLangEn:
+		return true
+	case BrowserReactionIntentLangPtBR:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConversationPreferenceIntentLang.
 const (
 	ConversationPreferenceIntentLangEn   ConversationPreferenceIntentLang = "en"
@@ -117,6 +135,24 @@ func (e GetBrowserMessageEditHistoryParamsLang) Valid() bool {
 	case GetBrowserMessageEditHistoryParamsLangEn:
 		return true
 	case GetBrowserMessageEditHistoryParamsLangPtBR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetBrowserMessageReactionsParamsLang.
+const (
+	GetBrowserMessageReactionsParamsLangEn   GetBrowserMessageReactionsParamsLang = "en"
+	GetBrowserMessageReactionsParamsLangPtBR GetBrowserMessageReactionsParamsLang = "pt-BR"
+)
+
+// Valid indicates whether the value is a known member of the GetBrowserMessageReactionsParamsLang enum.
+func (e GetBrowserMessageReactionsParamsLang) Valid() bool {
+	switch e {
+	case GetBrowserMessageReactionsParamsLangEn:
+		return true
+	case GetBrowserMessageReactionsParamsLangPtBR:
 		return true
 	default:
 		return false
@@ -239,6 +275,84 @@ type BrowserEditTarget struct {
 	//
 	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000002","currentRevisionId":"019a5df0-0000-7000-8000-000000000004","eligible":true,"messageId":"019a5df0-0000-7000-8000-000000000003","originalText":"Text to correct"}
 	Target externalRef0.MessageEditTarget `json:"target"`
+}
+
+// BrowserReactionIntent Complete immutable reaction choice retained for receipt reconciliation.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","csrf":"browser-csrf-token","emojis":"[]","engineId":"019a5df0-0000-7000-8000-000000000001","expectedOwnRevisionId":"","lang":"en","messageId":"019a5df0-0000-7000-8000-000000000004","operationKey":"019a5df0-0000-7000-8000-000000000006"}
+type BrowserReactionIntent struct {
+	// AccountId Source account.
+	AccountId openapi_types.UUID `json:"accountId"`
+
+	// ConversationId Source conversation.
+	ConversationId openapi_types.UUID `json:"conversationId"`
+
+	// Csrf Same-origin browser CSRF token.
+	Csrf string `json:"csrf"`
+
+	// Emojis JSON encoded complete own emoji set. An empty array clears it.
+	Emojis string `json:"emojis"`
+
+	// EngineId Selected owning engine.
+	EngineId openapi_types.UUID `json:"engineId"`
+
+	// ExpectedOwnRevisionId Current own reaction revision UUID or empty when absent.
+	ExpectedOwnRevisionId *string `json:"expectedOwnRevisionId,omitempty"`
+
+	// Lang Response presentation locale.
+	Lang *BrowserReactionIntentLang `json:"lang,omitempty"`
+
+	// MessageId Canonical retained source.
+	MessageId openapi_types.UUID `json:"messageId"`
+
+	// OperationKey Stable command UUID retained across uncertain acceptance.
+	OperationKey openapi_types.UUID `json:"operationKey"`
+}
+
+// BrowserReactionIntentLang Response presentation locale.
+type BrowserReactionIntentLang string
+
+// BrowserReactionPreparation Scoped read-only reaction eligibility and a fresh explicit-intent key.
+//
+// Example: {"engineId":"019a5df0-0000-7000-8000-000000000001","operationKey":"019a5df0-0000-7000-8000-000000000006","snapshot":{"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","eligible":true,"items":[],"maxEmojis":8,"messageId":"019a5df0-0000-7000-8000-000000000004","ownEmojis":[],"ownRevisionId":null,"revisionId":null}}
+type BrowserReactionPreparation struct {
+	// EngineId Verified selected engine identity.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	EngineId openapi_types.UUID `json:"engineId"`
+
+	// OperationKey Fresh UUID for one explicit reaction choice.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000006
+	OperationKey openapi_types.UUID `json:"operationKey"`
+
+	// Snapshot Canonical message reaction totals, own set and scoped mutation availability.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000002","eligible":true,"items":[],"maxEmojis":8,"messageId":"019a5df0-0000-7000-8000-000000000003","ownEmojis":[],"ownRevisionId":null,"revisionId":null}
+	Snapshot externalRef0.MessageReactions `json:"snapshot"`
+}
+
+// BrowserReactionResult Verified acceptance and actual dispatch evidence for one reaction command.
+//
+// Example: {"accepted":false,"message":"Reaction unconfirmed","ok":false,"rejected":false}
+type BrowserReactionResult struct {
+	// Accepted Durable acceptance of the exact immutable intent is verified.
+	Accepted bool `json:"accepted"`
+
+	// Code Stable failure code.
+	Code *string `json:"code,omitempty"`
+
+	// Command Durable immutable reaction intent and current transmission evidence.
+	Command *externalRef0.MessageReactionCommand `json:"command,omitempty"`
+
+	// Message Concise localized user status.
+	Message string `json:"message"`
+
+	// Ok A matching verified command was read.
+	Ok bool `json:"ok"`
+
+	// Rejected Definitive non-acceptance permits a new explicit intent.
+	Rejected bool `json:"rejected"`
 }
 
 // ConversationPreferenceIntent Browser command scoped to one engine and one owning account.
@@ -514,6 +628,27 @@ type GetBrowserMessageEditHistoryParams struct {
 // GetBrowserMessageEditHistoryParamsLang defines parameters for GetBrowserMessageEditHistory.
 type GetBrowserMessageEditHistoryParamsLang string
 
+// GetBrowserMessageReactionsParams defines parameters for GetBrowserMessageReactions.
+type GetBrowserMessageReactionsParams struct {
+	// EngineId Selected engine identity.
+	EngineId openapi_types.UUID `form:"engineId" json:"engineId"`
+
+	// AccountId Source account identity.
+	AccountId openapi_types.UUID `form:"accountId" json:"accountId"`
+
+	// ConversationId Source conversation identity.
+	ConversationId openapi_types.UUID `form:"conversationId" json:"conversationId"`
+
+	// MessageId Canonical source message identity.
+	MessageId openapi_types.UUID `form:"messageId" json:"messageId"`
+
+	// Lang Presentation language.
+	Lang *GetBrowserMessageReactionsParamsLang `form:"lang,omitempty" json:"lang,omitempty"`
+}
+
+// GetBrowserMessageReactionsParamsLang defines parameters for GetBrowserMessageReactions.
+type GetBrowserMessageReactionsParamsLang string
+
 // SearchBrowserMessagesParams defines parameters for SearchBrowserMessages.
 type SearchBrowserMessagesParams struct {
 	// EngineId Engine identity that owns this browser search session.
@@ -576,6 +711,12 @@ type SubmitBrowserMessageEditFormdataRequestBody = BrowserEditIntent
 
 // ReconcileBrowserMessageEditFormdataRequestBody defines body for ReconcileBrowserMessageEdit for application/x-www-form-urlencoded ContentType.
 type ReconcileBrowserMessageEditFormdataRequestBody = BrowserEditIntent
+
+// ReconcileBrowserMessageReactionsFormdataRequestBody defines body for ReconcileBrowserMessageReactions for application/x-www-form-urlencoded ContentType.
+type ReconcileBrowserMessageReactionsFormdataRequestBody = BrowserReactionIntent
+
+// SetBrowserMessageReactionsFormdataRequestBody defines body for SetBrowserMessageReactions for application/x-www-form-urlencoded ContentType.
+type SetBrowserMessageReactionsFormdataRequestBody = BrowserReactionIntent
 
 // ReconcileBrowserSubmissionFormdataRequestBody defines body for ReconcileBrowserSubmission for application/x-www-form-urlencoded ContentType.
 type ReconcileBrowserSubmissionFormdataRequestBody = PendingSubmission

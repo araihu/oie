@@ -148,6 +148,7 @@ type view struct {
 	Chats                                                                                         []engineapi.Conversation
 	Selected                                                                                      *engineapi.Conversation
 	Messages                                                                                      []messageView
+	Reactions                                                                                     map[string]engineapi.MessageReactions
 	StarsKnown                                                                                    bool
 	Stars                                                                                         map[string]engineapi.MessageStar
 	PreviewsKnown                                                                                 bool
@@ -158,6 +159,8 @@ type view struct {
 }
 
 type copy struct {
+	Reactions, ReactMessage, ReactionUnavailable, ReactionPending, ReactionUnknown, ReactionFailed, ReactionCheck, ReactionRemove string
+
 	CapabilitySendCorrectionsNote string
 
 	EditMessage, EditPreparing, EditMode, EditPending, SaveEdit, CancelEdit, EditUnavailable, EditChanged, EditQueued, EditDispatching, EditSubmitted, EditUnknown, EditAcceptanceUnknown, EditFailed, EditCheckStatus, EditRetry, EditStorageUnavailable string
@@ -515,6 +518,14 @@ var videosStylesheet []byte
 var liveScript []byte
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/ui/message-reactions" {
+		s.prepareReactions(w, r)
+		return
+	}
+	if r.URL.Path == "/ui/messages/reactions" || r.URL.Path == "/ui/messages/reaction-receipt" {
+		s.setReactions(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/message-edit-target" {
 		s.prepareMessageEdit(w, r)
 		return
@@ -570,7 +581,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/timeline.js": {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/cache.js": {"text/javascript", cacheScript}, "/ui/cache/LICENSE.md": {"text/plain; charset=utf-8", cacheLibraryLicense}, "/ui/cache/lru-cache.min.mjs": {"text/javascript", cacheLibrary}, "/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
 		"/ui/video-thumbnails.js": {"text/javascript", videoThumbnailsScript}, "/ui/videos.js": {"text/javascript", videosScript}, "/ui/video.css": {"text/css", videosStylesheet},
-		"/ui/message-correction.css": {"text/css", messageCorrectionStylesheet}, "/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/read-state.js": {"text/javascript", readStateScript}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/message-history.js": {"text/javascript", messageHistoryScript}, "/ui/message-history.css": {"text/css", messageHistoryStylesheet}, "/ui/sender.js": {"text/javascript", senderScript}, "/ui/message-search.js": {"text/javascript", messageSearchScript}, "/ui/message-search.css": {"text/css", messageSearchStylesheet}, "/ui/conversation-search.js": {"text/javascript", conversationSearchScript}, "/ui/conversation-search.css": {"text/css", conversationSearchStylesheet}, "/ui/conversation-preferences.js": {"text/javascript", conversationPreferencesScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
+		"/ui/reactions.js": {"text/javascript", reactionsScript}, "/ui/reactions.css": {"text/css", reactionsStylesheet}, "/ui/message-correction.css": {"text/css", messageCorrectionStylesheet}, "/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/read-state.js": {"text/javascript", readStateScript}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/message-history.js": {"text/javascript", messageHistoryScript}, "/ui/message-history.css": {"text/css", messageHistoryStylesheet}, "/ui/sender.js": {"text/javascript", senderScript}, "/ui/message-search.js": {"text/javascript", messageSearchScript}, "/ui/message-search.css": {"text/css", messageSearchStylesheet}, "/ui/conversation-search.js": {"text/javascript", conversationSearchScript}, "/ui/conversation-search.css": {"text/css", conversationSearchStylesheet}, "/ui/conversation-preferences.js": {"text/javascript", conversationPreferencesScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
 	}
 	if asset, ok := assets[r.URL.Path]; ok {
 		w.Header().Set("Content-Type", asset.mime)
@@ -917,7 +928,7 @@ func (v view) timelineVersion() string {
 		out.WriteString(m.Id + ":" + m.RevisionId + ":" + string(m.SendState) + ";")
 		videos, _ := json.Marshal(v.messageVideos(m.Id))
 		_, _ = fmt.Fprintf(&out, "video:%x;", sha256.Sum256(videos))
-		reply, _ := json.Marshal([]any{m.Reply, m.Edited, m.EditedAt})
+		reply, _ := json.Marshal([]any{m.Reply, m.Edited, m.EditedAt, v.Reactions[m.Id]})
 		_, _ = fmt.Fprintf(&out, "%x;", sha256.Sum256(reply))
 	}
 	return out.String()

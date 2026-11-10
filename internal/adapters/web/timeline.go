@@ -108,7 +108,7 @@ func timelineInitialParams(v view) *engineapi.ListMessagesParams {
 	return p
 }
 func (v view) messageVersion(m messageView) string {
-	data, _ := json.Marshal([]any{m.Message, m.Presentation, m.PresentationKnown, v.messageVideos(m.Id)})
+	data, _ := json.Marshal([]any{m.Message, m.Presentation, m.PresentationKnown, v.messageVideos(m.Id), v.Reactions[m.Id]})
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:])
 }
@@ -138,6 +138,7 @@ func (s *Server) formatTimeline(ctx context.Context, v *view, items []engineapi.
 		}
 	}
 	s.loadMessageStars(ctx, v)
+	s.loadReactions(ctx, v)
 	for i := range v.Messages {
 		m := &v.Messages[i]
 		m.Presentation = videoPresentation(imagePresentation(m.displayBody(), v.MessagePreviews[m.Id]), v.messageVideos(m.Id))
@@ -351,6 +352,7 @@ func (s *Server) timelinePage(w http.ResponseWriter, r *http.Request) {
 		part.MessagePreviews = map[string][]engineapi.MessagePreview{}
 		part.MessageVideos = nil
 		part.Stars = nil
+		part.Reactions = nil
 		s.formatTimeline(ctx, &part, []engineapi.Message{alias.Message}, nil)
 		v.TimelineAliases[requested] = part.Messages[0]
 		for id, entries := range part.MessagePreviews {
@@ -358,6 +360,12 @@ func (s *Server) timelinePage(w http.ResponseWriter, r *http.Request) {
 		}
 		for id, entries := range part.MessageVideos {
 			v.MessageVideos[id] = entries
+		}
+		for id, state := range part.Reactions {
+			if v.Reactions == nil {
+				v.Reactions = map[string]engineapi.MessageReactions{}
+			}
+			v.Reactions[id] = state
 		}
 		for id, star := range part.Stars {
 			if v.Stars == nil {
