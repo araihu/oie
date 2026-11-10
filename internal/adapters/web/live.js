@@ -51,7 +51,7 @@ window.OieRuntime.register('live', life => {
   const canonicalID=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
   // Sent corrections have a separate journal. They never overwrite the ordinary
   // message draft, its reply target, mention selections or original send key.
-  const editBox=composer?.querySelector('[data-composer-edit]'),editFeedback=editBox?.querySelector('[data-edit-feedback]'),editRecovery=editBox?.querySelector('[data-edit-recovery]');
+  const editBox=composer?.querySelector('[data-composer-edit]'),editFeedback=editBox?.querySelector('[data-edit-feedback]'),editRecovery=editBox?.querySelector('[data-edit-recovery]'),lastEditStatus=composer?.querySelector('[data-edit-last-status]');
   const editKey=draftKey?draftKey.replace('oie.draft.v1','oie.correction.v1'):'';
   const lastEditKey=editKey?editKey.replace('oie.correction.v1','oie.correction-receipt.v1'):'';
   const editText=key=>editBox?.dataset['edit'+key[0].toUpperCase()+key.slice(1)]||'';
@@ -63,10 +63,22 @@ window.OieRuntime.register('live', life => {
     if(value)inMemory.set(editKey,value);else inMemory.delete(editKey);
     try{if(value)localStorage.setItem(editKey,JSON.stringify(value));else localStorage.removeItem(editKey)}catch{editStorageDenied=true;storageWarning();}
   }
+  function editMessageBody(id){return id&&document.querySelector(`#message-timeline [data-message-id="${CSS.escape(id)}"] [data-message-bubble]`);}
+  function renderEditMarkers(){
+    for(const node of document.querySelectorAll('[data-editing-message],[data-edit-pending]')){node.removeAttribute('data-editing-message');node.removeAttribute('data-edit-pending');node.removeAttribute('aria-busy');}
+    const fallback=composer?.querySelector('.oie-composer-field');
+    const place=(node,id)=>{const bubble=editMessageBody(id),target=bubble||fallback;if(node&&target&&node.parentElement!==target)target.append(node);if(node){const top=bubble&&!node.hidden?document.querySelector('#message-timeline').getBoundingClientRect().top:null;node.toggleAttribute('data-edit-below',top!==null&&bubble.getBoundingClientRect().top-top<100);}return bubble;};
+    const bubble=place(editBox,editSession?.messageId);
+    const state=editSession?.command?.state;
+    if(bubble&&editSession){bubble.dataset.editingMessage='true';if(editBusy||editSession.submitted&&(!state||state==='queued'||state==='dispatching')){bubble.dataset.editPending='true';bubble.setAttribute('aria-busy','true');}}
+    const previous=place(lastEditStatus,lastEditReceipt?.messageId);
+    if(lastEditStatus)lastEditStatus.hidden=!lastEditReceipt?.command?.state||lastEditReceipt.command.state==='submitted'||editSession?.messageId===lastEditReceipt.messageId;
+    if(previous&&['queued','dispatching'].includes(lastEditReceipt?.command?.state)&&!previous.hasAttribute('data-editing-message')){previous.dataset.editPending='true';previous.setAttribute('aria-busy','true');}
+  }
   function renderEdit(){
     if(!editBox)return;
     composer.dataset.editing=String(!!editSession||editPreparing);
-    editBox.hidden=!editSession;
+    editBox.hidden=!editSession||editBusy||!(editSession.error||editSession.submitted||editSession.rejected||editStorageDenied);
     composer.setAttribute('aria-busy',String(editPreparing||editBusy));
     if(editFeedback){const state=editSession?.command?.state;editFeedback.textContent=editPreparing?editText('preparing'):editSession?.error||(state?editText(state):editSession?.submitted?editText('acceptanceUnknown'):editStorageDenied?editText('storage'):'');}
     const cancel=composer.querySelector('[data-edit-cancel]'),save=composer.querySelector('[data-send-message]'),check=editBox.querySelector('[data-edit-check]'),retry=editBox.querySelector('[data-edit-retry]');
@@ -77,6 +89,7 @@ window.OieRuntime.register('live', life => {
     if(check)check.disabled=editBusy;
     if(retry)retry.hidden=!!editSession?.command||editSession?.rejected===true;
     if(editSession){input.readOnly=editBusy||editSession.submitted||editSession.rejected===true;input.setAttribute('aria-readonly',String(input.readOnly));}
+    renderEditMarkers();
     for(const action of document.querySelectorAll('[id^="edit-message-"]')){
       action.hidden=action.id!=='edit-message-'+(composer.dataset.latestEditMessage||'');
       action.setAttribute('aria-disabled',String(editBusy||editPreparing||!!editSession||!!journal?.pending));
@@ -85,7 +98,7 @@ window.OieRuntime.register('live', life => {
   function restoreOrdinaryDraft(){
     input.value=journal?.pending?'':journal?.text||'';if(journal?.key)submissionKey.value=journal.key;restoreMentions(journal?.mentions);lockComposer(!!journal?.pending);renderReply();renderEdit();input.focus({preventScroll:true});
   }
-  function leaveEdit(){if(editBusy||editSession?.submitted)return;editEpoch++;editPreparing=false;clearTimeout(editPoll);keepEdit(null);restoreOrdinaryDraft();}
+  function leaveEdit(){if(editBusy||editSession?.submitted)return;if(editPreparing)window.OieTimeline?.cancelFocus();editEpoch++;editPreparing=false;clearTimeout(editPoll);keepEdit(null);restoreOrdinaryDraft();}
   function finishEdit(){keepLastEdit(editSession?{...editSession}:null);editEpoch++;clearTimeout(editPoll);editBusy=false;editPreparing=false;keepEdit(null);restoreOrdinaryDraft();scheduleRefresh();}
   function editMenuOpen(){return input.getAttribute('aria-expanded')==='true'||[...document.querySelectorAll('[role="dialog"],[role="menu"],[data-emoji-trigger][aria-expanded="true"]')].some(node=>node.getClientRects().length&&getComputedStyle(node).visibility!=='hidden');}
   async function beginEdit(messageId=''){
@@ -99,9 +112,10 @@ window.OieRuntime.register('live', life => {
       if(input.value!==draftAtRequest)return;
       const target=value.target;
       if(!response.ok||value.engineId!==body.dataset.engineId||!target||target.accountId!==body.dataset.accountId||target.conversationId!==body.dataset.conversationId||!canonicalID(target.messageId)||messageId&&target.messageId!==messageId||!canonicalID(target.currentRevisionId)||!canonicalID(value.operationKey)||!target.eligible||typeof target.originalText!=='string'||Array.from(target.originalText).length>16384)throw Error('edit_unavailable');
+      if(!editMessageBody(target.messageId)&&window.OieTimeline){const found=await window.OieTimeline.focus(target.messageId,{focus:false});if(life.signal.aborted||epoch!==editEpoch||input.value!==draftAtRequest)return;if(!found)throw Error('edit_source_unavailable');}
       saveDraft(draftRecord(false));
       keepEdit({engineId:body.dataset.engineId,accountId:body.dataset.accountId,conversationId:body.dataset.conversationId,messageId:target.messageId,expectedRevisionId:target.currentRevisionId,operationKey:value.operationKey,text:target.originalText,submitted:false});
-      input.value=target.originalText;restoreMentions([]);input.focus({preventScroll:true});input.setSelectionRange(input.value.length,input.value.length);
+      input.value=target.originalText;restoreMentions([]);announce(editText('mode'));input.focus({preventScroll:true});input.setSelectionRange(input.value.length,input.value.length);const bubble=editMessageBody(target.messageId),viewport=document.querySelector('#message-timeline')?.getBoundingClientRect(),bounds=bubble?.getBoundingClientRect();if(bounds&&viewport&&(bounds.bottom<=viewport.top||bounds.top>=viewport.bottom))bubble.scrollIntoView({block:'nearest',behavior:'auto'});
     }catch{if(!life.signal.aborted&&epoch===editEpoch){window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:editText('unavailable')}}));}}
     finally{clearTimeout(timeout);if(!life.signal.aborted&&epoch===editEpoch){editPreparing=false;renderReply();renderEdit();}}
   }
@@ -126,7 +140,7 @@ window.OieRuntime.register('live', life => {
       clearTimeout(timeout);if(!life.signal.aborted&&epoch===editEpoch){editBusy=false;renderReply();renderEdit();const state=editSession?.command?.state;if(state==='queued'||state==='dispatching')editPoll=life.timeout(()=>submitEdit(true),1200);}
     }
   }
-  function renderLastEdit(){const status=composer?.querySelector('[data-edit-last-status]');if(!status)return;const state=lastEditReceipt?.command?.state;status.hidden=!state||state==='submitted';status.querySelector('[data-edit-last-copy]').textContent=status.hidden?'':editText(state);const button=status.querySelector('[data-edit-last-check]');if(button)button.disabled=lastEditChecking;}
+  function renderLastEdit(){const status=lastEditStatus;if(!status)return;const state=lastEditReceipt?.command?.state;status.hidden=!state||state==='submitted';status.querySelector('[data-edit-last-copy]').textContent=status.hidden?'':editText(state);const button=status.querySelector('[data-edit-last-check]');if(button)button.disabled=lastEditChecking;renderEditMarkers();}
   function keepLastEdit(value){lastEditReceipt=value;clearTimeout(lastEditPoll);if(lastEditKey){if(value)inMemory.set(lastEditKey,value);else inMemory.delete(lastEditKey);try{if(value)localStorage.setItem(lastEditKey,JSON.stringify(value));else localStorage.removeItem(lastEditKey)}catch{storageWarning();}}renderLastEdit();if(value&&['queued','dispatching'].includes(value.command?.state))lastEditPoll=life.timeout(()=>checkCompletedEdit(),1200);}
   async function checkCompletedEdit(){
     const intent=lastEditReceipt;if(!intent||lastEditChecking||!editScope(intent))return;lastEditChecking=true;renderLastEdit();
@@ -293,6 +307,7 @@ window.OieRuntime.register('live', life => {
   if(lastEditKey&&!mock){let saved;try{saved=JSON.parse(localStorage.getItem(lastEditKey)||'null')||inMemory.get(lastEditKey)}catch{saved=inMemory.get(lastEditKey)}if(validEditSession(saved)&&matchingEditCommand(saved.command,saved)){keepLastEdit(saved);life.timeout(()=>checkCompletedEdit(),0);}}
   if(editKey&&!mock){let saved;try{saved=JSON.parse(localStorage.getItem(editKey)||'null')||inMemory.get(editKey)}catch{saved=inMemory.get(editKey)}if(validEditSession(saved)&&!journal?.pending){editSession=saved;input.value=saved.text;restoreMentions([]);if(saved.submitted)life.timeout(()=>submitEdit(true),0);}}
   renderReply();renderEdit();
+  if(editSession&&!editMessageBody(editSession.messageId)){const sourceID=editSession.messageId;life.timeout(async()=>{if(editSession?.messageId!==sourceID)return;await window.OieTimeline?.focus(sourceID,{focus:false});if(!life.signal.aborted)renderEditMarkers();},0);}
   life.on(document,'oie:actions-refreshed',()=>{renderReply();renderEdit();});
   life.on(document,'click',async event=>{
     const cancel=event.target.closest('[data-cancel-reply]');
@@ -581,7 +596,7 @@ window.OieRuntime.register('live', life => {
       if (refreshAgain) { refreshAgain = false; scheduleRefresh(); }
     }
   }
-  life.on(document,'oie:timeline-content',event=>{readAvatars(event.detail.page);applyAvatars();localizeTimes();if(highlightedMessage)document.querySelector(`#message-timeline [data-message-id="${CSS.escape(highlightedMessage)}"]`)?.classList.add('oie-reply-highlight');});
+  life.on(document,'oie:timeline-content',event=>{renderEditMarkers();readAvatars(event.detail.page);applyAvatars();localizeTimes();if(highlightedMessage)document.querySelector(`#message-timeline [data-message-id="${CSS.escape(highlightedMessage)}"]`)?.classList.add('oie-reply-highlight');});
   life.on(document,'oie:timeline-focus',event=>{focusMessage(event.detail.id,event.detail.focus!==false);showJump(true);});
   life.on(document,'oie:timeline-alias',event=>{if(highlightedMessage===event.detail.requested)highlightedMessage=event.detail.canonical;});
   life.on(document,'oie:info-content',()=>{applyAvatars();localizeTimes();});
