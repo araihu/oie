@@ -45,3 +45,8 @@ SELECT * FROM message_reaction_commands WHERE state='queued' AND next_attempt_at
 
 -- name: InterruptedMessageReactionCommands :many
 SELECT * FROM message_reaction_commands WHERE state='dispatching' ORDER BY id;
+
+-- name: ReactionActorProfile :one
+SELECT
+ CAST(COALESCE((SELECT co.display_name FROM contacts co WHERE co.account_id=sqlc.arg(account_id) AND co.address=sqlc.arg(address) AND co.active=1),'') AS TEXT) AS display_name,
+ CAST(COALESCE((SELECT json_extract(av.payload,'$.ImageHash') FROM avatars av WHERE av.account_id=sqlc.arg(account_id) AND av.address=sqlc.arg(address)),'') AS TEXT) AS avatar_hash;

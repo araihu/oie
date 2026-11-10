@@ -39,6 +39,16 @@ func reactions(r domain.MessageReactions) engineapi.MessageReactions {
 		RevisionId: reactionRevision(r.RevisionID), OwnRevisionId: reactionRevision(r.OwnRevisionID),
 		OwnEmojis: reactionEmojis(r.OwnEmojis), Items: []engineapi.ReactionItem{}, Eligible: r.Eligible, MaxEmojis: r.MaxEmojis,
 	}
+	actors := []engineapi.ReactionActor{}
+	for _, actor := range r.Actors {
+		entry := engineapi.ReactionActor{Address: actor.Address, DisplayName: actor.DisplayName, Own: actor.Own, Emojis: reactionEmojis(actor.Emojis)}
+		if actor.AvatarHash != "" {
+			hash := actor.AvatarHash
+			entry.AvatarHash = &hash
+		}
+		actors = append(actors, entry)
+	}
+	out.Actors = &actors
 	for _, item := range r.Items {
 		out.Items = append(out.Items, engineapi.ReactionItem{Emoji: item.Emoji, Count: item.Count, Own: item.Own})
 	}

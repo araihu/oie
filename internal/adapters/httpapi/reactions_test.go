@@ -90,6 +90,9 @@ func TestReactionHTTPSetClearReceiptsAndSourceIsolation(t *testing.T) {
 	if err != nil || current.JSON200 == nil || current.JSON200.OwnRevisionId == nil || len(current.JSON200.Items) != 2 || len(current.JSON200.OwnEmojis) != 2 {
 		t.Fatal("submitted own set missing", current, err)
 	}
+	if current.JSON200.Actors == nil || len(*current.JSON200.Actors) != 1 || !(*current.JSON200.Actors)[0].Own || len((*current.JSON200.Actors)[0].Emojis) != 2 {
+		t.Fatal("verified own actor missing from HTTP snapshot", current.JSON200)
+	}
 	for _, item := range current.JSON200.Items {
 		if !item.Own || item.Count != 1 {
 			t.Fatal("own reaction count wrong", item)

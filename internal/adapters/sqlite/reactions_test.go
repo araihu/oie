@@ -6,6 +6,7 @@ import (
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -340,5 +341,62 @@ func TestReactionAcceptanceAndMaterializationRollback(t *testing.T) {
 				t.Fatal("partial reaction materialization", got)
 			}
 		})
+	}
+}
+
+func TestReactionActorsRetainVerifiedNamesAvatarsAndNonemptySets(t *testing.T) {
+	s, e, c := outboxFixture(t)
+	e.SetProtocols(&reactionProtocol{max: 8})
+	m := ownSubmittedEdit(t, s, e, c, "reaction actor identity")
+	at := time.Now().UTC().Add(-time.Minute)
+	hash := strings.Repeat("a", 64)
+	if err := s.SaveAvatar(t.Context(), domain.Avatar{ID: migrationID(), RevisionID: migrationID(), AccountID: c.AccountID, Address: "bob@localhost", ImageHash: hash, UpdatedAt: at}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.ContactsReceived(t.Context(), c.AccountID, []application.ContactInput{{Address: "bob@localhost", DisplayName: "Robert", Subscription: "both"}}); err != nil {
+		t.Fatal(err)
+	}
+	in := application.IncomingReaction{AccountID: c.AccountID, Address: c.Address, Kind: c.Kind, ProviderID: "named-actor", CreatedAt: at, Actor: "bob@localhost", ActorName: "Bob nickname", Target: domain.MessageReference{ID: m.ProviderID}, Emojis: []string{"👍", "❤️"}}
+	if err := e.ReceiveReaction(t.Context(), in); err != nil {
+		t.Fatal(err)
+	}
+	_, before, _ := s.Snapshot(t.Context())
+	snapshot := reactionSnapshot(t, e, m.ID)
+	_, after, _ := s.Snapshot(t.Context())
+	if before != after || len(snapshot.Actors) != 1 {
+		t.Fatal("actor read mutated state or lost actor", snapshot)
+	}
+	actor := snapshot.Actors[0]
+	if actor.Address != "bob@localhost" || actor.DisplayName != "Robert" || actor.AvatarHash != hash || actor.Own || len(actor.Emojis) != 2 {
+		t.Fatal(actor)
+	}
+	// A same-address profile in another account cannot replace this actor's photo.
+	registered, err := e.Register(t.Context(), migrationID(), application.RegisterInput{Protocol: "xmpp", Label: "Other", Address: "other@localhost"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreign := registered.Account
+	if err := s.SaveAvatar(t.Context(), domain.Avatar{ID: migrationID(), RevisionID: migrationID(), AccountID: foreign.ID, Address: actor.Address, ImageHash: strings.Repeat("b", 64), UpdatedAt: at}); err != nil {
+		t.Fatal(err)
+	}
+	if got := reactionSnapshot(t, e, m.ID).Actors[0]; got.AvatarHash != hash {
+		t.Fatal("foreign avatar leaked", got)
+	}
+	if err := e.ContactsReceived(t.Context(), c.AccountID, []application.ContactInput{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := reactionSnapshot(t, e, m.ID).Actors[0]; got.DisplayName != "Bob nickname" {
+		t.Fatal("inactive contact name superseded observed actor", got)
+	}
+	// Clearing removes the actor from the roster without deleting the source.
+	in.ProviderID = "named-clear"
+	in.CreatedAt = at.Add(time.Second)
+	in.Emojis = []string{}
+	if err := e.ReceiveReaction(t.Context(), in); err != nil {
+		t.Fatal(err)
+	}
+	cleared := reactionSnapshot(t, e, m.ID)
+	if len(cleared.Actors) != 0 || len(cleared.Items) != 0 {
+		t.Fatal("empty actor remained", cleared)
 	}
 }

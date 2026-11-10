@@ -256,6 +256,29 @@ func (q *Queries) PendingMessageReactionCommands(ctx context.Context, nextAttemp
 	return items, nil
 }
 
+const reactionActorProfile = `-- name: ReactionActorProfile :one
+SELECT
+ CAST(COALESCE((SELECT co.display_name FROM contacts co WHERE co.account_id=?1 AND co.address=?2 AND co.active=1),'') AS TEXT) AS display_name,
+ CAST(COALESCE((SELECT json_extract(av.payload,'$.ImageHash') FROM avatars av WHERE av.account_id=?1 AND av.address=?2),'') AS TEXT) AS avatar_hash
+`
+
+type ReactionActorProfileParams struct {
+	AccountID string
+	Address   string
+}
+
+type ReactionActorProfileRow struct {
+	DisplayName string
+	AvatarHash  string
+}
+
+func (q *Queries) ReactionActorProfile(ctx context.Context, arg ReactionActorProfileParams) (ReactionActorProfileRow, error) {
+	row := q.db.QueryRowContext(ctx, reactionActorProfile, arg.AccountID, arg.Address)
+	var i ReactionActorProfileRow
+	err := row.Scan(&i.DisplayName, &i.AvatarHash)
+	return i, err
+}
+
 const reactionObservationsForTargets = `-- name: ReactionObservationsForTargets :many
 WITH matching AS (
 SELECT o.ordinal, o.id, o.account_id, o.address, o.kind, o.actor, o.provider_id, o.archive_scope, o.archive_id, o.target_id, o.target_scope, o.target_author, o.fingerprint, o.occurred_at, o.payload, o.command_id FROM message_reaction_observations o

@@ -10,7 +10,10 @@ import (
 	"github.com/araihu/oie/internal/domain"
 	"reflect"
 	"slices"
+	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 func decodeReaction(row dbgen.MessageReactionCommand) (domain.PendingMessageReaction, error) {
@@ -82,7 +85,7 @@ func readReactions(ctx context.Context, q *dbgen.Queries, id domain.ID) (applica
 		return out, err
 	}
 	out.Source = m
-	state := domain.MessageReactions{MessageID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID, OwnEmojis: []string{}, Items: []domain.ReactionItem{}, MaxEmojis: 8}
+	state := domain.MessageReactions{MessageID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID, OwnEmojis: []string{}, Items: []domain.ReactionItem{}, Actors: []domain.ReactionActor{}, MaxEmojis: 8}
 	crow, err := q.GetConversation(ctx, string(m.ConversationID))
 	if err != nil {
 		return out, err
@@ -172,6 +175,20 @@ func readReactions(ctx context.Context, q *dbgen.Queries, id domain.ID) (applica
 			state.OwnRevisionID = domain.ID(head.id)
 			state.OwnEmojis = append([]string{}, head.in.Emojis...)
 		}
+		if len(head.in.Emojis) > 0 {
+			profile, err := q.ReactionActorProfile(ctx, dbgen.ReactionActorProfileParams{AccountID: string(m.AccountID), Address: head.in.Actor})
+			if err != nil {
+				return out, err
+			}
+			name := strings.TrimSpace(profile.DisplayName)
+			if name == "" {
+				name = strings.TrimSpace(head.in.ActorName)
+			}
+			if name == "" || len(name) > 1023 || !utf8.ValidString(name) || strings.IndexFunc(name, unicode.IsControl) >= 0 {
+				name = head.in.Actor
+			}
+			state.Actors = append(state.Actors, domain.ReactionActor{Address: head.in.Actor, DisplayName: name, AvatarHash: profile.AvatarHash, Own: head.in.IsOwn, Emojis: append([]string{}, head.in.Emojis...)})
+		}
 		for _, emoji := range head.in.Emojis {
 			item := counts[emoji]
 			item.Emoji = emoji
@@ -180,6 +197,15 @@ func readReactions(ctx context.Context, q *dbgen.Queries, id domain.ID) (applica
 			counts[emoji] = item
 		}
 	}
+	slices.SortFunc(state.Actors, func(a, b domain.ReactionActor) int {
+		if a.Own != b.Own {
+			if a.Own {
+				return -1
+			}
+			return 1
+		}
+		return strings.Compare(a.Address, b.Address)
+	})
 	for _, item := range counts {
 		state.Items = append(state.Items, item)
 	}
