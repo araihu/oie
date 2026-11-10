@@ -53,7 +53,20 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 		cmd.Stdin = bytes.NewBufferString(input)
 		return cmd.CombinedOutput()
 	}
-	output, err := run(body, "accounts", "register", "--idempotency-key", string(key), "--body-stdin")
+	output, err := run("", "messages", "author", "--help")
+	if err != nil || !bytes.Contains(output, []byte("oiectl messages author [flags]")) {
+		t.Fatalf("CLI author help: %v %s", err, output)
+	}
+	output, err = run("", "messages", "authors")
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 2 || !bytes.Contains(output, []byte("unknown command")) {
+		t.Fatalf("CLI retired command: %v %s", err, output)
+	}
+	output, err = run("", "messages", "send", "--help")
+	if err != nil || !bytes.Contains(output, []byte("Examples:")) || !bytes.Contains(output, []byte("oiectl messages send")) {
+		t.Fatalf("CLI send help: %v %s", err, output)
+	}
+	output, err = run(body, "accounts", "register", "--idempotency-key", string(key), "--body-stdin")
 	if err != nil {
 		t.Fatalf("CLI register: %v %s", err, output)
 	}
@@ -84,11 +97,10 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err != nil || !bytes.Contains(output, []byte(account.Id)) {
 		t.Fatalf("CLI reconciliation: %v %s", err, output)
 	}
-	_, err = run(`{"protocol":"xmpp","address":"alice@localhost","label":"Changed"}`,
+	output, err = run(`{"protocol":"xmpp","address":"alice@localhost","label":"Changed"}`,
 		"accounts", "register", "--idempotency-key", string(key), "--body-stdin")
-	var exit *exec.ExitError
-	if !errors.As(err, &exit) || exit.ExitCode() != 4 {
-		t.Fatalf("expected HTTP failure exit 4: %v", err)
+	if !errors.As(err, &exit) || exit.ExitCode() != 4 || string(output) != "HTTP 409 Conflict (idempotency_conflict)\n" {
+		t.Fatalf("CLI idempotency conflict: %v %s", err, output)
 	}
 	_, seq, err := store.Snapshot(t.Context())
 	if err != nil || seq != 1 {

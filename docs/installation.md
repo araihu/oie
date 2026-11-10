@@ -376,18 +376,31 @@ Run the two CLI commands in another terminal while the engine is running.
 `-data-only` is supported by `local` and `hosted`; the default still serves the
 web interface. The CLI's API base URL can also come from `OIECTL_SERVER`.
 Credentials belong in `--body-stdin` or a private `--body-file`, not shell
-arguments. Use `--output raw` for binary operations and `events stream`.
-Streams are incremental; bound them with `--timeout` and `--max-output-bytes`.
+arguments. Use `--output raw` for binary downloads.
+`events stream` writes SSE frames as they arrive. The request timeout defaults
+to one minute. Set `--timeout` and `--max-output-bytes` for longer or larger streams.
 Transport failure, timeout or cancellation returns exit 3, including after
 partial output. Keep only fully consumed/applied SSE IDs and explicitly resume
-with `--last-event-id`; the CLI does not retry or reconnect automatically.
+with `--last-event-id`. Reconnect by running the command again.
+
+```sh
+bin/oiectl events stream
+bin/oiectl events stream --timeout 10m --last-event-id ENGINE_UUID:SEQUENCE
+```
+
+HTTP failures exit with code 4 and print to stderr. When the API returns a
+Problem Details code declared in the contract, the CLI includes it in the
+diagnostic, for example `HTTP 409 Conflict (idempotency_conflict)` or
+`HTTP 409 Conflict (state_conflict)`.
+
 See [the engine API policy](engine-api-policy.md) and
 [CLI verification](engine-api-cli-verification.md) for scope and fixture commands.
 
 ### oiectl commands
 
-Append `--help` to a group or command to see its options. Run
-`oiectl accounts avatars --help` to see both avatar commands.
+Append `--help` to a group to see its commands. Run
+`oiectl messages send --help` or `oiectl accounts avatars download --help`
+for flags and examples.
 Some reads end with the resource name, as in `system engine`. Subgroups
 with related actions include `accounts avatars` and `conversations rooms`.
 Commands that change state identify the action, as in `conversations
@@ -403,7 +416,7 @@ Update scripts that use earlier command names to the names below.
 | `conversations reads` | `get`, `mark` |
 | `conversations rooms` | `join`, `leave`, `status` |
 | `events` | `stream` |
-| `messages` | `authors`, `context`, `get`, `list`, `revisions`, `search`, `send` |
+| `messages` | `author`, `context`, `get`, `list`, `revisions`, `search`, `send` |
 | `messages edits` | `get`, `submit` |
 | `messages edits targets` | `get`, `latest` |
 | `messages outbox` | `cancel` |
@@ -427,8 +440,8 @@ bin/oiectl accounts avatars download --hash IMAGE_HASH --output raw > avatar.png
 `messages stars states` checks the star state of selected message IDs.
 `messages stars list` returns the starred messages themselves.
 
-Use `--output raw` for `events stream`, `accounts avatars download`,
-`previews images download` and `shared content download`. Use
+Use `--output raw` for `accounts avatars download`, `previews images download`
+and `shared content download`. Use
 `previews images request` to request retention of an original image on
 the engine. The response contains the download state. The CLI also
 provides `help` and `completion`.

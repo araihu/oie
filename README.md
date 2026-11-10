@@ -134,8 +134,8 @@ Use raw output for SSE and byte responses. To resume the event stream, supply
 the last event ID you processed.
 
 ```sh
-bin/oiectl events stream --output raw
-bin/oiectl events stream --output raw --last-event-id ENGINE_UUID:SEQUENCE
+bin/oiectl events stream
+bin/oiectl events stream --last-event-id ENGINE_UUID:SEQUENCE
 ```
 
 ## Connect and message through the API

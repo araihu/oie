@@ -2354,7 +2354,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
-              example: {type: 'urn:oie:problem:history_changed', title: Conflict, status: 409, code: history_changed}
+              example: {type: 'urn:oie:problem:history_changed', title: History changed, status: 409, code: history_changed}
         '503':
           $ref: '#/components/responses/Unavailable'
   /api/v1/messages/{messageId}/sender-profile:
@@ -2521,7 +2521,7 @@ components:
             $ref: '#/components/schemas/Problem'
           example:
             type: urn:oie:problem:invalid_request
-            title: Bad Request
+            title: Invalid request
             status: 400
             code: invalid_request
     NotFound:
@@ -2543,7 +2543,7 @@ components:
             $ref: '#/components/schemas/Problem'
           example:
             type: urn:oie:problem:idempotency_conflict
-            title: Conflict
+            title: Idempotency key conflict
             status: 409
             code: idempotency_conflict
     Unavailable:
@@ -3076,7 +3076,13 @@ components:
         status: 503
         code: unavailable
       additionalProperties: false
-      description: Stable codes for presentation-owned localization; no raw storage errors or credentials.
+      description: >-
+        RFC 9457 Problem Details served as application/problem+json. The type URI identifies
+        the problem. The code extension is a stable short identifier for display and localization.
+        Responses exclude raw storage errors and credentials.
+      externalDocs:
+        description: RFC 9457 Problem Details for HTTP APIs
+        url: https://www.rfc-editor.org/rfc/rfc9457.html
       required:
       - type
       - title
@@ -3085,12 +3091,16 @@ components:
       properties:
         type:
           type: string
+          description: Stable absolute problem type URI in the form urn:oie:problem:<code>.
         title:
           type: string
+          description: Short human-readable summary that is stable for a problem type.
         status:
           type: integer
+          description: HTTP status code of this response.
         code:
           type: string
+          description: Oiê extension for the short problem code.
           enum:
           - invalid_request
           - not_found

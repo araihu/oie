@@ -139,7 +139,7 @@ func (p *cliProof) call(out any, input string, args ...string) []byte {
 	}
 	return data
 }
-func (p *cliProof) failure(code int, input string, args ...string) {
+func (p *cliProof) failure(code int, input string, args ...string) string {
 	p.t.Helper()
 	out, stderr, err := p.invoke(input, args...)
 	var exit *exec.ExitError
@@ -149,6 +149,7 @@ func (p *cliProof) failure(code int, input string, args ...string) {
 	if strings.Contains(stderr, "local-only") {
 		p.t.Fatal("credential diagnostic leak")
 	}
+	return strings.TrimSpace(stderr)
 }
 func (p *cliProof) wait(label string, fn func() bool) {
 	p.t.Helper()
@@ -188,7 +189,7 @@ func (p *cliProof) observe(cursor string, match func(engineapi.Event) bool) engi
 	p.t.Helper()
 	ctx, cancel := context.WithTimeout(p.t.Context(), 15*time.Second)
 	defer cancel()
-	args := []string{"--server", p.address, "--output", "raw", "--timeout", "12s", "events", "stream"}
+	args := []string{"--server", p.address, "--timeout", "12s", "events", "stream"}
 	if cursor != "" {
 		args = append(args, "--last-event-id", cursor)
 	}
@@ -320,7 +321,9 @@ func TestCLIDataOnlyXMPP(t *testing.T) {
 	if replay := p.call(nil, body, args...); !bytes.Equal(original, replay) {
 		t.Fatal("replay changed acceptance")
 	}
-	p.failure(4, proofJSON(map[string]string{"originalText": "changed"}), args...)
+	if got := p.failure(4, proofJSON(map[string]string{"originalText": "changed"}), args...); got != "HTTP 409 Conflict (idempotency_conflict)" {
+		t.Fatalf("idempotency conflict diagnostic: %q", got)
+	}
 	var wg sync.WaitGroup
 	for range 4 {
 		wg.Go(func() {
@@ -416,7 +419,9 @@ func TestCLIDataOnlyXMPP(t *testing.T) {
 	queueBody := proofJSON(map[string]string{"originalText": marker + " cancelled"})
 	p.call(&queued, queueBody, "messages", "send", "--conversation-id", chat.Id, "--idempotency-key", queueKey, "--body-stdin")
 	cancelArgs := []string{"messages", "outbox", "cancel", "--message-id", queued.Id, "--idempotency-key", proofID(), "--body-stdin"}
-	p.failure(4, proofJSON(map[string]string{"expectedRevisionId": proofID()}), cancelArgs...)
+	if got := p.failure(4, proofJSON(map[string]string{"expectedRevisionId": proofID()}), cancelArgs...); got != "HTTP 409 Conflict (state_conflict)" {
+		t.Fatalf("state conflict diagnostic: %q", got)
+	}
 	cancelArgs[len(cancelArgs)-2] = proofID()
 	p.call(&queued, proofJSON(map[string]string{"expectedRevisionId": queued.RevisionId}), cancelArgs...)
 	if queued.SendState != "cancelled" {

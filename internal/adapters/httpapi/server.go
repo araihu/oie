@@ -141,48 +141,62 @@ func WriteProblem(w http.ResponseWriter, err error) {
 		writeProblem(w, status, mediaFailure.Code)
 		return
 	}
+	problem := newProblem(status, code)
 	var roomConflict application.RoomStateConflict
-	if errors.As(err, &roomConflict) {
-		current := roomSession(roomConflict.Current)
-		w.Header().Set("Content-Type", "application/problem+json")
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(engineapi.Problem{Type: "urn:oie:problem:" + code, Title: http.StatusText(status), Status: status, Code: engineapi.ProblemCode(code), CurrentRoomSession: &current})
-		return
-	}
 	var preferenceConflict application.ConversationPreferencesConflict
-	if errors.As(err, &preferenceConflict) {
-		current := conversation(preferenceConflict.Current)
-		w.Header().Set("Content-Type", "application/problem+json")
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(engineapi.Problem{Type: "urn:oie:problem:" + code, Title: http.StatusText(status), Status: status, Code: engineapi.ProblemCode(code), CurrentConversation: &current})
-		return
-	}
-	var conflict application.StateConflict
 	var starConflict application.StarConflict
-	if errors.As(err, &starConflict) {
+	var conflict application.StateConflict
+	switch {
+	case errors.As(err, &roomConflict):
+		current := roomSession(roomConflict.Current)
+		problem.CurrentRoomSession = &current
+	case errors.As(err, &preferenceConflict):
+		current := conversation(preferenceConflict.Current)
+		problem.CurrentConversation = &current
+	case errors.As(err, &starConflict):
 		current := star(starConflict.Current)
-		w.Header().Set("Content-Type", "application/problem+json")
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(engineapi.Problem{Type: "urn:oie:problem:" + code, Title: http.StatusText(status), Status: status, Code: engineapi.ProblemCode(code), CurrentStar: &current})
-		return
-	}
-	if errors.As(err, &conflict) {
+		problem.CurrentStar = &current
+	case errors.As(err, &conflict):
 		current := message(conflict.Current)
-		w.Header().Set("Content-Type", "application/problem+json")
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(engineapi.Problem{Type: "urn:oie:problem:" + code, Title: http.StatusText(status), Status: status, Code: engineapi.ProblemCode(code), CurrentMessage: &current})
-		return
+		problem.CurrentMessage = &current
 	}
-	writeProblem(w, status, code)
+	writeProblemDocument(w, problem)
+}
+
+var problemTitles = map[string]string{
+	"invalid_request":       "Invalid request",
+	"not_found":             "Not Found",
+	"idempotency_conflict":  "Idempotency key conflict",
+	"account_exists":        "Account already exists",
+	"invalid_cursor":        "Invalid event cursor",
+	"history_changed":       "History changed",
+	"unavailable":           "Service Unavailable",
+	"state_conflict":        "State conflict",
+	"protocol_unavailable":  "Protocol unavailable",
+	"media_blocked":         "Media access blocked",
+	"media_fetch_failed":    "Media fetch failed",
+	"media_too_large":       "Media too large",
+	"media_unsupported":     "Unsupported media",
+	"range_not_satisfiable": "Range not satisfiable",
+	"media_busy":            "Media service busy",
+	"media_timeout":         "Media request timed out",
+}
+
+func newProblem(status int, code string) engineapi.Problem {
+	return engineapi.Problem{
+		Type: "urn:oie:problem:" + code, Title: problemTitles[code],
+		Status: status, Code: engineapi.ProblemCode(code),
+	}
 }
 
 func writeProblem(w http.ResponseWriter, status int, code string) {
+	writeProblemDocument(w, newProblem(status, code))
+}
+
+func writeProblemDocument(w http.ResponseWriter, problem engineapi.Problem) {
 	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(engineapi.Problem{
-		Type: "urn:oie:problem:" + code, Title: http.StatusText(status),
-		Status: status, Code: engineapi.ProblemCode(code),
-	})
+	w.WriteHeader(problem.Status)
+	_ = json.NewEncoder(w).Encode(problem)
 }
 
 func (s *Server) GetHealth(ctx context.Context, _ engineapi.GetHealthRequestObject) (engineapi.GetHealthResponseObject, error) {

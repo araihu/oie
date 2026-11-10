@@ -103,7 +103,10 @@ func TestHTTPBoundaryProblemsAndAllow(t *testing.T) {
 				t.Fatalf("boundary status=%d allow=%q cache=%q body=%s", res.StatusCode, res.Header.Get("Allow"), res.Header.Get("Cache-Control"), data)
 			}
 			var problem engineapi.Problem
-			if json.Unmarshal(data, &problem) != nil || problem.Status != res.StatusCode || problem.Type == "" || strings.Contains(string(data), "secret") {
+			if res.Header.Get("Content-Type") != "application/problem+json" ||
+				json.Unmarshal(data, &problem) != nil || problem.Status != res.StatusCode ||
+				problem.Type != "urn:oie:problem:invalid_request" || problem.Title != "Invalid request" ||
+				problem.Code != "invalid_request" || strings.Contains(string(data), "secret") {
 				t.Fatalf("problem status/leak: %s", data)
 			}
 			validateResponseContract(t, req, res, data)

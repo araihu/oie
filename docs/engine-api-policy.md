@@ -22,7 +22,7 @@ store/application imports. No SDK, extra module, daemon or transport is required
 | Safe reads | GET queries observations or retained content; incidental cache/index enrichment is permitted | Shared catalog/preview reads can schedule bounded enrichment; no send, star, read-mark or room-intent mutation. Original bytes require explicit content GET |
 | Acceptance | 201 creates; 200 reads/completes/replays; 202 persists or accepts asynchronous intent | Acceptance is distinct from connection, protocol submission and recipient delivery. Poll the returned resource; use bounded waits, initially 250 ms, with backoff |
 | Locations | Resource creation/async responses identify a pollable resource with Location | Operation lookup identifies acceptance; GET resource returns current state, which can differ from receipt snapshot |
-| Input / errors | JSON commands, 1 MiB HTTP body cap, schema and application validation; opaque UUIDv7 IDs and UTC RFC3339 instants | Unsupported methods return 405 with Allow; unsupported request media types return 415 and bodies beyond the cap return 413. Other invalid input uses Problem Details with stable codes. Do not parse localized titles or raw protocol errors |
+| Input / errors | JSON commands, 1 MiB HTTP body cap, schema and application validation; opaque UUIDv7 IDs and UTC RFC3339 instants | Unsupported methods return 405 with Allow; unsupported request media types return 415 and bodies beyond the cap return 413. Engine errors use RFC 9457 Problem Details with stable type URIs and short codes |
 | Concurrency | Existing required body revisions and 409 state_conflict | No If-Match/412/428 policy yet. Content ETags identify representations, not automatically domain revisions |
 | Idempotency | Engine-wide UUIDv7 keys, normalized operation fingerprints, transactional receipt/state/outbox/events; no expiry | Exact authored text is retained. Connection and derived preview work deliberately do not have durable receipts; see audit matrix |
 | Retry | No automatic CLI retry. Reconcile uncertain sends using the original key/body | A timeout/cancellation is not rollback. Never mint a new key to hide an uncertain send; dispatch-unknown is not blindly retried |
@@ -31,7 +31,7 @@ store/application imports. No SDK, extra module, daemon or transport is required
 | Original media | Private no-store, bounded single ranges and If-Range | Provider ETag is not a verified hash. HEAD and conditional If-None-Match are intentionally unsupported for original content; BFF revalidation is separate |
 | Streams | Current SSE uses no-cache; clients should consume without persistent caching. Structured UTF-8 SSE, engine:sequence IDs; bounded DB batches, heartbeat, write deadline and cancellation | Snapshot cursor before reading snapshots, then subscribe/replay and deduplicate applied IDs. No retention expiry now; future gaps must return explicit reset/conflict, never skip silently |
 | Pagination | Bounded stable source ordering; cursor belongs to documented engine/filter/snapshot scope | Conversation activity can move between pages; resnapshot/deduplicate on live changes. Edit-history pages reject changed snapshots |
-| Operations | CLI results/bytes go to stdout, sanitized diagnostics to stderr; exits 2 input, 3 transport/deadline/cancellation, 4 HTTP | Raw SSE is consumed incrementally; timeout/cancellation returns 3 even after partial output. Persist only fully applied SSE IDs. No implicit reconnect/retry |
+| Operations | CLI results/bytes go to stdout, sanitized diagnostics to stderr; exits 2 input, 3 transport/deadline/cancellation, 4 HTTP | SSE is consumed incrementally by default. Timeout/cancellation returns 3 even after partial output. Persist only fully applied SSE IDs. No implicit reconnect/retry |
 | Exposure | Default loopback listener; preserve existing explicitly configured hosted scope | Application authentication remains deferred. No external listener or arbitrary quota is introduced by this proof |
 
 **RECOMMENDED:** `/api/v1` identifies the wire-contract major; OpenAPI
@@ -57,6 +57,23 @@ operation. Current no-expiry receipts must not acquire undocumented expiry.
 **BACKLOG / OUTSIDE THIS MILESTONE:** application authentication, TUI, WASM,
 public SDK, new transport, schedules, sync and outgoing attachments. Existing
 restrictions on corrections, rooms and reaction identity remain in force.
+
+## Engine problem responses
+
+The engine returns `application/problem+json` as defined by
+[RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html#section-3). The `type`
+URI is the primary identifier, in the form `urn:oie:problem:<code>`. The
+`title` summarizes the type and stays consistent across occurrences. The
+`status` matches the HTTP response. The `code` extension gives clients a
+short label for diagnostics and localized messages. The OpenAPI responses
+document the HTTP statuses and the Problem schema enumerates the codes.
+
+For example, a 409 response with type
+`urn:oie:problem:idempotency_conflict` means the idempotency key was already
+used with different input. A 409 with type `urn:oie:problem:state_conflict`
+can include the current resource in a documented extension so the caller can
+refresh its state. The CLI prints the short code on stderr when it is declared
+by the response contract.
 
 ## Standards used in the review
 

@@ -756,7 +756,9 @@
           "content"
         ],
         "x-cli-name": "download",
-        "x-cli-ignore": false
+        "x-cli-ignore": false,
+        "x-cli-description": "Download the original bytes of a shared item.",
+        "x-cli-example": "oiectl shared content download --item-id ITEM_UUID --output raw \u003e download\n"
       }
     },
     "/api/v1/conversations/{conversationId}/messages/{messageId}/context": {
@@ -1488,7 +1490,9 @@
           "images"
         ],
         "x-cli-name": "download",
-        "x-cli-ignore": false
+        "x-cli-ignore": false,
+        "x-cli-description": "Download a retained preview image by its hash.",
+        "x-cli-example": "oiectl previews images download --hash IMAGE_HASH --output raw \u003e preview-image\n"
       }
     },
     "/api/v1/health": {
@@ -1927,7 +1931,9 @@
           "avatars"
         ],
         "x-cli-name": "download",
-        "x-cli-ignore": false
+        "x-cli-ignore": false,
+        "x-cli-description": "Download a PNG using the imageHash from accounts avatars list.",
+        "x-cli-example": "oiectl accounts avatars download --hash IMAGE_HASH --output raw \u003e avatar.png\n"
       }
     },
     "/api/v1/accounts/{accountId}/history": {
@@ -2084,6 +2090,8 @@
         "summary": "Replay durable changes and follow new events",
         "x-cli-ignore": false,
         "description": "SSE id is engineUUID:sequence; event is the event type; data is Event JSON.\nLast-Event-ID resumes strictly after its sequence. Without a cursor replay\nfrom zero. Cursors from another engine or ahead of current state return 409\nbefore streaming. Heartbeat comments are not durable events.\nThis engine retains the complete change log. Clients deduplicate by event\nID and refresh snapshots if a future retention policy expires a cursor.\n",
+        "x-cli-description": "Print events as they arrive. The stream runs until it closes or reaches the request timeout (one minute by default). Resume from the last event ID you processed.",
+        "x-cli-example": "oiectl events stream\noiectl events stream --timeout 10m --last-event-id ENGINE_UUID:SEQUENCE\n",
         "parameters": [
           {
             "name": "Last-Event-ID",
@@ -2236,7 +2244,9 @@
             }
           }
         },
-        "x-cli-name": "connect"
+        "x-cli-name": "connect",
+        "x-cli-description": "Connect an account using credentials from a private JSON file or stdin.",
+        "x-cli-example": "oiectl accounts connect --account-id ACCOUNT_UUID --body-file connection.json\n"
       },
       "delete": {
         "operationId": "disconnectAccount",
@@ -3161,7 +3171,9 @@
             }
           }
         },
-        "x-cli-name": "send"
+        "x-cli-name": "send",
+        "x-cli-description": "Queue a text message for delivery. Use the returned message ID to check its delivery state with messages get. To retry the same request, reuse the key and body.",
+        "x-cli-example": "printf '%s\\n' '{\"originalText\":\"Olá!\"}' | oiectl messages send \\\n  --conversation-id CONVERSATION_UUID --idempotency-key REQUEST_UUID --body-stdin\n"
       }
     },
     "/api/v1/messages/{messageId}/reactions": {
@@ -3719,7 +3731,7 @@
                 },
                 "example": {
                   "type": "urn:oie:problem:history_changed",
-                  "title": "Conflict",
+                  "title": "History changed",
                   "status": 409,
                   "code": "history_changed"
                 }
@@ -3787,7 +3799,7 @@
             "$ref": "#/components/responses/NotFound"
           }
         },
-        "x-cli-name": "authors"
+        "x-cli-name": "author"
       }
     },
     "/api/v1/messages/{messageId}": {
@@ -3985,7 +3997,7 @@
             },
             "example": {
               "type": "urn:oie:problem:invalid_request",
-              "title": "Bad Request",
+              "title": "Invalid request",
               "status": 400,
               "code": "invalid_request"
             }
@@ -4017,7 +4029,7 @@
             },
             "example": {
               "type": "urn:oie:problem:idempotency_conflict",
-              "title": "Conflict",
+              "title": "Idempotency key conflict",
               "status": 409,
               "code": "idempotency_conflict"
             }
@@ -4903,7 +4915,11 @@
           "code": "unavailable"
         },
         "additionalProperties": false,
-        "description": "Stable codes for presentation-owned localization; no raw storage errors or credentials.",
+        "description": "RFC 9457 Problem Details served as application/problem+json. The type URI identifies the problem. The code extension is a stable short identifier for display and localization. Responses exclude raw storage errors and credentials.",
+        "externalDocs": {
+          "description": "RFC 9457 Problem Details for HTTP APIs",
+          "url": "https://www.rfc-editor.org/rfc/rfc9457.html"
+        },
         "required": [
           "type",
           "title",
@@ -4912,16 +4928,20 @@
         ],
         "properties": {
           "type": {
-            "type": "string"
+            "type": "string",
+            "description": "Stable absolute problem type URI in the form urn:oie:problem:\u003ccode\u003e."
           },
           "title": {
-            "type": "string"
+            "type": "string",
+            "description": "Short human-readable summary that is stable for a problem type."
           },
           "status": {
-            "type": "integer"
+            "type": "integer",
+            "description": "HTTP status code of this response."
           },
           "code": {
             "type": "string",
+            "description": "Oiê extension for the short problem code.",
             "enum": [
               "invalid_request",
               "not_found",
