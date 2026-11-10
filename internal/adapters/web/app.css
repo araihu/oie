@@ -1,7 +1,7 @@
 /* Chat workspace composition through public component root hooks and theme tokens. */
 :root {
  --oie-bg:#f7f8f7;--oie-panel:#fff;--oie-raised:#f0f2f1;--oie-selected:#e6ece8;
- --oie-text:#17211c;--oie-muted:#4b5951;--oie-border:#d7ddd9;--oie-chat:#e3e8e6;--oie-wallpaper-wash:rgb(227 232 230 / .6);
+ --oie-text:#17211c;--oie-muted:#4b5951;--oie-border:#d7ddd9;--oie-chat:#e3e8e6;--oie-wallpaper-wash:transparent;
  --oie-accent:#6092ab;--oie-accent-soft:#e1eef5;--oie-on-accent:#07111f;--oie-accent-text:#274c5e;
  --font-body:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
  --font-title:var(--font-body);
