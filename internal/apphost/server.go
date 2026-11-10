@@ -162,6 +162,16 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 	}
 	presentation := http.NewServeMux()
 	presentation.Handle("GET /assets/", assets.Handler())
+	// These paths belong to the BFF despite sharing the engine API prefix. Keep
+	// its CSRF, account/engine binding and response validation for native clients.
+	for _, pattern := range []string{
+		"GET /api/v1/previews/{id}",
+		"GET /api/v1/shared-content/{id}/thumbnail",
+		"GET /api/v1/conversations/{id}/read-state",
+		"POST /api/v1/conversations/{id}/read-state",
+	} {
+		presentation.Handle(pattern, ui)
+	}
 	presentation.HandleFunc("/api/", http.NotFound)
 	presentation.Handle("/", ui)
 	host.presentation = host.track(presentation)

@@ -3,6 +3,8 @@ package apphost
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -12,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -198,6 +201,100 @@ func TestPrivateListenerRequiresCapabilityButNativePresentationWorks(t *testing.
 	// BFF live events need the capability too, but never expose it to the WebView.
 	events := stream(t, presentation.URL+"/ui/events")
 	defer func() { _ = events.Body.Close() }()
+}
+
+func TestNativePresentationKeepsValidatedBFFJSONRoutes(t *testing.T) {
+	engineID, accountID, conversationID := uuid.Must(uuid.NewV7()).String(), uuid.Must(uuid.NewV7()).String(), uuid.Must(uuid.NewV7()).String()
+	previewID, itemID, messageID := uuid.Must(uuid.NewV7()).String(), uuid.Must(uuid.NewV7()).String(), uuid.Must(uuid.NewV7()).String()
+	revisionID := uuid.Must(uuid.NewV7()).String()
+	readPath := "/api/v1/conversations/" + conversationID + "/read-state"
+	previewPath := "/api/v1/previews/" + previewID
+	thumbnailPath := "/api/v1/shared-content/" + itemID + "/thumbnail"
+	var calls, writes atomic.Int32
+	engine := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		var body any
+		switch r.URL.Path {
+		case "/api/v1/engine":
+			body = map[string]any{"id": engineID}
+		case "/api/v1/conversations/" + conversationID:
+			body = engineapi.Conversation{Id: conversationID, AccountId: accountID}
+		case readPath:
+			unread := 2
+			if r.Method == http.MethodPost {
+				var mark engineapi.MarkMessagesRead
+				if err := json.NewDecoder(r.Body).Decode(&mark); err != nil || len(mark.MessageIds) != 1 || mark.MessageIds[0] != messageID || r.Header.Get("Idempotency-Key") != revisionID {
+					t.Error("BFF did not preserve the validated read-state operation")
+				}
+				writes.Add(1)
+				unread = 0
+			}
+			body = engineapi.ConversationReadState{ConversationId: conversationID, AccountId: accountID, UnreadCount: unread}
+		case previewPath:
+			body = engineapi.MessagePreview{Id: previewID, RevisionId: revisionID, AccountId: accountID, ConversationId: conversationID, MessageId: messageID, Kind: "image", State: "ready", DownloadState: "queued", Url: "https://example.test/image.jpg", UpdatedAt: time.Now().UTC()}
+		case thumbnailPath:
+			body = engineapi.VideoThumbnail{Id: previewID, RevisionId: revisionID, SharedContentId: itemID, AccountId: accountID, ConversationId: conversationID, MessageId: messageID, Kind: "video", State: "queued", Url: "https://example.test/video.mp4", UpdatedAt: time.Now().UTC()}
+		default:
+			t.Errorf("native presentation forwarded an unexpected engine path: %s", r.URL.Path)
+			w.WriteHeader(500)
+			return
+		}
+		if err := json.NewEncoder(w).Encode(body); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer engine.Close()
+	s := testServer(t, Config{Role: "bff", Listen: "127.0.0.1:0", EngineURL: engine.URL, PrivateAPI: true})
+	csrf := base64.RawURLEncoding.EncodeToString(make([]byte, 32))
+	request := func(method, path, token string) *httptest.ResponseRecorder {
+		t.Helper()
+		body := `{"messageIds":["` + messageID + `"]}`
+		r := httptest.NewRequest(method, "wails://localhost"+path, strings.NewReader(body))
+		r.Header.Set("X-Oie-Engine-ID", engineID)
+		r.Header.Set("X-Oie-Account-ID", accountID)
+		r.Header.Set("Idempotency-Key", revisionID)
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("X-CSRF-Token", token)
+		r.AddCookie(&http.Cookie{Name: "oie_csrf", Value: csrf})
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, r)
+		return w
+	}
+	for _, path := range []string{previewPath, thumbnailPath, readPath} {
+		w := request(http.MethodGet, path, "")
+		if w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" || !json.Valid(w.Body.Bytes()) {
+			t.Fatalf("native BFF query %s failed: %d %s", path, w.Code, w.Body)
+		}
+	}
+	before := calls.Load()
+	if w := request(http.MethodPost, readPath, "forged"); w.Code != 403 || calls.Load() != before || writes.Load() != 0 {
+		t.Fatalf("forged CSRF reached engine: status=%d calls=%d writes=%d", w.Code, calls.Load(), writes.Load())
+	}
+	w := request(http.MethodPost, readPath, csrf)
+	var marked engineapi.ConversationReadState
+	if err := json.Unmarshal(w.Body.Bytes(), &marked); err != nil || w.Code != 200 || marked.UnreadCount != 0 || writes.Load() != 1 {
+		t.Fatalf("valid native read-state mutation failed: %d %s %v", w.Code, w.Body, err)
+	}
+	if w.Header().Get("X-Oie-Next-Operation-Key") == "" {
+		t.Fatal("native mutation bypassed the BFF operation response")
+	}
+	before = calls.Load()
+	for _, scenario := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/engine"},
+		{http.MethodGet, "/api/openapi.yaml"},
+		{http.MethodGet, "/api/v1/accounts"},
+		{http.MethodGet, "/api/v1/conversations/" + conversationID + "/messages"},
+		{http.MethodPost, previewPath + "/download"},
+		{http.MethodPost, thumbnailPath},
+		{http.MethodDelete, readPath},
+		{http.MethodGet, previewPath + "/extra"},
+	} {
+		w = request(scenario.method, scenario.path, csrf)
+		if w.Code != 404 || calls.Load() != before {
+			t.Fatalf("native handler exposed raw API %s %s: status=%d", scenario.method, scenario.path, w.Code)
+		}
+	}
 }
 
 func TestFailedStartupReleasesListenerAndStore(t *testing.T) {
