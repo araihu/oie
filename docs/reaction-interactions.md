@@ -3,7 +3,8 @@
 The WhatsApp reference guides placement and interaction. Received messages expose
 the shortcut to their right; own messages expose it to their left. Hover and
 keyboard focus reveal the control without changing the bubble's dimensions.
-A compact capsule below the source shows the available emoji counts. Its
+A compact capsule slightly overlaps the source bubble's bottom border and shows
+the available emoji counts. Its
 Goshtoso Popover provides emoji filters and an explicit action to remove an own
 reaction or open the existing selector. Opening or filtering that panel sends
 nothing.
