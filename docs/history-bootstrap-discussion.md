@@ -19,6 +19,10 @@ implementation has not started.
 
 ## Agreed initial history target
 
+When initial recovery starts for a room, set the end of its window to that
+instant and the start to 48 hours earlier. Persist both bounds in UTC and reuse
+them when resuming the same recovery after an interruption or reconnect.
+
 For each room, prioritize messages from the **last 48 hours**. If that interval
 contains fewer than **128 messages**, include the immediately preceding messages
 until the room has 128 messages, or the available authorized archive is
@@ -45,8 +49,7 @@ how often the open room gets a turn and scheduling across accounts remain open.
 
 ## Open decisions for the next discussion
 
-- What anchors the 48-hour cutoff, and what page/message/time budgets keep
-  a very active room from delaying every other room? Store time bounds in UTC.
+- What page, message and time budgets keep a busy room from delaying the others?
 - What turn frequency gives the open room preference while preserving progress
   across rooms and accounts? Keep requests paced and live traffic responsive.
 - How do recent coverage and older backfill checkpoints resume after reconnect,
@@ -66,6 +69,8 @@ older-history coverage, live/archive deduplication and preservation of deletion
 markers. Historical imports must not create new unread messages or notifications.
 Verify that a busy open room receives its first page promptly and that other
 rooms receive pages before the open room completes its initial target.
+Interrupt recovery, advance the clock and verify that the resumed query uses
+the same UTC bounds for that room.
 
 The existing history implementation and its checks are described in
 [the history milestone](milestone-three-history.md). The agreed retention and

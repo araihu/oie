@@ -380,12 +380,14 @@ Keep retrieved history until explicit user deletion, even after the provider exp
 rc.0 may retain the current initial-recovery behavior. Initial room recovery
 must let the user interact while older authorized history continues in the
 background. **AGREED INITIAL TARGET:** prioritize the last 48 hours for each
-room. If that interval contains fewer than 128 messages, include immediately
-preceding messages until reaching 128 or exhausting the available authorized
-archive. Start with the newest page of the open room when it needs recovery,
+room. Fix the window when recovery starts for that room, persist both bounds
+in UTC and reuse them when resuming. If that interval contains fewer than 128
+messages, include immediately preceding messages until reaching 128 or
+exhausting the available authorized archive. Start with the newest page of the
+open room when it needs recovery,
 then alternate pages among rooms with preference for the open room. Show each
 page as it is stored. Fetch the remaining authorized history gradually in the
-background. Record page limits, turn frequency, time bounds and resume decisions in
+background. Record page limits, turn frequency and checkpoint decisions in
 [the initial-history discussion](history-bootstrap-discussion.md) before API-first
 implementation. Eventual full-history recovery and retention remain required.
 
