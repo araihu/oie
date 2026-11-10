@@ -807,6 +807,8 @@ command/outbox design. This increment does not implement it or turn the proposed
 **AGREED:** offer an Edit message action. With an empty composer, ArrowUp prepares
 the most recently sent own message for editing. Typing, IME composition and open
 pickers keep their normal keyboard behavior.
+While an edit is already open or being prepared, unmodified ArrowUp does nothing
+outside open pickers, preserving the text, selection and current edit target.
 
 **AGREED:** indicate editing by highlighting the source message, without an
 editing banner above the composer. Dim that message while its correction is

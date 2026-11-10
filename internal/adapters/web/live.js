@@ -166,6 +166,7 @@ window.OieRuntime.register('live', life => {
   life.on(input,'keydown',event=>{
     if(event.defaultPrevented||event.isComposing||event.keyCode===229||editComposing||event.ctrlKey||event.altKey||event.metaKey||event.shiftKey)return;
     if(event.key==='Escape'&&(editSession||editPreparing)&&!editMenuOpen()){event.preventDefault();event.stopImmediatePropagation();leaveEdit();return;}
+    if(event.key==='ArrowUp'&&(editSession||editPreparing)&&!editMenuOpen()){event.preventDefault();event.stopImmediatePropagation();return;}
     if(event.key==='ArrowUp'&&input.value===''&&!input.readOnly&&!input.disabled&&!editSession&&!editPreparing&&!journal?.pending&&!preparingReply&&!editMenuOpen()&&composer.dataset.editAllowed==='true'){event.preventDefault();void beginEdit();}
   });
 
