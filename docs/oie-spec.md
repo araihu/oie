@@ -21,7 +21,7 @@ The status labels have distinct meanings:
 
 Sections 2–13 describe **AGREED** behavior unless a paragraph carries a recommendation or open-decision label. Section 14 contains recommendations, not additional accepted scope. Acceptance scenarios distinguish agreed outcomes from proposed engineering details.
 
-Alpha includes local standalone operation, hosted-engine operation, optional app/history sync, multi-account XMPP, reliable immediate and scheduled sends, retained searchable history, rooms, attachments, responsive web UI, PWA/offline behavior, and manual merge restore.
+The broader alpha target includes local standalone operation, hosted-engine operation, optional app/history sync, multi-account XMPP, reliable immediate and scheduled sends, retained searchable history, rooms, attachments, responsive web UI, PWA/offline behavior, and manual merge restore. The first release, v0.0.1, freezes the currently implemented functional scope and adds standalone desktop packaging as agreed in section 2.1.1. This does not claim that every broader alpha requirement is already implemented.
 
 Alpha is single-user: one Oiê owner per instance. Multiple accounts and devices remain supported. Built-in application authentication, multi-user hosting, XMPP E2EE, calls, and other deferred features are listed in section 16. Protocol account credentials are still needed to connect existing XMPP accounts; this does not reopen the deferred application-login design.
 
@@ -41,11 +41,56 @@ Ship one Go executable supporting native engine, presentation/BFF, and optional 
 
 Each device/UI selects **one engine at a time**, supporting multiple accounts within that engine. The alpha UI does not simultaneously aggregate multiple independent engines. An engine's replicated history can still contain data obtained from other synced engines.
 
-Use an embedded engine initially, with no separate daemon required. In a future native window host, closing the window keeps the engine running; explicit quit stops it. In the browser-first alpha, closing a tab does not stop the serving Go process. Closing a hosted UI does not terminate its shared remote engine. Wails remains a possible later desktop host, not an alpha dependency.
+Use an embedded engine initially, with no separate daemon required. In a future native window host, closing the window keeps the engine running; explicit quit stops it. In the browser-first alpha, closing a tab does not stop the serving Go process. Closing a hosted UI does not terminate its shared remote engine. Wails is now selected for the first standalone desktop alpha, as described below; this supersedes the earlier browser-only release boundary.
 
 Ordinary engine restart/reconnect resumes eligible pending sends automatically. Backup recovery has a separate review rule in section 13.
 
 **OPEN O01:** Exact commands, configuration, role combinations, process supervision, and data-directory layout. **RECOMMENDED R01:** a modular monolith with explicit role configuration.
+
+### 2.1.1 First desktop alpha distribution · 2026-11-10
+
+**AGREED:** v0.0.1 is the first alpha. Freeze the functional scope at the usable
+application integrated into main at `741e794`; desktop packaging and corrections
+needed for that packaging may follow before the release. The larger specification
+remains the product direction, not a claim that sync, schedules, outgoing media,
+PWA/offline queues or every other planned feature ships in this release.
+
+**AGREED:** use Wails as the native window host, retaining the Go engine, local
+SQLite/media storage, Goshtoso/templ BFF and HTMX interface. Initial validated
+release targets are macOS Apple Silicon (`darwin/arm64`) and Ubuntu Linux x86_64
+(`linux/amd64`). Windows and other architectures are outside this initial
+validation matrix. Closing the window keeps the embedded engine running;
+explicit Quit stops it.
+
+**AGREED:** initially distribute through both source installation with
+`go install` and one macOS/Linux shell installer. The installer downloads the
+matching prebuilt artifact from `araihu/oie` GitHub Releases after detecting OS
+and architecture. Package-manager distribution is deferred as B22. These are
+requirements under discussion, not implemented installation commands or a
+published v0.0.1 tag.
+
+**RECOMMENDED:** pin Wails v3.1.0, the latest stable release verified on
+2026-11-10, consistently in app dependencies and the tools module. The Wails CLI
+belongs in the tools module. Keep generated frontend assets available in source
+so `go install` does not depend on an implicit generation step. Source builds
+still require the native platform toolchain and libraries; `go install` does not
+produce a macOS application bundle by itself.
+
+**RECOMMENDED:** publish simple archives, with a macOS `.app` bundle and a Linux
+executable plus desktop resources. The installer verifies release checksums,
+supports a pinned release, defaults to per-user installation and preserves the
+separate data directory during updates. These installer details await agreement.
+
+**OPEN:** the minimum Ubuntu/macOS versions, Ubuntu dependency handling,
+installation paths and launch behavior, macOS signing/notarization, update and
+uninstall behavior, FFmpeg distribution, and packaging CI/test coverage. The
+available development environment reports Ubuntu 26.04; this does not establish
+the supported minimum version. Direct WebView routing and SSE/media compatibility
+still need a desktop proof before choosing the final local transport.
+
+Reference evidence: [Wails v3.1.0 release](https://github.com/wailsapp/wails/releases/tag/v3.1.0),
+[native prerequisites](https://v3.wails.io/getting-started/installation/) and
+[build/package behavior](https://v3.wails.io/guides/build/building/).
 
 ### 2.2 Hexagonal architecture
 
@@ -668,14 +713,15 @@ Manual link stars/export, separate threads, automatic protocol relaying, multi-e
 | **B19** | Sticker selection, packs and sending. |
 | **B20** | GIF search, selection and sending. Existing ordinary media behavior does not imply a GIF discovery service. |
 | **B21** | Returning to Conversations from another navigation section restores the previously selected conversation in the same engine/account context, if it still exists and is accessible. |
+| **B22** | Package-manager distribution: Homebrew, MacPorts, APT packages/repositories and other popular Linux distribution package managers. Start with `go install` and the cross-platform GitHub Release installer; concrete additional managers and package formats remain to be selected. |
 
-A separate native daemon is an accepted future option. Wails is a possible desktop host. Matrix, IRC, and Nostr are likely future protocol candidates. These do not require alpha daemon/native-shell implementations or implement all candidate protocols now.
+A separate native daemon is an accepted future option. Wails desktop packaging is now selected for v0.0.1 under section 2.1.1. Matrix, IRC, and Nostr remain likely future protocol candidates; desktop packaging does not select a separate daemon or implement those protocols.
 
 ## 17. Recommended delivery sequence and validation
 
 ### 17.1 Proposed milestones
 
-This sequence is **RECOMMENDED**, not a reduction of the agreed final alpha scope.
+This original sequence is **RECOMMENDED** for the broader product target. The subsequently agreed v0.0.1 release boundary in section 2.1.1 takes precedence over treating completion of every milestone as a prerequisite for the first release.
 
 1. **Contracts and dependency fit.** Establish the Oiê module, dependency boundary checks, OpenAPI generation/lint, minimal engine/BFF roles, SQLite migrations, and a public-component consumer proof. Resolve G01/G02/Margo gaps through generic upstream PRs with pinned commit pseudo-versions as needed. Establish canonical identity and operation IDs before replication.
 2. **Usable XMPP messaging.** Connect multiple existing accounts, ingest/store messages, show responsive conversation list/timeline/composer, and exercise transactional sends/retries/receipts with en/pt-BR and System/Light/Dark from the start.

@@ -1,6 +1,6 @@
 # Oie unified chat project discussion
 
-Updated: 2026-11-07, America/Sao_Paulo.
+Updated: 2026-11-10, America/Sao_Paulo.
 
 ## Purpose and working agreement
 
@@ -16,7 +16,7 @@ Implementation is now authorized. The repository is https://github.com/araihu/oi
 
 - Project repository: `araihu/oie`. Repository creation and the first implementation milestone are now authorized.
 - Implement the application in Go with a Goshtoso web interface.
-- Start with a plain browser experience. Wails is a possible later desktop host, not a selected dependency or first-release requirement.
+- Start with a plain browser experience. Subsequently, the user selected Wails desktop packaging for the first release v0.0.1; see the 2026-11-10 distribution decision below.
 - Use hexagonal architecture to connect chat protocols through shared application-facing contracts. XMPP is the initial protocol; future protocols should fit through adapters.
 - Support both local and remotely hosted deployments of the Go program. The user explicitly chose both when asked where the Go process should run for the first browser version.
 - Support standalone use with local SQLite and an optional remote service for device synchronization. Both hosted-engine and local-engine-with-optional-sync modes are confirmed; sync scope, conflict policies, and service packaging remain undecided.
@@ -1286,3 +1286,26 @@ restoration. This is an implementation increment of the agreed history policy;
 full room membership/sending is still not implemented. The UI must display
 progress/partial coverage and keep recovered rooms read-only. See the milestone
 three notes for the implemented scope and remaining work.
+
+
+## First desktop alpha distribution · 2026-11-10
+
+Agreed: treat the current usable app, integrated into main at `741e794`, as the
+functional baseline for v0.0.1, the first alpha. Proceed with a Wails standalone
+host and packaging corrections before resuming broader feature milestones.
+Initial test/release targets are macOS Apple Silicon and Ubuntu Linux x86_64.
+Keep the embedded-engine lifecycle already agreed: close hides the window;
+explicit Quit stops the engine.
+
+Agreed: support source installation with `go install` and a cross-platform shell
+installer that detects the system/architecture and downloads the corresponding
+GitHub Release artifact. Defer Homebrew, MacPorts, APT and other popular distro
+package managers to backlog B22. Do not require those package formats for the
+first distribution.
+
+Recommended, not yet agreed: pin the verified latest stable Wails v3.1.0, simple
+release archives containing a macOS app bundle or Linux executable/resources,
+checksum verification, pinned versions and per-user installation. Native build
+prerequisites still apply to source installation. Installer dependency handling,
+minimum OS versions, signing, updates, FFmpeg and desktop-specific validation
+remain open. No desktop release or installer exists yet. See spec section 2.1.1.
