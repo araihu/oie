@@ -370,7 +370,13 @@ Needed public Margo API additions are authorized, provided existing behavior is 
 
 ## 7. History, search, and shared links
 
-Persist history independently of protocol-server retention. By default, gradually backfill **all available authorized history** with paced, serial requests per server. Allow on-demand recovery per room. Both modes load the initial history target and retain new messages and retrieved pages. Rooms on the same server share its limits across accounts. Different servers can recover history in parallel with independent limits. Serve retained history when reopening a conversation.
+Persist history independently of protocol-server retention. By default,
+gradually backfill **all available authorized history** with paced, serial
+requests per server. Allow on-demand recovery per room. Both modes load the
+initial history target and retain new messages and retrieved pages. For XMPP,
+key the queue by the normalized domain of the archive address. Rooms on the
+same domain share its limits across accounts. Different domains can recover
+history in parallel. Serve retained history when reopening a conversation.
 
 Keep retrieved history until explicit user deletion, even after the provider expires it. Optional Oiê history sync also transfers records no longer available from the provider. Oiê cannot retrieve history that neither the provider nor a participating Oiê store still possesses.
 
@@ -390,7 +396,7 @@ older history gradually in the default mode or as needed for navigation and
 search in on-demand mode. Advance the cursor after storing the entire page.
 If the cursor expires, resume from the inclusive timestamp at the last
 confirmed page boundary within the original window and deduplicate reread
-messages. Record server identity, page limits and turn frequency in
+messages. Record page limits and turn frequency in
 [the initial-history discussion](history-bootstrap-discussion.md).
 
 Search across accounts/sources in the selected engine and within a direct/group conversation. Alpha indexes message text, captions, filenames, URLs, page titles/descriptions, and available media metadata. Document-body extraction, image OCR, and audio transcription are backlogged.

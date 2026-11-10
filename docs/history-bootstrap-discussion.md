@@ -46,10 +46,10 @@ Prioritize enough recent history to give each room useful context quickly.
 Continue towards the agreed initial target for each room. Fetch the remaining
 authorized history gradually from the server in the background.
 
-Rooms on the same server share its recovery queue and request limits, including
-rooms reached through different accounts. Serialize history requests within
-each server. Different servers use independent limits and can recover history
-in parallel. The round robin runs within each server's queue.
+In XMPP, use the normalized domain of the archive address as the queue key.
+Rooms on the same domain share request limits across accounts. Serialize
+archive requests within each domain and alternate room pages in that queue.
+Different domains use independent limits and can recover history in parallel.
 
 When the current archive query finishes, give pending search and scroll
 requests the next available turn on that server. Wait at least one second
@@ -119,7 +119,6 @@ search. [MAM](https://xmpp.org/extensions/xep-0313.html),
 ## Open decisions for the next discussion
 
 - What page, message and time budgets keep a busy room from delaying the others?
-- How does each protocol adapter identify which archives share a server?
 - What turn frequency gives the open room preference while preserving progress
   across rooms on the same server? Keep requests paced and live traffic responsive.
 - Which protocol capabilities and archive failures need fallbacks? How do we
@@ -137,8 +136,8 @@ older-history coverage, live/archive deduplication and preservation of deletion
 markers. Historical imports must not create new unread messages or notifications.
 Verify that a busy open room receives its first page promptly and that other
 rooms receive pages before the open room completes its initial target.
-Verify that rooms on the same server share its limits across accounts and that
-a slow request to one server lets recovery continue on another server.
+Verify that rooms with the same archive domain share its limits across
+accounts. A slow request to one archive domain lets another domain continue.
 Verify that a pending search or scroll request gets the next turn after an
 in-flight page, including during the one-second interval before the next
 automatic backfill page.
