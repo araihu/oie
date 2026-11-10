@@ -11,6 +11,7 @@ planned.
 
 - [Live browser setup and development accounts](docs/live-preview.md)
 - [Local CI loop](docs/local-ci.md)
+- [Native desktop build and lifecycle](docs/desktop.md)
 - [First specification](docs/oie-spec.md)
 - [Decision history](docs/unified-chat-discussion.md)
 - [Formatting feasibility](docs/oie-formatting-feasibility.md)
@@ -32,6 +33,10 @@ original timestamps, replay deduplication and progress through the API/UI. Saved
 rooms support explicit entry/leave, basic text and replies while joined.
 Attachment uploads, schedules, sync, PWA/offline and backup/restore remain later
 work.
+The Wails desktop command embeds this same engine and interface. Closing its
+window keeps the engine running; explicit Quit stops it. See the
+[native build instructions](docs/desktop.md). Release bundles and the installer
+for v0.0.1 are not published yet.
 See [history recovery scope](docs/milestone-three-history.md). See [engine milestone notes](docs/milestone-two-engine.md) and
 [foundation notes](docs/milestone-one.md) for scope and invariants.
 

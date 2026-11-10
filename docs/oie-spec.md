@@ -76,6 +76,14 @@ so `go install` does not depend on an implicit generation step. Source builds
 still require the native platform toolchain and libraries; `go install` does not
 produce a macOS application bundle by itself.
 
+**IMPLEMENTED:** `cmd/oie-desktop` uses Wails v3.1.0 with the existing embedded
+engine and HTMX BFF. The stable native origin preserves drafts across launches;
+the host adapts cookies, native file saving, external links, close-to-hide and
+explicit Quit. The browser/server command remains available. Build and scope
+details are in [desktop integration](desktop.md). Release archives, application
+bundles, the release installer and the v0.0.1 tag are not implemented/published
+by this integration milestone.
+
 **AGREED:** default to installation for the current OS user. On Ubuntu, check
 for missing runtime dependencies and show the required installation commands;
 the installer does not install them or invoke `sudo`. Updating is manual through
@@ -104,8 +112,10 @@ a pinned release. Exact archive layout and installer flags remain to be defined.
 **OPEN:** the minimum Ubuntu/macOS versions, exact installation paths and launch
 behavior, uninstall behavior and packaging CI/test coverage. The
 available development environment reports Ubuntu 26.04; this does not establish
-the supported minimum version. Direct WebView routing and SSE/media compatibility
-still need a desktop proof before choosing the final local transport.
+the supported minimum version. Native routing, CSRF, SSE and partial media reads
+have desktop smoke coverage. Separate custom profiles on macOS still share
+Wails' default native website store; engine-specific drafts/cache do not establish
+complete native storage isolation.
 
 Reference evidence: [Wails v3.1.0 release](https://github.com/wailsapp/wails/releases/tag/v3.1.0),
 [native prerequisites](https://v3.wails.io/getting-started/installation/),
