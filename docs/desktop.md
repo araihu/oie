@@ -43,6 +43,31 @@ The package checks use disposable profiles and do not connect real XMPP accounts
 The [installation guide](installation.md#platforms-and-verified-scope) and
 [rc.0 release notes](releases/v0.0.1-rc.0.md) describe platform limits.
 
+### Rebuild the release archives
+
+Use the packaging revision in the release receipt as the tooling checkout.
+It is newer than the application tag. `make package-linux` obtains the tagged
+source and runs the Ubuntu amd64 build and installation checks through Dagger.
+Its output is under the selected CI artifact directory's `release` folder.
+
+On native Apple Silicon with the build dependencies installed, obtain the
+application tree separately from the tooling checkout:
+
+```sh
+release_inputs=$(mktemp -d)
+mkdir "$release_inputs/source"
+git archive --format=tar --output="$release_inputs/source.tar" v0.0.1-rc.0
+tar -xf "$release_inputs/source.tar" -C "$release_inputs/source"
+sh scripts/package-desktop.sh --version v0.0.1-rc.0 \
+  --revision e8ffe5d0d924727478b8a5cbe3567a4240d7ae48 \
+  --source "$release_inputs/source" --output "$PWD/dist/v0.0.1-rc.0"
+```
+
+The builder refuses to overwrite an existing archive. Build timestamps and
+native toolchain metadata can change the archive hash; rebuilding does not
+promise bit-for-bit identical output. Keep the source tag fixed and record the
+new tooling, source hash and build metadata for every published package.
+
 ## Runtime options
 
 Optional command flags:

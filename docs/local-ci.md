@@ -32,6 +32,17 @@ installation, LaunchServices launch, signature and retained-profile checks
 passed under `tests/desktop/artifacts/rc0-packaged-macos`. These package checks
 use isolated profiles; they do not replace messaging integration coverage.
 
+The final packaging-tooling checks passed through `make ci-check` on
+2026-11-10, including lint, generated-file verification, 27 installer fixtures,
+race tests and builds. Evidence is under
+`tests/browser/artifacts/ci-rc0-final-check`; setup took 51s, checks 6m39s and
+the mock build 3s. The application source was unchanged from rc.0. After
+publication, all five release assets downloaded over public HTTPS and matched
+`SHA256SUMS`. The published installer also installed the Mac archive with only
+system commands on PATH, with Go excluded, and its bundle signature verified.
+Logs are retained under `bin/rc0-published-downloads.log` and
+`bin/rc0-published-install-macos.log`.
+
 `make check` remains independent of native libraries through the `server` build
 tag. Desktop targets clear that tag. The Ubuntu desktop container explicitly
 sets `GOPATH=/go` to use the mounted module cache; copying the Go toolchain alone
