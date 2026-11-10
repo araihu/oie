@@ -6,11 +6,36 @@ one process. The browser/server command remains `cmd/oie`.
 
 ## Installation
 
-See [desktop installation on macOS and Linux](installation.md) for build and
-runtime dependencies, per-user source installation, macOS linker flags,
-optional FFmpeg, updates and the installation issues observed during testing.
+See [desktop installation on macOS and Linux](installation.md) for release
+archives, the per-user installer, runtime/build dependencies, source installation,
+macOS linker flags, optional FFmpeg and manual updates.
 That guide owns the installation commands; this document describes the host
 implementation and native verification.
+
+## Release packaging
+
+The application source for `v0.0.1-rc.0` is fixed at
+`e8ffe5d0d924727478b8a5cbe3567a4240d7ae48`. Packaging tooling from later commits
+builds the macOS `Oie.app` bundle and Linux `bin`/`share` archive without moving
+that tag. Each archive includes source/build metadata and license notices. The
+release's `packaging-receipt.json` records the source revision, packaging-tooling
+revision, source archive hash, platform metadata and artifact hashes separately.
+
+The installer defaults to rc.0 and selects only `darwin/arm64` or `linux/amd64`.
+It verifies the selected archive against `SHA256SUMS` before extraction, rejects
+unsafe archive entries and stages installation beside the destination. Existing
+application files remain available for rollback until replacement completes.
+The profile directory is outside this operation. No dependency installation,
+process termination or quarantine removal is part of the installer.
+
+The macOS bundle uses ad-hoc signing, without Developer ID signing or
+notarization. Its current flat icon remains unchanged for rc.0; icon variants
+are B24. Linux's desktop entry uses absolute escaped executable and icon paths
+for the selected prefix.
+
+Final production-package runtime checks and publication are pending. The native
+source/build evidence below does not substitute for installing and launching
+the exact release archives. See [rc.0 release notes](releases/v0.0.1-rc.0.md).
 
 ## Runtime options
 

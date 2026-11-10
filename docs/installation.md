@@ -1,22 +1,94 @@
 # Desktop installation on macOS and Linux
 
-Oiê currently installs from source as the `oie-desktop` executable. The desktop
-host uses Wails v3.1.0 and includes the local engine, SQLite store and web
-interface. Add an existing XMPP account through the interface after launching.
-An external XMPP server is still required for messaging.
+Oiê's desktop package includes the Go engine, SQLite store and web interface in
+one application. Add an existing XMPP account after launching. An external XMPP
+server is still required for messaging.
 
-The current source prerelease is **v0.0.1-rc.0**. The first alpha, v0.0.1,
+The current release candidate is **v0.0.1-rc.0**. The first alpha, v0.0.1,
 requires the [initial-history usability improvement B25](history-bootstrap-discussion.md),
-which is not implemented in rc.0. Prebuilt release archives, a macOS `.app`
-bundle and the release-download shell installer are not available yet. The
-commands below install the rc.0 source tag, not the final alpha.
+which is not implemented in rc.0. Its current history recovery is accepted for
+this release candidate.
+
+**Publication and packaged runtime verification are pending.** The release
+commands below describe the prepared assets and will work after they are
+published to [v0.0.1-rc.0 on GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.0).
+Source installation from the existing tag remains available now.
+
+## Install a release package
+
+Prebuilt packages require no Go, compiler, headers, Node, Docker or separate
+SQLite installation. On Ubuntu 24.04 x86_64, install the runtime libraries
+yourself before running the installer:
+
+```sh
+sudo apt update
+sudo apt install ca-certificates libgtk-4-1 libwebkitgtk-6.0-4 libsoup-3.0-0
+```
+
+macOS supplies Cocoa and WebKit. FFmpeg is optional on both platforms.
+The installer also needs `curl`, `tar`, `gzip` and either `sha256sum` or
+`shasum`. On Ubuntu, install `curl` separately if it is missing.
+
+Save the release installer, then run it as your current user:
+
+```sh
+curl --fail --location --proto '=https' --proto-redir '=https' \
+  --output oie-install.sh \
+  https://github.com/araihu/oie/releases/download/v0.0.1-rc.0/install.sh &&
+sh ./oie-install.sh --version v0.0.1-rc.0
+```
+
+You can inspect `oie-install.sh` before running the second command. Do not use
+`sudo` for the installer. It detects the OS and architecture, downloads the
+matching archive over HTTPS and verifies its SHA-256 against `SHA256SUMS` before
+extraction. It checks native libraries and prints dependency guidance rather
+than installing system packages. It does not remove macOS quarantine attributes.
+
+| Platform | Default installation | Launch |
+| --- | --- | --- |
+| Ubuntu Linux x86_64 | Executable under `~/.local/bin`, desktop entry/icon/docs under `~/.local/share` | Applications menu or `~/.local/bin/oie-desktop` |
+| macOS Apple Silicon | `~/Applications/Oie.app` | Finder or `open "$HOME/Applications/Oie.app"` |
+
+The installer defaults to rc.0. Use `--version VERSION` for another published
+release and `--prefix DIR` to choose a different install root. On macOS the
+prefix is the parent of `Oie.app`; on Linux it contains `bin` and `share`.
+For example:
+
+```sh
+sh ./oie-install.sh --version v0.0.1-rc.0 --prefix "$HOME/Apps/Oie desktop"
+sh ./oie-install.sh --help
+```
+
+The planned release assets are:
+
+| Asset | Contents |
+| --- | --- |
+| `oie_v0.0.1-rc.0_darwin_arm64.tar.gz` | `Oie.app` bundle with executable, resources and licenses |
+| `oie_v0.0.1-rc.0_linux_amd64.tar.gz` | Executable, desktop entry, icon and documentation in `bin`/`share` |
+| `install.sh` | Per-user installer for both targets |
+| `SHA256SUMS` | SHA-256 checksums for the archives, installer and receipt |
+| `packaging-receipt.json` | Source/tooling revisions, archive hashes, platform build metadata and verification scope |
+
+The application source stays at tag `v0.0.1-rc.0`, commit
+`e8ffe5d0d924727478b8a5cbe3567a4240d7ae48`. Newer packaging tooling does not
+move that tag. The receipt records the packaging revision separately, and
+`build-info.json` inside each package identifies its application source.
+
+### macOS first open
+
+The bundle has an ad-hoc signature. It is not Developer ID signed or notarized.
+If macOS blocks the first launch, try opening the app once, then follow
+[Apple's first-open procedure](https://support.apple.com/en-us/102445) in System
+Settings, Privacy & Security, using Open Anyway for this app. The installer
+does not disable Gatekeeper. The current flat app icon remains in this version;
+desktop icon variants are backlog B24.
 
 ## Platforms and verified scope
 
 | Target | Current evidence |
 | --- | --- |
-| macOS Apple Silicon, `darwin/arm64` | Native installation and WebView checks passed on macOS 26.6.2 with SDK 26.5 and Go 1.27.3. Remote installation by commit also passed. |
-| Ubuntu 24.04 x86_64, `linux/amd64` | Native build and WebView checks passed in the amd64 CI lane under emulation. Installation on a separate user's Linux machine reached compilation and reported missing GTK/WebKit development packages; successful installation after installing those packages is not yet confirmed. |
+| macOS Apple Silicon, `darwin/arm64` | Source installation and native WebView checks passed on macOS 26.6.2 with SDK 26.5 and Go 1.27.3. Final packaged-app installation/runtime verification is pending. |
+| Ubuntu 24.04 x86_64, `linux/amd64` | Native build and WebView checks passed in the amd64 CI lane under emulation. Final archive installation in a runtime-only image is pending. A separate user's source-install retry after adding development packages is still unconfirmed. |
 
 These are test environments, not a promised minimum OS version. Other Linux
 distributions need matching GTK 4, WebKitGTK 6 and libsoup 3 libraries, plus a
@@ -24,7 +96,7 @@ compatible C runtime. A compiled Linux executable is not a universal binary
 for every distribution. Windows, Intel Macs, 32-bit Linux and other Linux
 architectures are outside the initial Oiê validation matrix.
 
-Check the machine and Go target before building:
+Check the machine and Go target before building from source:
 
 ```sh
 uname -m
@@ -55,7 +127,7 @@ frontend assets are committed; the application includes its SQLite driver.
 Make is needed only when choosing a `make` target. Docker and Node are used by
 development/test workflows, documented in [local CI](local-ci.md).
 
-## Ubuntu 24.04 x86_64
+## Build from source on Ubuntu 24.04 x86_64
 
 Install Go 1.27.3 or newer first, then install the native build dependencies:
 
@@ -100,7 +172,6 @@ sudo apt update
 sudo apt install ca-certificates libgtk-4-1 libwebkitgtk-6.0-4 libsoup-3.0-0
 ```
 
-This is a runtime prerequisite list, not an available release-download command.
 If you installed the development packages, their runtime dependencies are
 already present. WebKit's [runtime package dependencies](https://packages.ubuntu.com/noble/libwebkitgtk-6.0-4)
 include JavaScriptCore and libsoup; GTK/GLib and related dependencies are
@@ -112,7 +183,7 @@ xdotool, scrot and `dbus-x11` are CI harness tools, not additional dependencies
 that every desktop user must install. Runtime video format support depends on
 the platform WebView and available codecs.
 
-## macOS Apple Silicon
+## Build from source on macOS Apple Silicon
 
 Run these commands in Terminal on the Mac, rather than inside a Linux VM.
 Install Go 1.27.3 or newer and the Xcode Command Line Tools. If the command-line
@@ -149,11 +220,10 @@ native runtime was tested on macOS 26.6.2. Keep any required custom compiler
 flags when adapting this command to a separately configured toolchain.
 
 The executable uses macOS Cocoa/WebKit frameworks. Running it does not require
-Go, Xcode, GTK or a separately installed WebKit runtime. It is currently a
-command-line-installed executable, not a Finder/Applications `.app` package.
-The first alpha is planned without Developer ID signing or notarization.
+Go, Xcode, GTK or a separately installed WebKit runtime. This source command
+produces an executable, rather than the release's Finder/Applications bundle.
 
-## Launch and executable location
+## Launch a source installation
 
 Both installation commands above select the same explicit output directory:
 
@@ -182,7 +252,7 @@ instance. The desktop profile is separate from the browser live preview.
 For development, or when editing the source:
 
 ```sh
-git clone --single-branch --branch codex/wails-integration https://github.com/araihu/oie.git
+git clone --single-branch --branch v0.0.1-rc.0 https://github.com/araihu/oie.git
 cd oie
 ```
 
@@ -235,17 +305,32 @@ selects another profile. Do not copy a running database to move a profile;
 quit first. For an existing hosted engine, see `--engine-url` in
 [desktop runtime options](desktop.md#runtime-options); this is not device sync.
 
-Updates are manual. Quit the app, choose the intended published commit or
-release, then repeat the appropriate installation command. Repeating a command
-pinned to the same hash reinstalls that snapshot; it does not fetch newer
-application code. Replacing the executable preserves the separate profile.
+Updates are manual. Quit the app, choose a published version and run the saved
+installer again with the same prefix. It stages replacements and restores the
+previous installation on a detected update failure. Source installations can
+repeat their `go install` command with the desired tag. Repeating the same
+version reinstalls it; it does not select newer application code. Both methods
+preserve the separate profile.
 
-To remove this per-user executable, quit the app and remove only
-`~/.local/bin/oie-desktop`. Keep the profile unless you explicitly intend to
-delete its history, credentials and files. There is no automatic updater or
-release installer yet. Homebrew, MacPorts, APT and other Oiê package-manager
-distributions remain backlog B22; automatic updates are B23 and desktop icon
-variants are B24.
+To uninstall a default Linux release installation, quit the app and remove only
+these application files:
+
+```sh
+rm -f "$HOME/.local/bin/oie-desktop" \
+  "$HOME/.local/share/applications/org.araihu.oie.desktop" \
+  "$HOME/.local/share/icons/hicolor/512x512/apps/org.araihu.oie.png"
+rm -rf "$HOME/.local/share/doc/oie"
+```
+
+For the default macOS bundle, quit and remove `~/Applications/Oie.app` in Finder.
+A source installation instead has only the executable at
+`~/.local/bin/oie-desktop`. If you selected a custom prefix, remove those same
+application paths under that prefix. Keep the profile containing history,
+credentials, media and preferences unless you explicitly choose to delete it.
+
+Homebrew, MacPorts, APT and other Oiê package-manager distributions remain
+backlog B22. Automatic updates are B23; the shell installer updates only when
+you run it.
 
 ## Installation issues observed on 2026-11-10
 
