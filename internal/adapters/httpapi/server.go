@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +17,7 @@ import (
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	"github.com/getkin/kin-openapi/routers"
+	"github.com/getkin/kin-openapi/routers/legacy"
 	middleware "github.com/oapi-codegen/nethttp-middleware"
 )
 
@@ -26,6 +29,10 @@ func New(engine *application.Engine) (http.Handler, error) {
 		return nil, err
 	}
 	schema.Servers = nil
+	router, err := legacy.NewRouter(schema)
+	if err != nil {
+		return nil, err
+	}
 	s := &Server{engine: engine}
 	handler := engineapi.HandlerWithOptions(engineapi.NewStrictHandlerWithOptions(s, nil, engineapi.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, _ error) {
@@ -40,8 +47,18 @@ func New(engine *application.Engine) (http.Handler, error) {
 		},
 	})
 	validated := middleware.OapiRequestValidatorWithOptions(schema, &middleware.Options{
-		ErrorHandlerWithOpts: func(_ context.Context, err error, w http.ResponseWriter, _ *http.Request, opts middleware.ErrorHandlerOpts) {
+		ErrorHandlerWithOpts: func(_ context.Context, err error, w http.ResponseWriter, r *http.Request, opts middleware.ErrorHandlerOpts) {
 			if errors.Is(err, routers.ErrMethodNotAllowed) {
+				var allowed []string
+				for _, method := range []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE"} {
+					candidate := r.Clone(r.Context())
+					candidate.Method = method
+					if _, _, routeErr := router.FindRoute(candidate); routeErr == nil {
+						allowed = append(allowed, method)
+					}
+				}
+				sort.Strings(allowed)
+				w.Header().Set("Allow", strings.Join(allowed, ", "))
 				writeProblem(w, http.StatusMethodNotAllowed, "invalid_request")
 				return
 			}
@@ -49,16 +66,32 @@ func New(engine *application.Engine) (http.Handler, error) {
 				WriteProblem(w, application.ErrNotFound)
 				return
 			}
+			var tooLarge *http.MaxBytesError
+			if errors.As(err, &tooLarge) {
+				writeProblem(w, http.StatusRequestEntityTooLarge, "invalid_request")
+				return
+			}
 			WriteProblem(w, application.ErrInvalid)
 		},
 	})(handler)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
 		if r.Method == http.MethodHead && strings.HasPrefix(r.URL.Path, "/api/v1/shared-content/") && strings.HasSuffix(r.URL.Path, "/content") {
 			w.Header().Set("Allow", http.MethodGet)
 			writeProblem(w, http.StatusMethodNotAllowed, "invalid_request")
 			return
 		}
-		w.Header().Set("Cache-Control", "no-store")
+		if route, _, routeErr := router.FindRoute(r); routeErr == nil && route.Operation.RequestBody != nil && r.Header.Get("Content-Type") != "" {
+			mediaType, _, parseErr := mime.ParseMediaType(r.Header.Get("Content-Type"))
+			if parseErr != nil {
+				WriteProblem(w, application.ErrInvalid)
+				return
+			}
+			if route.Operation.RequestBody.Value.Content.Get(mediaType) == nil {
+				writeProblem(w, http.StatusUnsupportedMediaType, "invalid_request")
+				return
+			}
+		}
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 		validated.ServeHTTP(w, r)
 	}), nil

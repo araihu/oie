@@ -583,6 +583,39 @@ type SubmissionReceipt struct {
 	State string `json:"state"`
 }
 
+// GetBrowserReadStateParams defines parameters for GetBrowserReadState.
+type GetBrowserReadStateParams struct {
+	// XOieEngineID Selected engine identity.
+	XOieEngineID *openapi_types.UUID `json:"X-Oie-Engine-ID,omitempty"`
+}
+
+// MarkBrowserMessagesReadParams defines parameters for MarkBrowserMessagesRead.
+type MarkBrowserMessagesReadParams struct {
+	// IdempotencyKey Original operation identity.
+	IdempotencyKey openapi_types.UUID `json:"Idempotency-Key"`
+
+	// XOieAccountID Selected account identity.
+	XOieAccountID openapi_types.UUID `json:"X-Oie-Account-ID"`
+
+	// XCSRFToken Matching browser CSRF token.
+	XCSRFToken string `json:"X-CSRF-Token"`
+
+	// XOieEngineID Selected engine identity.
+	XOieEngineID *openapi_types.UUID `json:"X-Oie-Engine-ID,omitempty"`
+}
+
+// GetBrowserPreviewParams defines parameters for GetBrowserPreview.
+type GetBrowserPreviewParams struct {
+	// XOieEngineID Selected engine identity.
+	XOieEngineID *openapi_types.UUID `json:"X-Oie-Engine-ID,omitempty"`
+}
+
+// GetBrowserVideoThumbnailParams defines parameters for GetBrowserVideoThumbnail.
+type GetBrowserVideoThumbnailParams struct {
+	// XOieEngineID Selected engine identity.
+	XOieEngineID *openapi_types.UUID `json:"X-Oie-Engine-ID,omitempty"`
+}
+
 // GetBrowserMessageEditTargetParams defines parameters for GetBrowserMessageEditTarget.
 type GetBrowserMessageEditTargetParams struct {
 	// EngineId Owning engine identity.
@@ -699,6 +732,9 @@ type GetBrowserMessageSenderParams struct {
 
 // GetBrowserMessageSenderParamsLang defines parameters for GetBrowserMessageSender.
 type GetBrowserMessageSenderParamsLang string
+
+// MarkBrowserMessagesReadJSONRequestBody defines body for MarkBrowserMessagesRead for application/json ContentType.
+type MarkBrowserMessagesReadJSONRequestBody = externalRef0.MarkMessagesRead
 
 // UpdateBrowserConversationPreferencesFormdataRequestBody defines body for UpdateBrowserConversationPreferences for application/x-www-form-urlencoded ContentType.
 type UpdateBrowserConversationPreferencesFormdataRequestBody = ConversationPreferenceIntent

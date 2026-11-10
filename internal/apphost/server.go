@@ -36,10 +36,12 @@ const capabilityHeader = "X-Oie-Host-Capability"
 // Config selects existing engine/presentation roles. PrivateAPI isolates a
 // native host's internal HTTP listener; its presentation Handler stays available
 // to the native asset server without exposing the structured engine API.
+// DataOnly omits presentation and assets for local/hosted network engines.
 type Config struct {
 	Role, Listen, DataDir, EngineURL, FFmpeg, XMPPCAFile string
 	DevReload                                            bool
 	PrivateAPI                                           bool
+	DataOnly                                             bool
 }
 
 // Server owns one engine, optional protocol sessions, the BFF, and their shared
@@ -156,26 +158,19 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 		workerDone = result
 		go func() { result <- engine.Run(ctx) }()
 	}
-	ui, err := web.New(engineURL, options...)
-	if err != nil {
-		return nil, err
+	host.presentation = host.track(http.NotFoundHandler())
+	if !cfg.DataOnly {
+		ui, err := web.New(engineURL, options...)
+		if err != nil {
+			return nil, err
+		}
+		presentation := http.NewServeMux()
+		presentation.Handle("GET /assets/", assets.Handler())
+		presentation.HandleFunc("/api/", http.NotFound)
+		presentation.Handle("/", ui)
+		host.presentation = host.track(presentation)
+		apiMux.Handle("/", presentation)
 	}
-	presentation := http.NewServeMux()
-	presentation.Handle("GET /assets/", assets.Handler())
-	// These paths belong to the BFF despite sharing the engine API prefix. Keep
-	// its CSRF, account/engine binding and response validation for native clients.
-	for _, pattern := range []string{
-		"GET /api/v1/previews/{id}",
-		"GET /api/v1/shared-content/{id}/thumbnail",
-		"GET /api/v1/conversations/{id}/read-state",
-		"POST /api/v1/conversations/{id}/read-state",
-	} {
-		presentation.Handle(pattern, ui)
-	}
-	presentation.HandleFunc("/api/", http.NotFound)
-	presentation.Handle("/", ui)
-	host.presentation = host.track(presentation)
-	apiMux.Handle("/", presentation)
 	networkHandler := http.Handler(apiMux)
 	if cfg.PrivateAPI {
 		networkHandler = host.guard(networkHandler)
@@ -204,6 +199,9 @@ func defaults(cfg Config) Config {
 }
 
 func validate(cfg Config) error {
+	if cfg.DataOnly && (cfg.Role == "bff" || cfg.PrivateAPI) {
+		return errors.New("data-only requires a local or hosted public engine listener")
+	}
 	if cfg.Role != "local" && cfg.Role != "hosted" && cfg.Role != "bff" {
 		return errors.New("role must be local, hosted, or bff; sync service is not implemented yet")
 	}

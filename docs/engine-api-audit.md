@@ -28,19 +28,19 @@ All engine operations below are in `api/openapi.yaml`, implemented through
 `internal/adapters/httpapi` and application-owned ports. HTTP tests are in that
 adapter's corresponding `*_test.go` files (names below). `tests/cli/client_test.go`
 covers a subset operationally; generation alone is command availability, not
-end-to-end coverage. Status lists are the baseline contract, not an assertion
+end-to-end coverage. The route list identifies the baseline contract; it does not assert
 that every failure branch was exercised. All rows are engine-owned; BFF exceptions
 are listed separately. Priority `—` means no evidenced correction required.
 
 | Contract operation (method and path) | Actual behavior / source | Owner | CLI at baseline | Test evidence | Verdict | Priority | Proposed correction |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `listContacts` GET `/api/v1/contacts` | Register persists receipt/account/revision/event atomically; bounded reads; `server.go` | engine | generated + real-store test | `server_test.go` | implemented | — | — |
+| `listContacts` GET `/api/v1/contacts` | Register persists receipt/account/revision/event atomically; bounded reads; `contacts.go` | engine | generated + real-store test | `server_test.go` | implemented | — | — |
 | `searchMessages` GET `/api/v1/messages/search` | Filter-before-limit; retained content and optional edit history; `message_search.go` | engine | generated + real-store test | `message_search_test.go` | implemented | — | — |
 | `listSharedContent` GET `/api/v1/shared-content` | Retained catalog; incidental preview scheduling; `shared_content.go` | engine | generated + real-store test | `shared_content_test.go` | implemented | — | — |
 | `getVideoThumbnail` GET `/api/v1/shared-content/{itemId}/thumbnail` | Cached metadata; GET does not request extraction; `previews.go` | engine | generated; operational branch unverified | `video_thumbnails_test.go` | implemented | — | — |
 | `requestVideoThumbnail` POST `/api/v1/shared-content/{itemId}/thumbnail` | Explicit derived work; coalesced, no durable operation receipt; `previews.go` | engine | generated; operational branch unverified | `video_thumbnails_test.go` | implemented | — | — |
 | `getSharedContentMedia` GET `/api/v1/shared-content/{itemId}/content` | Explicit bounded original bytes/range; no-store and If-Range; `shared_media.go` | engine | excluded | `shared_media_test.go` | implemented | P1 | Enable raw CLI and exercise |
-| `getMessageContext` GET `/api/v1/conversations/{conversationId}/messages/{messageId}/context` | Bounded source window; `message_search.go` | engine | generated + real-store test | `message_search_test.go` | implemented | — | — |
+| `getMessageContext` GET `/api/v1/conversations/{conversationId}/messages/{messageId}/context` | Bounded source window; `replies.go` | engine | generated + real-store test | `message_search_test.go` | implemented | — | — |
 | `getMessageStar` GET `/api/v1/messages/{messageId}/star` | App-owned retained star; `stars.go` | engine | generated; operational branch unverified | `stars_test.go` | implemented | — | — |
 | `setMessageStar` PUT `/api/v1/messages/{messageId}/star` | Durable key + revision CAS; replay returns current projection; `stars.go` | engine | generated + real-store test | `stars_test.go` | implemented | — | — |
 | `getConversationReadState` GET `/api/v1/conversations/{conversationId}/read-state` | Scoped retained unread count; `read_state.go` | engine | generated; operational branch unverified | `read_state_test.go` | implemented | — | — |
@@ -57,15 +57,15 @@ are listed separately. Priority `—` means no evidenced correction required.
 | `listAccounts` GET `/api/v1/accounts` | Register persists receipt/account/revision/event atomically; bounded reads; `server.go` | engine | generated; operational branch unverified | `server_test.go` | implemented | — | — |
 | `registerAccount` POST `/api/v1/accounts` | Register persists receipt/account/revision/event atomically; bounded reads; `server.go` | engine | generated + real-store test | `server_test.go` | implemented | — | — |
 | `getAccount` GET `/api/v1/accounts/{accountId}` | Register persists receipt/account/revision/event atomically; bounded reads; `server.go` | engine | generated; operational branch unverified | `server_test.go` | implemented | — | — |
-| `listAccountAvatars` GET `/api/v1/accounts/{accountId}/avatars` | Register persists receipt/account/revision/event atomically; bounded reads; `server.go` | engine | generated; operational branch unverified | `server_test.go` | implemented | — | — |
-| `getAvatarImage` GET `/api/v1/avatars/{hash}` | Register persists receipt/account/revision/event atomically; bounded reads; `server.go` | engine | excluded | `server_test.go` | implemented | P1 | Enable raw CLI and exercise |
-| `getAccountHistory` GET `/api/v1/accounts/{accountId}/history` | Register persists receipt/account/revision/event atomically; bounded reads; `server.go` | engine | generated; operational branch unverified | `server_test.go` | implemented | — | — |
-| `getAccountCapabilities` GET `/api/v1/accounts/{accountId}/capabilities` | Register persists receipt/account/revision/event atomically; bounded reads; `server.go` | engine | generated + real-store test | `server_test.go` | implemented | — | — |
+| `listAccountAvatars` GET `/api/v1/accounts/{accountId}/avatars` | Register persists receipt/account/revision/event atomically; bounded reads; `avatars.go` | engine | generated; operational branch unverified | `avatars_test.go` | implemented | — | — |
+| `getAvatarImage` GET `/api/v1/avatars/{hash}` | Register persists receipt/account/revision/event atomically; bounded reads; `avatars.go` | engine | excluded | `avatars_test.go` | implemented | P1 | Enable raw CLI and exercise |
+| `getAccountHistory` GET `/api/v1/accounts/{accountId}/history` | Register persists receipt/account/revision/event atomically; bounded reads; `messaging.go` | engine | generated; operational branch unverified | `server_test.go` | implemented | — | — |
+| `getAccountCapabilities` GET `/api/v1/accounts/{accountId}/capabilities` | Register persists receipt/account/revision/event atomically; bounded reads; `capabilities.go` | engine | generated + real-store test | `server_test.go` | implemented | — | — |
 | `getOperation` GET `/api/v1/operations/{operationId}` | Durable acceptance lookup; succeeded does not mean delivery; `server.go` | engine | generated + real-store test | `server_test.go` | implemented | — | — |
 | `streamEvents` GET `/api/v1/events` | 100-event batches, scoped canonical cursor, heartbeat/write deadlines; `server.go` | engine | excluded | `server_test.go` | implemented | P1 | Enable raw CLI and exercise |
-| `getAccountConnection` GET `/api/v1/accounts/{accountId}/connection` | Register persists receipt/account/revision/event atomically; bounded reads; `server.go` | engine | generated; operational branch unverified | `server_test.go` | implemented | — | — |
-| `configureAccountConnection` PUT `/api/v1/accounts/{accountId}/connection` | Register persists receipt/account/revision/event atomically; bounded reads; `server.go` | engine | generated; operational branch unverified | `server_test.go` | implemented | — | — |
-| `disconnectAccount` DELETE `/api/v1/accounts/{accountId}/connection` | Register persists receipt/account/revision/event atomically; bounded reads; `server.go` | engine | generated; operational branch unverified | `server_test.go` | implemented | — | — |
+| `getAccountConnection` GET `/api/v1/accounts/{accountId}/connection` | Register persists receipt/account/revision/event atomically; bounded reads; `messaging.go` | engine | generated; operational branch unverified | `server_test.go` | implemented | — | — |
+| `configureAccountConnection` PUT `/api/v1/accounts/{accountId}/connection` | Register persists receipt/account/revision/event atomically; bounded reads; `messaging.go` | engine | generated; operational branch unverified | `server_test.go` | implemented | — | — |
+| `disconnectAccount` DELETE `/api/v1/accounts/{accountId}/connection` | Register persists receipt/account/revision/event atomically; bounded reads; `messaging.go` | engine | generated; operational branch unverified | `server_test.go` | implemented | — | — |
 | `listConversations` GET `/api/v1/conversations` | Account-scoped reads; activity ordering can move between pages; `messaging.go` | engine | generated; operational branch unverified | `timeline_test.go` | implemented | — | — |
 | `openConversation` POST `/api/v1/conversations` | Durable key; existing scope returns 200; new scope 201; `messaging.go` | engine | generated + real-store test | `messaging_test.go` | inconsistent | P2 | Location on 201 |
 | `getRoomSession` GET `/api/v1/conversations/{conversationId}/room-session` | Current room intent and observed state; `room_sessions.go` | engine | generated + real-store test | `room_sessions_test.go` | implemented | — | — |
@@ -131,3 +131,28 @@ send only with the original key/body after operation lookup.
 See [contract policy and decisions](engine-api-policy.md). Inventory verdicts
 are bounded to source/test evidence, not compliance with an entire standard.
 Unknown failures and cross-provider interoperability remain unknown until tested.
+
+## Implemented corrections
+
+The implementation corrects all P1 findings above: data-only composition,
+separate browser paths, runtime version schema, raw binary/SSE CLI availability
+and a pinned compatibility gate. It also adds Location on conversation creation,
+connection/send/edit/reaction acceptance; 405 Allow; 413/415 request rejection;
+and missing 503 declarations for details/profile reads. Runtime JSON validation
+is now part of the existing HTTP test request helper, with deliberate negative
+controls. Dedicated media/SSE tests verify streamed representations separately.
+
+Reproduce adapter evidence with `GOFLAGS=-tags=server go test
+./internal/adapters/httpapi ./internal/apphost ./tests/architecture`; reproduce
+the operational fixture with `make test-cli-xmpp` and the development endpoint/CA
+variables described in [verification](engine-api-cli-verification.md).
+Other JSON operations retain their generated commands and existing specialized
+HTTP tests; no claim of live CLI execution of every supported reaction, edit,
+room, profile or preview branch is made. No backlog operation is added.
+
+Pagination exceptions: accounts/avatars use ascending UUID anchors; messages
+use retained conversation-scoped UUID anchors and timestamp/UUID order; shared
+content uses timestamp/UUID anchors, while edit-history cursors bind a snapshot.
+Conversation activity can move between pages. These are not one uniform cursor
+format. A CLI consumer must preserve its query/scope and deduplicate live results;
+no snapshot isolation across arbitrary query changes is promised.

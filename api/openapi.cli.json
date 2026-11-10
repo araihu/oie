@@ -734,7 +734,7 @@
             }
           }
         },
-        "x-cli-ignore": true
+        "x-cli-ignore": false
       }
     },
     "/api/v1/conversations/{conversationId}/messages/{messageId}/context": {
@@ -854,6 +854,26 @@
           }
         },
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "200": {
             "description": "Committed star state or original operation snapshot",
             "content": {
@@ -944,6 +964,26 @@
           }
         },
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "200": {
             "description": "Committed read state or original operation snapshot",
             "content": {
@@ -1382,7 +1422,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-cli-ignore": true
+        "x-cli-ignore": false
       }
     },
     "/api/v1/health": {
@@ -1432,7 +1472,7 @@
                 "example": {
                   "id": "019a5df0-0000-7000-8000-000000000003",
                   "role": "local",
-                  "apiVersion": "0.12.0",
+                  "apiVersion": "0.27.0",
                   "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
                 }
               }
@@ -1540,6 +1580,26 @@
           }
         },
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "201": {
             "description": "Account registered",
             "headers": {
@@ -1786,7 +1846,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-cli-ignore": true
+        "x-cli-ignore": false
       }
     },
     "/api/v1/accounts/{accountId}/history": {
@@ -1936,7 +1996,7 @@
         "x-sse-event-schema": {
           "$ref": "#/components/schemas/Event"
         },
-        "x-cli-ignore": true,
+        "x-cli-ignore": false,
         "summary": "Replay durable changes and follow new events",
         "description": "SSE id is engineUUID:sequence; event is the event type; data is Event JSON.\nLast-Event-ID resumes strictly after its sequence. Without a cursor replay\nfrom zero. Cursors from another engine or ahead of current state return 409\nbefore streaming. Heartbeat comments are not durable events.\nThis engine retains the complete change log. Clients deduplicate by event\nID and refresh snapshots if a future retention policy expires a cursor.\n",
         "parameters": [
@@ -2022,7 +2082,36 @@
         "summary": "Configure and connect an account",
         "description": "Persists write-only credentials before starting an asynchronous TLS/SASL connection. Transient network failures reconnect with bounded backoff; invalid credentials or TLS verification failures require corrected configuration. Ordinary engine restart reloads enabled configurations.",
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "202": {
+            "headers": {
+              "Location": {
+                "description": "Connection state; acceptance is not connection success.",
+                "schema": {
+                  "type": "string",
+                  "format": "uri-reference"
+                }
+              }
+            },
             "description": "Connection configuration accepted",
             "content": {
               "application/json": {
@@ -2214,7 +2303,36 @@
         "summary": "Open a direct conversation",
         "description": "Finds an existing conversation for the canonical account/peer or creates one. Durable operation keys retain original results. Does not add a contact or send presence subscriptions.",
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "201": {
+            "headers": {
+              "Location": {
+                "description": "New conversation resource.",
+                "schema": {
+                  "type": "string",
+                  "format": "uri-reference"
+                }
+              }
+            },
             "description": "Direct conversation opened",
             "content": {
               "application/json": {
@@ -2366,6 +2484,26 @@
           }
         },
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "200": {
             "description": "Join intent durably accepted or replayed",
             "content": {
@@ -2427,6 +2565,26 @@
           }
         },
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "200": {
             "description": "Leave intent durably accepted or replayed",
             "content": {
@@ -2516,6 +2674,16 @@
         "summary": "Read scoped conversation details",
         "description": "Read the current account connection and session-local conversation metadata. Returns immediately; a connected adapter may schedule a deduplicated, serialized discovery refresh no more often than once per sixty seconds. This never joins a room, requests a subscription, probes a peer or sends a message. Occupant discovery is a bounded snapshot, never a complete member roster. Missing presence remains unknown. Disconnect clears observations.",
         "responses": {
+          "503": {
+            "description": "Engine state is temporarily unavailable.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "200": {
             "description": "Available metadata and explicit field availability for this conversation",
             "content": {
@@ -2618,6 +2786,26 @@
           }
         },
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "200": {
             "description": "Accepted conversation snapshot, or its original idempotent replay",
             "headers": {
@@ -2744,7 +2932,36 @@
         "summary": "Accept an immediate text message",
         "description": "Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.",
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "202": {
+            "headers": {
+              "Location": {
+                "description": "Accepted message; poll for current send state.",
+                "schema": {
+                  "type": "string",
+                  "format": "uri-reference"
+                }
+              }
+            },
             "description": "Message and send intent committed",
             "content": {
               "application/json": {
@@ -2897,7 +3114,36 @@
           }
         },
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "202": {
+            "headers": {
+              "Location": {
+                "description": "Accepted reaction command; poll for current dispatch state.",
+                "schema": {
+                  "type": "string",
+                  "format": "uri-reference"
+                }
+              }
+            },
             "description": "Durable reaction command committed",
             "content": {
               "application/json": {
@@ -3140,7 +3386,36 @@
           }
         },
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "202": {
+            "headers": {
+              "Location": {
+                "description": "Accepted edit command; poll for current dispatch state.",
+                "schema": {
+                  "type": "string",
+                  "format": "uri-reference"
+                }
+              }
+            },
             "description": "Correction command committed without claiming delivery",
             "content": {
               "application/json": {
@@ -3314,6 +3589,16 @@
         "summary": "Read the author's available published profile",
         "description": "Resolves the author from the retained message and message-time protocol identity evidence. May issue a bounded read-only profile query to a known personal address. Room nicknames and current same-name occupants never establish a historical author's personal JID. Missing or undisclosed identity remains unavailable; user-provided vCard JABBERID does not establish it. Does not join rooms, add contacts, subscribe to presence or mark messages read.",
         "responses": {
+          "503": {
+            "description": "Engine state is temporarily unavailable.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "200": {
             "description": "Scoped profile availability and optional published full name and personal address",
             "content": {
@@ -3410,6 +3695,26 @@
         "summary": "Cancel a queued send",
         "description": "Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.",
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "200": {
             "description": "Current resource",
             "content": {
@@ -3896,7 +4201,7 @@
         "example": {
           "id": "019a5df0-0000-7000-8000-000000000003",
           "role": "local",
-          "apiVersion": "0.12.0",
+          "apiVersion": "0.27.0",
           "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
         },
         "additionalProperties": false,
@@ -3919,10 +4224,8 @@
           },
           "apiVersion": {
             "type": "string",
-            "enum": [
-              "0.11.0",
-              "0.12.0"
-            ]
+            "description": "Engine contract revision, independent of URL major and application release.",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
           },
           "eventCursor": {
             "type": "string",

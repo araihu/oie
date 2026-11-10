@@ -55,7 +55,7 @@ func TestReadProxyProtectsEngineAccountAndCSRF(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			before := effects.Load()
-			request := httptest.NewRequest(tc.method, "/api/v1/conversations/"+testChat+"/read-state", strings.NewReader(tc.body))
+			request := httptest.NewRequest(tc.method, "/ui/api/v1/conversations/"+testChat+"/read-state", strings.NewReader(tc.body))
 			request.Header.Set("X-Oie-Engine-ID", tc.engine)
 			request.Header.Set("X-Oie-Account-ID", tc.account)
 			request.Header.Set("Content-Type", "application/json")

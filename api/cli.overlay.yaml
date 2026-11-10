@@ -1,17 +1,17 @@
 overlay: 1.0.0
 info:
-  title: Oie development CLI
+  title: Oie engine CLI
   version: 0.1.0
 actions:
   - target: $.paths['/api/v1/events'].get
     update:
-      x-cli-ignore: true
+      x-cli-ignore: false
   - target: $.paths['/api/v1/avatars/{hash}'].get
     update:
-      x-cli-ignore: true
+      x-cli-ignore: false
   - target: $.paths['/api/v1/media/{hash}'].get
     update:
-      x-cli-ignore: true
+      x-cli-ignore: false
   - target: $.paths['/api/v1/shared-content/{itemId}/content'].get
     update:
-      x-cli-ignore: true
+      x-cli-ignore: false

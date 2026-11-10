@@ -17,6 +17,89 @@ tags:
 - name: Messages
   description: Browser submission receipt recovery
 paths:
+  /ui/api/v1/previews/{id}:
+    parameters:
+    - {in: path, name: id, required: true, description: Scoped resource identity., schema: {type: string, format: uuid}}
+    - {in: header, name: X-Oie-Engine-ID, description: Selected engine identity., schema: {type: string, format: uuid}}
+    get:
+      operationId: getBrowserPreview
+      tags: [Messages]
+      summary: Read scoped browser metadata
+      description: Browser projection of engine data with engine binding and no-store caching. This route is separate from the public engine API.
+      responses:
+        '200':
+          description: Validated metadata
+          content:
+            application/json:
+              schema: {$ref: './openapi.yaml#/components/schemas/MessagePreview'}
+        '400': {description: Invalid scope}
+        '404': {description: Resource unavailable}
+        '409': {description: Engine or account changed}
+        '503': {description: Engine unavailable}
+  /ui/api/v1/shared-content/{id}/thumbnail:
+    parameters:
+    - {in: path, name: id, required: true, description: Scoped resource identity., schema: {type: string, format: uuid}}
+    - {in: header, name: X-Oie-Engine-ID, description: Selected engine identity., schema: {type: string, format: uuid}}
+    get:
+      operationId: getBrowserVideoThumbnail
+      tags: [Messages]
+      summary: Read scoped browser metadata
+      description: Browser projection of engine data with engine binding and no-store caching. This route is separate from the public engine API.
+      responses:
+        '200':
+          description: Validated metadata
+          content:
+            application/json:
+              schema: {$ref: './openapi.yaml#/components/schemas/VideoThumbnail'}
+        '400': {description: Invalid scope}
+        '404': {description: Resource unavailable}
+        '409': {description: Engine or account changed}
+        '503': {description: Engine unavailable}
+  /ui/api/v1/conversations/{id}/read-state:
+    parameters:
+    - {in: path, name: id, required: true, description: Scoped resource identity., schema: {type: string, format: uuid}}
+    - {in: header, name: X-Oie-Engine-ID, description: Selected engine identity., schema: {type: string, format: uuid}}
+    get:
+      operationId: getBrowserReadState
+      tags: [Conversations]
+      summary: Read scoped browser metadata
+      description: Browser projection of engine data with engine binding and no-store caching. This route is separate from the public engine API.
+      responses:
+        '200':
+          description: Validated metadata
+          content:
+            application/json:
+              schema: {$ref: './openapi.yaml#/components/schemas/ConversationReadState'}
+        '400': {description: Invalid scope}
+        '404': {description: Resource unavailable}
+        '409': {description: Engine or account changed}
+        '503': {description: Engine unavailable}
+    post:
+      operationId: markBrowserMessagesRead
+      tags: [Conversations]
+      summary: Mark explicitly viewed messages read
+      description: Requires the browser CSRF cookie and matching X-CSRF-Token, X-Oie-Account-ID and engine binding. Does not send protocol read receipts.
+      parameters:
+      - {in: header, name: Idempotency-Key, required: true, description: Original operation identity., schema: {type: string, format: uuid}}
+      - {in: header, name: X-Oie-Account-ID, required: true, description: Selected account identity., schema: {type: string, format: uuid}}
+      - {in: header, name: X-CSRF-Token, required: true, description: Matching browser CSRF token., schema: {type: string}}
+      requestBody:
+        required: true
+        description: Explicitly viewed retained messages.
+        content:
+          application/json:
+            schema: {$ref: './openapi.yaml#/components/schemas/MarkMessagesRead'}
+      responses:
+        '200':
+          description: Current read state
+          content:
+            application/json:
+              schema: {$ref: './openapi.yaml#/components/schemas/ConversationReadState'}
+        '400': {description: Invalid scope or body}
+        '403': {description: CSRF rejected}
+        '404': {description: Resource unavailable}
+        '409': {description: Engine or account changed}
+        '503': {description: Engine unavailable}
   /ui/message-reactions:
     get:
       operationId: getBrowserMessageReactions

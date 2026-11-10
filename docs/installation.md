@@ -360,3 +360,26 @@ its limits. Keep this guide current as installation testing continues.
 Platform dependency references are [Wails installation](https://v3.wails.io/getting-started/installation/),
 the Ubuntu package pages linked above and the
 [Go module environment reference](https://go.dev/ref/mod#environment-variables).
+
+## Operating the engine without a web interface
+
+For automation against a loopback data API, build the server and generated CLI:
+
+```sh
+make build build-cli
+bin/oie -role local -data-only -listen 127.0.0.1:18090 -data-dir ./data-cli
+bin/oiectl --server http://127.0.0.1:18090 --output json system get-engine
+bin/oiectl --server http://127.0.0.1:18090 --output json system get-health
+```
+
+Run the two CLI commands in another terminal while the engine is running.
+`-data-only` is supported by `local` and `hosted`; the default still serves the
+web interface. The CLI's API base URL can also come from `OIECTL_SERVER`.
+Credentials belong in `--body-stdin` or a private `--body-file`, not shell
+arguments. Use `--output raw` for binary operations and `events stream-events`.
+Streams are incremental; bound them with `--timeout` and `--max-output-bytes`.
+Transport failure, timeout or cancellation returns exit 3, including after
+partial output. Keep only fully consumed/applied SSE IDs and explicitly resume
+with `--last-event-id`; the CLI does not retry or reconnect automatically.
+See [the engine API policy](engine-api-policy.md) and
+[CLI verification](engine-api-cli-verification.md) for scope and fixture commands.
