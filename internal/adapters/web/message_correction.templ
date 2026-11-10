@@ -9,7 +9,7 @@ import (
 )
 
 templ composerEdit(v view) {
-	<div class="oie-composer-edit" data-composer-edit hidden data-edit-preparing={ v.Text.EditPreparing } data-edit-mode={ v.Text.EditMode } data-edit-unavailable={ v.Text.EditUnavailable } data-edit-changed={ v.Text.EditChanged } data-edit-queued={ v.Text.EditQueued } data-edit-dispatching={ v.Text.EditDispatching } data-edit-submitted={ v.Text.EditSubmitted } data-edit-unknown={ v.Text.EditUnknown } data-edit-acceptance-unknown={ v.Text.EditAcceptanceUnknown } data-edit-failed={ v.Text.EditFailed } data-edit-storage={ v.Text.EditStorageUnavailable }>
+	<div class="oie-composer-edit" data-composer-edit hidden data-edit-preparing={ v.Text.EditPreparing } data-edit-mode={ v.Text.EditMode } data-edit-save-label={ v.Text.SaveEdit } data-edit-unavailable={ v.Text.EditUnavailable } data-edit-changed={ v.Text.EditChanged } data-edit-queued={ v.Text.EditQueued } data-edit-dispatching={ v.Text.EditDispatching } data-edit-submitted={ v.Text.EditSubmitted } data-edit-unknown={ v.Text.EditUnknown } data-edit-acceptance-unknown={ v.Text.EditAcceptanceUnknown } data-edit-failed={ v.Text.EditFailed } data-edit-storage={ v.Text.EditStorageUnavailable }>
 		<div>
 			<strong>{ v.Text.EditMode }</strong>
 			<p data-edit-feedback role="status" aria-live="polite"></p>
@@ -24,12 +24,6 @@ templ composerEdit(v view) {
 		</div>
 		@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-edit-dismiss": "", "hidden": true})) {
 			<span>{ v.Text.Back }</span>
-		}
-		@button.Button(button.WithType("button"), button.WithAttrs(templ.Attributes{"data-edit-save": ""})) {
-			<span>{ v.Text.SaveEdit }</span>
-		}
-		@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-edit-cancel": ""})) {
-			<span>{ v.Text.CancelEdit }</span>
 		}
 	</div>
 }

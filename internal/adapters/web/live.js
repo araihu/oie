@@ -66,17 +66,17 @@ window.OieRuntime.register('live', life => {
   function renderEdit(){
     if(!editBox)return;
     composer.dataset.editing=String(!!editSession||editPreparing);
-    editBox.hidden=!editSession&&!editPreparing;
+    editBox.hidden=!editSession;
+    composer.setAttribute('aria-busy',String(editPreparing||editBusy));
     if(editFeedback){const state=editSession?.command?.state;editFeedback.textContent=editPreparing?editText('preparing'):editSession?.error||(state?editText(state):editSession?.submitted?editText('acceptanceUnknown'):editStorageDenied?editText('storage'):'');}
-    const cancel=editBox.querySelector('[data-edit-cancel]'),save=editBox.querySelector('[data-edit-save]'),check=editBox.querySelector('[data-edit-check]'),retry=editBox.querySelector('[data-edit-retry]');
-    if(cancel)cancel.disabled=editBusy||!!editSession?.submitted;
+    const cancel=composer.querySelector('[data-edit-cancel]'),save=composer.querySelector('[data-send-message]'),check=editBox.querySelector('[data-edit-check]'),retry=editBox.querySelector('[data-edit-retry]');
+    if(cancel){cancel.hidden=!editSession;cancel.disabled=editBusy||!!editSession?.submitted;}
     const dismiss=editBox.querySelector('[data-edit-dismiss]');if(dismiss){dismiss.hidden=!editSession?.command;dismiss.disabled=editBusy;}
-    if(save)save.disabled=editBusy||editPreparing||!editSession||editSession.submitted||editSession.rejected===true||!input.value.trim()||Array.from(input.value).length>16384;
+    if(save){save.toggleAttribute('data-edit-save',!!editSession);if(editSession){save.disabled=editBusy||editSession.submitted||editSession.rejected===true||!input.value.trim()||Array.from(input.value).length>16384;}save.setAttribute('aria-label',editSession?editText('saveLabel'):text('send'));save.title=editSession?editText('saveLabel'):text('send');}
     if(editRecovery)editRecovery.hidden=!editSession?.submitted||editBusy;
     if(check)check.disabled=editBusy;
     if(retry)retry.hidden=!!editSession?.command||editSession?.rejected===true;
     if(editSession){input.readOnly=editBusy||editSession.submitted||editSession.rejected===true;input.setAttribute('aria-readonly',String(input.readOnly));}
-    const send=composer.querySelector('[data-send-message]');if(send)send.hidden=!!editSession||editPreparing;
     for(const action of document.querySelectorAll('[id^="edit-message-"]')){
       action.hidden=action.id!=='edit-message-'+(composer.dataset.latestEditMessage||'');
       action.setAttribute('aria-disabled',String(editBusy||editPreparing||!!editSession||!!journal?.pending));
@@ -90,18 +90,19 @@ window.OieRuntime.register('live', life => {
   function editMenuOpen(){return input.getAttribute('aria-expanded')==='true'||[...document.querySelectorAll('[role="dialog"],[role="menu"],[data-emoji-trigger][aria-expanded="true"]')].some(node=>node.getClientRects().length&&getComputedStyle(node).visibility!=='hidden');}
   async function beginEdit(messageId=''){
     if(!composer||!editBox||composer.dataset.editAllowed!=='true'||journal?.pending||preparingReply||editBusy||editPreparing||editSession||stopped)return;
-    const epoch=++editEpoch;editPreparing=true;renderReply();renderEdit();
+    const epoch=++editEpoch,draftAtRequest=input.value;editPreparing=true;feedback(composer,'');announce(editText('preparing'));renderReply();renderEdit();
     const url=new URL(composer.dataset.editTargetUrl,location.origin);if(messageId)url.searchParams.set('messageId',messageId);else url.searchParams.delete('messageId');
     const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),10000);
     try{
       const response=await life.fetch(url,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:controller.signal}),value=await response.json();
       if(life.signal.aborted||epoch!==editEpoch)return;
+      if(input.value!==draftAtRequest)return;
       const target=value.target;
       if(!response.ok||value.engineId!==body.dataset.engineId||!target||target.accountId!==body.dataset.accountId||target.conversationId!==body.dataset.conversationId||!canonicalID(target.messageId)||messageId&&target.messageId!==messageId||!canonicalID(target.currentRevisionId)||!canonicalID(value.operationKey)||!target.eligible||typeof target.originalText!=='string'||Array.from(target.originalText).length>16384)throw Error('edit_unavailable');
       saveDraft(draftRecord(false));
       keepEdit({engineId:body.dataset.engineId,accountId:body.dataset.accountId,conversationId:body.dataset.conversationId,messageId:target.messageId,expectedRevisionId:target.currentRevisionId,operationKey:value.operationKey,text:target.originalText,submitted:false});
       input.value=target.originalText;restoreMentions([]);input.focus({preventScroll:true});input.setSelectionRange(input.value.length,input.value.length);
-    }catch{if(!life.signal.aborted&&epoch===editEpoch){feedback(composer,editText('unavailable'),true);input.focus({preventScroll:true});}}
+    }catch{if(!life.signal.aborted&&epoch===editEpoch){window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:editText('unavailable')}}));}}
     finally{clearTimeout(timeout);if(!life.signal.aborted&&epoch===editEpoch){editPreparing=false;renderReply();renderEdit();}}
   }
   function editValues(intent=editSession){return new URLSearchParams({engineId:intent.engineId,accountId:intent.accountId,conversationId:intent.conversationId,messageId:intent.messageId,expectedRevisionId:intent.expectedRevisionId,operationKey:intent.operationKey,originalText:intent.text,csrf,lang:document.documentElement.lang});}
@@ -156,7 +157,7 @@ window.OieRuntime.register('live', life => {
   function renderReply(){
     const reply=journal?.reply,locked=!!journal?.pending,editing=!!editSession||editPreparing;
     if(replyField)replyField.value=reply?.messageId||'';
-    if(replyBox){replyBox.hidden=!reply||locked||editing;replyBox.querySelector('[data-composer-reply-sender]').textContent=typeof reply?.senderName==='string'?reply.senderName:'';replyBox.querySelector('[data-composer-reply-excerpt]').textContent=typeof reply?.excerpt==='string'?reply.excerpt:'';const cancel=replyBox.querySelector('[data-cancel-reply]');if(cancel)cancel.disabled=locked||preparingReply;}
+    if(replyBox){replyBox.hidden=!reply||locked||!!editSession;replyBox.querySelector('[data-composer-reply-sender]').textContent=typeof reply?.senderName==='string'?reply.senderName:'';replyBox.querySelector('[data-composer-reply-excerpt]').textContent=typeof reply?.excerpt==='string'?reply.excerpt:'';const cancel=replyBox.querySelector('[data-cancel-reply]');if(cancel)cancel.disabled=locked||preparingReply;}
     for(const button of document.querySelectorAll('[id^="reply-message-"]'))button.disabled=!composer||composer.dataset.replyAllowed!=='true'||locked||preparingReply||editing;
     const send=composer?.querySelector('[data-send-message]');if(send)send.disabled=stopped||locked||preparingReply||editing||composer.dataset.busy==='true'||(composer.dataset.sendAllowed!=='true'&&!locked);
   }
