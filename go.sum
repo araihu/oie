@@ -11,6 +11,8 @@ github.com/apapsch/go-jsonmerge/v2 v2.0.0 h1:axGnT1gRIfimI7gJifB699GoE/oq+F2MU7D
 github.com/apapsch/go-jsonmerge/v2 v2.0.0/go.mod h1:lvDnEdqiQrp0O42VQGgmlKpxL1AP2+08jFMw88y4klk=
 github.com/araihu/goshtoso v0.6.2-0.20261110022421-7c69f01af2ef h1:CPlMBTPnn/urpmvU0YPuZxx+PIHtXoYBoR7H7GrsvNI=
 github.com/araihu/goshtoso v0.6.2-0.20261110022421-7c69f01af2ef/go.mod h1:H/vLd+4wvpzNIjDnW81Sk44+4670WIe7x6DUE57Kg/8=
+github.com/araihu/goshtoso v0.6.2-0.20261110110007-83aed4efdc31 h1:GM5zfWP9HAEjj/z9RAppzgfS1wP8pBmAwTIo+yY6jWk=
+github.com/araihu/goshtoso v0.6.2-0.20261110110007-83aed4efdc31/go.mod h1:H/vLd+4wvpzNIjDnW81Sk44+4670WIe7x6DUE57Kg/8=
 github.com/araihu/margo v0.0.36-0.20261108235149-ff44a5fe5052 h1:aA/5OmFLV8sNmlMbRWMIzNd6RJAc8nCePSWPSwGI/jA=
 github.com/araihu/margo v0.0.36-0.20261108235149-ff44a5fe5052/go.mod h1:Cvt4KcHzu/OLH9Dy8XvdiqlOneGffUw1CaK7A9f2bd0=
 github.com/bmatcuk/doublestar v1.1.1/go.mod h1:UD6OnuiIn0yFxxA2le/rnRU1G4RaI4UvFv1sNto9p6w=
