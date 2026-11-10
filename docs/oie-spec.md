@@ -379,9 +379,12 @@ Keep retrieved history until explicit user deletion, even after the provider exp
 **AGREED RELEASE REQUIREMENT:** B25 is required before alpha v0.0.1, while
 rc.0 may retain the current initial-recovery behavior. Initial room recovery
 must let the user interact while older authorized history continues in the
-background. **USER PROPOSAL, NOT YET A FINAL QUERY POLICY:** fetch the last 48
-hours for each room first, with a fallback to the latest 128 messages for rooms
-without recent activity. Record the remaining choices in
+background. **AGREED INITIAL TARGET:** prioritize the last 48 hours for each
+room. If that interval contains fewer than 128 messages, include immediately
+preceding messages until reaching 128 or exhausting the available authorized
+archive. This also applies when there are some recent messages. The 128-message
+target does not cap the full 48-hour interval. Record remaining paging,
+scheduling, time-bound and resume decisions in
 [the initial-history discussion](history-bootstrap-discussion.md) before API-first
 implementation. Eventual full-history recovery and retention remain required.
 
@@ -747,7 +750,7 @@ B25 is an alpha release requirement. IDs remain stable and do not imply order.
 
 | ID | Item |
 | --- | --- |
-| **B25** | Usable initial room-history recovery, required for alpha v0.0.1 and accepted as missing in v0.0.1-rc.0. Prioritize recent room history, then continue all older authorized history in the background without blocking interaction. User proposal: last 48 hours first, falling back to the latest 128 messages for inactive rooms. Exact fallback semantics, paging/budgets, scheduling and resume behavior remain to be discussed in [initial-history recovery](history-bootstrap-discussion.md); implementation is deferred during current packaging work. |
+| **B25** | Usable initial room-history recovery, required for alpha v0.0.1 and accepted as missing in v0.0.1-rc.0. Prioritize the last 48 hours per room, supplementing with immediately preceding messages until reaching 128 when needed and available. Continue all remaining authorized history in the background without blocking interaction. Paging/budgets, scheduling, time bounds and resume behavior remain open in [initial-history recovery](history-bootstrap-discussion.md). Discussion is active after rc.0 publication; implementation has not started. |
 | **B01** | Blocking/unblocking protocol identities. |
 | **B02** | Activity-based notification routing/suppression across devices. |
 | **B03** | Automatic idle/away detection and activity aggregation. |

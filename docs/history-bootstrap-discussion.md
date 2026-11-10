@@ -1,15 +1,15 @@
 # Initial room-history recovery discussion
 
 Recorded on 2026-11-10 from testing a fresh standalone installation.
-Tracking item: **B25, first backlog priority after the current rc.0 packaging
-work**. This is a discussion record, not an implemented recovery policy.
+Tracking item: **B25, first backlog priority before alpha v0.0.1**. The rc.0
+packages are published. This discussion now defines the recovery policy;
+implementation has not started.
 
 ## Agreed goals and release boundary
 
 - Fresh-install room-history recovery currently makes the app unpleasant to use.
   Improve it before the first alpha, **v0.0.1**.
-- The current behavior is acceptable in **v0.0.1-rc.0**. Continue the current
-  desktop installation/packaging work; do not implement this item now.
+- The current behavior is acceptable in the published **v0.0.1-rc.0**.
 - Make recent conversation history usable without waiting for the full archive.
   The user must be able to send, receive, navigate and otherwise interact while
   older history and local derived data are recovered in the background.
@@ -17,20 +17,35 @@ work**. This is a discussion record, not an implemented recovery policy.
   retain it until explicit deletion. Prioritizing recent messages does not
   reduce the retention scope or erase existing local history.
 
-## User proposal to develop
+## Agreed initial history target
 
-For each room, restore messages from the **last 48 hours** first. For a room
-without recent activity, fall back to its **latest 128 messages** so a new
-installation can show conversation context even when the room has been quiet
-for a long time. Continue recovering the remaining archive in the background.
+For each room, prioritize messages from the **last 48 hours**. If that interval
+contains fewer than **128 messages**, include the immediately preceding messages
+until the room has 128 messages, or the available authorized archive is
+exhausted. The fallback also applies when the interval contains some messages;
+it is not limited to rooms with no recent activity.
 
-The 48-hour window and 128-message fallback are the proposed starting point.
-They have not been implemented or validated against protocol archive queries.
+- 20 messages in the interval: include up to 108 earlier messages.
+- No messages in the interval: include up to the latest 128 messages.
+- More than 128 messages in the interval: retain the full 48-hour target;
+  128 is not a cap on recent history.
+- Fewer than 128 messages available in total: retain what is available.
+
+Continue recovering all remaining authorized history in the background without
+blocking interaction. This target does not require downloading or rendering the
+whole interval before showing the first retrieved messages. Page budgets and
+queue ordering remain open decisions.
+
+## Recommendation awaiting discussion
+
+Prioritize the selected room's next recent-history page, then alternate bounded
+pages among the other rooms so that one busy archive cannot monopolize initial
+recovery. Continue from the newest messages toward older ones. Keep live
+sending/receiving responsive throughout. Exact fairness and account scheduling
+have not been agreed.
 
 ## Open decisions for the next discussion
 
-- Does fallback apply only when the 48-hour query returns no messages, or should
-  rooms with fewer than 128 recent messages also load older messages to fill it?
 - What anchors the 48-hour cutoff, and what page/message/time budgets keep
   a very active room from delaying every other room? Store time bounds in UTC.
 - How should the selected room, other rooms and multiple accounts share the
