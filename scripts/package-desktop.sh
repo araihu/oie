@@ -1,10 +1,17 @@
 #!/bin/sh
 # Build the selected immutable source, not the checkout containing this script.
 set -eu
+# The selected source controls VCS metadata, even when a Git alias launches us.
+unset GIT_DIR GIT_WORK_TREE GIT_PREFIX GIT_INDEX_FILE
 
 fail() { printf '%s\n' "package-desktop: $*" >&2; exit 1; }
 usage() {
   printf '%s\n' 'Usage: package-desktop.sh --version TAG --revision FULL_SHA --source DIR --output DIR'
+}
+copy_file() {
+  # Fresh package resources need their contents, not the builder's extended
+  # attributes. Shared build directories may not support macOS metadata.
+  if [ "$target_os" = darwin ]; then cp -X "$@"; else cp "$@"; fi
 }
 version= revision= source_dir= output_dir=
 while [ "$#" -gt 0 ]; do
@@ -102,8 +109,22 @@ short_version=${short_version%%+*}
 archive_name="oie_${version}_${target_os}_${target_arch}.tar.gz"
 [ ! -e "$output_dir/$archive_name" ] || fail "archive already exists: $output_dir/$archive_name"
 [ ! -e "$output_dir/$archive_name.sha256" ] || fail 'archive checksum already exists'
-stage=$(mktemp -d "$output_dir/.oie-package.XXXXXX")
-trap 'rm -rf "$stage"' EXIT HUP INT TERM
+if [ "$target_os" = darwin ]; then
+  # Signing and icon tools operate on native macOS storage. Only the finished
+  # archive crosses into a possibly shared output filesystem.
+  stage=$(mktemp -d "${TMPDIR:-/tmp}/oie-package.XXXXXX")
+else
+  stage=$(mktemp -d "$output_dir/.oie-package.XXXXXX")
+fi
+archive_tmp=
+cleanup() {
+  [ -z "$archive_tmp" ] || rm -f "$archive_tmp"
+  rm -rf "$stage"
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 payload="$stage/payload"
 mkdir -p "$payload"
 if [ "$target_os" = darwin ]; then
@@ -119,14 +140,14 @@ else
   executable="$payload/bin/oie-desktop"
   doc_dir="$payload/share/doc/oie"
   mkdir -p "$payload/bin" "$payload/share/applications" "$payload/share/icons/hicolor/512x512/apps" "$doc_dir"
-  cp "$tooling_dir/packaging/linux/org.araihu.oie.desktop.in" "$payload/share/applications/org.araihu.oie.desktop"
-  cp "$source_dir/internal/adapters/desktop/assets/icon.png" "$payload/share/icons/hicolor/512x512/apps/org.araihu.oie.png"
+  copy_file "$tooling_dir/packaging/linux/org.araihu.oie.desktop.in" "$payload/share/applications/org.araihu.oie.desktop"
+  copy_file "$source_dir/internal/adapters/desktop/assets/icon.png" "$payload/share/icons/hicolor/512x512/apps/org.araihu.oie.png"
 fi
 
 printf '%s\n' "Building $version ($revision) for $target_os/$target_arch" >&2
 (cd "$source_dir" && go build -mod=readonly -tags production -trimpath -buildvcs="$build_vcs" -ldflags "$link_flags" -o "$executable" ./cmd/oie-desktop)
 chmod 0755 "$executable"
-cp "$source_dir/LICENSE" "$source_dir/THIRD_PARTY_NOTICES.md" "$doc_dir/"
+copy_file "$source_dir/LICENSE" "$source_dir/THIRD_PARTY_NOTICES.md" "$doc_dir/"
 mkdir -p "$doc_dir/licenses"
 # Retain the embedded browser/artwork notices in a browsable relative tree.
 find "$source_dir/internal/adapters/web" "$source_dir/internal/adapters/desktop/assets" -type f | while IFS= read -r file; do
@@ -134,14 +155,14 @@ find "$source_dir/internal/adapters/web" "$source_dir/internal/adapters/desktop/
     LICENSE*|LICENCE*|COPYING*|NOTICE*|Apache-2.0.txt)
       relative=${file#"$source_dir/"}
       mkdir -p "$doc_dir/licenses/$(dirname "$relative")"
-      cp "$file" "$doc_dir/licenses/$relative" ;;
+      copy_file "$file" "$doc_dir/licenses/$relative" ;;
   esac
 done
 # The artwork notice names this Apache text even when a source archive omits
 # the duplicate file. It is the same license as the project's root LICENSE.
 for art_dir in internal/adapters/desktop/assets internal/adapters/web/brand; do
   art_license="$doc_dir/licenses/$art_dir/Apache-2.0.txt"
-  [ -f "$art_license" ] || cp "$source_dir/LICENSE" "$art_license"
+  [ -f "$art_license" ] || copy_file "$source_dir/LICENSE" "$art_license"
 done
 go_root=$(cd "$source_dir" && go env GOROOT)
 go_license="$go_root/LICENSE"
@@ -153,7 +174,7 @@ if [ ! -f "$go_license" ] && [ "$target_os" = darwin ] && [ "$(basename "$go_roo
 fi
 [ -f "$go_license" ] || fail "the Go SDK license is missing: $go_root/LICENSE"
 mkdir -p "$doc_dir/licenses/go"
-cp "$go_license" "$doc_dir/licenses/go/LICENSE"
+copy_file "$go_license" "$doc_dir/licenses/go/LICENSE"
 (cd "$source_dir" && go list -mod=readonly -tags production -deps -f '{{if .Module}}{{.Module.Path}}{{"\t"}}{{.Module.Dir}}{{end}}' ./cmd/oie-desktop) > "$stage/modules-raw.tsv"
 LC_ALL=C sort -u "$stage/modules-raw.tsv" > "$stage/modules.tsv"
 tab=$(printf '\t')
@@ -163,7 +184,7 @@ while IFS="$tab" read -r module_path module_dir; do
     [ -f "$file" ] || continue
     destination="$doc_dir/licenses/go-modules/$module_path"
     mkdir -p "$destination"
-    cp "$file" "$destination/$(basename "$file")"
+    copy_file "$file" "$destination/$(basename "$file")"
   done
 done < "$stage/modules.tsv"
 # Include the resolved dependency versions without leaking builder paths.
@@ -211,6 +232,10 @@ if [ "$target_os" = darwin ]; then
 else
   tar -czf "$stage/$archive_name" -C "$payload" bin share
 fi
-mv "$stage/$archive_name" "$output_dir/$archive_name"
+archive_tmp=$(mktemp "$output_dir/.oie-archive.XXXXXX")
+copy_file "$stage/$archive_name" "$archive_tmp"
+chmod 0644 "$archive_tmp"
+mv "$archive_tmp" "$output_dir/$archive_name"
+archive_tmp=
 (cd "$output_dir" && if command -v sha256sum >/dev/null 2>&1; then sha256sum "$archive_name"; else shasum -a 256 "$archive_name"; fi) > "$output_dir/$archive_name.sha256"
 printf '%s\n' "$output_dir/$archive_name"
