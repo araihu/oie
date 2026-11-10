@@ -61,7 +61,7 @@ func TestEditedEvidenceAndLateMetadataInvalidateTimeline(t *testing.T) {
 	for _, attr := range edited.Attr {
 		attrs[attr.Key] = attr.Val
 	}
-	if edited.Data != "a" || attrs["aria-label"] != v.Text.ViewEditHistory || attrs["data-edited-at"] != messageEditedAt(v.Messages[0]) {
+	if edited.Data != "a" || attrs["aria-label"] != v.Text.Edited+" · "+v.Text.ViewEditHistory || attrs["data-edited-at"] != messageEditedAt(v.Messages[0]) {
 		t.Fatal("edited evidence lost its accessible history link or authored date")
 	}
 	if _, ok := attrs["data-open-message-history"]; !ok {
@@ -86,8 +86,8 @@ func TestEditedEvidenceAndLateMetadataInvalidateTimeline(t *testing.T) {
 		}
 	}
 	collect(edited)
-	if text.String() != v.Text.Edited {
-		t.Fatal("edited evidence label changed")
+	if strings.TrimSpace(text.String()) != "" || !strings.Contains(out.String(), "message-edited-tip-"+testMessage) {
+		t.Fatal("edited evidence must be an icon with an accessible tooltip")
 	}
 	if !v.Messages[0].CreatedAt.Equal(message.CreatedAt) || v.Messages[0].OriginalText != message.OriginalText {
 		t.Fatal("presentation changed original creation time/content")

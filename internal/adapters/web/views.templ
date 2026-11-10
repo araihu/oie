@@ -16,6 +16,8 @@ import (
 	"github.com/araihu/goshtoso/components/link"
 "github.com/araihu/goshtoso/components/popover"
 	"github.com/araihu/goshtoso/components/sidebar"
+	"github.com/araihu/goshtoso/components/spinner"
+	"github.com/araihu/goshtoso/components/tooltip"
 	"github.com/araihu/goshtoso/components/textarea"
 	"github.com/araihu/goshtoso/components/textinput"
 	"github.com/araihu/goshtoso/components/toast"
@@ -699,13 +701,41 @@ if !m.IsOwn && !grouped {
 }
 @messageBody(v,m)
 <div class="oie-message-stamp">
-if messageEdited(m) {
-@link.Link(v.editHistoryHref(m),link.WithRootClass("oie-message-edited"),link.WithAttrs(templ.Attributes{"data-message-edited":"","data-open-message-history":"","data-edited-at":messageEditedAt(m),"aria-label":v.Text.ViewEditHistory})){<span>{v.Text.Edited}</span>}
-}
+@messageEditIndicator(v,m)
 @messageStarIndicator(v,m.Id)
 <time data-message-time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
 </div>
 </div>
+}
+
+templ messageEditIndicator(v view,m messageView){
+<div class="oie-message-edit-indicator">
+<span class="oie-message-edit-state" data-edit-state="editing">
+@tooltip.Tooltip("message-editing-tip-"+m.Id,v.Text.EditMode,tooltip.WithTrigger(messageEditStateIcon(v.Text.EditMode,false)),tooltip.WithPortal(true))
+</span>
+<span class="oie-message-edit-state" data-edit-state="pending">
+@tooltip.Tooltip("message-edit-pending-tip-"+m.Id,v.Text.EditPending,tooltip.WithTrigger(messageEditStateIcon(v.Text.EditPending,true)),tooltip.WithPortal(true))
+</span>
+if messageEdited(m) {
+<span class="oie-message-edit-history">
+@tooltip.Tooltip("message-edited-tip-"+m.Id,v.Text.Edited+" · "+v.Text.ViewEditHistory,tooltip.WithTrigger(messageEditedIcon(v,m)),tooltip.WithPortal(true))
+</span>
+}
+</div>
+}
+
+templ messageEditStateIcon(label string,pending bool){
+<span class="oie-message-edit-symbol" role="img" aria-label={label} tabindex="0">
+if pending {
+@spinner.Spinner(spinner.Config{Size:spinner.SizeSM,RootClass:"oie-edit-spinner"})
+}else{
+@glyph(heroicons.Icon16SolidPencilSquare)
+}
+</span>
+}
+
+templ messageEditedIcon(v view,m messageView){
+@link.Link(v.editHistoryHref(m),link.WithRootClass("oie-message-edited"),link.WithAttrs(templ.Attributes{"data-message-edited":"","data-open-message-history":"","data-edited-at":messageEditedAt(m),"aria-label":v.Text.Edited+" · "+v.Text.ViewEditHistory})){@glyph(heroicons.Icon16SolidClock)}
 }
 
 templ messageStarIndicator(v view,id string){

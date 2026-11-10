@@ -491,6 +491,7 @@
   "EditMessage": "Edit message",
   "EditPreparing": "Preparing edit…",
   "EditMode": "Editing message",
+  "EditPending": "Saving edit",
   "SaveEdit": "Save edit",
   "CancelEdit": "Cancel edit",
   "EditUnavailable": "This message cannot be edited right now.",

@@ -160,7 +160,7 @@ type view struct {
 type copy struct {
 	CapabilitySendCorrectionsNote string
 
-	EditMessage, EditPreparing, EditMode, SaveEdit, CancelEdit, EditUnavailable, EditChanged, EditQueued, EditDispatching, EditSubmitted, EditUnknown, EditAcceptanceUnknown, EditFailed, EditCheckStatus, EditRetry, EditStorageUnavailable string
+	EditMessage, EditPreparing, EditMode, EditPending, SaveEdit, CancelEdit, EditUnavailable, EditChanged, EditQueued, EditDispatching, EditSubmitted, EditUnknown, EditAcceptanceUnknown, EditFailed, EditCheckStatus, EditRetry, EditStorageUnavailable string
 
 	ViewEditHistory, EditHistory, EditHistoryLoading, EditHistoryUnavailable, EditHistoryEmpty, EditHistoryOriginal, EditHistoryCurrent, EditHistoryPrevious, EditHistoryMore, EditHistoryNewer, EditHistoryChanged string
 	SenderInfo, OpenSenderInfo, SenderInfoLoading, SenderInfoUnavailable, SenderConversation, SenderAccount                                                                                                         string

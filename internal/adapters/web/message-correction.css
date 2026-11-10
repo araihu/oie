@@ -8,6 +8,8 @@
 .oie-message-body[data-editing-message],.oie-message-body[data-edit-pending]{outline:none}
 .oie-message-own:has([data-editing-message],[data-edit-pending]) .oie-message-stamp{color:inherit}
 .oie-bubble:has([data-edit-pending]){opacity:.7}
+.oie-message-body:is([data-editing-message],[data-edit-pending]) .oie-message-edit-history{display:none}
+.oie-message-body[data-editing-message]:not([data-edit-pending]) [data-edit-state=editing],.oie-message-body[data-edit-pending] [data-edit-state=pending]{display:inline-flex}
 .oie-composer-edit,.oie-edit-status{position:absolute;inset-inline-end:0;bottom:calc(100% + 6px);z-index:35;width:max-content;max-width:min(22rem,calc(100vw - 96px));padding:8px 10px;border:1px solid var(--oie-border);border-radius:8px;font-size:11px;background:var(--oie-panel);color:var(--oie-text);box-shadow:0 2px 8px #0003;overflow-wrap:anywhere}
 [data-edit-below]{top:calc(100% + 6px);bottom:auto}
 .oie-composer-edit[hidden],.oie-edit-recovery[hidden],.oie-edit-status[hidden]{display:none!important}

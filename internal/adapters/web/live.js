@@ -383,7 +383,6 @@ window.OieRuntime.register('live', life => {
     for (const time of document.querySelectorAll('time[datetime]:not([data-day]):not([data-history-date])')) {
       const date=new Date(time.dateTime);if(!Number.isNaN(date.getTime()))time.textContent=time.matches('[data-viewer-date],[data-capability-date],[data-details-date],[data-shared-source-date]')?new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(date):clock.format(date);
     }
-    for(const label of document.querySelectorAll('[data-message-edited][data-edited-at]')){const at=new Date(label.dataset.editedAt);if(!Number.isNaN(at.getTime()))label.title=new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(at);}
     const timeline=document.querySelector('#message-timeline');if(!timeline)return;
     for(const divider of timeline.querySelectorAll('.oie-day-divider'))divider.remove();
     const key=date=>[date.getFullYear(),date.getMonth(),date.getDate()].join('-');

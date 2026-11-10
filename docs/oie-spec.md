@@ -815,6 +815,9 @@ editing banner above the composer. Dim that message while its correction is
 awaiting asynchronous submission. Remove the highlight on cancellation or
 completion. Keep concise recovery status and actions attached to the source
 message, preserving the composer geometry and ordinary draft.
+Use a non-actionable editing icon or pending spinner with a localized tooltip in
+the message timestamp row. The edited state uses a history icon with a tooltip
+and an action to open retained revisions, replacing the visible Edited text.
 
 **AGREED:** change the bubble fill during editing. Queued and dispatching edits
 use dimming without a visible status box, and restore ordinary composition once
