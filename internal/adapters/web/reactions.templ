@@ -2,6 +2,7 @@ package web
 
 import (
  "strconv"
+ "github.com/araihu/goshtoso/components/avatar"
  "github.com/araihu/goshtoso/components/button"
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/modal"
@@ -58,8 +59,23 @@ templ reactionPickerContent(v view){
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-reaction-catalog-retry":"","hidden":true})){<span>{v.Text.Retry}</span>}
 <template data-reaction-emoji-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-emoji-cell"),button.WithAttrs(templ.Attributes{"data-reaction-choice":""})) {}</template>
 <template data-reaction-chip-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-chip"),button.WithAttrs(templ.Attributes{"data-reaction-emoji":""})){<span data-reaction-glyph aria-hidden="true"></span><small data-reaction-count></small><span data-reaction-busy hidden>@spinner.Spinner(spinner.Config{Size:spinner.SizeSM,RootClass:"oie-reaction-spinner"})</span>}</template>
+<template data-reaction-actor-template>
+<div class="oie-reaction-actor" data-reaction-actor>
+<div class="oie-reaction-actor-avatar" data-src="" x-data="{reactionAvatarSrc: $el.dataset.src}">
+<div x-show="!reactionAvatarSrc">@avatar.Avatar(avatar.Config{Size:avatar.SizeXS,Icon:reactionActorInitials()})</div>
+<template x-if="reactionAvatarSrc">@avatar.Avatar(avatar.Config{Size:avatar.SizeXS,SrcExpr:"reactionAvatarSrc",Icon:reactionActorInitials()})</template>
+</div>
+<div class="oie-reaction-actor-identity"><strong data-reaction-actor-name></strong><small data-reaction-actor-address></small></div>
+<div class="oie-reaction-actor-emojis" data-reaction-actor-emojis></div>
+</div>
+</template>
+<template data-reaction-own-emoji-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-own-emoji"),button.WithAttrs(templ.Attributes{"data-reaction-emoji":""})){<span data-reaction-remove-glyph></span>}</template>
 <template data-reaction-filter-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-filter"),button.WithAttrs(templ.Attributes{"data-reaction-filter":""})) {<span></span>}</template>
 <template data-reaction-remove-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-remove"),button.WithAttrs(templ.Attributes{"data-reaction-emoji":"","aria-label":v.Text.ReactionRemove,"title":v.Text.ReactionRemove})) {@glyph(heroicons.Icon16SolidXMark)}</template>
 <template data-reaction-status-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-chip oie-reaction-recovery"),button.WithAttrs(templ.Attributes{"data-reaction-check":""})){<span data-reaction-check-icon>@glyph(heroicons.Icon16SolidArrowPath)</span><span data-reaction-status-spinner hidden>@spinner.Spinner(spinner.Config{Size:spinner.SizeSM,RootClass:"oie-reaction-spinner"})</span>}</template>
 </section>
+}
+
+templ reactionActorInitials(){
+<span x-text="$el.closest('[data-reaction-actor]').dataset.initials"></span>
 }

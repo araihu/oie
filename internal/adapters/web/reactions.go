@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/araihu/goshtoso/components/popover"
@@ -77,6 +78,38 @@ func validReactions(value engineapi.MessageReactions, account, conversation, mes
 	for _, e := range value.OwnEmojis {
 		if !seen[e] {
 			return false
+		}
+	}
+	if value.Actors != nil {
+		actors, totals := map[string]bool{}, map[string]int{}
+		ownActors := 0
+		for _, actor := range *value.Actors {
+			if actor.Address == "" || len(actor.Address) > 1023 || !utf8.ValidString(actor.Address) || strings.IndexFunc(actor.Address, unicode.IsControl) >= 0 || actors[actor.Address] || strings.TrimSpace(actor.DisplayName) == "" || len(actor.DisplayName) > 1023 || !utf8.ValidString(actor.DisplayName) || strings.IndexFunc(actor.DisplayName, unicode.IsControl) >= 0 || len(actor.Emojis) == 0 || !validReactionSet(actor.Emojis) || actor.AvatarHash != nil && !validAvatarHash(*actor.AvatarHash) {
+				return false
+			}
+			actors[actor.Address] = true
+			if actor.Own {
+				ownActors++
+				if len(actor.Emojis) != len(value.OwnEmojis) {
+					return false
+				}
+				for _, emoji := range actor.Emojis {
+					if !own[emoji] {
+						return false
+					}
+				}
+			}
+			for _, emoji := range actor.Emojis {
+				totals[emoji]++
+			}
+		}
+		if ownActors > 1 || (len(value.OwnEmojis) > 0) != (ownActors == 1) || len(totals) != len(value.Items) {
+			return false
+		}
+		for _, item := range value.Items {
+			if totals[item.Emoji] != item.Count {
+				return false
+			}
 		}
 	}
 	if value.AllowedEmojis != nil {
