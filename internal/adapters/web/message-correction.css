@@ -2,8 +2,12 @@
 .oie-composer-auxiliary{position:absolute;inset-inline:0;bottom:100%;z-index:40;max-block-size:min(50dvh,20rem);overflow-y:auto;overscroll-behavior:contain;background:var(--oie-panel)}
 /* Editing is indicated on the retained message, never by a composer banner. */
 .oie-message-body{position:relative}
-.oie-message-body[data-editing-message]{outline:2px solid var(--oie-accent);outline-offset:3px;border-radius:4px}
-.oie-message-body[data-edit-pending]>:not(.oie-message-menu-slot):not([data-composer-edit]):not([data-edit-last-status]){opacity:.55}
+/* Secondary is the provisional editing tone; the comparison also evaluates warning. */
+:root{--oie-edit-tint:var(--color-secondary);--oie-edit-tint-dark:var(--color-secondary-dark)}
+.oie-message-own:has([data-editing-message],[data-edit-pending]){--color-primary:color-mix(in srgb,var(--oie-edit-tint) 18%,var(--oie-panel));--color-on-primary:var(--oie-text);--color-primary-dark:color-mix(in srgb,var(--oie-edit-tint-dark) 22%,var(--oie-panel));--color-on-primary-dark:var(--oie-text)}
+.oie-message-body[data-editing-message],.oie-message-body[data-edit-pending]{outline:none}
+.oie-message-own:has([data-editing-message],[data-edit-pending]) .oie-message-stamp{color:inherit}
+.oie-bubble:has([data-edit-pending]){opacity:.7}
 .oie-composer-edit,.oie-edit-status{position:absolute;inset-inline-end:0;bottom:calc(100% + 6px);z-index:35;width:max-content;max-width:min(22rem,calc(100vw - 96px));padding:8px 10px;border:1px solid var(--oie-border);border-radius:8px;font-size:11px;background:var(--oie-panel);color:var(--oie-text);box-shadow:0 2px 8px #0003;overflow-wrap:anywhere}
 [data-edit-below]{top:calc(100% + 6px);bottom:auto}
 .oie-composer-edit[hidden],.oie-edit-recovery[hidden],.oie-edit-status[hidden]{display:none!important}

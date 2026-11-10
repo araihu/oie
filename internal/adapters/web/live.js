@@ -73,13 +73,13 @@ window.OieRuntime.register('live', life => {
     const state=editSession?.command?.state;
     if(bubble&&editSession){bubble.dataset.editingMessage='true';if(editBusy||editSession.submitted&&(!state||state==='queued'||state==='dispatching')){bubble.dataset.editPending='true';bubble.setAttribute('aria-busy','true');}}
     const previous=place(lastEditStatus,lastEditReceipt?.messageId);
-    if(lastEditStatus)lastEditStatus.hidden=!lastEditReceipt?.command?.state||lastEditReceipt.command.state==='submitted'||editSession?.messageId===lastEditReceipt.messageId;
+    if(lastEditStatus)lastEditStatus.hidden=!lastEditReceipt?.command?.state||['queued','dispatching','submitted'].includes(lastEditReceipt.command.state)||editSession?.messageId===lastEditReceipt.messageId;
     if(previous&&['queued','dispatching'].includes(lastEditReceipt?.command?.state)&&!previous.hasAttribute('data-editing-message')){previous.dataset.editPending='true';previous.setAttribute('aria-busy','true');}
   }
   function renderEdit(){
     if(!editBox)return;
     composer.dataset.editing=String(!!editSession||editPreparing);
-    editBox.hidden=!editSession||editBusy||!(editSession.error||editSession.submitted||editSession.rejected||editStorageDenied);
+    editBox.hidden=!editSession||editBusy||['queued','dispatching'].includes(editSession.command?.state)||!(editSession.error||editSession.submitted||editSession.rejected||editStorageDenied);
     composer.setAttribute('aria-busy',String(editPreparing||editBusy));
     if(editFeedback){const state=editSession?.command?.state;editFeedback.textContent=editPreparing?editText('preparing'):editSession?.error||(state?editText(state):editSession?.submitted?editText('acceptanceUnknown'):editStorageDenied?editText('storage'):'');}
     const cancel=composer.querySelector('[data-edit-cancel]'),save=composer.querySelector('[data-send-message]'),check=editBox.querySelector('[data-edit-check]'),retry=editBox.querySelector('[data-edit-retry]');
@@ -132,7 +132,7 @@ window.OieRuntime.register('live', life => {
       if(life.signal.aborted||epoch!==editEpoch)return;
       if(response.ok&&result.ok&&result.accepted&&matchingEditCommand(result.command)){
         keepEdit({...editSession,command:result.command,error:''});
-        if(result.command.state==='submitted'){finishEdit();return;}
+        if(['queued','dispatching','submitted'].includes(result.command.state)){finishEdit();return;}
         if(result.command.state==='failed')keepEdit({...editSession,submitted:false,rejected:true});
       }else if(result.rejected===true){keepEdit({...editSession,submitted:false,rejected:true,error:result.message||editText('changed')});}
       else keepEdit({...editSession,error:result.message||editText('acceptanceUnknown')});

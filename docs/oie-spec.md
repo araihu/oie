@@ -814,6 +814,13 @@ awaiting asynchronous submission. Remove the highlight on cancellation or
 completion. Keep concise recovery status and actions attached to the source
 message, preserving the composer geometry and ordinary draft.
 
+**AGREED:** change the bubble fill during editing. Queued and dispatching edits
+use dimming without a visible status box, and restore ordinary composition once
+the engine accepts the command. Keep uncertain or failed outcomes recoverable.
+**RECOMMENDED:** use a secondary container tint for editing; reserve warning for
+conditions requiring attention. **OPEN:** final editing fill, comparing secondary
+and warning in both themes. Secondary is provisional in the live preview.
+
 **IMPLEMENTATION SCOPE:** the first outgoing correction supports the latest own
 plain text message sent by this engine in the current verified XMPP connection.
 Room corrections also require the original own echo with verified occupant
