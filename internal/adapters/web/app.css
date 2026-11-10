@@ -1,7 +1,7 @@
 /* Chat workspace composition through public component root hooks and theme tokens. */
 :root {
  --oie-bg:#f7f8f7;--oie-panel:#fff;--oie-raised:#f0f2f1;--oie-selected:#e6ece8;
- --oie-text:#17211c;--oie-muted:#56615b;--oie-border:#d7ddd9;--oie-chat:#edf2ee;
+ --oie-text:#17211c;--oie-muted:#4b5951;--oie-border:#d7ddd9;--oie-chat:#e3e8e6;--oie-wallpaper-wash:rgb(227 232 230 / .6);
  --oie-accent:#6092ab;--oie-accent-soft:#e1eef5;--oie-on-accent:#07111f;--oie-accent-text:#274c5e;
  --font-body:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
  --font-title:var(--font-body);
@@ -13,7 +13,7 @@
 }
 html.dark {
  --oie-bg:#1c1d1c;--oie-panel:#202120;--oie-raised:#2b2c2b;--oie-selected:#373937;
- --oie-text:#f3f4f3;--oie-muted:#afb5b0;--oie-border:#383b38;--oie-chat:#101110;
+ --oie-text:#f3f4f3;--oie-muted:#afb5b0;--oie-border:#383b38;--oie-chat:#101110;--oie-wallpaper-wash:transparent;
  --oie-accent:#6092ab;--oie-accent-soft:#203d4d;--oie-on-accent:#07111f;--oie-accent-text:#9ac3d8;
  --color-surface-dark:var(--oie-panel);--color-surface-dark-alt:var(--oie-raised);
  --color-on-surface-dark:var(--oie-text);--color-on-surface-dark-strong:var(--oie-text);
@@ -73,12 +73,14 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-chat-identity{flex:1;min-width:0}.oie-chat-identity h2{font-weight:650;font-size:14px;margin:0 0 3px}.oie-chat-identity p{font-size:11px;color:var(--oie-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0}
 .oie-back-button{display:none;color:var(--oie-text)}
 .oie-preview-note{margin:0;padding:7px 20px;text-align:center;font-size:11px;color:var(--oie-muted);background:var(--oie-panel);border-bottom:1px solid var(--oie-border)}
-.oie-timeline{flex:1;min-height:0;overflow-y:auto;padding:22px clamp(20px,3vw,64px) 28px;background-image:url('/ui/chat-pattern.svg');background-size:480px 480px;scrollbar-width:thin;scrollbar-color:var(--oie-border) transparent;outline-offset:-3px}
+.oie-timeline{flex:1;min-height:0;overflow-y:auto;padding:22px clamp(20px,3vw,64px) 28px;background-image:linear-gradient(var(--oie-wallpaper-wash),var(--oie-wallpaper-wash)),url('/ui/chat-pattern.svg');background-size:480px 480px;scrollbar-width:thin;scrollbar-color:var(--oie-border) transparent;outline-offset:-3px}
 .oie-day-divider{display:flex;justify-content:center;margin:0 0 22px}.oie-day-divider span{background:var(--oie-panel);border:1px solid var(--oie-border);padding:4px 12px;border-radius:7px;font-size:11px;color:var(--oie-muted)}
 .oie-message{margin-bottom:9px;max-width:min(88%,620px);font-size:13px;line-height:1.45}
 .oie-message-own{margin-left:auto;--color-primary:#e1eef5;--color-on-primary:#274c5e;--color-primary-dark:#24495c;--color-on-primary-dark:#eff7fb}
 .oie-message:not(.oie-message-group-end)>.oie-message-content>.oie-avatar-scope{visibility:hidden}
 .oie-bubble{margin-top:0;font-family:var(--font-body);font-size:13px}
+html:not(.dark) .oie-bubble{--color-surface-alt:var(--oie-panel);filter:drop-shadow(0 1px 1px rgb(23 33 28 / .1))}
+html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 .oie-message-time{display:block;text-align:right;color:var(--oie-muted);font-size:10px;margin-top:3px}
 .oie-media-message{max-width:326px;margin-left:48px;padding:6px;border-radius:9px;background:var(--oie-raised);box-shadow:0 1px 1px #0001}
 .oie-media-sender{display:block;font-size:12px;font-weight:650;margin:0 5px 6px;color:var(--oie-text)}
