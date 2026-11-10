@@ -396,7 +396,9 @@ Search across accounts/sources in the selected engine and within a direct/group 
 
 **AGREED:** room text search queries SQLite and the room archive in parallel
 when remote text search is supported. Show local results as they become
-available and add authorized remote matches as they arrive. Retain those
+available and add authorized remote matches as they arrive. Dispatch remote
+search after a short typing pause and keep only the latest term queued for
+each active room search. Apply responses to the matching search. Retain those
 messages with canonical deduplication and track contiguous history coverage
 separately. Timeline and remote search requests take precedence over backfill
 in the server's queue.

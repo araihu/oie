@@ -83,6 +83,10 @@ historical ingestion and deduplicate by canonical ID. Track continuous archive
 coverage separately from individual hits. Fetch surrounding messages as needed
 when opening a remote hit.
 
+Wait for a short typing pause before starting remote search. Within each
+active room search, keep only the latest term queued for the server. Apply
+arriving results to the interface only if they match the active search.
+
 Give timeline and search requests priority over backfill in the server's
 queue. Report the available search scope when coverage is partial.
 The initial recommendation for global search is to use local data.
@@ -102,8 +106,6 @@ search. [MAM](https://xmpp.org/extensions/xep-0313.html),
 ## Open decisions for the next discussion
 
 - What page, message and time budgets keep a busy room from delaying the others?
-- When does typing trigger remote search, and how are obsolete searches
-  cancelled or superseded?
 - How does each protocol adapter identify which archives share a server?
 - What turn frequency gives the open room preference while preserving progress
   across rooms on the same server? Keep requests paced and live traffic responsive.
@@ -132,6 +134,8 @@ Verify that on-demand rooms fetch older pages when requested, and that local
 and remote hits merge without duplicates or advancing continuous coverage.
 Verify that search remains usable with a slow server or an archive that only
 supports page retrieval.
+Verify that rapid typing queues only the latest remote search and that a late
+response leaves the current results intact.
 
 The existing history implementation and its checks are described in
 [the history milestone](milestone-three-history.md). The agreed retention and
