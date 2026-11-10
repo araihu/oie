@@ -458,6 +458,8 @@ Desktop composer defaults: Enter sends, Shift+Enter inserts a newline, with a pe
 
 The composer grows and shrinks with wrapped or multiline text, including restored drafts, up to the smaller of 12rem or 30% of the dynamic viewport height. Beyond that limit, scroll inside the textarea. Keep composer actions aligned to its bottom edge.
 
+**AGREED:** follow the [visual stability policy](ui-stability.md). An eligibility lookup must not flash an editor or move the composer/timeline. Report unavailable edits with a temporary, dismissible toast. Reuse the composer submit button to save an edit, and provide X and Escape to cancel before dispatch, respecting existing send-key and IME behavior. Keep transient controls and status out of the normal composer layout while preserving intentional text autosizing.
+
 Open at the first unread message, otherwise at latest, with **Jump to latest**. Incoming messages auto-scroll only if the user is already at the bottom; otherwise preserve position and show **New messages**. Explicit search/reply navigation targets its selected message.
 
 **AGREED:** conversation history loads in bounded pages as the user scrolls upward. Navigation from a reply, shared item, starred message or another source opens only a bounded page around the target, with infinite loading toward both older and newer messages and the existing Jump to latest action. Keep a bounded rendered window, unloading distant messages while retaining the ability to page back to them. Preserve the visible position when pages arrive; never load the complete retained archive into the DOM merely to reach a message.

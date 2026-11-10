@@ -8,6 +8,8 @@ Read docs/oie-spec.md before changing behavior. Keep agreed requirements, recomm
 - Domain and application packages must not depend on HTTP, SQL, Goshtoso, or protocol client packages. Adapters implement application-owned ports.
 - Reuse public Goshtoso components and examples. Generic dependency gaps belong upstream, in an open PR with a concrete commit pseudo-version pinned here. Do not import dependency internal/demo packages.
 - Keep user-facing expressions localized in English and Brazilian Portuguese from the start.
+- Keep implementation documentation out of product UI. Use concise user-relevant states and actions; put backend explanations and workflow internals in docs. Technical detail belongs in a view only when explicitly requested or needed for a concrete user decision.
+- Follow docs/ui-stability.md for UI changes. Eligibility checks and transient feedback must not shift the composer or timeline; verify delayed responses and painted-frame geometry for affected interactions.
 - Use a managed worktree for feature implementation; preserve unrelated changes.
 - Run make check and relevant integration checks before presenting changes. Document unavailable checks precisely.
 - Keep increments as small local commits and run CI locally through Dagger. Do not open more Oie pull requests until a version is ready for alpha v0.0.1.
