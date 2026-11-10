@@ -369,7 +369,7 @@ For automation against a loopback data API, build the server and generated CLI:
 make build build-cli
 bin/oie -role local -data-only -listen 127.0.0.1:18090 -data-dir ./data-cli
 bin/oiectl --server http://127.0.0.1:18090 --output json system engine get
-bin/oiectl --server http://127.0.0.1:18090 --output json system health check
+bin/oiectl --server http://127.0.0.1:18090 --output json system health
 ```
 
 Run the two CLI commands in another terminal while the engine is running.
@@ -424,8 +424,8 @@ Update scripts that use earlier command names to the names below.
 | `previews images` | `download`, `request` |
 | `previews thumbnails` | `get`, `request` |
 | `shared content` | `download`, `list` |
+| `system` | `health` |
 | `system engine` | `get` |
-| `system health` | `check` |
 
 List avatar metadata by account and use the returned `imageHash` to download
 the PNG.

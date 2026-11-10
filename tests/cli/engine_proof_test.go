@@ -290,7 +290,7 @@ func TestCLIDataOnlyXMPP(t *testing.T) {
 	p := newCLIProof(t)
 	var identity engineapi.Engine
 	p.call(&identity, "", "system", "engine", "get")
-	p.call(nil, "", "system", "health", "check")
+	p.call(nil, "", "system", "health")
 	var alice, bob engineapi.Account
 	for _, entry := range []struct {
 		address string

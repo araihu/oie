@@ -109,7 +109,7 @@ The source contract is [api/openapi.yaml](api/openapi.yaml), also served at
 `/api/openapi.yaml`. Errors use stable codes in `application/problem+json`.
 
 ```sh
-bin/oiectl system health check
+bin/oiectl system health
 bin/oiectl system engine get --output json
 printf '%s\n' '{"protocol":"xmpp","address":"alice@localhost","label":"Personal"}' |
   bin/oiectl accounts register \

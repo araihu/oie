@@ -1526,11 +1526,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-cli-group": [
-          "system",
-          "health"
-        ],
-        "x-cli-name": "check"
+        "x-cli-name": "health"
       }
     },
     "/api/v1/engine": {
