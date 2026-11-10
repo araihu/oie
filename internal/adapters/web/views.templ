@@ -695,6 +695,7 @@ for identity,hash:=range v.Avatars {
 // positioning never depends on ChatBubble's private row or bubble selectors.
 templ messageBubbleBody(v view,m messageView,grouped bool){
 <div class={"oie-message-body",templ.KV("oie-message-body-compact",m.IsOwn||grouped)} data-message-bubble={m.Id}>
+@messageReactionShortcut(v,m)
 <div class="oie-message-menu-slot" data-message-menu-slot={m.Id}>
 @dropdown.Dropdown(dropdown.Config{ID:"message-menu-"+m.Id,Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,m.Id),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:messageActions(v,m.Id)})
 </div>

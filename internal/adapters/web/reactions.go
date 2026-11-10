@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/araihu/goshtoso/components/popover"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
@@ -330,4 +331,29 @@ func (s *Server) setReactions(w http.ResponseWriter, r *http.Request) {
 	result.Rejected = problem.Code != "idempotency_conflict"
 	result.Message = v.Text.ReactionUnavailable
 	respond(status)
+}
+
+func reactionSummaryPlacement(own bool) popover.Placement {
+	if own {
+		return popover.PlacementTopEnd
+	}
+	return popover.PlacementTopStart
+}
+
+func reactionSummaryCount(state engineapi.MessageReactions) int {
+	count := 0
+	for _, item := range state.Items {
+		count += item.Count
+	}
+	return count
+}
+func reactionSummaryEmojis(state engineapi.MessageReactions) string {
+	emojis := []string{}
+	for _, item := range state.Items {
+		if len(emojis) == 3 {
+			break
+		}
+		emojis = append(emojis, item.Emoji)
+	}
+	return strings.Join(emojis, " ")
 }
