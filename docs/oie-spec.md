@@ -21,7 +21,7 @@ The status labels have distinct meanings:
 
 Sections 2–13 describe **AGREED** behavior unless a paragraph carries a recommendation or open-decision label. Section 14 contains recommendations, not additional accepted scope. Acceptance scenarios distinguish agreed outcomes from proposed engineering details.
 
-The broader alpha target includes local standalone operation, hosted-engine operation, optional app/history sync, multi-account XMPP, reliable immediate and scheduled sends, retained searchable history, rooms, attachments, responsive web UI, PWA/offline behavior, and manual merge restore. The first release, v0.0.1, freezes the currently implemented functional scope and adds standalone desktop packaging as agreed in section 2.1.1. This does not claim that every broader alpha requirement is already implemented.
+The broader alpha target includes local standalone operation, hosted-engine operation, optional app/history sync, multi-account XMPP, reliable immediate and scheduled sends, retained searchable history, rooms, attachments, responsive web UI, PWA/offline behavior, and manual merge restore. The current source prerelease is v0.0.1-rc.0, with the implemented functional scope and ongoing standalone desktop packaging agreed in section 2.1.1. The first alpha, v0.0.1, additionally requires the initial-history usability improvement tracked as B25. This does not claim that every broader alpha requirement is already implemented.
 
 Alpha is single-user: one Oiê owner per instance. Multiple accounts and devices remain supported. Built-in application authentication, multi-user hosting, XMPP E2EE, calls, and other deferred features are listed in section 16. Protocol account credentials are still needed to connect existing XMPP accounts; this does not reopen the deferred application-login design.
 
@@ -47,13 +47,16 @@ Ordinary engine restart/reconnect resumes eligible pending sends automatically. 
 
 **OPEN O01:** Exact commands, configuration, role combinations, process supervision, and data-directory layout. **RECOMMENDED R01:** a modular monolith with explicit role configuration.
 
-### 2.1.1 First desktop alpha distribution · 2026-11-10
+### 2.1.1 First desktop release candidate and alpha distribution · 2026-11-10
 
-**AGREED:** v0.0.1 is the first alpha. Freeze the functional scope at the usable
-application integrated into main at `741e794`; desktop packaging and corrections
-needed for that packaging may follow before the release. The larger specification
+**AGREED:** the current source prerelease is **v0.0.1-rc.0**. The current
+functional baseline and desktop packaging work continue. The first alpha remains
+**v0.0.1** and must include B25, usable room history during initial recovery.
+The existing recovery experience is accepted for rc.0. This explicitly extends
+the earlier functional freeze at `741e794` for the alpha; it does not require
+implementing B25 during the current packaging work. The larger specification
 remains the product direction, not a claim that sync, schedules, outgoing media,
-PWA/offline queues or every other planned feature ships in this release.
+PWA/offline queues or every other planned feature ships in these versions.
 
 **AGREED:** use Wails as the native window host, retaining the Go engine, local
 SQLite/media storage, Goshtoso/templ BFF and HTMX interface. Initial validated
@@ -78,8 +81,9 @@ produce a macOS application bundle by itself.
 engine and HTMX BFF. The stable native origin preserves drafts across launches;
 the host adapts cookies, native file saving, external links, close-to-hide and
 explicit Quit. The browser/server command remains available. Build and scope
-details are in [desktop integration](desktop.md). Release archives, application
-bundles, the release installer and the v0.0.1 tag are not implemented/published
+details are in [desktop integration](desktop.md). The source tag v0.0.1-rc.0
+records this behavior; B25 is not implemented by that tag. Release archives,
+application bundles, the release installer and the v0.0.1 alpha are not published
 by this integration milestone.
 
 **AGREED:** default to installation for the current OS user. On Ubuntu, check
@@ -361,6 +365,15 @@ Persist history independently of protocol-server retention. Automatically backfi
 Keep retrieved history until explicit user deletion, even after the provider expires it. Optional Oiê history sync also transfers records no longer available from the provider. Oiê cannot retrieve history that neither the provider nor a participating Oiê store still possesses.
 
 **RECOMMENDED R08:** a bounded, paced backfill queue with checkpoints, resumable pages, backoff, foreground/live-message priority, and explicit partial-history status. Scope serialization and limits deliberately rather than launching one unbounded worker per room.
+
+**AGREED RELEASE REQUIREMENT:** B25 is required before alpha v0.0.1, while
+rc.0 may retain the current initial-recovery behavior. Initial room recovery
+must let the user interact while older authorized history continues in the
+background. **USER PROPOSAL, NOT YET A FINAL QUERY POLICY:** fetch the last 48
+hours for each room first, with a fallback to the latest 128 messages for rooms
+without recent activity. Record the remaining choices in
+[the initial-history discussion](history-bootstrap-discussion.md) before API-first
+implementation. Eventual full-history recovery and retention remain required.
 
 Search across accounts/sources in the selected engine and within a direct/group conversation. Alpha indexes message text, captions, filenames, URLs, page titles/descriptions, and available media metadata. Document-body extraction, image OCR, and audio transcription are backlogged.
 
@@ -716,10 +729,15 @@ These are design tasks, not another mandatory interview checklist. They should b
 
 Manual link stars/export, separate threads, automatic protocol relaying, multi-engine UI aggregation, recurring schedules, and native mobile packaging have **not been selected**. Do not silently implement them as either confirmed alpha scope or explicitly approved backlog.
 
-## 16. Explicit backlog and later runtime options
+## 16. Backlog and later runtime options
 
-| ID | Deferred item |
+**First priority: B25.** Discuss and implement it after the current rc.0
+packaging work and before alpha v0.0.1. Unlike the other deferred items below,
+B25 is an alpha release requirement. IDs remain stable and do not imply order.
+
+| ID | Item |
 | --- | --- |
+| **B25** | Usable initial room-history recovery, required for alpha v0.0.1 and accepted as missing in v0.0.1-rc.0. Prioritize recent room history, then continue all older authorized history in the background without blocking interaction. User proposal: last 48 hours first, falling back to the latest 128 messages for inactive rooms. Exact fallback semantics, paging/budgets, scheduling and resume behavior remain to be discussed in [initial-history recovery](history-bootstrap-discussion.md); implementation is deferred during current packaging work. |
 | **B01** | Blocking/unblocking protocol identities. |
 | **B02** | Activity-based notification routing/suppression across devices. |
 | **B03** | Automatic idle/away detection and activity aggregation. |
@@ -745,7 +763,7 @@ Manual link stars/export, separate threads, automatic protocol relaying, multi-e
 | **B23** | Automatic in-app updates. The first alpha updates manually through the same release installer, or through `go install` for source installations, while preserving user data. |
 | **B24** | Native desktop icon variants, generated by `araihu/assets`: a macOS Dock/application icon with a platform-appropriate background, shape and optical margins, high-resolution and smaller exports, and a separate monochrome menu-bar icon. Retain the approved flat mascot and palette. Include the Finder icon when packaging the macOS `.app`. Background color and final composition remain recommendations to review. |
 
-A separate native daemon is an accepted future option. Wails desktop packaging is now selected for v0.0.1 under section 2.1.1. Matrix, IRC, and Nostr remain likely future protocol candidates; desktop packaging does not select a separate daemon or implement those protocols.
+A separate native daemon is an accepted future option. Wails desktop packaging is selected for the v0.0.1-rc.0/alpha sequence under section 2.1.1. Matrix, IRC, and Nostr remain likely future protocol candidates; desktop packaging does not select a separate daemon or implement those protocols.
 
 ## 17. Recommended delivery sequence and validation
 

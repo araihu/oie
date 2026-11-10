@@ -5,10 +5,11 @@ host uses Wails v3.1.0 and includes the local engine, SQLite store and web
 interface. Add an existing XMPP account through the interface after launching.
 An external XMPP server is still required for messaging.
 
-The first alpha, v0.0.1, has not been tagged or released. Prebuilt release
-archives, a macOS `.app` bundle and the release-download shell installer are
-not available yet. The commands below select published development commit
-`e4b77dd98a94`; they do not install a released alpha.
+The current source prerelease is **v0.0.1-rc.0**. The first alpha, v0.0.1,
+requires the [initial-history usability improvement B25](history-bootstrap-discussion.md),
+which is not implemented in rc.0. Prebuilt release archives, a macOS `.app`
+bundle and the release-download shell installer are not available yet. The
+commands below install the rc.0 source tag, not the final alpha.
 
 ## Platforms and verified scope
 
@@ -82,7 +83,7 @@ Install for the current user:
 mkdir -p "$HOME/.local/bin"
 GOBIN="$HOME/.local/bin" GOFLAGS= GOWORK=off CGO_ENABLED=1 \
   GONOPROXY=github.com/araihu/oie \
-  go install -tags production github.com/araihu/oie/cmd/oie-desktop@e4b77dd98a94
+  go install -tags production github.com/araihu/oie/cmd/oie-desktop@v0.0.1-rc.0
 ```
 
 Do not run `go install` with `sudo`. The application and its data belong to
@@ -139,7 +140,7 @@ GOBIN="$HOME/.local/bin" GOFLAGS= GOWORK=off CGO_ENABLED=1 \
   CGO_CFLAGS="-O2 -g -mmacosx-version-min=13.0" \
   CGO_LDFLAGS="-O2 -g -mmacosx-version-min=13.0" \
   go install -tags production -ldflags='-extldflags=-mmacosx-version-min=13.0' \
-  github.com/araihu/oie/cmd/oie-desktop@e4b77dd98a94
+  github.com/araihu/oie/cmd/oie-desktop@v0.0.1-rc.0
 ```
 
 These flags avoid the observed mismatch between macOS compilation targets and
@@ -186,7 +187,7 @@ cd oie
 ```
 
 Use the installation command for your platform above, replacing its final
-`github.com/araihu/oie/cmd/oie-desktop@e4b77dd98a94` argument with
+`github.com/araihu/oie/cmd/oie-desktop@v0.0.1-rc.0` argument with
 `./cmd/oie-desktop`. Keep the macOS compilation/linker flags. A checkout install
 does not need the `GONOPROXY` exception for Oiê itself.
 
@@ -264,8 +265,7 @@ development package is actually installed.
 Plain `go install` requires CGO to be enabled; the examples set it explicitly.
 The Makefile uses the `server` tag for headless checks, so native install
 commands explicitly clear `GOFLAGS` and use `-tags production`. The pinned
-desktop commit is intentional: do not substitute `@latest` while the desktop
-command remains outside remote main.
+prerelease tag is intentional so the example selects a repeatable version.
 
 For a release, verify a complete remote `go install` on both targets, native
 runtime behavior and installation from a clean machine. A successful

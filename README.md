@@ -9,6 +9,11 @@ provenance are documented in [Branding](docs/branding.md).
 The alpha targets one owner with multiple protocol accounts. Device sync remains
 planned.
 
+The current source prerelease is **v0.0.1-rc.0**. The first alpha, **v0.0.1**,
+requires improved initial room-history recovery. That is the first backlog
+priority, tracked as [B25](docs/history-bootstrap-discussion.md); the current
+recovery behavior is accepted in rc.0 while desktop packaging continues.
+
 - [Desktop installation on macOS and Linux](docs/installation.md)
 - [Live browser setup and development accounts](docs/live-preview.md)
 - [Local CI loop](docs/local-ci.md)
@@ -40,7 +45,7 @@ See [history recovery scope](docs/milestone-three-history.md). See [engine miles
 The Wails desktop command embeds this same engine and interface. Closing its
 window keeps the engine running; explicit Quit stops it. See the
 [installation instructions](docs/installation.md). Release bundles and the installer
-for v0.0.1 are not published yet.
+are not published yet; the rc.0 source tag supports installation through Go.
 
 Published account, peer and saved-room profile images now load into a local
 thumbnail cache and appear in the interface. Missing or inaccessible images keep
