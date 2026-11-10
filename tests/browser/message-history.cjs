@@ -46,6 +46,16 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const base='http://127.0.0.1:'+port,browser=await chromium.launch({headless:true}),findings=[],errors=[],external=[];
  const until=async(fn,label)=>{for(let n=0;n<200;n++){if(childError)throw Error(childError);if(await fn())return;await new Promise(resolve=>setTimeout(resolve,50))}throw Error('Timed out: '+label+' '+stderr.slice(-1500))};
  const route=(c,lang='en',theme='dark')=>base+'/?'+new URLSearchParams({account,chat:c.id,lang,theme});
+ const observeHistoryTooltip=async(p,action)=>{
+  await action.focus();const tooltipID=await action.evaluate(el=>el.closest('[data-tooltip-portal-ready]').querySelector('[role="tooltip"]').id);
+  await p.waitForFunction(id=>document.getElementById(id).matches(':popover-open'),tooltipID);
+  await p.evaluate(id=>{window.historyTooltipAtOpen=null;window.addEventListener('drawer:open',event=>{if(event.detail?.id==='message-history')window.historyTooltipAtOpen=document.getElementById(id).matches(':popover-open')},{once:true})},tooltipID);
+  return p.locator('[id="'+tooltipID+'"]');
+ };
+ const assertHistoryTooltipDismissed=async(p,tooltip)=>{
+  assert.equal(await p.evaluate(()=>window.historyTooltipAtOpen),false,'tooltip closes before opening history');
+  assert.equal(await tooltip.evaluate(el=>el.matches(':popover-open')),false,'tooltip stays closed above history');
+ };
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
   const context=await browser.newContext({viewport:{width:1440,height:960},locale:'en',timezoneId:'America/Sao_Paulo'});
@@ -55,7 +65,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const target=page.locator('[data-message-id="'+targetID(chats[0])+'"]'),edited=target.locator('[data-message-edited][data-open-message-history]'),slot=page.locator('#message-history-content'),drawer=page.getByRole('dialog',{name:'Edit history',exact:true});
   await page.locator('#message-composer').fill('Keep this draft 😀');await edited.scrollIntoViewIfNeeded();await edited.focus();
   await page.evaluate(()=>{window.historyTimeline=document.querySelector('#message-timeline');window.historyTimelineRow=document.querySelector('[data-message-id]');window.historyScroll=historyTimeline.scrollTop;window.historyDocument=crypto.randomUUID();});const token=await page.evaluate(()=>historyDocument),beforeDocuments=documents,beforeHistoryReads=state.otherReads.length;
-  await page.keyboard.press('Enter');await drawer.waitFor({state:'visible'});await slot.locator('[data-message-history-page]').waitFor();
+  const editedTooltip=await observeHistoryTooltip(page,edited);await page.keyboard.press('Enter');await drawer.waitFor({state:'visible'});await slot.locator('[data-message-history-page]').waitFor();await assertHistoryTooltipDismissed(page,editedTooltip);
   const rows=()=>slot.locator('[data-history-revision]');
   // Exercise a real BFF snapshot. Mutating only the mounted source leaves the
   // mock history/version stale, so a later recovery poll correctly invalidates it.
@@ -92,7 +102,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const unedited=page.locator('[data-message-id="'+id(baseNumber(chats[1])+19)+'"]');assert.equal(await unedited.locator('[data-open-message-history]').count(),0);
   const artifacts=path.join(__dirname,'artifacts');
   for(const width of [390,1440])for(const locale of ['en','pt-BR'])for(const theme of ['light','dark']){
-   const p=await context.newPage();p.on('pageerror',e=>errors.push(e.message));await p.setViewportSize({width,height:960});await p.goto(route(chats[1],locale,theme));await p.locator('[data-message-id="'+targetID(chats[1])+'"] [data-message-edited][data-open-message-history]').click();const title=locale==='en'?'Edit history':'Histórico de edições';const d=p.getByRole('dialog',{name:title,exact:true});await d.waitFor({state:'visible'});await p.locator('[data-message-history-page]').waitFor();await p.waitForTimeout(230);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const box=await d.boundingBox();assert(box.x>=-1&&box.x+box.width<=width+1);await p.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],`${width} ${locale} ${theme}`);await fs.mkdir(artifacts,{recursive:true});if(theme==='dark')await p.screenshot({path:path.join(artifacts,`message-history-${width}-${locale}.png`)});await p.close();findings.push({width,locale,theme,axe:0});
+   const p=await context.newPage();p.on('pageerror',e=>errors.push(e.message));await p.setViewportSize({width,height:960});await p.goto(route(chats[1],locale,theme));const historyAction=p.locator('[data-message-id="'+targetID(chats[1])+'"] [data-message-edited][data-open-message-history]');const historyTooltip=await observeHistoryTooltip(p,historyAction);await historyAction.click();const title=locale==='en'?'Edit history':'Histórico de edições';const d=p.getByRole('dialog',{name:title,exact:true});await d.waitFor({state:'visible'});await p.locator('[data-message-history-page]').waitFor();await p.waitForTimeout(230);await assertHistoryTooltipDismissed(p,historyTooltip);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const box=await d.boundingBox();assert(box.x>=-1&&box.x+box.width<=width+1);await p.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],`${width} ${locale} ${theme}`);await fs.mkdir(artifacts,{recursive:true});if(theme==='dark')await p.screenshot({path:path.join(artifacts,`message-history-${width}-${locale}.png`)});await p.close();findings.push({width,locale,theme,axe:0});
   }
   assert.deepEqual(state.writes,[]);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);findings.push('Native aliased read resolves canonical history, unedited messages have no history action and all 8 responsive localized theme variants pass accessibility with zero writes or external requests');
   console.log('PASS: scoped observed edit history, bounded older/newer pages, current/original labels, literal sources, stale/retry/route guards, keyboard/draft/scroll preservation, native alias and localized accessible layouts');
