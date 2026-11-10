@@ -171,6 +171,12 @@ Keep application contracts independent of wire transport. Future WebSocket, IPC,
 
 **RECOMMENDED R02:** narrow application ports and protocol feature interfaces, with transport adapters translating into the same use cases. **RECOMMENDED R03:** stable operation IDs, revision preconditions, and recoverable event subscriptions.
 
+The authorized independent-engine API and CLI milestone is recorded in the
+[API policy addendum](engine-api-policy.md), with an
+[evidence-based operation audit](engine-api-audit.md). The addendum distinguishes
+implemented behavior, recommendations and open decisions; it does not expand
+the alpha feature scope or authorize release publication.
+
 ## 3. Accounts, contacts, rooms, and capabilities
 
 ### 3.1 Protocol scope and effective capabilities
