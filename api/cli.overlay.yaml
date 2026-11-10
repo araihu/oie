@@ -6,23 +6,23 @@ actions:
   # accounts
   - target: $.paths['/api/v1/avatars/{hash}'].get
     update:
-      x-cli-name: avatar
+      x-cli-name: download-avatar
       x-cli-ignore: false
   - target: $.paths['/api/v1/accounts/{accountId}/avatars'].get
     update:
-      x-cli-name: avatars
+      x-cli-name: list-avatars
   - target: $.paths['/api/v1/accounts/{accountId}/capabilities'].get
     update:
-      x-cli-name: capabilities
+      x-cli-name: get-capabilities
   - target: $.paths['/api/v1/accounts/{accountId}/connection'].put
     update:
       x-cli-name: connect
   - target: $.paths['/api/v1/accounts/{accountId}/connection'].get
     update:
-      x-cli-name: connection
+      x-cli-name: get-connection
   - target: $.paths['/api/v1/contacts'].get
     update:
-      x-cli-name: contacts
+      x-cli-name: list-contacts
   - target: $.paths['/api/v1/accounts/{accountId}/connection'].delete
     update:
       x-cli-name: disconnect
@@ -31,7 +31,7 @@ actions:
       x-cli-name: get
   - target: $.paths['/api/v1/accounts/{accountId}/history'].get
     update:
-      x-cli-name: history
+      x-cli-name: get-history-status
   - target: $.paths['/api/v1/accounts'].get
     update:
       x-cli-name: list
@@ -41,16 +41,16 @@ actions:
   # conversations
   - target: $.paths['/api/v1/conversations/{conversationId}/details'].get
     update:
-      x-cli-name: details
+      x-cli-name: get-details
   - target: $.paths['/api/v1/conversations/{conversationId}'].get
     update:
       x-cli-name: get
   - target: $.paths['/api/v1/conversations/{conversationId}/room-session'].post
     update:
-      x-cli-name: join
+      x-cli-name: join-room
   - target: $.paths['/api/v1/conversations/{conversationId}/room-session/leave'].post
     update:
-      x-cli-name: leave
+      x-cli-name: leave-room
   - target: $.paths['/api/v1/conversations'].get
     update:
       x-cli-name: list
@@ -59,16 +59,16 @@ actions:
       x-cli-name: mark-read
   - target: $.paths['/api/v1/conversations/{conversationId}/mention-candidates'].get
     update:
-      x-cli-name: mention-candidates
+      x-cli-name: list-mention-candidates
   - target: $.paths['/api/v1/conversations'].post
     update:
       x-cli-name: open
   - target: $.paths['/api/v1/conversations/{conversationId}/read-state'].get
     update:
-      x-cli-name: read-state
+      x-cli-name: get-read-state
   - target: $.paths['/api/v1/conversations/{conversationId}/room-session'].get
     update:
-      x-cli-name: room-session
+      x-cli-name: get-room-session
   - target: $.paths['/api/v1/conversations/{conversationId}'].patch
     update:
       x-cli-name: set-preferences
@@ -80,40 +80,40 @@ actions:
   # messages
   - target: $.paths['/api/v1/messages/{messageId}/cancel'].post
     update:
-      x-cli-name: cancel
+      x-cli-name: cancel-send
   - target: $.paths['/api/v1/conversations/{conversationId}/messages/{messageId}/context'].get
     update:
-      x-cli-name: context
+      x-cli-name: get-context
   - target: $.paths['/api/v1/conversations/{conversationId}/reactions'].get
     update:
-      x-cli-name: conversation-reactions
+      x-cli-name: list-reactions
   - target: $.paths['/api/v1/messages/{messageId}/edits'].post
     update:
       x-cli-name: edit
   - target: $.paths['/api/v1/message-edits/{editId}'].get
     update:
-      x-cli-name: edit-command
+      x-cli-name: get-edit-command
   - target: $.paths['/api/v1/messages/{messageId}/edit-history'].get
     update:
-      x-cli-name: edit-history
+      x-cli-name: list-revisions
   - target: $.paths['/api/v1/messages/{messageId}/edit-target'].get
     update:
-      x-cli-name: edit-target
+      x-cli-name: get-edit-target
   - target: $.paths['/api/v1/messages/{messageId}'].get
     update:
       x-cli-name: get
   - target: $.paths['/api/v1/conversations/{conversationId}/edit-target'].get
     update:
-      x-cli-name: latest-edit-target
+      x-cli-name: get-latest-edit-target
   - target: $.paths['/api/v1/conversations/{conversationId}/messages'].get
     update:
       x-cli-name: list
   - target: $.paths['/api/v1/message-reaction-commands/{commandId}'].get
     update:
-      x-cli-name: reaction-command
+      x-cli-name: get-reaction-command
   - target: $.paths['/api/v1/messages/{messageId}/reactions'].get
     update:
-      x-cli-name: reactions
+      x-cli-name: get-reactions
   - target: $.paths['/api/v1/messages/search'].get
     update:
       x-cli-name: search
@@ -122,7 +122,7 @@ actions:
       x-cli-name: send
   - target: $.paths['/api/v1/messages/{messageId}/sender-profile'].get
     update:
-      x-cli-name: sender-profile
+      x-cli-name: get-sender-profile
   - target: $.paths['/api/v1/messages/{messageId}/reactions'].post
     update:
       x-cli-name: set-reactions
@@ -131,13 +131,13 @@ actions:
       x-cli-name: set-star
   - target: $.paths['/api/v1/messages/{messageId}/star'].get
     update:
-      x-cli-name: star
+      x-cli-name: get-star
   - target: $.paths['/api/v1/starred-messages'].get
     update:
-      x-cli-name: starred
+      x-cli-name: list-starred
   - target: $.paths['/api/v1/conversations/{conversationId}/message-stars'].get
     update:
-      x-cli-name: stars
+      x-cli-name: list-star-states
   # operations
   - target: $.paths['/api/v1/operations/{operationId}'].get
     update:
@@ -145,13 +145,13 @@ actions:
   # previews
   - target: $.paths['/api/v1/previews/{previewId}/download'].post
     update:
-      x-cli-name: download
+      x-cli-name: request-image
   - target: $.paths['/api/v1/previews/{previewId}'].get
     update:
       x-cli-name: get
   - target: $.paths['/api/v1/media/{hash}'].get
     update:
-      x-cli-name: image
+      x-cli-name: download-image
       x-cli-ignore: false
   - target: $.paths['/api/v1/conversations/{conversationId}/previews'].get
     update:
@@ -164,7 +164,7 @@ actions:
       x-cli-name: request-thumbnail
   - target: $.paths['/api/v1/shared-content/{itemId}/thumbnail'].get
     update:
-      x-cli-name: thumbnail
+      x-cli-name: get-thumbnail
   # shared-content
   - target: $.paths['/api/v1/shared-content/{itemId}/content'].get
     update:
@@ -176,7 +176,7 @@ actions:
   # system
   - target: $.paths['/api/v1/engine'].get
     update:
-      x-cli-name: engine
+      x-cli-name: get-engine
   - target: $.paths['/api/v1/health'].get
     update:
-      x-cli-name: health
+      x-cli-name: check-health

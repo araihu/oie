@@ -109,8 +109,8 @@ The source contract is [api/openapi.yaml](api/openapi.yaml), also served at
 `/api/openapi.yaml`. Errors use stable codes in `application/problem+json`.
 
 ```sh
-bin/oiectl system health
-bin/oiectl system engine --output json
+bin/oiectl system check-health
+bin/oiectl system get-engine --output json
 printf '%s\n' '{"protocol":"xmpp","address":"alice@localhost","label":"Personal"}' |
   bin/oiectl accounts register \
     --idempotency-key 019a5df0-0000-7000-8000-000000000004 \
@@ -126,7 +126,7 @@ returns 409. Use a new UUIDv7 for a new logical operation. Set `OIECTL_SERVER` o
 `--server` to use another engine.
 
 Arai Hû's [oapi-cli-gen](https://github.com/araihu/oapi-cli-gen) generates the
-standalone [CLI module](cli). The overlay sets the short command names. Run
+standalone [CLI module](cli). The overlay sets the command names. Run
 `bin/oiectl messages send --help` to see its flags, or open the
 [command reference](docs/installation.md#oiectl-commands) for the full list.
 
@@ -154,7 +154,7 @@ stdin and are never included in account reads or operation receipts:
 ```sh
 printf '%s\n' '{"password":"alice-local-only","endpoint":"localhost:5222"}' |
   bin/oiectl accounts connect --account-id ACCOUNT_UUID --body-stdin
-bin/oiectl accounts connection --account-id ACCOUNT_UUID
+bin/oiectl accounts get-connection --account-id ACCOUNT_UUID
 printf '%s\n' '{"accountId":"ACCOUNT_UUID","address":"bob@localhost"}' |
   bin/oiectl conversations open \
     --idempotency-key 019a5df0-0000-7000-8000-000000000005 --body-stdin

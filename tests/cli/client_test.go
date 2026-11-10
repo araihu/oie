@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/png"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -11,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/avatarfiles"
 	"github.com/araihu/oie/internal/adapters/httpapi"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/araihu/oie/internal/adapters/sqlite"
@@ -36,6 +39,7 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	defer func() { _ = store.Close() }()
 	engine, _ := application.New(store, "hosted", ids, time.Now)
 	engine.SetProtocols(xmppadapter.New(t.TempDir(), nil))
+	engine.SetAvatarFiles(avatarfiles.New(t.TempDir()))
 	handler, err := httpapi.New(engine)
 	if err != nil {
 		t.Fatal(err)
@@ -58,7 +62,7 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 		t.Fatalf("JSON: %v %s", err, output)
 	}
 	registration := append([]byte(nil), output...)
-	output, err = run("", "accounts", "capabilities", "--account-id", account.Id)
+	output, err = run("", "accounts", "get-capabilities", "--account-id", account.Id)
 	var capabilities engineapi.Capabilities
 	if err != nil || json.Unmarshal(output, &capabilities) != nil || capabilities.Discovery.State != "not_connected" || len(capabilities.Features) == 0 || len(capabilities.Discovery.Services) != 0 {
 		t.Fatalf("CLI capability diagnostics: %v %s", err, output)
@@ -66,7 +70,7 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err = engine.ContactsReceived(t.Context(), domain.ID(account.Id), []application.ContactInput{{Address: "bob@localhost", DisplayName: "Generated Café", Subscription: "none"}}); err != nil {
 		t.Fatal(err)
 	}
-	output, err = run("", "accounts", "contacts", "--q", "cafe", "--account-id", account.Id)
+	output, err = run("", "accounts", "list-contacts", "--q", "cafe", "--account-id", account.Id)
 	var contacts engineapi.ContactPage
 	if err != nil || json.Unmarshal(output, &contacts) != nil || len(contacts.Items) != 1 || contacts.Items[0].Address != "bob@localhost" || contacts.Items[0].AccountId != account.Id || len(contacts.Sources) != 1 || contacts.Sources[0].State != "known" {
 		t.Fatalf("CLI saved contacts: %v %s", err, output)
@@ -90,6 +94,29 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err != nil || seq != 1 {
 		t.Fatal("generated CLI retries created extra state")
 	}
+
+	var avatarPNG bytes.Buffer
+	avatarBounds := image.Rect(0, 0, 8, 8)
+	if err := png.Encode(&avatarPNG, image.NewGray(avatarBounds)); err != nil {
+		t.Fatal(err)
+	}
+	if err := engine.StoreAvatar(t.Context(), domain.ID(account.Id), "bob@localhost", "cli-fixture", avatarPNG.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	output, err = run("", "accounts", "list-avatars", "--account-id", account.Id)
+	var avatars engineapi.AvatarPage
+	if err != nil || json.Unmarshal(output, &avatars) != nil || len(avatars.Items) != 1 || avatars.Items[0].Address != "bob@localhost" {
+		t.Fatalf("CLI avatar metadata: %v %s", err, output)
+	}
+	output, err = run("", "accounts", "download-avatar", "--hash", avatars.Items[0].ImageHash, "--output", "raw")
+	if err != nil {
+		t.Fatalf("CLI avatar download: %v %s", err, output)
+	}
+	avatar, err := png.Decode(bytes.NewReader(output))
+	if err != nil || avatar.Bounds() != avatarBounds {
+		t.Fatalf("CLI avatar download did not return the expected PNG: %v", err)
+	}
+
 	// Exercise the newly generated messaging commands against the real store.
 	// The adapter is deliberately disconnected: this tests durable acceptance,
 	// reconciliation and cancellation, not a simulated protocol delivery.
@@ -117,7 +144,7 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 		t.Fatal("CLI message replay changed")
 	}
 	cancelKey, _ := ids()
-	output, err = run(`{"expectedRevisionId":"`+message.RevisionId+`"}`, "messages", "cancel", "--message-id", message.Id, "--idempotency-key", string(cancelKey), "--body-stdin")
+	output, err = run(`{"expectedRevisionId":"`+message.RevisionId+`"}`, "messages", "cancel-send", "--message-id", message.Id, "--idempotency-key", string(cancelKey), "--body-stdin")
 	if err != nil || !bytes.Contains(output, []byte(`"sendState": "cancelled"`)) {
 		t.Fatalf("CLI cancel: %v %s", err, output)
 	}
@@ -134,12 +161,12 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err != nil || json.Unmarshal(output, &search) != nil || len(search.Items) != 1 || search.Items[0].Message.Id != message.Id || search.Items[0].Historical || search.Items[0].Message.SendState != "cancelled" || !search.IncludeEditHistory {
 		t.Fatalf("CLI retained content search: %v %s", err, output)
 	}
-	output, err = run("", "messages", "context", "--conversation-id", conversation.Id, "--message-id", message.Id, "--limit", "1")
+	output, err = run("", "messages", "get-context", "--conversation-id", conversation.Id, "--message-id", message.Id, "--limit", "1")
 	var window engineapi.MessageContext
 	if err != nil || json.Unmarshal(output, &window) != nil || window.TargetId != message.Id || len(window.Items) != 1 || window.HasOlder || window.HasNewer {
 		t.Fatalf("CLI bounded source context: %v %s", err, output)
 	}
-	output, err = run("", "conversations", "details", "--conversation-id", conversation.Id)
+	output, err = run("", "conversations", "get-details", "--conversation-id", conversation.Id)
 	var details engineapi.ConversationDetails
 	if err != nil || json.Unmarshal(output, &details) != nil || details.ConversationId != conversation.Id || details.AccountId != account.Id || details.State != "not_connected" {
 		t.Fatalf("CLI scoped details: %v %s", err, output)
@@ -165,7 +192,7 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err != nil || !bytes.Equal(output, replay) {
 		t.Fatalf("CLI star replay changed receipt: %v %s", err, replay)
 	}
-	output, err = run("", "messages", "starred", "--account-id", account.Id)
+	output, err = run("", "messages", "list-starred", "--account-id", account.Id)
 	if err != nil || !bytes.Contains(output, []byte(message.Id)) || !bytes.Contains(output, []byte(`"sendState": "cancelled"`)) {
 		t.Fatalf("CLI starred source projection: %v %s", err, output)
 	}
@@ -199,22 +226,22 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 			roomID = string(chat.ID)
 		}
 	}
-	output, err = run("", "conversations", "room-session", "--conversation-id", roomID)
+	output, err = run("", "conversations", "get-room-session", "--conversation-id", roomID)
 	var session engineapi.RoomSession
 	if err != nil || json.Unmarshal(output, &session) != nil || session.Active {
 		t.Fatalf("CLI room read: %v %s", err, output)
 	}
 	joinKey, _ := ids()
-	output, err = run(`{"expectedRevisionId":null}`, "conversations", "join", "--conversation-id", roomID, "--idempotency-key", string(joinKey), "--body-stdin")
+	output, err = run(`{"expectedRevisionId":null}`, "conversations", "join-room", "--conversation-id", roomID, "--idempotency-key", string(joinKey), "--body-stdin")
 	if err != nil || json.Unmarshal(output, &session) != nil || !session.Active || session.IntentRevisionId == nil || session.State == "joined" {
 		t.Fatalf("CLI explicit room intent: %v %s", err, output)
 	}
 	leaveKey, _ := ids()
-	output, err = run(`{"expectedRevisionId":"`+*session.IntentRevisionId+`"}`, "conversations", "leave", "--conversation-id", roomID, "--idempotency-key", string(leaveKey), "--body-stdin")
+	output, err = run(`{"expectedRevisionId":"`+*session.IntentRevisionId+`"}`, "conversations", "leave-room", "--conversation-id", roomID, "--idempotency-key", string(leaveKey), "--body-stdin")
 	if err != nil || json.Unmarshal(output, &session) != nil || session.Active {
 		t.Fatalf("CLI explicit room leave: %v %s", err, output)
 	}
-	output, err = run(`{"expectedRevisionId":null}`, "conversations", "join", "--conversation-id", roomID, "--idempotency-key", string(joinKey), "--body-stdin")
+	output, err = run(`{"expectedRevisionId":null}`, "conversations", "join-room", "--conversation-id", roomID, "--idempotency-key", string(joinKey), "--body-stdin")
 	if err != nil || json.Unmarshal(output, &session) != nil || session.Active {
 		t.Fatalf("CLI old join replay reactivated room: %v %s", err, output)
 	}

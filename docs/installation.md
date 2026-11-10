@@ -368,8 +368,8 @@ For automation against a loopback data API, build the server and generated CLI:
 ```sh
 make build build-cli
 bin/oie -role local -data-only -listen 127.0.0.1:18090 -data-dir ./data-cli
-bin/oiectl --server http://127.0.0.1:18090 --output json system engine
-bin/oiectl --server http://127.0.0.1:18090 --output json system health
+bin/oiectl --server http://127.0.0.1:18090 --output json system get-engine
+bin/oiectl --server http://127.0.0.1:18090 --output json system check-health
 ```
 
 Run the two CLI commands in another terminal while the engine is running.
@@ -387,22 +387,28 @@ See [the engine API policy](engine-api-policy.md) and
 ### oiectl commands
 
 Run `oiectl <group> <command> --help` for the required flags and input.
-Scripts using earlier command names such as `messages send-message` should
-use the corresponding short names below.
+Commands use `get` for a single result, `list` for a collection,
+`download` for bytes and `request` to start work on the engine.
+Update scripts that use earlier command names to the names below.
 
 | Group | Commands |
 | --- | --- |
-| `accounts` | `avatar`, `avatars`, `capabilities`, `connect`, `connection`, `contacts`, `disconnect`, `get`, `history`, `list`, `register` |
-| `conversations` | `details`, `get`, `join`, `leave`, `list`, `mark-read`, `mention-candidates`, `open`, `read-state`, `room-session`, `set-preferences` |
+| `accounts` | `connect`, `disconnect`, `download-avatar`, `get`, `get-capabilities`, `get-connection`, `get-history-status`, `list`, `list-avatars`, `list-contacts`, `register` |
+| `conversations` | `get`, `get-details`, `get-read-state`, `get-room-session`, `join-room`, `leave-room`, `list`, `list-mention-candidates`, `mark-read`, `open`, `set-preferences` |
 | `events` | `stream` |
-| `messages` | `cancel`, `context`, `conversation-reactions`, `edit`, `edit-command`, `edit-history`, `edit-target`, `get`, `latest-edit-target`, `list`, `reaction-command`, `reactions`, `search`, `send`, `sender-profile`, `set-reactions`, `set-star`, `star`, `starred`, `stars` |
+| `messages` | `cancel-send`, `edit`, `get`, `get-context`, `get-edit-command`, `get-edit-target`, `get-latest-edit-target`, `get-reaction-command`, `get-reactions`, `get-sender-profile`, `get-star`, `list`, `list-reactions`, `list-revisions`, `list-star-states`, `list-starred`, `search`, `send`, `set-reactions`, `set-star` |
 | `operations` | `get` |
-| `previews` | `download`, `get`, `image`, `list`, `refresh`, `request-thumbnail`, `thumbnail` |
+| `previews` | `download-image`, `get`, `get-thumbnail`, `list`, `refresh`, `request-image`, `request-thumbnail` |
 | `shared-content` | `download`, `list` |
-| `system` | `engine`, `health` |
+| `system` | `check-health`, `get-engine` |
 
-Use `--output raw` for `events stream`, `accounts avatar`, `previews image`,
-and `shared-content download`. `previews download` requests an image download
-by the engine and returns download metadata. Use `--output json` to read that
-metadata as JSON. The CLI also provides `help`
-and `completion`.
+`accounts list-avatars` lists avatar metadata for an account. Pass the
+returned `imageHash` to `accounts download-avatar --hash` to read the PNG.
+`messages list-star-states` checks the star state of selected message IDs.
+`messages list-starred` returns the starred messages themselves.
+
+Use `--output raw` for `events stream`, `accounts download-avatar`,
+`previews download-image` and `shared-content download`. Use
+`previews request-image` to request retention of an original image on
+the engine. The response contains the download state. The CLI also
+provides `help` and `completion`.
