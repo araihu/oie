@@ -429,6 +429,7 @@ type copy struct {
 	Preview, PreviewNote, Message, Send, Attach                                                                                                                          string
 	SendingUnavailable, Back, Today, Navigation, Active                                                                                                                  string
 	OpenNavigation, Close, Details, Participants, MediaEmpty                                                                                                             string
+	ExpandNavigation, CollapseNavigation                                                                                                                                 string
 	MediaBody, SelectChat, SelectChatBody, EngineState, AccountHelp                                                                                                      string
 	PreviewOnly, ThemeHelp, LanguageHelp, NoChats, NoChatsBody                                                                                                           string
 	AddAccount, AccountAddress, AccountLabel, AddressPlaceholder, LabelPlaceholder                                                                                       string
@@ -495,6 +496,9 @@ var sharedActionsStylesheet []byte
 
 //go:embed read-state.js
 var readStateScript []byte
+
+//go:embed sidebar.js
+var sidebarScript []byte
 
 //go:embed navigation.js
 var navigationScript []byte
@@ -577,6 +581,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mime string
 		body []byte
 	}{
+		"/ui/sidebar.js":  {"text/javascript", sidebarScript},
 		"/ui/mentions.js": {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
 		"/ui/timeline.js": {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/cache.js": {"text/javascript", cacheScript}, "/ui/cache/LICENSE.md": {"text/plain; charset=utf-8", cacheLibraryLicense}, "/ui/cache/lru-cache.min.mjs": {"text/javascript", cacheLibrary}, "/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},

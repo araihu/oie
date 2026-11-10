@@ -70,6 +70,8 @@
   "Navigation": "Navegação principal",
   "Active": "Visualização atual",
   "OpenNavigation": "Abrir navegação",
+  "ExpandNavigation": "Expandir barra lateral",
+  "CollapseNavigation": "Recolher barra lateral",
   "Close": "Fechar",
   "Details": "Detalhes da conversa",
   "Participants": "Participantes",

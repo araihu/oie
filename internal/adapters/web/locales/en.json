@@ -70,6 +70,8 @@
   "Navigation": "Main navigation",
   "Active": "Current view",
   "OpenNavigation": "Open navigation",
+  "ExpandNavigation": "Expand sidebar",
+  "CollapseNavigation": "Collapse sidebar",
   "Close": "Close",
   "Details": "Conversation details",
   "Participants": "Participants",

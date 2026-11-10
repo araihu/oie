@@ -43,6 +43,24 @@ func navigation(v view, id string) sidebar.Config {
 	}
 }
 
+templ desktopNavigation(v view) {
+	@sidebar.Sidebar(navigation(v,"desktop"))
+	<div class="oie-sidebar-splitter" role="separator" tabindex="0" aria-orientation="vertical" aria-controls="desktop-navigation" aria-label={v.Text.Navigation} data-sidebar-splitter></div>
+}
+
+templ navigationControl(v view) {
+	@button.Button(button.WithRootClass("oie-icon-button oie-sidebar-toggle"), button.WithAttrs(templ.Attributes{
+		"type": "button", "data-sidebar-toggle": "", "aria-controls": "desktop-navigation",
+		"data-expand-label": v.Text.ExpandNavigation, "data-collapse-label": v.Text.CollapseNavigation,
+		"aria-expanded": "true", "aria-label": v.Text.CollapseNavigation, "title": v.Text.CollapseNavigation,
+	})) {
+		@glyph(heroicons.Icon16SolidChevronLeft)
+	}
+	<div class="oie-mobile-nav">
+		@sidebar.Overlay(sidebar.OverlayConfig{ID: "mobile-navigation", Sidebar: navigation(v,"mobile-navigation"), TriggerLabel: v.Text.OpenNavigation, Trigger: glyph(heroicons.Icon16SolidBars3)})
+	</div>
+}
+
 templ glyph(symbol icon.Symbol) {
 	@icon.Icon(icon.Config{SpriteURL: heroicons.SpriteURL, Symbol: symbol, Decorative: true, RootClass: "oie-icon"})
 }
@@ -70,6 +88,7 @@ templ page(v view) {
 <meta name="theme-color" content="#6092ab"/>
 			<script src="/ui/runtime.js"></script>
 <script src="/ui/theme.js"></script>
+<script src="/ui/sidebar.js"></script>
 <script src="/ui/formatting.js"></script>
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href="/ui/app.css"/>
@@ -137,7 +156,7 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 </div>
 }
 			<h1 class="sr-only">{v.Text.AppName}</h1>
-			@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: sidebar.Sidebar(navigation(v,"desktop")), Content: workspace(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
+			@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: desktopNavigation(v), SidebarAttrs: templ.Attributes{"id": "desktop-navigation"}, Content: workspace(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
 			@settings(v)
 			@accounts(v)
 @newConversation(v)
@@ -214,9 +233,7 @@ if v.NativeMessageSearch {
 	<div id="workspace" class={ "oie-workspace",templ.KV("oie-chat-open",v.ChatOpen) }>
 		<section class="oie-list-pane" aria-label={ v.Text.Chats }>
 			<div class="oie-list-heading">
-				<div class="oie-mobile-nav">
-					@sidebar.Overlay(sidebar.OverlayConfig{ID: "mobile-navigation", Sidebar: navigation(v,"mobile-navigation"), TriggerLabel: v.Text.OpenNavigation, Trigger: glyph(heroicons.Icon16SolidBars3)})
-				</div>
+				@navigationControl(v)
 				<h2>
 					switch v.Section {
 						case "archived":
