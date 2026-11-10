@@ -44,14 +44,19 @@ Keep navigation, sending and receiving available throughout recovery.
 
 Prioritize enough recent history to give each room useful context quickly.
 Continue towards the agreed initial target for each room. Fetch the remaining
-authorized history gradually from the server in the background. Page limits,
-how often the open room gets a turn and scheduling across accounts remain open.
+authorized history gradually from the server in the background.
+
+Rooms on the same server share its recovery queue and request limits, including
+rooms reached through different accounts. Serialize history requests within
+each server. Different servers use independent limits and can recover history
+in parallel. The round robin runs within each server's queue.
 
 ## Open decisions for the next discussion
 
 - What page, message and time budgets keep a busy room from delaying the others?
+- How does each protocol adapter identify which archives share a server?
 - What turn frequency gives the open room preference while preserving progress
-  across rooms and accounts? Keep requests paced and live traffic responsive.
+  across rooms on the same server? Keep requests paced and live traffic responsive.
 - How do recent coverage and older backfill checkpoints resume after reconnect,
   interruption or an expired archive cursor, without restarting a complete scan?
 - Which protocol capabilities and archive failures need fallbacks? How do we
@@ -69,6 +74,8 @@ older-history coverage, live/archive deduplication and preservation of deletion
 markers. Historical imports must not create new unread messages or notifications.
 Verify that a busy open room receives its first page promptly and that other
 rooms receive pages before the open room completes its initial target.
+Verify that rooms on the same server share its limits across accounts and that
+a slow request to one server lets recovery continue on another server.
 Interrupt recovery, advance the clock and verify that the resumed query uses
 the same UTC bounds for that room.
 

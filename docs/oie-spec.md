@@ -370,7 +370,7 @@ Needed public Margo API additions are authorized, provided existing behavior is 
 
 ## 7. History, search, and shared links
 
-Persist history independently of protocol-server retention. Automatically backfill **all available authorized history**, serially and without overwhelming the provider. Serve retained history without downloading the full archive again whenever a conversation opens.
+Persist history independently of protocol-server retention. Automatically backfill **all available authorized history** with paced, serial requests per server. Rooms on the same server share its limits across accounts. Different servers can recover history in parallel with independent limits. Serve retained history without downloading the full archive again whenever a conversation opens.
 
 Keep retrieved history until explicit user deletion, even after the provider expires it. Optional Oiê history sync also transfers records no longer available from the provider. Oiê cannot retrieve history that neither the provider nor a participating Oiê store still possesses.
 
@@ -384,10 +384,10 @@ room. Fix the window when recovery starts for that room, persist both bounds
 in UTC and reuse them when resuming. If that interval contains fewer than 128
 messages, include immediately preceding messages until reaching 128 or
 exhausting the available authorized archive. Start with the newest page of the
-open room when it needs recovery,
-then alternate pages among rooms with preference for the open room. Show each
-page as it is stored. Fetch the remaining authorized history gradually in the
-background. Record page limits, turn frequency and checkpoint decisions in
+open room when it needs recovery, then alternate pages among rooms on each
+server with preference for the open room. Show each page as it is stored. Fetch
+the remaining authorized history gradually in the background. Record server
+identity, page limits, turn frequency and checkpoint decisions in
 [the initial-history discussion](history-bootstrap-discussion.md) before API-first
 implementation. Eventual full-history recovery and retention remain required.
 
