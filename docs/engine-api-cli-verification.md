@@ -8,7 +8,7 @@ The final evidence section below records the tested implementation revision.
 
 ```sh
 GOMAXPROCS=4 make check
-GOFLAGS=-tags=server GOMAXPROCS=4 go test -race ./internal/adapters/httpapi ./internal/adapters/web ./internal/apphost ./tests/architecture
+GOFLAGS=-tags=server GOMAXPROCS=4 go test -race -p 1 ./internal/adapters/httpapi ./internal/adapters/web ./internal/apphost ./tests/architecture
 OIE_XMPP_CA_FILE=/path/to/development/localhost.crt \
 OIE_XMPP_ENDPOINT=127.0.0.1:5222 GOMAXPROCS=4 make test-cli-xmpp
 OIE_CI_SSH_HOST=dagger-vm \
@@ -82,7 +82,29 @@ browser. See the [audit](engine-api-audit.md) and [policy](engine-api-policy.md)
 
 ## Final evidence
 
-Implementation source revision and final native/Dagger outcomes are recorded
-here after validation completes. Native logs are retained in the ignored
+Tested implementation: `a42f7aa9af3730f11c035399191013faaccb0642`.
+The Dagger materialized snapshot contains 994 source files, all byte-for-byte
+identical to that commit. Per-file SHA-256 values and the empty mismatch list
+are in `tests/browser/artifacts/ci-engine-api-cli/source-snapshot.json`.
+Later documentation corrections do not change that implementation.
+
+A separate black-box smoke run built `bin/oie` and `bin/oiectl`, launched the
+actual `-data-only` command and exercised readiness, register/open/send/cancel
+and same-directory restart. `/`, `/ui/events` and `/assets/` returned 404.
+Its result is `engine-api-cli-native/binary-data-only.json`.
+
+Native validation passed: `make check`, the CLI XMPP proof with `-race` (8.87s),
+the entire development XMPP suite with `-race` (65.687s), focused adapter/host/
+architecture race checks with packages serialized, and all three affected
+browser suites. One earlier concurrent-package race invocation exceeded the
+existing three-second host-test cleanup deadline. The host suite passed when
+repeated alone (9.776s) and in the serialized complete focused run (10.663s for
+host). The deadline was not increased; both the failure and passing logs are
+retained. No data race was reported.
+
+Dagger checks passed (4m6s), including lint, generation drift, compatibility,
+unit/race tests and builds. The complete graph continues with desktop, isolated
+XMPP/CLI and browser checks; its final exit will be recorded below.
+Native logs are retained in the ignored
 `tests/browser/artifacts/engine-api-cli-native`; full graph evidence uses
 `tests/browser/artifacts/ci-engine-api-cli`.

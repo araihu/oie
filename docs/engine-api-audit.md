@@ -42,9 +42,9 @@ are listed separately. Priority `—` means no evidenced correction required.
 | `getSharedContentMedia` GET `/api/v1/shared-content/{itemId}/content` | Explicit bounded original bytes/range; no-store and If-Range; `shared_media.go` | engine | excluded | `shared_media_test.go` | implemented | P1 | Enable raw CLI and exercise |
 | `getMessageContext` GET `/api/v1/conversations/{conversationId}/messages/{messageId}/context` | Bounded source window; `replies.go` | engine | generated + real-store test | `message_search_test.go` | implemented | — | — |
 | `getMessageStar` GET `/api/v1/messages/{messageId}/star` | App-owned retained star; `stars.go` | engine | generated; operational branch unverified | `stars_test.go` | implemented | — | — |
-| `setMessageStar` PUT `/api/v1/messages/{messageId}/star` | Durable key + revision CAS; replay returns current projection; `stars.go` | engine | generated + real-store test | `stars_test.go` | implemented | — | — |
+| `setMessageStar` PUT `/api/v1/messages/{messageId}/star` | Durable key + revision CAS; replay returns original snapshot; `stars.go` | engine | generated + real-store test | `stars_test.go` | implemented | — | — |
 | `getConversationReadState` GET `/api/v1/conversations/{conversationId}/read-state` | Scoped retained unread count; `read_state.go` | engine | generated; operational branch unverified | `read_state_test.go` | implemented | — | — |
-| `markConversationMessagesRead` POST `/api/v1/conversations/{conversationId}/read-state` | Durable key, normalized ID set; replay current state, no provider receipt; `read_state.go` | engine | generated; operational branch unverified | `read_state_test.go` | implemented | — | — |
+| `markConversationMessagesRead` POST `/api/v1/conversations/{conversationId}/read-state` | Durable key, normalized ID set; replay original snapshot, no provider receipt; `read_state.go` | engine | generated; operational branch unverified | `read_state_test.go` | implemented | — | — |
 | `listConversationMessageStars` GET `/api/v1/conversations/{conversationId}/message-stars` | Bounded source-linked star projections; `stars.go` | engine | generated; operational branch unverified | `stars_test.go` | implemented | — | — |
 | `listStarredMessages` GET `/api/v1/starred-messages` | Scoped cursor and retained source projection; `stars.go` | engine | generated + real-store test | `stars_test.go` | implemented | — | — |
 | `listConversationPreviews` GET `/api/v1/conversations/{conversationId}/previews` | Incidental cached enrichment of retained sources; `previews.go` | engine | generated; operational branch unverified | `previews_test.go` | implemented | — | — |
@@ -74,7 +74,7 @@ are listed separately. Priority `—` means no evidenced correction required.
 | `getMentionCandidates` GET `/api/v1/conversations/{conversationId}/mention-candidates` | Verified scope and UTF-16 mention selections; `mentions.go` | engine | generated; operational branch unverified | `mentions_test.go` | implemented | — | — |
 | `getConversationDetails` GET `/api/v1/conversations/{conversationId}/details` | Read-only scoped snapshot, including unknown observations; `conversation_details.go` | engine | generated + real-store test | `conversation_details_test.go` | implemented | — | — |
 | `getConversation` GET `/api/v1/conversations/{conversationId}` | Account-scoped reads; activity ordering can move between pages; `messaging.go` | engine | generated; operational branch unverified | `timeline_test.go` | implemented | — | — |
-| `updateConversationPreferences` PATCH `/api/v1/conversations/{conversationId}` | Durable key + revision CAS; replay current projection; `conversation_preferences.go` | engine | generated; operational branch unverified | `conversation_preferences_test.go` | implemented | — | — |
+| `updateConversationPreferences` PATCH `/api/v1/conversations/{conversationId}` | Durable key + revision CAS; replay original snapshot; `conversation_preferences.go` | engine | generated; operational branch unverified | `conversation_preferences_test.go` | implemented | — | — |
 | `listMessages` GET `/api/v1/conversations/{conversationId}/messages` | Durable queued intent / original acceptance replay; bounded reads; `messaging.go` | engine | generated + real-store test | `messaging_test.go` | implemented | — | — |
 | `sendMessage` POST `/api/v1/conversations/{conversationId}/messages` | Durable queued intent / original acceptance replay; bounded reads; `messaging.go` | engine | generated + real-store test | `messaging_test.go` | implemented | — | — |
 | `getMessageReactions` GET `/api/v1/messages/{messageId}/reactions` | Scoped observed actors and commands; `reactions.go` | engine | generated; operational branch unverified | `reactions_test.go` | implemented | — | — |
@@ -113,8 +113,8 @@ pruning is implemented: receipts/events persist with the data directory.
 | Open direct conversation | Account + canonical peer | Original scoped conversation; existing conversation can return 200 |
 | Send | Conversation + exact authored content + frozen reply/mention input | Original queued acceptance; persisted message/outbox/event in one transaction |
 | Cancel | Message + expected revision | Atomic queued state cutoff; replay before guard |
-| Star / preferences | Target + desired state + expected revision | Replay returns current projection; original accepted intent remains in operation receipt |
-| Read-state | Conversation + sorted/deduplicated source IDs | Current read projection; does not send XMPP receipts |
+| Star / preferences | Target + desired state + expected revision | Original acceptance snapshot, even after later writes; GET the resource for current state |
+| Read-state | Conversation + sorted/deduplicated source IDs | Original acceptance snapshot; GET returns current read state; does not send XMPP receipts |
 | Room join/leave | Conversation + intent and revision | Current room projection; old join replay cannot undo later leave |
 | Edits / reactions | Scoped target, revision/command details | Durable command acceptance; protocol observation remains separate |
 | PUT/DELETE connection | Desired configuration / disconnected state | Intentionally no operation receipt; repeated PUT may reconnect. Password never returned |
@@ -156,3 +156,22 @@ content uses timestamp/UUID anchors, while edit-history cursors bind a snapshot.
 Conversation activity can move between pages. These are not one uniform cursor
 format. A CLI consumer must preserve its query/scope and deduplicate live results;
 no snapshot isolation across arbitrary query changes is promised.
+
+Cache/access detail: `application.AvatarImage` reads a valid hash from this
+engine's avatar file adapter before checking If-None-Match. `MediaImage` resolves
+the media metadata and verifies stored bytes before its conditional response.
+Neither is an account authorization system: the current product has one owner
+and deferred application authentication. Engine switches scope BFF/device cache
+keys; verified hash bytes can remain in private browser caches. Do not claim
+revocation of a prior cached copy. Representations here do not negotiate by
+Accept/Accept-Language, so no header-based variant requiring Vary was observed.
+BFF language is selected in its presentation URL, not parsed from engine text.
+
+Operational limits: `apphost/server.go` sets a five-second read-header deadline
+and sixty-second idle timeout, while original byte streams renew a thirty-second
+write deadline and SSE uses five-second writes/fifteen-second heartbeats. The
+CLI bounds the complete request; it does not impose a server-side full-body
+read deadline. A complete mutation-body read deadline and correlation header
+remain **missing (P3)**; a future bound must preserve long-lived event/media
+responses. No global rate-limit or Retry-After contract was observed. Protocol
+reconnect backoff and unknown-send recovery are separate from HTTP retry policy.
