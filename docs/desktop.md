@@ -113,3 +113,15 @@ and Go 1.27.3. It covered all six smoke groups, production source installation,
 vet and desktop/runtime race tests. The build used a macOS 13 deployment target;
 that flag is not evidence of runtime support on macOS 13. Logs and the report
 are under `tests/desktop/artifacts/macos-source-install.log` and `report.json`.
+
+A separate macOS media probe loaded the checked-in WebM fixture through the
+native BFF, observed partial requests and advancing playback, then loaded the
+PDF fixture through PDF.js with a real Worker and rendered its expected text.
+The driver, invocation, binary metadata and results are retained under
+`tests/desktop/artifacts/mac-native-media*`. This verifies those fixtures on that
+WebView, not every video codec or document.
+
+The Ubuntu 24.04 `linux/amd64` lane passes seven native smoke groups, including
+the actual GTK Save/Cancel chooser. The development runner is arm64, so this
+target runs under emulation. Its first successful chooser report is under
+`tests/browser/artifacts/ci-wails-dialog-fixed/desktop/report.json`.

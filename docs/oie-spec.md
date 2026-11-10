@@ -65,9 +65,7 @@ explicit Quit stops it.
 **AGREED:** initially distribute through both source installation with
 `go install` and one macOS/Linux shell installer. The installer downloads the
 matching prebuilt artifact from `araihu/oie` GitHub Releases after detecting OS
-and architecture. Package-manager distribution is deferred as B22. These are
-requirements under discussion, not implemented installation commands or a
-published v0.0.1 tag.
+and architecture. Package-manager distribution is deferred as B22.
 
 **RECOMMENDED:** pin Wails v3.1.0, the latest stable release verified on
 2026-11-10, consistently in app dependencies and the tools module. The Wails CLI
