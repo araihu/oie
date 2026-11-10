@@ -22,10 +22,31 @@ make build-desktop
 bin/oie-desktop
 ```
 
-The source command also supports Go installation from this checkout:
+The source command also supports per-user Go installation from this checkout.
+On macOS, use matching compilation and linker deployment targets:
 
 ```sh
-GOFLAGS= GOWORK=off go install -tags production ./cmd/oie-desktop
+mkdir -p "$HOME/.local/bin"
+GOBIN="$HOME/.local/bin" GOFLAGS= GOWORK=off \
+  MACOSX_DEPLOYMENT_TARGET=13.0 \
+  CGO_CFLAGS="-O2 -g -mmacosx-version-min=13.0" \
+  CGO_LDFLAGS="-O2 -g -mmacosx-version-min=13.0" \
+  go install -tags production -ldflags='-extldflags=-mmacosx-version-min=13.0' ./cmd/oie-desktop
+"$HOME/.local/bin/oie-desktop"
+```
+
+These flags align the build tools; they do not establish runtime support on
+macOS 13. Without them, a plain source installation may emit linker warnings
+about objects built for newer macOS versions than the link target. Such warnings
+alone do not mean installation failed.
+
+On Ubuntu, after installing the native dependencies above:
+
+```sh
+mkdir -p "$HOME/.local/bin"
+GOBIN="$HOME/.local/bin" GOFLAGS= GOWORK=off \
+  go install -tags production ./cmd/oie-desktop
+"$HOME/.local/bin/oie-desktop"
 ```
 
 This produces an executable, not a macOS `.app` bundle. GitHub release archives,
