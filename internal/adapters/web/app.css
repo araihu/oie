@@ -455,3 +455,17 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-sender-context dt{margin-top:14px;font-weight:600}
 .oie-sender-context dd{margin:0;color:var(--oie-muted)}
 .oie-sender-retry{display:block;margin-top:16px}
+
+.oie-about-entry{
+ justify-content:space-between;padding-inline:12px;border-top:1px solid var(--oie-border);
+ border-radius:0;color:var(--oie-text);font-weight:650
+}
+.oie-about{display:grid;gap:24px;padding:12px 24px 28px;color:var(--oie-text)}
+.oie-about-back{justify-self:start;gap:6px;padding-inline:0;color:var(--oie-accent-text)}
+.oie-about-back .oie-icon{width:16px;height:16px}
+.oie-about-brand{display:flex;justify-content:center;padding-block:10px}
+.oie-about-brand .oie-brand-logo{height:52px;max-width:none}
+.oie-about h3{margin:0 0 8px;font-size:14px;font-weight:650}
+.oie-about section{font-size:14px;line-height:1.55}
+.oie-about ul{display:grid;gap:8px}
+.oie-about .oie-about-link{color:var(--oie-accent-text);text-decoration:underline}

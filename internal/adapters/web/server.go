@@ -452,6 +452,7 @@ type copy struct {
 	ImageInfo, ImageSource, ImageFilename, ImageType, ImageSize, ImageNotDownloaded                                                                                      string
 	RenderMarkdown, RenderMarkdownHelp, CopyOriginal, MessageCopied, CopyFailed                                                                                          string
 	DevicePreferences, AutoImageDownloads, AutoImageDownloadsHelp, DevicePreferenceUnavailable                                                                           string
+	About, BackToSettings, License, Attributions, LogoAttribution, EmojiData                                                                                             string
 	ValidationFailed, Edit, Done                                                                                                                                         string
 }
 

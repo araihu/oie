@@ -30,9 +30,8 @@ selectfield "github.com/araihu/goshtoso/components/select"
 )
 
 func navigation(v view, id string) sidebar.Config {
- footer:=navigationFooter(v,id)
-	return sidebar.Config{
-		Logo: brand(v), LogoHref: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), DisableSkipLink: true, RootClass: "oie-navigation", FooterSlot: footer,
+	cfg := sidebar.Config{
+		DisableSkipLink: true, RootClass: "oie-navigation", FooterSlot: navigationFooter(v,id),
 		Items: []sidebar.Item{
 			{ID: "chats", Label: v.Text.Chats, Href: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidQueueList), Active: v.Section == "chats", LinkAttrs: sidebarNavigationAttrs()},
 
@@ -41,6 +40,11 @@ func navigation(v view, id string) sidebar.Config {
 			{ID: "favorites", Label: v.Text.Favorites, Href: v.href("section", "favorites", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidStar), Active: v.Section == "favorites", LinkAttrs: sidebarNavigationAttrs()},
 		},
 	}
+	if id == "mobile-navigation" {
+		cfg.Logo = brand(v)
+		cfg.LogoHref = v.href("section", "chats", "chat", "", "q", "", "filter", "all")
+	}
+	return cfg
 }
 
 templ desktopNavigation(v view) {
@@ -158,6 +162,7 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 			<h1 class="sr-only">{v.Text.AppName}</h1>
 			@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: desktopNavigation(v), SidebarAttrs: templ.Attributes{"id": "desktop-navigation"}, Content: workspace(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
 			@settings(v)
+			@about(v)
 			@accounts(v)
 @newConversation(v)
 @imageViewer(v)
@@ -430,6 +435,7 @@ templ settings(v view) {
 			if v.Preview {
 				<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
 			}
+			@aboutEntry(v)
 		</div>
 	}
 }
