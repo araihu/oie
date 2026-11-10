@@ -12,7 +12,7 @@ account selector and HTMX navigation contract.
 
 The correction is open in [Goshtoso PR 379](https://github.com/araihu/goshtoso/pull/379)
 and included in [integration PR 375](https://github.com/araihu/goshtoso/pull/375).
-Oiê pins `v0.6.2-0.20261109092607-b79c3a7a8527`.
+Oiê pins `v0.6.2-0.20261110022421-7c69f01af2ef`.
 
 The consumer regression is `tests/browser/fragment-navigation.cjs`. It checks
 both control associations before and after mobile fragment transitions, in
@@ -45,3 +45,20 @@ were confirmed complete. No complete Dagger pass is claimed. Evidence is saved
 in `/tmp/oie-popover-dagger-retry.log` and
 `/tmp/oie-popover-dagger-remote-proof.log`. The host `make check` result and
 isolated browser passes above are separate from these incomplete Dagger runs.
+
+## Opening-frame placement
+
+The reaction increment exposed an opening race in the same public Popover.
+Alpine could paint its scale transition before the deferred positioner clamped
+the panel. The generic correction in integration PR 375 keeps the measurable
+panel invisible until positioning completes. Keyboard focus and the focus trap
+wait for that visibility update. Oie retains its existing light bubble shadow
+and uses no consumer workaround against private library markup.
+
+The source-star fixture now samples every visible opening frame for 42 menu
+openings across received, own, grouped, image and link messages at 390, 818 and
+1440 px in light and dark themes. Existing settled bounds, Escape focus and
+accessibility assertions remain. Upstream component/runtime checks and focused
+Popover/Dropdown browser suites passed, including filtered and transformed
+scroll containers. The upstream native lint executable was unavailable and was
+not run locally. Oie's final CI results are recorded in `docs/local-ci.md`.

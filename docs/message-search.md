@@ -18,7 +18,7 @@ native GET navigation available. Query/filter changes replace only results;
 result links use the existing bounded conversation context navigation. Results
 do not animate into place.
 
-The selected Goshtoso version is `v0.6.2-0.20261109092607-b79c3a7a8527`.
+The selected Goshtoso version is `v0.6.2-0.20261110022421-7c69f01af2ef`.
 Public `search.Search` provides a client-ranked command palette and JSON item
 loading, which does not own the engine-scoped history cursor contract. Compose
 `textinput`, searchable `combobox`, `checkbox`, `link`, `button`,
