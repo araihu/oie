@@ -208,7 +208,7 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 	integrated := goContainer.WithServiceBinding("xmpp", xmpp).WithFile("/tmp/xmpp-ca.crt", ca).
 		WithEnvVariable("OIE_XMPP_INTEGRATION", "1").WithEnvVariable("OIE_XMPP_CA_FILE", "/tmp/xmpp-ca.crt").
 		WithEnvVariable("OIE_XMPP_ENDPOINT", "xmpp:5222").WithEnvVariable("OIE_CI_RUN_ID", runID).
-		WithExec([]string{"go", "test", "-race", "-count=1", "-v", "./tests/xmpp"})
+		WithExec([]string{"go", "test", "-race", "-count=1", "-p", "1", "-v", "./tests/xmpp", "./tests/cli"})
 	if _, err := r.stage(ctx, "xmpp", integrated); err != nil {
 		return err
 	}
