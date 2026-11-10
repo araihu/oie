@@ -16,7 +16,7 @@ func (r runner) desktop(ctx context.Context, source *dagger.Directory) error {
 	toolchain := r.client.Container(dagger.ContainerOpts{Platform: platform}).From(goImage)
 	base := r.client.Container(dagger.ContainerOpts{Platform: platform}).From(desktopImage).
 		WithEnvVariable("DEBIAN_FRONTEND", "noninteractive").
-		WithExec([]string{"sh", "-c", "apt-get update -qq && apt-get install -y --no-install-recommends build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev xvfb xauth xdotool dbus-x11 python3 ca-certificates curl && rm -rf /var/lib/apt/lists/*"}).
+		WithExec([]string{"sh", "-c", "apt-get update -qq && apt-get install -y --no-install-recommends build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev xvfb xauth xdotool scrot x11-utils dbus-x11 python3 ca-certificates curl && rm -rf /var/lib/apt/lists/*"}).
 		WithDirectory("/usr/local/go", toolchain.Directory("/usr/local/go")).
 		WithEnvVariable("PATH", "/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin").
 		WithEnvVariable("GOPATH", "/go").

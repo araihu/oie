@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shutil
 import socket
 import subprocess
 import sys
@@ -247,6 +248,29 @@ def native(*args, **kwargs):
         app.close()
 
 
+def linux_dialog_diagnostics(stage, app, target):
+    """Capture only this test's private Xvfb, including native GTK windows."""
+    if os.environ.get("OIE_DESKTOP_PRIVATE_DISPLAY") != "1":
+        return
+    prefix = ARTIFACTS / ("gtk-chooser-" + stage)
+    commands = {
+        "tree": ["xwininfo", "-root", "-tree"],
+        "focus": ["xdotool", "getwindowfocus", "getwindowname"],
+    }
+    for kind, command in commands.items():
+        if shutil.which(command[0]):
+            result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+            prefix.with_suffix("." + kind + ".txt").write_text(result.stdout + result.stderr)
+    if shutil.which("scrot"):
+        subprocess.run(["scrot", "-o", str(prefix.with_suffix(".png"))], capture_output=True, timeout=10)
+    state = {"target": str(target), "targetExists": target.exists(), "contentReads": Fixture.content_reads}
+    try:
+        state["app"] = app.tool("app_info")
+    except (OSError, RuntimeError) as error:
+        state["appError"] = str(error)
+    prefix.with_suffix(".json").write_text(json.dumps(state, indent=2) + "\n")
+
+
 def linux_save_dialog(app, target, cancel=False):
     """Drive GTK in this test's private Xvfb. Never sends input on a host display."""
     if sys.platform != "linux":
@@ -265,6 +289,7 @@ def linux_save_dialog(app, target, cancel=False):
 
     dialog = app.wait(dialog_window, "native GTK save chooser")
     subprocess.run(["xdotool", "windowfocus", "--sync", dialog], check=True, timeout=5)
+    linux_dialog_diagnostics("opened-cancel" if cancel else "opened", app, target)
     if cancel:
         subprocess.run(["xdotool", "key", "--clearmodifiers", "Escape"], check=True, timeout=5)
         app.wait(lambda: not dialog_window(), "native GTK chooser cancelled")
@@ -273,12 +298,22 @@ def linux_save_dialog(app, target, cancel=False):
         require(Fixture.content_reads == previous_reads, "cancel unnecessarily read the original")
         return
     subprocess.run(["xdotool", "key", "--clearmodifiers", "ctrl+l"], check=True, timeout=5)
+    # GTK selects the filename stem here and retains its extension. Replace all.
+    subprocess.run(["xdotool", "key", "--clearmodifiers", "ctrl+a"], check=True, timeout=5)
+    linux_dialog_diagnostics("location-focus", app, target)
     subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "1", str(target)], check=True, timeout=5)
+    linux_dialog_diagnostics("path-entered", app, target)
     subprocess.run(["xdotool", "key", "--clearmodifiers", "Return"], check=True, timeout=5)
     time.sleep(.5)
+    linux_dialog_diagnostics("return", app, target)
     if dialog_window():
         subprocess.run(["xdotool", "key", "--clearmodifiers", "alt+s"], check=True, timeout=5)
-    app.wait(target.exists, "native saved original")
+    linux_dialog_diagnostics("save", app, target)
+    try:
+        app.wait(target.exists, "native saved original")
+    except BaseException:
+        linux_dialog_diagnostics("failed", app, target)
+        raise
     require(target.read_bytes() == b"0123456789", "native chooser saved different bytes")
     app.wait(lambda: not dialog_window(), "native GTK chooser closed")
 
