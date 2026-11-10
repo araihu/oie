@@ -400,8 +400,10 @@ available and add authorized remote matches as they arrive. Dispatch remote
 search after a short typing pause and keep only the latest term queued for
 each active room search. Apply responses to the matching search. Retain those
 messages with canonical deduplication and track contiguous history coverage
-separately. Timeline and remote search requests take precedence over backfill
-in the server's queue.
+separately. After the current query finishes, give search and scroll requests
+the next available turn on that server. Space automatic backfill pages at
+least one second apart per server. Search and scroll requests can use that
+interval.
 
 **AGREED:** use the existing conversation-list search field as one unified global
 search. Remove the separate message-search navigation item and heading action.

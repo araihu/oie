@@ -51,6 +51,11 @@ rooms reached through different accounts. Serialize history requests within
 each server. Different servers use independent limits and can recover history
 in parallel. The round robin runs within each server's queue.
 
+When the current archive query finishes, give pending search and scroll
+requests the next available turn on that server. Wait at least one second
+between automatic backfill pages on the same server. Search and scroll
+requests can use that interval.
+
 ## Gajim comparison
 
 Gajim 2.7.0 starts room archive recovery after joining a room that advertises
@@ -128,6 +133,9 @@ Verify that a busy open room receives its first page promptly and that other
 rooms receive pages before the open room completes its initial target.
 Verify that rooms on the same server share its limits across accounts and that
 a slow request to one server lets recovery continue on another server.
+Verify that a pending search or scroll request gets the next turn after an
+in-flight page, including during the one-second interval before the next
+automatic backfill page.
 Interrupt recovery, advance the clock and verify that the resumed query uses
 the same UTC bounds for that room.
 Verify that on-demand rooms fetch older pages when requested, and that local
