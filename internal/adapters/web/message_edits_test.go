@@ -34,7 +34,7 @@ func TestEditedEvidenceAndLateMetadataInvalidateTimeline(t *testing.T) {
 		t.Fatal("UTC edit evidence changed")
 	}
 	var out bytes.Buffer
-	if err := messageBody(v, v.Messages[0]).Render(context.Background(), &out); err != nil {
+	if err := messageBubbleBody(v, v.Messages[0], false).Render(context.Background(), &out); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Count(out.String(), "data-message-edited") != 1 {
