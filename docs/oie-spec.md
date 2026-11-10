@@ -86,6 +86,13 @@ updates are deferred as B23.
 **AGREED:** the first macOS alpha ships without Developer ID signing or
 notarization.
 
+**AGREED:** FFmpeg remains an optional external dependency, installed separately.
+Its absence must not prevent installation or normal app startup. Locally
+generated video thumbnails require it; video playback remains independent and
+subject to the formats supported by the platform WebView. The installer can
+identify a missing optional FFmpeg executable and provide installation guidance,
+without downloading or installing it automatically.
+
 **RECOMMENDED:** retain any ad-hoc executable signing required by the native
 build tooling and document Apple's manual first-open procedure. The installer
 should not silently remove quarantine attributes or disable Gatekeeper.
@@ -95,13 +102,13 @@ executable plus desktop resources. Verify release checksums and support selectin
 a pinned release. Exact archive layout and installer flags remain to be defined.
 
 **OPEN:** the minimum Ubuntu/macOS versions, exact installation paths and launch
-behavior, uninstall behavior, FFmpeg distribution, and packaging CI/test coverage. The
+behavior, uninstall behavior and packaging CI/test coverage. The
 available development environment reports Ubuntu 26.04; this does not establish
 the supported minimum version. Direct WebView routing and SSE/media compatibility
 still need a desktop proof before choosing the final local transport.
 
 Reference evidence: [Wails v3.1.0 release](https://github.com/wailsapp/wails/releases/tag/v3.1.0),
-[native prerequisites](https://v3.wails.io/getting-started/installation/) and
+[native prerequisites](https://v3.wails.io/getting-started/installation/),
 [build/package behavior](https://v3.wails.io/guides/build/building/) and
 [Apple manual first-open guidance](https://support.apple.com/en-us/102445).
 

@@ -1314,5 +1314,11 @@ Recommended, not yet agreed: pin the verified latest stable Wails v3.1.0, simple
 release archives containing a macOS app bundle or Linux executable/resources,
 checksum verification and pinned versions. Native build prerequisites still
 apply to source installation. Minimum OS versions, exact paths, launch/uninstall
-behavior, FFmpeg and desktop-specific validation remain open. No desktop release
+behavior and desktop-specific validation remain open. No desktop release
 or installer exists yet. See spec section 2.1.1.
+
+
+Agreed subsequently: keep FFmpeg optional and installed separately. The app and
+installer work without it. Local video-thumbnail generation uses FFmpeg when
+available; playback remains subject to native WebView codec support. Do not bundle
+or automatically install FFmpeg in the initial release installer.
