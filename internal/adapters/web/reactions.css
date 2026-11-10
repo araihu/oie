@@ -1,8 +1,8 @@
 /* Reaction controls belong to the application-owned rich message slot. */
 .oie-reactions{position:absolute;inset-inline:0;bottom:0;display:flex;align-items:flex-start;gap:4px;height:0;max-width:100%;margin:0;color:var(--oie-text)}
 .oie-message-own .oie-reactions{justify-content:flex-end}
-.oie-reaction-summary-popover,[data-reaction-pending]{position:relative;top:8px;flex-shrink:0}
-.oie-message:has([data-reaction-summary]:not([hidden])){margin-bottom:34px}
+.oie-reaction-summary-popover,[data-reaction-pending]{position:relative;top:18px;flex-shrink:0}
+.oie-message:has([data-reaction-summary]:not([hidden])){margin-bottom:42px}
 .oie-reactions:has([data-reaction-summary][hidden]){inset:0;height:auto;pointer-events:none}
 .oie-reactions:has([data-reaction-summary][hidden]) [data-reaction-pending]{position:absolute;inset-inline-start:calc(100% + 24px);top:50%;transform:translateY(-50%);pointer-events:auto}
 .oie-message-own .oie-reactions:has([data-reaction-summary][hidden]) [data-reaction-pending]{inset-inline-start:auto;inset-inline-end:calc(100% + 24px)}
