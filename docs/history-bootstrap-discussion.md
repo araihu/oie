@@ -51,6 +51,23 @@ rooms reached through different accounts. Serialize history requests within
 each server. Different servers use independent limits and can recover history
 in parallel. The round robin runs within each server's queue.
 
+## Gajim comparison
+
+Gajim 2.7.0 starts room archive recovery after joining a room that advertises
+MAM. Without a saved cursor, it requests messages from the preceding day. On
+later joins, it can resume from the saved archive ID or use a configured time
+threshold. [Room join](https://github.com/gajim/gajim/blob/048a2f3d986a68ca07bde52a2f6a22ef2926188b/src/gajim/common/modules/muc.py#L1122-L1139)
+and [query bounds](https://github.com/gajim/gajim/blob/048a2f3d986a68ca07bde52a2f6a22ef2926188b/src/gajim/common/modules/mam.py#L266-L315).
+
+Each archive task awaits a page, saves its last archive ID and requests the next
+page directly. Gajim tracks active queries by archive JID in each account's MAM
+module. The inspected path has no fixed delay between pages or shared limit by
+server, so tasks for different rooms can overlap. The nbxmpp 7.5.0 version
+bundled by the Flatpak build requests up to 70 results per page by default.
+[Gajim pagination](https://github.com/gajim/gajim/blob/048a2f3d986a68ca07bde52a2f6a22ef2926188b/src/gajim/common/modules/mam.py#L424-L465),
+[query tracking](https://github.com/gajim/gajim/blob/048a2f3d986a68ca07bde52a2f6a22ef2926188b/src/gajim/common/modules/mam.py#L238-L246)
+and [nbxmpp page size](https://github.com/gajim/python-nbxmpp/blob/c3cc88b25e99a42bf936041800f59e478b3459cf/nbxmpp/modules/mam.py#L39-L53).
+
 ## Open decisions for the next discussion
 
 - What page, message and time budgets keep a busy room from delaying the others?
