@@ -1303,9 +1303,16 @@ GitHub Release artifact. Defer Homebrew, MacPorts, APT and other popular distro
 package managers to backlog B22. Do not require those package formats for the
 first distribution.
 
+Agreed subsequently: default to per-user installation. On Ubuntu, only check
+missing runtime dependencies and show their installation commands; do not install
+them or invoke sudo. Updates are manual through the same installer, preserving
+user data; source installations update through go install. Put an automatic
+in-app updater in backlog B23. The first macOS alpha ships without Developer ID
+signing or notarization; required ad-hoc signing remains a build detail.
+
 Recommended, not yet agreed: pin the verified latest stable Wails v3.1.0, simple
 release archives containing a macOS app bundle or Linux executable/resources,
-checksum verification, pinned versions and per-user installation. Native build
-prerequisites still apply to source installation. Installer dependency handling,
-minimum OS versions, signing, updates, FFmpeg and desktop-specific validation
-remain open. No desktop release or installer exists yet. See spec section 2.1.1.
+checksum verification and pinned versions. Native build prerequisites still
+apply to source installation. Minimum OS versions, exact paths, launch/uninstall
+behavior, FFmpeg and desktop-specific validation remain open. No desktop release
+or installer exists yet. See spec section 2.1.1.

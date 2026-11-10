@@ -76,21 +76,34 @@ so `go install` does not depend on an implicit generation step. Source builds
 still require the native platform toolchain and libraries; `go install` does not
 produce a macOS application bundle by itself.
 
-**RECOMMENDED:** publish simple archives, with a macOS `.app` bundle and a Linux
-executable plus desktop resources. The installer verifies release checksums,
-supports a pinned release, defaults to per-user installation and preserves the
-separate data directory during updates. These installer details await agreement.
+**AGREED:** default to installation for the current OS user. On Ubuntu, check
+for missing runtime dependencies and show the required installation commands;
+the installer does not install them or invoke `sudo`. Updating is manual through
+the same installer, preserving the separate database, media and preferences.
+Source installations can be updated through `go install`. Automatic in-app
+updates are deferred as B23.
 
-**OPEN:** the minimum Ubuntu/macOS versions, Ubuntu dependency handling,
-installation paths and launch behavior, macOS signing/notarization, update and
-uninstall behavior, FFmpeg distribution, and packaging CI/test coverage. The
+**AGREED:** the first macOS alpha ships without Developer ID signing or
+notarization.
+
+**RECOMMENDED:** retain any ad-hoc executable signing required by the native
+build tooling and document Apple's manual first-open procedure. The installer
+should not silently remove quarantine attributes or disable Gatekeeper.
+
+**RECOMMENDED:** publish simple archives, with a macOS `.app` bundle and a Linux
+executable plus desktop resources. Verify release checksums and support selecting
+a pinned release. Exact archive layout and installer flags remain to be defined.
+
+**OPEN:** the minimum Ubuntu/macOS versions, exact installation paths and launch
+behavior, uninstall behavior, FFmpeg distribution, and packaging CI/test coverage. The
 available development environment reports Ubuntu 26.04; this does not establish
 the supported minimum version. Direct WebView routing and SSE/media compatibility
 still need a desktop proof before choosing the final local transport.
 
 Reference evidence: [Wails v3.1.0 release](https://github.com/wailsapp/wails/releases/tag/v3.1.0),
 [native prerequisites](https://v3.wails.io/getting-started/installation/) and
-[build/package behavior](https://v3.wails.io/guides/build/building/).
+[build/package behavior](https://v3.wails.io/guides/build/building/) and
+[Apple manual first-open guidance](https://support.apple.com/en-us/102445).
 
 ### 2.2 Hexagonal architecture
 
@@ -714,6 +727,7 @@ Manual link stars/export, separate threads, automatic protocol relaying, multi-e
 | **B20** | GIF search, selection and sending. Existing ordinary media behavior does not imply a GIF discovery service. |
 | **B21** | Returning to Conversations from another navigation section restores the previously selected conversation in the same engine/account context, if it still exists and is accessible. |
 | **B22** | Package-manager distribution: Homebrew, MacPorts, APT packages/repositories and other popular Linux distribution package managers. Start with `go install` and the cross-platform GitHub Release installer; concrete additional managers and package formats remain to be selected. |
+| **B23** | Automatic in-app updates. The first alpha updates manually through the same release installer, or through `go install` for source installations, while preserving user data. |
 
 A separate native daemon is an accepted future option. Wails desktop packaging is now selected for v0.0.1 under section 2.1.1. Matrix, IRC, and Nostr remain likely future protocol candidates; desktop packaging does not select a separate daemon or implement those protocols.
 
