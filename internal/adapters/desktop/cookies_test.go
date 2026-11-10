@@ -156,7 +156,7 @@ func TestNativeCookiesDoNotBlockMutationsBehindSSE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer events.Body.Close()
+	defer func() { _ = events.Body.Close() }()
 	line, err := bufio.NewReader(events.Body).ReadString('\n')
 	if err != nil || line != "data: ready\n" {
 		t.Fatal(line, err)
