@@ -144,8 +144,16 @@ for art_dir in internal/adapters/desktop/assets internal/adapters/web/brand; do
   [ -f "$art_license" ] || cp "$source_dir/LICENSE" "$art_license"
 done
 go_root=$(cd "$source_dir" && go env GOROOT)
+go_license="$go_root/LICENSE"
+# Homebrew keeps the Go SDK under libexec but relocates its license to the
+# versioned formula directory. Retain that exact SDK license in the bundle.
+if [ ! -f "$go_license" ] && [ "$target_os" = darwin ] && [ "$(basename "$go_root")" = libexec ]; then
+  go_license="$(dirname "$go_root")/LICENSE"
+  [ -f "$go_license" ] && grep -q '^Copyright 2009 The Go Authors\.' "$go_license" || fail 'the Homebrew Go SDK license is missing or unrecognized'
+fi
+[ -f "$go_license" ] || fail "the Go SDK license is missing: $go_root/LICENSE"
 mkdir -p "$doc_dir/licenses/go"
-cp "$go_root/LICENSE" "$doc_dir/licenses/go/LICENSE"
+cp "$go_license" "$doc_dir/licenses/go/LICENSE"
 (cd "$source_dir" && go list -mod=readonly -tags production -deps -f '{{if .Module}}{{.Module.Path}}{{"\t"}}{{.Module.Dir}}{{end}}' ./cmd/oie-desktop) > "$stage/modules-raw.tsv"
 LC_ALL=C sort -u "$stage/modules-raw.tsv" > "$stage/modules.tsv"
 tab=$(printf '\t')
