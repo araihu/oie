@@ -13,8 +13,9 @@ leaves retained text usable without a reaction action.
 
 Reaction chips show the observed count and indicate whether the current account
 is included. Clicking a chip toggles that emoji in the own set. React opens a
-Goshtoso dialog with quick choices and search across the embedded English and
-Brazilian Portuguese catalog. Search names follow the UI language and keywords
+Goshtoso dialog with the composer's shared emoji selector. The same component and
+controller provide continuous categories, footer navigation, bilingual search,
+device recent history and grouped skin-tone choices. Search names follow the UI language and keywords
 match both languages. The source composer and ordinary draft are independent.
 Escape closes the picker and restores source-action focus. The server's allowed
 emoji list filters choices; its maximum applies to the complete own set. With a
@@ -53,3 +54,21 @@ movement, keyboard focus and English/Portuguese light/dark layouts at 390 and
 foreign-account rejection, CSRF and allowlists larger than the selection limit.
 Engine, persistence and XMPP integration results are reported separately by the
 coordinating session.
+
+## Shared selector invariants
+
+| Context | Action | Preserved state and effect |
+|---|---|---|
+| Composer | Choose an emoji or tone | Insert at the caret, keep the draft and issue no reaction command. |
+| Reactions | Choose an allowed emoji or tone | Keep the composer draft, submit one scoped full-set command and update shared device recents. |
+| Restricted protocol | Browse or choose | Show only allowed emoji/tone variants; respect the current selection limit. |
+| Nested tone strip | Escape | Close only the strip and focus its trigger; retain the reaction dialog and draft. |
+| Delayed or refused preparation | Open reaction selector | Keep the composer/timeline geometry; issue no mutation on refusal. |
+
+`tests/browser/reactions.cjs` exercises these alongside receipt recovery, unknown
+outcomes, bilingual search, category navigation, device recents shared in both
+directions, complete-set limits and individual-tone restrictions. Its visual
+matrix covers 390/1440 px, both locales, Goshtoso/Minimal and light/dark modes.
+The composer fixture scopes its queries to its selector instance. Its held cached
+opener test starts after the public popover is positioned so it delays application
+work without freezing the library's visibility gate.

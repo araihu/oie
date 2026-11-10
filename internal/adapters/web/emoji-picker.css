@@ -7,7 +7,7 @@
 [data-emoji-retry][hidden]{display:none}
 
 .oie-emoji-content>:not(.oie-emoji-scroll){flex-shrink:0}
-.oie-emoji-picker button:hover,.oie-emoji-picker button:focus-visible{text-decoration:none}
+.oie-emoji-content button:hover,.oie-emoji-content button:focus-visible{text-decoration:none}
 .oie-emoji-cell:hover,.oie-emoji-choice:hover>.oie-emoji-cell{background:var(--oie-raised)}
 .oie-emoji-choice{position:relative;display:block;min-width:0}
 .oie-emoji-variants{position:absolute;right:0;bottom:0}

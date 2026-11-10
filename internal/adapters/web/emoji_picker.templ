@@ -22,17 +22,22 @@ templ emojiTrigger(v view) {
 }
 
 templ emojiContent(v view) {
+@emojiSelector(v,"emoji",v.Text.EmojiPicker)
+}
+
+// Shared catalog presentation for composition and protocol-scoped reactions.
+templ emojiSelector(v view,prefix string,label string) {
 {{ ctx=expressions.With(ctx,expressions.Set{TextInput:expressions.TextInput{SearchAriaLabel:v.Text.EmojiSearch}}) }}
-<div class="oie-emoji-content" data-emoji-content data-emoji-url={"/ui/emoji/"+v.Locale+".json"} data-emoji-loading={v.Text.EmojiLoading} data-emoji-empty={v.Text.EmojiEmpty} data-emoji-failed={v.Text.EmojiFailed} data-emoji-no-recent={v.Text.EmojiNoRecent}>
-@textinput.TextInput(textinput.Config{ID:"emoji-search",Type:textinput.TypeSearch,Placeholder:v.Text.EmojiSearch,Autocomplete:"off",InputAttrs:templ.Attributes{"aria-label":v.Text.EmojiSearch,"aria-controls":"emoji-grid","maxlength":"128"}})
+<div class="oie-emoji-content" data-emoji-content data-emoji-prefix={prefix} data-emoji-url={"/ui/emoji/"+v.Locale+".json"} data-emoji-loading={v.Text.EmojiLoading} data-emoji-empty={v.Text.EmojiEmpty} data-emoji-failed={v.Text.EmojiFailed} data-emoji-no-recent={v.Text.EmojiNoRecent}>
+@textinput.TextInput(textinput.Config{ID:prefix+"-search",Type:textinput.TypeSearch,Placeholder:v.Text.EmojiSearch,Autocomplete:"off",InputAttrs:templ.Attributes{"aria-label":v.Text.EmojiSearch,"aria-controls":prefix+"-grid","maxlength":"128","data-emoji-search":""}})
 <p data-emoji-status class="oie-emoji-status" role="status" aria-live="polite"></p>
 <div class="oie-emoji-scroll" data-emoji-scroll>
-<div id="emoji-grid" class="oie-emoji-sections" role="group" aria-label={v.Text.EmojiPicker}></div>
+<div id={prefix+"-grid"} data-emoji-grid class="oie-emoji-sections" role="group" aria-label={label}></div>
 </div>
 <nav class="oie-emoji-footer" aria-label={v.Text.EmojiCategories}>
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-emoji-jump"),button.WithAttrs(templ.Attributes{"data-emoji-jump":"recent","aria-label":v.Text.EmojiRecent,"title":v.Text.EmojiRecent,"aria-controls":"emoji-grid","disabled":true})){@glyph(heroicons.Icon16SolidClock)}
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-emoji-jump"),button.WithAttrs(templ.Attributes{"data-emoji-jump":"recent","aria-label":v.Text.EmojiRecent,"title":v.Text.EmojiRecent,"aria-controls":prefix+"-grid","disabled":true})){@glyph(heroicons.Icon16SolidClock)}
 for index,label:=range emojiCategoryLabels(v) {
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-emoji-jump"),button.WithAttrs(templ.Attributes{"data-emoji-jump":strconv.Itoa(index),"aria-label":label,"title":label,"aria-controls":"emoji-grid","disabled":true})){<span class="oie-emoji-category-symbol" aria-hidden="true">{emojiCategoryGlyph(index)}</span>}
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-emoji-jump"),button.WithAttrs(templ.Attributes{"data-emoji-jump":strconv.Itoa(index),"aria-label":label,"title":label,"aria-controls":prefix+"-grid","disabled":true})){<span class="oie-emoji-category-symbol" aria-hidden="true">{emojiCategoryGlyph(index)}</span>}
 }
 </nav>
 <template data-emoji-section-template><section class="oie-emoji-section"><h3 tabindex="-1"></h3><div class="oie-emoji-grid"></div></section></template>

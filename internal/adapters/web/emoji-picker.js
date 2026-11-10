@@ -1,19 +1,16 @@
-window.OieRuntime.register('emoji-picker', life => {
+// One catalog, category list, recent history and tone picker for both entry points.
+window.OieEmojiPicker={mount(root,life,options){
  'use strict';
- const root=document.getElementById('oie-emoji-picker'),input=document.getElementById('message-composer'),form=document.getElementById('send-message-form');
- if(!root||!input||!form)return;
- const content=root.querySelector('[data-emoji-content]'),trigger=root.querySelector('[data-emoji-trigger]'),search=root.querySelector('#emoji-search'),grid=root.querySelector('#emoji-grid'),scroll=root.querySelector('[data-emoji-scroll]'),status=root.querySelector('[data-emoji-status]'),retry=root.querySelector('[data-emoji-retry]'),cell=root.querySelector('[data-emoji-button]'),choice=root.querySelector('[data-emoji-choice]'),sectionTemplate=root.querySelector('[data-emoji-section-template]'),jumps=[...root.querySelectorAll('[data-emoji-jump]')];
+ options=options||{};
+ const content=root.querySelector('[data-emoji-content]');if(!content)return null;
+ const search=content.querySelector('[data-emoji-search]'),grid=content.querySelector('[data-emoji-grid]'),scroll=content.querySelector('[data-emoji-scroll]'),status=content.querySelector('[data-emoji-status]'),retry=content.querySelector('[data-emoji-retry]'),cell=content.querySelector('[data-emoji-button]'),choice=content.querySelector('[data-emoji-choice]'),sectionTemplate=content.querySelector('[data-emoji-section-template]'),jumps=[...content.querySelectorAll('[data-emoji-jump]')];
  const memory=window.OieRuntime.memory,cacheKey='emoji-catalog-v2:'+content.dataset.emojiUrl,recentKey='oie.emoji-recent.v1',fold=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase(document.documentElement.lang).trim();
- let catalog=memory.get(cacheKey),loading=false,sections=new Map(),scrollFrame=false,variantGeometry=null,selection={start:input.selectionStart||0,end:input.selectionEnd||0},recent=[];
- try{recent=JSON.parse(localStorage.getItem(recentKey)||'[]')}catch{recent=memory.get(recentKey)||[]}
- if(!Array.isArray(recent))recent=[];recent=recent.filter(value=>typeof value==='string').slice(0,24);
- const writable=()=>input.isConnected&&!input.disabled&&!input.readOnly&&form.dataset.busy!=='true'&&form.dataset.composeAllowed==='true';
+ let catalog=memory.get(cacheKey),loading=false,sections=new Map(),scrollFrame=false,variantGeometry=null,recent=[];
+ function readRecent(){try{recent=JSON.parse(localStorage.getItem(recentKey)||'[]')}catch{recent=memory.get(recentKey)||[]}if(!Array.isArray(recent))recent=[];recent=recent.filter(value=>typeof value==='string').slice(0,24)}
+ const writable=()=>root.isConnected&&(options.available?.()??true),allowed=glyph=>options.allowed?.(glyph)??true,enabled=glyph=>writable()&&(options.enabled?.(glyph)??true);
  const mutate=fn=>window.Alpine?.mutateDom?window.Alpine.mutateDom(fn):fn();
  function clear(node){for(const child of node.children)window.Alpine?.destroyTree(child);node.replaceChildren()}
- function rememberSelection(){selection={start:input.selectionStart,end:input.selectionEnd}}
- for(const name of ['select','keyup','pointerup','input'])life.on(input,name,rememberSelection);
- life.on(trigger,'pointerdown',rememberSelection);
- function setButton(button,item){button.textContent=item.glyph;button.dataset.emojiPick=item.glyph;button.setAttribute('aria-label',item.name);button.title=item.name}
+ function setButton(button,item){button.textContent=item.glyph;button.dataset.emojiPick=item.glyph;button.setAttribute('aria-label',item.name);button.title=item.name;button.disabled=!enabled(item.glyph);if(options.selected)button.setAttribute('aria-pressed',String(options.selected(item.glyph)))}
  function createChoice(item){
   const node=(item.family.variants.length>1?choice:cell).content.firstElementChild.cloneNode(true);
   if(item.family.variants.length>1){
@@ -35,15 +32,16 @@ window.OieRuntime.register('emoji-picker', life => {
   // Preserve the selected app-owned emoji when rebuilding that same grid.
   const active=grid.contains(document.activeElement)?document.activeElement:null,glyph=active?.dataset.emojiPick,section=active?.closest('[data-emoji-section]')?.dataset.emojiSection;
   const terms=fold(search.value).split(/\s+/).filter(Boolean),exact=catalog.items.get(search.value.trim()),preferred=new Map();
-  for(const glyph of recent){const item=catalog.items.get(glyph);if(item&&!preferred.has(item.family))preferred.set(item.family,item)}
-  const candidates=[...catalog.families.values()].filter(family=>family.variants.some(item=>terms.every(term=>item.match.includes(term))));
-  const display=family=>({family,display:exact?.family===family.base.glyph?exact:preferred.get(family.base.glyph)||family.base});
+  for(const glyph of recent){const item=catalog.items.get(glyph);if(item&&allowed(item.glyph)&&!preferred.has(item.family))preferred.set(item.family,item)}
+  const available=[...catalog.families.values()].map(family=>({...family,variants:family.variants.filter(item=>allowed(item.glyph))})).filter(family=>family.variants.length);
+  const candidates=available.filter(family=>family.variants.some(item=>terms.every(term=>item.match.includes(term))));
+  const display=family=>({family,display:exact?.family===family.base.glyph&&allowed(exact.glyph)?exact:preferred.get(family.base.glyph)||family.variants.find(item=>item.glyph===family.base.glyph)||family.variants[0]});
   const groups=new Map();
-  if(!terms.length)groups.set('recent',[...preferred.keys()].map(key=>display(catalog.families.get(key))));
+  if(!terms.length)groups.set('recent',available.filter(family=>preferred.has(family.base.glyph)).sort((a,b)=>[...preferred.keys()].indexOf(a.base.glyph)-[...preferred.keys()].indexOf(b.base.glyph)).map(display));
   for(let group=0;group<9;group++){const items=candidates.filter(family=>family.base.group===group).map(display);if(items.length)groups.set(String(group),items)}
   const fragment=document.createDocumentFragment();sections=new Map();
   for(const [key,items]of groups){
-   const section=sectionTemplate.content.firstElementChild.cloneNode(true);section.dataset.emojiSection=key;section.id='emoji-section-'+key;
+   const section=sectionTemplate.content.firstElementChild.cloneNode(true);section.dataset.emojiSection=key;section.id=content.dataset.emojiPrefix+'-section-'+key;
    section.querySelector('h3').textContent=jumps.find(button=>button.dataset.emojiJump===key).getAttribute('aria-label');
    const cells=section.querySelector('.oie-emoji-grid');for(const item of items)cells.append(createChoice(item));
    if(!items.length){const empty=document.createElement('p');empty.textContent=content.dataset.emojiNoRecent;section.append(empty)}
@@ -103,32 +101,41 @@ window.OieRuntime.register('emoji-picker', life => {
  life.cleanup(stopVariantGeometry);
  function closeVariants(){for(const button of root.querySelectorAll('[data-emoji-variants-trigger][aria-expanded="true"]'))button.click();stopVariantGeometry()}
 
- function sync(){const disabled=!writable();if(disabled){closeVariants();if(trigger.getAttribute('aria-expanded')==='true')trigger.click()}trigger.disabled=disabled}
- const observer=new MutationObserver(sync);observer.observe(input,{attributes:true,attributeFilter:['readonly','disabled']});observer.observe(form,{attributes:true,attributeFilter:['data-busy','data-compose-allowed']});life.cleanup(()=>observer.disconnect());sync();
- function focusWhenOpen(toggle,target,attempt=0){life.raf(()=>{if(toggle.getAttribute('aria-expanded')!=='true'||document.activeElement===target)return;const active=document.activeElement;if(active!==toggle&&active!==document.body&&!(target===search&&active===input))return;if(target?.getClientRects().length){target.focus({preventScroll:true});if(document.activeElement===target)return}if(attempt<12)focusWhenOpen(toggle,target,attempt+1)})}
+ function focusWhenOpen(toggle,target,attempt=0){life.raf(()=>{if(toggle.getAttribute('aria-expanded')!=='true'||document.activeElement===target)return;const active=document.activeElement;if(active!==toggle&&active!==document.body&&!(target===search&&active===options.input))return;if(target?.getClientRects().length){target.focus({preventScroll:true});if(document.activeElement===target)return}if(attempt<12)focusWhenOpen(toggle,target,attempt+1)})}
  function populateVariants(toggle){
   const wrapper=toggle.closest('[data-emoji-family]'),variants=wrapper?.querySelector('[data-emoji-variants]'),family=catalog?.families.get(wrapper?.dataset.emojiFamily);if(!variants||!family)return;
-  if(!variants.childElementCount){const fragment=document.createDocumentFragment();for(const item of family.variants){const button=cell.content.firstElementChild.cloneNode(true);setButton(button,item);button.dataset.emojiVariant='';button.setAttribute('aria-pressed',String(item.glyph===wrapper.querySelector(':scope>[data-emoji-pick]').dataset.emojiPick));fragment.append(button)}mutate(()=>{variants.append(fragment);for(const node of variants.children)window.Alpine?.initTree(node)})}
+  if(!variants.childElementCount){const fragment=document.createDocumentFragment();for(const item of family.variants.filter(item=>allowed(item.glyph))){const button=cell.content.firstElementChild.cloneNode(true);setButton(button,item);button.dataset.emojiVariant='';button.setAttribute('aria-pressed',String(options.selected?options.selected(item.glyph):item.glyph===wrapper.querySelector(':scope>[data-emoji-pick]').dataset.emojiPick));fragment.append(button)}mutate(()=>{variants.append(fragment);for(const node of variants.children)window.Alpine?.initTree(node)})}
   if(toggle.getAttribute('aria-expanded')==='true')watchVariantGeometry(toggle);
   focusWhenOpen(toggle,variants.querySelector('[data-emoji-pick]'));
  }
- life.on(trigger,'click',()=>{if(!writable())return;life.raf(()=>{if(trigger.getAttribute('aria-expanded')==='true'){load();focusWhenOpen(trigger,search)}})});
- life.on(trigger,'keydown',event=>{if(['Enter',' ','ArrowDown'].includes(event.key)&&writable())life.raf(()=>{load();focusWhenOpen(trigger,search)})});
- life.on(search,'input',render);life.on(search,'keydown',event=>{if(['Enter','ArrowDown'].includes(event.key)){event.preventDefault();grid.querySelector('[data-emoji-pick]')?.focus()}});
+ life.on(search,'input',render);life.on(search,'keydown',event=>{if(['Enter','ArrowDown'].includes(event.key)){event.preventDefault();grid.querySelector('[data-emoji-pick]:not(:disabled)')?.focus()}});
  life.on(scroll,'scroll',()=>{if(!scrollFrame){scrollFrame=true;life.raf(()=>{scrollFrame=false;updateFooter()})}},{passive:true});
  life.on(root,'click',event=>{
   const jump=event.target.closest('[data-emoji-jump]');if(jump){jumpTo(jump.dataset.emojiJump);return}if(event.target.closest('[data-emoji-retry]')){load();return}
   const toggle=event.target.closest('[data-emoji-variants-trigger]');if(toggle){populateVariants(toggle);return}
-  const chosen=event.target.closest('[data-emoji-pick]');if(!chosen||!writable()||!catalog?.items.has(chosen.dataset.emojiPick))return;
-  event.preventDefault();const glyph=chosen.dataset.emojiPick,start=Math.min(selection.start,input.value.length),end=Math.min(selection.end,input.value.length);
-  input.setRangeText(glyph,start,end,'end');input.dispatchEvent(new Event('input',{bubbles:true}));rememberSelection();
+  const chosen=event.target.closest('[data-emoji-pick]');if(!chosen||chosen.disabled||!writable()||!catalog?.items.has(chosen.dataset.emojiPick))return;
+  event.preventDefault();const glyph=chosen.dataset.emojiPick;if(!allowed(glyph)||!enabled(glyph)||options.choose?.(glyph)===false)return;
   recent=[glyph,...recent.filter(value=>value!==glyph)].slice(0,24);memory.set(recentKey,recent);try{localStorage.setItem(recentKey,JSON.stringify(recent))}catch{}
-  closeVariants();if(trigger.getAttribute('aria-expanded')==='true')trigger.click();input.focus({preventScroll:true});
+  closeVariants();options.afterChoose?.();
  });
  life.on(root,'keydown',event=>{
   const toggle=event.target.closest('[data-emoji-variants-trigger]');if(toggle&&['Enter',' ','ArrowDown'].includes(event.key)){populateVariants(toggle);return}
   const region=event.target.closest('[data-emoji-variants],.oie-emoji-grid');if(!region)return;
-  const buttons=[...region.querySelectorAll('[data-emoji-pick]')].filter(button=>button.closest('[data-emoji-variants],.oie-emoji-grid')===region),index=buttons.indexOf(event.target),columns=region.matches('[data-emoji-variants]')?1:8,delta={ArrowLeft:-1,ArrowRight:1,ArrowUp:-columns,ArrowDown:columns}[event.key];
+  const buttons=[...region.querySelectorAll('[data-emoji-pick]')].filter(button=>!button.disabled&&button.closest('[data-emoji-variants],.oie-emoji-grid')===region),index=buttons.indexOf(event.target),columns=region.matches('[data-emoji-variants]')?1:8,delta={ArrowLeft:-1,ArrowRight:1,ArrowUp:-columns,ArrowDown:columns}[event.key];
   if(index<0||delta===undefined)return;event.preventDefault();buttons[Math.max(0,Math.min(buttons.length-1,index+delta))]?.focus();
  });
+ return {search,open(resetSearch=false){readRecent();if(resetSearch)search.value='';void load()},close:closeVariants,escape(){const toggle=root.querySelector('[data-emoji-variants-trigger][aria-expanded="true"]');if(!toggle)return false;closeVariants();toggle.focus({preventScroll:true});return true}};
+}};
+window.OieRuntime.register('emoji-picker',life=>{
+ const root=document.getElementById('oie-emoji-picker'),input=document.getElementById('message-composer'),form=document.getElementById('send-message-form');if(!root||!input||!form)return;
+ const trigger=root.querySelector('[data-emoji-trigger]');let selection={start:input.selectionStart||0,end:input.selectionEnd||0};
+ const writable=()=>input.isConnected&&!input.disabled&&!input.readOnly&&form.dataset.busy!=='true'&&form.dataset.composeAllowed==='true';
+ function rememberSelection(){selection={start:input.selectionStart,end:input.selectionEnd}}
+ for(const name of ['select','keyup','pointerup','input'])life.on(input,name,rememberSelection);life.on(trigger,'pointerdown',rememberSelection);
+ const selector=window.OieEmojiPicker.mount(root,life,{input,available:writable,choose(glyph){const start=Math.min(selection.start,input.value.length),end=Math.min(selection.end,input.value.length);input.setRangeText(glyph,start,end,'end');input.dispatchEvent(new Event('input',{bubbles:true}));rememberSelection()},afterChoose(){if(trigger.getAttribute('aria-expanded')==='true')trigger.click();input.focus({preventScroll:true})}});
+ function sync(){const disabled=!writable();if(disabled){selector.close();if(trigger.getAttribute('aria-expanded')==='true')trigger.click()}trigger.disabled=disabled}
+ const observer=new MutationObserver(sync);observer.observe(input,{attributes:true,attributeFilter:['readonly','disabled']});observer.observe(form,{attributes:true,attributeFilter:['data-busy','data-compose-allowed']});life.cleanup(()=>observer.disconnect());sync();
+ function focusSearch(attempt=0){life.raf(()=>{if(trigger.getAttribute('aria-expanded')!=='true'||document.activeElement===selector.search)return;const active=document.activeElement;if(active!==trigger&&active!==document.body&&active!==input)return;selector.search.focus({preventScroll:true});if(document.activeElement!==selector.search&&attempt<12)focusSearch(attempt+1)})}
+ life.on(trigger,'click',()=>{if(!writable())return;life.raf(()=>{if(trigger.getAttribute('aria-expanded')==='true'){selector.open();focusSearch()}})});
+ life.on(trigger,'keydown',event=>{if(['Enter',' ','ArrowDown'].includes(event.key)&&writable())life.raf(()=>{selector.open();focusSearch()})});
 });

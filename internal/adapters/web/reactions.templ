@@ -6,8 +6,6 @@ import (
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/modal"
  "github.com/araihu/goshtoso/components/spinner"
- "github.com/araihu/goshtoso/components/textinput"
- "github.com/araihu/goshtoso/expressions"
 )
 
 templ messageReactions(v view,m messageView){
@@ -27,14 +25,9 @@ if v.Selected!=nil {
 }
 
 templ reactionPickerContent(v view){
-{{ ctx=expressions.With(ctx,expressions.Set{TextInput:expressions.TextInput{SearchAriaLabel:v.Text.EmojiSearch}}) }}
-<section class="oie-reaction-picker" data-reaction-picker data-emoji-url={"/ui/emoji/"+v.Locale+".json"} data-unavailable={v.Text.ReactionUnavailable} data-unknown={v.Text.ReactionUnknown} data-failed={v.Text.ReactionFailed} data-pending={v.Text.ReactionPending} data-check={v.Text.ReactionCheck} data-remove={v.Text.ReactionRemove} data-retry={v.Text.Retry} data-react={v.Text.ReactMessage} data-loading={v.Text.EmojiLoading} data-load-failed={v.Text.EmojiFailed} data-empty={v.Text.EmojiEmpty}>
+<section class="oie-reaction-picker" data-reaction-picker data-unavailable={v.Text.ReactionUnavailable} data-unknown={v.Text.ReactionUnknown} data-failed={v.Text.ReactionFailed} data-pending={v.Text.ReactionPending} data-check={v.Text.ReactionCheck} data-remove={v.Text.ReactionRemove} data-retry={v.Text.Retry} data-react={v.Text.ReactMessage}>
 <header><strong>{v.Text.ReactMessage}</strong>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"data-reaction-close":"","aria-label":v.Text.Close})){@glyph(heroicons.Icon16SolidXMark)}</header>
-@textinput.TextInput(textinput.Config{ID:"reaction-emoji-search",Type:textinput.TypeSearch,Placeholder:v.Text.EmojiSearch,Autocomplete:"off",InputAttrs:templ.Attributes{"aria-label":v.Text.EmojiSearch,"aria-controls":"reaction-emoji-grid","maxlength":"128"}})
-<p data-reaction-picker-status class="oie-reaction-picker-status" role="status" aria-live="polite"></p>
-<div id="reaction-emoji-grid" class="oie-reaction-grid" role="group" aria-label={v.Text.Reactions}></div>
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-reaction-catalog-retry":"","hidden":true})){<span>{v.Text.Retry}</span>}
-<template data-reaction-emoji-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-emoji-cell"),button.WithAttrs(templ.Attributes{"data-reaction-choice":""})) {}</template>
+@emojiSelector(v,"reaction-emoji",v.Text.Reactions)
 <template data-reaction-chip-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-chip"),button.WithAttrs(templ.Attributes{"data-reaction-emoji":""})){<span data-reaction-glyph aria-hidden="true"></span><small data-reaction-count></small><span data-reaction-busy hidden>@spinner.Spinner(spinner.Config{Size:spinner.SizeSM,RootClass:"oie-reaction-spinner"})</span>}</template>
 <template data-reaction-status-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-chip oie-reaction-recovery"),button.WithAttrs(templ.Attributes{"data-reaction-check":""})){<span data-reaction-check-icon>@glyph(heroicons.Icon16SolidArrowPath)</span><span data-reaction-status-spinner hidden>@spinner.Spinner(spinner.Config{Size:spinner.SizeSM,RootClass:"oie-reaction-spinner"})</span>}</template>
 </section>
