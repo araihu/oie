@@ -31,25 +31,24 @@ it is not limited to rooms with no recent activity.
   128 is not a cap on recent history.
 - Fewer than 128 messages available in total: retain what is available.
 
-Continue recovering all remaining authorized history in the background without
-blocking interaction. This target does not require downloading or rendering the
-whole interval before showing the first retrieved messages. Page budgets and
-queue ordering remain open decisions.
+## Agreed recovery order
 
-## Recommendation awaiting discussion
+Start with the newest page of the open room when it needs recovery. Alternate
+pages across rooms and give the open room preference while each room with
+pending work continues to receive turns. Show each page as soon as it is stored.
+Keep navigation, sending and receiving available throughout recovery.
 
-Prioritize the selected room's next recent-history page, then alternate bounded
-pages among the other rooms so that one busy archive cannot monopolize initial
-recovery. Continue from the newest messages toward older ones. Keep live
-sending/receiving responsive throughout. Exact fairness and account scheduling
-have not been agreed.
+Prioritize enough recent history to give each room useful context quickly.
+Continue towards the agreed initial target for each room. Fetch the remaining
+authorized history gradually from the server in the background. Page limits,
+how often the open room gets a turn and scheduling across accounts remain open.
 
 ## Open decisions for the next discussion
 
 - What anchors the 48-hour cutoff, and what page/message/time budgets keep
   a very active room from delaying every other room? Store time bounds in UTC.
-- How should the selected room, other rooms and multiple accounts share the
-  queue while retaining provider pacing and foreground/live-message priority?
+- What turn frequency gives the open room preference while preserving progress
+  across rooms and accounts? Keep requests paced and live traffic responsive.
 - How do recent coverage and older backfill checkpoints resume after reconnect,
   interruption or an expired archive cursor, without restarting a complete scan?
 - Which protocol capabilities and archive failures need fallbacks? How do we
@@ -65,6 +64,8 @@ Cover active rooms, rooms quiet for more than 48 hours, rooms with fewer than
 live sending/receiving and navigation while recovery is in progress, eventual
 older-history coverage, live/archive deduplication and preservation of deletion
 markers. Historical imports must not create new unread messages or notifications.
+Verify that a busy open room receives its first page promptly and that other
+rooms receive pages before the open room completes its initial target.
 
 The existing history implementation and its checks are described in
 [the history milestone](milestone-three-history.md). The agreed retention and
