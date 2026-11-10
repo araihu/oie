@@ -9,7 +9,7 @@
 - Give media, previews and loading placeholders explicit dimensions or aspect ratios. Replacement content should use the same geometry. Avoid scrollbar changes that unexpectedly resize adjacent content.
 - Do not animate height, margins or position to conceal reflow. Respect reduced-motion preferences.
 
-Intentional changes remain allowed: navigation, explicit expansion, opening the keyboard, viewport resizing and the specified textarea autosizing. Text can grow the composer up to its existing limit. An edit toolbar or status must not add another height change on top of that text growth. Entering edit mode reuses the composer, its submit button saves the edit, and X or Escape cancels before dispatch. Existing send-key and IME rules still apply.
+Intentional changes remain allowed: navigation, explicit expansion, opening the keyboard, viewport resizing and the specified textarea autosizing. Text can grow the composer up to its existing limit. Editing highlights the source message and dims it while submission is pending, without a composer banner. Recovery controls attach to that message without changing the composer or message geometry. Entering edit mode reuses the composer, its submit button saves the edit, and X or Escape cancels before dispatch. Existing send-key and IME rules still apply.
 
 ## Verification
 

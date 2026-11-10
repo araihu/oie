@@ -808,6 +808,12 @@ command/outbox design. This increment does not implement it or turn the proposed
 the most recently sent own message for editing. Typing, IME composition and open
 pickers keep their normal keyboard behavior.
 
+**AGREED:** indicate editing by highlighting the source message, without an
+editing banner above the composer. Dim that message while its correction is
+awaiting asynchronous submission. Remove the highlight on cancellation or
+completion. Keep concise recovery status and actions attached to the source
+message, preserving the composer geometry and ordinary draft.
+
 **IMPLEMENTATION SCOPE:** the first outgoing correction supports the latest own
 plain text message sent by this engine in the current verified XMPP connection.
 Room corrections also require the original own echo with verified occupant
