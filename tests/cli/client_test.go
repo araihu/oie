@@ -62,7 +62,7 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 		t.Fatalf("JSON: %v %s", err, output)
 	}
 	registration := append([]byte(nil), output...)
-	output, err = run("", "accounts", "get-capabilities", "--account-id", account.Id)
+	output, err = run("", "accounts", "capabilities", "get", "--account-id", account.Id)
 	var capabilities engineapi.Capabilities
 	if err != nil || json.Unmarshal(output, &capabilities) != nil || capabilities.Discovery.State != "not_connected" || len(capabilities.Features) == 0 || len(capabilities.Discovery.Services) != 0 {
 		t.Fatalf("CLI capability diagnostics: %v %s", err, output)
@@ -70,7 +70,7 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err = engine.ContactsReceived(t.Context(), domain.ID(account.Id), []application.ContactInput{{Address: "bob@localhost", DisplayName: "Generated Café", Subscription: "none"}}); err != nil {
 		t.Fatal(err)
 	}
-	output, err = run("", "accounts", "list-contacts", "--q", "cafe", "--account-id", account.Id)
+	output, err = run("", "accounts", "contacts", "list", "--q", "cafe", "--account-id", account.Id)
 	var contacts engineapi.ContactPage
 	if err != nil || json.Unmarshal(output, &contacts) != nil || len(contacts.Items) != 1 || contacts.Items[0].Address != "bob@localhost" || contacts.Items[0].AccountId != account.Id || len(contacts.Sources) != 1 || contacts.Sources[0].State != "known" {
 		t.Fatalf("CLI saved contacts: %v %s", err, output)
@@ -144,7 +144,7 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 		t.Fatal("CLI message replay changed")
 	}
 	cancelKey, _ := ids()
-	output, err = run(`{"expectedRevisionId":"`+message.RevisionId+`"}`, "messages", "cancel-send", "--message-id", message.Id, "--idempotency-key", string(cancelKey), "--body-stdin")
+	output, err = run(`{"expectedRevisionId":"`+message.RevisionId+`"}`, "messages", "outbox", "cancel", "--message-id", message.Id, "--idempotency-key", string(cancelKey), "--body-stdin")
 	if err != nil || !bytes.Contains(output, []byte(`"sendState": "cancelled"`)) {
 		t.Fatalf("CLI cancel: %v %s", err, output)
 	}
@@ -161,17 +161,17 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err != nil || json.Unmarshal(output, &search) != nil || len(search.Items) != 1 || search.Items[0].Message.Id != message.Id || search.Items[0].Historical || search.Items[0].Message.SendState != "cancelled" || !search.IncludeEditHistory {
 		t.Fatalf("CLI retained content search: %v %s", err, output)
 	}
-	output, err = run("", "messages", "get-context", "--conversation-id", conversation.Id, "--message-id", message.Id, "--limit", "1")
+	output, err = run("", "messages", "context", "get", "--conversation-id", conversation.Id, "--message-id", message.Id, "--limit", "1")
 	var window engineapi.MessageContext
 	if err != nil || json.Unmarshal(output, &window) != nil || window.TargetId != message.Id || len(window.Items) != 1 || window.HasOlder || window.HasNewer {
 		t.Fatalf("CLI bounded source context: %v %s", err, output)
 	}
-	output, err = run("", "conversations", "get-details", "--conversation-id", conversation.Id)
+	output, err = run("", "conversations", "details", "get", "--conversation-id", conversation.Id)
 	var details engineapi.ConversationDetails
 	if err != nil || json.Unmarshal(output, &details) != nil || details.ConversationId != conversation.Id || details.AccountId != account.Id || details.State != "not_connected" {
 		t.Fatalf("CLI scoped details: %v %s", err, output)
 	}
-	output, err = run("", "shared-content", "list", "--type", "documents", "--account-id", account.Id)
+	output, err = run("", "shared", "content", "list", "--type", "documents", "--account-id", account.Id)
 	var library engineapi.SharedContentPage
 	if err != nil || json.Unmarshal(output, &library) != nil || library.Indexing.TotalMessages != 1 || library.Indexing.State != "pending" {
 		t.Fatalf("CLI shared-content query: %v %s", err, output)
@@ -180,7 +180,7 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	// explicit null precondition on the first write through the generated CLI.
 	starKey, _ := ids()
 	starBody := `{"starred":true,"expectedRevisionId":null}`
-	output, err = run(starBody, "messages", "set-star", "--message-id", message.Id, "--idempotency-key", string(starKey), "--body-stdin")
+	output, err = run(starBody, "messages", "stars", "set", "--message-id", message.Id, "--idempotency-key", string(starKey), "--body-stdin")
 	if err != nil {
 		t.Fatalf("CLI star acceptance: %v %s", err, output)
 	}
@@ -188,11 +188,11 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err = json.Unmarshal(output, &state); err != nil || !state.Starred || state.RevisionId == nil {
 		t.Fatalf("CLI star state: %v %s", err, output)
 	}
-	replay, err = run(starBody, "messages", "set-star", "--message-id", message.Id, "--idempotency-key", string(starKey), "--body-stdin")
+	replay, err = run(starBody, "messages", "stars", "set", "--message-id", message.Id, "--idempotency-key", string(starKey), "--body-stdin")
 	if err != nil || !bytes.Equal(output, replay) {
 		t.Fatalf("CLI star replay changed receipt: %v %s", err, replay)
 	}
-	output, err = run("", "messages", "list-starred", "--account-id", account.Id)
+	output, err = run("", "messages", "stars", "list", "--account-id", account.Id)
 	if err != nil || !bytes.Contains(output, []byte(message.Id)) || !bytes.Contains(output, []byte(`"sendState": "cancelled"`)) {
 		t.Fatalf("CLI starred source projection: %v %s", err, output)
 	}
@@ -226,22 +226,22 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 			roomID = string(chat.ID)
 		}
 	}
-	output, err = run("", "conversations", "get-room-session", "--conversation-id", roomID)
+	output, err = run("", "conversations", "rooms", "status", "--conversation-id", roomID)
 	var session engineapi.RoomSession
 	if err != nil || json.Unmarshal(output, &session) != nil || session.Active {
 		t.Fatalf("CLI room read: %v %s", err, output)
 	}
 	joinKey, _ := ids()
-	output, err = run(`{"expectedRevisionId":null}`, "conversations", "join-room", "--conversation-id", roomID, "--idempotency-key", string(joinKey), "--body-stdin")
+	output, err = run(`{"expectedRevisionId":null}`, "conversations", "rooms", "join", "--conversation-id", roomID, "--idempotency-key", string(joinKey), "--body-stdin")
 	if err != nil || json.Unmarshal(output, &session) != nil || !session.Active || session.IntentRevisionId == nil || session.State == "joined" {
 		t.Fatalf("CLI explicit room intent: %v %s", err, output)
 	}
 	leaveKey, _ := ids()
-	output, err = run(`{"expectedRevisionId":"`+*session.IntentRevisionId+`"}`, "conversations", "leave-room", "--conversation-id", roomID, "--idempotency-key", string(leaveKey), "--body-stdin")
+	output, err = run(`{"expectedRevisionId":"`+*session.IntentRevisionId+`"}`, "conversations", "rooms", "leave", "--conversation-id", roomID, "--idempotency-key", string(leaveKey), "--body-stdin")
 	if err != nil || json.Unmarshal(output, &session) != nil || session.Active {
 		t.Fatalf("CLI explicit room leave: %v %s", err, output)
 	}
-	output, err = run(`{"expectedRevisionId":null}`, "conversations", "join-room", "--conversation-id", roomID, "--idempotency-key", string(joinKey), "--body-stdin")
+	output, err = run(`{"expectedRevisionId":null}`, "conversations", "rooms", "join", "--conversation-id", roomID, "--idempotency-key", string(joinKey), "--body-stdin")
 	if err != nil || json.Unmarshal(output, &session) != nil || session.Active {
 		t.Fatalf("CLI old join replay reactivated room: %v %s", err, output)
 	}

@@ -164,7 +164,7 @@ func (p *cliProof) wait(label string, fn func() bool) {
 func (p *cliProof) connection(account, state string) {
 	p.wait("connection "+state, func() bool {
 		var c engineapi.Connection
-		p.call(&c, "", "accounts", "get-connection", "--account-id", account)
+		p.call(&c, "", "accounts", "connection", "get", "--account-id", account)
 		return string(c.State) == state
 	})
 }
@@ -289,8 +289,8 @@ func TestCLIDataOnlyXMPP(t *testing.T) {
 	}
 	p := newCLIProof(t)
 	var identity engineapi.Engine
-	p.call(&identity, "", "system", "get-engine")
-	p.call(nil, "", "system", "check-health")
+	p.call(&identity, "", "system", "engine", "get")
+	p.call(nil, "", "system", "health", "check")
 	var alice, bob engineapi.Account
 	for _, entry := range []struct {
 		address string
@@ -301,11 +301,11 @@ func TestCLIDataOnlyXMPP(t *testing.T) {
 	p.connect(alice.Id, "alice-local-only")
 	p.connect(bob.Id, "bob-local-only")
 	var capabilities engineapi.Capabilities
-	p.call(&capabilities, "", "accounts", "get-capabilities", "--account-id", alice.Id)
+	p.call(&capabilities, "", "accounts", "capabilities", "get", "--account-id", alice.Id)
 	if capabilities.DirectText == nil || !*capabilities.DirectText {
 		t.Fatal("no actual direct text capability")
 	}
-	p.call(nil, "", "accounts", "list-contacts", "--account-id", alice.Id)
+	p.call(nil, "", "accounts", "contacts", "list", "--account-id", alice.Id)
 	var chat engineapi.Conversation
 	p.call(&chat, proofJSON(map[string]string{"accountId": alice.Id, "address": "bob@localhost"}), "conversations", "open", "--idempotency-key", proofID(), "--body-stdin")
 	marker := "CLI-proof-" + proofID()
@@ -415,7 +415,7 @@ func TestCLIDataOnlyXMPP(t *testing.T) {
 	queueKey := proofID()
 	queueBody := proofJSON(map[string]string{"originalText": marker + " cancelled"})
 	p.call(&queued, queueBody, "messages", "send", "--conversation-id", chat.Id, "--idempotency-key", queueKey, "--body-stdin")
-	cancelArgs := []string{"messages", "cancel-send", "--message-id", queued.Id, "--idempotency-key", proofID(), "--body-stdin"}
+	cancelArgs := []string{"messages", "outbox", "cancel", "--message-id", queued.Id, "--idempotency-key", proofID(), "--body-stdin"}
 	p.failure(4, proofJSON(map[string]string{"expectedRevisionId": proofID()}), cancelArgs...)
 	cancelArgs[len(cancelArgs)-2] = proofID()
 	p.call(&queued, proofJSON(map[string]string{"expectedRevisionId": queued.RevisionId}), cancelArgs...)
@@ -430,14 +430,14 @@ func TestCLIDataOnlyXMPP(t *testing.T) {
 	byteFailuresChecked := false
 	for _, kind := range []string{"video", "documents"} {
 		p.wait("shared-content indexing", func() bool {
-			p.call(&library, "", "shared-content", "list", "--type", kind, "--account-id", alice.Id)
+			p.call(&library, "", "shared", "content", "list", "--type", kind, "--account-id", alice.Id)
 			return library.Indexing.State == "complete" && len(library.Items) > 0
 		})
 		for _, item := range library.Items {
 			if !strings.Contains(item.Url, marker) {
 				continue
 			}
-			download := []string{"shared-content", "download", "--item-id", item.Id, "--output", "raw"}
+			download := []string{"shared", "content", "download", "--item-id", item.Id, "--output", "raw"}
 			if strings.HasSuffix(item.Url, ".docx") {
 				p.failure(4, "", download...)
 				continue
@@ -480,7 +480,7 @@ func TestCLIDataOnlyXMPP(t *testing.T) {
 	p.close()
 	p.start()
 	var restarted engineapi.Engine
-	p.call(&restarted, "", "system", "get-engine")
+	p.call(&restarted, "", "system", "engine", "get")
 	if restarted.Id != identity.Id {
 		t.Fatal("restart changed engine identity")
 	}

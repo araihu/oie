@@ -368,8 +368,8 @@ For automation against a loopback data API, build the server and generated CLI:
 ```sh
 make build build-cli
 bin/oie -role local -data-only -listen 127.0.0.1:18090 -data-dir ./data-cli
-bin/oiectl --server http://127.0.0.1:18090 --output json system get-engine
-bin/oiectl --server http://127.0.0.1:18090 --output json system check-health
+bin/oiectl --server http://127.0.0.1:18090 --output json system engine get
+bin/oiectl --server http://127.0.0.1:18090 --output json system health check
 ```
 
 Run the two CLI commands in another terminal while the engine is running.
@@ -388,21 +388,44 @@ See [the engine API policy](engine-api-policy.md) and
 
 Append `--help` to a group or command to see its options. Run
 `oiectl accounts avatars --help` to see both avatar commands.
+Subgroups use separate words, as in `conversations rooms join`.
 Commands use `get` for a single result, `list` for a collection,
 `download` for bytes and `request` to start work on the engine.
 Update scripts that use earlier command names to the names below.
 
 | Group | Commands |
 | --- | --- |
-| `accounts` | `connect`, `disconnect`, `get`, `get-capabilities`, `get-connection`, `get-history-status`, `list`, `list-contacts`, `register` |
+| `accounts` | `connect`, `disconnect`, `get`, `list`, `register` |
 | `accounts avatars` | `download`, `list` |
-| `conversations` | `get`, `get-details`, `get-read-state`, `get-room-session`, `join-room`, `leave-room`, `list`, `list-mention-candidates`, `mark-read`, `open`, `set-preferences` |
+| `accounts capabilities` | `get` |
+| `accounts connection` | `get` |
+| `accounts contacts` | `list` |
+| `accounts history` | `status` |
+| `conversations` | `get`, `list`, `open` |
+| `conversations details` | `get` |
+| `conversations mentions` | `list` |
+| `conversations preferences` | `set` |
+| `conversations reads` | `get`, `mark` |
+| `conversations rooms` | `join`, `leave`, `status` |
 | `events` | `stream` |
-| `messages` | `cancel-send`, `edit`, `get`, `get-context`, `get-edit-command`, `get-edit-target`, `get-latest-edit-target`, `get-reaction-command`, `get-reactions`, `get-sender-profile`, `get-star`, `list`, `list-reactions`, `list-revisions`, `list-star-states`, `list-starred`, `search`, `send`, `set-reactions`, `set-star` |
+| `messages` | `get`, `list`, `search`, `send` |
+| `messages authors` | `get` |
+| `messages context` | `get` |
+| `messages edits` | `get`, `submit` |
+| `messages edits targets` | `get`, `latest` |
+| `messages outbox` | `cancel` |
+| `messages reactions` | `get`, `list`, `set` |
+| `messages reactions commands` | `get` |
+| `messages revisions` | `list` |
+| `messages stars` | `get`, `list`, `set` |
+| `messages stars states` | `list` |
 | `operations` | `get` |
-| `previews` | `download-image`, `get`, `get-thumbnail`, `list`, `refresh`, `request-image`, `request-thumbnail` |
-| `shared-content` | `download`, `list` |
-| `system` | `check-health`, `get-engine` |
+| `previews` | `get`, `list`, `refresh` |
+| `previews images` | `download`, `request` |
+| `previews thumbnails` | `get`, `request` |
+| `shared content` | `download`, `list` |
+| `system engine` | `get` |
+| `system health` | `check` |
 
 List avatar metadata by account and use the returned `imageHash` to download
 the PNG.
@@ -412,11 +435,11 @@ bin/oiectl accounts avatars list --account-id ACCOUNT_UUID --output json
 bin/oiectl accounts avatars download --hash IMAGE_HASH --output raw > avatar.png
 ```
 
-`messages list-star-states` checks the star state of selected message IDs.
-`messages list-starred` returns the starred messages themselves.
+`messages stars states list` checks the star state of selected message IDs.
+`messages stars list` returns the starred messages themselves.
 
 Use `--output raw` for `events stream`, `accounts avatars download`,
-`previews download-image` and `shared-content download`. Use
-`previews request-image` to request retention of an original image on
+`previews images download` and `shared content download`. Use
+`previews images request` to request retention of an original image on
 the engine. The response contains the download state. The CLI also
 provides `help` and `completion`.
