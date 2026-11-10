@@ -56,7 +56,7 @@ test-race:
 check-generated:
 	sh scripts/check-generated.sh
 
-check: lint lint-go check-generated check-ci-tools
+check: lint lint-go check-generated check-ci-tools test-packaging
 	@test -z "$$(gofmt -l cmd internal api/spec.go tests tools/cmd)" || { echo 'Go formatting drift'; exit 1; }
 	GOWORK=off $(GO) vet ./...
 	GOWORK=off $(GO) -C cli vet ./...
@@ -101,7 +101,7 @@ dev-bridge: build-dev-bridge
 test-live-browser: build
 	sh scripts/test-live-browser.sh
 
-.PHONY: ci ci-check ci-desktop
+.PHONY: ci ci-check ci-desktop package-linux test-packaging
 ci:
 	sh tools/ci/run.sh all
 
@@ -110,6 +110,13 @@ ci-check:
 
 ci-desktop:
 	sh tools/ci/run.sh desktop
+
+package-linux:
+	sh tools/ci/run.sh release
+
+test-packaging:
+	sh -n scripts/install.sh scripts/package-desktop.sh
+	python3 -m unittest discover -s tests/packaging -p 'test_*.py'
 
 # Restart only the frontend/BFF. Run the engine separately to retain XMPP sessions.
 DEV_ENGINE_URL ?= http://127.0.0.1:18084

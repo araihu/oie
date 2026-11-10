@@ -36,13 +36,13 @@ type runner struct {
 }
 
 func main() {
-	mode := flag.String("mode", "checks", "checks, desktop, or all")
+	mode := flag.String("mode", "checks", "checks, desktop, release, or all")
 	source := flag.String("source", "", "materialized source directory")
 	artifacts := flag.String("artifacts", "", "host evidence directory")
 	limit := flag.Duration("timeout", 30*time.Minute, "overall execution deadline")
 	flag.Parse()
-	if (*mode != "checks" && *mode != "desktop" && *mode != "all") || *source == "" || *artifacts == "" || *limit <= 0 {
-		fmt.Fprintln(os.Stderr, "ci requires -mode checks|desktop|all, -source, -artifacts and a positive timeout")
+	if (*mode != "checks" && *mode != "desktop" && *mode != "release" && *mode != "all") || *source == "" || *artifacts == "" || *limit <= 0 {
+		fmt.Fprintln(os.Stderr, "ci requires -mode checks|desktop|release|all, -source, -artifacts and a positive timeout")
 		os.Exit(2)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -154,6 +154,9 @@ func (r runner) writeLog(name, stdout, stderr string) error {
 func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 	client := r.client
 	source := client.Host().Directory(sourcePath)
+	if mode == "release" {
+		return r.release(ctx, source)
+	}
 	if mode == "desktop" {
 		return r.desktop(ctx, source)
 	}
