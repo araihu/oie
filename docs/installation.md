@@ -368,7 +368,7 @@ For automation against a loopback data API, build the server and generated CLI:
 ```sh
 make build build-cli
 bin/oie -role local -data-only -listen 127.0.0.1:18090 -data-dir ./data-cli
-bin/oiectl --server http://127.0.0.1:18090 --output json system engine get
+bin/oiectl --server http://127.0.0.1:18090 --output json system engine
 bin/oiectl --server http://127.0.0.1:18090 --output json system health
 ```
 
@@ -388,44 +388,33 @@ See [the engine API policy](engine-api-policy.md) and
 
 Append `--help` to a group or command to see its options. Run
 `oiectl accounts avatars --help` to see both avatar commands.
-Subgroups use separate words, as in `conversations rooms join`.
-Commands use `get` for a single result, `list` for a collection,
-`download` for bytes and `request` to start work on the engine.
+Some reads end with the resource name, as in `system engine`. Subgroups
+with related actions include `accounts avatars` and `conversations rooms`.
+Commands that change state identify the action, as in `conversations
+preferences set` or `messages outbox cancel`.
 Update scripts that use earlier command names to the names below.
 
 | Group | Commands |
 | --- | --- |
-| `accounts` | `connect`, `disconnect`, `get`, `list`, `register` |
+| `accounts` | `capabilities`, `connect`, `connection`, `contacts`, `disconnect`, `get`, `history`, `list`, `register` |
 | `accounts avatars` | `download`, `list` |
-| `accounts capabilities` | `get` |
-| `accounts connection` | `get` |
-| `accounts contacts` | `list` |
-| `accounts history` | `status` |
-| `conversations` | `get`, `list`, `open` |
-| `conversations details` | `get` |
-| `conversations mentions` | `list` |
+| `conversations` | `details`, `get`, `list`, `mentions`, `open` |
 | `conversations preferences` | `set` |
 | `conversations reads` | `get`, `mark` |
 | `conversations rooms` | `join`, `leave`, `status` |
 | `events` | `stream` |
-| `messages` | `get`, `list`, `search`, `send` |
-| `messages authors` | `get` |
-| `messages context` | `get` |
+| `messages` | `authors`, `context`, `get`, `list`, `revisions`, `search`, `send` |
 | `messages edits` | `get`, `submit` |
 | `messages edits targets` | `get`, `latest` |
 | `messages outbox` | `cancel` |
-| `messages reactions` | `get`, `list`, `set` |
-| `messages reactions commands` | `get` |
-| `messages revisions` | `list` |
-| `messages stars` | `get`, `list`, `set` |
-| `messages stars states` | `list` |
+| `messages reactions` | `command`, `get`, `list`, `set` |
+| `messages stars` | `get`, `list`, `set`, `states` |
 | `operations` | `get` |
 | `previews` | `get`, `list`, `refresh` |
 | `previews images` | `download`, `request` |
 | `previews thumbnails` | `get`, `request` |
 | `shared content` | `download`, `list` |
-| `system` | `health` |
-| `system engine` | `get` |
+| `system` | `engine`, `health` |
 
 List avatar metadata by account and use the returned `imageHash` to download
 the PNG.
@@ -435,7 +424,7 @@ bin/oiectl accounts avatars list --account-id ACCOUNT_UUID --output json
 bin/oiectl accounts avatars download --hash IMAGE_HASH --output raw > avatar.png
 ```
 
-`messages stars states list` checks the star state of selected message IDs.
+`messages stars states` checks the star state of selected message IDs.
 `messages stars list` returns the starred messages themselves.
 
 Use `--output raw` for `events stream`, `accounts avatars download`,

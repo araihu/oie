@@ -62,7 +62,7 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 		t.Fatalf("JSON: %v %s", err, output)
 	}
 	registration := append([]byte(nil), output...)
-	output, err = run("", "accounts", "capabilities", "get", "--account-id", account.Id)
+	output, err = run("", "accounts", "capabilities", "--account-id", account.Id)
 	var capabilities engineapi.Capabilities
 	if err != nil || json.Unmarshal(output, &capabilities) != nil || capabilities.Discovery.State != "not_connected" || len(capabilities.Features) == 0 || len(capabilities.Discovery.Services) != 0 {
 		t.Fatalf("CLI capability diagnostics: %v %s", err, output)
@@ -70,7 +70,7 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err = engine.ContactsReceived(t.Context(), domain.ID(account.Id), []application.ContactInput{{Address: "bob@localhost", DisplayName: "Generated Café", Subscription: "none"}}); err != nil {
 		t.Fatal(err)
 	}
-	output, err = run("", "accounts", "contacts", "list", "--q", "cafe", "--account-id", account.Id)
+	output, err = run("", "accounts", "contacts", "--q", "cafe", "--account-id", account.Id)
 	var contacts engineapi.ContactPage
 	if err != nil || json.Unmarshal(output, &contacts) != nil || len(contacts.Items) != 1 || contacts.Items[0].Address != "bob@localhost" || contacts.Items[0].AccountId != account.Id || len(contacts.Sources) != 1 || contacts.Sources[0].State != "known" {
 		t.Fatalf("CLI saved contacts: %v %s", err, output)
@@ -161,12 +161,12 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err != nil || json.Unmarshal(output, &search) != nil || len(search.Items) != 1 || search.Items[0].Message.Id != message.Id || search.Items[0].Historical || search.Items[0].Message.SendState != "cancelled" || !search.IncludeEditHistory {
 		t.Fatalf("CLI retained content search: %v %s", err, output)
 	}
-	output, err = run("", "messages", "context", "get", "--conversation-id", conversation.Id, "--message-id", message.Id, "--limit", "1")
+	output, err = run("", "messages", "context", "--conversation-id", conversation.Id, "--message-id", message.Id, "--limit", "1")
 	var window engineapi.MessageContext
 	if err != nil || json.Unmarshal(output, &window) != nil || window.TargetId != message.Id || len(window.Items) != 1 || window.HasOlder || window.HasNewer {
 		t.Fatalf("CLI bounded source context: %v %s", err, output)
 	}
-	output, err = run("", "conversations", "details", "get", "--conversation-id", conversation.Id)
+	output, err = run("", "conversations", "details", "--conversation-id", conversation.Id)
 	var details engineapi.ConversationDetails
 	if err != nil || json.Unmarshal(output, &details) != nil || details.ConversationId != conversation.Id || details.AccountId != account.Id || details.State != "not_connected" {
 		t.Fatalf("CLI scoped details: %v %s", err, output)

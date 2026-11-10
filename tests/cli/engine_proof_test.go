@@ -164,7 +164,7 @@ func (p *cliProof) wait(label string, fn func() bool) {
 func (p *cliProof) connection(account, state string) {
 	p.wait("connection "+state, func() bool {
 		var c engineapi.Connection
-		p.call(&c, "", "accounts", "connection", "get", "--account-id", account)
+		p.call(&c, "", "accounts", "connection", "--account-id", account)
 		return string(c.State) == state
 	})
 }
@@ -289,7 +289,7 @@ func TestCLIDataOnlyXMPP(t *testing.T) {
 	}
 	p := newCLIProof(t)
 	var identity engineapi.Engine
-	p.call(&identity, "", "system", "engine", "get")
+	p.call(&identity, "", "system", "engine")
 	p.call(nil, "", "system", "health")
 	var alice, bob engineapi.Account
 	for _, entry := range []struct {
@@ -301,11 +301,11 @@ func TestCLIDataOnlyXMPP(t *testing.T) {
 	p.connect(alice.Id, "alice-local-only")
 	p.connect(bob.Id, "bob-local-only")
 	var capabilities engineapi.Capabilities
-	p.call(&capabilities, "", "accounts", "capabilities", "get", "--account-id", alice.Id)
+	p.call(&capabilities, "", "accounts", "capabilities", "--account-id", alice.Id)
 	if capabilities.DirectText == nil || !*capabilities.DirectText {
 		t.Fatal("no actual direct text capability")
 	}
-	p.call(nil, "", "accounts", "contacts", "list", "--account-id", alice.Id)
+	p.call(nil, "", "accounts", "contacts", "--account-id", alice.Id)
 	var chat engineapi.Conversation
 	p.call(&chat, proofJSON(map[string]string{"accountId": alice.Id, "address": "bob@localhost"}), "conversations", "open", "--idempotency-key", proofID(), "--body-stdin")
 	marker := "CLI-proof-" + proofID()
@@ -480,7 +480,7 @@ func TestCLIDataOnlyXMPP(t *testing.T) {
 	p.close()
 	p.start()
 	var restarted engineapi.Engine
-	p.call(&restarted, "", "system", "engine", "get")
+	p.call(&restarted, "", "system", "engine")
 	if restarted.Id != identity.Id {
 		t.Fatal("restart changed engine identity")
 	}

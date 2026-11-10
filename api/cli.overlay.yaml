@@ -15,19 +15,16 @@ actions:
       x-cli-name: list
   - target: $.paths['/api/v1/accounts/{accountId}/capabilities'].get
     update:
-      x-cli-group: [accounts, capabilities]
-      x-cli-name: get
+      x-cli-name: capabilities
   - target: $.paths['/api/v1/accounts/{accountId}/connection'].put
     update:
       x-cli-name: connect
   - target: $.paths['/api/v1/accounts/{accountId}/connection'].get
     update:
-      x-cli-group: [accounts, connection]
-      x-cli-name: get
+      x-cli-name: connection
   - target: $.paths['/api/v1/contacts'].get
     update:
-      x-cli-group: [accounts, contacts]
-      x-cli-name: list
+      x-cli-name: contacts
   - target: $.paths['/api/v1/accounts/{accountId}/connection'].delete
     update:
       x-cli-name: disconnect
@@ -36,8 +33,7 @@ actions:
       x-cli-name: get
   - target: $.paths['/api/v1/accounts/{accountId}/history'].get
     update:
-      x-cli-group: [accounts, history]
-      x-cli-name: status
+      x-cli-name: history
   - target: $.paths['/api/v1/accounts'].get
     update:
       x-cli-name: list
@@ -47,8 +43,7 @@ actions:
   # conversations
   - target: $.paths['/api/v1/conversations/{conversationId}/details'].get
     update:
-      x-cli-group: [conversations, details]
-      x-cli-name: get
+      x-cli-name: details
   - target: $.paths['/api/v1/conversations/{conversationId}'].get
     update:
       x-cli-name: get
@@ -69,8 +64,7 @@ actions:
       x-cli-name: mark
   - target: $.paths['/api/v1/conversations/{conversationId}/mention-candidates'].get
     update:
-      x-cli-group: [conversations, mentions]
-      x-cli-name: list
+      x-cli-name: mentions
   - target: $.paths['/api/v1/conversations'].post
     update:
       x-cli-name: open
@@ -98,8 +92,7 @@ actions:
       x-cli-name: cancel
   - target: $.paths['/api/v1/conversations/{conversationId}/messages/{messageId}/context'].get
     update:
-      x-cli-group: [messages, context]
-      x-cli-name: get
+      x-cli-name: context
   - target: $.paths['/api/v1/conversations/{conversationId}/reactions'].get
     update:
       x-cli-group: [messages, reactions]
@@ -114,8 +107,7 @@ actions:
       x-cli-name: get
   - target: $.paths['/api/v1/messages/{messageId}/edit-history'].get
     update:
-      x-cli-group: [messages, revisions]
-      x-cli-name: list
+      x-cli-name: revisions
   - target: $.paths['/api/v1/messages/{messageId}/edit-target'].get
     update:
       x-cli-group: [messages, edits, targets]
@@ -132,8 +124,8 @@ actions:
       x-cli-name: list
   - target: $.paths['/api/v1/message-reaction-commands/{commandId}'].get
     update:
-      x-cli-group: [messages, reactions, commands]
-      x-cli-name: get
+      x-cli-group: [messages, reactions]
+      x-cli-name: command
   - target: $.paths['/api/v1/messages/{messageId}/reactions'].get
     update:
       x-cli-group: [messages, reactions]
@@ -146,8 +138,7 @@ actions:
       x-cli-name: send
   - target: $.paths['/api/v1/messages/{messageId}/sender-profile'].get
     update:
-      x-cli-group: [messages, authors]
-      x-cli-name: get
+      x-cli-name: authors
   - target: $.paths['/api/v1/messages/{messageId}/reactions'].post
     update:
       x-cli-group: [messages, reactions]
@@ -166,8 +157,8 @@ actions:
       x-cli-name: list
   - target: $.paths['/api/v1/conversations/{conversationId}/message-stars'].get
     update:
-      x-cli-group: [messages, stars, states]
-      x-cli-name: list
+      x-cli-group: [messages, stars]
+      x-cli-name: states
   # operations
   - target: $.paths['/api/v1/operations/{operationId}'].get
     update:
@@ -212,8 +203,7 @@ actions:
   # system
   - target: $.paths['/api/v1/engine'].get
     update:
-      x-cli-group: [system, engine]
-      x-cli-name: get
+      x-cli-name: engine
   - target: $.paths['/api/v1/health'].get
     update:
       x-cli-name: health

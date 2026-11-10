@@ -110,7 +110,7 @@ The source contract is [api/openapi.yaml](api/openapi.yaml), also served at
 
 ```sh
 bin/oiectl system health
-bin/oiectl system engine get --output json
+bin/oiectl system engine --output json
 printf '%s\n' '{"protocol":"xmpp","address":"alice@localhost","label":"Personal"}' |
   bin/oiectl accounts register \
     --idempotency-key 019a5df0-0000-7000-8000-000000000004 \
@@ -154,7 +154,7 @@ stdin and are never included in account reads or operation receipts:
 ```sh
 printf '%s\n' '{"password":"alice-local-only","endpoint":"localhost:5222"}' |
   bin/oiectl accounts connect --account-id ACCOUNT_UUID --body-stdin
-bin/oiectl accounts connection get --account-id ACCOUNT_UUID
+bin/oiectl accounts connection --account-id ACCOUNT_UUID
 printf '%s\n' '{"accountId":"ACCOUNT_UUID","address":"bob@localhost"}' |
   bin/oiectl conversations open \
     --idempotency-key 019a5df0-0000-7000-8000-000000000005 --body-stdin

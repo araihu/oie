@@ -118,11 +118,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-cli-group": [
-          "accounts",
-          "contacts"
-        ],
-        "x-cli-name": "list"
+        "x-cli-name": "contacts"
       }
     },
     "/api/v1/messages/search": {
@@ -813,11 +809,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-cli-group": [
-          "messages",
-          "context"
-        ],
-        "x-cli-name": "get"
+        "x-cli-name": "context"
       }
     },
     "/api/v1/messages/{messageId}/star": {
@@ -1120,10 +1112,9 @@
         },
         "x-cli-group": [
           "messages",
-          "stars",
-          "states"
+          "stars"
         ],
-        "x-cli-name": "list"
+        "x-cli-name": "states"
       }
     },
     "/api/v1/starred-messages": {
@@ -1558,11 +1549,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-cli-group": [
-          "system",
-          "engine"
-        ],
-        "x-cli-name": "get"
+        "x-cli-name": "engine"
       }
     },
     "/api/v1/accounts": {
@@ -1984,11 +1971,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-cli-group": [
-          "accounts",
-          "history"
-        ],
-        "x-cli-name": "status"
+        "x-cli-name": "history"
       }
     },
     "/api/v1/accounts/{accountId}/capabilities": {
@@ -2035,11 +2018,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-cli-group": [
-          "accounts",
-          "capabilities"
-        ],
-        "x-cli-name": "get"
+        "x-cli-name": "capabilities"
       }
     },
     "/api/v1/operations/{operationId}": {
@@ -2179,11 +2158,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-cli-group": [
-          "accounts",
-          "connection"
-        ],
-        "x-cli-name": "get"
+        "x-cli-name": "connection"
       },
       "put": {
         "operationId": "configureAccountConnection",
@@ -2788,11 +2763,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-cli-group": [
-          "conversations",
-          "mentions"
-        ],
-        "x-cli-name": "list"
+        "x-cli-name": "mentions"
       }
     },
     "/api/v1/conversations/{conversationId}/details": {
@@ -2836,11 +2807,7 @@
             "$ref": "#/components/responses/NotFound"
           }
         },
-        "x-cli-group": [
-          "conversations",
-          "details"
-        ],
-        "x-cli-name": "get"
+        "x-cli-name": "details"
       }
     },
     "/api/v1/conversations/{conversationId}": {
@@ -3441,10 +3408,9 @@
         },
         "x-cli-group": [
           "messages",
-          "reactions",
-          "commands"
+          "reactions"
         ],
-        "x-cli-name": "get"
+        "x-cli-name": "command"
       }
     },
     "/api/v1/messages/{messageId}/edit-target": {
@@ -3764,11 +3730,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-cli-group": [
-          "messages",
-          "revisions"
-        ],
-        "x-cli-name": "list"
+        "x-cli-name": "revisions"
       }
     },
     "/api/v1/messages/{messageId}/sender-profile": {
@@ -3825,11 +3787,7 @@
             "$ref": "#/components/responses/NotFound"
           }
         },
-        "x-cli-group": [
-          "messages",
-          "authors"
-        ],
-        "x-cli-name": "get"
+        "x-cli-name": "authors"
       }
     },
     "/api/v1/messages/{messageId}": {
