@@ -45,15 +45,50 @@ def painted_frame(path):
     subprocess.run(["scrot", "--overwrite", str(path)], check=True)
     data = path.read_bytes()
     require(data[:8] == b"\x89PNG\r\n\x1a\n", "screen capture is not PNG")
+    width, height, depth, kind, _, _, interlace = struct.unpack(">IIBBBBB", data[16:29])
+    require(depth == 8 and kind in (2, 6) and interlace == 0, "unexpected screenshot PNG format")
     offset, compressed = 8, []
     while offset + 12 <= len(data):
         size = struct.unpack(">I", data[offset:offset + 4])[0]
         if data[offset + 4:offset + 8] == b"IDAT":
             compressed.append(data[offset + 8:offset + 8 + size])
         offset += size + 12
-    # A mapped GTK window precedes WebKit's first paint. The disposable Xvfb
-    # screen is otherwise black; require rendered pixel variation before Quit.
-    return len(set(zlib.decompress(b"".join(compressed)))) >= 64
+    # A native menu can paint before HTML and CSS. Require the approved blue
+    # brand in the upper app viewport, not merely a mapped/white GTK window.
+    raw = zlib.decompress(b"".join(compressed))
+    channels = 3 if kind == 2 else 4
+    stride = width * channels
+    previous = bytearray(stride)
+    matches = 0
+    for y in range(min(height, 320)):
+        position = y * (stride + 1)
+        mode = raw[position]
+        row = bytearray(raw[position + 1:position + 1 + stride])
+        for x in range(stride):
+            left = row[x - channels] if x >= channels else 0
+            up = previous[x]
+            corner = previous[x - channels] if x >= channels else 0
+            if mode == 1:
+                predictor = left
+            elif mode == 2:
+                predictor = up
+            elif mode == 3:
+                predictor = (left + up) // 2
+            elif mode == 4:
+                value = left + up - corner
+                distances = (abs(value - left), abs(value - up), abs(value - corner))
+                predictor = (left, up, corner)[distances.index(min(distances))]
+            else:
+                require(mode == 0, "invalid PNG filter")
+                predictor = 0
+            row[x] = (row[x] + predictor) & 255
+        for x in range(0, stride, channels):
+            if abs(row[x] - 96) <= 8 and abs(row[x + 1] - 146) <= 8 and abs(row[x + 2] - 171) <= 8:
+                matches += 1
+                if matches >= 32:
+                    return True
+        previous = row
+    return False
 
 
 def main():
