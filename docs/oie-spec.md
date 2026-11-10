@@ -82,9 +82,11 @@ engine and HTMX BFF. The stable native origin preserves drafts across launches;
 the host adapts cookies, native file saving, external links, close-to-hide and
 explicit Quit. The browser/server command remains available. Build and scope
 details are in [desktop integration](desktop.md). The source tag v0.0.1-rc.0
-records this behavior; B25 is not implemented by that tag. Release archives,
-application bundles, the release installer and the v0.0.1 alpha are not published
-by this integration milestone.
+records this behavior; B25 is not implemented by that tag. The subsequent
+packaging increment publishes rc.0 archives and a per-user shell installer for
+macOS Apple Silicon and Ubuntu Linux x86_64. The original tag remains fixed;
+packaging-tooling provenance and validation scope are recorded separately in
+the release receipt. The v0.0.1 alpha has not been published.
 
 **AGREED:** default to installation for the current OS user. On Ubuntu, check
 for missing runtime dependencies and show the required installation commands;
@@ -109,10 +111,18 @@ should not silently remove quarantine attributes or disable Gatekeeper.
 
 **RECOMMENDED:** publish simple archives, with a macOS `.app` bundle and a Linux
 executable plus desktop resources. Verify release checksums and support selecting
-a pinned release. Exact archive layout and installer flags remain to be defined.
+a pinned release.
 
-**OPEN:** the minimum Ubuntu/macOS versions, exact installation paths and launch
-behavior, uninstall behavior and packaging CI/test coverage. The
+**IMPLEMENTED:** rc.0 uses a macOS `Oie.app` archive and a Linux `bin`/`share`
+archive. `install.sh --version VERSION --prefix DIR` verifies SHA-256 before
+installation. Defaults are `~/Applications/Oie.app` on macOS and `~/.local` on
+Linux. Updates preserve the separate data directory. The installer checks
+runtime dependencies without installing them and rejects unsafe archive paths.
+Native package checks cover installation, launch, engine initialization and
+reinstallation with retained data. See [installation](installation.md) for the
+exact assets, dependencies, removal procedure and tested environments.
+
+**OPEN:** the minimum Ubuntu/macOS versions beyond the tested environments. The
 available development environment reports Ubuntu 26.04; this does not establish
 the supported minimum version. Native routing, CSRF, SSE and partial media reads
 have desktop smoke coverage. Separate custom profiles on macOS still share

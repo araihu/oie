@@ -9,10 +9,9 @@ requires the [initial-history usability improvement B25](history-bootstrap-discu
 which is not implemented in rc.0. Its current history recovery is accepted for
 this release candidate.
 
-**Publication and packaged runtime verification are pending.** The release
-commands below describe the prepared assets and will work after they are
-published to [v0.0.1-rc.0 on GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.0).
-Source installation from the existing tag remains available now.
+Download packages and the installer from
+[v0.0.1-rc.0 on GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.0).
+Source installation from the same immutable tag remains available.
 
 ## Install a release package
 
@@ -59,7 +58,7 @@ sh ./oie-install.sh --version v0.0.1-rc.0 --prefix "$HOME/Apps/Oie desktop"
 sh ./oie-install.sh --help
 ```
 
-The planned release assets are:
+The release assets are:
 
 | Asset | Contents |
 | --- | --- |
@@ -87,8 +86,8 @@ desktop icon variants are backlog B24.
 
 | Target | Current evidence |
 | --- | --- |
-| macOS Apple Silicon, `darwin/arm64` | Source installation and native WebView checks passed on macOS 26.6.2 with SDK 26.5 and Go 1.27.3. Final packaged-app installation/runtime verification is pending. |
-| Ubuntu 24.04 x86_64, `linux/amd64` | Native build and WebView checks passed in the amd64 CI lane under emulation. Final archive installation in a runtime-only image is pending. A separate user's source-install retry after adding development packages is still unconfirmed. |
+| macOS Apple Silicon, `darwin/arm64` | The actual ad-hoc signed archive installed into a path containing spaces on macOS 26.6.2. LaunchServices opened the bundle and initialized SQLite. Reinstallation preserved the profile and signature. Built with SDK 26.5 and Go 1.27.3. |
+| Ubuntu 24.04 x86_64, `linux/amd64` | The actual amd64 archive installed and displayed the Oiê interface in a fresh Ubuntu 24.04 runtime container under emulation, without Go, a compiler or development headers. Ctrl+Q exited cleanly. Reinstallation preserved SQLite identity and retained files. |
 
 These are test environments, not a promised minimum OS version. Other Linux
 distributions need matching GTK 4, WebKitGTK 6 and libsoup 3 libraries, plus a

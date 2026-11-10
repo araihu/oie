@@ -33,9 +33,15 @@ notarization. Its current flat icon remains unchanged for rc.0; icon variants
 are B24. Linux's desktop entry uses absolute escaped executable and icon paths
 for the selected prefix.
 
-Final production-package runtime checks and publication are pending. The native
-source/build evidence below does not substitute for installing and launching
-the exact release archives. See [rc.0 release notes](releases/v0.0.1-rc.0.md).
+The published archives passed installation and reinstallation with retained
+SQLite identity and user files. On native Apple Silicon, LaunchServices opened
+the installed signed bundle and initialized the engine. In an Ubuntu 24.04
+amd64 runtime container under emulation, the installed production executable
+painted the Oiê interface and exited through Ctrl+Q. That container had runtime
+libraries and an Xvfb test harness, with no Go, compiler or development headers.
+The package checks use disposable profiles and do not connect real XMPP accounts.
+The [installation guide](installation.md#platforms-and-verified-scope) and
+[rc.0 release notes](releases/v0.0.1-rc.0.md) describe platform limits.
 
 ## Runtime options
 

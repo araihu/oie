@@ -14,6 +14,24 @@ golangci-lint, vet, race tests and an actual WebView smoke run there. Xvfb,
 a private D-Bus session and xdotool exercise the native Save/Cancel chooser.
 See [desktop verification](desktop.md#verification).
 
+Release packaging has its own `make package-linux` Dagger lane. It obtains the
+application tree from the selected immutable tag, then uses current packaging
+tooling to build on Ubuntu 24.04 amd64. A separate runtime container installs
+the actual archive with no Go, compiler or development headers. It waits for
+the branded WebView content, initializes SQLite, quits through Ctrl+Q and
+reinstalls while preserving the profile. The installer fixture suite covers
+platform selection, checksums, unsafe archives, dependency checks, escaped paths
+and update rollback. `make check` includes these 27 installer cases.
+
+The rc.0 archive lane passed with packaging revision
+`6711a951c4343bf81e9a6c9c4bf4f913fb255056` and application source
+`e8ffe5d0d924727478b8a5cbe3567a4240d7ae48`. Logs, the painted production window,
+archive and source receipt are under
+`tests/browser/artifacts/ci-rc0-packaging-painted`. The native macOS bundle
+installation, LaunchServices launch, signature and retained-profile checks
+passed under `tests/desktop/artifacts/rc0-packaged-macos`. These package checks
+use isolated profiles; they do not replace messaging integration coverage.
+
 `make check` remains independent of native libraries through the `server` build
 tag. Desktop targets clear that tag. The Ubuntu desktop container explicitly
 sets `GOPATH=/go` to use the mounted module cache; copying the Go toolchain alone
@@ -34,7 +52,9 @@ lint, race tests, builds, the Ubuntu 24.04 amd64 desktop/WebView lane, isolated
 XMPP integration and all 43 browser workflows including the real-engine flow.
 Evidence is under `tests/browser/artifacts/ci-wails-release-ready`, with the
 exact materialized source hashes in `source-snapshot.json` and the final result
-in `integration-receipt.json`. Subsequent source changes are documentation only.
+in `integration-receipt.json`. Subsequent application changes for the rc.0 tag
+are documentation only; later packaging and installer tooling has the separate
+validation described above.
 
 Checks took 24s, desktop dependency setup 4m36s, native build/lint/race 6m35s,
 native WebView 58s, XMPP 50s and browser checks 10m49s. Native amd64 execution
