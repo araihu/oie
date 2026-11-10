@@ -442,6 +442,8 @@ Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screen
 
 **AGREED:** clicking a message author avatar opens a user-information drawer without replacing the conversation. Show available name, cached avatar, account and conversation context. Direct peers may show observed presence. Room nicknames do not prove a personal identity or current presence; richer room profiles require explicit protocol identity evidence. Show the published full name, nickname and personal user@host address separately when available. Personal addresses for room authors must come from authenticated message-time protocol evidence, never a same-name current occupant or self-declared vCard JABBERID. Retain that evidence across restart and duplicate archive recovery without changing message content or edit history; contradictory addresses suppress identity. Opening the drawer makes no contact, presence-subscription, read-state or room-session changes.
 
+**AGREED:** show a reaction shortcut beside the message bubble on hover and keyboard focus, on the right of received messages and the left of sent messages. Existing reactions use a compact capsule slightly overlapping the bubble's bottom border. Opening its summary and filtering by emoji are read-only actions. Clicking the capsule lists verified actors with name, cached avatar or initials and their emoji set. Emoji filters narrow that list. Own emoji actions remove only the current account's reaction. Show participant identities only when the API provides authoritative identity data. On touch devices, double-tapping a message opens the reaction selector; holding opens the existing message actions. Scrolling, canceled touches and navigation must cancel pending gestures without affecting the composer or sending a reaction. Preserve native links and playback controls. See [reaction interactions](reaction-interactions.md).
+
 **AGREED:** ordinary in-app navigation and filtering should use HTMX fragment swaps rather than full-document reloads. Selecting a conversation within the same inbox replaces only the conversation region, preserving the navigation and conversation-list DOM, unfinished search input and list scroll. Preserve addressable URLs, browser Back/Forward, account/conversation isolation, drafts and meaningful focus/scroll. Keep native links/forms as a fallback. Dispose obsolete listeners, timers and live subscriptions when a fragment replaces their owning screen; stale responses must not overwrite a newer screen or repeat a mutation.
 
 Alpha is responsive: on phones, show one primary panel at a time with access to the other views. The screenshots do not require native window controls or add stories, calls, AI, communities, or recording features.
@@ -862,7 +864,7 @@ payloads or structured mentions requires a later implementation increment.
 
 ### Message reaction sets increment
 
-**IMPLEMENTATION SCOPE:** API 0.26 reads retained reaction snapshots for a bounded
+**IMPLEMENTATION SCOPE:** API 0.27 reads retained reaction snapshots for a bounded
 message page and accepts full own-set replacement or removal through a separate
 durable command. Its precondition guards the current account's reaction revision;
 other actors' updates do not invalidate it. Reactions preserve source UUID,
@@ -884,8 +886,11 @@ Restart converts interrupted dispatch to Unknown. A changed sending session fail
 the frozen command rather than rebinding it. Verified provider rejection removes
 the rejected set without replacing a newer own update.
 
-The interface shows counts and own selection, with a searchable localized emoji
-picker. Clicking an own reaction removes it. A protocol maximum of one makes a
+The interface shows counts, verified actor names and cached avatars, plus own
+selection and a searchable localized emoji picker. The actor list uses the same
+canonical observations as the totals and never resolves identities from room
+nicknames. Its own-emoji actions remove that emoji after a fresh scoped check;
+cleared stale selections never become additions. Clicking an own reaction removes it. A protocol maximum of one makes a
 different choice replace the old reaction. The implementation bounds each set to
 eight emojis and honors observed allowlists and smaller limits. This bound is not
 an agreed cardinality rule for every protocol. Pending indicators and recovery

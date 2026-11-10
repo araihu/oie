@@ -13,6 +13,24 @@ import (
 
 type reactionHTTPProtocol struct{ protocolStub }
 
+func TestReactionContractDistinguishesActorsFromClearCommands(t *testing.T) {
+	doc, err := engineapi.GetSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := doc.Components.Schemas["ReactionActor"].Value.Properties["emojis"].Value
+	command := doc.Components.Schemas["SetMessageReactions"].Value.Properties["emojis"].Value
+	if err := actor.VisitJSON([]any{}); err == nil {
+		t.Fatal("an actor with an empty reaction set passed the contract")
+	}
+	if err := actor.VisitJSON([]any{"👍"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := command.VisitJSON([]any{}); err != nil {
+		t.Fatalf("clearing own reactions must remain valid: %v", err)
+	}
+}
+
 func (p *reactionHTTPProtocol) PrepareReaction(_ context.Context, a domain.Account, _ domain.Conversation, m domain.Message) (domain.OutgoingReaction, error) {
 	return domain.OutgoingReaction{
 		TargetMessageID: m.ID, Actor: a.Address, SessionID: "http-reactions",
@@ -89,6 +107,9 @@ func TestReactionHTTPSetClearReceiptsAndSourceIsolation(t *testing.T) {
 	current, err := client.GetMessageReactionsWithResponse(ctx, string(original.ID))
 	if err != nil || current.JSON200 == nil || current.JSON200.OwnRevisionId == nil || len(current.JSON200.Items) != 2 || len(current.JSON200.OwnEmojis) != 2 {
 		t.Fatal("submitted own set missing", current, err)
+	}
+	if current.JSON200.Actors == nil || len(*current.JSON200.Actors) != 1 || !(*current.JSON200.Actors)[0].Own || len((*current.JSON200.Actors)[0].Emojis) != 2 {
+		t.Fatal("verified own actor missing from HTTP snapshot", current.JSON200)
 	}
 	for _, item := range current.JSON200.Items {
 		if !item.Own || item.Count != 1 {

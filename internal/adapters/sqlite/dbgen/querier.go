@@ -115,6 +115,7 @@ type Querier interface {
 	PutMessageStar(ctx context.Context, arg PutMessageStarParams) error
 	PutRoomIntent(ctx context.Context, arg PutRoomIntentParams) error
 	PutSharedContent(ctx context.Context, arg PutSharedContentParams) error
+	ReactionActorProfile(ctx context.Context, arg ReactionActorProfileParams) (ReactionActorProfileRow, error)
 	ReactionObservationsForTargets(ctx context.Context, arg ReactionObservationsForTargetsParams) ([]ReactionObservationsForTargetsRow, error)
 	ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error
 	RecordOriginalTransmission(ctx context.Context, id string) error

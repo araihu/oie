@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.26.0",
+    "version": "0.27.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.",
     "contact": {
       "name": "Arai Hû",
@@ -5707,6 +5707,62 @@
           }
         }
       },
+      "ReactionActorEmojiSet": {
+        "type": "array",
+        "description": "A verified actor's latest nonempty set of distinct emoji graphemes.",
+        "minItems": 1,
+        "maxItems": 8,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "example": "👍"
+        },
+        "example": [
+          "👍"
+        ]
+      },
+      "ReactionActor": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "One verified actor's latest nonempty set, with a retained display name and optional cached avatar. Identity is scoped to the snapshot account and conversation. Reading never discovers or links identities.",
+        "required": [
+          "address",
+          "displayName",
+          "own",
+          "emojis"
+        ],
+        "properties": {
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1023,
+            "description": "Protocol-verified actor address, never inferred from a nickname.",
+            "example": "alice@example.test"
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1023,
+            "description": "Active contact name, observed actor name, or address fallback.",
+            "example": "Alice"
+          },
+          "avatarHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "Cached avatar PNG SHA-256, resolved only for this verified address in the same account.",
+            "example": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "own": {
+            "type": "boolean",
+            "example": true
+          },
+          "emojis": {
+            "$ref": "#/components/schemas/ReactionActorEmojiSet"
+          }
+        }
+      },
       "MessageReactions": {
         "type": "object",
         "example": {
@@ -5757,6 +5813,14 @@
             "example": [],
             "items": {
               "$ref": "#/components/schemas/ReactionItem"
+            }
+          },
+          "actors": {
+            "type": "array",
+            "description": "Complete retained actor sets matching the emoji totals. Optional for compatibility with engines before API 0.27; current engines always include it, including an empty array. Empty sets and conflicting observations are omitted.",
+            "example": [],
+            "items": {
+              "$ref": "#/components/schemas/ReactionActor"
             }
           },
           "eligible": {

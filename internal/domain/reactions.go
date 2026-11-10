@@ -17,10 +17,17 @@ type ReactionItem struct {
 	Count int
 	Own   bool
 }
+type ReactionActor struct {
+	Address, DisplayName, AvatarHash string
+	Own                              bool
+	Emojis                           []string
+}
+
 type MessageReactions struct {
 	MessageID, AccountID, ConversationID, RevisionID, OwnRevisionID ID
 	OwnEmojis                                                       []string
 	Items                                                           []ReactionItem
+	Actors                                                          []ReactionActor
 	Eligible                                                        bool
 	Reason                                                          string
 	MaxEmojis                                                       int

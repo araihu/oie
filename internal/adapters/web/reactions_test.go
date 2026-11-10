@@ -132,3 +132,38 @@ func TestReactionAllowlistIsIndependentOfSelectionLimit(t *testing.T) {
 		t.Fatal("unverifiedownchipaccepted")
 	}
 }
+
+func TestReactionActorSnapshotValidation(t *testing.T) {
+	actors := []engineapi.ReactionActor{{Address: "alice@localhost", DisplayName: "Alice", Own: true, Emojis: []string{"👍"}}, {Address: "bob@localhost", DisplayName: "Bob <img>", Emojis: []string{"👍"}}}
+	valid := engineapi.MessageReactions{MessageId: testMessage, AccountId: testAccount, ConversationId: testChat, OwnEmojis: []string{"👍"}, Items: []engineapi.ReactionItem{{Emoji: "👍", Count: 2, Own: true}}, Actors: &actors, Eligible: true, MaxEmojis: 8}
+	if !validReactions(valid, testAccount, testChat, testMessage) {
+		t.Fatal("valid verified actor roster rejected")
+	}
+	for name, mutate := range map[string]func(*engineapi.MessageReactions){
+		"duplicate actor": func(s *engineapi.MessageReactions) { (*s.Actors)[1].Address = (*s.Actors)[0].Address },
+		"foreign avatar URL": func(s *engineapi.MessageReactions) {
+			url := "https://untrusted.example/avatar"
+			(*s.Actors)[1].AvatarHash = &url
+		},
+		"count mismatch": func(s *engineapi.MessageReactions) { s.Items[0].Count = 3 },
+		"forged own":     func(s *engineapi.MessageReactions) { (*s.Actors)[1].Own = true },
+		"empty set":      func(s *engineapi.MessageReactions) { (*s.Actors)[1].Emojis = []string{} },
+		"control name":   func(s *engineapi.MessageReactions) { (*s.Actors)[1].DisplayName = "Bob\x00" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			data, _ := json.Marshal(valid)
+			var snapshot engineapi.MessageReactions
+			if err := json.Unmarshal(data, &snapshot); err != nil {
+				t.Fatal(err)
+			}
+			mutate(&snapshot)
+			if validReactions(snapshot, testAccount, testChat, testMessage) {
+				t.Fatal("untrusted actor projection accepted")
+			}
+		})
+	}
+	valid.Actors = nil
+	if !validReactions(valid, testAccount, testChat, testMessage) {
+		t.Fatal("older engine snapshot lost compatibility")
+	}
+}
