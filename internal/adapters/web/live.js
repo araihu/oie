@@ -5,7 +5,7 @@ window.OieRuntime.register('live', life => {
   const labels = document.querySelector('#oie-live-copy')?.dataset || {};
   const text = key => labels[key] || '';
   const status = document.querySelector('[data-live-status]');
-  const announce = (message, quiet = false) => { if (status) { status.textContent = message; status.hidden = quiet; } };
+  const announce = (message, quiet = false) => { if (status) { status.textContent = message; status.hidden = quiet || !message; } };
   const mock = body.dataset.mock === 'true';
   const csrf = document.querySelector('meta[name="oie-csrf"]')?.content || '';
   let pendingRequests = 0, refreshTimer, refreshing = false, refreshAgain = false;
@@ -54,6 +54,7 @@ window.OieRuntime.register('live', life => {
   const editBox=composer?.querySelector('[data-composer-edit]'),editFeedback=editBox?.querySelector('[data-edit-feedback]'),editRecovery=editBox?.querySelector('[data-edit-recovery]'),lastEditStatus=composer?.querySelector('[data-edit-last-status]');
   const editKey=draftKey?draftKey.replace('oie.draft.v1','oie.correction.v1'):'';
   const lastEditKey=editKey?editKey.replace('oie.correction.v1','oie.correction-receipt.v1'):'';
+  const announceEdit=message=>{const region=composer?.querySelector('[data-edit-announcement]');if(region)region.textContent=message;};
   const editText=key=>editBox?.dataset['edit'+key[0].toUpperCase()+key.slice(1)]||'';
   let editSession=null,editPreparing=false,editBusy=false,editEpoch=0,editPoll=0,editComposing=false,editStorageDenied=false,lastEditReceipt=null,lastEditChecking=false,lastEditPoll=0;
   const editScope=value=>value&&value.engineId===body.dataset.engineId&&value.accountId===body.dataset.accountId&&value.conversationId===body.dataset.conversationId;
@@ -103,7 +104,7 @@ window.OieRuntime.register('live', life => {
   function editMenuOpen(){return input.getAttribute('aria-expanded')==='true'||[...document.querySelectorAll('[role="dialog"],[role="menu"],[data-emoji-trigger][aria-expanded="true"]')].some(node=>node.getClientRects().length&&getComputedStyle(node).visibility!=='hidden');}
   async function beginEdit(messageId=''){
     if(!composer||!editBox||composer.dataset.editAllowed!=='true'||journal?.pending||preparingReply||editBusy||editPreparing||editSession||stopped)return;
-    const epoch=++editEpoch,draftAtRequest=input.value;editPreparing=true;feedback(composer,'');announce(editText('preparing'));renderReply();renderEdit();
+    const epoch=++editEpoch,draftAtRequest=input.value;editPreparing=true;feedback(composer,'');announceEdit(editText('preparing'));renderReply();renderEdit();
     const url=new URL(composer.dataset.editTargetUrl,location.origin);if(messageId)url.searchParams.set('messageId',messageId);else url.searchParams.delete('messageId');
     const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),10000);
     try{
@@ -115,7 +116,7 @@ window.OieRuntime.register('live', life => {
       if(!editMessageBody(target.messageId)&&window.OieTimeline){const found=await window.OieTimeline.focus(target.messageId,{focus:false});if(life.signal.aborted||epoch!==editEpoch||input.value!==draftAtRequest)return;if(!found)throw Error('edit_source_unavailable');}
       saveDraft(draftRecord(false));
       keepEdit({engineId:body.dataset.engineId,accountId:body.dataset.accountId,conversationId:body.dataset.conversationId,messageId:target.messageId,expectedRevisionId:target.currentRevisionId,operationKey:value.operationKey,text:target.originalText,submitted:false});
-      input.value=target.originalText;restoreMentions([]);announce(editText('mode'));input.focus({preventScroll:true});input.setSelectionRange(input.value.length,input.value.length);const bubble=editMessageBody(target.messageId),viewport=document.querySelector('#message-timeline')?.getBoundingClientRect(),bounds=bubble?.getBoundingClientRect();if(bounds&&viewport&&(bounds.bottom<=viewport.top||bounds.top>=viewport.bottom))bubble.scrollIntoView({block:'nearest',behavior:'auto'});
+      input.value=target.originalText;restoreMentions([]);announceEdit(editText('mode'));input.focus({preventScroll:true});input.setSelectionRange(input.value.length,input.value.length);const bubble=editMessageBody(target.messageId),viewport=document.querySelector('#message-timeline')?.getBoundingClientRect(),bounds=bubble?.getBoundingClientRect();if(bounds&&viewport&&(bounds.bottom<=viewport.top||bounds.top>=viewport.bottom))bubble.scrollIntoView({block:'nearest',behavior:'auto'});
     }catch{if(!life.signal.aborted&&epoch===editEpoch){window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:editText('unavailable')}}));}}
     finally{clearTimeout(timeout);if(!life.signal.aborted&&epoch===editEpoch){editPreparing=false;renderReply();renderEdit();}}
   }
