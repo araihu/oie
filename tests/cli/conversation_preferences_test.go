@@ -66,7 +66,7 @@ func TestGeneratedCLIPreferencesPreserveOmittedAndFalse(t *testing.T) {
 	defer server.Close()
 	run := func(key domain.ID, body string, extra ...string) []byte {
 		t.Helper()
-		args := []string{"--server", server.URL, "--output", "json", "conversations", "update-conversation-preferences", "--conversation-id", string(opened.Conversation.ID), "--idempotency-key", string(key), "--body-stdin"}
+		args := []string{"--server", server.URL, "--output", "json", "conversations", "set-preferences", "--conversation-id", string(opened.Conversation.ID), "--idempotency-key", string(key), "--body-stdin"}
 		args = append(args, extra...)
 		command := exec.CommandContext(t.Context(), binary, args...)
 		command.Stdin = bytes.NewBufferString(body)

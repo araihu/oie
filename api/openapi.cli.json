@@ -117,7 +117,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "contacts"
       }
     },
     "/api/v1/messages/search": {
@@ -207,7 +208,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "search"
       }
     },
     "/api/v1/shared-content": {
@@ -319,7 +321,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "list"
       }
     },
     "/api/v1/shared-content/{itemId}/thumbnail": {
@@ -361,7 +364,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "thumbnail"
       },
       "post": {
         "tags": [
@@ -403,7 +407,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "request-thumbnail"
       }
     },
     "/api/v1/shared-content/{itemId}/content": {
@@ -734,6 +739,7 @@
             }
           }
         },
+        "x-cli-name": "download",
         "x-cli-ignore": false
       }
     },
@@ -786,7 +792,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "context"
       }
     },
     "/api/v1/messages/{messageId}/star": {
@@ -822,7 +829,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "star"
       },
       "put": {
         "operationId": "setMessageStar",
@@ -896,7 +904,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "set-star"
       }
     },
     "/api/v1/conversations/{conversationId}/read-state": {
@@ -932,7 +941,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "read-state"
       },
       "post": {
         "operationId": "markConversationMessagesRead",
@@ -1006,7 +1016,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "mark-read"
       }
     },
     "/api/v1/conversations/{conversationId}/message-stars": {
@@ -1066,7 +1077,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "stars"
       }
     },
     "/api/v1/starred-messages": {
@@ -1137,7 +1149,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "starred"
       }
     },
     "/api/v1/conversations/{conversationId}/previews": {
@@ -1199,7 +1212,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "list"
       }
     },
     "/api/v1/previews/{previewId}": {
@@ -1241,7 +1255,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "get"
       }
     },
     "/api/v1/previews/{previewId}/refresh": {
@@ -1286,7 +1301,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "refresh"
       }
     },
     "/api/v1/previews/{previewId}/download": {
@@ -1338,7 +1354,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "download"
       }
     },
     "/api/v1/media/{hash}": {
@@ -1422,6 +1439,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
+        "x-cli-name": "image",
         "x-cli-ignore": false
       }
     },
@@ -1450,7 +1468,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "health"
       }
     },
     "/api/v1/engine": {
@@ -1481,7 +1500,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "engine"
       }
     },
     "/api/v1/accounts": {
@@ -1543,7 +1563,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "list"
       },
       "post": {
         "tags": [
@@ -1669,7 +1690,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "register"
       }
     },
     "/api/v1/accounts/{accountId}": {
@@ -1714,7 +1736,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "get"
       }
     },
     "/api/v1/accounts/{accountId}/avatars": {
@@ -1774,7 +1797,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "avatars"
       }
     },
     "/api/v1/avatars/{hash}": {
@@ -1846,6 +1870,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
+        "x-cli-name": "avatar",
         "x-cli-ignore": false
       }
     },
@@ -1889,7 +1914,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "history"
       }
     },
     "/api/v1/accounts/{accountId}/capabilities": {
@@ -1935,7 +1961,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "capabilities"
       }
     },
     "/api/v1/operations/{operationId}": {
@@ -1984,7 +2011,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "get"
       }
     },
     "/api/v1/events": {
@@ -1996,8 +2024,9 @@
         "x-sse-event-schema": {
           "$ref": "#/components/schemas/Event"
         },
-        "x-cli-ignore": false,
+        "x-cli-name": "stream",
         "summary": "Replay durable changes and follow new events",
+        "x-cli-ignore": false,
         "description": "SSE id is engineUUID:sequence; event is the event type; data is Event JSON.\nLast-Event-ID resumes strictly after its sequence. Without a cursor replay\nfrom zero. Cursors from another engine or ahead of current state return 409\nbefore streaming. Heartbeat comments are not durable events.\nThis engine retains the complete change log. Clients deduplicate by event\nID and refresh snapshots if a future retention policy expires a cursor.\n",
         "parameters": [
           {
@@ -2072,7 +2101,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "connection"
       },
       "put": {
         "operationId": "configureAccountConnection",
@@ -2149,7 +2179,8 @@
               }
             }
           }
-        }
+        },
+        "x-cli-name": "connect"
       },
       "delete": {
         "operationId": "disconnectAccount",
@@ -2183,7 +2214,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "disconnect"
       }
     },
     "/api/v1/conversations": {
@@ -2293,7 +2325,8 @@
               ]
             }
           }
-        ]
+        ],
+        "x-cli-name": "list"
       },
       "post": {
         "operationId": "openConversation",
@@ -2416,7 +2449,8 @@
               }
             }
           }
-        }
+        },
+        "x-cli-name": "open"
       }
     },
     "/api/v1/conversations/{conversationId}/room-session": {
@@ -2452,7 +2486,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "room-session"
       },
       "post": {
         "operationId": "joinRoom",
@@ -2526,7 +2561,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "join"
       }
     },
     "/api/v1/conversations/{conversationId}/room-session/leave": {
@@ -2607,7 +2643,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "leave"
       }
     },
     "/api/v1/conversations/{conversationId}/mention-candidates": {
@@ -2657,7 +2694,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "mention-candidates"
       }
     },
     "/api/v1/conversations/{conversationId}/details": {
@@ -2700,7 +2738,8 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           }
-        }
+        },
+        "x-cli-name": "details"
       }
     },
     "/api/v1/conversations/{conversationId}": {
@@ -2749,7 +2788,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "get"
       },
       "patch": {
         "operationId": "updateConversationPreferences",
@@ -2849,7 +2889,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "set-preferences"
       }
     },
     "/api/v1/conversations/{conversationId}/messages": {
@@ -2922,7 +2963,8 @@
               "default": 50
             }
           }
-        ]
+        ],
+        "x-cli-name": "list"
       },
       "post": {
         "operationId": "sendMessage",
@@ -3046,7 +3088,8 @@
               }
             }
           }
-        }
+        },
+        "x-cli-name": "send"
       }
     },
     "/api/v1/messages/{messageId}/reactions": {
@@ -3082,7 +3125,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "reactions"
       },
       "post": {
         "operationId": "setMessageReactions",
@@ -3175,7 +3219,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "set-reactions"
       }
     },
     "/api/v1/conversations/{conversationId}/reactions": {
@@ -3233,7 +3278,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "conversation-reactions"
       }
     },
     "/api/v1/message-reaction-commands/{commandId}": {
@@ -3275,7 +3321,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "reaction-command"
       }
     },
     "/api/v1/messages/{messageId}/edit-target": {
@@ -3311,7 +3358,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "edit-target"
       }
     },
     "/api/v1/conversations/{conversationId}/edit-target": {
@@ -3347,7 +3395,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "latest-edit-target"
       }
     },
     "/api/v1/messages/{messageId}/edits": {
@@ -3447,7 +3496,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "edit"
       }
     },
     "/api/v1/message-edits/{editId}": {
@@ -3489,7 +3539,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "edit-command"
       }
     },
     "/api/v1/messages/{messageId}/edit-history": {
@@ -3572,7 +3623,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "edit-history"
       }
     },
     "/api/v1/messages/{messageId}/sender-profile": {
@@ -3628,7 +3680,8 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           }
-        }
+        },
+        "x-cli-name": "sender-profile"
       }
     },
     "/api/v1/messages/{messageId}": {
@@ -3678,7 +3731,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "get"
       }
     },
     "/api/v1/messages/{messageId}/cancel": {
@@ -3776,7 +3830,8 @@
               }
             }
           }
-        }
+        },
+        "x-cli-name": "cancel"
       }
     }
   },

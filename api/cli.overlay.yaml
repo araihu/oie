@@ -3,15 +3,180 @@ info:
   title: Oie engine CLI
   version: 0.1.0
 actions:
-  - target: $.paths['/api/v1/events'].get
-    update:
-      x-cli-ignore: false
+  # accounts
   - target: $.paths['/api/v1/avatars/{hash}'].get
     update:
+      x-cli-name: avatar
       x-cli-ignore: false
+  - target: $.paths['/api/v1/accounts/{accountId}/avatars'].get
+    update:
+      x-cli-name: avatars
+  - target: $.paths['/api/v1/accounts/{accountId}/capabilities'].get
+    update:
+      x-cli-name: capabilities
+  - target: $.paths['/api/v1/accounts/{accountId}/connection'].put
+    update:
+      x-cli-name: connect
+  - target: $.paths['/api/v1/accounts/{accountId}/connection'].get
+    update:
+      x-cli-name: connection
+  - target: $.paths['/api/v1/contacts'].get
+    update:
+      x-cli-name: contacts
+  - target: $.paths['/api/v1/accounts/{accountId}/connection'].delete
+    update:
+      x-cli-name: disconnect
+  - target: $.paths['/api/v1/accounts/{accountId}'].get
+    update:
+      x-cli-name: get
+  - target: $.paths['/api/v1/accounts/{accountId}/history'].get
+    update:
+      x-cli-name: history
+  - target: $.paths['/api/v1/accounts'].get
+    update:
+      x-cli-name: list
+  - target: $.paths['/api/v1/accounts'].post
+    update:
+      x-cli-name: register
+  # conversations
+  - target: $.paths['/api/v1/conversations/{conversationId}/details'].get
+    update:
+      x-cli-name: details
+  - target: $.paths['/api/v1/conversations/{conversationId}'].get
+    update:
+      x-cli-name: get
+  - target: $.paths['/api/v1/conversations/{conversationId}/room-session'].post
+    update:
+      x-cli-name: join
+  - target: $.paths['/api/v1/conversations/{conversationId}/room-session/leave'].post
+    update:
+      x-cli-name: leave
+  - target: $.paths['/api/v1/conversations'].get
+    update:
+      x-cli-name: list
+  - target: $.paths['/api/v1/conversations/{conversationId}/read-state'].post
+    update:
+      x-cli-name: mark-read
+  - target: $.paths['/api/v1/conversations/{conversationId}/mention-candidates'].get
+    update:
+      x-cli-name: mention-candidates
+  - target: $.paths['/api/v1/conversations'].post
+    update:
+      x-cli-name: open
+  - target: $.paths['/api/v1/conversations/{conversationId}/read-state'].get
+    update:
+      x-cli-name: read-state
+  - target: $.paths['/api/v1/conversations/{conversationId}/room-session'].get
+    update:
+      x-cli-name: room-session
+  - target: $.paths['/api/v1/conversations/{conversationId}'].patch
+    update:
+      x-cli-name: set-preferences
+  # events
+  - target: $.paths['/api/v1/events'].get
+    update:
+      x-cli-name: stream
+      x-cli-ignore: false
+  # messages
+  - target: $.paths['/api/v1/messages/{messageId}/cancel'].post
+    update:
+      x-cli-name: cancel
+  - target: $.paths['/api/v1/conversations/{conversationId}/messages/{messageId}/context'].get
+    update:
+      x-cli-name: context
+  - target: $.paths['/api/v1/conversations/{conversationId}/reactions'].get
+    update:
+      x-cli-name: conversation-reactions
+  - target: $.paths['/api/v1/messages/{messageId}/edits'].post
+    update:
+      x-cli-name: edit
+  - target: $.paths['/api/v1/message-edits/{editId}'].get
+    update:
+      x-cli-name: edit-command
+  - target: $.paths['/api/v1/messages/{messageId}/edit-history'].get
+    update:
+      x-cli-name: edit-history
+  - target: $.paths['/api/v1/messages/{messageId}/edit-target'].get
+    update:
+      x-cli-name: edit-target
+  - target: $.paths['/api/v1/messages/{messageId}'].get
+    update:
+      x-cli-name: get
+  - target: $.paths['/api/v1/conversations/{conversationId}/edit-target'].get
+    update:
+      x-cli-name: latest-edit-target
+  - target: $.paths['/api/v1/conversations/{conversationId}/messages'].get
+    update:
+      x-cli-name: list
+  - target: $.paths['/api/v1/message-reaction-commands/{commandId}'].get
+    update:
+      x-cli-name: reaction-command
+  - target: $.paths['/api/v1/messages/{messageId}/reactions'].get
+    update:
+      x-cli-name: reactions
+  - target: $.paths['/api/v1/messages/search'].get
+    update:
+      x-cli-name: search
+  - target: $.paths['/api/v1/conversations/{conversationId}/messages'].post
+    update:
+      x-cli-name: send
+  - target: $.paths['/api/v1/messages/{messageId}/sender-profile'].get
+    update:
+      x-cli-name: sender-profile
+  - target: $.paths['/api/v1/messages/{messageId}/reactions'].post
+    update:
+      x-cli-name: set-reactions
+  - target: $.paths['/api/v1/messages/{messageId}/star'].put
+    update:
+      x-cli-name: set-star
+  - target: $.paths['/api/v1/messages/{messageId}/star'].get
+    update:
+      x-cli-name: star
+  - target: $.paths['/api/v1/starred-messages'].get
+    update:
+      x-cli-name: starred
+  - target: $.paths['/api/v1/conversations/{conversationId}/message-stars'].get
+    update:
+      x-cli-name: stars
+  # operations
+  - target: $.paths['/api/v1/operations/{operationId}'].get
+    update:
+      x-cli-name: get
+  # previews
+  - target: $.paths['/api/v1/previews/{previewId}/download'].post
+    update:
+      x-cli-name: download
+  - target: $.paths['/api/v1/previews/{previewId}'].get
+    update:
+      x-cli-name: get
   - target: $.paths['/api/v1/media/{hash}'].get
     update:
+      x-cli-name: image
       x-cli-ignore: false
+  - target: $.paths['/api/v1/conversations/{conversationId}/previews'].get
+    update:
+      x-cli-name: list
+  - target: $.paths['/api/v1/previews/{previewId}/refresh'].post
+    update:
+      x-cli-name: refresh
+  - target: $.paths['/api/v1/shared-content/{itemId}/thumbnail'].post
+    update:
+      x-cli-name: request-thumbnail
+  - target: $.paths['/api/v1/shared-content/{itemId}/thumbnail'].get
+    update:
+      x-cli-name: thumbnail
+  # shared-content
   - target: $.paths['/api/v1/shared-content/{itemId}/content'].get
     update:
+      x-cli-name: download
       x-cli-ignore: false
+  - target: $.paths['/api/v1/shared-content'].get
+    update:
+      x-cli-name: list
+  # system
+  - target: $.paths['/api/v1/engine'].get
+    update:
+      x-cli-name: engine
+  - target: $.paths['/api/v1/health'].get
+    update:
+      x-cli-name: health
