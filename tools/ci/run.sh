@@ -2,7 +2,7 @@
 set -eu
 umask 077
 mode=${1:-all}
-case "$mode" in all|checks) ;; *) echo 'usage: tools/ci/run.sh [all|checks]' >&2; exit 2;; esac
+case "$mode" in all|checks|desktop) ;; *) echo 'usage: tools/ci/run.sh [all|checks|desktop]' >&2; exit 2;; esac
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 ci_artifacts=${OIE_CI_ARTIFACTS:-"$root/tests/browser/artifacts/ci"}
 case "$ci_artifacts" in /*) ;; *) ci_artifacts="$root/$ci_artifacts" ;; esac

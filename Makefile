@@ -1,4 +1,8 @@
 GO ?= go
+# Keep the existing HTTP checks/build independent of native WebView libraries.
+# The desktop target and native CI lane explicitly clear this build tag.
+GOFLAGS ?= -tags=server
+export GOFLAGS
 COMPOSE ?= docker compose
 CODEGEN = GOWORK=off $(GO) tool -modfile=tools/go.mod
 VACUUM = GOWORK=off $(GO) -C tools/vacuum tool vacuum
@@ -31,6 +35,10 @@ lint-go:
 
 build:
 	GOWORK=off $(GO) build -trimpath -o bin/oie ./cmd/oie
+
+.PHONY: build-desktop
+build-desktop:
+	GOFLAGS= GOWORK=off $(GO) build -trimpath -tags production -o bin/oie-desktop ./cmd/oie-desktop
 
 build-cli:
 	GOWORK=off $(GO) -C cli build -trimpath -o ../bin/oiectl ./cmd/oiectl
@@ -93,12 +101,15 @@ dev-bridge: build-dev-bridge
 test-live-browser: build
 	sh scripts/test-live-browser.sh
 
-.PHONY: ci ci-check
+.PHONY: ci ci-check ci-desktop
 ci:
 	sh tools/ci/run.sh all
 
 ci-check:
 	sh tools/ci/run.sh checks
+
+ci-desktop:
+	sh tools/ci/run.sh desktop
 
 # Restart only the frontend/BFF. Run the engine separately to retain XMPP sessions.
 DEV_ENGINE_URL ?= http://127.0.0.1:18084

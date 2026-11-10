@@ -1,0 +1,14 @@
+{
+  "show": "Mostrar Oiê",
+  "quit": "Sair do Oiê",
+  "file": "Arquivo",
+  "edit": "Editar",
+  "undo": "Desfazer",
+  "redo": "Refazer",
+  "cut": "Recortar",
+  "copy": "Copiar",
+  "paste": "Colar",
+  "selectAll": "Selecionar tudo",
+  "saveFile": "Salvar arquivo",
+  "saveFailed": "Não foi possível salvar o arquivo."
+}
