@@ -8,6 +8,13 @@ one process. The browser/server command remains `cmd/oie`.
 
 Use Go 1.27.3 or newer. macOS builds require Xcode Command Line Tools. Ubuntu
 builds require a C compiler, pkg-config, GTK 4 and WebKitGTK 6 development files.
+Obtain the current desktop source with:
+
+```sh
+git clone --single-branch --branch codex/wails-integration https://github.com/araihu/oie.git
+cd oie
+```
+
 On Ubuntu 24.04 these can be installed explicitly with:
 
 ```sh
@@ -52,6 +59,37 @@ GOBIN="$HOME/.local/bin" GOFLAGS= GOWORK=off \
 This produces an executable, not a macOS `.app` bundle. GitHub release archives,
 the cross-platform release installer and a published `v0.0.1` tag are separate
 packaging work. No released installation command is available yet.
+
+### Remote commit installation before the first release
+
+Remote installation by commit initially failed with `loading deprecation ... no
+matching versions for query "latest"`. Remote `main` contained only the initial
+specification and no `go.mod`, and the repository had no version tags. Go also
+reads module deprecation metadata from the latest module version, even when
+installing a specific commit. Resolving the hash with `go list -m` alone did not
+verify remote command installation.
+
+On 2026-11-10, the previously integrated local `main` at `115e8eb` was published
+to make the module available on the default branch. While the public module
+proxy still returns its earlier missing-version result, install the published
+desktop commit directly from GitHub on Ubuntu with the native dependencies and
+Git installed:
+
+```sh
+mkdir -p "$HOME/.local/bin"
+GOBIN="$HOME/.local/bin" GOFLAGS= GOWORK=off CGO_ENABLED=1 \
+  GONOPROXY=github.com/araihu/oie \
+  go install -tags production github.com/araihu/oie/cmd/oie-desktop@e4b77dd98a94
+"$HOME/.local/bin/oie-desktop"
+```
+
+This command bypasses the proxy only for Oie, keeps checksum verification and
+does not change the user's persisted Go environment. The native macOS remote
+installation passed with this setting and the macOS compilation/linker flags
+above. Linux amd64 build and desktop smoke coverage are recorded below; this
+macOS check does not establish a new Linux installation run.
+
+## Runtime options
 
 Optional command flags:
 
