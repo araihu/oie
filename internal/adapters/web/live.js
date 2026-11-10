@@ -214,7 +214,7 @@ window.OieRuntime.register('live', life => {
       window.Alpine?.destroyTree(node);node.remove();acceptedBubbles.delete(node);
     }
   }
-  function renderPendingSend(state='sending',detail=''){
+  function renderPendingSend(state='sending'){
     if(!journal?.pending)return;
     const timeline=document.querySelector('#message-timeline'),template=composer?.querySelector('[data-pending-send-template]');
     if(!timeline||!template)return;
@@ -237,8 +237,6 @@ window.OieRuntime.register('live', life => {
     // Keep an unresolved send readable while the retry action is available.
     pendingBubble.querySelector('[data-pending-send-content]').style.opacity=state==='uncertain'?'1':'';
     for(const node of pendingBubble.querySelectorAll('[data-pending-state]'))node.hidden=node.dataset.pendingState!==state;
-    pendingBubble.querySelector('[data-pending-send-status]').title=detail;
-    pendingBubble.querySelector('[data-pending-send-shortcut]').hidden=state!=='uncertain';
     const disabled=state!=='uncertain'||stopped||composer.dataset.busy==='true';
     for(const action of pendingBubble.querySelectorAll('[data-pending-send-retry],#retry-pending-send')){action.disabled=disabled;action.setAttribute('aria-disabled',String(disabled));}
   }
@@ -247,7 +245,6 @@ window.OieRuntime.register('live', life => {
     renderPendingSend('accepted');
     // Accepted placeholders have no retry action. The engine now owns delivery.
     const menu=pendingBubble.querySelector('.oie-message-menu-slot');window.Alpine?.destroyTree(menu);menu.remove();
-    pendingBubble.querySelector('[data-pending-send-shortcut]').remove();
     pendingBubble.dataset.acceptedMessage=id;acceptedBubbles.add(pendingBubble);pendingBubble=null;retireAcceptedBubbles();
   }
   life.cleanup(()=>{for(const node of [...acceptedBubbles,pendingBubble])if(node){window.Alpine?.destroyTree(node);node.remove();}});
@@ -268,7 +265,7 @@ window.OieRuntime.register('live', life => {
   });
   function feedback(form, message, error = false) {
     const region = form.querySelector('[data-form-feedback]');
-    if(form===composer&&journal?.pending){if(region)region.textContent='';renderPendingSend(error?'uncertain':'sending',message);announce(message,true);return;}
+    if(form===composer&&journal?.pending){if(region)region.textContent='';renderPendingSend(error?'uncertain':'sending');announce(message,true);return;}
     if (region) { region.textContent = message; region.dataset.error = String(error);region.setAttribute('role',error?'alert':'status'); if(error&&form.dataset.oieAction!=='send'){region.tabIndex=-1;region.focus({preventScroll:true});} }
     announce(message);
   }

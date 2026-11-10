@@ -1,12 +1,23 @@
 # Pending message bubbles
 
 The browser projects the existing immutable pending submission as an outgoing
-Goshtoso ChatBubble, with Badge status and Button/Dropdown retry actions. It
+Goshtoso ChatBubble, with a fixed status-icon slot inside the timestamp row and Button/Dropdown retry actions. No send state adds a box or row below the bubble. It
 moves the submitted text and reply preview out of the composer. The composer
 stays read-only until acceptance is resolved, as it did before this change.
 There is one unresolved submission per engine/account/conversation. This is
 not a multi-message browser outbox, attachment upload queue or offline delivery
 implementation.
+
+Send progress, uncertainty and canonical send states use a fixed-size icon slot
+beside the timestamp. The pending status announcement remains screen-reader
+only. Unconfirmed submissions retain an icon retry action and menu recovery;
+neither adds a row below the bubble. Queued cancellation is available in the
+menu with JavaScript, and the native form remains available without scripting.
+Browser checks cover painted-frame geometry through sending and uncertainty,
+pending-to-canonical replacement, dispatch, failure and submission. Native
+`make check`, Dagger checks mode, the send geometry matrix, mention recovery and
+pending reply recovery passed for this change. These are scoped checks, not a
+claim of a complete Dagger browser run.
 
 A missing or lost response means acceptance is unconfirmed. It does not prove
 that provider delivery failed. `POST /ui/messages/reconcile` reads the existing
@@ -19,7 +30,7 @@ Accepted placeholders remain visible until the bounded timeline contains their
 canonical message ID. Equal text never establishes identity. Explicit server
 rejection restores the editable draft and its mention/reply selections.
 
-The application composes public Goshtoso ChatBubble, Badge, Dropdown, Button
+The application composes public Goshtoso ChatBubble, Spinner, Dropdown, Button
 and Heroicons APIs. Its own JavaScript supplies submission lifecycle and receipt
 reconciliation, which are application behavior rather than generic components.
 

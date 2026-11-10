@@ -105,6 +105,7 @@ if v.DevBuildID!="" {
 <script src="/ui/dev-reload.js" data-build-id={v.DevBuildID} defer></script>
 }
 <meta name="oie-csrf" content={v.CSRF}/>
+<noscript><style>.oie-cancel-form{display:flex!important}.oie-message-meta:has(>.oie-cancel-form){margin-top:4px}</style></noscript>
 		</head>
 		<body data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
 @appFragment(v)
@@ -344,9 +345,6 @@ if m.IsOwn {
 if m.Attachment!=nil {
 <time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
 }
-if m.SendState=="failed" || m.SendState=="unknown" || m.SendState=="cancelled" {
-<span data-message-status title={statusHint(v,m.SendState)}>{v.stateLabel(m.SendState)}</span>
-}
 if m.SendState=="queued" && !v.Preview {
 @form.Form(form.Config{ID:"cancel-"+m.Id,Action:"/ui/messages/cancel",Method:"post",RootClass:"oie-cancel-form",RootAttrs:templ.Attributes{"data-oie-action":"cancel","data-cancel-message":""}}){
 @mutationFields(v,"cancel-"+m.Id,newOperationKey())
@@ -359,7 +357,7 @@ if m.SendState=="queued" && !v.Preview {
 }
 </div>
 }
-func statusHint(v view,state engineapi.MessageSendState)string{if state=="submitted"{return v.Text.SubmittedHint};if state=="unknown"{return v.Text.UnknownHint};return v.stateLabel(state)}
+func sendIndicatorLabel(v view,state engineapi.MessageSendState)string{if state=="submitted"{return v.Text.SendAccepted};if state=="unknown"{return v.Text.SendUnconfirmed};return v.stateLabel(state)}
 
 func messageSide(own bool) chatbubble.Side {
 	if own {
@@ -705,6 +703,7 @@ if !m.IsOwn && !grouped {
 <div class="oie-message-stamp">
 @messageEditIndicator(v,m)
 @messageStarIndicator(v,m.Id)
+@messageSendIndicator(v,m)
 <time data-message-time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
 </div>
 @messageReactions(v,m)
@@ -725,6 +724,25 @@ if messageEdited(m) {
 </span>
 }
 </div>
+}
+
+templ messageSendIndicator(v view,m messageView){
+if m.IsOwn && sendIndicatorLabel(v,m.SendState)!="" {
+<span class="oie-send-state-slot" data-message-status role="img" aria-label={sendIndicatorLabel(v,m.SendState)} title={sendIndicatorLabel(v,m.SendState)}>
+switch m.SendState {
+case "queued":
+@glyph(heroicons.Icon16SolidClock)
+case "dispatching":
+@spinner.Spinner(spinner.Config{Size:spinner.SizeSM,RootClass:"oie-send-spinner"})
+case "submitted":
+@glyph(heroicons.Icon16SolidCheck)
+case "cancelled":
+@glyph(heroicons.Icon16SolidXMark)
+default:
+@glyph(heroicons.Icon16SolidExclamationCircle)
+}
+</span>
+}
 }
 
 templ messageEditStateIcon(label string,pending bool){

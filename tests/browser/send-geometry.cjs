@@ -22,6 +22,7 @@ module.exports=async({browser,base,chat,state,emit,until,id})=>{
    await page.locator('#message-composer').fill(originalText);await page.locator('[data-send-message]').click();
    await until(async()=>await page.locator('[data-pending-send]').count()===1,'local pending bubble');
    const initial=await bounds(page.locator('[data-pending-send]'));
+   const initialRow=page.locator('[data-pending-send]');assert.equal(await initialRow.locator(':scope>.oie-message-meta').count(),0,'pending send has no status row');const contentHeight=await initialRow.locator('.oie-message-content').evaluate(n=>n.getBoundingClientRect().height);assert(Math.abs(initial.rowHeight-contentHeight)<1,'pending row contains only the bubble');
    assert(await page.locator('[data-pending-send-time]').textContent());
    await checkAccessibility(page.locator('[data-pending-send]'),'local pending');
    await page.evaluate(()=>{

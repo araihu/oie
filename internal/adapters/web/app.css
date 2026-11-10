@@ -133,14 +133,16 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 /* Keep pending messages subdued while retaining readable text and timestamps. */
 .oie-message-own[data-send-state=queued]>.oie-message-content,.oie-message-own[data-send-state=dispatching]>.oie-message-content,.oie-message-own[data-send-state=queued]>.oie-media-message,.oie-message-own[data-send-state=dispatching]>.oie-media-message,.oie-message[data-pending-send]>.oie-message-content{opacity:.8}
 .oie-message-own:is([data-send-state=queued],[data-send-state=dispatching],[data-pending-send]) .oie-message-stamp{color:inherit}
-.oie-message[data-pending-send]:not([data-pending-state=uncertain])>.oie-message-meta{margin-top:0}
 .oie-message-meta:empty{display:none}
 /* Enhanced cancellation lives in the message menu; keep the native form for
    browsers without scripting, without adding a transient row during dispatch. */
-body[data-oie-live-ready] .oie-cancel-form{display:none}
-body[data-oie-live-ready] .oie-message-meta:has(>.oie-cancel-form):not(:has(>[data-message-status])){margin-top:0}
-.oie-cancel-form{display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+.oie-message-meta:has(>.oie-cancel-form){margin-top:0}
+.oie-cancel-form{display:none;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
 .oie-cancel-form button{font-size:10px;padding:2px 5px}
+.oie-send-state-slot,.oie-send-state-slot>span,.oie-send-retry{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:14px;height:14px;min-width:14px;min-height:14px;padding:0;border:0;background:transparent;color:inherit;line-height:1}
+.oie-send-state-slot .oie-icon,.oie-send-spinner{width:12px;height:12px}
+.oie-send-state-slot [hidden]{display:none!important}
+.oie-send-retry:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:2px;border-radius:3px}
 .oie-chat-pane{position:relative}
 .oie-jump-latest{position:absolute;right:20px;bottom:85px;z-index:10;border:1px solid var(--oie-border);border-radius:18px;padding:8px 14px;background:var(--oie-panel);color:var(--oie-text);font-size:12px;box-shadow:0 2px 8px #0002}
 .oie-jump-latest[hidden]{display:none}

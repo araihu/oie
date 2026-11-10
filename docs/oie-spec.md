@@ -198,7 +198,7 @@ Keep these milestones distinct:
 
 Missing optional delivery/read receipts must not trigger indefinite resending of an otherwise accepted message.
 
-**AGREED:** pending outgoing bubbles are faded, without a visible progress label. Restore normal opacity when protocol submission is confirmed. Show failures and uncertain outcomes below the bubble, retaining their recovery actions. Engine acceptance alone does not imply protocol submission or recipient delivery.
+**AGREED:** pending outgoing bubbles are faded, without a visible progress label. Restore normal opacity when protocol submission is confirmed. Show send states as compact accessible icons beside the time inside the bubble, retaining recovery through an icon or the message menu. Do not add a status box or row below the bubble. Engine acceptance alone does not imply protocol submission or recipient delivery.
 
 ### 5.2 Mutation cutoff and races
 
@@ -454,7 +454,7 @@ Desktop composer defaults: Enter sends, Shift+Enter inserts a newline, with a pe
 
 **AGREED:** typing `@` at a word boundary in a room opens a filtered list of available participants. Selection inserts readable `@nickname` text without sending. Keep keyboard/touch access and IME input, and preserve selections in device drafts and pending-send intents. The engine validates scoped participant selections and freezes protocol references alongside the message. XMPP structured mentions follow XEP-0372 only with an observed real bare JID in a confirmed non-anonymous room; otherwise use readable plain text. Do not discover or expose hidden identities, infer JIDs from nicknames, claim a complete membership roster, or promise recipient notifications. See [room mentions](mentions.md).
 
-**AGREED:** submitting a message immediately places a pending bubble in the timeline. Keep send progress out of the composer layout. If acceptance is uncertain, show a status indicator and a refresh-icon retry shortcut directly below that bubble, plus retry in its actions menu. Retain the exact operation key, body, reply target and mentions. Receipt recovery is read-only; explicit retry reuses the original operation. Replace the local bubble by canonical message identity after confirmed engine acceptance. Engine acceptance is distinct from provider delivery.
+**AGREED:** submitting a message immediately places a pending bubble in the timeline. Keep send progress out of the composer layout. Keep a fixed status-icon slot beside the time inside the bubble. If acceptance is uncertain, that slot offers an accessible refresh-icon retry action, with retry also in the actions menu. State changes must not add a box or row below the bubble or shift its geometry. Retain the exact operation key, body, reply target and mentions. Receipt recovery is read-only; explicit retry reuses the original operation. Replace the local bubble by canonical message identity after confirmed engine acceptance. Engine acceptance is distinct from provider delivery.
 
 The composer grows and shrinks with wrapped or multiline text, including restored drafts, up to the smaller of 12rem or 30% of the dynamic viewport height. Beyond that limit, scroll inside the textarea. Keep composer actions aligned to its bottom edge.
 
