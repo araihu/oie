@@ -6124,11 +6124,11 @@ func messageBubbleBody(v view, m messageView, grouped bool) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = messageStarIndicator(v, m.Id).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = messageSendIndicator(v, m).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = messageSendIndicator(v, m).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = messageStarIndicator(v, m.Id).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -703,8 +703,8 @@ if !m.IsOwn && !grouped {
 @messageBody(v,m)
 <div class="oie-message-stamp">
 @messageEditIndicator(v,m)
-@messageStarIndicator(v,m.Id)
 @messageSendIndicator(v,m)
+@messageStarIndicator(v,m.Id)
 <time data-message-time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
 </div>
 @messageReactions(v,m)
