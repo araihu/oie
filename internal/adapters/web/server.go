@@ -48,10 +48,11 @@ var themeScript []byte
 var localeFiles embed.FS
 
 type Server struct {
-	devBuildID   string
-	client       *engineapi.ClientWithResponses
-	streamClient *engineapi.Client
-	catalogs     map[string]copy
+	devBuildID    string
+	engineEditors []engineapi.RequestEditorFn
+	client        *engineapi.ClientWithResponses
+	streamClient  *engineapi.Client
+	catalogs      map[string]copy
 }
 
 func New(engineURL string, options ...Option) (*Server, error) {
@@ -63,7 +64,17 @@ func New(engineURL string, options ...Option) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	client, err := engineapi.NewClientWithResponses(engineURL, engineapi.WithHTTPClient(&http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}))
+	server := &Server{catalogs: catalogs}
+	for _, option := range options {
+		if option != nil {
+			option(server)
+		}
+	}
+	clientOptions := []engineapi.ClientOption{engineapi.WithHTTPClient(&http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }})}
+	for _, editor := range server.engineEditors {
+		clientOptions = append(clientOptions, engineapi.WithRequestEditorFn(editor))
+	}
+	client, err := engineapi.NewClientWithResponses(engineURL, clientOptions...)
 	if err != nil {
 		return nil, err
 	}
@@ -71,17 +82,27 @@ func New(engineURL string, options ...Option) (*Server, error) {
 	transport.DialContext = (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext
 	transport.ResponseHeaderTimeout = 5 * time.Second
 	transport.TLSHandshakeTimeout = 5 * time.Second
-	streamClient, err := engineapi.NewClient(engineURL, engineapi.WithHTTPClient(&http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}))
+	streamOptions := []engineapi.ClientOption{engineapi.WithHTTPClient(&http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }})}
+	for _, editor := range server.engineEditors {
+		streamOptions = append(streamOptions, engineapi.WithRequestEditorFn(editor))
+	}
+	streamClient, err := engineapi.NewClient(engineURL, streamOptions...)
 	if err != nil {
 		return nil, err
 	}
-	server := &Server{client: client, streamClient: streamClient, catalogs: catalogs}
-	for _, option := range options {
-		if option != nil {
-			option(server)
+	server.client, server.streamClient = client, streamClient
+	return server, nil
+}
+
+// WithEngineRequestEditor configures the BFF's private engine transport. The
+// editor applies to ordinary queries, live events and streaming media, and is
+// never derived from a browser request or exposed in rendered content.
+func WithEngineRequestEditor(editor engineapi.RequestEditorFn) Option {
+	return func(s *Server) {
+		if editor != nil {
+			s.engineEditors = append(s.engineEditors, editor)
 		}
 	}
-	return server, nil
 }
 
 type errInvalidURL struct{}
