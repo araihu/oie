@@ -41,11 +41,11 @@ func navigation(v view, id string) sidebar.Config {
 	return sidebar.Config{
 		Logo: brand(v), LogoHref: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), DisableSkipLink: true, RootClass: "oie-navigation", FooterSlot: footer,
 		Items: []sidebar.Item{
-			{ID: "chats", Label: v.Text.Chats, Href: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidQueueList), Active: v.Section == "chats", LinkAttrs: applicationNavigationAttrs()},
+			{ID: "chats", Label: v.Text.Chats, Href: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidQueueList), Active: v.Section == "chats", LinkAttrs: sidebarNavigationAttrs()},
 
-			{ID: "media", Label: v.Text.SharedMedia, Href: v.href("section", "media", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidRectangleGroup), Active: v.Section == "media", LinkAttrs: applicationNavigationAttrs()},
-			{ID: "archived", Label: v.Text.Archived, Href: v.href("section", "archived", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidFolder), Active: v.Section == "archived", LinkAttrs: applicationNavigationAttrs()},
-			{ID: "favorites", Label: v.Text.Favorites, Href: v.href("section", "favorites", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidStar), Active: v.Section == "favorites", LinkAttrs: applicationNavigationAttrs()},
+			{ID: "media", Label: v.Text.SharedMedia, Href: v.href("section", "media", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidRectangleGroup), Active: v.Section == "media", LinkAttrs: sidebarNavigationAttrs()},
+			{ID: "archived", Label: v.Text.Archived, Href: v.href("section", "archived", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidFolder), Active: v.Section == "archived", LinkAttrs: sidebarNavigationAttrs()},
+			{ID: "favorites", Label: v.Text.Favorites, Href: v.href("section", "favorites", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidStar), Active: v.Section == "favorites", LinkAttrs: sidebarNavigationAttrs()},
 		},
 	}
 }

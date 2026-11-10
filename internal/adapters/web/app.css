@@ -27,6 +27,11 @@ html,body{margin:0;height:100%;font-family:var(--font-body);background:var(--oie
 .oie-main{padding:0;overflow:hidden;background:var(--oie-panel)}
 .oie-sidebar{display:block;width:208px;overflow:hidden;background:var(--oie-panel);border-color:var(--oie-border)}
 .oie-navigation{border:0;background:var(--oie-panel);color:var(--oie-text)}
+html:not(.dark) .oie-navigation{background:#edf2f5}
+html:not(.dark) [data-oie-navigation-item]{padding-inline:8px;border-radius:8px;color:var(--oie-text)}
+html:not(.dark) [data-oie-navigation-item]:hover{background:#dce5ea}
+html:not(.dark) [data-oie-navigation-item][aria-current=page]{background:#274c5e;color:#fff;--oie-accent-text:#fff;--color-primary:#fff}
+html:not(.dark) [data-oie-navigation-item]:focus-visible{outline:2px solid #274c5e;outline-offset:2px}
 .oie-brand{display:inline-flex;align-items:center}
 .oie-brand-logo{display:block;width:auto;height:36px;max-width:136px;object-fit:contain}
 .oie-brand-logo-dark{display:none}
