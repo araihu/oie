@@ -387,10 +387,11 @@ exhausting the available authorized archive. Start with the newest page of the
 open room when it needs recovery, then alternate pages among rooms on each
 server with preference for the open room. Show each page as it is stored. Fetch
 older history gradually in the default mode or as needed for navigation and
-search in on-demand mode. Record server identity, page limits, turn frequency
-and checkpoint decisions in
-[the initial-history discussion](history-bootstrap-discussion.md) before API-first
-implementation.
+search in on-demand mode. Advance the cursor after storing the entire page.
+If the cursor expires, resume from the inclusive timestamp at the last
+confirmed page boundary within the original window and deduplicate reread
+messages. Record server identity, page limits and turn frequency in
+[the initial-history discussion](history-bootstrap-discussion.md).
 
 Search across accounts/sources in the selected engine and within a direct/group conversation. Alpha indexes message text, captions, filenames, URLs, page titles/descriptions, and available media metadata. Document-body extraction, image OCR, and audio transcription are backlogged.
 

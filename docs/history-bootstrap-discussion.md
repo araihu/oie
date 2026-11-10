@@ -56,6 +56,14 @@ requests the next available turn on that server. Wait at least one second
 between automatic backfill pages on the same server. Search and scroll
 requests can use that interval.
 
+## Agreed recovery checkpoints
+
+Advance the archive cursor only after the entire page has been stored. Keep
+the archive timestamp at the confirmed page boundary for the current paging
+direction. If the cursor expires, resume from that timestamp within the
+original window. Include the boundary timestamp so messages sharing it can
+be recovered. Deduplicate reread messages by their archive identity.
+
 ## Gajim comparison
 
 Gajim 2.7.0 starts room archive recovery after joining a room that advertises
@@ -114,8 +122,6 @@ search. [MAM](https://xmpp.org/extensions/xep-0313.html),
 - How does each protocol adapter identify which archives share a server?
 - What turn frequency gives the open room preference while preserving progress
   across rooms on the same server? Keep requests paced and live traffic responsive.
-- How do recent coverage and older backfill checkpoints resume after reconnect,
-  interruption or an expired archive cursor, without restarting a complete scan?
 - Which protocol capabilities and archive failures need fallbacks? How do we
   keep database writes, indexing and preview work from blocking interaction?
 
@@ -138,6 +144,9 @@ in-flight page, including during the one-second interval before the next
 automatic backfill page.
 Interrupt recovery, advance the clock and verify that the resumed query uses
 the same UTC bounds for that room.
+Interrupt a page write and verify that its cursor has not advanced. Expire a
+cursor at a boundary shared by several messages and verify that resuming keeps
+the original window and recovers those messages without duplicates.
 Verify that on-demand rooms fetch older pages when requested, and that local
 and remote hits merge without duplicates or advancing continuous coverage.
 Verify that search remains usable with a slow server or an archive that only
