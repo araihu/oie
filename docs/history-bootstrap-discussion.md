@@ -13,9 +13,9 @@ implementation has not started.
 - Make recent conversation history usable without waiting for the full archive.
   The user must be able to send, receive, navigate and otherwise interact while
   older history and local derived data are recovered in the background.
-- Still recover all available authorized history, paced and resumable, and
-  retain it until explicit deletion. Prioritizing recent messages does not
-  reduce the retention scope or erase existing local history.
+- Recover all available authorized history gradually by default. Allow the
+  user to select on-demand recovery per room. Retain imported messages and
+  new messages until explicit deletion in either mode.
 
 ## Agreed initial history target
 
@@ -68,7 +68,26 @@ bundled by the Flatpak build requests up to 70 results per page by default.
 [query tracking](https://github.com/gajim/gajim/blob/048a2f3d986a68ca07bde52a2f6a22ef2926188b/src/gajim/common/modules/mam.py#L238-L246)
 and [nbxmpp page size](https://github.com/gajim/python-nbxmpp/blob/c3cc88b25e99a42bf936041800f59e478b3459cf/nbxmpp/modules/mam.py#L39-L53).
 
-## On-demand history and server search proposal
+## Agreed recovery modes and room search
+
+Gradual backfill is the default. Each room can instead use on-demand recovery,
+which fetches older pages when needed for navigation or search. Both modes
+use the agreed initial history target and retain new messages, fetched pages
+and authorized search hits in SQLite. Unvisited history can expire on the
+server, and local searches cover the messages already stored.
+
+For a room search, query SQLite and, when its archive supports text search,
+query the server in parallel. Show local results as soon as they are ready
+and add remote matches as they arrive. Store the imported matches through
+historical ingestion and deduplicate by canonical ID. Track continuous archive
+coverage separately from individual hits. Fetch surrounding messages as needed
+when opening a remote hit.
+
+Give timeline and search requests priority over backfill in the server's
+queue. Report the available search scope when coverage is partial.
+The initial recommendation for global search is to use local data.
+
+## XMPP server search feasibility
 
 XMPP MAM supports fetching archive pages by time and cursor. Full-text search
 is optional. XEP-0431 is Deferred and leaves matching semantics to the
@@ -80,28 +99,11 @@ search. [MAM](https://xmpp.org/extensions/xep-0313.html),
 [ejabberd 25.07](https://www.process-one.net/blog/ejabberd-25-07/) and
 [MongooseIM](https://esl.github.io/MongooseDocs/6.2.1/modules/mod_mam/).
 
-The proposed hybrid model keeps the initial room target and retains new
-messages, fetched timeline pages and authorized search hits in SQLite. When
-scrolling reaches the end of the retained range, fetch the next archive page.
-Start room searches locally and add remote results where supported. Reuse
-historical ingestion and canonical IDs to deduplicate imported matches. Keep
-search hits separate from the checkpoints that describe contiguous archive
-coverage. Fetch surrounding messages on demand when opening a remote hit.
-
-Give explicit timeline and search requests priority over backfill in the
-server's queue. Bound remote searches and keep global search local initially.
-When only part of the archive is locally searchable, report that scope. For
-servers without full-text search, indexing older history locally extends
-coverage as pages arrive.
-
-The existing requirement is to recover all available authorized history in
-the background and retain imported messages. Replacing automatic recovery
-with on-demand fetching alone is an open product decision. It can leave older
-messages unsearchable and allow unvisited history to expire on the server.
-
 ## Open decisions for the next discussion
 
 - What page, message and time budgets keep a busy room from delaying the others?
+- When does typing trigger remote search, and how are obsolete searches
+  cancelled or superseded?
 - How does each protocol adapter identify which archives share a server?
 - What turn frequency gives the open room preference while preserving progress
   across rooms on the same server? Keep requests paced and live traffic responsive.
@@ -126,6 +128,10 @@ Verify that rooms on the same server share its limits across accounts and that
 a slow request to one server lets recovery continue on another server.
 Interrupt recovery, advance the clock and verify that the resumed query uses
 the same UTC bounds for that room.
+Verify that on-demand rooms fetch older pages when requested, and that local
+and remote hits merge without duplicates or advancing continuous coverage.
+Verify that search remains usable with a slow server or an archive that only
+supports page retrieval.
 
 The existing history implementation and its checks are described in
 [the history milestone](milestone-three-history.md). The agreed retention and

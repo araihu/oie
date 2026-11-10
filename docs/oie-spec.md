@@ -370,7 +370,7 @@ Needed public Margo API additions are authorized, provided existing behavior is 
 
 ## 7. History, search, and shared links
 
-Persist history independently of protocol-server retention. Automatically backfill **all available authorized history** with paced, serial requests per server. Rooms on the same server share its limits across accounts. Different servers can recover history in parallel with independent limits. Serve retained history without downloading the full archive again whenever a conversation opens.
+Persist history independently of protocol-server retention. By default, gradually backfill **all available authorized history** with paced, serial requests per server. Allow on-demand recovery per room. Both modes load the initial history target and retain new messages and retrieved pages. Rooms on the same server share its limits across accounts. Different servers can recover history in parallel with independent limits. Serve retained history when reopening a conversation.
 
 Keep retrieved history until explicit user deletion, even after the provider expires it. Optional Oiê history sync also transfers records no longer available from the provider. Oiê cannot retrieve history that neither the provider nor a participating Oiê store still possesses.
 
@@ -386,12 +386,20 @@ messages, include immediately preceding messages until reaching 128 or
 exhausting the available authorized archive. Start with the newest page of the
 open room when it needs recovery, then alternate pages among rooms on each
 server with preference for the open room. Show each page as it is stored. Fetch
-the remaining authorized history gradually in the background. Record server
-identity, page limits, turn frequency and checkpoint decisions in
+older history gradually in the default mode or as needed for navigation and
+search in on-demand mode. Record server identity, page limits, turn frequency
+and checkpoint decisions in
 [the initial-history discussion](history-bootstrap-discussion.md) before API-first
-implementation. Eventual full-history recovery and retention remain required.
+implementation.
 
 Search across accounts/sources in the selected engine and within a direct/group conversation. Alpha indexes message text, captions, filenames, URLs, page titles/descriptions, and available media metadata. Document-body extraction, image OCR, and audio transcription are backlogged.
+
+**AGREED:** room text search queries SQLite and the room archive in parallel
+when remote text search is supported. Show local results as they become
+available and add authorized remote matches as they arrive. Retain those
+messages with canonical deduplication and track contiguous history coverage
+separately. Timeline and remote search requests take precedence over backfill
+in the server's queue.
 
 **AGREED:** use the existing conversation-list search field as one unified global
 search. Remove the separate message-search navigation item and heading action.
@@ -679,7 +687,7 @@ Everything in this section is **RECOMMENDED**, rather than a previously accepted
 | **R05** | Store logical entities and immutable revision payloads separately from mutable projections. Track parent links and per-field changes; derive current message heads. Use provider-scoped identity mappings and canonical aliases to converge independently observed copies. Do not derive causality from UUID order. |
 | **R06** | Separate replicated send visibility from executing ownership. Persist attempt/evidence state and reconcile uncertain acceptance before retransmission. Use a due/retry queue that does not let future schedules block eligible sends. On restore, import stale executable intents as review-required recovery records; preserve newer terminal evidence. |
 | **R07** | Add a public Margo chat profile and semantic projection for text/spans/blocks. Reuse its current parser and existing templ composition. Treat unsupported document constructs readably; keep raw HTML, frontmatter consumption, document runtime features, and Markdown image fetching from bypassing chat/media policy. |
-| **R08** | Use SQLite FTS5 and rebuildable projections. Start with one in-flight background history page per engine, paced across its accounts, with a fair queue, live/foreground priority, backoff, opaque scoped cursors, and checkpointed coverage/gaps. Keep provider archive cursors, read positions, and UI SSE cursors distinct. |
+| **R08** | Use SQLite FTS5 and rebuildable projections. Start with one in-flight archive request per server, paced across accounts using that server, with a fair queue, live/foreground priority, backoff, opaque scoped cursors, and checkpointed coverage/gaps. Keep provider archive cursors, read positions, and UI SSE cursors distinct. |
 | **R09** | Use IndexedDB for durable device records and pending submissions, plus versioned Cache Storage/BFF snapshots for offline presentation. Scope cache identity by selected engine, device, locale, and schema. Coordinate tab ownership and stale controls; local persistence failure must keep the draft and report failure rather than claim queued success. Exact browser rendering/storage fit needs a prototype. |
 | **R10** | Stream attachment bytes into durable staging, hash incrementally, compare supported expected digests, and finalize only when complete. Store algorithm/provenance/outcome, using SHA-256 for a computed-only baseline. Keep binary data separate from SQLite; retain shared-reference accounting. Use a bounded cached preview resolver with URL/redirect/content-size controls, without blocking message acceptance or history backfill. |
 | **R11** | Share a type-specific merge implementation between sync and backup import. Replicate missing revisions/records incrementally, process known scoped tombstones, and rebuild indexes. Keep per-device exclusions separate from shared content deletion. Use monotonic read progress plus an independently versioned manual-unread reminder rather than regressing receipt evidence. |
@@ -753,7 +761,7 @@ B25 is an alpha release requirement. IDs remain stable and do not imply order.
 
 | ID | Item |
 | --- | --- |
-| **B25** | Usable initial room-history recovery, required for alpha v0.0.1. Prioritize the last 48 hours per room, supplementing with immediately preceding messages until reaching 128 when needed and available. Start with the open room and alternate pages among rooms, making each page available as it is stored. Fetch the rest gradually in the background. Remaining decisions are tracked in [initial-history recovery](history-bootstrap-discussion.md). |
+| **B25** | Usable initial room-history recovery, required for alpha v0.0.1. Prioritize the last 48 hours per room, supplementing with immediately preceding messages until reaching 128 when needed and available. Start with the open room and alternate pages among rooms, making each page available as it is stored. Offer gradual background recovery by default and an on-demand mode per room. Room search combines SQLite and supported server search. Remaining decisions are tracked in [initial-history recovery](history-bootstrap-discussion.md). |
 | **B01** | Blocking/unblocking protocol identities. |
 | **B02** | Activity-based notification routing/suppression across devices. |
 | **B03** | Automatic idle/away detection and activity aggregation. |
@@ -810,7 +818,7 @@ These scenarios validate **AGREED** behavior; proposed mechanisms such as a part
 | Scheduling | Do not send before the UTC instant. A timezone display change does not move it. A missed schedule sends on next owning-engine availability unless cancelled. Backup-recovered schedules remain paused. |
 | Offline Send | Offline explicit Send persists a pending submission and later submits automatically. A saved draft does not. Lost acceptance responses do not create a second logical send; storage failure does not claim success or discard the draft. |
 | Ownership | Synced pending items are visible without another engine dispatching them. Alpha remote changes require owning-engine confirmation. Copying history or changing the selected engine does not silently take over sends. |
-| History | Import all available authorized history serially, resume after interruption, and retain it beyond provider expiry. Reopening a conversation does not trigger a complete redownload. Do not manufacture unavailable history. |
+| History | Gradually import available authorized history by default and fetch older pages as needed in on-demand rooms. Resume after interruption and retain imported messages beyond provider expiry. Reopening a conversation uses retained messages. |
 | Search | Global/per-conversation metadata search returns source context. Latest versions are default; historical/retracted matches require their independent filters. Offline results clearly cover only cached data. |
 | Retraction | Supported own retraction uses its separate action. Stored retracted originals display a placeholder/Reveal original and remain outside ordinary search/library views. No guarantee of erasing another client's copy is shown. |
 | Deletion | Device-local deletion leaves other device copies intact, including with a shared hosted engine. All-copy deletion propagates on sync. All revisions/derived entries disappear within scope, including under both Include filters; known deletion markers prevent revival. |
