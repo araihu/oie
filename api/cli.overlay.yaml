@@ -6,11 +6,13 @@ actions:
   # accounts
   - target: $.paths['/api/v1/avatars/{hash}'].get
     update:
-      x-cli-name: download-avatar
+      x-cli-group: [accounts, avatars]
+      x-cli-name: download
       x-cli-ignore: false
   - target: $.paths['/api/v1/accounts/{accountId}/avatars'].get
     update:
-      x-cli-name: list-avatars
+      x-cli-group: [accounts, avatars]
+      x-cli-name: list
   - target: $.paths['/api/v1/accounts/{accountId}/capabilities'].get
     update:
       x-cli-name: get-capabilities

@@ -1798,7 +1798,11 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-cli-name": "list-avatars"
+        "x-cli-group": [
+          "accounts",
+          "avatars"
+        ],
+        "x-cli-name": "list"
       }
     },
     "/api/v1/avatars/{hash}": {
@@ -1870,7 +1874,11 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-cli-name": "download-avatar",
+        "x-cli-group": [
+          "accounts",
+          "avatars"
+        ],
+        "x-cli-name": "download",
         "x-cli-ignore": false
       }
     },

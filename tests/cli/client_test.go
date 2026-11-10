@@ -103,12 +103,12 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err := engine.StoreAvatar(t.Context(), domain.ID(account.Id), "bob@localhost", "cli-fixture", avatarPNG.Bytes()); err != nil {
 		t.Fatal(err)
 	}
-	output, err = run("", "accounts", "list-avatars", "--account-id", account.Id)
+	output, err = run("", "accounts", "avatars", "list", "--account-id", account.Id)
 	var avatars engineapi.AvatarPage
 	if err != nil || json.Unmarshal(output, &avatars) != nil || len(avatars.Items) != 1 || avatars.Items[0].Address != "bob@localhost" {
 		t.Fatalf("CLI avatar metadata: %v %s", err, output)
 	}
-	output, err = run("", "accounts", "download-avatar", "--hash", avatars.Items[0].ImageHash, "--output", "raw")
+	output, err = run("", "accounts", "avatars", "download", "--hash", avatars.Items[0].ImageHash, "--output", "raw")
 	if err != nil {
 		t.Fatalf("CLI avatar download: %v %s", err, output)
 	}
