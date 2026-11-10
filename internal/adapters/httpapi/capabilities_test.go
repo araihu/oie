@@ -41,6 +41,9 @@ func TestCapabilityMatrixSeparatesImplementationProtocolAndEvidence(t *testing.T
 	if upload.AppSupport != "unsupported" || upload.ProtocolSupport != "supported" || upload.ServerSupport != "supported" {
 		t.Fatal("server support enabled unimplemented operation", upload)
 	}
+	if reaction := byID["reactions"]; reaction.AppSupport != "partial" || reaction.ProtocolSupport != "supported" || reaction.ServerSupport != "scope_dependent" {
+		t.Fatal("reaction implementation and scoped protocol support", reaction)
+	}
 	if byID["account_history"].ServerSupport != "unknown" || byID["reactions"].ServerSupport != "scope_dependent" || byID["message_stars"].ServerSupport != "not_required" || byID["message_search"].AppSupport != "supported" || byID["message_search"].ServerSupport != "not_required" || byID["message_search"].ProtocolSupport != "not_required" {
 		t.Fatal("unknown/client/local scope confused", byID)
 	}
@@ -64,6 +67,9 @@ func TestCapabilityMatrixSeparatesImplementationProtocolAndEvidence(t *testing.T
 		t.Fatal("stale server evidence after disconnect", err)
 	}
 	for _, row := range offline.JSON200.Features {
+		if row.Id == "reactions" && row.AppSupport != "partial" {
+			t.Fatal("disconnect changed implemented reaction support", row)
+		}
 		if row.Id == "file_upload" && row.ServerSupport != "unknown" {
 			t.Fatal("offline support claim", row)
 		}
