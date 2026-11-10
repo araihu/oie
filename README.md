@@ -6,7 +6,8 @@ XMPP is the first protocol; local and hosted engines share the same API.
 The display name is Oiê. The shared identity, browser icons and distribution
 provenance are documented in [Branding](docs/branding.md).
 
-The alpha is single-owner, with multiple accounts and optional device sync.
+The alpha targets one owner with multiple protocol accounts. Device sync remains
+planned.
 
 - [Live browser setup and development accounts](docs/live-preview.md)
 - [Local CI loop](docs/local-ci.md)
@@ -28,9 +29,9 @@ receive live updates. Device drafts and unresolved acceptance keys survive refre
 The independent read-only mock remains available for presentation tests.
 Existing account text archives now recover serially with durable checkpoints,
 original timestamps, replay deduplication and progress through the API/UI. Saved
-rooms and their authorized archives appear in read-only mode. Room joining and
-sending, attachment uploads, schedules, sync, PWA/offline and backup/restore remain
-later work.
+rooms support explicit entry/leave, basic text and replies while joined.
+Attachment uploads, schedules, sync, PWA/offline and backup/restore remain later
+work.
 See [history recovery scope](docs/milestone-three-history.md). See [engine milestone notes](docs/milestone-two-engine.md) and
 [foundation notes](docs/milestone-one.md) for scope and invariants.
 
@@ -51,6 +52,17 @@ own guarded revisions and durable receipts; the engine API and generated CLI
 provide a paginated starred-message collection. The image toolbar shows the
 sender and local device time, and cached originals can be saved from the message
 menu. See [message stars](docs/message-stars.md).
+
+Verified incoming corrections retain their previous versions. Outgoing editing
+currently covers the latest own plain text original sent by this engine in the
+current verified connection. Imported messages, earlier originals, replies and
+structured mentions are outside outgoing correction support.
+
+API 0.26 adds retained emoji reaction counts and full own-set replacement or
+removal, with a searchable English/Portuguese picker. Direct reactions have real
+development-server coverage. Room support requires trusted stanza IDs and current
+verified non-anonymous actor identity. See [reaction API and persistence scope](docs/message-reactions.md)
+and [reaction controls](docs/reactions.md).
 
 ## Run
 
