@@ -15,13 +15,14 @@ leaves retained text usable without a reaction action.
 The reaction capsule shows observed counts and opens a Goshtoso Popover with
 avatars, names and per-actor emoji sets. Emoji filters narrow the list. Each own
 emoji is a remove action; other actors' emojis have no mutation action. A fresh
-preflight that finds an already-cleared own emoji does not re-add it. React opens a
-Goshtoso dialog with the composer's shared emoji selector. The same component and
-controller provide continuous categories, footer navigation, bilingual search,
-device recent history and grouped skin-tone choices. Search names follow the UI
-language and keywords match both languages. The source composer and ordinary
-draft are independent.
-Escape closes the picker and restores source-action focus. The server's allowed
+preflight that finds an already-cleared own emoji does not re-add it. React opens
+a compact, anchored row of common emojis. Selecting one applies it immediately.
+The plus button opens a Goshtoso Popover with the composer's shared emoji
+selector. The catalog provides continuous categories, footer navigation,
+bilingual search, device recents and grouped skin-tone choices. Search names
+follow the UI language and keywords match both languages. The source composer
+and ordinary draft are independent.
+Escape closes the active panel and restores focus to its trigger. The server's allowed
 emoji list filters choices; its maximum applies to the complete own set. With a
 maximum of one, choosing another emoji replaces the previous one. Selecting the
 same emoji removes it. The alpha app's bound of eight is an implementation limit,
@@ -45,7 +46,7 @@ retry states retain that row's geometry, and timeline updates retain the visible
 message anchor. Fragment disposal aborts outstanding reads and clears polling.
 
 The UI composes public Goshtoso ChatBubble rich content, Avatar, Popover, Button,
-native Dialog, TextInput and Spinner APIs. It imports no dependency demo/internal packages. The
+TextInput and Spinner APIs. It imports no dependency demo/internal packages. The
 composer emoji selector keeps its existing behavior.
 
 Validation uses an isolated engine fixture and BFF, without a real account.
@@ -67,7 +68,7 @@ The actor-list increment does not change XMPP transport behavior.
 | Composer | Choose an emoji or tone | Insert at the caret, keep the draft and issue no reaction command. |
 | Reactions | Choose an allowed emoji or tone | Keep the composer draft, submit one scoped full-set command and update shared device recents. |
 | Restricted protocol | Browse or choose | Show only allowed emoji/tone variants; respect the current selection limit. |
-| Nested tone strip | Escape | Close only the strip and focus its trigger; retain the reaction dialog and draft. |
+| Nested tone strip | Escape | Close only the strip and focus its trigger; retain the reaction catalog and draft. |
 | Delayed or refused preparation | Open reaction selector | Keep the composer/timeline geometry; issue no mutation on refusal. |
 
 `tests/browser/reactions.cjs` exercises these alongside receipt recovery, unknown

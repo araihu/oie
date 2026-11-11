@@ -7,6 +7,7 @@ window.OieEmojiPicker={mount(root,life,options){
  const memory=window.OieRuntime.memory,cacheKey='emoji-catalog-v2:'+content.dataset.emojiUrl,recentKey='oie.emoji-recent.v1',fold=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase(document.documentElement.lang).trim();
  let catalog=memory.get(cacheKey),loading=false,sections=new Map(),scrollFrame=false,variantGeometry=null,recent=[];
  function readRecent(){try{recent=JSON.parse(localStorage.getItem(recentKey)||'[]')}catch{recent=memory.get(recentKey)||[]}if(!Array.isArray(recent))recent=[];recent=recent.filter(value=>typeof value==='string').slice(0,24)}
+ function remember(glyph){readRecent();recent=[glyph,...recent.filter(value=>value!==glyph)].slice(0,24);memory.set(recentKey,recent);try{localStorage.setItem(recentKey,JSON.stringify(recent))}catch{}}
  const writable=()=>root.isConnected&&(options.available?.()??true),allowed=glyph=>options.allowed?.(glyph)??true,enabled=glyph=>writable()&&(options.enabled?.(glyph)??true);
  const mutate=fn=>window.Alpine?.mutateDom?window.Alpine.mutateDom(fn):fn();
  function clear(node){for(const child of node.children)window.Alpine?.destroyTree(child);node.replaceChildren()}
@@ -115,7 +116,7 @@ window.OieEmojiPicker={mount(root,life,options){
   const toggle=event.target.closest('[data-emoji-variants-trigger]');if(toggle){populateVariants(toggle);return}
   const chosen=event.target.closest('[data-emoji-pick]');if(!chosen||chosen.disabled||!writable()||!catalog?.items.has(chosen.dataset.emojiPick))return;
   event.preventDefault();const glyph=chosen.dataset.emojiPick;if(!allowed(glyph)||!enabled(glyph)||options.choose?.(glyph)===false)return;
-  recent=[glyph,...recent.filter(value=>value!==glyph)].slice(0,24);memory.set(recentKey,recent);try{localStorage.setItem(recentKey,JSON.stringify(recent))}catch{}
+  remember(glyph);
   closeVariants();options.afterChoose?.();
  });
  life.on(root,'keydown',event=>{
@@ -124,7 +125,7 @@ window.OieEmojiPicker={mount(root,life,options){
   const buttons=[...region.querySelectorAll('[data-emoji-pick]')].filter(button=>!button.disabled&&button.closest('[data-emoji-variants],.oie-emoji-grid')===region),index=buttons.indexOf(event.target),columns=region.matches('[data-emoji-variants]')?1:8,delta={ArrowLeft:-1,ArrowRight:1,ArrowUp:-columns,ArrowDown:columns}[event.key];
   if(index<0||delta===undefined)return;event.preventDefault();buttons[Math.max(0,Math.min(buttons.length-1,index+delta))]?.focus();
  });
- return {search,open(resetSearch=false){readRecent();if(resetSearch)search.value='';void load()},close:closeVariants,escape(){const toggle=root.querySelector('[data-emoji-variants-trigger][aria-expanded="true"]');if(!toggle)return false;closeVariants();toggle.focus({preventScroll:true});return true}};
+ return {search,remember,focusSearch:trigger=>focusWhenOpen(trigger,search),open(resetSearch=false){readRecent();if(resetSearch)search.value='';void load()},close:closeVariants};
 }};
 window.OieRuntime.register('emoji-picker',life=>{
  const root=document.getElementById('oie-emoji-picker'),input=document.getElementById('message-composer'),form=document.getElementById('send-message-form');if(!root||!input||!form)return;

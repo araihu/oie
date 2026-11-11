@@ -374,6 +374,18 @@ func (s *Server) setReactions(w http.ResponseWriter, r *http.Request) {
 	respond(status)
 }
 
+func reactionQuickChoices(text copy) []struct{ emoji, label string } {
+	return []struct{ emoji, label string }{
+		{"👍", text.ReactionThumbsUp},
+		{"❤️", text.ReactionHeart},
+		{"😂", text.ReactionLaugh},
+		{"😮", text.ReactionSurprise},
+		{"😢", text.ReactionCry},
+		{"🙏", text.ReactionPray},
+		{"👏", text.ReactionClap},
+	}
+}
+
 func reactionSummaryPlacement(own bool) popover.Placement {
 	if own {
 		return popover.PlacementTopEnd

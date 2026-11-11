@@ -5,7 +5,6 @@ import (
  "github.com/araihu/goshtoso/components/avatar"
  "github.com/araihu/goshtoso/components/button"
  "github.com/araihu/goshtoso/components/icon/heroicons"
- "github.com/araihu/goshtoso/components/modal"
  "github.com/araihu/goshtoso/components/popover"
  "github.com/araihu/goshtoso/components/tooltip"
  "github.com/araihu/goshtoso/components/spinner"
@@ -27,7 +26,7 @@ templ reactionDetails(v view,m messageView){
 <header><strong>{v.Text.Reactions}</strong><span data-reaction-total></span></header>
 <div class="oie-reaction-filters" data-reaction-filters role="group" aria-label={v.Text.Reactions}></div>
 <div class="oie-reaction-detail-list" data-reaction-detail-list></div>
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-add"),button.WithAttrs(templ.Attributes{"data-reaction-open":m.Id,"aria-label":v.Text.ReactMessage})) {@glyph(heroicons.Icon16SolidFaceSmile)<span>{v.Text.ReactMessage}</span>}
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-add"),button.WithAttrs(templ.Attributes{"data-reaction-open":m.Id,"aria-label":v.Text.ReactMessage,"aria-haspopup":"dialog","aria-controls":"oie-reaction-quick","aria-expanded":"false"})) {@glyph(heroicons.Icon16SolidFaceSmile)<span>{v.Text.ReactMessage}</span>}
 </section>
 }
 
@@ -38,19 +37,29 @@ templ messageReactionShortcut(v view,m messageView){
 }
 
 templ reactionShortcutButton(v view,m messageView){
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-shortcut"),button.WithAttrs(templ.Attributes{"data-reaction-open":m.Id,"aria-label":v.Text.ReactMessage})) {@glyph(heroicons.Icon16SolidFaceSmile)}
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-shortcut"),button.WithAttrs(templ.Attributes{"data-reaction-open":m.Id,"aria-label":v.Text.ReactMessage,"aria-haspopup":"dialog","aria-controls":"oie-reaction-quick","aria-expanded":"false"})) {@glyph(heroicons.Icon16SolidFaceSmile)}
 }
 
-templ reactionDialog(v view){
+templ reactionPicker(v view){
 if v.Selected!=nil {
-@modal.Dialog(modal.DialogConfig{ID:"oie-reaction-picker",Title:v.Text.ReactMessage,Content:reactionPickerContent(v),Compact:true})
+<section id="oie-reaction-quick" popover="manual" hidden role="dialog" aria-label={v.Text.ReactMessage}>
+<div class="oie-reaction-quick-row">
+for _, choice:=range reactionQuickChoices(v.Text) {
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-quick-button"),button.WithAttrs(templ.Attributes{"data-reaction-quick-emoji":choice.emoji,"aria-label":choice.label,"aria-pressed":"false","title":choice.label})){ {choice.emoji} }
 }
+@popover.Popover(popover.Config{ID:"oie-reaction-picker",Trigger:reactionMoreButton(v),Content:emojiSelector(v,"reaction-emoji",v.Text.Reactions),Placement:popover.PlacementTopEnd,Role:"dialog",Label:v.Text.ReactionMore,PanelClass:"oie-emoji-panel oie-reaction-catalog-panel"})
+</div>
+</section>
+@reactionPickerContent(v)
+}
+}
+
+templ reactionMoreButton(v view){
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-quick-button oie-reaction-more"),button.WithAttrs(templ.Attributes{"data-reaction-more":"","aria-label":v.Text.ReactionMore,"title":v.Text.ReactionMore})){@glyph(heroicons.Icon16SolidPlus)}
 }
 
 templ reactionPickerContent(v view){
-<section class="oie-reaction-picker" data-reaction-picker data-unavailable={v.Text.ReactionUnavailable} data-unknown={v.Text.ReactionUnknown} data-failed={v.Text.ReactionFailed} data-pending={v.Text.ReactionPending} data-check={v.Text.ReactionCheck} data-remove={v.Text.ReactionRemove} data-retry={v.Text.Retry} data-react={v.Text.ReactMessage} data-all={v.Text.All} data-you={v.Text.You} data-react-summary={v.Text.Reactions}>
-<header><strong>{v.Text.ReactMessage}</strong>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"data-reaction-close":"","aria-label":v.Text.Close})){@glyph(heroicons.Icon16SolidXMark)}</header>
-@emojiSelector(v,"reaction-emoji",v.Text.Reactions)
+<div hidden data-reaction-picker data-unavailable={v.Text.ReactionUnavailable} data-unknown={v.Text.ReactionUnknown} data-failed={v.Text.ReactionFailed} data-pending={v.Text.ReactionPending} data-check={v.Text.ReactionCheck} data-remove={v.Text.ReactionRemove} data-retry={v.Text.Retry} data-react={v.Text.ReactMessage} data-all={v.Text.All} data-you={v.Text.You} data-react-summary={v.Text.Reactions}>
 <template data-reaction-chip-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-chip"),button.WithAttrs(templ.Attributes{"data-reaction-emoji":""})){<span data-reaction-glyph aria-hidden="true"></span><small data-reaction-count></small><span data-reaction-busy hidden>@spinner.Spinner(spinner.Config{Size:spinner.SizeSM,RootClass:"oie-reaction-spinner"})</span>}</template>
 <template data-reaction-actor-template>
 <div class="oie-reaction-actor" data-reaction-actor>
@@ -66,7 +75,7 @@ templ reactionPickerContent(v view){
 <template data-reaction-filter-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-filter"),button.WithAttrs(templ.Attributes{"data-reaction-filter":""})) {<span></span>}</template>
 <template data-reaction-remove-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-remove"),button.WithAttrs(templ.Attributes{"data-reaction-emoji":"","aria-label":v.Text.ReactionRemove,"title":v.Text.ReactionRemove})) {@glyph(heroicons.Icon16SolidXMark)}</template>
 <template data-reaction-status-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-chip oie-reaction-recovery"),button.WithAttrs(templ.Attributes{"data-reaction-check":""})){<span data-reaction-check-icon>@glyph(heroicons.Icon16SolidArrowPath)</span><span data-reaction-status-spinner hidden>@spinner.Spinner(spinner.Config{Size:spinner.SizeSM,RootClass:"oie-reaction-spinner"})</span>}</template>
-</section>
+</div>
 }
 
 templ reactionActorInitials(){

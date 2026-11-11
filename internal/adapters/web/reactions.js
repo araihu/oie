@@ -1,12 +1,20 @@
 window.OieRuntime.register('reactions',life=>{
  'use strict';
- const picker=document.querySelector('[data-reaction-picker]'),dialog=document.getElementById('oie-reaction-picker');if(!picker||!dialog)return;
+ const picker=document.querySelector('[data-reaction-picker]'),quick=document.getElementById('oie-reaction-quick'),catalog=document.getElementById('oie-reaction-picker');if(!picker||!quick||!catalog)return;
+ const more=quick.querySelector('[data-reaction-more]'),choices=[...quick.querySelectorAll('[data-reaction-quick-emoji]')];
  const body=document.body,scope={engineId:body.dataset.engineId,accountId:body.dataset.accountId,conversationId:body.dataset.conversationId},labels=picker.dataset,csrf=document.querySelector('meta[name="oie-csrf"]')?.content||'';
  const memory=window.OieRuntime.memory,key='reaction-journals:'+Object.values(scope).join(':'),journals=memory.get(key)||new Map();memory.set(key,journals);
  const filters=new Map(),snapshots=new Map(),busy=new Set(),polls=new Map(),stored=new Set(),prefix='oie.reaction.v1:'+Object.values(scope).join(':')+':';
  const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(v),sameSet=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every(e=>b.includes(e));
  let preparation=null,opener=null,openerID='',prepareEpoch=0,preparing=null;
- const selector=window.OieEmojiPicker.mount(picker,life,{available:()=>!!preparation&&snapshots.get(preparation.messageId)?.eligible===true,allowed:glyph=>{const s=preparation&&snapshots.get(preparation.messageId);return !!s&&(!s.allowedEmojis||s.allowedEmojis.includes(glyph))},selected:glyph=>preparation?.emojis.includes(glyph)===true,enabled:glyph=>{const s=preparation&&snapshots.get(preparation.messageId);return !!s&&(s.maxEmojis===1||preparation.emojis.includes(glyph)||preparation.emojis.length<s.maxEmojis)},choose:glyph=>!!preparation&&dialog.open&&choose({...preparation,emojis:[...preparation.emojis]},glyph)});
+ const activeSnapshot=()=>preparation&&snapshots.get(preparation.messageId);
+ const allowed=glyph=>{const s=activeSnapshot();return !!s&&(!s.allowedEmojis||s.allowedEmojis.includes(glyph))};
+ const selected=glyph=>preparation?.emojis.includes(glyph)===true;
+ const enabled=glyph=>{const s=activeSnapshot();return !!s&&(s.maxEmojis===1||selected(glyph)||preparation.emojis.length<s.maxEmojis)};
+ const selector=window.OieEmojiPicker.mount(catalog,life,{
+  available:()=>!quick.hidden&&activeSnapshot()?.eligible===true,allowed,selected,enabled,
+  choose:glyph=>!!preparation&&!quick.hidden&&choose(preparation,glyph)
+ });
  function notify(message){if(message)window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message}}))}
  function validSnapshot(s,id){return s&&s.messageId===id&&s.accountId===scope.accountId&&s.conversationId===scope.conversationId&&Array.isArray(s.items)&&Array.isArray(s.ownEmojis)&&s.ownEmojis.length<=8&&s.ownEmojis.every(e=>typeof e==='string')&&(!s.ownRevisionId||uuid(s.ownRevisionId))&&(!s.revisionId||uuid(s.revisionId))&&Number.isInteger(s.maxEmojis)&&s.maxEmojis>=1&&s.maxEmojis<=8&&s.items.every(i=>typeof i.emoji==='string'&&i.emoji&&Number.isSafeInteger(i.count)&&i.count>0&&typeof i.own==='boolean')&&(!s.allowedEmojis||Array.isArray(s.allowedEmojis)&&s.allowedEmojis.length<=256)&&validActors(s)}
  function validActors(s){
@@ -23,6 +31,7 @@ window.OieRuntime.register('reactions',life=>{
  function read(root){
   for(const region of root.querySelectorAll('[data-reaction-source][data-reaction-state]')){const id=region.dataset.reactionSource;if(!uuid(id))continue;let s;try{s=JSON.parse(region.dataset.reactionState)}catch{continue}if(!validSnapshot(s,id))continue;snapshots.set(id,s);restore(id);if(s.pendingCommand){const intent=commandIntent(s.pendingCommand);if(validIntent(intent,id)&&matches(s.pendingCommand,intent)&&!journals.has(id))save(intent)}}
   render();
+  if(preparation&&!activeSnapshot()?.eligible)close(false);else positionQuick();
  }
  function chipLabel(item){return item.emoji+' · '+item.count+(item.own?' · '+labels.remove:'')}
  function detailFilter(id,emoji,count,selected){const button=picker.querySelector('[data-reaction-filter-template]').content.firstElementChild.cloneNode(true);button.dataset.reactionFilter=emoji;button.dataset.reactionMessage=id;button.setAttribute('aria-pressed',String(selected));button.querySelector('span').textContent=(emoji||labels.all)+' · '+count;return button}
@@ -76,23 +85,106 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
    if(value.snapshot.pendingCommand){const intent=commandIntent(value.snapshot.pendingCommand);if(!validIntent(intent,id)||!matches(intent.command,intent))throw Error('pending');save(intent);busy.delete(id);void submit(intent,true);return}
    if(!value.snapshot.eligible)throw Error('ineligible');const next={...scope,messageId:id,expectedOwnRevisionId:value.snapshot.ownRevisionId||'',operationKey:value.operationKey,emojis:value.snapshot.ownEmojis};
    if(emoji){busy.delete(id);if(next.emojis.includes(emoji))choose(next,emoji);return}
-   preparation=next;window.dispatchEvent(new CustomEvent('modal:open',{detail:{id:dialog.id}}));selector.open(true);life.timeout(()=>selector.search.focus({preventScroll:true}),0);
+   openQuick(next);
   }catch{if(!life.signal.aborted&&epoch===prepareEpoch&&!controller.signal.aborted)notify(labels.unavailable)}
   finally{clearTimeout(timeout);if(epoch===prepareEpoch)preparing=null;if(!journals.has(id))busy.delete(id);if(!life.signal.aborted)render()}
  }
- function close(){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id:dialog.id}}))}
+ function positionQuick(){
+  if(quick.hidden)return;
+  const bubble=document.querySelector('[data-message-bubble="'+CSS.escape(openerID)+'"]');
+  const timeline=document.getElementById('message-timeline');
+  if(!bubble||!timeline){close(false);return}
+  const source=bubble.getBoundingClientRect(),pane=timeline.getBoundingClientRect();
+  const anchor=bubble.querySelector('.oie-reaction-shortcut')?.getBoundingClientRect();
+  const rect=anchor?.width?anchor:source,viewport=window.visualViewport;
+  const left=(viewport?.offsetLeft||0)+8,right=(viewport?.offsetLeft||0)+(viewport?.width||document.documentElement.clientWidth)-8;
+  const top=Math.max(pane.top,viewport?.offsetTop||0)+6,bottom=Math.min(pane.bottom,(viewport?.offsetTop||0)+(viewport?.height||innerHeight))-6;
+  if(source.bottom<=top||source.top>=bottom){close(false);return}
+  const width=quick.offsetWidth,height=quick.offsetHeight,own=!!bubble.closest('.oie-message-own');
+  const x=own?rect.left-6:rect.right-width+6;
+  const y=rect.top-height-6>=top?rect.top-height-6:rect.bottom+6;
+  quick.style.left=Math.max(left,Math.min(x,right-width))+'px';
+  quick.style.top=Math.max(top,Math.min(y,bottom-height))+'px';
+ }
+ function openQuick(intent){
+  preparation=intent;
+  for(const button of choices){
+   const glyph=button.dataset.reactionQuickEmoji;
+   button.hidden=!allowed(glyph);
+   button.disabled=!enabled(glyph);
+   button.setAttribute('aria-pressed',String(selected(glyph)));
+  }
+  quick.hidden=false;
+  quick.showPopover?.();
+  positionQuick();
+  if(quick.hidden)return;
+  if(opener?.matches('[data-reaction-open]'))opener.setAttribute('aria-expanded','true');
+  (choices.find(button=>!button.hidden&&!button.disabled)||more).focus({preventScroll:true});
+ }
+ function close(restoreFocus=true){
+  if(quick.hidden)return;
+  const source=opener,id=openerID;
+  if(more.getAttribute('aria-expanded')==='true')more.click();
+  selector.close();
+  if(quick.isConnected)quick.hidePopover?.();
+  quick.hidden=true;
+  preparation=null;
+  if(source?.matches('[data-reaction-open]'))source.setAttribute('aria-expanded','false');
+  if(!restoreFocus)return;
+  const root=document.querySelector('[data-message-bubble="'+CSS.escape(id)+'"]');
+  const control=source?.matches('.oie-reaction-shortcut')&&source.isConnected&&source.getClientRects().length
+   ?source:root?.querySelector('[data-message-menu-trigger]');
+  control?.focus({preventScroll:true});
+ }
  function choose(intent,emoji){
   const s=snapshots.get(intent.messageId);if(!s||!s.eligible||s.allowedEmojis&&!s.allowedEmojis.includes(emoji))return false;
   const emojis=intent.emojis.includes(emoji)?intent.emojis.filter(e=>e!==emoji):s.maxEmojis===1?[emoji]:[...intent.emojis,emoji];if(emojis.length>s.maxEmojis){notify(labels.unavailable);return false}
   close();void submit({...intent,emojis},false);return true;
  }
- life.on(picker,'click',event=>{if(event.target.closest('[data-reaction-close]'))close()});
- life.on(document,'keydown',event=>{if(event.key==='Escape'&&preparing){prepareEpoch++;preparing.abort();preparing=null}});
- life.on(dialog,'keydown',event=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();event.stopPropagation();if(!selector.escape())close()}});
- life.on(dialog,'close',()=>{selector.close();preparation=null;const id=openerID;life.timeout(()=>{if(life.signal.aborted)return;const target=opener?.isConnected&&opener.getClientRects().length?opener:id?document.querySelector('[data-message-menu-trigger="'+CSS.escape(id)+'"]'):null;target?.focus({preventScroll:true})},0)});
+ const catalogObserver=new MutationObserver(()=>{
+  if(!quick.hidden&&more.getAttribute('aria-expanded')==='true'){
+   selector.open(true);
+   selector.focusSearch(more);
+  }else selector.close();
+ });
+ catalogObserver.observe(more,{attributes:true,attributeFilter:['aria-expanded']});
+ life.cleanup(()=>{catalogObserver.disconnect();close(false)});
+ life.on(quick,'click',event=>{
+  const button=event.target.closest('[data-reaction-quick-emoji]');
+  if(!button||button.disabled||button.hidden||!preparation)return;
+  const glyph=button.dataset.reactionQuickEmoji;
+  if(choose(preparation,glyph))selector.remember(glyph);
+ });
+ life.on(quick,'keydown',event=>{
+  if(!['ArrowLeft','ArrowRight'].includes(event.key)||catalog.contains(event.target)&&event.target!==more)return;
+  const buttons=[...choices.filter(button=>!button.hidden&&!button.disabled),more];
+  const current=buttons.indexOf(event.target);if(current<0)return;
+  event.preventDefault();
+  buttons[(current+buttons.length+(event.key==='ArrowRight'?1:-1))%buttons.length].focus({preventScroll:true});
+ });
+ function cancelPreparation(){if(preparing){prepareEpoch++;preparing.abort();preparing=null}}
+ life.on(document,'keydown',event=>{
+  if(event.key!=='Escape')return;
+  cancelPreparation();
+  if(quick.hidden||more.getAttribute('aria-expanded')==='true')return;
+  event.preventDefault();
+  close();
+ });
+ life.on(document,'pointerdown',event=>{
+  if(quick.contains(event.target)||opener?.contains(event.target))return;
+  cancelPreparation();
+  close(false);
+ },{capture:true});
+ life.on(document,'focusin',event=>{
+  if(!quick.hidden&&!quick.contains(event.target)&&event.target!==opener)close(false);
+ });
+ life.on(document,'scroll',event=>{if(!quick.contains(event.target))positionQuick()},{capture:true,passive:true});
+ life.on(window,'resize',positionQuick);
+ life.on(window.visualViewport,'resize',positionQuick);
+ life.on(window.visualViewport,'scroll',positionQuick);
  life.on(document,'click',event=>{
   const filter=event.target.closest('[data-reaction-filter]');if(filter){event.preventDefault();filters.set(filter.dataset.reactionMessage,filter.dataset.reactionFilter);render();return}
-  const direct=event.target.closest('[data-reaction-open]'),menu=event.target.closest('[id^="react-message-"]'),chip=event.target.closest('[data-reaction-emoji][data-reaction-message]'),check=event.target.closest('[data-reaction-check]');if(!direct&&!menu&&!chip&&!check)return;const button=direct||menu||chip||check;if(button.disabled)return;event.preventDefault();if(!direct||button.closest('[data-reaction-details]'))button.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));const id=direct?direct.dataset.reactionOpen:menu?menu.id.slice(14):button.dataset.reactionMessage;if(check){const intent=journals.get(id);if(intent)void submit(intent,!!intent.command||!intent.missingReceipt)}else void prepare(id,button,chip?.dataset.reactionEmoji)
+  const direct=event.target.closest('[data-reaction-open]'),menu=event.target.closest('[id^="react-message-"]'),chip=event.target.closest('[data-reaction-emoji][data-reaction-message]'),check=event.target.closest('[data-reaction-check]');if(!direct&&!menu&&!chip&&!check)return;const button=direct||menu||chip||check;if(button.disabled)return;event.preventDefault();if(!direct||button.closest('[data-reaction-details]'))button.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));const id=direct?direct.dataset.reactionOpen:menu?menu.id.slice(14):button.dataset.reactionMessage;if(check){const intent=journals.get(id);if(intent)void submit(intent,!!intent.command||!intent.missingReceipt)}else if(!quick.hidden&&button===opener)close();else{close(false);void prepare(id,button,chip?.dataset.reactionEmoji)}
  });
  // Touch gestures compose the same scoped, read-only preparation and public
  // Dropdown trigger as keyboard/menu use. Scrolling and native controls win.
@@ -109,7 +201,7 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
  life.on(document,'pointermove',event=>{if(gesture&&gesture.id===event.pointerId&&Math.hypot(event.clientX-gesture.x,event.clientY-gesture.y)>10){cancelGesture();lastTap=null}},{passive:true});
  life.on(document,'pointerup',event=>{
   if(!gesture||gesture.id!==event.pointerId)return;const candidate=gesture;cancelGesture();if(candidate.held||!candidate.source.isConnected)return;const now=performance.now();if(now-candidate.time>450){lastTap=null;return}
-  if(lastTap&&lastTap.source===candidate.source&&now-lastTap.time<=320&&Math.hypot(candidate.x-lastTap.x,candidate.y-lastTap.y)<=24){event.preventDefault();lastTap=null;suppressClick={source:candidate.source,until:now+700};void prepare(candidate.source.dataset.messageBubble,candidate.source)}else lastTap={...candidate,time:now}
+  if(lastTap&&lastTap.source===candidate.source&&now-lastTap.time<=320&&Math.hypot(candidate.x-lastTap.x,candidate.y-lastTap.y)<=24){event.preventDefault();lastTap=null;suppressClick={source:candidate.source,until:now+700};close(false);void prepare(candidate.source.dataset.messageBubble,candidate.source)}else lastTap={...candidate,time:now}
  },{passive:false});
  life.on(document,'pointercancel',()=>{cancelGesture();cancelPrimary();lastTap=null},{passive:true});
  life.on(document,'scroll',()=>{cancelGesture();cancelPrimary();lastTap=null},{capture:true,passive:true});

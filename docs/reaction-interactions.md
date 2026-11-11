@@ -9,10 +9,13 @@ Goshtoso Popover provides emoji filters and an explicit action to remove an own
 reaction or open the existing selector. Opening or filtering that panel sends
 nothing.
 
-Compose public Goshtoso Button, Tooltip and Popover components in ChatBubble's
-public rich-content slot. Reuse the existing reaction Dialog and public Dropdown
-trigger. Message-specific gesture arbitration belongs to Oie's scoped browser
-runtime; it is not a replacement overlay or dependency-internal DOM workaround.
+The chat prioritizes a compact row of common emojis for quick reactions.
+Compose public Goshtoso Button, Tooltip, Popover and Dropdown components with
+ChatBubble's public rich-content slot. A shared native popover holds the compact
+row because it is anchored to whichever message passed the eligibility check.
+The plus button uses Goshtoso Popover to open the shared catalog beside the row.
+Keep both surfaces within the visible viewport using the existing theme colors.
+Escape closes one surface at a time and returns focus to its trigger.
 API 0.27 extends the existing read snapshot with verified actor sets. The BFF
 read contract references that same snapshot; mutations keep the existing contract.
 
@@ -44,6 +47,18 @@ retain their primary action. A second tap cancels that delayed opening. Links,
 inputs and audio/video controls retain native behavior. Scroll, canceled pointers,
 Escape, hidden documents and fragment disposal clear pending gesture work. Scope
 and message identity are still checked by the existing reaction preparation.
+
+| State | Action | Result | Focus and context | Reaction writes |
+|---|---|---|---|---|
+| Eligible message | Open React | Show the compact row after preparation | First available emoji, or plus | 0 |
+| Compact row | Open plus | Show the anchored catalog | Catalog search and same draft | 0 |
+| Eligible choice | Choose an emoji in either panel | Apply the complete own set | Return to the message action | 1 |
+| Already selected choice | Choose the same emoji | Remove it from the own set | Return to the message action | 1 |
+| Restricted or full set | Browse either panel | Filter disallowed choices and disable additional choices at the cap | Keep the draft and scroll | 0 |
+| Stale revision | Choose an emoji | Reject the stale set and refresh the message | Keep the draft and scroll | 0 |
+| Delayed or rejected preparation | Cancel or wait for refusal | Keep both surfaces closed | Preserve the message and composer geometry | 0 |
+| Either open panel | Press Escape | Close the active panel | Return focus to its trigger | 0 |
+| Submission response lost | Check or retry | Reconcile the existing operation key | Keep the draft and message | At most 1 |
 
 The isolated reaction browser fixture covers the original set/clear, CAS receipt
 and recovery cases plus verified actor names, cached photos and missing-photo
