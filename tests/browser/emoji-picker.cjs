@@ -46,6 +46,20 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   await trigger.click();await search.waitFor({state:'visible'});await until(async()=>await search.evaluate(node=>node===document.activeElement),'search focus');
   const picker=page.getByRole('dialog',{name:'Choose emoji',exact:true});await page.locator('#emoji-grid [data-emoji-pick]').first().waitFor();await picker.evaluate(node=>Promise.all(node.getAnimations().map(animation=>animation.finished.catch(()=>{}))));const fullHeight=await picker.evaluate(node=>node.offsetHeight);
   await page.getByText('No recent emojis yet.',{exact:true}).waitFor();assert(Math.abs(await picker.evaluate(node=>node.offsetHeight)-fullHeight)<2,'empty recent section changed picker height');assert.equal(await page.locator('#oie-emoji-picker [data-emoji-category],[role=tablist]').count(),0,'picker uses section navigation rather than filtering tabs');assert.equal(await page.locator('#oie-emoji-picker [data-emoji-section]').count(),10);const browseArtifacts=path.join(__dirname,'artifacts');await fs.mkdir(browseArtifacts,{recursive:true});await page.screenshot({path:path.join(browseArtifacts,'emoji-picker-browse-desktop.png')});
+  const footer=picker.locator('.oie-emoji-footer');
+  const symbols=footer.locator('[data-emoji-jump="7"]');
+  await symbols.hover();
+  const footerGeometry=await footer.locator('[data-emoji-jump]').evaluateAll(buttons=>buttons.map(button=>{
+   const bounds=button.getBoundingClientRect(),glyph=button.firstElementChild,glyphBounds=glyph.getBoundingClientRect();
+   return {category:button.dataset.emojiJump,width:bounds.width,height:bounds.height,radius:getComputedStyle(button).borderTopLeftRadius,
+    x:glyphBounds.x+glyphBounds.width/2-bounds.x-bounds.width/2,y:glyphBounds.y+glyphBounds.height/2-bounds.y-bounds.height/2};
+  }));
+  assert.equal(footerGeometry.length,10);
+  for(const icon of footerGeometry){
+   assert.equal(icon.width,28);assert.equal(icon.height,28);assert.equal(icon.radius,'50%');
+   assert(Math.abs(icon.x)<.1,'category glyph is horizontally centered');
+   assert(Math.abs(icon.y-(icon.category==='4'?-3.4:0))<.1,'category glyph has the expected optical alignment');
+  }
   const totalChoices=await page.locator('#oie-emoji-picker [data-emoji-section]>.oie-emoji-grid>[data-emoji-pick],[data-emoji-section]>.oie-emoji-grid>[data-emoji-family]').count();
   await page.locator('#oie-emoji-picker [data-emoji-jump="8"]').click();await until(async()=>await page.locator('#oie-emoji-picker [data-emoji-scroll]').evaluate(node=>node.scrollTop>100),'footer jumps down the long list');assert.equal(await page.locator('#oie-emoji-picker [data-emoji-section]>.oie-emoji-grid>[data-emoji-pick],[data-emoji-section]>.oie-emoji-grid>[data-emoji-family]').count(),totalChoices,'footer jump must not filter emojis');assert.equal(await search.inputValue(),'');
   await search.fill('heart');await page.locator('#oie-emoji-picker [data-emoji-pick="❤️"]').click();

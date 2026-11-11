@@ -29,5 +29,9 @@
 .oie-emoji-variants-bubble [data-emoji-variant]:first-child::after{content:"";position:absolute;right:-2px;top:5px;bottom:5px;border-right:1px solid var(--oie-border)}
 
 .oie-emoji-section{margin-bottom:16px}.oie-emoji-section>h3{margin:0 0 7px;color:var(--oie-muted);font-size:12px;font-weight:600}.oie-emoji-section>p{margin:0;font-size:12px;color:var(--oie-muted)}
-.oie-emoji-footer{display:flex;justify-content:space-between;gap:1px;border-top:1px solid var(--oie-border);padding-top:7px}.oie-emoji-jump{padding:3px;min-width:0;width:28px;height:28px;border-radius:50%;color:var(--oie-muted)}.oie-emoji-jump[aria-current=location],.oie-emoji-jump:hover{background:var(--oie-raised);color:var(--oie-accent-text)}.oie-emoji-jump:disabled{opacity:.35}
+.oie-emoji-footer{display:flex;align-items:center;justify-content:space-between;gap:1px;border-top:1px solid var(--oie-border);padding-top:7px}
+.oie-emoji-jump{display:grid;place-items:center;flex:0 1 28px;width:28px;height:auto;aspect-ratio:1;min-width:0;min-height:0;padding:0;border-radius:50%;color:var(--oie-muted)}
+.oie-emoji-jump[aria-current=location],.oie-emoji-jump:hover{background:var(--oie-raised);color:var(--oie-accent-text)}.oie-emoji-jump:disabled{opacity:.35}
 .oie-emoji-category-symbol{font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;font-size:17px;line-height:1;filter:grayscale(1);opacity:.8}
+/* The car is drawn along the bottom of its emoji line box. */
+.oie-emoji-jump[data-emoji-jump="4"] .oie-emoji-category-symbol{translate:0 -.2em}
