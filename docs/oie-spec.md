@@ -741,6 +741,18 @@ Manual link stars/export, separate threads, automatic protocol relaying, multi-e
 
 A separate native daemon is an accepted future option. Wails desktop packaging is now selected for v0.0.1 under section 2.1.1. Matrix, IRC, and Nostr remain likely future protocol candidates; desktop packaging does not select a separate daemon or implement those protocols.
 
+### 16.1 Post-alpha priorities from the Gajim comparison
+
+| ID | Deferred item, in priority order |
+| --- | --- |
+| **B25** | Message search by sender, date range, and content type. Start with sender and date range in the current conversation. See O08 for search filter design. |
+| **B26** | A per-account **Note to self** shortcut for sending text and links to the account's own address. Verify that messages appear in both Oiê and Gajim when using the same XMPP account. |
+| **B27** | Activity for incoming mentions and reactions to the user's messages. Start by highlighting incoming mentions in rooms and marking the corresponding conversations. Then explore a reaction activity view that opens the source message and follows the existing active-conversation, mute, and Do Not Disturb policies. |
+| **B28** | Select multiple messages and export an individual conversation as a readable file. Start with copying selected messages. Bulk deletion depends on the deletion scopes and recovery behavior in section 9.1 and O10. |
+| **B29** | Organize chats across accounts. Start with filtering by existing contact groups. Explore user-defined workspaces that can contain direct chats and rooms from several accounts. |
+| **B30** | Start a private chat with a room occupant when the room does not disclose the occupant's personal address. Use the identity exposed by the room and respect room permissions. |
+| **B31** | Moderate messages sent by other room participants where the protocol and the user's permissions allow it. Represent received moderation events in the timeline. See section 6 for retraction of one's own messages and B04 for participant moderation. |
+
 ## 17. Recommended delivery sequence and validation
 
 ### 17.1 Proposed milestones
