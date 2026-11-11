@@ -16,7 +16,8 @@
 .oie-reaction-shortcut-slot{position:absolute;inset-inline-start:calc(100% + 24px);top:50%;transform:translateY(-50%);z-index:4;opacity:0;pointer-events:none}
 .oie-message-own .oie-reaction-shortcut-slot{inset-inline-start:auto;inset-inline-end:calc(100% + 24px)}
 .oie-reaction-shortcut{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;width:32px;height:32px;padding:6px;border-radius:50%;border:1px solid var(--oie-border);background:var(--oie-panel);color:var(--oie-muted);box-shadow:0 1px 3px #0002}
-.oie-reaction-shortcut .oie-icon{width:18px;height:18px}
+/* Optically center the face, whose features sit below the middle of the glyph. */
+.oie-reaction-shortcut .oie-icon{width:18px;height:18px;translate:0 -.5px}
 .oie-reaction-shortcut:hover{color:var(--oie-text);background:var(--oie-raised)}
 .oie-message:focus-within .oie-reaction-shortcut-slot{opacity:1;pointer-events:auto}
 @media(hover:hover) and (pointer:fine){.oie-message:hover .oie-reaction-shortcut-slot{opacity:1;pointer-events:auto}}
