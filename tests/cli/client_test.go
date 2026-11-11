@@ -288,12 +288,12 @@ func testLocalDiagnostics(t *testing.T, binary, serverURL string) {
 	closed := httptest.NewServer(nil)
 	closed.Close()
 	for _, tc := range []struct {
-		name, server, code, message string
-		exitCode                    int
-		args                        []string
+		name, server, code, title, detail string
+		exitCode                          int
+		args                              []string
 	}{
-		{"usage", serverURL, "usage_error", "invalid --message-id: required", 2, []string{"messages", "author"}},
-		{"connection", closed.URL, "transport_error", "request transport failed", 3, []string{"system", "health"}},
+		{"usage", serverURL, "usage_error", "Invalid command usage", "invalid --message-id: required", 2, []string{"messages", "author"}},
+		{"connection", closed.URL, "transport_error", "Transport error", "request transport failed", 3, []string{"system", "health"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			args := append([]string{"--server", tc.server}, tc.args...)
@@ -304,13 +304,17 @@ func testLocalDiagnostics(t *testing.T, binary, serverURL string) {
 			err := cmd.Run()
 			var exit *exec.ExitError
 			var got struct {
-				Code     string `json:"code"`
-				Message  string `json:"message"`
-				ExitCode int    `json:"exitCode"`
+				Type     string          `json:"type"`
+				Title    string          `json:"title"`
+				Detail   string          `json:"detail"`
+				Code     string          `json:"code"`
+				ExitCode int             `json:"exitCode"`
+				Status   json.RawMessage `json:"status"`
 			}
 			if !errors.As(err, &exit) || exit.ExitCode() != tc.exitCode || stdout.Len() != 0 ||
 				json.Unmarshal(stderr.Bytes(), &got) != nil || got.Code != tc.code ||
-				got.ExitCode != tc.exitCode || got.Message != tc.message {
+				got.Type != "urn:cli:oiectl:problem:"+tc.code || got.Title != tc.title ||
+				got.Detail != tc.detail || got.ExitCode != tc.exitCode || got.Status != nil {
 				t.Fatalf("CLI diagnostic: %v stdout=%q stderr=%q", err, stdout.String(), stderr.String())
 			}
 			t.Logf("oiectl stderr:\n%s", stderr.String())

@@ -402,10 +402,18 @@ With `--output json`, an HTTP failure writes one Problem Details object to
 stderr and leaves stdout empty. The exit code is still 4. The diagnostic
 includes the HTTP status and validated problem metadata. If the API response
 has no recognized Problem Details, the object uses `about:blank` and the HTTP
-status title. Usage and transport failures also leave stdout empty and emit a
-JSON object with `code`, `message`, and `exitCode` on stderr. Usage failures
-use `usage_error` (exit 2). Transport failures, timeouts, and cancellations
-use `transport_error` (exit 3).
+status title.
+
+Usage and transport failures emit a Problem Details object on stderr and
+leave stdout empty. The object has `type`, `title`, `detail`, `code`, and
+`exitCode`. HTTP `status` is omitted for these local failures.
+
+| Type URN | Title | Code | Exit code |
+| --- | --- | --- | --- |
+| `urn:cli:oiectl:problem:usage_error` | Invalid command usage | `usage_error` | 2 |
+| `urn:cli:oiectl:problem:transport_error` | Transport error | `transport_error` | 3 |
+
+Transport failures include timeouts and cancellations.
 
 See [the engine API policy](engine-api-policy.md) and
 [CLI verification](engine-api-cli-verification.md) for scope and fixture commands.
