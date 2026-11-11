@@ -15,7 +15,7 @@ window.OieRuntime.register('mentions',life=>{
   if(Array.isArray(value)&&value.length<=32){
    for(const item of value){
     if(!item||typeof item.participantId!=='string'||!item.participantId||item.participantId.length>1024||!Number.isInteger(item.begin)||!Number.isInteger(item.end)||item.begin<0||item.end<=item.begin||item.end>text.length||tokens.some(token=>item.begin<token.end&&item.end>token.begin))continue;
-    const word=text.slice(item.begin,item.end).join('');if(!word.startsWith('@')||/[\r\n\u0000]/u.test(word))continue;
+    const word=text.slice(item.begin,item.end).join('');if(/[\r\n\u0000]/u.test(word))continue;
     tokens.push({participantId:item.participantId,begin:item.begin,end:item.end,text:word});
    }
   }
@@ -38,7 +38,7 @@ window.OieRuntime.register('mentions',life=>{
   const caret=input.selectionStart,prefix=input.value.slice(0,caret),start=prefix.lastIndexOf('@');
   if(start<0||(start>0&&!/[\s([{]/u.test(prefix[start-1])))return null;
   const query=prefix.slice(start+1),begin=points(prefix.slice(0,start)).length;
-  if(points(query).length>80||/[\r\n@\u0000]/u.test(query)||query.split(/\s+/u).length>4||tokens.some(token=>token.begin===begin))return null;
+  if(points(query).length>80||/[\r\n@\u0000]/u.test(query)||query.split(/\s+/u).length>4||tokens.some(token=>token.begin<=begin&&begin<token.end))return null;
   if(dismissed===start+':'+prefix)return null;
   const suffix=input.value.slice(caret).match(/^[\p{L}\p{M}\p{N}_'-]*/u)[0];
   return{start,caret,end:caret+suffix.length,begin,query};
@@ -73,7 +73,7 @@ window.OieRuntime.register('mentions',life=>{
   if(!catalog){status.textContent='';return;}
   const matches=catalog.items.filter(item=>terms.every(term=>item.match.includes(term)));
   matches.sort((a,b)=>{
-   const aStartsWithQuery=a.nickname.startsWith(query),bStartsWithQuery=b.nickname.startsWith(query);
+   const aStartsWithQuery=a.foldedNickname.startsWith(query),bStartsWithQuery=b.foldedNickname.startsWith(query);
    if(aStartsWithQuery!==bStartsWithQuery)return aStartsWithQuery?-1:1;
    return nicknameOrder.compare(a.insertText,b.insertText);
   });
@@ -95,8 +95,9 @@ window.OieRuntime.register('mentions',life=>{
   if(!data||Object.entries(scope).some(([key,value])=>data[key]!==value)||!['known','partial','unavailable','not_connected'].includes(data.state)||!Array.isArray(data.items)||data.items.length>200||typeof data.truncated!=='boolean')throw Error('invalid_candidates');
   const ids=new Set(),items=[];
   for(const item of data.items){
-   if(!item||typeof item.id!=='string'||!item.id||item.id.length>1024||ids.has(item.id)||typeof item.displayName!=='string'||!item.displayName||points(item.displayName).length>300||typeof item.insertText!=='string'||!item.insertText.startsWith('@')||points(item.insertText).length>301||/[\r\n\u0000]/u.test(item.insertText)||!['text','structured'].includes(item.referenceMode))throw Error('invalid_candidate');
-   ids.add(item.id);items.push({...item,nickname:fold(item.insertText.slice(1)),match:fold(item.displayName+' '+item.insertText)});
+   if(!item||typeof item.id!=='string'||!item.id||item.id.length>1024||ids.has(item.id)||typeof item.displayName!=='string'||!item.displayName||points(item.displayName).length>300||typeof item.insertText!=='string'||!item.insertText.startsWith('@')||item.insertText.length<2||points(item.insertText).length>1100||/[\r\n\u0000]/u.test(item.insertText)||!['text','structured'].includes(item.referenceMode))throw Error('invalid_candidate');
+   const nickname=item.insertText.slice(1);
+   ids.add(item.id);items.push({...item,nickname,foldedNickname:fold(nickname),match:fold(item.displayName+' '+item.insertText)});
   }
   if(['unavailable','not_connected'].includes(data.state))throw Error('unavailable_candidates');
   return{state:data.state,truncated:data.truncated,items};
@@ -120,12 +121,14 @@ window.OieRuntime.register('mentions',life=>{
  }
  function choose(index){
   const item=visible[index],current=trigger();if(!item||!current||!writable()||tokens.length>=32)return;
-  const following=input.value.slice(current.end),separator=!following||!/^[\s.,;:!?)\]}]/u.test(following)?' ':'';
-  const replacement=item.insertText+separator,old=input.value;input.setRangeText(replacement,current.start,current.end,'end');track();
-  const mention={participantId:item.id,begin:current.begin,end:current.begin+points(item.insertText).length,text:item.insertText};
+  const following=input.value.slice(current.end);
+  const hasPunctuation=/^[.,;:!?)\]}]/u.test(following);
+  const comma=current.start===0&&!hasPunctuation?',':'';
+  const space=hasPunctuation||/^\s/u.test(following)?'':' ';
+  input.setRangeText(item.nickname+comma+space,current.start,current.end,'end');track();
+  const mention={participantId:item.id,begin:current.begin,end:current.begin+points(item.nickname).length,text:item.nickname};
   tokens=tokens.filter(token=>mention.begin>=token.end||mention.end<=token.begin);tokens.push(mention);tokens.sort((a,b)=>a.begin-b.begin);sync();previous=input.value;dismissed='';hide();
   input.focus({preventScroll:true});input.dispatchEvent(new Event('input',{bubbles:true}));
-  if(old===input.value)hide();
  }
  restore();input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-controls',list.id);input.setAttribute('aria-haspopup','listbox');
  life.on(input,'input',event=>{dismissed='';track();composing=event.isComposing===true;update();},{capture:true});

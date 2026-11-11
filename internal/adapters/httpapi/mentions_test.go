@@ -64,6 +64,20 @@ func TestRoomMentionHTTPScopesRangesAndImmutableReplay(t *testing.T) {
 	if _, err := e.JoinRoom(t.Context(), id(), room.ID, "Alice", ""); err != nil {
 		t.Fatal(err)
 	}
+	nickname := []engineapi.MentionSelection{{ParticipantId: "opaque-juliet", Begin: 0, End: 6}}
+	opening := engineapi.SendMessage{OriginalText: "Juliet, hi", Mentions: &nickname}
+	accepted, err := client.SendMessageWithResponse(t.Context(), string(room.ID), &engineapi.SendMessageParams{IdempotencyKey: string(id())}, opening)
+	if err != nil || accepted.JSON202 == nil || accepted.JSON202.OriginalText != opening.OriginalText || accepted.JSON202.Mentions == nil || len(*accepted.JSON202.Mentions) != 1 {
+		t.Fatal("bare nickname was not accepted", accepted, err)
+	}
+	if mention := (*accepted.JSON202.Mentions)[0]; mention.Begin != 0 || mention.End != 6 || mention.ReferenceMode != "structured" {
+		t.Fatal("reference does not cover just the nickname", mention)
+	}
+	opening.OriginalText = "Romeox, hi"
+	rejected, err := client.SendMessageWithResponse(t.Context(), string(room.ID), &engineapi.SendMessageParams{IdempotencyKey: string(id())}, opening)
+	if err != nil || rejected.StatusCode() != 400 {
+		t.Fatal("different nickname was accepted", rejected, err)
+	}
 	selections := []engineapi.MentionSelection{{ParticipantId: "opaque-juliet", Begin: 2, End: 9}}
 	body := engineapi.SendMessage{OriginalText: "😀 @Juliet", Mentions: &selections}
 	key := string(id())

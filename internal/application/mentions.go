@@ -81,7 +81,8 @@ func (e *Engine) freezeMentions(ctx context.Context, a domain.Account, c domain.
 	mentions := make([]domain.MessageMention, 0, len(selections))
 	for _, selection := range selections {
 		candidate, ok := byID[selection.ParticipantID]
-		if !ok || candidate.InsertText == "" || string(body[selection.Begin:selection.End]) != candidate.InsertText {
+		selected := string(body[selection.Begin:selection.End])
+		if !ok || (selected != strings.TrimPrefix(candidate.InsertText, "@") && selected != candidate.InsertText) {
 			return nil, ErrInvalid
 		}
 		mode, uri := "text", ""

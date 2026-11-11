@@ -4371,7 +4371,7 @@ components:
           type: integer
           minimum: 1
           maximum: 16384
-          description: Exclusive Unicode code-point offset. The selected span must equal the candidate insertion text.
+          description: Exclusive Unicode code-point offset. The span must match the candidate's nickname or its at-prefixed insertText. Composer-added punctuation and spacing are outside the span.
     MessageMention:
       type: object
       description: Accepted mention selection with frozen text or structured delivery mode; protocol targets remain private to the engine.
@@ -4407,7 +4407,7 @@ components:
         insertText:
           type: string
           maxLength: 1100
-          description: Exact readable text to insert, including the leading at sign.
+          description: Room nickname prefixed by one at sign. Clients can use the nickname without that prefix and add punctuation outside the selected span.
         referenceMode:
           type: string
           enum: [text, structured]

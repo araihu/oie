@@ -279,15 +279,20 @@ func TestExplicitRoomJoinReplyWireReconnectAndLeave(t *testing.T) {
 		}
 		return false
 	})
-	mentionBody := "😀 " + mention.InsertText
-	chosen := []domain.MentionSelection{{ParticipantID: mention.ID, Begin: 2, End: utf8.RuneCountInString(mentionBody)}}
-	acceptedMention, err := engine.SendMessageWithMentions(ctx, id(), conversation.ID, mentionBody, "", chosen)
-	if err != nil || len(acceptedMention.Message.Mentions) != 1 {
-		t.Fatal("mention acceptance", acceptedMention, err)
-	}
-	mentionWire := awaitWire(mentionBody)
-	if len(mentionWire.Mentions) != 1 || mentionWire.Mentions[0].Type != "mention" || mentionWire.Mentions[0].URI != "xmpp:bob@localhost" || mentionWire.Mentions[0].Begin != 2 || mentionWire.Mentions[0].End != utf8.RuneCountInString(mentionBody) {
-		t.Fatal("XEP-0372 mention was not preserved by the room", mentionWire)
+	nickname := strings.TrimPrefix(mention.InsertText, "@")
+	for _, body := range []struct{ before, after string }{{"", ", hello!"}, {"😀 hello ", "!"}} {
+		mentionBody := body.before + nickname + body.after
+		begin := utf8.RuneCountInString(body.before)
+		end := begin + utf8.RuneCountInString(nickname)
+		chosen := []domain.MentionSelection{{ParticipantID: mention.ID, Begin: begin, End: end}}
+		acceptedMention, err := engine.SendMessageWithMentions(ctx, id(), conversation.ID, mentionBody, "", chosen)
+		if err != nil || len(acceptedMention.Message.Mentions) != 1 {
+			t.Fatal("mention acceptance", acceptedMention, err)
+		}
+		mentionWire := awaitWire(mentionBody)
+		if len(mentionWire.Mentions) != 1 || mentionWire.Mentions[0].Type != "mention" || mentionWire.Mentions[0].URI != "xmpp:bob@localhost" || mentionWire.Mentions[0].Begin != begin || mentionWire.Mentions[0].End != end {
+			t.Fatal("XEP-0372 mention was not preserved by the room", mentionWire)
+		}
 	}
 	original := "Original 🧑🏽‍💻 & café\nsecond line"
 	clientID := "owner-client-" + string(id())

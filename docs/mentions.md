@@ -4,11 +4,14 @@ AGREED: typing `@` at a word boundary opens participant suggestions in a room.
 Typing filters the available names and nicknames. Nicknames starting with the
 query appear first, and matches in each group are ordered by nickname in the UI
 language. Enter and Tab confirm a selected match for a typed query. Enter also
-works with the initial list after `@`. Selecting a participant inserts readable
-`@nickname` text without sending. Escape dismisses the list and Shift+Tab moves
-focus. Tab also moves focus during loading, with an empty query, or without a
-match. Touch, IME composition and the existing composer draft behavior remain
-available.
+works with the initial list after `@`. Selecting a participant replaces the
+query with their nickname, as in `Ana, tudo bem?` at the start of the message
+and `Oi Ana!` in the middle. The composer adds a comma at the start and a
+space when needed, preserving adjacent punctuation and whitespace. Selecting
+a participant leaves the message in the composer. Escape dismisses the list
+and Shift+Tab moves focus. Tab also moves focus during loading, with an empty
+query, or without a match. Touch, IME composition and the existing composer
+draft behavior remain available.
 
 The menu lists only participants the owning account can currently observe.
 It never joins a room or requests hidden identities. An incomplete list is not
@@ -21,7 +24,7 @@ a server-wide guarantee that all occupants' clients understand mentions.
 [XEP-0421](https://xmpp.org/extensions/xep-0421.html) supplies an opaque occupant
 identifier, not a replacement for the real JID required by XEP-0372.
 Use protocol metadata only where the adapter has an appropriate observed target.
-Otherwise send the same readable `@nickname` text without a structured reference.
+Otherwise send the same readable nickname text without a structured reference.
 Do not infer a real JID from a nickname or treat a room address as the person.
 
 The composer reuses public Goshtoso Textarea, Panel, Avatar and Button components.
@@ -30,6 +33,8 @@ keeps its text input while an app-owned listbox supplies chat-specific matching.
 The browser sends only the opaque participant selection and authored-text ranges.
 The engine validates the current room, freezes the delivery plan in the durable
 send intent, and owns protocol translation. The frontend has no XMPP client.
+The selection spans the nickname only. The engine also accepts the original
+`@nickname` form for existing drafts and API clients.
 
 ## Gajim interoperability
 
