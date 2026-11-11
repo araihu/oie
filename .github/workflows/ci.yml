@@ -6,104 +6,17 @@ on:
 permissions:
   contents: read
 jobs:
-  contracts-and-go:
+  dagger:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache-dependency-path: |
-            go.sum
-            cli/go.sum
-            tools/go.sum
-            tools/vacuum/go.sum
-      - run: make check
-      - run: make test-race
-  development-xmpp:
-    runs-on: ubuntu-latest
-    env:
-      COMPOSE_PROJECT_NAME: oie-ci-${{ github.run_id }}-${{ github.run_attempt }}
-      OIE_XMPP_BROWSER_FIXTURES: '1'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: tests/browser/package-lock.json
-      - run: make dev-up
-      - &ubuntu_archive
-        name: Use the Princeton Ubuntu mirror
-        run: |
-          sudo sed -Ei 's@mirror[+]file:/etc/apt/apt-mirrors\.txt|https?://(azure\.)?archive\.ubuntu\.com/ubuntu/?@https://mirror.math.princeton.edu/pub/ubuntu/@g' /etc/apt/sources.list.d/ubuntu.sources
-          grep '^URIs:' /etc/apt/sources.list.d/ubuntu.sources
-      - name: Run integration tests against the shared Prosody
-        env:
-          OIE_XMPP_CA_FILE: ${{ runner.temp }}/xmpp-localhost.crt
-        run: |
-          docker compose cp xmpp:/var/lib/prosody/certs/localhost.crt "$OIE_XMPP_CA_FILE"
-          (
-            python3 scripts/test-xmpp.py --ca-file "$OIE_XMPP_CA_FILE" &&
-            OIE_XMPP_INTEGRATION=1 GOWORK=off go test -tags=server -count=1 -timeout=90s -v ./tests/xmpp
-          ) &
-          xmpp_pid=$!
-          setup_status=0
-          (cd tests/browser && npm ci && npx playwright install --with-deps chromium) || setup_status=$?
-          wait "$xmpp_pid"
-          test "$setup_status" -eq 0
-          make test-live-browser
-      - if: always()
-        run: docker compose logs --tail 100
-      - if: always()
-        run: docker compose down --volumes
+          cache-dependency-path: tools/ci/go.sum
+      - run: make ci
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: real-engine-browser-evidence
-          path: tests/browser/artifacts
-
-  browser-consumer:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: tests/browser/package-lock.json
-      - run: |
-          make build
-          go build -o bin/oie-mock ./cmd/oie-mock
-      - *ubuntu_archive
-      - working-directory: tests/browser
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
-      - run: |
-          bin/oie-mock > "$RUNNER_TEMP/oie-mock.log" 2>&1 &
-          mock_pid=$!
-          bin/oie --role bff --engine-url http://127.0.0.1:18082 > "$RUNNER_TEMP/oie.log" 2>&1 &
-          oie_pid=$!
-          trap 'kill "$oie_pid" "$mock_pid"' EXIT
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent --output /dev/null http://127.0.0.1:8080/; then break; fi
-            sleep 1
-          done
-          npm --prefix tests/browser test
-          npm --prefix tests/browser run test:chat
-          npm --prefix tests/browser run test:states
-          npm --prefix tests/browser run test:accounts
-      - run: OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/live-chat.cjs
-      - run: OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/avatars.cjs
-      - if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: browser-consumer-evidence
-          path: tests/browser/artifacts
+          name: dagger-ci-evidence
+          path: tests/browser/artifacts/ci

@@ -1,4 +1,4 @@
-// Command ci runs the local Dagger graph without the interactive CLI frontend.
+// Command ci runs the Dagger graph without the interactive CLI frontend.
 package main
 
 import (
@@ -232,7 +232,10 @@ func (r runner) integration(ctx context.Context, source *dagger.Directory, goCon
 	integrated := goContainer.WithServiceBinding("xmpp", xmpp).WithFile("/tmp/xmpp-ca.crt", ca).
 		WithEnvVariable("OIE_XMPP_INTEGRATION", "1").WithEnvVariable("OIE_XMPP_CA_FILE", "/tmp/xmpp-ca.crt").
 		WithEnvVariable("OIE_XMPP_ENDPOINT", "xmpp:5222").WithEnvVariable("OIE_CI_RUN_ID", runID).
-		WithExec([]string{"go", "test", "-race", "-count=1", "-p", "1", "-v", "./tests/xmpp", "./tests/cli"})
+		WithExec([]string{"sh", "-ec", `
+python3 scripts/test-xmpp.py --host xmpp --ca-file "$OIE_XMPP_CA_FILE"
+exec go test -race -count=1 -p 1 -v ./tests/xmpp ./tests/cli
+`})
 	browser := client.Container().From(nodeImage).
 		WithMountedCache("/root/.npm", client.CacheVolume("oie-ci-npm-v1")).
 		WithMountedCache("/root/.cache/ms-playwright", client.CacheVolume("oie-ci-playwright-1.62.1")).

@@ -14,8 +14,8 @@ SASL = "urn:ietf:params:xml:ns:xmpp-sasl"
 
 
 class Client:
-    def __init__(self, username, password, port, ca_file):
-        self.socket = socket.create_connection(("127.0.0.1", port), timeout=8)
+    def __init__(self, username, password, endpoint, ca_file):
+        self.socket = socket.create_connection(endpoint, timeout=8)
         self.socket.settimeout(8)
         self.restart()
         self.receive(f"{{{S}}}features")
@@ -62,11 +62,13 @@ class Client:
 
 def main():
     args = argparse.ArgumentParser()
+    args.add_argument("--host", default="127.0.0.1", help="TCP host for the localhost XMPP domain")
     args.add_argument("--port", type=int, default=5222)
     args.add_argument("--ca-file", required=True)
     options = args.parse_args()
-    alice = Client("alice", "alice-local-only", options.port, options.ca_file)
-    bob = Client("bob", "bob-local-only", options.port, options.ca_file)
+    endpoint = (options.host, options.port)
+    alice = Client("alice", "alice-local-only", endpoint, options.ca_file)
+    bob = Client("bob", "bob-local-only", endpoint, options.ca_file)
     try:
         alice.send('<iq type="get" id="disco" to="localhost"><query xmlns="http://jabber.org/protocol/disco#info"/></iq>')
         info = alice.receive("{jabber:client}iq", "disco")

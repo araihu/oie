@@ -245,6 +245,9 @@ make ci-check  # Contracts, generation drift, golangci-lint, vet, unit/race test
 make ci        # Also isolated Prosody integration and all browser workflows
 ```
 
+GitHub Actions runs the same `make ci` command and uploads its stage logs and
+test evidence as `dagger-ci-evidence`, including when tests fail.
+
 The Dagger Go graph and shell entrypoint are under `tools/ci`. Dagger dependencies
 remain separate from the root application and generation-tool modules. Images
 are pinned by digest. Go modules,
@@ -272,14 +275,12 @@ edits. It excludes Git internals, data directories, credentials, binaries, brows
 artifacts and dependency directories before invoking Dagger. A source-boundary
 test verifies those exclusions, including an accidentally tracked data file.
 
-The full Dagger pipeline starts one disposable Prosody service and shares its
-TLS certificate between the Go integration tests and the live browser workflow.
-GitHub Actions runs the protocol smoke check, Go integration tests and live
-browser workflow on the runner against one Compose service. Each workflow
-attempt uses a fresh Compose project and removes its volume at the end.
-Playwright setup overlaps the Go integration tests in both CI paths.
+Each full Dagger run starts one disposable Prosody service and shares its TLS
+certificate across the protocol smoke check, Go integration tests and live
+browser workflow. The smoke check and Go integration tests run in sequence
+while Playwright setup runs in parallel.
 
-Both CI paths set `OIE_XMPP_BROWSER_FIXTURES=1` for Prosody and the live browser
+Dagger sets `OIE_XMPP_BROWSER_FIXTURES=1` for Prosody and the live browser
 workflow. This provisions separate `browser-alice@localhost` and
 `browser-bob@localhost` accounts so the browser's empty-inbox check is independent
 of the messages, rosters and profiles from the other suites. The browser still
