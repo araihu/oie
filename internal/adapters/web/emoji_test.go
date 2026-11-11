@@ -10,16 +10,18 @@ import (
 
 func TestEmojiCatalogsPreserveLocalizedUnicodeSequences(t *testing.T) {
 	var baseline []string
-	var baselineSearch [][2][2]string
+	var baselineSearch []string
+	baselineShortcuts := map[string][2]string{}
 	for _, locale := range []string{"en", "pt-BR"} {
 		data, err := emojiFiles.ReadFile("emoji/" + locale + ".json")
 		if err != nil {
 			t.Fatal(err)
 		}
 		var catalog struct {
-			Locale   string            `json:"locale"`
-			Items    []json.RawMessage `json:"items"`
-			Families map[string]string `json:"families"`
+			Locale    string              `json:"locale"`
+			Items     []json.RawMessage   `json:"items"`
+			Families  map[string]string   `json:"families"`
+			Shortcuts map[string][]string `json:"shortcuts"`
 		}
 		if err := json.Unmarshal(data, &catalog); err != nil {
 			t.Fatal(err)
@@ -30,25 +32,17 @@ func TestEmojiCatalogsPreserveLocalizedUnicodeSequences(t *testing.T) {
 		seen := map[string]bool{}
 		for index, raw := range catalog.Items {
 			var item []json.RawMessage
-			if err := json.Unmarshal(raw, &item); err != nil || len(item) != 5 {
-				t.Fatal("invalid emoji record", locale, index)
+			if err := json.Unmarshal(raw, &item); err != nil || len(item) != 4 {
+				t.Fatal("emoji record incompatible with existing pickers", locale, index)
 			}
-			var glyph, name string
-			var search [2][2]string
+			var glyph, name, search string
 			var group int
-			for i, field := range []*string{&glyph, &name} {
+			for i, field := range []*string{&glyph, &name, &search} {
 				if err := json.Unmarshal(item[i], field); err != nil || *field == "" || !utf8.ValidString(*field) {
 					t.Fatal("missing localized emoji metadata", locale, index, i)
 				}
 			}
-			for i := range search {
-				var terms []string
-				if err := json.Unmarshal(item[2+i], &terms); err != nil || len(terms) != 2 || terms[0] == "" {
-					t.Fatal("missing language-specific emoji search data", locale, index, i)
-				}
-				search[i] = [2]string{terms[0], terms[1]}
-			}
-			if err := json.Unmarshal(item[4], &group); err != nil || group < 0 || group > 8 || seen[glyph] {
+			if err := json.Unmarshal(item[3], &group); err != nil || group < 0 || group > 8 || seen[glyph] {
 				t.Fatal("invalid emoji identity or category", locale, index)
 			}
 			seen[glyph] = true
@@ -61,11 +55,31 @@ func TestEmojiCatalogsPreserveLocalizedUnicodeSequences(t *testing.T) {
 				t.Fatal("search language depends on interface language", index)
 			}
 			if glyph == "👍" || glyph == "👍🏽" {
-				for i, term := range []string{"thumbs up", "joinha"} {
-					if !strings.Contains(search[i][0], term) || strings.Contains(search[1-i][0], term) {
-						t.Fatal("misclassified search term", locale, glyph, term)
+				for _, term := range []string{"thumbs up", "joinha"} {
+					if !strings.Contains(search, term) {
+						t.Fatal("missing bilingual picker search term", locale, glyph, term)
 					}
 				}
+			}
+		}
+		if len(catalog.Shortcuts) != len(seen)-len(catalog.Families) {
+			t.Fatal("missing emoji family shortcuts", locale)
+		}
+		for glyph, terms := range catalog.Shortcuts {
+			if !seen[glyph] || catalog.Families[glyph] != "" || len(terms) != 2 || terms[0] == "" || terms[1] == "" {
+				t.Fatal("invalid language-specific shortcuts", locale, glyph)
+			}
+			pair := [2]string{terms[0], terms[1]}
+			if locale == "en" {
+				baselineShortcuts[glyph] = pair
+			} else if baselineShortcuts[glyph] != pair {
+				t.Fatal("shortcuts depend on interface language", glyph)
+			}
+		}
+		thumbs := catalog.Shortcuts["👍"]
+		for i, term := range []string{"thumbs up", "joinha"} {
+			if len(thumbs) != 2 || !strings.Contains(thumbs[i], term) || strings.Contains(thumbs[1-i], term) {
+				t.Fatal("misclassified emoji shortcut", locale, term)
 			}
 		}
 		for _, required := range []string{"❤️", "👍🏽", "👩🏽‍💻", "🇧🇷"} {

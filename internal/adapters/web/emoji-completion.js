@@ -35,9 +35,11 @@
     if (!indices.has(catalog)) {
       const index = [];
       for (const {base} of catalog.families.values()) {
+        const shortcuts = catalog.shortcuts.get(base.glyph);
+        if (!shortcuts) continue;
         const names = {};
         for (const lang of languages) {
-          names[lang] = base.shortcuts[lang].split(' | ').map(term => {
+          names[lang] = shortcuts[lang].split(' | ').map(term => {
             const label = term.toLowerCase().replace(/[^\p{L}\p{M}\p{N}+-]+/gu, '-');
             return {label, key: normalize(label)};
           });

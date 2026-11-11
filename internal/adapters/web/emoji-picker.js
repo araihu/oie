@@ -37,18 +37,18 @@ window.OieEmojiPicker=(()=>{
  }
  function prepare(data,locale){
   if(!Array.isArray(data.items)||data.items.length>10000||data.locale!==locale||!data.families||typeof data.families!=='object'||Array.isArray(data.families))throw Error('invalid_catalog');
+  const shortcuts=new Map();
+  for(const [glyph,terms] of Object.entries(data.shortcuts??{})){
+   if(Array.isArray(terms)&&terms.length===2&&terms.every(term=>typeof term==='string'&&term))shortcuts.set(glyph,{en:terms[0],'pt-BR':terms[1]});
+  }
   const items=new Map(),families=new Map();
   for(const item of data.items){
-   if(!Array.isArray(item)||item.length!==5)throw Error('invalid_emoji');
-   const [glyph,name,english,portuguese,group]=item;
-   if(typeof glyph!=='string'||!glyph||typeof name!=='string'||!name||!Number.isInteger(group)||group<0||group>8||items.has(glyph))throw Error('invalid_emoji');
-   for(const terms of [english,portuguese]){
-    if(!Array.isArray(terms)||terms.length!==2||typeof terms[0]!=='string'||!terms[0]||typeof terms[1]!=='string')throw Error('invalid_emoji_search');
-   }
+   if(!Array.isArray(item)||item.length!==4)throw Error('invalid_emoji');
+   const [glyph,name,search,group]=item;
+   if(typeof glyph!=='string'||!glyph||typeof name!=='string'||!name||typeof search!=='string'||!search||!Number.isInteger(group)||group<0||group>8||items.has(glyph))throw Error('invalid_emoji');
    const family=Object.hasOwn(data.families,glyph)?data.families[glyph]:glyph;
    if(typeof family!=='string')throw Error('invalid_family');
-   const match=fold([glyph,...english,...portuguese].join(' | '));
-   items.set(glyph,{glyph,name,match,shortcuts:{en:english[0],'pt-BR':portuguese[0]},group,family});
+   items.set(glyph,{glyph,name,match:fold(glyph+' '+search),group,family});
   }
   for(const item of items.values()){
    const base=items.get(item.family);
@@ -56,7 +56,7 @@ window.OieEmojiPicker=(()=>{
    if(!families.has(base.glyph))families.set(base.glyph,{base,variants:[base]});
    if(item.glyph!==base.glyph)families.get(base.glyph).variants.push(item);
   }
-  return{items,families};
+  return{items,families,shortcuts};
  }
  function mount(root,life,options){
  'use strict';
