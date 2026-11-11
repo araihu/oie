@@ -504,11 +504,7 @@ func insertReactionObservation(ctx context.Context, q *dbgen.Queries, in applica
 			return false, err
 		}
 		epoch = privacy.Epoch
-		// A newly discovered archived event from before a known mode change
-		// must not reintroduce a peer set into the current identity mode.
-		if epoch > 0 && in.ArchiveID != "" && stamp(in.CreatedAt) < privacy.ChangedAt {
-			epoch--
-		}
+
 	}
 	order, err := placeArchivedReaction(ctx, q, in, dbgen.MessageReactionObservation{})
 	if err != nil {
@@ -555,21 +551,37 @@ func reconcileReactionObservation(ctx context.Context, q *dbgen.Queries, in appl
 			return false, err
 		}
 	}
+	retained := old
+	if in.IsOwn && len(matches) > 1 {
+		// An older build could retain both the local and archived copies.
+		// Keep the revision of the copy that previously won the projection.
+		var previous reactionHead
+		for _, candidate := range matches {
+			var payload application.IncomingReaction
+			if err := json.Unmarshal([]byte(candidate.Payload), &payload); err != nil {
+				return false, err
+			}
+			head := reactionHead{candidate.ID, candidate.Ordinal, candidate.ArchiveOrder, candidate.Fingerprint, payload}
+			if previous.id == "" || head.after(previous) {
+				previous, retained = head, candidate
+			}
+		}
+	}
 	for _, duplicate := range matches {
-		if duplicate.Ordinal != old.Ordinal {
+		if duplicate.Ordinal != retained.Ordinal {
 			if err := q.DeleteReactionObservation(ctx, duplicate.Ordinal); err != nil {
 				return false, err
 			}
 		}
 	}
-	if old.ProviderID == merged.ProviderID && old.ArchiveID == merged.ArchiveID &&
-		old.ArchiveOrder == order && old.CommandID == string(command) {
+	if retained.ProviderID == merged.ProviderID && retained.ArchiveID == merged.ArchiveID &&
+		retained.ArchiveOrder == order && retained.CommandID == string(command) {
 		return len(matches) > 1, nil
 	}
 	// An echo or archive copy changes the evidence for the same logical
 	// reaction. Keep the revision that subsequent own commands may rely on.
 	err := q.ReconcileReactionObservation(ctx, dbgen.ReconcileReactionObservationParams{
-		Ordinal: old.Ordinal, ProviderID: merged.ProviderID, ArchiveScope: merged.ArchiveScope, ArchiveID: merged.ArchiveID,
+		Ordinal: retained.Ordinal, ProviderID: merged.ProviderID, ArchiveScope: merged.ArchiveScope, ArchiveID: merged.ArchiveID,
 		OccurredAt: stamp(merged.CreatedAt), ArchiveOrder: order, Payload: jsonText(merged), CommandID: string(command),
 	})
 	return err == nil, err
@@ -772,31 +784,33 @@ func (s *Store) SetRoomReactionPrivacy(ctx context.Context, account domain.ID, a
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	row, err := q.FindConversation(ctx, dbgen.FindConversationParams{AccountID: string(account), Address: address})
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
 	now := time.Now().UTC()
 	var visibility int64
-	if privacy.Public && privacy.Mode == application.RoomReactionsNonanonymous {
-		visibility = 1
+	if privacy.Public && privacy.Mode == application.RoomReactionsNonanonymous && row.ID != "" {
+		intent, err := q.GetRoomIntent(ctx, row.ID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		if errors.Is(err, sql.ErrNoRows) || intent.Active != 0 {
+			visibility = 1
+		}
 	}
 	changed, err := q.SetRoomReactionPrivacy(ctx, dbgen.SetRoomReactionPrivacyParams{
-		AccountID: string(account), Address: address, Public: visibility,
-		IdentityMode: privacy.Mode, ChangedAt: stamp(now),
+		AccountID: string(account), Address: address, Public: visibility, IdentityMode: privacy.Mode,
 	})
 	if err != nil {
 		return err
 	}
-	if changed > 0 {
-		row, err := q.FindConversation(ctx, dbgen.FindConversationParams{AccountID: string(account), Address: address})
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if changed > 0 && row.ID != "" {
+		conversation, err := decodeConversation(row)
+		if err != nil {
 			return err
 		}
-		if err == nil {
-			conversation, err := decodeConversation(row)
-			if err != nil {
-				return err
-			}
-			if conversation.Kind != "room" {
-				return tx.Commit()
-			}
+		if conversation.Kind == "room" {
 			if _, err = change(ctx, q, "conversation.updated", conversation, now); err != nil {
 				return err
 			}

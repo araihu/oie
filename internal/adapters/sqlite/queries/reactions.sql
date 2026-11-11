@@ -82,17 +82,18 @@ SELECT
  CAST(COALESCE((SELECT json_extract(av.payload,'$.ImageHash') FROM avatars av WHERE av.account_id=sqlc.arg(account_id) AND av.address=sqlc.arg(address)),'') AS TEXT) AS avatar_hash;
 
 -- name: GetRoomReactionPrivacy :one
-SELECT public,identity_mode,epoch,changed_at FROM room_reaction_privacy WHERE account_id=? AND address=?;
+SELECT public,identity_mode,epoch FROM room_reaction_privacy WHERE account_id=? AND address=?;
 
 -- name: SetRoomReactionPrivacy :execrows
-INSERT INTO room_reaction_privacy(account_id,address,public,identity_mode,changed_at) VALUES(?,?,?,?,?)
+INSERT INTO room_reaction_privacy(account_id,address,public,identity_mode) VALUES(?,?,?,?)
 ON CONFLICT(account_id,address) DO UPDATE SET
  public=excluded.public,
  identity_mode=CASE WHEN excluded.identity_mode<>'' THEN excluded.identity_mode ELSE room_reaction_privacy.identity_mode END,
- epoch=room_reaction_privacy.epoch+CASE WHEN room_reaction_privacy.identity_mode<>'' AND excluded.identity_mode<>'' AND room_reaction_privacy.identity_mode<>excluded.identity_mode THEN 1 ELSE 0 END,
- changed_at=CASE WHEN room_reaction_privacy.identity_mode<>'' AND excluded.identity_mode<>'' AND room_reaction_privacy.identity_mode<>excluded.identity_mode
-  THEN excluded.changed_at ELSE room_reaction_privacy.changed_at END
+ epoch=room_reaction_privacy.epoch+CASE WHEN room_reaction_privacy.identity_mode<>'' AND excluded.identity_mode<>'' AND room_reaction_privacy.identity_mode<>excluded.identity_mode THEN 1 ELSE 0 END
 WHERE room_reaction_privacy.public<>excluded.public OR (excluded.identity_mode<>'' AND room_reaction_privacy.identity_mode<>excluded.identity_mode);
+
+-- name: ClearRoomReactionVisibility :exec
+UPDATE room_reaction_privacy SET public=0 WHERE account_id=? AND address=? AND public<>0;
 
 -- name: ResetRoomReactionPrivacy :exec
 UPDATE room_reaction_privacy SET public=0 WHERE account_id=? AND public<>0;

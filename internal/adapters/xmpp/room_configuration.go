@@ -45,12 +45,19 @@ func (m *Manager) recordDiscoInfo(ctx context.Context, e *entry, s *mx.Session, 
 	if room || configuration.pending || configuration.mode != "" {
 		slot := e.rooms[address]
 		joined := slot != nil && slot.session == s && slot.snapshot.State == "joined" && !slot.leaving
-		if slot != nil && !e.occupantScopes[address] {
-			slot.ownOccupantID = ""
-			slot.recentReactionsRecovered = false
-		}
 		if err := m.setRoomReactionPrivacy(ctx, e, address, mode, joined); err != nil {
 			return err
+		}
+		if slot != nil {
+			switch {
+			case !e.occupantScopes[address]:
+				updateOwnRoomOccupant(slot, "")
+			case joined && slot.pendingOwnOccupantID != "" && slot.pendingOccupantRevision == revision:
+				if updateOwnRoomOccupant(slot, slot.pendingOwnOccupantID) {
+					wakeRoomArchiveLocked(e)
+				}
+			}
+			slot.pendingOwnOccupantID = ""
 		}
 		configuration.pending, configuration.mode = false, mode
 		if e.roomConfigurations == nil {

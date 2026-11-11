@@ -60,6 +60,20 @@ func (q *Queries) ArchivedReactionNeighbors(ctx context.Context, arg ArchivedRea
 	return i, err
 }
 
+const clearRoomReactionVisibility = `-- name: ClearRoomReactionVisibility :exec
+UPDATE room_reaction_privacy SET public=0 WHERE account_id=? AND address=? AND public<>0
+`
+
+type ClearRoomReactionVisibilityParams struct {
+	AccountID string
+	Address   string
+}
+
+func (q *Queries) ClearRoomReactionVisibility(ctx context.Context, arg ClearRoomReactionVisibilityParams) error {
+	_, err := q.db.ExecContext(ctx, clearRoomReactionVisibility, arg.AccountID, arg.Address)
+	return err
+}
+
 const deleteReactionObservation = `-- name: DeleteReactionObservation :exec
 DELETE FROM message_reaction_observations WHERE ordinal=?
 `
@@ -180,7 +194,7 @@ func (q *Queries) GetMessageReactionCommand(ctx context.Context, id string) (Mes
 }
 
 const getRoomReactionPrivacy = `-- name: GetRoomReactionPrivacy :one
-SELECT public,identity_mode,epoch,changed_at FROM room_reaction_privacy WHERE account_id=? AND address=?
+SELECT public,identity_mode,epoch FROM room_reaction_privacy WHERE account_id=? AND address=?
 `
 
 type GetRoomReactionPrivacyParams struct {
@@ -192,18 +206,12 @@ type GetRoomReactionPrivacyRow struct {
 	Public       int64
 	IdentityMode string
 	Epoch        int64
-	ChangedAt    string
 }
 
 func (q *Queries) GetRoomReactionPrivacy(ctx context.Context, arg GetRoomReactionPrivacyParams) (GetRoomReactionPrivacyRow, error) {
 	row := q.db.QueryRowContext(ctx, getRoomReactionPrivacy, arg.AccountID, arg.Address)
 	var i GetRoomReactionPrivacyRow
-	err := row.Scan(
-		&i.Public,
-		&i.IdentityMode,
-		&i.Epoch,
-		&i.ChangedAt,
-	)
+	err := row.Scan(&i.Public, &i.IdentityMode, &i.Epoch)
 	return i, err
 }
 
@@ -531,13 +539,11 @@ func (q *Queries) ResetRoomReactionPrivacy(ctx context.Context, accountID string
 }
 
 const setRoomReactionPrivacy = `-- name: SetRoomReactionPrivacy :execrows
-INSERT INTO room_reaction_privacy(account_id,address,public,identity_mode,changed_at) VALUES(?,?,?,?,?)
+INSERT INTO room_reaction_privacy(account_id,address,public,identity_mode) VALUES(?,?,?,?)
 ON CONFLICT(account_id,address) DO UPDATE SET
  public=excluded.public,
  identity_mode=CASE WHEN excluded.identity_mode<>'' THEN excluded.identity_mode ELSE room_reaction_privacy.identity_mode END,
- epoch=room_reaction_privacy.epoch+CASE WHEN room_reaction_privacy.identity_mode<>'' AND excluded.identity_mode<>'' AND room_reaction_privacy.identity_mode<>excluded.identity_mode THEN 1 ELSE 0 END,
- changed_at=CASE WHEN room_reaction_privacy.identity_mode<>'' AND excluded.identity_mode<>'' AND room_reaction_privacy.identity_mode<>excluded.identity_mode
-  THEN excluded.changed_at ELSE room_reaction_privacy.changed_at END
+ epoch=room_reaction_privacy.epoch+CASE WHEN room_reaction_privacy.identity_mode<>'' AND excluded.identity_mode<>'' AND room_reaction_privacy.identity_mode<>excluded.identity_mode THEN 1 ELSE 0 END
 WHERE room_reaction_privacy.public<>excluded.public OR (excluded.identity_mode<>'' AND room_reaction_privacy.identity_mode<>excluded.identity_mode)
 `
 
@@ -546,7 +552,6 @@ type SetRoomReactionPrivacyParams struct {
 	Address      string
 	Public       int64
 	IdentityMode string
-	ChangedAt    string
 }
 
 func (q *Queries) SetRoomReactionPrivacy(ctx context.Context, arg SetRoomReactionPrivacyParams) (int64, error) {
@@ -555,7 +560,6 @@ func (q *Queries) SetRoomReactionPrivacy(ctx context.Context, arg SetRoomReactio
 		arg.Address,
 		arg.Public,
 		arg.IdentityMode,
-		arg.ChangedAt,
 	)
 	if err != nil {
 		return 0, err

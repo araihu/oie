@@ -3,6 +3,7 @@ window.OieRuntime.register('reactions',life=>{
  const picker=document.querySelector('[data-reaction-picker]'),quick=document.getElementById('oie-reaction-quick'),catalog=document.getElementById('oie-reaction-picker');if(!picker||!quick||!catalog)return;
  const more=quick.querySelector('[data-reaction-more]'),choices=[...quick.querySelectorAll('[data-reaction-quick-emoji]')];
  const body=document.body,scope={engineId:body.dataset.engineId,accountId:body.dataset.accountId,conversationId:body.dataset.conversationId},labels=picker.dataset,csrf=document.querySelector('meta[name="oie-csrf"]')?.content||'';
+ const room=!!document.getElementById('room-session-status'),roomRevisions=new Map();
  const memory=window.OieRuntime.memory,key='reaction-journals:'+Object.values(scope).join(':'),journals=memory.get(key)||new Map();memory.set(key,journals);
  const filters=new Map(),snapshots=new Map(),busy=new Set(),polls=new Map(),stored=new Set(),prefix='oie.reaction.v1:'+Object.values(scope).join(':')+':';
  const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(v),sameSet=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every(e=>b.includes(e));
@@ -28,8 +29,46 @@ window.OieRuntime.register('reactions',life=>{
  function clear(id){journals.delete(id);clearTimeout(polls.get(id));polls.delete(id);try{localStorage.removeItem(prefix+id)}catch{}}
  function restore(id){if(stored.has(id))return;stored.add(id);try{const saved=JSON.parse(localStorage.getItem(prefix+id)||'null');if(validIntent(saved,id))journals.set(id,saved)}catch{}}
  function commandIntent(command){return {...scope,messageId:command.messageId,operationKey:command.id,expectedOwnRevisionId:command.expectedOwnRevisionId||'',emojis:command.emojis,command}}
+ const roomState=()=>document.getElementById('room-session-status')?.dataset.roomState;
+ const publicActors=s=>s?.actors?.some(actor=>!actor.address.startsWith('occupant:'))===true;
+ function publishRoomSnapshot(id,s,previous,valid){
+  if(!valid||s?.eligible!==previous?.eligible||publicActors(s)!==publicActors(previous)){
+   roomRevisions.set(id,(roomRevisions.get(id)||0)+1);
+  }
+  // A refresh can retain the active row or omit rows from older pages.
+  const live=document.querySelector('[data-reaction-source="'+CSS.escape(id)+'"]');
+  if(live)live.dataset.reactionState=JSON.stringify(s??null);
+  if(s)snapshots.set(id,s);
+ }
  function read(root){
-  for(const region of root.querySelectorAll('[data-reaction-source][data-reaction-state]')){const id=region.dataset.reactionSource;if(!uuid(id))continue;let s;try{s=JSON.parse(region.dataset.reactionState)}catch{continue}if(!validSnapshot(s,id))continue;snapshots.set(id,s);restore(id);if(s.pendingCommand){const intent=commandIntent(s.pendingCommand);if(validIntent(intent,id)&&matches(s.pendingCommand,intent)&&!journals.has(id))save(intent)}}
+  const withdrawn=room&&roomState()!=='joined';
+  if(withdrawn){
+   for(const [id,previous] of snapshots){
+    if(previous.eligible||publicActors(previous)){
+     const s={...previous,actors:publicActors(previous)?undefined:previous.actors,eligible:false};
+     publishRoomSnapshot(id,s,previous,false);
+    }
+   }
+  }
+  for(const region of root.querySelectorAll('[data-reaction-source][data-reaction-state]')){
+   const id=region.dataset.reactionSource;
+   if(!uuid(id))continue;
+   let incoming;
+   try{incoming=JSON.parse(region.dataset.reactionState)}catch{}
+   const valid=validSnapshot(incoming,id),previous=snapshots.get(id);
+   if(!room&&!valid)continue;
+   let s=valid?incoming:previous;
+   if(room){
+    if(s&&(!valid||withdrawn))s={...s,actors:!valid||publicActors(s)?undefined:s.actors,eligible:false};
+    publishRoomSnapshot(id,s,previous,valid);
+   }else snapshots.set(id,s);
+   if(!s)continue;
+   restore(id);
+   if(s.pendingCommand){
+    const intent=commandIntent(s.pendingCommand);
+    if(validIntent(intent,id)&&matches(s.pendingCommand,intent)&&!journals.has(id))save(intent);
+   }
+  }
   render();
   if(preparation&&!activeSnapshot()?.eligible)close(false);else positionQuick();
  }
@@ -52,6 +91,8 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
    const activeEmoji=active?.dataset.reactionEmoji,activeFilter=active?.dataset.reactionFilter;
    const signature=JSON.stringify([s.items,s.actors,s.eligible,pending?.operationKey,pending?.command?.state,busy.has(id),selected]);if(region.dataset.reactionRendered===signature)continue;
    const summary=region.querySelector('[data-reaction-summary]'),total=s.items.reduce((sum,item)=>sum+item.count,0),details=region.querySelector('[data-reaction-details]');
+   const closingEmpty=total===0&&summary.getAttribute('aria-expanded')==='true';
+   if(closingEmpty)summary.click();
    summary.hidden=total===0;summary.querySelector('[data-reaction-summary-emojis]').textContent=s.items.slice(0,3).map(item=>item.emoji).join(' ');summary.querySelector('[data-reaction-summary-count]').textContent=String(total);summary.setAttribute('aria-label',labels.reactSummary+' · '+total);
    details.querySelector('[data-reaction-total]').textContent=String(total);const filterRow=details.querySelector('[data-reaction-filters]'),rows=details.querySelector('[data-reaction-detail-list]');
    filterRow.replaceChildren(detailFilter(id,'',total,!selected),...s.items.map(item=>detailFilter(id,item.emoji,item.count,selected===item.emoji)));
@@ -59,7 +100,8 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
    details.querySelector('[data-reaction-open]').disabled=!s.eligible||!!pending||busy.has(id);
    const pendingSlot=region.querySelector('[data-reaction-pending]');pendingSlot.replaceChildren();
    if(pending){const button=picker.querySelector('[data-reaction-status-template]').content.firstElementChild.cloneNode(true),state=pending.command?.state,waiting=busy.has(id)||['queued','dispatching'].includes(state);button.dataset.reactionMessage=id;button.disabled=busy.has(id);const actionLabel=waiting?labels.pending:!pending.command&&pending.missingReceipt?labels.retry:labels.check;button.setAttribute('aria-label',actionLabel);button.title=actionLabel;button.setAttribute('aria-busy',String(waiting));button.querySelector('[data-reaction-check-icon]').hidden=waiting;button.querySelector('[data-reaction-status-spinner]').hidden=!waiting;pendingSlot.append(button)}
-   region.dataset.reactionRendered=signature;if(active&&!active.isConnected){const replacement=activeFilter!==undefined?[...filterRow.querySelectorAll('[data-reaction-filter]')].find(button=>button.dataset.reactionFilter===activeFilter):activeEmoji?[...rows.querySelectorAll('[data-reaction-emoji]')].find(button=>button.dataset.reactionEmoji===activeEmoji):pendingSlot.querySelector('[data-reaction-check]');(replacement||summary)?.focus({preventScroll:true})}
+   region.dataset.reactionRendered=signature;if(active&&!active.isConnected){const replacement=activeFilter!==undefined?[...filterRow.querySelectorAll('[data-reaction-filter]')].find(button=>button.dataset.reactionFilter===activeFilter):activeEmoji?[...rows.querySelectorAll('[data-reaction-emoji]')].find(button=>button.dataset.reactionEmoji===activeEmoji):pendingSlot.querySelector('[data-reaction-check]');(replacement||(!summary.hidden?summary:region.closest('[data-message-bubble]')?.querySelector('[data-message-menu-trigger]')))?.focus({preventScroll:true})}
+   if(closingEmpty&&active&&summary===document.activeElement)region.closest('[data-message-bubble]')?.querySelector('[data-message-menu-trigger]')?.focus({preventScroll:true});
   }
   for(const button of document.querySelectorAll('[data-reaction-open]')){const s=snapshots.get(button.dataset.reactionOpen),pending=journals.get(button.dataset.reactionOpen),slot=button.closest('[data-reaction-shortcut-slot]');if(slot)slot.hidden=!s||(!s.eligible&&!pending);if(slot)button.setAttribute('aria-busy',String(busy.has(button.dataset.reactionOpen)))}
   for(const button of document.querySelectorAll('[id^="react-message-"]')){const id=button.id.slice(14),s=snapshots.get(id),pending=journals.get(id);button.disabled=!s||(!s.eligible&&!pending)||busy.has(id);button.setAttribute('aria-label',pending?labels.check:labels.react);button.title=pending?labels.check:labels.react;let text=button.querySelector('[data-reaction-menu-label]');if(!text){text=document.createElement('span');text.dataset.reactionMenuLabel='';const icon=button.querySelector('svg');button.replaceChildren(...(icon?[icon]:[]),text)}text.textContent=pending?labels.check:labels.react}
@@ -80,6 +122,7 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
  async function prepare(id,element,emoji){
   if(!uuid(id)||busy.has(id)||body.dataset.mock==='true')return;if(journals.has(id)){void submit(journals.get(id),true);return}
   const opening=!emoji,controller=new AbortController();
+  const roomRevision=roomRevisions.get(id),presence=roomState();
   if(opening){
    cancelPreparation();
    preparing=controller;
@@ -93,9 +136,18 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
    const url=new URL('/ui/message-reactions',location.origin);
    for(const[k,v]of Object.entries({...scope,messageId:id,lang:document.documentElement.lang}))url.searchParams.set(k,v);
    const response=await life.fetch(url,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:controller.signal}),value=await response.json();
-   if(life.signal.aborted||controller.signal.aborted)return;
+   if(life.signal.aborted||controller.signal.aborted||room&&(roomRevision!==roomRevisions.get(id)||presence!==roomState()))return;
    if(!response.ok||value.engineId!==scope.engineId||!uuid(value.operationKey)||!validSnapshot(value.snapshot,id))throw Error('unavailable');
-   setCurrent(value.snapshot);
+   if(room){
+    // Preflight authorizes the action. Actor details come from the timeline
+    // refresh so a delayed preflight cannot reintroduce a public profile.
+    const prior=snapshots.get(id);
+    if(prior){
+     const {eligible,allowedEmojis,maxEmojis}=value.snapshot;
+     setCurrent({...prior,eligible,allowedEmojis,maxEmojis});
+     if(!sameSet(prior.ownEmojis,value.snapshot.ownEmojis))refresh();
+    }
+   }else setCurrent(value.snapshot);
    if(value.snapshot.pendingCommand){
     const intent=commandIntent(value.snapshot.pendingCommand);
     if(!validIntent(intent,id)||!matches(intent.command,intent))throw Error('pending');

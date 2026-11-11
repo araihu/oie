@@ -29,6 +29,8 @@ type roomSlot struct {
 	leaving                  bool
 	mentionOccupants         map[string]observedMention
 	ownOccupantID            string
+	pendingOwnOccupantID     string
+	pendingOccupantRevision  uint64
 	recentReactionsRecovered bool
 }
 type ownRoomMessage struct{ address, body string }
@@ -407,7 +409,7 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 			e.mu.Unlock()
 			return true, err
 		}
-		slot.ownOccupantID = ""
+		slot.ownOccupantID, slot.pendingOwnOccupantID = "", ""
 		slot.snapshot = roomSnapshot(slot.conversation, state, slot.snapshot.Nickname, code, slot.snapshot.IntentRevisionID)
 		slot.snapshot.Revoked = code == "forbidden" || code == "removed"
 		slot.leaving = false
@@ -443,14 +445,26 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 	return true, nil
 }
 
-// A self-presence is eligible only in a configuration that currently proves
-// the room assigns occupant IDs. The caller holds e.mu.
+// A scoped self-presence can precede the discovery reply. Hold its candidate
+// for that configuration and only use it after the room proves support.
+// The caller holds e.mu.
 func captureOwnRoomOccupant(e *entry, room string, slot *roomSlot, ids []wireID) bool {
-	e.historyMu.Lock()
-	trusted := e.occupantScopes[room] && !e.roomConfigurations[room].pending
-	e.historyMu.Unlock()
 	id := verifiedOccupantID(ids)
-	if !trusted || id == "" || id == slot.ownOccupantID {
+	if id == "" {
+		return false
+	}
+	e.historyMu.Lock()
+	defer e.historyMu.Unlock()
+	configuration := e.roomConfigurations[room]
+	if configuration.pending {
+		slot.pendingOwnOccupantID, slot.pendingOccupantRevision = id, configuration.revision
+		return false
+	}
+	return e.occupantScopes[room] && updateOwnRoomOccupant(slot, id)
+}
+
+func updateOwnRoomOccupant(slot *roomSlot, id string) bool {
+	if id == slot.ownOccupantID {
 		return false
 	}
 	slot.ownOccupantID = id

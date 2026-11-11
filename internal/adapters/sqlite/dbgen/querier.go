@@ -13,6 +13,7 @@ type Querier interface {
 	ArchivedReactionNeighbors(ctx context.Context, arg ArchivedReactionNeighborsParams) (ArchivedReactionNeighborsRow, error)
 	ClearCanonicalAliases(ctx context.Context, ids string) error
 	ClearContentHeads(ctx context.Context, ids string) error
+	ClearRoomReactionVisibility(ctx context.Context, arg ClearRoomReactionVisibilityParams) error
 	CorrectionNeighbors(ctx context.Context, arg CorrectionNeighborsParams) ([]CorrectionNeighborsRow, error)
 	CountConversationUnread(ctx context.Context, conversationID string) (int64, error)
 	CountRoomArchiveMessages(ctx context.Context, arg CountRoomArchiveMessagesParams) (int64, error)

@@ -1037,8 +1037,12 @@ scoped to the account and room and projected with nicknames and opaque keys.
 Authenticated room configuration notices revoke cached reaction capabilities
 until discovery confirms them again. History checkpoints wait for that discovery.
 Real room addresses and contact avatars require current presence and verified
-non-anonymous discovery. After an observed identity-mode change, older peer sets
-stay out of counts if the room later returns to a previous mode. A fresh verified
+non-anonymous discovery. After an observed identity-mode change, peer sets
+already retained under a previous mode stay out of counts. Legacy rooms with
+mixed identity schemes start a fresh peer set because the old observations
+cannot safely be correlated. Newly discovered archived reactions use their
+verified occupant identity. The local discovery time does not date the room's
+change. A fresh verified
 self-presence can restore occupant-based reactions during an existing room session.
 If a room archive page is read before self-presence establishes the account’s
 occupant ID, its skipped reaction range is stored with the text checkpoint.

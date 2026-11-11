@@ -334,7 +334,6 @@ type RoomReactionPrivacy struct {
 	Public       int64
 	IdentityMode string
 	Epoch        int64
-	ChangedAt    string
 }
 
 type SharedContent struct {

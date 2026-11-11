@@ -27,6 +27,10 @@ func (m *Manager) WakeRoomArchive(account domain.ID) {
 	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+	wakeRoomArchiveLocked(e)
+}
+
+func wakeRoomArchiveLocked(e *entry) {
 	select {
 	case e.historyWake <- struct{}{}:
 	default:

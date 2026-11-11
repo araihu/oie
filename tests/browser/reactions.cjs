@@ -11,12 +11,13 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
  const conversation={id:chat,revisionId:revision,accountId:account,kind:'direct',title:'Bob',address:'bob@fixture',lastMessage:source.originalText,updatedAt:source.createdAt,unreadCount:0,archived:false,favorite:false};
  const pending=()=>[...commands.values()].find(c=>['queued','dispatching','unknown'].includes(c.state));
  const snapshot=()=>({messageId:message,accountId:account,conversationId:chat,revisionId:state.ownRevision,ownRevisionId:state.ownRevision,ownEmojis:[...state.own],actors:[...(state.own.length?[{address:'alice@fixture',displayName:'Alice',own:true,emojis:[...state.own]}]:[]),...(state.baseReactions?[{address:state.peerOccupant||'bob@fixture',displayName:state.peerName,own:false,emojis:['👍'],...(state.peerOccupant?{}:{avatarHash})},{address:'carol@fixture',displayName:'Carol',own:false,emojis:['👍']}]:[])],items:[...new Set([...(state.baseReactions?['👍']:[]),...state.own])].sort().map(emoji=>({emoji,count:(state.baseReactions&&emoji==='👍'?2:0)+(state.own.includes(emoji)?1:0),own:state.own.includes(emoji)})),eligible:state.eligible,maxEmojis:state.max,...(state.allowed?{allowedEmojis:state.allowed}:{}),...(pending()?{pendingCommand:pending()}: {})});
- const emit=()=>{state.seq++;for(const s of streams)s.write(`id: ${engine}:${state.seq}\nevent: message.updated\ndata: {}\n\n`)};
+ const emit=(event='message.updated')=>{state.seq++;for(const s of streams)s.write(`id: ${engine}:${state.seq}\nevent: ${event}\ndata: {}\n\n`)};
  const apply=c=>{c.state='submitted';state.own=[...c.emojis];state.ownRevision=c.revisionId;emit()};
  const api=http.createServer(async(req,res)=>{
   const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(code,value)=>{res.statusCode=code;res.end(JSON.stringify(value))};
   if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.27.0',eventCursor:engine+':'+state.seq});
   if(u.pathname==='/api/v1/accounts'||u.pathname==='/api/v1/accounts/'+account){const a={id:account,revisionId:revision,protocol:'xmpp',label:'Alice',address:'alice@fixture',createdAt:source.createdAt};return send(200,u.pathname.endsWith('/accounts')?{items:[a]}:a)}
+  if(u.pathname.endsWith('/room-session'))return send(200,{conversationId:chat,accountId:account,state:state.eligible?'joined':'not_joined',active:state.eligible,updatedAt:source.createdAt});
   if(u.pathname.endsWith('/connection'))return send(200,{accountId:account,state:'connected',updatedAt:source.createdAt});
   if(u.pathname.endsWith('/history'))return send(200,{accountId:account,state:'complete',retainedMessages:1,conversations:1,updatedAt:source.createdAt});
   if(u.pathname==='/api/v1/avatars/'+avatarHash){res.setHeader('Content-Type','image/png');res.statusCode=200;return res.end(avatarImage)}
@@ -27,6 +28,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   if(u.pathname==='/api/v1/conversations/'+chat+'/messages/'+message+'/context')return send(200,{targetId:message,items:[source],hasOlder:false,hasNewer:false});
   if(u.pathname==='/api/v1/messages/'+message)return send(200,source);
   if(u.pathname.endsWith('/message-stars'))return send(200,{items:u.searchParams.getAll('messageId').map(messageId=>({messageId,accountId:account,conversationId:chat,starred:false,revisionId:null,updatedAt:null}))});
+  if(u.pathname==='/api/v1/conversations/'+chat+'/reactions'&&state.noBatch)return send(503,{code:'unavailable'});
   if(u.pathname==='/api/v1/conversations/'+chat+'/reactions')return send(200,{items:u.searchParams.getAll('messageId').map(()=>snapshot())});
   if(u.pathname==='/api/v1/messages/'+message+'/reactions'&&req.method==='GET'){state.reads++;const value=snapshot();if(state.prepareEligible!==null)value.eligible=state.prepareEligible;return state.delay?setTimeout(()=>send(200,value),state.delay):send(200,value)}
   if(u.pathname.startsWith('/api/v1/message-reaction-commands/')){const c=commands.get(u.pathname.split('/').at(-1));return c?send(200,c):send(404,{code:'not_found'})}
@@ -188,6 +190,39 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   await quick.waitFor({state:'visible'});
   assert.deepEqual(await quick.locator('[data-reaction-quick-emoji]:visible').allTextContents(),['😂']);
   await quick.locator('[data-reaction-more]').click();await modal.waitFor({state:'visible'});await until(async()=>await modal.locator('[data-emoji-pick="😂"]').count()>0,'allowed choices');const choices=await modal.locator('[data-emoji-pick]').evaluateAll(nodes=>[...new Set(nodes.map(n=>n.dataset.emojiPick))].sort());assert.deepEqual(choices,['👍🏽','😂'].sort(),'only allowed tones/emoji appear; unsupported family base is absent');assert.equal(await modal.locator('[data-emoji-variants-trigger]').count(),0,'no unsupported tones in the variant menu');await modal.locator('[data-emoji-pick="😂"]').first().click();await own('😂',true);assert.deepEqual(state.own,['😂']);state.allowed=null;state.max=8;emit();findings.push('The composer and reactions reuse category navigation, bilingual search, shared device recents and tone variants; protocol allowlists filter individual tones and full selection limits disable extra choices without changing drafts');
+  // A protected room row must lose public actor data even if the batch read
+  // fails, and an older in-flight preparation must not restore that data.
+  conversation.kind='room';conversation.address='room@fixture';conversation.title='Fixture room';
+  state.own=[];state.ownRevision=null;state.eligible=true;state.baseReactions=true;
+  await page.goto(route('pt-BR','dark'));
+  const roomState=page.locator('[data-room-state]'),roomSummary=region.locator('[data-reaction-summary]');
+  const publicActor=region.locator('[data-reaction-actor="bob@fixture"]');
+  await until(async()=>await roomState.getAttribute('data-room-state')==='joined','room joined');
+  await roomSummary.click();
+  await publicActor.waitFor({state:'visible'});
+  const privacyPosts=state.posts;
+  state.eligible=false;state.noBatch=true;emit('conversation.room_session_changed');
+  await until(async()=>await roomState.getAttribute('data-room-state')==='not_joined','leave during failed snapshot read');
+  await publicActor.waitFor({state:'detached'});
+  assert(!(await region.getAttribute('data-reaction-state')).includes('bob@fixture'));
+  state.noBatch=false;state.baseReactions=false;emit('conversation.updated');
+  await roomSummary.waitFor({state:'hidden'});
+  await region.locator('[data-reaction-details]').waitFor({state:'hidden'});
+  state.eligible=true;state.baseReactions=true;emit('conversation.room_session_changed');
+  await until(async()=>await roomState.getAttribute('data-room-state')==='joined','room rejoined');
+  await publicActor.waitFor({state:'attached'});
+  state.delay=1300;
+  const roomRead=state.reads;
+  await openReact();
+  await until(()=>state.reads>roomRead,'pending room reaction preparation');
+  state.eligible=false;state.baseReactions=false;emit('conversation.room_session_changed');
+  await until(async()=>await roomState.getAttribute('data-room-state')==='not_joined','leave during room reaction preparation');
+  await wait(1400);
+  assert.equal(await quick.isVisible(),false);
+  assert.equal(await publicActor.count(),0);
+  assert(!(await region.getAttribute('data-reaction-state')).includes('bob@fixture'));
+  assert.equal(state.posts,privacyPosts);
+  findings.push('Room exit clears cached actor details on a failed snapshot read and discards a delayed preflight');
   assert.deepEqual(errors,[]);await fs.writeFile(path.join(__dirname,'artifacts/reactions-report.json'),JSON.stringify({findings,effects:state.effects,posts:state.posts,posted:state.posted,frames:frames.length,pageErrors:errors},null,2));console.log('PASS: scoped reactions, set/clear, bilingual picker, unknown receipt and same-key retry, no preflight shift, draft/keyboard preservation and responsive accessibility');
  }finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(r=>api.close(r))}
 })().catch(error=>{console.error(error);process.exitCode=1});
