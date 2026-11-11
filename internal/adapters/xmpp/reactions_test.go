@@ -329,7 +329,9 @@ func TestReactionSendWritesBodylessWireWithoutChangingOriginalSendTracking(t *te
 			go func() {
 				var wire archiveMessage
 				_ = right.SetReadDeadline(time.Now().Add(3 * time.Second))
-				if err := xml.NewDecoder(right).Decode(&wire); err != nil {
+				decoder := xml.NewDecoder(right)
+				decoder.DefaultSpace = stanza.NSClient
+				if err := decoder.Decode(&wire); err != nil {
 					t.Error(err)
 				}
 				received <- wire
@@ -343,6 +345,75 @@ func TestReactionSendWritesBodylessWireWithoutChangingOriginalSendTracking(t *te
 				t.Fatal("reaction altered original message identity/tracking", wire, e)
 			}
 		})
+	}
+}
+
+type reactionDeadlineConn struct {
+	net.Conn
+	onDeadline func()
+}
+
+func (c *reactionDeadlineConn) SetWriteDeadline(at time.Time) error {
+	if !at.IsZero() && c.onDeadline != nil {
+		notify := c.onDeadline
+		c.onDeadline = nil
+		notify()
+	}
+	return c.Conn.SetWriteDeadline(at)
+}
+
+func TestReactionSendRechecksRoomConfigurationAtStreamWrite(t *testing.T) {
+	m, e, slot, _ := reactionRoomFixture(t)
+	c := slot.conversation
+	left, right := net.Pipe()
+	t.Cleanup(func() { _ = left.Close(); _ = right.Close() })
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	s, err := mx.NewSession(ctx, jid.MustParse("example.test"), jid.MustParse("alice@example.test/test"), left, mx.Ready, func(context.Context, *stream.Info, *stream.Info, *mx.Session, any) (mx.SessionState, io.ReadWriter, any, error) {
+		return mx.Ready, nil, nil, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := &reactionDeadlineConn{Conn: left, onDeadline: func() {
+		feedReaction(t, m, e, `<message xmlns="jabber:client" from="`+c.Address+`" type="groupchat"><x xmlns="http://jabber.org/protocol/muc#user"><status code="104"/></x></message>`)
+	}}
+	e.raw, e.session, slot.session = raw, s, s
+	slot.ownOccupantID = "own-id"
+	disco := `<query xmlns="http://jabber.org/protocol/disco#info"><identity category="conference" type="text"/><feature var="muc_semianonymous"/><feature var="urn:xmpp:occupant-id:0"/><feature var="urn:xmpp:sid:0"/></query>`
+	if _, err := m.decodeDiscoInfo(ctx, e, s, c.Address, disco, 0); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := m.PrepareReaction(ctx, e.account, c, reactionTarget(e, c))
+	if err != nil || !domain.IsRoomReactionActor(plan.RoomActor) {
+		t.Fatal("expected a verified occupant reaction", plan, err)
+	}
+	out := application.Outgoing{ID: "019a5df0-0000-7000-8000-000000000012", Kind: c.Kind, Address: c.Address, Reaction: &plan, ReactionEmojis: []string{"👍"}, RoomIntentRevisionID: plan.RoomIntentRevisionID}
+	type result struct {
+		wire archiveMessage
+		err  error
+	}
+	received := make(chan result, 1)
+	go func() {
+		var res result
+		decoder := xml.NewDecoder(right)
+		decoder.DefaultSpace = stanza.NSClient
+		res.err = decoder.Decode(&res.wire)
+		received <- res
+	}()
+	if outcome := m.Send(ctx, e.account, out); outcome != application.Failed {
+		t.Fatal("reaction was not rejected before writing", outcome)
+	}
+	if !currentRoomConfiguration(e, c.Address).pending || len(e.reactionCommands) != 0 {
+		t.Fatal("expected pending configuration with no tracked command")
+	}
+	message := application.Outgoing{ID: "019a5df0-0000-7000-8000-000000000013", Kind: c.Kind, Address: c.Address, OriginalText: "still connected", RoomIntentRevisionID: plan.RoomIntentRevisionID}
+	if outcome := m.Send(ctx, e.account, message); outcome != application.Submitted {
+		t.Fatal("room text write failed after the local refusal", outcome)
+	}
+	res := <-received
+	if res.err != nil || res.wire.ID != string(message.ID) || res.wire.Body != message.OriginalText || len(res.wire.Reactions) != 0 {
+		t.Fatal("expected only the later room text on the wire", res.wire, res.err)
 	}
 }
 

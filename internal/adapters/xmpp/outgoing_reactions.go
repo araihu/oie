@@ -1,7 +1,11 @@
 package xmpp
 
 import (
+	"bytes"
 	"context"
+	"encoding/xml"
+	"io"
+	"net"
 	"slices"
 	"strconv"
 	"strings"
@@ -10,6 +14,7 @@ import (
 
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
+	"mellium.im/xmlstream"
 	mx "mellium.im/xmpp"
 	"mellium.im/xmpp/disco"
 	"mellium.im/xmpp/form"
@@ -204,8 +209,8 @@ func withinReactionLimit(emojis []string, limit reactionLimit) bool {
 	return true
 }
 
-// The send mutex is held by the caller. A frozen reaction never rebinds to a
-// new authenticated connection or silently becomes an ordinary chat message.
+// The caller holds e.mu. A frozen reaction never rebinds to a new authenticated
+// connection or silently becomes an ordinary chat message.
 func validFrozenReaction(e *entry, a domain.Account, out application.Outgoing) bool {
 	if !validReactionPayload(a, out) || out.Reaction.SessionID != e.correctionSession || !withinReactionLimit(out.ReactionEmojis, currentReactionLimit(e, out.Address)) {
 		return false
@@ -221,6 +226,40 @@ func validFrozenReaction(e *entry, a domain.Account, out application.Outgoing) b
 		return actor == a.Address
 	}
 	return true
+}
+
+func sendFrozenReaction(ctx context.Context, e *entry, session *mx.Session, raw net.Conn, a domain.Account, out application.Outgoing, payload outboundMessage) string {
+	wire, err := xml.Marshal(payload)
+	if err != nil {
+		return application.Failed
+	}
+	var refused string
+	// Send reads its first token only after locking the stream writer. Admit
+	// and track the reaction there, before it can emit XML or receive an echo.
+	admit := xmlstream.ReaderFunc(func() (xml.Token, error) {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		switch {
+		case ctx.Err() != nil || e.session != session || e.raw != raw || e.state.State != "connected":
+			refused = application.NotSent
+		case !validFrozenReaction(e, a, out):
+			refused = application.Failed
+		default:
+			trackReactionCommand(e, out)
+			return nil, io.EOF
+		}
+		return nil, application.ErrProtocolUnavailable
+	})
+	decoder := xml.NewDecoder(bytes.NewReader(wire))
+	err = session.Send(ctx, xmlstream.MultiReader(admit, xmlstream.ReaderFunc(decoder.RawToken)))
+	if refused != "" {
+		return refused
+	}
+	if err != nil {
+		_ = raw.Close()
+		return application.Unknown
+	}
+	return application.Submitted
 }
 
 func trackReactionCommand(e *entry, out application.Outgoing) {

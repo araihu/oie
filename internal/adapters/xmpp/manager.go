@@ -492,12 +492,8 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 		e.mu.Unlock()
 		return application.Failed
 	}
-	if out.Reaction != nil && !validFrozenReaction(e, a, out) {
-		e.mu.Unlock()
-		return application.Failed
-	}
 	e.mu.Unlock()
-	if out.Kind == "room" {
+	if out.Kind == "room" && out.Reaction == nil {
 		e.mu.Lock()
 		slot := e.rooms[out.Address]
 		if slot == nil || slot.session != session || slot.snapshot.State != "joined" || slot.snapshot.IntentRevisionID != out.RoomIntentRevisionID {
@@ -507,18 +503,16 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 			}
 			return application.NotSent
 		}
-		if out.Reaction == nil && e.ownRoomMessages == nil {
+		if e.ownRoomMessages == nil {
 			e.ownRoomMessages = map[string]ownRoomMessage{}
 		}
-		if out.Reaction == nil && len(e.ownRoomMessages) >= maxOwnRoomMessages {
+		if len(e.ownRoomMessages) >= maxOwnRoomMessages {
 			for id := range e.ownRoomMessages {
 				delete(e.ownRoomMessages, id)
 				break
 			}
 		}
-		if out.Reaction == nil {
-			e.ownRoomMessages[string(out.ID)] = ownRoomMessage{address: out.Address, body: out.OriginalText}
-		}
+		e.ownRoomMessages[string(out.ID)] = ownRoomMessage{address: out.Address, body: out.OriginalText}
 		e.mu.Unlock()
 	}
 
@@ -531,12 +525,11 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	}
 	_ = raw.SetWriteDeadline(deadline)
 	defer func() { _ = raw.SetWriteDeadline(time.Time{}) }()
-	e.mu.Lock()
 	if out.Reaction != nil {
-		trackReactionCommand(e, out)
-	} else {
-		trackCorrectionSource(e, a, out)
+		return sendFrozenReaction(ctx, e, session, raw, a, out, payload)
 	}
+	e.mu.Lock()
+	trackCorrectionSource(e, a, out)
 	e.mu.Unlock()
 
 	if err = session.Encode(ctx, payload); err != nil {
