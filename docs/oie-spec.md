@@ -659,6 +659,18 @@ Do not mutate a process-global locale for a hosted engine's devices. Full-page r
 
 Use UTC internally for timestamps and scheduling. Convert local input into an instant at the presentation boundary and format that instant locally. DST input ambiguity and exact wire precision are **OPEN O14**.
 
+### 11.6 Delete all Oiê data
+
+**AGREED:** Settings offers an installation-wide reset on engines that support
+it. The user must type the exact word `delete` to confirm. Delete the engine's
+accounts and credentials, retained history and indexes, queued operations, and
+managed media. Start an empty engine with a new identity so requests from the
+old installation cannot repeat the reset. Clear Oiê's settings, drafts and
+preview cache in the browser that initiated the reset. Other browser profiles,
+exported files and protocol-server data are outside the operation. When an
+installation uses a shared hosted engine, this deletes the data held by that
+engine for all its clients.
+
 ## 12. Backup and merge restore
 
 Include manual engine-data backup and restore, with media files optionally included. Restore **merges into existing data** using stable entity/revision UUIDv7 IDs. Fresh-directory-only restore with merging deferred was explicitly rejected.

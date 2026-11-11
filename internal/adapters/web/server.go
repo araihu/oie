@@ -134,6 +134,7 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	CanResetData     bool
 	LatestEditTarget *engineapi.MessageEditTarget
 
 	SenderInfo                                                                                    *senderInfoView
@@ -190,6 +191,7 @@ type view struct {
 }
 
 type copy struct {
+	DeleteAllData, DeleteDataWarning, DeleteHostedDataWarning, DeleteDataConfirmation, DeleteDataCancel, DeleteDataFailed         string
 	Reactions, ReactMessage, ReactionUnavailable, ReactionPending, ReactionUnknown, ReactionFailed, ReactionCheck, ReactionRemove string
 
 	CapabilitySendCorrectionsNote string
@@ -557,6 +559,10 @@ var liveScript []byte
 var roomArchiveScript []byte
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/ui/engine/reset" {
+		s.resetData(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, browserRoomArchivePath) {
 		s.browserRoomArchive(w, r)
 		return
@@ -620,8 +626,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mime string
 		body []byte
 	}{
-		"/ui/sidebar.js":  {"text/javascript", sidebarScript},
-		"/ui/mentions.js": {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
+		"/ui/sidebar.js":    {"text/javascript", sidebarScript},
+		"/ui/reset-data.js": {"text/javascript", resetDataScript},
+		"/ui/mentions.js":   {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
 		"/ui/room-archive.js": {"text/javascript", roomArchiveScript},
 		"/ui/timeline.js":     {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/cache.js": {"text/javascript", cacheScript}, "/ui/cache/LICENSE.md": {"text/plain; charset=utf-8", cacheLibraryLicense}, "/ui/cache/lru-cache.min.mjs": {"text/javascript", cacheLibrary}, "/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
@@ -757,6 +764,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		return
 	}
 	v.EngineID = engine.JSON200.Id
+	v.CanResetData = engine.JSON200.CanResetData != nil && *engine.JSON200.CanResetData
 	v.EventCursor = engine.JSON200.EventCursor
 	v.Preview = engine.HTTPResponse.Header.Get("X-Oie-Mock") == "true"
 	v.Role = v.Text.Local

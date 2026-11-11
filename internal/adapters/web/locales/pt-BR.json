@@ -1,4 +1,10 @@
 {
+  "DeleteAllData": "Apagar todos os dados",
+  "DeleteDataWarning": "Isso apaga permanentemente as contas, mensagens, arquivos e configurações salvos nesta instalação do Oiê. As cópias nos servidores de conversa permanecem lá.",
+  "DeleteHostedDataWarning": "Isso apaga permanentemente as contas, mensagens e arquivos deste servidor Oiê para todos os dispositivos conectados. Também limpa suas configurações neste dispositivo. As cópias nos servidores de conversa permanecem lá.",
+  "DeleteDataConfirmation": "Digite delete para confirmar",
+  "DeleteDataCancel": "Cancelar",
+  "DeleteDataFailed": "Não foi possível apagar todos os dados.",
   "Reactions": "Reações",
   "ReactMessage": "Reagir",
   "ReactionUnavailable": "Reações indisponíveis para esta mensagem.",

@@ -12,21 +12,13 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/araihu/goshtoso/assets"
 	"github.com/araihu/oie/api"
-	"github.com/araihu/oie/internal/adapters/avatarfiles"
-	"github.com/araihu/oie/internal/adapters/httpapi"
-	"github.com/araihu/oie/internal/adapters/mediafiles"
-	"github.com/araihu/oie/internal/adapters/previewfetch"
 	"github.com/araihu/oie/internal/adapters/sqlite"
-	"github.com/araihu/oie/internal/adapters/videothumb"
 	"github.com/araihu/oie/internal/adapters/web"
-	xmpadapter "github.com/araihu/oie/internal/adapters/xmpp"
-	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	"github.com/google/uuid"
 )
@@ -81,19 +73,15 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 		return nil, err
 	}
 	var store *sqlite.Store
-	var protocols *xmpadapter.Manager
-	var workerDone <-chan error
+	var engine *engineHost
 	defer func() {
 		if err == nil {
 			return
 		}
 		cancel()
 		_ = listener.Close()
-		if workerDone != nil {
-			<-workerDone
-		}
-		if protocols != nil {
-			protocols.Close()
+		if engine != nil {
+			engine.instance.close()
 		}
 		if store != nil {
 			err = errors.Join(err, store.Close())
@@ -118,29 +106,11 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 		if err != nil {
 			return nil, err
 		}
-		engine, newErr := application.New(store, cfg.Role, newID, time.Now)
-		if newErr != nil {
-			return nil, newErr
-		}
-		engine.SetAvatarFiles(avatarfiles.New(filepath.Join(cfg.DataDir, "media", "avatars")))
-		fetcher := previewfetch.New()
-		engine.SetPreviewServices(fetcher, mediafiles.New(filepath.Join(cfg.DataDir, "media", "images")))
-		engine.SetMediaReader(fetcher)
-		engine.SetVideoThumbnailer(videothumb.New(cfg.FFmpeg))
-		roots, rootErr := certificateRoots(cfg.XMPPCAFile)
-		if rootErr != nil {
-			return nil, rootErr
-		}
-		protocols = xmpadapter.New(filepath.Join(cfg.DataDir, "private", "connections"), roots)
-		engine.SetProtocols(protocols)
-		if err = protocols.Start(ctx, engine); err != nil {
+		engine, err = newEngineHost(ctx, cfg, store)
+		if err != nil {
 			return nil, err
 		}
-		handler, handlerErr := httpapi.New(engine)
-		if handlerErr != nil {
-			return nil, handlerErr
-		}
-		apiMux.Handle("/api/v1/", handler)
+		apiMux.Handle("/api/v1/", engine)
 		apiMux.HandleFunc("GET /api/openapi.yaml", func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/yaml")
 			_, _ = w.Write(api.OpenAPI)
@@ -152,9 +122,6 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 				return nil
 			}))
 		}
-		result := make(chan error, 1)
-		workerDone = result
-		go func() { result <- engine.Run(ctx) }()
 	}
 	ui, err := web.New(engineURL, options...)
 	if err != nil {
@@ -183,7 +150,7 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 	host.server = &http.Server{Handler: host.track(networkHandler), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	served := make(chan error, 1)
 	go func() { served <- host.server.Serve(listener) }()
-	go host.supervise(served, workerDone, protocols, store)
+	go host.supervise(served, engine)
 	return host, nil
 }
 
@@ -280,16 +247,18 @@ func (s *Server) beginClose() {
 	s.cancel()
 }
 
-func (s *Server) supervise(served, workerDone <-chan error, protocols *xmpadapter.Manager, store *sqlite.Store) {
+func (s *Server) supervise(served <-chan error, engine *engineHost) {
 	var result error
-	workerConsumed := false
+	var failures <-chan error
+	if engine != nil {
+		failures = engine.failures
+	}
 	select {
 	case result = <-served:
 		if errors.Is(result, http.ErrServerClosed) {
 			result = nil
 		}
-	case result = <-workerDone:
-		workerConsumed = true
+	case result = <-failures:
 		if result != nil && !errors.Is(result, context.Canceled) {
 			result = fmt.Errorf("engine worker: %w", result)
 		} else {
@@ -305,16 +274,11 @@ func (s *Server) supervise(served, workerDone <-chan error, protocols *xmpadapte
 		result = errors.Join(result, fmt.Errorf("shutdown: %w", shutdownErr), s.server.Close())
 	}
 	s.requests.Wait()
-	if workerDone != nil && !workerConsumed {
-		if err := <-workerDone; err != nil && !errors.Is(err, context.Canceled) {
-			result = errors.Join(result, fmt.Errorf("engine worker: %w", err))
+	if engine != nil {
+		if engine.instance != nil {
+			engine.instance.close()
 		}
-	}
-	if protocols != nil {
-		protocols.Close()
-	}
-	if store != nil {
-		result = errors.Join(result, store.Close())
+		result = errors.Join(result, engine.store.Close())
 	}
 	s.err = result
 	s.done <- result

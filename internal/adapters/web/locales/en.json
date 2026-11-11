@@ -1,4 +1,10 @@
 {
+  "DeleteAllData": "Delete all data",
+  "DeleteDataWarning": "This permanently removes the accounts, messages, files, and settings saved in this Oiê installation. Copies on chat servers stay there.",
+  "DeleteHostedDataWarning": "This permanently removes the accounts, messages, and files saved in this Oiê server for every connected device. It also clears your settings on this device. Copies on chat servers stay there.",
+  "DeleteDataConfirmation": "Type delete to confirm",
+  "DeleteDataCancel": "Cancel",
+  "DeleteDataFailed": "Could not delete all data.",
   "Reactions": "Reactions",
   "ReactMessage": "React",
   "ReactionUnavailable": "Reactions are unavailable for this message.",

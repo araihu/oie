@@ -10,6 +10,8 @@ servers:
 - url: http://127.0.0.1:8080
 security: []
 tags:
+- name: Settings
+  description: Browser settings actions
 - name: Documents
   description: Static document presentation
 - name: Conversations
@@ -17,6 +19,31 @@ tags:
 - name: Messages
   description: Browser submission receipt recovery
 paths:
+  /ui/engine/reset:
+    post:
+      operationId: resetBrowserEngineData
+      tags: [Settings]
+      summary: Confirm deletion of all Oiê data
+      description: Resets the selected engine and clears browser preference cookies on success.
+      requestBody:
+        description: Confirmation from the settings dialog, bound to the current engine.
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            example: {engineId: 019a5df0-0000-7000-8000-000000000003, confirmation: delete, csrf: example-browser-token}
+            schema:
+              type: object
+              required: [engineId, confirmation, csrf]
+              properties:
+                engineId: {$ref: './openapi.yaml#/components/schemas/ID'}
+                confirmation: {type: string, enum: [delete], example: delete}
+                csrf: {type: string, example: example-browser-token}
+      responses:
+        '204': {description: Installation reset and empty engine ready.}
+        '400': {description: Invalid confirmation or request.}
+        '403': {description: Browser token missing or invalid.}
+        '409': {description: Engine identity changed.}
+        '503': {description: Engine data could not be reset.}
   /ui/room-archive/{conversationId}:
     parameters:
     - {$ref: './openapi.yaml#/components/parameters/ConversationID'}

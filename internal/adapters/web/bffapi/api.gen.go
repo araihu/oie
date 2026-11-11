@@ -105,6 +105,21 @@ func (e PendingSubmissionTheme) Valid() bool {
 	}
 }
 
+// Defines values for ResetBrowserEngineDataFormdataBodyConfirmation.
+const (
+	Delete ResetBrowserEngineDataFormdataBodyConfirmation = "delete"
+)
+
+// Valid indicates whether the value is a known member of the ResetBrowserEngineDataFormdataBodyConfirmation enum.
+func (e ResetBrowserEngineDataFormdataBodyConfirmation) Valid() bool {
+	switch e {
+	case Delete:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GetBrowserMessageEditTargetParamsLang.
 const (
 	GetBrowserMessageEditTargetParamsLangEn   GetBrowserMessageEditTargetParamsLang = "en"
@@ -583,6 +598,23 @@ type SubmissionReceipt struct {
 	State string `json:"state"`
 }
 
+// ResetBrowserEngineDataFormdataBody defines parameters for ResetBrowserEngineData.
+type ResetBrowserEngineDataFormdataBody struct {
+	// Confirmation Example: delete
+	Confirmation ResetBrowserEngineDataFormdataBodyConfirmation `form:"confirmation" json:"confirmation"`
+
+	// Csrf Example: example-browser-token
+	Csrf string `form:"csrf" json:"csrf"`
+
+	// EngineId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	EngineId externalRef0.ID `form:"engineId" json:"engineId"`
+}
+
+// ResetBrowserEngineDataFormdataBodyConfirmation defines parameters for ResetBrowserEngineData.
+type ResetBrowserEngineDataFormdataBodyConfirmation string
+
 // GetBrowserMessageEditTargetParams defines parameters for GetBrowserMessageEditTarget.
 type GetBrowserMessageEditTargetParams struct {
 	// EngineId Owning engine identity.
@@ -729,6 +761,9 @@ type UpdateBrowserConversationPreferencesFormdataRequestBody = ConversationPrefe
 
 // RenderDocumentMarkdownJSONRequestBody defines body for RenderDocumentMarkdown for application/json ContentType.
 type RenderDocumentMarkdownJSONRequestBody = MarkdownSource
+
+// ResetBrowserEngineDataFormdataRequestBody defines body for ResetBrowserEngineData for application/x-www-form-urlencoded ContentType.
+type ResetBrowserEngineDataFormdataRequestBody ResetBrowserEngineDataFormdataBody
 
 // SubmitBrowserMessageEditFormdataRequestBody defines body for SubmitBrowserMessageEdit for application/x-www-form-urlencoded ContentType.
 type SubmitBrowserMessageEditFormdataRequestBody = BrowserEditIntent

@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.28.0",
+    "version": "0.29.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.",
     "contact": {
       "name": "Arai Hû",
@@ -1432,11 +1432,67 @@
                 "example": {
                   "id": "019a5df0-0000-7000-8000-000000000003",
                   "role": "local",
-                  "apiVersion": "0.12.0",
+                  "apiVersion": "0.29.0",
                   "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
                 }
               }
             }
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/engine/reset": {
+      "post": {
+        "tags": [
+          "System"
+        ],
+        "operationId": "resetEngineData",
+        "summary": "Delete all data held by this engine",
+        "description": "Permanently deletes accounts, credentials, history and files held by the engine and starts an empty engine with a new identity. Provider copies are outside this operation.",
+        "requestBody": {
+          "description": "The active engine identity and the literal confirmation word.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "engineId": "019a5df0-0000-7000-8000-000000000003",
+                "confirmation": "delete"
+              },
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "engineId",
+                  "confirmation"
+                ],
+                "properties": {
+                  "engineId": {
+                    "$ref": "#/components/schemas/ID"
+                  },
+                  "confirmation": {
+                    "type": "string",
+                    "example": "delete",
+                    "enum": [
+                      "delete"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Data deleted and empty engine ready."
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
           },
           "503": {
             "$ref": "#/components/responses/Unavailable"
@@ -4053,7 +4109,7 @@
         "example": {
           "id": "019a5df0-0000-7000-8000-000000000003",
           "role": "local",
-          "apiVersion": "0.12.0",
+          "apiVersion": "0.29.0",
           "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
         },
         "additionalProperties": false,
@@ -4078,12 +4134,17 @@
             "type": "string",
             "enum": [
               "0.11.0",
-              "0.12.0"
+              "0.12.0",
+              "0.29.0"
             ]
           },
           "eventCursor": {
             "type": "string",
             "description": "Application stream boundary, separate from provider history cursors."
+          },
+          "canResetData": {
+            "type": "boolean",
+            "description": "This engine supports deleting its data through the reset operation."
           }
         }
       },

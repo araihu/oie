@@ -36,6 +36,7 @@ OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/conversation-details.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/shared-content.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/shared-actions.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/settings-entry.cjs
+OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/reset-data.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/appearance-settings.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/language-settings.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/shared-content-scroll.cjs

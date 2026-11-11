@@ -122,6 +122,7 @@ templ page(v view) {
 <script src="/ui/shared-actions.js" defer></script>
 <script src="/ui/room-archive.js" defer></script>
 <script src="/ui/timeline.js" defer></script>
+<script src="/ui/reset-data.js" defer></script>
 <script src="/ui/live.js" defer></script><script src="/ui/read-state.js" defer></script>
 <script src="/ui/emoji-picker.js" defer></script><script src="/ui/mentions.js" defer></script>
 <script src="/ui/navigation.js"></script>
@@ -162,6 +163,9 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 			<h1 class="sr-only">{v.Text.AppName}</h1>
 			@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: desktopNavigation(v), SidebarAttrs: templ.Attributes{"id": "desktop-navigation"}, Content: workspace(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
 			@settings(v)
+			if v.CanResetData {
+				@resetDataDialog(v)
+			}
 			@about(v)
 			@accounts(v)
 @newConversation(v)
@@ -435,6 +439,9 @@ templ settings(v view) {
 				<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
 			}
 			@aboutEntry(v)
+			if v.CanResetData {
+				@resetDataEntry(v)
+			}
 		</div>
 	}
 }
