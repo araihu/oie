@@ -209,7 +209,11 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 	for _, port := range []int{80, 443, 5269, 5280, 5281, 5347} {
 		prosody = prosody.WithoutExposedPort(port)
 	}
-	xmpp := prosody.WithExposedPort(5222).WithExposedPort(5281).AsService(dagger.ContainerAsServiceOpts{Args: []string{"sh", "/opt/oie/start.sh"}})
+	prosody = prosody.WithExposedPort(5222).WithExposedPort(5281)
+	startProsody := dagger.ContainerAsServiceOpts{Args: []string{"sh", "/opt/oie/start.sh"}}
+	xmpp := prosody.AsService(startProsody)
+	// Browser tests start with an empty inbox and must have their own archive.
+	browserXmpp := prosody.WithEnvVariable("OIE_CI_FIXTURE", "browser").AsService(startProsody)
 	integrated := goContainer.WithServiceBinding("xmpp", xmpp).WithFile("/tmp/xmpp-ca.crt", ca).
 		WithEnvVariable("OIE_XMPP_INTEGRATION", "1").WithEnvVariable("OIE_XMPP_CA_FILE", "/tmp/xmpp-ca.crt").
 		WithEnvVariable("OIE_XMPP_ENDPOINT", "xmpp:5222").WithEnvVariable("OIE_CI_RUN_ID", runID).
@@ -230,7 +234,7 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 	}
 	browser = browser.WithDirectory("/src", source).
 		WithFile("/src/bin/oie", checked.File("/src/bin/oie")).WithFile("/src/bin/oie-mock", checked.File("/src/bin/oie-mock")).
-		WithFile("/tmp/xmpp-ca.crt", ca).WithWorkdir("/src").WithServiceBinding("xmpp", xmpp).
+		WithFile("/tmp/xmpp-ca.crt", ca).WithWorkdir("/src").WithServiceBinding("xmpp", browserXmpp).
 		WithEnvVariable("OIE_XMPP_CA_FILE", "/tmp/xmpp-ca.crt").WithEnvVariable("OIE_XMPP_ENDPOINT", "xmpp:5222").
 		WithEnvVariable("OIE_CI_RUN_ID", runID).WithExec([]string{"sh", "-c", browserCommand}, dagger.ContainerWithExecOpts{Expect: dagger.ReturnTypeAny})
 	browser, err = r.stage(ctx, "browser", browser)
