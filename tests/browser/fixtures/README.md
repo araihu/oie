@@ -1,5 +1,5 @@
 `tiny-video.webm` is an original silent test animation, covered by this
-repository's Apache License 2.0. It contains no third-party footage.
+[repository's license](../../../LICENSE). It contains no third-party footage.
 
 The 64×48 VP8/WebM clip was recorded from a browser canvas with
 `canvas.captureStream(8)` and `MediaRecorder`, using
@@ -11,7 +11,7 @@ Browser tests use the committed clip to verify actual decoding and playback.
 They do not need FFmpeg, network media, or any external fixture service.
 
 `tiny-document.txt` and `tiny-document.pdf` are original fixtures covered by
-this repository's Apache License 2.0. The UTF-8 text includes literal HTML and
+the [repository's license](../../../LICENSE). The UTF-8 text includes literal HTML and
 Unicode to check escaping. The PDF is a handcrafted, two-page PDF 1.4 file
 with Helvetica titles and subtitles. Its cross-reference offsets and stream
 length are computed from the committed bytes. The PDF has no external

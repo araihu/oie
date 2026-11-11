@@ -30,9 +30,8 @@ selectfield "github.com/araihu/goshtoso/components/select"
 )
 
 func navigation(v view, id string) sidebar.Config {
- footer:=navigationFooter(v,id)
-	return sidebar.Config{
-		Logo: brand(v), LogoHref: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), DisableSkipLink: true, RootClass: "oie-navigation", FooterSlot: footer,
+	cfg := sidebar.Config{
+		DisableSkipLink: true, RootClass: "oie-navigation", FooterSlot: navigationFooter(v,id),
 		Items: []sidebar.Item{
 			{ID: "chats", Label: v.Text.Chats, Href: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidQueueList), Active: v.Section == "chats", LinkAttrs: sidebarNavigationAttrs()},
 
@@ -41,6 +40,29 @@ func navigation(v view, id string) sidebar.Config {
 			{ID: "favorites", Label: v.Text.Favorites, Href: v.href("section", "favorites", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidStar), Active: v.Section == "favorites", LinkAttrs: sidebarNavigationAttrs()},
 		},
 	}
+	if id == "mobile-navigation" {
+		cfg.Logo = brand(v)
+		cfg.LogoHref = v.href("section", "chats", "chat", "", "q", "", "filter", "all")
+	}
+	return cfg
+}
+
+templ desktopNavigation(v view) {
+	@sidebar.Sidebar(navigation(v,"desktop"))
+	<div class="oie-sidebar-splitter" role="separator" tabindex="0" aria-orientation="vertical" aria-controls="desktop-navigation" aria-label={v.Text.Navigation} data-sidebar-splitter></div>
+}
+
+templ navigationControl(v view) {
+	@button.Button(button.WithRootClass("oie-icon-button oie-sidebar-toggle"), button.WithAttrs(templ.Attributes{
+		"type": "button", "data-sidebar-toggle": "", "aria-controls": "desktop-navigation",
+		"data-expand-label": v.Text.ExpandNavigation, "data-collapse-label": v.Text.CollapseNavigation,
+		"aria-expanded": "true", "aria-label": v.Text.CollapseNavigation, "title": v.Text.CollapseNavigation,
+	})) {
+		@glyph(heroicons.Icon16SolidChevronLeft)
+	}
+	<div class="oie-mobile-nav">
+		@sidebar.Overlay(sidebar.OverlayConfig{ID: "mobile-navigation", Sidebar: navigation(v,"mobile-navigation"), TriggerLabel: v.Text.OpenNavigation, Trigger: glyph(heroicons.Icon16SolidBars3)})
+	</div>
 }
 
 templ glyph(symbol icon.Symbol) {
@@ -70,6 +92,7 @@ templ page(v view) {
 <meta name="theme-color" content="#6092ab"/>
 			<script src="/ui/runtime.js"></script>
 <script src="/ui/theme.js"></script>
+<script src="/ui/sidebar.js"></script>
 <script src="/ui/formatting.js"></script>
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href="/ui/app.css"/>
@@ -115,16 +138,15 @@ if v.DevBuildID!="" {
 
 // Application state travels with each shell fragment; the head/runtime persists.
 templ appFragment(v view) {
-<div id="oie-app" hx-history-elt data-route-loading={v.Text.NavLoading} data-route-error={v.Text.NavFailed} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
-<p class="oie-live-status" data-navigation-status role="status" aria-live="polite" hidden></p>
+<div id="oie-app" hx-history-elt data-route-error={v.Text.NavFailed} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
 @toast.ToastContainer(toast.ContainerConfig{}).WithExpressions(expressions.Toast{DismissLabel:v.Text.Close,DismissAriaLabel:v.Text.Close})
 @liveCopy(v)
-<p class="oie-live-status" data-read-status data-read-failed={v.Text.ReadFailed} role="status" aria-live="polite" hidden></p>
+<p class="sr-only" data-read-status data-read-failed={v.Text.ReadFailed} role="status" aria-live="polite" hidden></p>
 <div data-shared-action-copy hidden data-failed={v.Text.SharedActionFailed} data-copied={v.Text.SharedLinkCopied} data-downloading={v.Text.SharedDownloading}></div>
 if v.Section=="media" {
 @avatarData(v)
 }
-<div class="oie-live-status" data-live-status role="status" aria-live="polite" hidden></div>
+<div class="sr-only" data-live-status role="status" aria-live="polite" hidden></div>
 if v.ErrorMessage!="" {
 <div class="oie-native-error" role="alert" tabindex="-1" data-native-error>
 {v.ErrorMessage}
@@ -137,8 +159,9 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 </div>
 }
 			<h1 class="sr-only">{v.Text.AppName}</h1>
-			@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: sidebar.Sidebar(navigation(v,"desktop")), Content: workspace(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
+			@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: desktopNavigation(v), SidebarAttrs: templ.Attributes{"id": "desktop-navigation"}, Content: workspace(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
 			@settings(v)
+			@about(v)
 			@accounts(v)
 @newConversation(v)
 @imageViewer(v)
@@ -214,9 +237,7 @@ if v.NativeMessageSearch {
 	<div id="workspace" class={ "oie-workspace",templ.KV("oie-chat-open",v.ChatOpen) }>
 		<section class="oie-list-pane" aria-label={ v.Text.Chats }>
 			<div class="oie-list-heading">
-				<div class="oie-mobile-nav">
-					@sidebar.Overlay(sidebar.OverlayConfig{ID: "mobile-navigation", Sidebar: navigation(v,"mobile-navigation"), TriggerLabel: v.Text.OpenNavigation, Trigger: glyph(heroicons.Icon16SolidBars3)})
-				</div>
+				@navigationControl(v)
 				<h2>
 					switch v.Section {
 						case "archived":
@@ -256,7 +277,6 @@ if v.NativeMessageSearch {
 				@filterLink(v, "favorites", v.Text.Favorites)
 				@filterLink(v, "groups", v.Text.Groups)
 			</nav>
-<div id="history-status" class="oie-history-status" role="status">@historyBanner(v)</div>
 <div class="oie-conversation-scroll" id="conversation-list" data-version={v.conversationListVersion()}>
 @conversationList(v)
 </div>
@@ -413,6 +433,7 @@ templ settings(v view) {
 			if v.Preview {
 				<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
 			}
+			@aboutEntry(v)
 		</div>
 	}
 }
@@ -583,7 +604,6 @@ if v.InfoView=="shared" || v.InfoView=="stars" {
 if v.Section=="media"{
 <div id="live-shared-content"><div id="live-shared-status">@sharedStatus(v)</div><div id="live-shared-results" data-version={v.sharedVersion()}>@sharedItems(v)</div><div id="live-shared-pagination">@sharedPagination(v)</div></div>
 }
-<div id="live-history-status">@historyBanner(v)</div>
 <div id="live-list" data-version={v.conversationListVersion()}>@conversationList(v)</div>
 <div id="live-timeline" data-version={v.timelineVersion()}>@timeline(v)</div>
 <div id="live-header" data-version={v.headerVersion()}>
@@ -647,18 +667,6 @@ templ nativeRecovery(v view){
 @textarea.Textarea(textarea.Config{ID:"native-retained-message",Name:"originalText",Label:v.Text.Message,Value:v.field("originalText"),ReadOnly:true,Rows:4})
 @button.Button(button.WithType("submit")){ {v.Text.RetrySubmission} }
 </form>
-}
-
-templ historyBanner(v view){
-if v.AccountFilter!="" {
-{v.historyCaption(v.AccountFilter)}
-}else{
-for _,a:=range v.Accounts {
-if h,ok:=v.Histories[a.Id];ok&&(h.State=="syncing"||h.State=="partial"||h.State=="error") {
-<p>{a.Label}: {v.historyCaption(a.Id)}</p>
-}
-}
-}
 }
 
 // The scope belongs to Oie. Avatar's public SrcExpr consumes a fixed expression;

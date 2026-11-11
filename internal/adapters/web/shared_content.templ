@@ -6,7 +6,6 @@ import (
  "github.com/araihu/goshtoso/components/emptystate"
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/link"
- "github.com/araihu/goshtoso/components/sidebar"
  "github.com/araihu/goshtoso/components/combobox"
  "github.com/araihu/goshtoso/components/textinput"
  "github.com/araihu/goshtoso/components/toolbar"
@@ -18,7 +17,7 @@ import (
 templ sharedWorkspace(v view){
 <section id="workspace" class="oie-shared-workspace" aria-label={v.Text.SharedMedia}>
 <header class="oie-shared-header">
-<div class="oie-mobile-nav">@sidebar.Overlay(sidebar.OverlayConfig{ID:"mobile-navigation",Sidebar:navigation(v,"mobile-navigation"),TriggerLabel:v.Text.OpenNavigation,Trigger:glyph(heroicons.Icon16SolidBars3)})</div>
+@navigationControl(v)
 <h2>{v.Text.SharedMedia}</h2>
 
 </header>
