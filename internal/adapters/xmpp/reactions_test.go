@@ -99,6 +99,29 @@ func TestDirectArchivedReactionsCarryStableDelayAndOwnIdentity(t *testing.T) {
 	}
 }
 
+func TestRoomReactionArchiveIdentityIsIndependentOfClientID(t *testing.T) {
+	a := domain.Account{ID: "019a5df0-0000-7000-8000-000000000001", Address: "alice@example.test"}
+	room := "room@conference.example.test"
+	var r archiveResult
+	r.Forwarded.Delay.Stamp = "2026-11-08T12:30:00Z"
+	trust := archiveTrust{SIDVerified: true, OccupantVerified: true, Semianonymous: true, OwnReactionActor: roomReactionActor(a.ID, room, "self")}
+	raw := `<message xmlns="jabber:client" from="` + room + `/Bob" type="groupchat" id="reused"><occupant-id xmlns="urn:xmpp:occupant-id:0" id="peer"/><reactions xmlns="urn:xmpp:reactions:0" id="original"/></message>`
+	var providerIDs []string
+	for i, raw := range []string{raw, raw, strings.Replace(raw, ` id="reused"`, "", 1)} {
+		var msg archiveMessage
+		if err := xml.Unmarshal([]byte(raw), &msg); err != nil {
+			t.Fatal(err)
+		}
+		r.Forwarded.Message = &msg
+		r.ID = []string{"archive-a", "archive-b", "archive-c"}[i]
+		in, ok, err := archivedReaction(a, room, &r, trust)
+		if err != nil || !ok || in.CommandEchoID != "" || slices.Contains(providerIDs, in.ProviderID) {
+			t.Fatal("a client ID interfered with the trusted archive event identity", in, ok, err)
+		}
+		providerIDs = append(providerIDs, in.ProviderID)
+	}
+}
+
 func reactionRoomFixture(t *testing.T) (*Manager, *entry, *roomSlot, *roomHostStub) {
 	t.Helper()
 	m, e, slot, host := roomFixture(t)
@@ -115,7 +138,7 @@ func reactionRoomFixture(t *testing.T) (*Manager, *entry, *roomSlot, *roomHostSt
 
 func TestLiveRoomReactionRequiresCurrentVerifiedRealActorAndStableTargetScope(t *testing.T) {
 	m, e, slot, host := reactionRoomFixture(t)
-	raw := `<message xmlns="jabber:client" from="room@conference.example.test/Bob" type="groupchat" id="event"><reactions xmlns="urn:xmpp:reactions:0" id="room-source"><reaction>👍</reaction></reactions></message>`
+	raw := `<message xmlns="jabber:client" from="room@conference.example.test/Bob" type="groupchat" id="event"><stanza-id xmlns="urn:xmpp:sid:0" by="room@conference.example.test" id="room-event"/><reactions xmlns="urn:xmpp:reactions:0" id="room-source"><reaction>👍</reaction></reactions></message>`
 	feedReaction(t, m, e, raw)
 	if len(host.received) != 1 || host.received[0].Reaction == nil || host.received[0].Reaction.Actor != "bob@example.test" || host.received[0].Reaction.ActorName != "Bob" || host.received[0].Reaction.Target.Scope != "room:"+slot.conversation.Address {
 		t.Fatal("live room identity/reference invalid", host.received)
@@ -139,8 +162,8 @@ func TestSemianonymousRoomReactionsUseVerifiedOccupantIDs(t *testing.T) {
 	c := slot.conversation
 	slot.snapshot.State = "joining"
 	e.details[c.ID].info.Features = []string{"anonymous"}
-	discoXML := `<query xmlns="http://jabber.org/protocol/disco#info"><identity category="conference" type="text"/><feature var="muc_semianonymous"/><feature var="urn:xmpp:occupant-id:0"/></query>`
-	if _, err := decodeDiscoInfo(e, e.session, c.Address, discoXML, 0); err != nil {
+	discoXML := `<query xmlns="http://jabber.org/protocol/disco#info"><identity category="conference" type="text"/><feature var="muc_semianonymous"/><feature var="urn:xmpp:occupant-id:0"/><feature var="urn:xmpp:sid:0"/></query>`
+	if _, err := m.decodeDiscoInfo(t.Context(), e, e.session, c.Address, discoXML, 0); err != nil {
 		t.Fatal(err)
 	}
 	target := reactionTarget(e, c)
@@ -163,7 +186,7 @@ func TestSemianonymousRoomReactionsUseVerifiedOccupantIDs(t *testing.T) {
 		t.Fatal("reaction sent private identity or message body", string(wire), err)
 	}
 	reaction := func(nickname, event, occupant string) {
-		feedReaction(t, m, e, `<message xmlns="jabber:client" from="`+c.Address+"/"+nickname+`" type="groupchat" id="`+event+`">`+occupant+`<reactions xmlns="urn:xmpp:reactions:0" id="room-assigned-original"><reaction>👍</reaction></reactions></message>`)
+		feedReaction(t, m, e, `<message xmlns="jabber:client" from="`+c.Address+"/"+nickname+`" type="groupchat" id="reused-client-id"><stanza-id xmlns="urn:xmpp:sid:0" by="`+c.Address+`" id="`+event+`"/>`+occupant+`<reactions xmlns="urn:xmpp:reactions:0" id="room-assigned-original"><reaction>👍</reaction></reactions></message>`)
 	}
 	peer := `<occupant-id xmlns="urn:xmpp:occupant-id:0" id="peer-id"/>`
 	reaction("Bob", "add", peer)
@@ -176,7 +199,7 @@ func TestSemianonymousRoomReactionsUseVerifiedOccupantIDs(t *testing.T) {
 		t.Fatal("missing or ambiguous occupant identity accepted", host.received)
 	}
 	first, renamed, own, replacement := host.received[0].Reaction, host.received[1].Reaction, host.received[2].Reaction, host.received[3].Reaction
-	if !domain.IsRoomReactionActor(first.Actor) || first.Actor != renamed.Actor || renamed.ActorName != "Robert" ||
+	if !domain.IsRoomReactionActor(first.Actor) || first.Actor != renamed.Actor || first.ProviderID == renamed.ProviderID || first.CommandEchoID != "" || own.CommandEchoID != "reused-client-id" || renamed.ActorName != "Robert" ||
 		replacement.Actor == first.Actor || first.IsOwn || !own.IsOwn || own.Actor != plan.RoomActor {
 		t.Fatal("occupant aliases were not scoped by verified identity", first, renamed, own, replacement)
 	}
@@ -187,7 +210,7 @@ func TestSemianonymousRoomReactionsUseVerifiedOccupantIDs(t *testing.T) {
 	if validFrozenReaction(e, e.account, out) {
 		t.Fatal("frozen command rebound to a different occupant")
 	}
-	if _, err = decodeDiscoInfo(e, e.session, c.Address, strings.Replace(discoXML, `<feature var="urn:xmpp:occupant-id:0"/>`, "", 1), 0); err != nil {
+	if _, err = m.decodeDiscoInfo(t.Context(), e, e.session, c.Address, strings.Replace(discoXML, `<feature var="urn:xmpp:occupant-id:0"/>`, "", 1), 0); err != nil {
 		t.Fatal(err)
 	}
 	reaction("Bob", "unverified", peer)
@@ -201,7 +224,7 @@ func TestRoomConfigurationInvalidatesReactionTrust(t *testing.T) {
 	room := slot.conversation.Address
 	slot.ownOccupantID = "own-id"
 	disco := `<query xmlns="http://jabber.org/protocol/disco#info"><identity category="conference" type="text"/><feature var="muc_semianonymous"/><feature var="urn:xmpp:occupant-id:0"/><feature var="urn:xmpp:sid:0"/></query>`
-	if _, err := decodeDiscoInfo(e, e.session, room, disco, 0); err != nil {
+	if _, err := m.decodeDiscoInfo(t.Context(), e, e.session, room, disco, 0); err != nil {
 		t.Fatal(err)
 	}
 	inFlight := &archiveQuery{Scope: room}
@@ -215,7 +238,7 @@ func TestRoomConfigurationInvalidatesReactionTrust(t *testing.T) {
 	if !currentRoomConfiguration(e, room).pending || inFlight.Err == nil {
 		t.Fatal("room configuration failed to revoke cached and in-flight proof")
 	}
-	if _, err := decodeDiscoInfo(e, e.session, room, disco, 0); err == nil {
+	if _, err := m.decodeDiscoInfo(t.Context(), e, e.session, room, disco, 0); err == nil {
 		t.Fatal("accepted a discovery result from before the room change")
 	}
 	feedReaction(t, m, e, `<message xmlns="jabber:client" from="`+room+`/Bob" type="groupchat" id="client"><occupant-id xmlns="urn:xmpp:occupant-id:0" id="own-id"/><reactions xmlns="urn:xmpp:reactions:0" id="source"><reaction>👍</reaction></reactions></message>`)
@@ -223,7 +246,7 @@ func TestRoomConfigurationInvalidatesReactionTrust(t *testing.T) {
 		t.Fatal("accepted an occupant ID using revoked proof")
 	}
 	fresh := strings.Replace(disco, `<feature var="urn:xmpp:occupant-id:0"/>`, "", 1)
-	if _, err := decodeDiscoInfo(e, e.session, room, fresh, 1); err != nil {
+	if _, err := m.decodeDiscoInfo(t.Context(), e, e.session, room, fresh, 1); err != nil {
 		t.Fatal(err)
 	}
 	if currentRoomConfiguration(e, room).pending || e.occupantScopes[room] {

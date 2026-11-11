@@ -1,6 +1,9 @@
 package xmpp
 
 import (
+	"context"
+
+	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	mx "mellium.im/xmpp"
 	"mellium.im/xmpp/disco"
@@ -18,29 +21,46 @@ func currentRoomConfiguration(e *entry, room string) roomConfiguration {
 	return e.roomConfigurations[room]
 }
 
-func recordDiscoInfo(e *entry, s *mx.Session, address string, revision uint64, info disco.Info) bool {
+func (m *Manager) recordDiscoInfo(ctx context.Context, e *entry, s *mx.Session, address string, revision uint64, info disco.Info) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.historyMu.Lock()
 	defer e.historyMu.Unlock()
 	configuration := e.roomConfigurations[address]
 	if e.session != s || e.state.State != "connected" || configuration.revision != revision {
-		return false
+		return errArchive
 	}
-	recordRoomIdentity(e, address, info)
+	room, public := recordRoomIdentity(e, address, info)
+	if room || configuration.pending {
+		stable := false
+		for _, feature := range info.Features {
+			stable = stable || feature.Var == sidNS
+		}
+		if e.sidScopes == nil {
+			e.sidScopes = make(map[string]bool)
+		}
+		e.sidScopes[address] = room && stable
+	}
+	if room || configuration.pending {
+		if host, ok := m.host.(application.RoomReactionPrivacyHost); ok {
+			if err := host.SetRoomReactionPrivacy(ctx, e.account.ID, address, public); err != nil {
+				return err
+			}
+		}
+	}
 	recordReactionRestrictionsLocked(e, address, info)
 	if configuration.pending {
 		configuration.pending = false
 		e.roomConfigurations[address] = configuration
 	}
-	return true
+	return nil
 }
 
 // Only the room itself can revoke the discovery evidence for its current
 // configuration. Requests already in flight cannot reinstate that evidence.
-func (m *Manager) invalidateRoomConfiguration(e *entry, msg stanza.Message, muc *mucUser) {
+func (m *Manager) invalidateRoomConfiguration(ctx context.Context, e *entry, msg stanza.Message, muc *mucUser) error {
 	if msg.Type != stanza.GroupChatMessage || msg.From.Localpart() == "" || msg.From.Resourcepart() != "" {
-		return
+		return nil
 	}
 	for _, status := range muc.Status {
 		switch status.Code {
@@ -50,7 +70,7 @@ func (m *Manager) invalidateRoomConfiguration(e *entry, msg stanza.Message, muc 
 			slot := e.rooms[room]
 			if e.session == nil || slot == nil || slot.session != e.session || (slot.snapshot.State != "joined" && slot.snapshot.State != "joining") {
 				e.mu.Unlock()
-				return
+				return nil
 			}
 			e.historyMu.Lock()
 			if e.roomConfigurations == nil {
@@ -75,9 +95,14 @@ func (m *Manager) invalidateRoomConfiguration(e *entry, msg stanza.Message, muc 
 				default:
 				}
 			}
+			var err error
+			if host, ok := m.host.(application.RoomReactionPrivacyHost); ok {
+				err = host.SetRoomReactionPrivacy(ctx, e.account.ID, room, false)
+			}
 			e.mu.Unlock()
 			m.WakeRoomArchive(e.account.ID)
-			return
+			return err
 		}
 	}
+	return nil
 }

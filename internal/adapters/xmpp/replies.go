@@ -46,6 +46,25 @@ func usableID(id string) bool {
 	return id != "" && len(id) <= 4096 && utf8.ValidString(id) && !strings.ContainsRune(id, 0)
 }
 
+func roomStanzaID(from jid.JID, ids []wireID) string {
+	var found *wireID
+	for i := range ids {
+		id := &ids[i]
+		by, err := jid.Parse(id.By)
+		if err != nil || by.Resourcepart() != "" || !by.Equal(from.Bare()) {
+			continue
+		}
+		if found != nil {
+			return ""
+		}
+		found = id
+	}
+	if found != nil && usableID(found.ID) && found.Text == "" && len(found.Children) == 0 {
+		return found.ID
+	}
+	return ""
+}
+
 // Room IDs are accepted only after discovery confirms the room enforces SID
 // assignment. Direct IDs remain scoped by the authenticated sender, never global.
 func decodeReplyMetadata(meta replyMetadata, body string, from jid.JID, account, peer string, room, stableVerified bool) ([]domain.MessageReference, *domain.ReplyReference) {
@@ -55,15 +74,8 @@ func decodeReplyMetadata(meta replyMetadata, body string, from jid.JID, account,
 		scope, author = "room:"+from.Bare().String(), from.String()
 	}
 	if room && stableVerified {
-		valid := []wireID{}
-		for _, id := range meta.Stable {
-			by, err := jid.Parse(id.By)
-			if err == nil && by.Resourcepart() == "" && by.Equal(from.Bare()) {
-				valid = append(valid, id)
-			}
-		}
-		if len(valid) == 1 && usableID(valid[0].ID) && valid[0].Text == "" && len(valid[0].Children) == 0 {
-			refs = append(refs, domain.MessageReference{Scope: scope, ID: valid[0].ID, Author: author})
+		if id := roomStanzaID(from, meta.Stable); id != "" {
+			refs = append(refs, domain.MessageReference{Scope: scope, ID: id, Author: author})
 		}
 	} else if !room {
 		if len(meta.Origins) == 1 {

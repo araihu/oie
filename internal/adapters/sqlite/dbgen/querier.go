@@ -10,12 +10,14 @@ import (
 
 type Querier interface {
 	AcquireWriteLock(ctx context.Context) error
+	ArchivedReactionPlacement(ctx context.Context, arg ArchivedReactionPlacementParams) (int64, error)
 	ClearCanonicalAliases(ctx context.Context, ids string) error
 	ClearContentHeads(ctx context.Context, ids string) error
 	CorrectionNeighbors(ctx context.Context, arg CorrectionNeighborsParams) ([]CorrectionNeighborsRow, error)
 	CountConversationUnread(ctx context.Context, conversationID string) (int64, error)
 	CountRoomArchiveMessages(ctx context.Context, arg CountRoomArchiveMessagesParams) (int64, error)
 	DeleteObsoleteSharedContent(ctx context.Context, arg DeleteObsoleteSharedContentParams) error
+	DeleteReactionObservation(ctx context.Context, ordinal int64) error
 	FindAvatar(ctx context.Context, arg FindAvatarParams) (Avatar, error)
 	FindConversation(ctx context.Context, arg FindConversationParams) (Conversation, error)
 	FindMessagePreview(ctx context.Context, arg FindMessagePreviewParams) (MessagePreview, error)
@@ -124,14 +126,20 @@ type Querier interface {
 	ReactionObservationsForTargets(ctx context.Context, arg ReactionObservationsForTargetsParams) ([]ReactionObservationsForTargetsRow, error)
 	ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error
 	RecordOriginalTransmission(ctx context.Context, id string) error
+	ResetAllRoomReactionPrivacy(ctx context.Context) error
+	ResetRoomReactionPrivacy(ctx context.Context, accountID string) error
 	ResolveMessageAlias(ctx context.Context, aliasID string) (string, error)
+	RoomReactionPrivacy(ctx context.Context, arg RoomReactionPrivacyParams) (int64, error)
 	SearchContacts(ctx context.Context, arg SearchContactsParams) ([]SearchContactsRow, error)
 	SearchMessages(ctx context.Context, arg SearchMessagesParams) ([]SearchMessagesRow, error)
 	SetOperationResult(ctx context.Context, arg SetOperationResultParams) error
 	SetRoomObservation(ctx context.Context, arg SetRoomObservationParams) error
+	SetRoomReactionPrivacy(ctx context.Context, arg SetRoomReactionPrivacyParams) (int64, error)
 	SharedContentCandidates(ctx context.Context, arg SharedContentCandidatesParams) ([]Message, error)
 	SharedContentIndexStatus(ctx context.Context, arg SharedContentIndexStatusParams) (SharedContentIndexStatusRow, error)
+	ShiftArchivedReactions(ctx context.Context, arg ShiftArchivedReactionsParams) error
 	Snapshot(ctx context.Context) (SnapshotRow, error)
+	UpdateArchivedReactionIdentity(ctx context.Context, arg UpdateArchivedReactionIdentityParams) error
 	UpdateAvatar(ctx context.Context, arg UpdateAvatarParams) error
 	UpdateConversation(ctx context.Context, arg UpdateConversationParams) error
 	UpdateConversationPreferences(ctx context.Context, arg UpdateConversationPreferencesParams) (int64, error)

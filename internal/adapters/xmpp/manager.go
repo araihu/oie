@@ -612,7 +612,9 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			return m.captureArchive(e, msg.Message, msg.Archive)
 		}
 		if msg.MUC != nil && msg.Delay.Stamp == "" && msg.Delay.From == "" {
-			m.invalidateRoomConfiguration(e, msg.Message, msg.MUC)
+			if err := m.invalidateRoomConfiguration(ctx, e, msg.Message, msg.MUC); err != nil {
+				return err
+			}
 		}
 		if msg.Type == stanza.ErrorMessage {
 			if handled, err := m.rejectReaction(ctx, e, msg.Message); handled {
@@ -645,7 +647,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			return m.host.Reject(ctx, application.Rejected{AccountID: e.account.ID, MessageID: msg.ID, Address: address, FromServer: fromServer, FromParticipant: msg.From.Resourcepart() != ""})
 		}
 		if len(msg.Reactions) != 0 {
-			return m.receiveReaction(ctx, e, msg.Message, msg.reactionMetadata, msg.Occupants, msg.Delay.Stamp, msg.Delay.From)
+			return m.receiveReaction(ctx, e, msg.Message, msg.reactionMetadata, msg.replyMetadata, msg.Occupants, msg.Delay.Stamp, msg.Delay.From)
 		}
 		if msg.Type == stanza.GroupChatMessage {
 			return m.receiveRoomMessage(ctx, e, msg.Message, msg.replyMetadata, msg.Body, msg.Delay.Stamp, msg.Delay.From, msg.fileSharingMetadata, msg.correctionMetadata)

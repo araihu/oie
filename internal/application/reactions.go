@@ -14,8 +14,11 @@ import (
 type IncomingReaction struct {
 	AccountID                                          domain.ID
 	Address, Kind, ProviderID, ArchiveScope, ArchiveID string
+	CommandEchoID                                      string
 	CreatedAt                                          time.Time
 	Historical, IsOwn                                  bool
+	ArchivePrepend                                     bool     `json:"-"`
+	ArchiveEarlier, ArchiveLater                       []string `json:"-"`
 	Target                                             domain.MessageReference
 	Actor, ActorName                                   string
 	Emojis                                             []string
@@ -23,6 +26,21 @@ type IncomingReaction struct {
 type ReactionProvider interface {
 	PrepareReaction(context.Context, domain.Account, domain.Conversation, domain.Message) (domain.OutgoingReaction, error)
 }
+
+// RoomReactionPrivacyHost records whether current room discovery permits
+// projecting a participant's address from stored reaction observations.
+type RoomReactionPrivacyHost interface {
+	SetRoomReactionPrivacy(context.Context, domain.ID, string, bool) error
+}
+
+func (e *Engine) SetRoomReactionPrivacy(ctx context.Context, account domain.ID, address string, public bool) error {
+	repo, ok := e.repo.(RoomReactionPrivacyHost)
+	if !ok {
+		return ErrProtocolUnavailable
+	}
+	return repo.SetRoomReactionPrivacy(ctx, account, address, public)
+}
+
 type MessageReactionCandidate struct {
 	Snapshot domain.MessageReactions
 	Source   domain.Message
@@ -209,6 +227,9 @@ func validRoomReactionName(name string) bool {
 
 func (e *Engine) ReceiveReaction(ctx context.Context, in IncomingReaction) error {
 	if !validID(in.AccountID) || !validText(in.Actor, 1023) || !validText(in.Target.ID, 4096) || in.Kind != "direct" && in.Kind != "room" || in.ProviderID == "" && in.ArchiveID == "" || len(in.ProviderID) > 4096 || len(in.ArchiveID) > 4096 || len(in.ArchiveScope) > 4096 || len(in.Target.Scope) > 4096 || len(in.Target.Author) > 4096 {
+		return ErrInvalid
+	}
+	if in.CommandEchoID != "" && (!in.IsOwn || in.Kind != "room" || !validText(in.CommandEchoID, 4096)) {
 		return ErrInvalid
 	}
 	emojis, err := NormalizeReactionEmojis(in.Emojis)

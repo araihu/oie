@@ -276,7 +276,7 @@ func TestEditHistoryMigration13To14PreservesSourceIdentityAndPendingSends(t *tes
 	}
 	var version, indexes int
 	var dirty bool
-	if err = upgraded.db.QueryRow("SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != 17 || dirty {
+	if err = upgraded.db.QueryRow("SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != 18 || dirty {
 		t.Fatal("unclean migration", err)
 	}
 	if err = upgraded.db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='index' AND name='message_revisions_entity'").Scan(&indexes); err != nil || indexes != 1 {

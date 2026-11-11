@@ -130,12 +130,9 @@ func (m *Manager) JoinRoom(ctx context.Context, a domain.Account, c domain.Conve
 	}
 	// Discovery prevents a join request from accidentally creating an unknown room.
 	info, discoErr := m.queryInfo(ctx, e, session, c.Address)
-	roomSupported, stable := false, false
+	roomSupported := false
 	for _, identity := range info.Identity {
 		roomSupported = roomSupported || (identity.Category == "conference" && identity.Type == "text")
-	}
-	for _, feature := range info.Features {
-		stable = stable || feature.Var == sidNS
 	}
 	if discoErr != nil || !roomSupported {
 		code := "room_unavailable"
@@ -167,12 +164,6 @@ func (m *Manager) JoinRoom(ctx context.Context, a domain.Account, c domain.Conve
 		m.notifyRoom(ctx, e, slot, snapshot)
 		return snapshot, nil
 	}
-	e.historyMu.Lock()
-	if e.sidScopes == nil {
-		e.sidScopes = map[string]bool{}
-	}
-	e.sidScopes[c.Address] = stable
-	e.historyMu.Unlock()
 	e.roomNotifyMu.Lock()
 	defer e.roomNotifyMu.Unlock()
 	e.mu.Lock()

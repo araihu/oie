@@ -21,7 +21,7 @@ func archiveSearchKey(c domain.Conversation, query string) string {
 }
 
 func (m *Manager) isolatedRoomPage(ctx context.Context, host application.RoomArchiveHost, e *entry, s *mx.Session, c domain.Conversation, result domain.RoomArchiveResult, request domain.RoomArchiveRequest) (domain.RoomArchiveResult, error) {
-	req := archivePageRequest{Backward: true}
+	req := archivePageRequest{Backward: true, Prepend: true}
 	var searchKey string
 	if request.Action == "search" {
 		if result.Archive.TextSearch != "supported" {

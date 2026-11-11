@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ type archivePageRequest struct {
 	Start, End            time.Time
 	Before, After, Search string
 	Backward              bool
+	Prepend               bool
 	Limit                 int
 }
 
@@ -26,6 +28,7 @@ type archivePage struct {
 	Query       *archiveQuery
 	First, Last string
 	Complete    bool
+	Prepend     bool
 }
 
 func (r archivePageRequest) payload(id string) string {
@@ -114,16 +117,56 @@ func (m *Manager) readArchivePage(ctx context.Context, e *entry, s *mx.Session, 
 		(request.Before != "" && first == request.Before) || (request.After != "" && last == request.After) {
 		return archivePage{}, errArchive
 	}
-	return archivePage{Query: q, First: first, Last: last, Complete: fin.Complete}, nil
+	return archivePage{Query: q, First: first, Last: last, Complete: fin.Complete, Prepend: request.Prepend}, nil
 }
 
 func (m *Manager) ingestArchivePage(ctx context.Context, page archivePage) error {
+	// XEP-0313 gives these results a chronological order even when several
+	// events have the same timestamp or the page was fetched backwards.
+	type tie struct {
+		ids    []string
+		events []*application.IncomingReaction
+	}
+	ties := make(map[time.Time]*tie)
 	for _, in := range page.Query.Messages {
-		if err := m.host.Receive(ctx, in); err != nil {
-			if in.Reaction != nil && errors.Is(err, application.ErrInvalid) {
-				continue
+		if r := in.Reaction; r != nil {
+			group := ties[r.CreatedAt]
+			if group == nil {
+				group = &tie{}
+				ties[r.CreatedAt] = group
 			}
-			return err
+			group.ids = append(group.ids, r.ArchiveID)
+			group.events = append(group.events, r)
+		}
+	}
+	for _, group := range ties {
+		for i, r := range group.events {
+			r.ArchivePrepend = page.Prepend
+			r.ArchiveEarlier, r.ArchiveLater = group.ids[:i], group.ids[i+1:]
+		}
+	}
+	receive := func(in application.Incoming) error {
+		err := m.host.Receive(ctx, in)
+		if in.Reaction != nil && errors.Is(err, application.ErrInvalid) {
+			return nil
+		}
+		return err
+	}
+	for _, in := range page.Query.Messages {
+		if !page.Prepend || in.Reaction == nil {
+			if err := receive(in); err != nil {
+				return err
+			}
+		}
+	}
+	if page.Prepend {
+		// Start at the already retained end of an older page.
+		for _, in := range slices.Backward(page.Query.Messages) {
+			if in.Reaction != nil {
+				if err := receive(in); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil

@@ -92,23 +92,24 @@ func TestRoomCorrectionRequiresVerifiedOccupantAndFullSender(t *testing.T) {
 	}
 }
 func TestOccupantEvidenceIsBoundToDiscoveredRoomAndCurrentSession(t *testing.T) {
+	m := New(t.TempDir(), nil)
 	current, old := &mx.Session{}, &mx.Session{}
 	e := &entry{account: domain.Account{Address: "alice@example.test"}, session: current, state: domain.Connection{State: "connected"}}
 	supported := disco.Info{Identity: []info.Identity{{Category: "conference", Type: "text"}}, Features: []info.Feature{{Var: occupantIDNS}}}
 	room := "room@conference.example.test"
-	recordDiscoInfo(e, old, room, 0, supported)
+	_ = m.recordDiscoInfo(t.Context(), e, old, room, 0, supported)
 	if e.occupantScopes[room] {
 		t.Fatal("old session advertised current authority")
 	}
-	recordDiscoInfo(e, current, room, 0, supported)
+	_ = m.recordDiscoInfo(t.Context(), e, current, room, 0, supported)
 	if !e.occupantScopes[room] {
 		t.Fatal("room support not retained")
 	}
-	recordDiscoInfo(e, current, room, 0, disco.Info{Identity: supported.Identity})
+	_ = m.recordDiscoInfo(t.Context(), e, current, room, 0, disco.Info{Identity: supported.Identity})
 	if e.occupantScopes[room] {
 		t.Fatal("removed feature remained trusted")
 	}
-	recordDiscoInfo(e, current, room, 0, disco.Info{Features: supported.Features})
+	_ = m.recordDiscoInfo(t.Context(), e, current, room, 0, disco.Info{Features: supported.Features})
 	if e.occupantScopes[room] {
 		t.Fatal("client feature advertised room authority")
 	}

@@ -217,6 +217,7 @@ type MessageReactionObservation struct {
 	OccurredAt   string
 	Payload      string
 	CommandID    string
+	ArchiveOrder int64
 }
 
 type MessageRead struct {
@@ -324,6 +325,12 @@ type RoomIntent struct {
 	LastErrorCode          string
 	ObservationFingerprint string
 	UpdatedAt              string
+}
+
+type RoomReactionPrivacy struct {
+	AccountID string
+	Address   string
+	Public    int64
 }
 
 type SharedContent struct {

@@ -61,12 +61,12 @@ func verifiedOccupantID(occupants []wireID) string {
 // A matching tag is not proof: rooms must advertise XEP-0421, otherwise a
 // participant could inject a pseudonym and correct another occupant's text.
 // The caller holds e.mu and e.historyMu.
-func recordRoomIdentity(e *entry, address string, info disco.Info) {
+func recordRoomIdentity(e *entry, address string, info disco.Info) (roomDiscovered, public bool) {
 	room, err := jid.Parse(address)
 	if err != nil || room.Localpart() == "" || room.Resourcepart() != "" || address == e.account.Address {
-		return
+		return false, false
 	}
-	conference, advertised, semianonymous, nonanonymous := false, false, false, false
+	conference, advertised, semianonymous, nonanonymous, anonymous := false, false, false, false, false
 	for _, identity := range info.Identity {
 		conference = conference || (identity.Category == "conference" && identity.Type == "text")
 	}
@@ -74,16 +74,18 @@ func recordRoomIdentity(e *entry, address string, info disco.Info) {
 		advertised = advertised || feature.Var == occupantIDNS
 		semianonymous = semianonymous || feature.Var == "muc_semianonymous"
 		nonanonymous = nonanonymous || feature.Var == "muc_nonanonymous"
+		anonymous = anonymous || feature.Var == "muc_fullyanonymous"
 	}
 	if e.occupantScopes == nil {
 		e.occupantScopes = map[string]bool{}
 	}
 	if _, exists := e.occupantScopes[address]; len(e.occupantScopes) >= maxRoomSessions && !exists {
-		return
+		return false, false
 	}
 	e.occupantScopes[address] = conference && advertised
 	if e.semianonymousRooms == nil {
 		e.semianonymousRooms = map[string]bool{}
 	}
-	e.semianonymousRooms[address] = conference && semianonymous && !nonanonymous
+	e.semianonymousRooms[address] = conference && semianonymous && !nonanonymous && !anonymous
+	return conference, conference && nonanonymous && !semianonymous && !anonymous
 }

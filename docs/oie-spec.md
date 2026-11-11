@@ -1034,11 +1034,19 @@ updates additionally require a verified actor. Joined semianonymous rooms
 can supply XEP-0421 occupant IDs for live and authenticated archive reactions,
 including the account's own ID in verified self-presence. Those reactions are
 scoped to the account and room and projected with nicknames and opaque keys.
-Completed text history gets a bounded recent reaction replay after joining.
-Bodyless reaction controls never become timeline messages. Retained observations deduplicate provider and
-archive identities, exclude conflicting identifiers and preserve newer actor sets
-when older history arrives. Unresolved original references can resolve when the
-source is subsequently retained.
+Authenticated room configuration notices revoke cached reaction capabilities
+until discovery confirms them again. Public-room JID observations stop contributing
+to counts and actor details when room identities become private.
+If a room archive page is read before self-presence establishes the account’s
+occupant ID, its skipped reaction range is stored with the text checkpoint.
+Joining resumes that range in bounded pages, or replays the latest page when no
+range was recorded.
+
+Bodyless reaction controls never become timeline messages. Room updates use the
+room-issued stanza or archive ID for deduplication. A confirmed archive copy can
+replace the live receipt timestamp, and equal archive timestamps follow the
+server’s result order. Unresolved original references can resolve when the source
+is subsequently retained.
 
 Freeze the desired set, operation UUID, target and sending session. Revalidate
 constraints at acceptance and dispatch. Known-unsent attempts may retry; ambiguous

@@ -120,12 +120,12 @@ func (m *Manager) queryInfo(ctx context.Context, e *entry, s *mx.Session, addres
 	if err != nil {
 		return disco.Info{}, err
 	}
-	return decodeDiscoInfo(e, s, address, body, configuration.revision)
+	return m.decodeDiscoInfo(ctx, e, s, address, body, configuration.revision)
 }
 
 const discoInfoQuery = `<query xmlns="http://jabber.org/protocol/disco#info"/>`
 
-func decodeDiscoInfo(e *entry, s *mx.Session, address, body string, revision uint64) (disco.Info, error) {
+func (m *Manager) decodeDiscoInfo(ctx context.Context, e *entry, s *mx.Session, address, body string, revision uint64) (disco.Info, error) {
 	var result struct {
 		Query *disco.Info `xml:"http://jabber.org/protocol/disco#info query"`
 	}
@@ -135,8 +135,8 @@ func decodeDiscoInfo(e *entry, s *mx.Session, address, body string, revision uin
 	if result.Query == nil {
 		return disco.Info{}, errArchive
 	}
-	if !recordDiscoInfo(e, s, address, revision, *result.Query) {
-		return disco.Info{}, errArchive
+	if err := m.recordDiscoInfo(ctx, e, s, address, revision, *result.Query); err != nil {
+		return disco.Info{}, err
 	}
 	return *result.Query, nil
 }

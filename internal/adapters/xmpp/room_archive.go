@@ -33,7 +33,7 @@ func (m *Manager) WakeRoomArchive(account domain.ID) {
 	}
 }
 
-func roomArchiveSupport(ctx context.Context, e *entry, s *mx.Session, address string) (roomArchiveCapability, error) {
+func (m *Manager) roomArchiveSupport(ctx context.Context, e *entry, s *mx.Session, address string) (roomArchiveCapability, error) {
 	e.historyMu.Lock()
 	capability, checked := e.archiveCapabilities[address]
 	configuration := e.roomConfigurations[address]
@@ -45,16 +45,14 @@ func roomArchiveSupport(ctx context.Context, e *entry, s *mx.Session, address st
 	if err != nil {
 		return capability, err
 	}
-	info, err := decodeDiscoInfo(e, s, address, body, configuration.revision)
+	info, err := m.decodeDiscoInfo(ctx, e, s, address, body, configuration.revision)
 	recordDiscovery(e, s, discovered("room", address, info, err))
 	if err != nil {
 		return capability, err
 	}
-	sid := false
 	for _, feature := range info.Features {
 		capability.mam = capability.mam || feature.Var == mamNS
 		capability.textSearch = capability.textSearch || feature.Var == "urn:xmpp:fulltext:0"
-		sid = sid || feature.Var == sidNS
 	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -69,10 +67,7 @@ func roomArchiveSupport(ctx context.Context, e *entry, s *mx.Session, address st
 	if e.archiveCapabilities == nil {
 		e.archiveCapabilities = make(map[string]roomArchiveCapability)
 	}
-	if e.sidScopes == nil {
-		e.sidScopes = make(map[string]bool)
-	}
-	e.archiveCapabilities[address], e.sidScopes[address] = capability, sid
+	e.archiveCapabilities[address] = capability
 	return capability, nil
 }
 
@@ -122,7 +117,7 @@ func (m *Manager) roomArchiveTurn(waitCtx, sessionCtx context.Context, host appl
 	if priority == archiveAutomatic && a.InitialComplete && (a.OlderComplete || a.Mode == "on_demand") && !a.CaughtUpThrough.Before(cutoff) && reactionReplay == nil && !currentRoomConfiguration(e, c.Address).pending {
 		return result, nil
 	}
-	capability, err := roomArchiveSupport(sessionCtx, e, s, c.Address)
+	capability, err := m.roomArchiveSupport(sessionCtx, e, s, c.Address)
 	p := &result.Archive.RoomArchiveProgress
 	availability, search := "supported", "unsupported"
 	switch {
@@ -277,7 +272,7 @@ func (m *Manager) recoverDeferredRoomReactions(ctx context.Context, host applica
 }
 
 func (m *Manager) extendRoomArchive(ctx context.Context, host application.RoomArchiveHost, e *entry, s *mx.Session, c domain.Conversation, p *domain.RoomArchiveProgress) error {
-	req := archivePageRequest{Backward: true, Before: p.Cursor, End: p.WindowStart}
+	req := archivePageRequest{Backward: true, Before: p.Cursor, End: p.WindowStart, Prepend: p.Cursor != "" || p.RecentComplete}
 	if !p.RecentComplete {
 		req.Start, req.End = p.WindowStart, p.WindowEnd
 	} else if !p.InitialComplete {

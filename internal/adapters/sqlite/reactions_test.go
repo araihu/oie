@@ -13,7 +13,7 @@ import (
 
 func downReactionMigration(t *testing.T, s *Store) {
 	t.Helper()
-	for _, name := range []string{"000017_room_archives", "000016_message_reactions"} {
+	for _, name := range []string{"000018_room_reaction_reconciliation", "000017_room_archives", "000016_message_reactions"} {
 		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
 		if err != nil {
 			t.Fatal(err)
@@ -440,8 +440,30 @@ func TestSemianonymousReactionProjectionAndCommandEcho(t *testing.T) {
 	}
 	ref.Author = ""
 	incoming := application.IncomingReaction{AccountID: c.AccountID, Address: c.Address, Kind: "room", ProviderID: "peer-first", CreatedAt: at, Actor: peer, ActorName: "Bob", Target: ref, Emojis: []string{"👍"}}
-	if err = e.ReceiveReaction(ctx, incoming); err != nil {
+	public := incoming
+	public.Actor, public.ProviderID = "bob@localhost", "public-reaction"
+	if err := e.SetRoomReactionPrivacy(ctx, c.AccountID, c.Address, true); err != nil {
 		t.Fatal(err)
+	}
+	if err := e.ReceiveReaction(ctx, public); err != nil {
+		t.Fatal(err)
+	}
+	if got := reactionSnapshot(t, e, m.ID); len(got.Actors) != 1 || got.Actors[0].Address != public.Actor {
+		t.Fatal("verified public actor not visible", got)
+	}
+	if err := e.SetRoomReactionPrivacy(ctx, c.AccountID, c.Address, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := reactionSnapshot(t, e, m.ID); len(got.Actors) != 0 || len(got.Items) != 0 {
+		t.Fatal("room configuration change left a legacy real address or count", got)
+	}
+	clearPublic := incoming
+	clearPublic.ProviderID, clearPublic.Emojis = "occupant-clear", []string{}
+	if err := e.ReceiveReaction(ctx, clearPublic); err != nil {
+		t.Fatal(err)
+	}
+	if got := reactionSnapshot(t, e, m.ID); len(got.Actors) != 0 || len(got.Items) != 0 {
+		t.Fatal("clearing as an occupant exposed the prior real address", got)
 	}
 	incoming.ProviderID, incoming.ActorName, incoming.CreatedAt = "peer-renamed", "Robert", at.Add(time.Second)
 	if err = e.ReceiveReaction(ctx, incoming); err != nil {
@@ -457,7 +479,8 @@ func TestSemianonymousReactionProjectionAndCommandEcho(t *testing.T) {
 	if _, err = s.FinishMessageReaction(ctx, key, "submitted", migrationID(), time.Now(), time.Now(), ""); err != nil {
 		t.Fatal(err)
 	}
-	incoming.ProviderID, incoming.Actor, incoming.ActorName, incoming.IsOwn, incoming.CreatedAt = string(key), own, "My room nickname", true, time.Now()
+	incoming.ProviderID, incoming.Actor, incoming.ActorName, incoming.IsOwn, incoming.CreatedAt = "room-reaction:own-add", own, "My room nickname", true, time.Now()
+	incoming.CommandEchoID = string(key)
 	if err = e.ReceiveReaction(ctx, incoming); err != nil {
 		t.Fatal(err)
 	}
@@ -473,7 +496,8 @@ func TestSemianonymousReactionProjectionAndCommandEcho(t *testing.T) {
 	if _, err = s.ClaimMessageReaction(ctx, clear, migrationID(), time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	incoming.ProviderID, incoming.Emojis, incoming.CreatedAt = string(clear), []string{}, time.Now()
+	incoming.ProviderID, incoming.Emojis, incoming.CreatedAt = "room-reaction:own-clear", []string{}, time.Now()
+	incoming.CommandEchoID = string(clear)
 	if err = e.ReceiveReaction(ctx, incoming); err != nil {
 		t.Fatal(err)
 	}
@@ -484,5 +508,53 @@ func TestSemianonymousReactionProjectionAndCommandEcho(t *testing.T) {
 	got = reactionSnapshot(t, e, m.ID)
 	if len(got.OwnEmojis) != 0 || len(got.Actors) != 1 || got.Actors[0].Address != peer || len(got.Items) != 1 || got.Items[0].Count != 1 {
 		t.Fatal("clear affected a different room occupant", got)
+	}
+}
+
+func TestRoomArchiveReconcilesReceiptTimeAndPreservesEqualTimestampOrder(t *testing.T) {
+	s, e, base := outboxFixture(t)
+	e.SetProtocols(&reactionProtocol{max: 8})
+	ctx := t.Context()
+	c := outboundRoom(t, s, base.AccountID, "room@rooms.localhost")
+	stamp := time.Now().UTC().Add(-time.Minute)
+	ref := domain.MessageReference{ID: "source", Scope: "room:" + c.Address}
+	msg := domain.Message{
+		ID: migrationID(), RevisionID: migrationID(), AccountID: c.AccountID, OriginalText: "source",
+		CreatedAt: stamp.Add(-time.Second), Historical: true, ProviderID: "source",
+		References: []domain.MessageReference{ref}, SendState: "received",
+	}
+	if err := s.ReceiveMessage(ctx, c, msg, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+	add := application.IncomingReaction{
+		AccountID: c.AccountID, Address: c.Address, Kind: "room", ProviderID: "room-reaction:z-add",
+		Actor: domain.RoomReactionActorPrefix + strings.Repeat("a", 64), ActorName: "Bob", Target: ref,
+		CreatedAt: stamp.Add(time.Second), Emojis: []string{"👍"},
+	}
+	clear := add
+	clear.ProviderID, clear.Emojis = "room-reaction:a-clear", []string{}
+	clear.Historical, clear.ArchiveScope, clear.ArchiveID = true, c.Address, "a-clear"
+	clear.CreatedAt = stamp
+	for _, in := range []application.IncomingReaction{add, clear} {
+		if err := e.ReceiveReaction(ctx, in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := reactionSnapshot(t, e, msg.ID); len(got.Items) != 1 {
+		t.Fatal("expected the original live receipt time to win before reconciliation", got)
+	}
+	add.Historical, add.ArchiveScope, add.ArchiveID = true, c.Address, "z-add"
+	add.CreatedAt = stamp
+	add.ArchiveLater = []string{clear.ArchiveID}
+	clear.ArchiveEarlier = []string{add.ArchiveID}
+	for range 2 {
+		for _, in := range []application.IncomingReaction{add, clear} {
+			if err := e.ReceiveReaction(ctx, in); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if got := reactionSnapshot(t, e, msg.ID); len(got.Items) != 0 || len(got.Actors) != 0 {
+			t.Fatal("the later archived clear lost to receipt time or lexicographic ID", got)
+		}
 	}
 }
