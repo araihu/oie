@@ -405,13 +405,14 @@ has no recognized Problem Details, the object uses `about:blank` and the HTTP
 status title.
 
 Usage and transport failures emit a Problem Details object on stderr and
-leave stdout empty. The object has `type`, `title`, `detail`, `code`, and
-`exitCode`. HTTP `status` is omitted for these local failures.
+leave stdout empty. The object has `type`, `title`, `detail`, `code`,
+`exitCode`, and `documentation`. HTTP `status` is omitted for these local
+failures.
 
 | Type URN | Title | Code | Exit code |
 | --- | --- | --- | --- |
-| `urn:cli:oiectl:problem:usage_error` | Invalid command usage | `usage_error` | 2 |
-| `urn:cli:oiectl:problem:transport_error` | Transport error | `transport_error` | 3 |
+| [`urn:cli:oiectl:problem:usage_error`](engine-api-problems.md#usage_error) | Invalid command usage | `usage_error` | 2 |
+| [`urn:cli:oiectl:problem:transport_error`](engine-api-problems.md#transport_error) | Transport error | `transport_error` | 3 |
 
 Transport failures include timeouts and cancellations.
 

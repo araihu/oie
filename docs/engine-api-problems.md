@@ -1,4 +1,4 @@
-# Oiê engine API errors
+# Oiê API and CLI errors
 
 The engine returns [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457.html)
 as `application/problem+json`. Each problem has a stable `type` URI of the
@@ -99,3 +99,27 @@ before retrying the download.
 
 **Media request timed out · HTTP 504.** The media source took too long to
 respond. Retry the download if the source is still available.
+
+## oiectl local errors
+
+With `--output json`, oiectl reports local failures as Problem Details on
+stderr. The process exit code is available in `exitCode`.
+
+### usage_error
+
+**Invalid command usage · exit 2.**
+Type `urn:cli:oiectl:problem:usage_error`.
+
+Check the diagnostic for the missing or invalid argument. Run the command
+with `--help` to see its required flags and accepted values.
+
+### transport_error
+
+**Transport error · exit 3.**
+Type `urn:cli:oiectl:problem:transport_error`.
+
+For a connection failure, check that the engine is running and that
+`--server` or `OIECTL_SERVER` points to it. The detail can also report a
+timeout, cancellation, or response read failure. If a write's outcome is
+uncertain, look up the operation or retry with its original idempotency key
+and input when the command supports idempotency.

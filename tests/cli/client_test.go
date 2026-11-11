@@ -304,17 +304,19 @@ func testLocalDiagnostics(t *testing.T, binary, serverURL string) {
 			err := cmd.Run()
 			var exit *exec.ExitError
 			var got struct {
-				Type     string          `json:"type"`
-				Title    string          `json:"title"`
-				Detail   string          `json:"detail"`
-				Code     string          `json:"code"`
-				ExitCode int             `json:"exitCode"`
-				Status   json.RawMessage `json:"status"`
+				Type          string          `json:"type"`
+				Title         string          `json:"title"`
+				Detail        string          `json:"detail"`
+				Code          string          `json:"code"`
+				ExitCode      int             `json:"exitCode"`
+				Status        json.RawMessage `json:"status"`
+				Documentation string          `json:"documentation"`
 			}
 			if !errors.As(err, &exit) || exit.ExitCode() != tc.exitCode || stdout.Len() != 0 ||
 				json.Unmarshal(stderr.Bytes(), &got) != nil || got.Code != tc.code ||
 				got.Type != "urn:cli:oiectl:problem:"+tc.code || got.Title != tc.title ||
-				got.Detail != tc.detail || got.ExitCode != tc.exitCode || got.Status != nil {
+				got.Detail != tc.detail || got.ExitCode != tc.exitCode || got.Status != nil ||
+				got.Documentation != "https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md#"+tc.code {
 				t.Fatalf("CLI diagnostic: %v stdout=%q stderr=%q", err, stdout.String(), stderr.String())
 			}
 			t.Logf("oiectl stderr:\n%s", stderr.String())
