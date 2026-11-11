@@ -1,4 +1,4 @@
-// Command ci runs the local Dagger graph without the interactive CLI frontend.
+// Command ci runs the Dagger graph without the interactive CLI frontend.
 package main
 
 import (
@@ -169,7 +169,11 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 		// shared runners. Child processes still keep their production deadlines.
 		WithEnvVariable("GOMAXPROCS", "4").
 		WithEnvVariable("GOWORK", "off").WithExec([]string{"sh", "-c", setupCommand})
-	base, err := r.stage(ctx, "setup", base)
+	base, err := r.withLinters(ctx, base)
+	if err != nil {
+		return err
+	}
+	base, err = r.stage(ctx, "setup", base)
 	if err != nil {
 		return err
 	}
@@ -183,7 +187,7 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 		WithMountedTemp(goScratch, dagger.ContainerWithMountedTempOpts{Size: 2 << 30}).
 		WithEnvVariable("TMPDIR", goScratch).
 		// A cold toolchain build can exceed the test scratch mount capacity.
-		WithEnvVariable("GOTMPDIR", "/tmp")
+		WithEnvVariable("GOTMPDIR", "/var/tmp")
 	checked, err := r.stage(ctx, "checks", goContainer.WithExec([]string{"make", "check"}))
 	if err != nil {
 		return err
@@ -206,33 +210,56 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 	if err := r.desktop(ctx, source); err != nil {
 		return err
 	}
+	return r.integration(ctx, source, goContainer, checked)
+}
+
+func (r runner) integration(ctx context.Context, source *dagger.Directory, goContainer, checked *dagger.Container) (err error) {
 	runID := os.Getenv("OIE_CI_RUN_ID")
 	if runID == "" {
 		return errors.New("OIE_CI_RUN_ID is required for isolated services")
 	}
+	client := r.client
+	const browserFixtures = "OIE_XMPP_BROWSER_FIXTURES"
+	const startsDir = "/run/oie-ci-prosody"
+	starts := client.CacheVolume("oie-ci-prosody-starts-v1")
+	startsFile := filepath.Join(startsDir, runID)
 	prosody := client.Container().From(xmppImage).WithoutEntrypoint().
 		WithFile("/etc/prosody/prosody.cfg.lua", source.File("dev/xmpp/prosody.cfg.lua")).
 		WithFile("/opt/oie/start.sh", source.File("dev/xmpp/start.sh")).
 		WithEnvVariable("OIE_CI_RUN_ID", runID).
+		WithEnvVariable(browserFixtures, "1").
 		WithExec([]string{"sh", "-c", "mkdir -p /var/lib/prosody/certs && openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj /CN=localhost -addext subjectAltName=DNS:localhost,IP:127.0.0.1 -keyout /var/lib/prosody/certs/localhost.key -out /var/lib/prosody/certs/localhost.crt"})
 	ca := prosody.File("/var/lib/prosody/certs/localhost.crt")
 	for _, port := range []int{80, 443, 5269, 5280, 5281, 5347} {
 		prosody = prosody.WithoutExposedPort(port)
 	}
-	prosody = prosody.WithExposedPort(5222)
-	// The integration suite writes to the same fixture accounts the browser
-	// opens. Give each stage its own service and message archive.
-	prosodyService := func(stage string) *dagger.Service {
-		return prosody.WithEnvVariable("OIE_CI_STAGE", stage).
-			AsService(dagger.ContainerAsServiceOpts{Args: []string{"sh", "/opt/oie/start.sh"}})
+	// The receipt lives outside the service filesystem so a restart is counted.
+	xmpp := prosody.WithExposedPort(5222).
+		WithMountedCache(startsDir, starts).WithEnvVariable("OIE_CI_PROSODY_STARTS_FILE", startsFile).
+		AsService(dagger.ContainerAsServiceOpts{Args: []string{"sh", "-ec", `
+printf 'started\n' >> "$OIE_CI_PROSODY_STARTS_FILE"
+exec sh /opt/oie/start.sh
+`}})
+	// Hold a service reference across the Go and browser stages. A binding
+	// alone can stop Prosody while Playwright is being prepared.
+	xmpp, err = xmpp.Start(ctx)
+	if err != nil {
+		return fmt.Errorf("start integration Prosody: %w", err)
 	}
-	integrated := goContainer.WithServiceBinding("xmpp", prosodyService("xmpp")).WithFile("/tmp/xmpp-ca.crt", ca).
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		if _, stopErr := xmpp.Stop(stopCtx); stopErr != nil {
+			err = errors.Join(err, fmt.Errorf("stop integration Prosody: %w", stopErr))
+		}
+	}()
+	integrated := goContainer.WithServiceBinding("xmpp", xmpp).WithFile("/tmp/xmpp-ca.crt", ca).
 		WithEnvVariable("OIE_XMPP_INTEGRATION", "1").WithEnvVariable("OIE_XMPP_CA_FILE", "/tmp/xmpp-ca.crt").
 		WithEnvVariable("OIE_XMPP_ENDPOINT", "xmpp:5222").WithEnvVariable("OIE_CI_RUN_ID", runID).
-		WithExec([]string{"go", "test", "-race", "-count=1", "-p", "1", "-v", "./tests/xmpp", "./tests/cli"})
-	if _, err := r.stage(ctx, "xmpp", integrated); err != nil {
-		return err
-	}
+		WithExec([]string{"sh", "-ec", `
+python3 scripts/test-xmpp.py --host xmpp --ca-file "$OIE_XMPP_CA_FILE"
+exec go test -race -count=1 -p 1 -v ./tests/xmpp ./tests/cli
+`})
 	browser := client.Container().From(nodeImage).
 		WithMountedCache("/root/.npm", client.CacheVolume("oie-ci-npm-v1")).
 		WithMountedCache("/root/.cache/ms-playwright", client.CacheVolume("oie-ci-playwright-1.62.1")).
@@ -240,17 +267,24 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 		WithFile("package.json", source.File("tests/browser/package.json")).
 		WithFile("package-lock.json", source.File("tests/browser/package-lock.json")).
 		WithExec([]string{"npm", "ci"}).WithExec([]string{"npx", "playwright", "install", "--with-deps", "chromium"})
-	browser, err = r.stage(ctx, "browser-setup", browser)
-	if err != nil {
+	xmppResult := make(chan error, 1)
+	go func() {
+		_, err := r.stage(ctx, "xmpp", integrated)
+		xmppResult <- err
+	}()
+	browser, browserSetupErr := r.stage(ctx, "browser-setup", browser)
+	if err := errors.Join(<-xmppResult, browserSetupErr); err != nil {
 		return err
 	}
 	const browserScratch = "/tmp/oie-browser"
 	browser = browser.WithDirectory("/src", source).
 		WithFile("/src/bin/oie", checked.File("/src/bin/oie")).WithFile("/src/bin/oie-mock", checked.File("/src/bin/oie-mock")).
-		WithFile("/tmp/xmpp-ca.crt", ca).WithWorkdir("/src").WithServiceBinding("xmpp", prosodyService("browser")).
+		WithFile("/tmp/xmpp-ca.crt", ca).WithWorkdir("/src").WithServiceBinding("xmpp", xmpp).
+		WithMountedCache(startsDir, starts).WithEnvVariable("OIE_CI_PROSODY_STARTS_FILE", startsFile).
 		WithMountedTemp(browserScratch, dagger.ContainerWithMountedTempOpts{Size: 2 << 30}).
 		WithEnvVariable("TMPDIR", browserScratch).
 		WithEnvVariable("OIE_XMPP_CA_FILE", "/tmp/xmpp-ca.crt").WithEnvVariable("OIE_XMPP_ENDPOINT", "xmpp:5222").
+		WithEnvVariable(browserFixtures, "1").
 		WithEnvVariable("OIE_CI_RUN_ID", runID).WithExec([]string{"sh", "-c", browserCommand}, dagger.ContainerWithExecOpts{Expect: dagger.ReturnTypeAny})
 	browser, err = r.stage(ctx, "browser", browser)
 	if err != nil {
@@ -268,7 +302,22 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 	return browserOutcome(code)
 }
 
-const browserCommand = "mkdir -p tests/browser/artifacts; sh tools/ci/browser.sh > tests/browser/artifacts/ci.log 2>&1; result=$?; printf '%s\\n' \"$result\" > /tmp/oie-browser-exit; cat tests/browser/artifacts/ci.log; exit \"$result\""
+const browserCommand = `
+mkdir -p tests/browser/artifacts
+log=tests/browser/artifacts/ci.log
+sh tools/ci/browser.sh > "$log" 2>&1
+result=$?
+starts=0
+if [ -f "$OIE_CI_PROSODY_STARTS_FILE" ]; then
+  starts=$(wc -l < "$OIE_CI_PROSODY_STARTS_FILE")
+fi
+printf 'Prosody starts: %s (expected 1)\n' "$starts" >> "$log"
+rm -f "$OIE_CI_PROSODY_STARTS_FILE"
+if [ "$starts" != 1 ] && [ "$result" = 0 ]; then result=1; fi
+printf '%s\n' "$result" > /tmp/oie-browser-exit
+cat "$log"
+exit "$result"
+`
 
 func browserOutcome(code string) error {
 	if strings.TrimSpace(code) != "0" {

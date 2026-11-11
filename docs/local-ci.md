@@ -245,6 +245,15 @@ make ci-check  # Contracts, generation drift, golangci-lint, vet, unit/race test
 make ci        # Also isolated Prosody integration and all browser workflows
 ```
 
+GitHub Actions runs the same `make ci` command and uploads its stage logs and
+test evidence as `dagger-ci-evidence`, including when tests fail.
+The workflow uses `hostinger-vps-trusted` for allowlisted pushes to `main` and
+`hostinger-vps-pr` for ready pull requests opened by allowlisted actors from
+branches in the same repository. The allowlist comes from the organization
+variable `HOSTINGER_PR_ACTORS_JSON`. Other events, including fork pull requests,
+run on `ubuntu-latest`. The Hostinger runners supply separate Dagger sockets and
+caches for the two lanes.
+
 The Dagger Go graph and shell entrypoint are under `tools/ci`. Dagger dependencies
 remain separate from the root application and generation-tool modules. Images
 are pinned by digest. Go modules,
@@ -253,8 +262,6 @@ persistent engine caches.
 The runner prints stage progress every 30 seconds and saves command output under
 `tests/browser/artifacts/ci`. Browser evidence is under its `browser` subdirectory.
 `checks`, `race` and `build` run as separate stages with their own logs.
-The Go XMPP integration and the real-engine browser workflow use separate
-Prosody instances so browser accounts start with an empty message archive.
 Go and browser stages use a bounded memory-backed `TMPDIR` for disposable
 SQLite databases and browser profiles. Go keeps its compiler scratch files in
 disk-backed `GOTMPDIR` because a cold tool build can exceed the memory mount's
@@ -268,9 +275,10 @@ memory-backed check stage.
 `OIE_CI_TIMEOUT` sets the overall execution deadline, defaulting to 30 minutes.
 Failure and interruption preserve a failing exit status and clean only the
 snapshot, runner process and optional SSH tunnel owned by that invocation.
-`make check` includes golangci-lint v2.13.1 pinned in the tools module.
-Its standard linters include errcheck, govet, ineffassign, staticcheck and unused.
-The first run populates those caches; later runs reuse them.
+The Dagger checks download the precompiled Vacuum and golangci-lint releases
+for the engine's architecture and verify their SHA-256 digests. The desktop lane
+uses the amd64 golangci-lint binary. Direct `make check` runs the versions pinned
+in the tools modules, with optional `VACUUM` and `GOLANGCI_LINT` overrides.
 
 `make check-ci-tools` checks the CI module and shell lifecycle regressions and is
 part of `make check`. The CI module uses the `http2legacy` build tag for Dagger's
@@ -285,8 +293,20 @@ edits. It excludes Git internals, data directories, credentials, binaries, brows
 artifacts and dependency directories before invoking Dagger. A source-boundary
 test verifies those exclusions, including an accidentally tracked data file.
 
-The full pipeline creates its own Prosody service and development certificates.
-It does not use the live-preview engine, account credentials or data directory.
+Each full Dagger run starts one disposable Prosody service and shares its TLS
+certificate across the protocol smoke check, Go integration tests and live
+browser workflow. The smoke check and Go integration tests run in sequence
+while Playwright setup runs in parallel.
+The browser evidence records the number of Prosody starts for that run. CI
+fails if the count differs from one.
+
+Dagger sets `OIE_XMPP_BROWSER_FIXTURES=1` for Prosody and the live browser
+workflow. This provisions separate `browser-alice@localhost` and
+`browser-bob@localhost` accounts so the browser's empty-inbox check is independent
+of the messages, rosters and profiles from the other suites. The browser still
+uses a fresh Oie data directory. Standalone runs default to the standard
+development accounts.
+
 The profile integration test requires the repository's Prosody configuration,
 which enables `vcard_legacy`. If a local Compose server returns
 `service-unavailable` for the fixture vCard, run `make dev-up` to rebuild the

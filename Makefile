@@ -5,7 +5,8 @@ GOFLAGS ?= -tags=server
 export GOFLAGS
 COMPOSE ?= docker compose
 CODEGEN = GOWORK=off $(GO) tool -modfile=tools/go.mod
-VACUUM = GOWORK=off $(GO) -C tools/vacuum tool vacuum
+VACUUM ?= env GOWORK=off $(GO) tool -modfile=tools/vacuum/go.mod vacuum
+GOLANGCI_LINT ?= $(CODEGEN) golangci-lint
 CLI_ARGS = --spec api/openapi.cli.json --name oiectl --module github.com/araihu/oie/cli --out cli
 
 .PHONY: generate lint lint-go build build-cli run check test test-race check-generated dev-up dev-down test-xmpp test-engine-xmpp
@@ -18,20 +19,20 @@ generate:
 	$(CODEGEN) oapi-codegen --config api/bff.codegen.yaml api/bff.openapi.yaml
 	$(CODEGEN) oapi-codegen --config api/cache.codegen.yaml api/cache.openapi.yaml
 	$(CODEGEN) templ generate
-	$(VACUUM) bundle --composed ../../api/openapi.yaml ../../api/openapi.bundle.yaml
-	$(VACUUM) apply-overlay --fail-on-warnings ../../api/openapi.bundle.yaml ../../api/cli.overlay.yaml ../../api/openapi.cli.yaml
-	$(VACUUM) bundle --composed --format json ../../api/openapi.cli.yaml ../../api/openapi.cli.json
+	$(VACUUM) bundle --composed api/openapi.yaml api/openapi.bundle.yaml
+	$(VACUUM) apply-overlay --fail-on-warnings api/openapi.bundle.yaml api/cli.overlay.yaml api/openapi.cli.yaml
+	$(VACUUM) bundle --composed --format json api/openapi.cli.yaml api/openapi.cli.json
 	@if [ -f cli/.oapi-cli-gen.json ]; then $(CODEGEN) oapi-cli-gen generate $(CLI_ARGS) --update; else $(CODEGEN) oapi-cli-gen generate $(CLI_ARGS); fi
 	GOWORK=off $(GO) -C cli mod tidy
 
 lint:
-	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn ../../api/openapi.yaml
-	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn ../../api/ui-preview.openapi.yaml
-	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn ../../api/bff.openapi.yaml
-	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn ../../api/cache.openapi.yaml
+	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn api/openapi.yaml
+	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn api/ui-preview.openapi.yaml
+	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn api/bff.openapi.yaml
+	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn api/cache.openapi.yaml
 
 lint-go:
-	$(CODEGEN) golangci-lint run
+	$(GOLANGCI_LINT) run
 
 build:
 	GOWORK=off $(GO) build -trimpath -o bin/oie ./cmd/oie
@@ -54,7 +55,7 @@ test-race:
 	GOWORK=off $(GO) test -race ./...
 
 check-generated:
-	sh scripts/check-generated.sh
+	sh scripts/check-generated.sh $(VACUUM)
 
 check: lint lint-go check-generated check-api-compatibility check-ci-tools test-packaging
 	@test -z "$$(gofmt -l cmd internal api/spec.go tests tools/cmd)" || { echo 'Go formatting drift'; exit 1; }
