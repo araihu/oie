@@ -76,10 +76,8 @@ func TestPublishedSenderProfileDevelopmentVCardAndScopedRead(t *testing.T) {
 	if err != nil {
 		t.Fatal("read original fixture profile", err)
 	}
-	if originalType == stanza.ErrorIQ {
-		original = `<vCard xmlns="vcard-temp"/>`
-	} else if originalType != stanza.ResultIQ {
-		t.Fatal("unexpected original profile response")
+	if originalType != stanza.ResultIQ {
+		t.Fatalf("read original fixture profile: %s %s; use the development Prosody configuration with vcard_legacy enabled (make dev-up for Compose)", originalType, profileFixtureError(original))
 	}
 	defer func() {
 		cleanup, stop := context.WithTimeout(context.Background(), 5*time.Second)

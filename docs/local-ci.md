@@ -274,6 +274,10 @@ test verifies those exclusions, including an accidentally tracked data file.
 
 The full pipeline creates its own Prosody service and development certificates.
 It does not use the live-preview engine, account credentials or data directory.
+The profile integration test requires the repository's Prosody configuration,
+which enables `vcard_legacy`. If a local Compose server returns
+`service-unavailable` for the fixture vCard, run `make dev-up` to rebuild the
+service with that configuration. Its data volume persists across the rebuild.
 Integration tests accept `OIE_XMPP_ENDPOINT` for the Dagger service binding while
 keeping account-domain TLS verification. Host Compose tests keep their existing
 loopback default. Browser evidence is exported to the ignored directory
