@@ -13,7 +13,7 @@ import selectfield "github.com/araihu/goshtoso/components/select"
 
 func languageSelect(v view) selectfield.Config {
 	return selectfield.Config{
-		ID: "settings-language", Name: "lang", Label: v.Text.Languages, HelperText: v.Text.LanguageHelp,
+		ID: "settings-language", Name: "lang", Label: v.Text.Languages,
 		Options: []selectfield.Option{
 			{Value: "en", Label: v.Text.English, Selected: v.Locale == "en", Leading: languageFlag("🇺🇸")},
 			{Value: "pt-BR", Label: v.Text.Portuguese, Selected: v.Locale == "pt-BR", Leading: languageFlag("🇧🇷")},
