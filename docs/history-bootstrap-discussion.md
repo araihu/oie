@@ -116,18 +116,31 @@ search. [MAM](https://xmpp.org/extensions/xep-0313.html),
 [ejabberd 25.07](https://www.process-one.net/blog/ejabberd-25-07/) and
 [MongooseIM](https://esl.github.io/MongooseDocs/6.2.1/modules/mod_mam/).
 
-## Open decisions for the next discussion
+## Implementation
 
-- What page, message and time budgets keep a busy room from delaying the others?
-- What turn frequency gives the open room preference while preserving progress
-  across rooms on the same server? Keep requests paced and live traffic responsive.
-- Which protocol capabilities and archive failures need fallbacks? How do we
-  keep database writes, indexing and preview work from blocking interaction?
+Engine API 0.28.0 exposes the room recovery mode and progress under
+`/api/v1/conversations/{conversationId}/archive`. The browser can prioritize
+the initial page, ask for older messages, fetch context around a retained
+message or search a capable room archive. Reads of saved progress use SQLite.
+Migration 17 adds one mode and one recovery checkpoint per room. Existing
+history and the direct-message archive checkpoint remain available.
 
-These choices must be resolved before treating the proposal as an exact API or
-adapter contract. Keep the detailed operation/state design out of product UI.
+The XMPP adapter requests up to 50 entries per page. After it has covered
+the 48-hour window, the bootstrap requests only enough older entries to
+fill the remaining gap to 128 retained messages. Each domain takes one
+automatic turn at a time and alternates rooms. Initial pages take priority
+over older sweeps within the domain. Explicit archive requests can use the
+one-second pause between automatic turns. A reconnect also catches up on
+messages newer than the original window.
 
-## Verification to define before implementation
+Room search waits 350 ms before requesting a page from the server.
+The browser keeps local results available while that request runs. The XMPP
+adapter enables server search for a room that advertises both MAM and the
+XEP-0431 discovery feature. Opening an isolated search hit can fetch a page
+on each side. Those pages and individual hits do not move the continuous
+recovery checkpoint.
+
+## Verification
 
 Cover active rooms, rooms quiet for more than 48 hours, rooms with fewer than
 128 messages, empty or inaccessible archives, and interruption/resume. Verify

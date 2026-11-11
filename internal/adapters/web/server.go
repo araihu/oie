@@ -51,6 +51,7 @@ type Server struct {
 	devBuildID    string
 	engineEditors []engineapi.RequestEditorFn
 	client        *engineapi.ClientWithResponses
+	archiveClient *engineapi.ClientWithResponses
 	streamClient  *engineapi.Client
 	catalogs      map[string]copy
 }
@@ -70,11 +71,15 @@ func New(engineURL string, options ...Option) (*Server, error) {
 			option(server)
 		}
 	}
-	clientOptions := []engineapi.ClientOption{engineapi.WithHTTPClient(&http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }})}
-	for _, editor := range server.engineEditors {
-		clientOptions = append(clientOptions, engineapi.WithRequestEditorFn(editor))
+	optionsFor := func(client *http.Client) []engineapi.ClientOption {
+		client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+		options := []engineapi.ClientOption{engineapi.WithHTTPClient(client)}
+		for _, editor := range server.engineEditors {
+			options = append(options, engineapi.WithRequestEditorFn(editor))
+		}
+		return options
 	}
-	client, err := engineapi.NewClientWithResponses(engineURL, clientOptions...)
+	client, err := engineapi.NewClientWithResponses(engineURL, optionsFor(&http.Client{Timeout: 5 * time.Second})...)
 	if err != nil {
 		return nil, err
 	}
@@ -82,15 +87,19 @@ func New(engineURL string, options ...Option) (*Server, error) {
 	transport.DialContext = (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext
 	transport.ResponseHeaderTimeout = 5 * time.Second
 	transport.TLSHandshakeTimeout = 5 * time.Second
-	streamOptions := []engineapi.ClientOption{engineapi.WithHTTPClient(&http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }})}
-	for _, editor := range server.engineEditors {
-		streamOptions = append(streamOptions, engineapi.WithRequestEditorFn(editor))
-	}
-	streamClient, err := engineapi.NewClient(engineURL, streamOptions...)
+	streamClient, err := engineapi.NewClient(engineURL, optionsFor(&http.Client{Transport: transport})...)
 	if err != nil {
 		return nil, err
 	}
-	server.client, server.streamClient = client, streamClient
+	archiveTransport := transport.Clone()
+	// Archive actions can wait for a provider page. The request context
+	// bounds the wait without extending deadlines for ordinary local reads.
+	archiveTransport.ResponseHeaderTimeout = 0
+	archiveClient, err := engineapi.NewClientWithResponses(engineURL, optionsFor(&http.Client{Transport: archiveTransport})...)
+	if err != nil {
+		return nil, err
+	}
+	server.client, server.streamClient, server.archiveClient = client, streamClient, archiveClient
 	return server, nil
 }
 
@@ -129,6 +138,7 @@ type view struct {
 
 	SenderInfo                                                                                    *senderInfoView
 	GlobalMessageSearch                                                                           bool
+	RoomArchive                                                                                   *engineapi.RoomArchive
 	ConversationSearchOpen                                                                        bool
 	ConversationSearchQuery                                                                       string
 	ConversationSearchHistory                                                                     bool
@@ -202,6 +212,7 @@ type copy struct {
 	MessageStarred                                                                                                                                                                                           string
 	AutoVideoThumbnails, AutoVideoThumbnailsHelp, VideoThumbnailLoad, VideoThumbnailLoading, VideoThumbnailFailed                                                                                            string
 	ReadFailed                                                                                                                                                                                               string
+	RoomArchiveMode, RoomArchiveGradual, RoomArchiveOnDemand, RoomArchiveLocalResults                                                                                                                        string
 	TimelineOlder, TimelineNewer, TimelineLoading, TimelineFailed, TimelinePaused                                                                                                                            string
 	SharedItemActions                                                                                                                                                                                        string
 	SharedCopyLink                                                                                                                                                                                           string
@@ -538,7 +549,14 @@ var videosStylesheet []byte
 //go:embed live.js
 var liveScript []byte
 
+//go:embed room-archive.js
+var roomArchiveScript []byte
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, browserRoomArchivePath) {
+		s.browserRoomArchive(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/message-reactions" {
 		s.prepareReactions(w, r)
 		return
@@ -599,7 +617,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		body []byte
 	}{
 		"/ui/mentions.js": {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
-		"/ui/timeline.js": {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
+		"/ui/room-archive.js": {"text/javascript", roomArchiveScript},
+		"/ui/timeline.js":     {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/cache.js": {"text/javascript", cacheScript}, "/ui/cache/LICENSE.md": {"text/plain; charset=utf-8", cacheLibraryLicense}, "/ui/cache/lru-cache.min.mjs": {"text/javascript", cacheLibrary}, "/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
 		"/ui/video-thumbnails.js": {"text/javascript", videoThumbnailsScript}, "/ui/videos.js": {"text/javascript", videosScript}, "/ui/video.css": {"text/css", videosStylesheet},
 		"/ui/reactions.js": {"text/javascript", reactionsScript}, "/ui/reactions.css": {"text/css", reactionsStylesheet}, "/ui/message-correction.css": {"text/css", messageCorrectionStylesheet}, "/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/read-state.js": {"text/javascript", readStateScript}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/message-history.js": {"text/javascript", messageHistoryScript}, "/ui/message-history.css": {"text/css", messageHistoryStylesheet}, "/ui/sender.js": {"text/javascript", senderScript}, "/ui/message-search.js": {"text/javascript", messageSearchScript}, "/ui/message-search.css": {"text/css", messageSearchStylesheet}, "/ui/conversation-search.js": {"text/javascript", conversationSearchScript}, "/ui/conversation-search.css": {"text/css", conversationSearchStylesheet}, "/ui/conversation-preferences.js": {"text/javascript", conversationPreferencesScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
@@ -828,6 +847,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	}
 	v.Selected = conversation.JSON200
 	v.ChatID = selected
+	s.loadRoomArchive(ctx, v)
 	s.loadConversationDetails(ctx, v)
 	s.loadMessaging(ctx, v)
 	s.latestEditTarget(ctx, v)

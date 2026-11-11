@@ -679,6 +679,30 @@ type SearchBrowserMessagesParams struct {
 // SearchBrowserMessagesParamsLang defines parameters for SearchBrowserMessages.
 type SearchBrowserMessagesParamsLang string
 
+// RequestBrowserRoomArchiveParams defines parameters for RequestBrowserRoomArchive.
+type RequestBrowserRoomArchiveParams struct {
+	// XOieEngineID Selected engine identity.
+	XOieEngineID openapi_types.UUID `json:"X-Oie-Engine-ID"`
+
+	// XOieAccountID Owning account identity.
+	XOieAccountID openapi_types.UUID `json:"X-Oie-Account-ID"`
+
+	// XCSRFToken Same-origin browser token.
+	XCSRFToken string `json:"X-CSRF-Token"`
+}
+
+// SetBrowserRoomArchiveModeParams defines parameters for SetBrowserRoomArchiveMode.
+type SetBrowserRoomArchiveModeParams struct {
+	// XOieEngineID Selected engine identity.
+	XOieEngineID openapi_types.UUID `json:"X-Oie-Engine-ID"`
+
+	// XOieAccountID Owning account identity.
+	XOieAccountID openapi_types.UUID `json:"X-Oie-Account-ID"`
+
+	// XCSRFToken Same-origin browser token.
+	XCSRFToken string `json:"X-CSRF-Token"`
+}
+
 // GetBrowserMessageSenderParams defines parameters for GetBrowserMessageSender.
 type GetBrowserMessageSenderParams struct {
 	// EngineId Identity of the engine that owns the retained message.
@@ -720,6 +744,12 @@ type SetBrowserMessageReactionsFormdataRequestBody = BrowserReactionIntent
 
 // ReconcileBrowserSubmissionFormdataRequestBody defines body for ReconcileBrowserSubmission for application/x-www-form-urlencoded ContentType.
 type ReconcileBrowserSubmissionFormdataRequestBody = PendingSubmission
+
+// RequestBrowserRoomArchiveJSONRequestBody defines body for RequestBrowserRoomArchive for application/json ContentType.
+type RequestBrowserRoomArchiveJSONRequestBody = externalRef0.RoomArchiveRequest
+
+// SetBrowserRoomArchiveModeJSONRequestBody defines body for SetBrowserRoomArchiveMode for application/json ContentType.
+type SetBrowserRoomArchiveModeJSONRequestBody = externalRef0.SetRoomArchiveMode
 
 // AsConversationPreferenceIntent0 returns the union data inside the ConversationPreferenceIntent as a ConversationPreferenceIntent0
 func (t ConversationPreferenceIntent) AsConversationPreferenceIntent0() (ConversationPreferenceIntent0, error) {
