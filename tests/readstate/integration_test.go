@@ -77,7 +77,7 @@ func TestReadStateBFFAndRealSQLiteEngine(t *testing.T) {
 		t.Fatal("missing browser CSRF cookie")
 	}
 	body, _ := json.Marshal(map[string]any{"messageIds": ids[:2]})
-	request := httptest.NewRequest("POST", "/api/v1/conversations/"+string(c.ID)+"/read-state", strings.NewReader(string(body)))
+	request := httptest.NewRequest("POST", "/ui/api/v1/conversations/"+string(c.ID)+"/read-state", strings.NewReader(string(body)))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Idempotency-Key", string(next()))
 	request.Header.Set("X-Oie-Engine-ID", string(engineID))

@@ -6,17 +6,19 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
 (async()=>{
  const engine=id(1),account=id(2),chat=id(3),message=id(4),revision=id(5),streams=new Set(),commands=new Map();
  const avatarImage=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jQ1kAAAAASUVORK5CYII=','base64'),avatarHash=createHash('sha256').update(avatarImage).digest('hex');
- const state={peerName:'Bob',prepareEligible:null,effects:0,posts:0,seq:0,reads:0,baseReactions:true,eligible:true,delay:0,commandState:'submitted',own:[],ownRevision:null,allowed:null,max:8,posted:[]};
+ const state={peerName:'Bob',peerOccupant:'',prepareEligible:null,effects:0,posts:0,seq:0,reads:0,baseReactions:true,eligible:true,delay:0,commandState:'submitted',own:[],ownRevision:null,allowed:null,max:8,posted:[]};
  const source={id:message,revisionId:revision,accountId:account,conversationId:chat,originalText:'A retained message with reactions',createdAt:'2026-11-09T12:00:00Z',sendState:'received',isOwn:false,historical:true,sender:{id:id(7),displayName:'Bob'}};
+ const older={...source,id:id(144),createdAt:'2026-11-08T12:00:00Z',originalText:'An older message'};
  const conversation={id:chat,revisionId:revision,accountId:account,kind:'direct',title:'Bob',address:'bob@fixture',lastMessage:source.originalText,updatedAt:source.createdAt,unreadCount:0,archived:false,favorite:false};
  const pending=()=>[...commands.values()].find(c=>['queued','dispatching','unknown'].includes(c.state));
- const snapshot=()=>({messageId:message,accountId:account,conversationId:chat,revisionId:state.ownRevision,ownRevisionId:state.ownRevision,ownEmojis:[...state.own],actors:[...(state.own.length?[{address:'alice@fixture',displayName:'Alice',own:true,emojis:[...state.own]}]:[]),...(state.baseReactions?[{address:'bob@fixture',displayName:state.peerName,own:false,emojis:['👍'],avatarHash},{address:'carol@fixture',displayName:'Carol',own:false,emojis:['👍']}]:[])],items:[...new Set([...(state.baseReactions?['👍']:[]),...state.own])].sort().map(emoji=>({emoji,count:(state.baseReactions&&emoji==='👍'?2:0)+(state.own.includes(emoji)?1:0),own:state.own.includes(emoji)})),eligible:state.eligible,maxEmojis:state.max,...(state.allowed?{allowedEmojis:state.allowed}:{}),...(pending()?{pendingCommand:pending()}: {})});
- const emit=()=>{state.seq++;for(const s of streams)s.write(`id: ${engine}:${state.seq}\nevent: message.updated\ndata: {}\n\n`)};
- const apply=c=>{c.state='submitted';state.own=[...c.emojis];state.ownRevision=c.revisionId;emit()};
+ const snapshot=(target=message)=>({messageId:target,accountId:account,conversationId:chat,revisionId:state.ownRevision,ownRevisionId:state.ownRevision,ownEmojis:[...state.own],actors:[...(state.own.length?[{address:'alice@fixture',displayName:'Alice',own:true,emojis:[...state.own]}]:[]),...(state.baseReactions?[{address:state.peerOccupant||'bob@fixture',displayName:state.peerName,own:false,emojis:['👍'],...(state.peerOccupant?{}:{avatarHash})},{address:state.roomPrivate?'occupant:'+('b'.repeat(64)):'carol@fixture',displayName:'Carol',own:false,emojis:['👍']}]:[])],items:[...new Set([...(state.baseReactions?['👍']:[]),...state.own])].sort().map(emoji=>({emoji,count:(state.baseReactions&&emoji==='👍'?2:0)+(state.own.includes(emoji)?1:0),own:state.own.includes(emoji)})),eligible:state.eligible,maxEmojis:state.max,...(state.allowed?{allowedEmojis:state.allowed}:{}),...(pending()?{pendingCommand:pending()}: {})});
+ const emit=(event='message.updated',data={})=>{state.seq++;for(const s of streams)s.write(`id: ${engine}:${state.seq}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`)};
+ const apply=(c,data)=>{c.state='submitted';state.own=[...c.emojis];state.ownRevision=c.revisionId;emit('message.updated',data)};
  const api=http.createServer(async(req,res)=>{
   const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(code,value)=>{res.statusCode=code;res.end(JSON.stringify(value))};
   if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.27.0',eventCursor:engine+':'+state.seq});
   if(u.pathname==='/api/v1/accounts'||u.pathname==='/api/v1/accounts/'+account){const a={id:account,revisionId:revision,protocol:'xmpp',label:'Alice',address:'alice@fixture',createdAt:source.createdAt};return send(200,u.pathname.endsWith('/accounts')?{items:[a]}:a)}
+  if(u.pathname.endsWith('/room-session'))return send(200,{conversationId:chat,accountId:account,state:state.eligible?'joined':'not_joined',active:state.eligible,updatedAt:source.createdAt});
   if(u.pathname.endsWith('/connection'))return send(200,{accountId:account,state:'connected',updatedAt:source.createdAt});
   if(u.pathname.endsWith('/history'))return send(200,{accountId:account,state:'complete',retainedMessages:1,conversations:1,updatedAt:source.createdAt});
   if(u.pathname==='/api/v1/avatars/'+avatarHash){res.setHeader('Content-Type','image/png');res.statusCode=200;return res.end(avatarImage)}
@@ -26,8 +28,11 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   if(u.pathname==='/api/v1/conversations/'+chat+'/messages')return send(200,{items:[source]});
   if(u.pathname==='/api/v1/conversations/'+chat+'/messages/'+message+'/context')return send(200,{targetId:message,items:[source],hasOlder:false,hasNewer:false});
   if(u.pathname==='/api/v1/messages/'+message)return send(200,source);
+  if(u.pathname==='/api/v1/messages/'+older.id)return send(200,older);
+  if(u.pathname==='/api/v1/conversations/'+chat+'/messages/'+older.id+'/context')return send(200,{targetId:older.id,items:[source,older],hasOlder:false,hasNewer:false});
   if(u.pathname.endsWith('/message-stars'))return send(200,{items:u.searchParams.getAll('messageId').map(messageId=>({messageId,accountId:account,conversationId:chat,starred:false,revisionId:null,updatedAt:null}))});
-  if(u.pathname==='/api/v1/conversations/'+chat+'/reactions')return send(200,{items:u.searchParams.getAll('messageId').map(()=>snapshot())});
+  if(u.pathname==='/api/v1/conversations/'+chat+'/reactions'&&state.noBatch)return send(503,{code:'unavailable'});
+  if(u.pathname==='/api/v1/conversations/'+chat+'/reactions')return send(200,{items:u.searchParams.getAll('messageId').map(target=>snapshot(target))});
   if(u.pathname==='/api/v1/messages/'+message+'/reactions'&&req.method==='GET'){state.reads++;const value=snapshot();if(state.prepareEligible!==null)value.eligible=state.prepareEligible;return state.delay?setTimeout(()=>send(200,value),state.delay):send(200,value)}
   if(u.pathname.startsWith('/api/v1/message-reaction-commands/')){const c=commands.get(u.pathname.split('/').at(-1));return c?send(200,c):send(404,{code:'not_found'})}
   if(u.pathname==='/api/v1/messages/'+message+'/reactions'&&req.method==='POST'){
@@ -51,46 +56,276 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF starts');const context=await browser.newContext({viewport:{width:1440,height:960},reducedMotion:'reduce'}),page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
   const route=(lang='en',theme='dark')=>base+'/?'+new URLSearchParams({account,chat,lang,theme});
-  const input=page.locator('#message-composer'),region=page.locator('[data-reaction-source="'+message+'"]'),modal=page.locator('#oie-reaction-picker');
-  const react=async()=>{await page.locator('[data-message-menu-trigger="'+message+'"]').click();await page.locator('#react-message-'+message).click()};
+  const input=page.locator('#message-composer'),region=page.locator('[data-reaction-source="'+message+'"]'),quick=page.locator('#oie-reaction-quick'),modal=page.locator('#oie-reaction-picker-panel');
+  const openReact=async()=>{await page.locator('[data-message-menu-trigger="'+message+'"]').click();await page.locator('#react-message-'+message).click()};
+  const react=async()=>{
+   await openReact();await quick.waitFor({state:'visible'});
+   const reads=state.reads,effects=state.effects;
+   await quick.locator('[data-reaction-more]').click();await modal.waitFor({state:'visible'});
+   assert.equal(state.reads,reads,'plus reuses the prepared source');
+   assert.equal(state.effects,effects,'opening the catalog sends no reaction');
+  };
+  const dismissCatalog=async()=>{
+   await page.keyboard.press('Escape');await modal.waitFor({state:'hidden'});
+   await page.keyboard.press('Escape');await quick.waitFor({state:'hidden'});
+  };
   const pick=async glyph=>{await modal.waitFor({state:'visible'});await modal.locator('[data-emoji-pick="'+glyph+'"]').first().click()};
   const chip=glyph=>region.locator('[data-reaction-emoji="'+glyph+'"]');
   const removeReaction=async glyph=>{await region.locator('[data-reaction-summary]').click();await chip(glyph).waitFor({state:'visible'});await chip(glyph).click()};
   const own=async(glyph,value)=>await until(async()=>await chip(glyph).count()===Number(value),'own reaction '+glyph+' '+value);
   await page.goto(route());await until(async()=>await page.evaluate(()=>document.body.dataset.oieLiveReady==='true'),'runtime');await input.fill('Keep this unsent draft 😀');await own('👍',false);
-  await react();await modal.waitFor({state:'visible'});await modal.locator('#reaction-emoji-search').fill('joinha');await until(async()=>await modal.locator('[data-emoji-pick="👍"]').count()===1,'bilingual emoji query');await pick('👍');await own('👍',true);assert.equal(await region.locator('[data-reaction-summary-count]').textContent(),'3');assert.equal(await region.locator('[data-reaction-actor="bob@fixture"] [data-reaction-actor-name]').textContent(),'Bob');assert.equal(await region.locator('[data-reaction-actor="bob@fixture"] [data-reaction-emoji]').count(),0,'peer reactions are read-only');assert.equal(state.effects,1);assert.equal(await input.inputValue(),'Keep this unsent draft 😀');
-  await removeReaction('👍');await own('👍',false);assert.equal(await region.locator('[data-reaction-summary-count]').textContent(),'2');assert.equal(state.effects,2);assert.equal(source.revisionId,revision);assert.equal(conversation.lastMessage,source.originalText);findings.push('Scoped full-set commands add/remove own emoji, counts remain canonical, bilingual catalog selection does not touch source content or draft');
+  await openReact();await quick.waitFor({state:'visible'});assert.equal(await modal.isVisible(),false);
+  assert.equal(await quick.locator('[data-reaction-quick-emoji]:visible').count(),7);
+  assert.equal(state.effects,0);
+  await quick.getByRole('button',{name:'Thumbs up'}).press('ArrowRight');
+  assert.equal(await quick.getByRole('button',{name:'Red heart'}).evaluate(n=>n===document.activeElement),true);
+  await quick.getByRole('button',{name:'Thumbs up'}).click();
+  await own('👍',true);assert.equal(await region.locator('[data-reaction-summary-count]').textContent(),'3');assert.equal(await region.locator('[data-reaction-actor="bob@fixture"] [data-reaction-actor-name]').textContent(),'Bob');assert.equal(await region.locator('[data-reaction-actor="bob@fixture"] [data-reaction-emoji]').count(),0,'peer reactions are read-only');assert.equal(state.effects,1);assert.equal(await input.inputValue(),'Keep this unsent draft 😀');
+  state.delay=450;
+  const removalRead=state.reads;
+  await removeReaction('👍');
+  await until(()=>state.reads>removalRead,'delayed own removal');
+  await input.click();
+  await own('👍',false);
+  state.delay=0;assert.equal(await region.locator('[data-reaction-summary-count]').textContent(),'2');assert.equal(state.effects,2);assert.equal(source.revisionId,revision);assert.equal(conversation.lastMessage,source.originalText);findings.push('Scoped full-set commands add/remove own emoji, counts remain canonical, bilingual catalog selection does not touch source content or draft');
   state.own=['😂'];state.ownRevision=id(699);emit();await own('😂',true);await region.locator('[data-reaction-summary]').click();await chip('😂').waitFor({state:'visible'});const beforeStaleRemove=state.effects;state.own=[];state.ownRevision=id(700);await chip('😂').click();await until(async()=>await chip('😂').count()===0,'stale own removal refreshed');assert.equal(state.effects,beforeStaleRemove,'stale removal never becomes an add');
   state.peerName='<img src=x onerror=alert(1)>';emit();await until(async()=>await region.locator('[data-reaction-actor="bob@fixture"] [data-reaction-actor-name]').textContent()===state.peerName,'actor names remain literal text');assert.equal(await region.locator('[data-reaction-actor="bob@fixture"] [data-reaction-actor-name] img').count(),0);state.peerName='Bob';emit();
+  state.peerOccupant='occupant:'+'a'.repeat(64);
+  state.peerName='Bob in the room';
+  emit();
+  const occupant=region.locator('[data-reaction-actor="'+state.peerOccupant+'"]');
+  await occupant.waitFor({state:'attached'});
+  assert.equal(await occupant.locator('[data-reaction-actor-name]').textContent(),'Bob in the room');
+  assert.equal(await occupant.locator('[data-reaction-actor-address]').textContent(),'');
+  assert.equal(await occupant.locator('img').count(),0);
+  state.peerOccupant='';
+  state.peerName='Bob';
+  emit();
   // A rejected delayed preparation must never flash the picker or shift layout.
-  state.delay=450;state.prepareEligible=false;await page.evaluate(()=>{const read=()=>{const i=document.querySelector('#message-composer').getBoundingClientRect(),t=document.querySelector('#message-timeline');return{x:i.x,y:i.y,w:i.width,h:i.height,scroll:t.scrollTop,picker:document.querySelector('#oie-reaction-picker').open}};window.reactionGeometry={read,frames:[read()],active:true};const tick=()=>{if(!reactionGeometry.active)return;reactionGeometry.frames.push(read());requestAnimationFrame(tick)};requestAnimationFrame(tick)});const beforeEffects=state.effects,beforeReads=state.reads;await react();await until(()=>state.reads>beforeReads,'delayed preflight');await wait(700);const frames=await page.evaluate(()=>{reactionGeometry.active=false;return reactionGeometry.frames});assert(frames.length>10);for(const f of frames){assert(!f.picker);for(const k of ['x','y','w','h','scroll'])assert(Math.abs(f[k]-frames[0][k])<=1,k+' shifted')};assert.equal(state.effects,beforeEffects);assert.equal(await input.inputValue(),'Keep this unsent draft 😀');state.delay=0;state.prepareEligible=null;state.eligible=true;emit();await until(async()=>await page.locator('#react-message-'+message).isEnabled(),'eligibility refreshed');
+  state.delay=450;state.prepareEligible=false;await page.evaluate(()=>{const read=()=>{const i=document.querySelector('#message-composer').getBoundingClientRect(),t=document.querySelector('#message-timeline');return{x:i.x,y:i.y,w:i.width,h:i.height,scroll:t.scrollTop,picker:!document.querySelector('#oie-reaction-quick').hidden}};window.reactionGeometry={read,frames:[read()],active:true};const tick=()=>{if(!reactionGeometry.active)return;reactionGeometry.frames.push(read());requestAnimationFrame(tick)};requestAnimationFrame(tick)});const beforeEffects=state.effects,beforeReads=state.reads;await openReact();await until(()=>state.reads>beforeReads,'delayed preflight');await wait(700);const frames=await page.evaluate(()=>{reactionGeometry.active=false;return reactionGeometry.frames});assert(frames.length>10);for(const f of frames){assert(!f.picker);for(const k of ['x','y','w','h','scroll'])assert(Math.abs(f[k]-frames[0][k])<=1,k+' shifted')};assert.equal(state.effects,beforeEffects);assert.equal(await input.inputValue(),'Keep this unsent draft 😀');state.delay=0;state.prepareEligible=null;state.eligible=true;emit();await until(async()=>await page.locator('#react-message-'+message).isEnabled(),'eligibility refreshed');
+  const keyboardBubble=page.locator('[data-message-bubble="'+message+'"]');
+  await keyboardBubble.evaluate(node=>node.closest('.oie-message').style.marginTop='500px');
+  await react();
+  const reactionSearch=modal.locator('#reaction-emoji-search');
+  await reactionSearch.focus();
+  await page.evaluate(()=>{
+   const viewport=window.visualViewport;
+   Object.defineProperty(viewport,'height',{configurable:true,value:400});
+   viewport.dispatchEvent(new Event('resize'));
+  });
+  await until(async()=>await reactionSearch.evaluate(node=>{
+   const viewport=window.visualViewport,source=document.querySelector('[data-message-bubble]').getBoundingClientRect();
+   return source.top>=viewport.height&&node===document.activeElement&&node.getBoundingClientRect().bottom<=viewport.height;
+  }),'catalog search remains focused with the message behind the keyboard');
+  await page.evaluate(()=>{delete window.visualViewport.height;window.visualViewport.dispatchEvent(new Event('resize'))});
+  await dismissCatalog();
+  await keyboardBubble.evaluate(node=>node.closest('.oie-message').style.removeProperty('margin-top'));
   // Missing acceptance can retry only the exact same command after a receipt GET.
   let abort=true;await page.route('**/ui/messages/reactions',r=>{if(abort){abort=false;return r.abort('connectionreset')}return r.continue()});await react();await pick('😂');await region.locator('[data-reaction-check]').waitFor({state:'visible'});assert.equal(state.effects,2);await region.locator('[data-reaction-check]').click();await until(async()=>await region.locator('[data-reaction-check]').getAttribute('aria-label')==='Try again','missing receipt exposes Retry');await region.locator('[data-reaction-check]').click();await own('😂',true);assert.equal(state.effects,3);await page.unroute('**/ui/messages/reactions');
   // Lost reply after acceptance must reconcile without another engine POST.
-  let lost=true;await page.route('**/ui/messages/reactions',async r=>{if(lost){lost=false;await r.fetch();return r.abort('connectionreset')}return r.continue()});await removeReaction('😂');await region.locator('[data-reaction-check]').waitFor({state:'visible'});const posts=state.posts;await region.locator('[data-reaction-check]').click();await until(async()=>await region.locator('[data-reaction-check]').count()===0,'accepted receipt reconciled');assert.equal(state.posts,posts);assert.equal(state.effects,4);await page.unroute('**/ui/messages/reactions');
+  let lost=true;await page.route('**/ui/messages/reactions',async r=>{if(lost){lost=false;await r.fetch();return r.abort('connectionreset')}return r.continue()});
+  const posts=state.posts+1;
+  await removeReaction('😂');
+  await until(()=>state.posts===posts&&state.effects===4,'engine accepted the reaction before losing its response');
+  await region.locator('[data-reaction-check]').waitFor({state:'visible'});await region.locator('[data-reaction-check]').click();await until(async()=>await region.locator('[data-reaction-check]').count()===0,'accepted receipt reconciled');assert.equal(state.posts,posts);assert.equal(state.effects,4);await page.unroute('**/ui/messages/reactions');
   state.commandState='unknown';await react();await pick('🙏');await region.locator('[data-reaction-check]').waitFor({state:'visible'});const unknown=[...commands.values()].at(-1),unknownPosts=state.posts;await page.reload();await region.locator('[data-reaction-check]').waitFor({state:'visible'});await region.locator('[data-reaction-check]').click();await wait(250);assert.equal(state.posts,unknownPosts);assert.equal(await region.locator('[data-reaction-check]').getAttribute('aria-label'),'Check reaction status');apply(unknown);await region.locator('[data-reaction-check]').click();await until(async()=>await region.locator('[data-reaction-check]').count()===0,'unknown command resolved');state.commandState='submitted';findings.push('Abort before acceptance supports explicit same-key retry after receipt404; lost accepted response/reload and known unknown dispatch use read-only reconciliation without another provider command');
   // Cross-account and CSRF attempts are rejected before any mutation.
   const effects=state.effects,csrf=await page.locator('meta[name="oie-csrf"]').getAttribute('content'),bad=new URLSearchParams({csrf,engineId:engine,accountId:id(999),conversationId:chat,messageId:message,operationKey:id(901),expectedOwnRevisionId:state.ownRevision||'',emojis:'[]',lang:'en'});
   const foreign=await context.request.post(base+'/ui/messages/reactions',{headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},data:bad.toString()});assert.equal(foreign.status(),404);bad.set('accountId',account);bad.set('csrf','wrong');const denied=await context.request.post(base+'/ui/messages/reactions',{headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},data:bad.toString()});assert.equal(denied.status(),403);assert.equal(state.effects,effects);
   state.max=1;state.allowed=['👍','😂','🙏','😮','😢','❤️','😀','😃','😄','😁','😆','😅'];emit();await react();await pick('😂');await own('😂',true);assert.deepEqual(state.own,['😂'],'single-selection restriction replaces previous own emoji');assert.equal(await region.locator('[data-reaction-emoji="🙏"]').count(),0);await removeReaction('😂');await until(()=>state.own.length===0,'single reaction clears');
-  state.commandState='queued';await react();await pick('😮');await region.locator('[data-reaction-check][aria-busy="true"]').waitFor({state:'visible'});assert.equal(await region.locator('[data-reaction-detail-emoji="😮"]').count(),0,'queued dispatch does not invent observed reaction count');const queued=[...commands.values()].at(-1);apply(queued);await own('😮',true);await until(async()=>await region.locator('[data-reaction-check]').count()===0,'queued receipt completes');state.commandState='submitted';
+  const summary=region.locator('[data-reaction-summary]'),count=summary.locator('[data-reaction-summary-count]');
+  const busySummary=region.locator('[data-reaction-summary][aria-busy="true"]');
+  state.commandState='queued';await react();
+  const summaryBefore=await summary.boundingBox();
+  await pick('😮');await busySummary.waitFor({state:'visible'});
+  assert.deepEqual(await summary.boundingBox(),summaryBefore,'the spinner keeps the capsule geometry');
+  assert.equal(await count.isVisible(),false,'the spinner replaces the number');
+  const spinner=await summary.locator('.oie-reaction-count-spinner').boundingBox();
+  const countSlot=await summary.locator('.oie-reaction-count-slot').boundingBox();
+  assert.equal(spinner.width,10);assert.equal(spinner.height,10);
+  assert(Math.abs(spinner.x+spinner.width/2-countSlot.x-countSlot.width/2)<=.5,'spinner is centered over the count');
+  assert.equal(await region.locator('[data-reaction-check]').count(),0,'sending does not create a separate chip');
+  assert.equal(await region.locator('[data-reaction-detail-emoji="😮"]').count(),0,'queued dispatch does not invent observed reaction count');
+  const queued=[...commands.values()].at(-1);apply(queued);
+  await busySummary.waitFor({state:'hidden'});await own('😮',true);assert.equal(await count.isVisible(),true);
+  state.commandState='submitted';await removeReaction('😮');await own('😮',false);
+  await until(async()=>await region.locator('[data-reaction-check]').count()===0,'reaction cleared before event fixture');
+  state.commandState='queued';
+  let heldResponse,releaseResponse;
+  const responseGate=new Promise(resolve=>{releaseResponse=resolve});
+  await page.route('**/ui/messages/reactions',async route=>{
+   const response=await route.fetch();heldResponse=true;
+   await responseGate;await route.fulfill({response});
+  });
+  await page.evaluate(id=>{
+   const original=window.setTimeout;
+   window.restoreReactionTimer=()=>{window.setTimeout=original};
+   window.setTimeout=(fn,ms,...args)=>original(fn,ms===1200?30000:ms,...args);
+   document.addEventListener('oie:message-updated',event=>{
+    if(event.detail.id===id)window.receivedReactionHint=true;
+   });
+  },message);
+  try{
+   const posts=state.posts;
+   await react();await pick('😮');
+   await until(()=>heldResponse,'accepted reaction response is held');
+   await busySummary.waitFor({state:'visible'});
+   apply([...commands.values()].at(-1),{message:source});
+   await until(()=>page.evaluate(()=>window.receivedReactionHint===true),'matching SSE event arrives before the acceptance response');
+   releaseResponse();
+   await busySummary.waitFor({state:'hidden'});
+   assert.equal(await region.locator('[data-reaction-check]').count(),0,'SSE reconciles receipt before the fallback');
+   await own('😮',true);
+   assert.equal(state.posts,posts+1,'SSE checks the receipt without resending');
+  }finally{
+   releaseResponse();await page.unrouteAll({behavior:'wait'});
+   await page.evaluate(()=>window.restoreReactionTimer());
+  }
+  state.commandState='submitted';
   const invalid=new URLSearchParams({csrf,engineId:engine,accountId:account,conversationId:chat,messageId:message,operationKey:id(902),expectedOwnRevisionId:state.ownRevision||'',emojis:'["plain"]',lang:'en'}),beforeInvalid=state.effects;const invalidResponse=await context.request.post(base+'/ui/messages/reactions',{headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},data:invalid.toString()});assert.equal(invalidResponse.status(),400);assert.equal((await invalidResponse.json()).rejected,true);assert.equal(state.effects,beforeInvalid);assert.equal(await page.locator('[data-form-feedback]').first().textContent(),'');state.allowed=null;state.max=8;emit();findings.push('An allowlist with more than eight choices is retained independently of maxEmojis1; choosing another replaces the existing reaction, same choice clears, and protocol refusal adds no composer banner');
   // The first pending reaction uses an overlay, before any observed count exists.
-  await removeReaction('😮');await until(()=>state.own.length===0,'clear before empty summary');state.baseReactions=false;emit();await region.locator('[data-reaction-summary]').waitFor({state:'hidden'});state.commandState='unknown';await react();await modal.waitFor({state:'visible'});await page.evaluate(()=>{const read=()=>{const b=document.querySelector('[data-message-bubble]').getBoundingClientRect(),c=document.querySelector('#message-composer').getBoundingClientRect(),t=document.querySelector('#message-timeline');return{x:b.x,y:b.y,w:b.width,h:b.height,composer:c.y,scroll:t.scrollTop}};window.firstReactionGeometry={read,frames:[read()],active:true};const tick=()=>{if(!firstReactionGeometry.active)return;firstReactionGeometry.frames.push(read());requestAnimationFrame(tick)};requestAnimationFrame(tick)});await pick('😮');await region.locator('[data-reaction-check]').waitFor({state:'visible'});await wait(200);const pendingFrames=await page.evaluate(()=>{firstReactionGeometry.active=false;return firstReactionGeometry.frames});assert(pendingFrames.length>5);for(const f of pendingFrames)for(const k of ['x','y','w','h','composer','scroll'])assert(Math.abs(f[k]-pendingFrames[0][k])<=1,'first pending reaction shifted '+k);const firstPending=[...commands.values()].at(-1);apply(firstPending);await region.locator('[data-reaction-check]').click();await own('😮',true);await until(async()=>await region.locator('[data-reaction-check]').count()===0,'first pending receipt reconciled');state.commandState='submitted';state.baseReactions=true;emit();await region.locator('[data-reaction-detail-emoji="👍"]').first().waitFor({state:'attached'});findings.push('First reaction pending/recovery overlays the source without changing bubble, composer or timeline geometry in painted frames');
+  await page.setViewportSize({width:390,height:900});
+  await removeReaction('😮');await until(()=>state.own.length===0,'clear before empty summary');state.baseReactions=false;emit();await summary.waitFor({state:'hidden'});
+  state.commandState='unknown';await react();
+  let releaseFirst;
+  const firstResponseGate=new Promise(resolve=>{releaseFirst=resolve});
+  await page.route('**/ui/messages/reactions',async route=>{
+   const response=await route.fetch();await firstResponseGate;await route.fulfill({response});
+  });
+  await page.evaluate(()=>{const read=()=>{const b=document.querySelector('[data-message-bubble]').getBoundingClientRect(),c=document.querySelector('#message-composer').getBoundingClientRect(),t=document.querySelector('#message-timeline');return{x:b.x,y:b.y,w:b.width,h:b.height,composer:c.y,scroll:t.scrollTop}};window.firstReactionGeometry={read,frames:[read()],active:true};const tick=()=>{if(!firstReactionGeometry.active)return;firstReactionGeometry.frames.push(read());requestAnimationFrame(tick)};requestAnimationFrame(tick)});
+  try{
+   await pick('😮');await busySummary.waitFor({state:'visible'});
+   assert.equal(await summary.locator('[data-reaction-summary-emojis]').textContent(),'😮');
+   assert.equal(await count.isVisible(),false,'no observed count is invented');
+   assert.equal(await summary.isDisabled(),true,'a provisional capsule has no roster to open');
+   assert.equal(await region.locator('[data-reaction-check]').count(),0);
+   const provisional=await summary.boundingBox();
+   assert(provisional.x>=0&&provisional.x+provisional.width<=390,'the first capsule fits the narrow viewport');
+   await wait(200);
+  }finally{releaseFirst();await page.unrouteAll({behavior:'wait'});}
+  await region.locator('[data-reaction-check]').waitFor({state:'visible'});
+  const pendingFrames=await page.evaluate(()=>{firstReactionGeometry.active=false;return firstReactionGeometry.frames});assert(pendingFrames.length>5);for(const f of pendingFrames)for(const k of ['x','y','w','h','composer','scroll'])assert(Math.abs(f[k]-pendingFrames[0][k])<=1,'first pending reaction shifted '+k);
+  const firstPending=[...commands.values()].at(-1);apply(firstPending);await region.locator('[data-reaction-check]').click();await own('😮',true);await busySummary.waitFor({state:'hidden'});assert.equal(await region.locator('[data-reaction-check]').count(),0,'first pending receipt reconciled');state.commandState='submitted';state.baseReactions=true;emit();await region.locator('[data-reaction-detail-emoji="👍"]').first().waitFor({state:'attached'});findings.push('First reaction pending/recovery overlays the source without changing bubble, composer or timeline geometry in painted frames');
+  await page.setViewportSize({width:1440,height:960});
   for(const width of [390,1440])for(const lang of ['en','pt-BR'])for(const theme of ['light','dark'])for(const libraryTheme of ['goshtoso','minimal']){
-   source.isOwn=theme==='dark';const variant=await browser.newContext({viewport:{width,height:900},hasTouch:width===390,isMobile:width===390});const p=await variant.newPage();p.on('pageerror',e=>errors.push(e.message));await p.setViewportSize({width,height:900});await p.goto(route(lang,theme));await p.evaluate(t=>document.documentElement.dataset.theme=t,libraryTheme);await p.locator('#message-composer').fill('Draft retained');const bubble=p.locator('[data-message-bubble="'+message+'"]'),shortcut=p.locator('[data-reaction-shortcut-slot="'+message+'"] [data-reaction-open]');const beforeHover=await bubble.boundingBox();const capsule=await p.locator('[data-reaction-summary]').boundingBox(),bubbleBottom=await bubble.evaluate(n=>n.parentElement.getBoundingClientRect().bottom);assert(bubbleBottom-capsule.y>=2&&bubbleBottom-capsule.y<=6,'reaction capsule overlaps bottom border: '+(bubbleBottom-capsule.y));assert(capsule.y+capsule.height>bubbleBottom,'reaction capsule extends below bubble');const followingGap=await bubble.evaluate(n=>{const row=n.closest('.oie-message'),next=row.cloneNode(true);next.querySelectorAll('[data-reaction-source],[data-reaction-shortcut-slot]').forEach(control=>control.remove());row.after(next);const gap=next.getBoundingClientRect().top-row.querySelector('[data-reaction-summary]').getBoundingClientRect().bottom;next.remove();return gap});assert(followingGap>=8,'reaction capsule clears following message: '+followingGap);if(width===390&&lang==='pt-BR'){await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});await p.screenshot({path:path.join(__dirname,`artifacts/reaction-capsule-overlap-${theme}.png`),clip:{x:0,y:Math.max(0,beforeHover.y-20),width,height:Math.min(beforeHover.height+75,900-Math.max(0,beforeHover.y-20))}})}await bubble.hover();await shortcut.focus();const shortcutRect=await shortcut.boundingBox(),paint=await bubble.evaluate(n=>{const r=n.parentElement.getBoundingClientRect();return{x:r.x,right:r.right}});assert.deepEqual(await bubble.boundingBox(),beforeHover,'shortcut never changes bubble geometry');assert(shortcutRect.x>=-1&&shortcutRect.x+shortcutRect.width<=width+1,'shortcut stays in viewport');if(source.isOwn)assert(shortcutRect.x+shortcutRect.width<=paint.x-3,'own shortcut left of bubble');else assert(shortcutRect.x>=paint.right+3,'received shortcut right of bubble');await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});await p.screenshot({path:path.join(__dirname,`artifacts/reaction-shortcut-${width}-${lang}-${theme}.png`)});await shortcut.click();const d=p.locator('#oie-reaction-picker');await d.waitFor({state:'visible'});await d.locator('#reaction-emoji-search').fill('joinha');await d.locator('[data-emoji-family="👍"] > [data-emoji-pick]').waitFor();await d.locator('#reaction-emoji-search').press('ArrowDown');assert.equal(await d.locator('[data-emoji-family="👍"] > [data-emoji-pick]').evaluate(n=>document.activeElement===n),true);const rect=await d.boundingBox();assert(rect.x>=-1&&rect.x+rect.width<=width+1);assert(rect.width<=361,'picker follows its compact content width');assert.equal(await d.evaluate(n=>n.scrollWidth>n.clientWidth+1||n.querySelector('[data-emoji-content]').scrollWidth>n.querySelector('[data-emoji-content]').clientWidth+1),false,'shared selector has no horizontal overflow');await p.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await d.evaluate(n=>window.axe.run(n,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});await p.screenshot({path:path.join(__dirname,`artifacts/reactions-${width}-${lang}-${theme}.png`)});await p.keyboard.press('Escape');await d.waitFor({state:'hidden'});await until(async()=>await shortcut.evaluate(n=>document.activeElement===n),'reaction source focus restored');assert.equal(await p.locator('#message-composer').inputValue(),'Draft retained');const readOnlyEffects=state.effects;await p.locator('[data-reaction-summary]').click();const details=p.locator('[data-reaction-details]');await details.locator('[data-reaction-filter="👍"]').waitFor({state:'visible'});await details.locator('[data-reaction-filter="👍"]').click();assert.equal(await details.locator('[data-reaction-actor]').count(),2);assert.equal(await details.locator('[data-reaction-actor="alice@fixture"]').count(),0);await details.locator('[data-reaction-filter=""]').click();assert.equal(await details.locator('[data-reaction-actor]').count(),3);await until(async()=>await details.locator('[data-reaction-actor="bob@fixture"] img').evaluate(n=>n.complete&&n.naturalWidth>0),'cached reaction actor avatar loaded');assert.equal(await details.locator('[data-reaction-actor="carol@fixture"] [x-text]').first().textContent(),'C');assert.equal(await details.locator('[data-reaction-actor="carol@fixture"] img').count(),0,'missing avatar has initials without an empty image');await p.screenshot({path:path.join(__dirname,`artifacts/reaction-summary-${width}-${lang}-${theme}.png`)});const panelAxe=await details.evaluate(n=>window.axe.run(n,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(panelAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);assert.equal(state.effects,readOnlyEffects,'summary and filters are read-only');await p.keyboard.press('Escape');await details.waitFor({state:'hidden'});await bubble.locator('[data-rendered-message]').first().evaluate(n=>n.textContent='👍');const compact=await bubble.evaluate(n=>{const r=n.parentElement.getBoundingClientRect();return{width:r.width,height:r.height}});await p.locator('[data-reaction-summary-emojis]').evaluate(n=>n.textContent='👍 ❤️ 😂');await p.locator('[data-reaction-summary-count]').evaluate(n=>n.textContent='99999');assert.deepEqual(await bubble.evaluate(n=>{const r=n.parentElement.getBoundingClientRect();return{width:r.width,height:r.height}}),compact,'reaction capsule never widens a short message');await variant.close();findings.push({width,lang,theme,libraryTheme,axe:0});
+   source.isOwn=theme==='dark';const variant=await browser.newContext({viewport:{width,height:900},hasTouch:width===390,isMobile:width===390});const p=await variant.newPage();p.on('pageerror',e=>errors.push(e.message));await p.setViewportSize({width,height:900});await p.goto(route(lang,theme));await p.evaluate(t=>document.documentElement.dataset.theme=t,libraryTheme);await p.locator('#message-composer').fill('Draft retained');const bubble=p.locator('[data-message-bubble="'+message+'"]'),shortcut=p.locator('[data-reaction-shortcut-slot="'+message+'"] [data-reaction-open]');const beforeHover=await bubble.boundingBox();const capsule=await p.locator('[data-reaction-summary]').boundingBox(),bubbleBottom=await bubble.evaluate(n=>n.parentElement.getBoundingClientRect().bottom);assert(bubbleBottom-capsule.y>=2&&bubbleBottom-capsule.y<=6,'reaction capsule overlaps bottom border: '+(bubbleBottom-capsule.y));assert(capsule.y+capsule.height>bubbleBottom,'reaction capsule extends below bubble');const followingGap=await bubble.evaluate(n=>{const row=n.closest('.oie-message'),next=row.cloneNode(true);next.querySelectorAll('[data-reaction-source],[data-reaction-shortcut-slot]').forEach(control=>control.remove());row.after(next);const gap=next.getBoundingClientRect().top-row.querySelector('[data-reaction-summary]').getBoundingClientRect().bottom;next.remove();return gap});assert(followingGap>=8,'reaction capsule clears following message: '+followingGap);if(width===390&&lang==='pt-BR'){await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});await p.screenshot({path:path.join(__dirname,`artifacts/reaction-capsule-overlap-${theme}.png`),clip:{x:0,y:Math.max(0,beforeHover.y-20),width,height:Math.min(beforeHover.height+75,900-Math.max(0,beforeHover.y-20))}})}await bubble.hover();await shortcut.focus();const shortcutRect=await shortcut.boundingBox();
+   const iconRect=await shortcut.locator('svg').boundingBox();
+   assert.equal(shortcutRect.width,32);assert.equal(shortcutRect.height,32);
+   const iconOffsetX=iconRect.x+iconRect.width/2-(shortcutRect.x+shortcutRect.width/2);
+   const iconOffsetY=iconRect.y+iconRect.height/2-(shortcutRect.y+shortcutRect.height/2);
+   assert(Math.abs(iconOffsetX)<.1,'reaction icon is centered horizontally');
+   assert(Math.abs(iconOffsetY+.5)<.1,'reaction icon has a half-pixel optical lift');
+   const paint=await bubble.evaluate(n=>{const r=n.parentElement.getBoundingClientRect();return{x:r.x,right:r.right}});assert.deepEqual(await bubble.boundingBox(),beforeHover,'shortcut never changes bubble geometry');assert(shortcutRect.x>=-1&&shortcutRect.x+shortcutRect.width<=width+1,'shortcut stays in viewport');if(source.isOwn)assert(shortcutRect.x+shortcutRect.width<=paint.x-3,'own shortcut left of bubble');else assert(shortcutRect.x>=paint.right+3,'received shortcut right of bubble');await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});await p.screenshot({path:path.join(__dirname,`artifacts/reaction-shortcut-${width}-${lang}-${theme}.png`)});await shortcut.click();
+   const strip=p.locator('#oie-reaction-quick'),plus=strip.locator('[data-reaction-more]'),d=p.locator('#oie-reaction-picker-panel');
+   await strip.waitFor({state:'visible'});assert.equal(await d.isVisible(),false);
+   const stripRect=await strip.boundingBox();assert(stripRect.x>=0&&stripRect.x+stripRect.width<=width&&stripRect.height<=44);
+   assert(Math.abs(stripRect.y+stripRect.height-shortcutRect.y)<=12||Math.abs(stripRect.y-(shortcutRect.y+shortcutRect.height))<=12);
+   await p.screenshot({path:path.join(__dirname,`artifacts/reaction-quick-${width}-${lang}-${theme}-${libraryTheme}.png`)});
+   await plus.press('Enter');await d.waitFor({state:'visible'});assert.equal(await strip.isVisible(),true);
+   assert.deepEqual(await bubble.boundingBox(),beforeHover,'opening either panel preserves message geometry');await d.locator('#reaction-emoji-search').fill('joinha');await d.locator('[data-emoji-family="👍"] > [data-emoji-pick]').waitFor();await d.locator('#reaction-emoji-search').press('ArrowDown');assert.equal(await d.locator('[data-emoji-family="👍"] > [data-emoji-pick]').evaluate(n=>document.activeElement===n),true);const rect=await d.boundingBox();assert(rect.x>=-1&&rect.x+rect.width<=width+1);assert(rect.width<=361,'picker follows its compact content width');assert.equal(await d.evaluate(n=>n.scrollWidth>n.clientWidth+1||n.querySelector('[data-emoji-content]').scrollWidth>n.querySelector('[data-emoji-content]').clientWidth+1),false,'shared selector has no horizontal overflow');await p.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await d.evaluate(n=>window.axe.run(n,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});await p.screenshot({path:path.join(__dirname,`artifacts/reactions-${width}-${lang}-${theme}.png`)});await p.keyboard.press('Escape');await d.waitFor({state:'hidden'});
+   await until(async()=>await plus.evaluate(n=>document.activeElement===n),'more emojis focus restored');
+   assert.equal(await strip.isVisible(),true);
+   await p.keyboard.press('Escape');await strip.waitFor({state:'hidden'});
+   await until(async()=>await shortcut.evaluate(n=>document.activeElement===n),'reaction source focus restored');assert.equal(await p.locator('#message-composer').inputValue(),'Draft retained');const readOnlyEffects=state.effects;await p.locator('[data-reaction-summary]').click();const details=p.locator('[data-reaction-details]');await details.locator('[data-reaction-filter="👍"]').waitFor({state:'visible'});await details.locator('[data-reaction-filter="👍"]').click();assert.equal(await details.locator('[data-reaction-actor]').count(),2);assert.equal(await details.locator('[data-reaction-actor="alice@fixture"]').count(),0);await details.locator('[data-reaction-filter=""]').click();assert.equal(await details.locator('[data-reaction-actor]').count(),3);await until(async()=>await details.locator('[data-reaction-actor="bob@fixture"] img').evaluate(n=>n.complete&&n.naturalWidth>0),'cached reaction actor avatar loaded');assert.equal(await details.locator('[data-reaction-actor="carol@fixture"] [x-text]').first().textContent(),'C');assert.equal(await details.locator('[data-reaction-actor="carol@fixture"] img').count(),0,'missing avatar has initials without an empty image');await p.screenshot({path:path.join(__dirname,`artifacts/reaction-summary-${width}-${lang}-${theme}.png`)});const panelAxe=await details.evaluate(n=>window.axe.run(n,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(panelAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);assert.equal(state.effects,readOnlyEffects,'summary and filters are read-only');await p.keyboard.press('Escape');await details.waitFor({state:'hidden'});await bubble.locator('[data-rendered-message]').first().evaluate(n=>n.textContent='👍');const compact=await bubble.evaluate(n=>{const r=n.parentElement.getBoundingClientRect();return{width:r.width,height:r.height}});await p.locator('[data-reaction-summary-emojis]').evaluate(n=>n.textContent='👍 ❤️ 😂');await p.locator('[data-reaction-summary-count]').evaluate(n=>n.textContent='99999');assert.deepEqual(await bubble.evaluate(n=>{const r=n.parentElement.getBoundingClientRect();return{width:r.width,height:r.height}}),compact,'reaction capsule never widens a short message');await variant.close();findings.push({width,lang,theme,libraryTheme,axe:0});
   }
   source.isOwn=false;
-  const touch=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true}),phone=await touch.newPage();phone.on('pageerror',e=>errors.push(e.message));await phone.goto(route('pt-BR','light'));await until(async()=>await phone.evaluate(()=>document.body.dataset.oieLiveReady==='true'),'touch runtime');const text=phone.locator('[data-message-bubble="'+message+'"] [data-rendered-message]').first(),phoneDialog=phone.locator('#oie-reaction-picker'),trigger=phone.locator('[data-message-menu-trigger="'+message+'"]');await text.waitFor();await phone.locator('#message-composer').fill('Rascunho móvel');const noWrites=state.effects;await text.tap();await text.tap();await phoneDialog.waitFor({state:'visible'});assert.equal(state.effects,noWrites,'double tap only prepares a reaction');await phone.keyboard.press('Escape');await phoneDialog.waitFor({state:'hidden'});
-  const cdp=await touch.newCDPSession(phone),r=await text.boundingBox(),point={x:r.x+Math.min(30,r.width/2),y:r.y+r.height/2};await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});await phone.waitForTimeout(620);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await until(async()=>await trigger.getAttribute('aria-expanded')==='true','long press opens message actions');await phone.locator('#copy-message-'+message).waitFor({state:'visible'});assert.equal(await phoneDialog.evaluate(n=>n.open),false);assert.equal(state.effects,noWrites,'long press performs no reaction mutation');await phone.keyboard.press('Escape');await phone.locator('#copy-message-'+message).waitFor({state:'hidden'});
-  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:point.x,y:point.y-35}]});await phone.waitForTimeout(620);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});assert.equal(await trigger.getAttribute('aria-expanded'),'false','drag cancels long press');assert.equal(await phoneDialog.evaluate(n=>n.open),false);assert.equal(await phone.locator('#message-composer').inputValue(),'Rascunho móvel');assert.equal(state.effects,noWrites);
+  const touch=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true}),phone=await touch.newPage();phone.on('pageerror',e=>errors.push(e.message));await phone.goto(route('pt-BR','light'));await until(async()=>await phone.evaluate(()=>document.body.dataset.oieLiveReady==='true'),'touch runtime');const text=phone.locator('[data-message-bubble="'+message+'"] [data-rendered-message]').first(),phoneDialog=phone.locator('#oie-reaction-quick'),trigger=phone.locator('[data-message-menu-trigger="'+message+'"]');await text.waitFor();await phone.locator('#message-composer').fill('Rascunho móvel');const noWrites=state.effects;await text.tap();await text.tap();await phoneDialog.waitFor({state:'visible'});assert.equal(state.effects,noWrites,'double tap only prepares a reaction');
+  const phoneCatalog=phone.locator('#oie-reaction-picker-panel');
+  await phoneDialog.locator('[data-reaction-more]').tap();
+  await phoneCatalog.waitFor({state:'visible'});
+  await phone.keyboard.press('Escape');await phoneCatalog.waitFor({state:'hidden'});
+  await phone.keyboard.press('Escape');await phoneDialog.waitFor({state:'hidden'});
+  const cdp=await touch.newCDPSession(phone),r=await text.boundingBox(),point={x:r.x+Math.min(30,r.width/2),y:r.y+r.height/2};await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});await phone.waitForTimeout(620);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await until(async()=>await trigger.getAttribute('aria-expanded')==='true','long press opens message actions');await phone.locator('#copy-message-'+message).waitFor({state:'visible'});assert.equal(await phoneDialog.isVisible(),false);assert.equal(state.effects,noWrites,'long press performs no reaction mutation');await phone.keyboard.press('Escape');await phone.locator('#copy-message-'+message).waitFor({state:'hidden'});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:point.x,y:point.y-35}]});await phone.waitForTimeout(620);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});assert.equal(await trigger.getAttribute('aria-expanded'),'false','drag cancels long press');assert.equal(await phoneDialog.isVisible(),false);assert.equal(await phone.locator('#message-composer').inputValue(),'Rascunho móvel');assert.equal(state.effects,noWrites);
+  await text.tap();await text.tap();
+  await phoneDialog.waitFor({state:'visible'});
+  await cdp.send('Emulation.setPageScaleFactor',{pageScaleFactor:2});
+  const plus=phoneDialog.locator('[data-reaction-more]');
+  await until(async()=>await plus.evaluate(button=>{
+   const viewport=window.visualViewport;
+   const strip=button.closest('#oie-reaction-quick').getBoundingClientRect(),box=button.getBoundingClientRect();
+   return viewport.scale===2&&strip.width>0&&strip.left>=viewport.offsetLeft&&
+    strip.right<=viewport.offsetLeft+viewport.width&&box.left>=strip.left&&box.right<=strip.right&&
+    box.top>=viewport.offsetTop&&box.bottom<=viewport.offsetTop+viewport.height;
+  }),'quick choices and plus fit at 2x zoom');
+  await plus.tap();
+  await phoneCatalog.waitFor({state:'visible'});
+  await phone.keyboard.press('Escape');await phoneCatalog.waitFor({state:'hidden'});
+  await phone.keyboard.press('Escape');await phoneDialog.waitFor({state:'hidden'});
+  await cdp.send('Emulation.setPageScaleFactor',{pageScaleFactor:1});
   await phone.evaluate(id=>{const body=document.querySelector('[data-message-bubble="'+id+'"]'),button=document.querySelector('[data-reaction-filter-template]').content.firstElementChild.cloneNode(true);button.removeAttribute('data-reaction-filter');button.dataset.previewExpand='';button.dataset.gestureImage='';button.style.cssText='display:block;width:120px;height:70px';button.textContent='Photo';window.gestureImageOpens=0;button.addEventListener('click',()=>gestureImageOpens++);body.append(button)},message);const image=phone.locator('[data-gesture-image]');await image.tap();await until(async()=>await phone.evaluate(()=>gestureImageOpens)===1,'single image tap retains primary action');await image.tap();await image.tap();await phoneDialog.waitFor({state:'visible'});assert.equal(await phone.evaluate(()=>gestureImageOpens),1,'double image tap suppresses viewer opening');await phone.keyboard.press('Escape');await phoneDialog.waitFor({state:'hidden'});assert.equal(state.effects,noWrites);
   await touch.close();findings.push('Touch double tap opens scoped picker without sending; hold opens the existing public Dropdown; dragging cancels both gestures and drafts survive');
   // Both entry points mount the same categorized selector and share device recents.
   await react();await modal.waitFor({state:'visible'});await modal.locator('[data-emoji-section]').first().waitFor();const categoryChoices=await modal.locator('[data-emoji-section]>.oie-emoji-grid>*').count();assert(categoryChoices>1000);await modal.locator('[data-emoji-jump="8"]').click();assert.equal(await modal.locator('[data-emoji-section]>.oie-emoji-grid>*').count(),categoryChoices,'category navigation scrolls the shared list without filtering');assert.equal(await modal.locator('[data-emoji-scroll]').evaluate(n=>n.scrollTop>100),true);await modal.locator('#reaction-emoji-search').fill('thumbs up');await modal.locator('[data-emoji-family="👍"]').waitFor();const englishFamilies=await modal.locator('[data-emoji-family]').count();await modal.locator('#reaction-emoji-search').fill('joinha');assert.equal(await modal.locator('[data-emoji-family]').count(),englishFamilies);await modal.locator('[data-emoji-family="👍"] [data-emoji-variants-trigger]').click();const tone=modal.locator('[data-emoji-variants] [data-emoji-pick="👍🏽"]');await tone.waitFor({state:'visible'});assert.equal(await modal.locator('[data-emoji-variant]').count(),6);await tone.focus();await page.keyboard.press('Escape');await tone.waitFor({state:'hidden'});assert.equal(await modal.isVisible(),true,'Escape closes only the tone submenu');assert.equal(await modal.locator('[data-emoji-variants-trigger]').evaluate(n=>document.activeElement===n),true);await modal.locator('[data-emoji-variants-trigger]').click();await tone.click();await own('👍🏽',true);assert.equal(await input.inputValue(),'Keep this unsent draft 😀','reacting with a tone never inserts it into the composer');
-  const composeTrigger=page.locator('#oie-emoji-picker [data-emoji-trigger]');await composeTrigger.click();const composePicker=page.locator('#oie-emoji-picker-panel');await composePicker.waitFor({state:'visible'});await composePicker.locator('[data-emoji-jump=recent]').click();await composePicker.locator('#emoji-section-recent [data-emoji-pick="👍🏽"]').waitFor({state:'visible'});await composePicker.locator('#emoji-search').fill('rocket');await composePicker.locator('[data-emoji-pick="🚀"]').click();const composerDraft=await input.inputValue();assert(composerDraft.includes('🚀'));await react();await modal.waitFor({state:'visible'});await modal.locator('[data-emoji-jump=recent]').click();await modal.locator('#reaction-emoji-section-recent [data-emoji-pick="🚀"]').waitFor({state:'visible'});await page.keyboard.press('Escape');assert.equal(await input.inputValue(),composerDraft);
-  state.max=2;emit();await react();await modal.locator('#reaction-emoji-search').fill('😂');await until(async()=>await modal.locator('[data-emoji-pick="😂"]').count()>0,'limit choice rendered');assert.equal(await modal.locator('[data-emoji-pick="😂"]').first().isDisabled(),true,'full multi-selection limit disables additional choices');await page.keyboard.press('Escape');
-  state.allowed=['👍🏽','😂'];state.max=1;emit();await react();await modal.waitFor({state:'visible'});await until(async()=>await modal.locator('[data-emoji-pick="😂"]').count()>0,'allowed choices');const choices=await modal.locator('[data-emoji-pick]').evaluateAll(nodes=>[...new Set(nodes.map(n=>n.dataset.emojiPick))].sort());assert.deepEqual(choices,['👍🏽','😂'].sort(),'only allowed tones/emoji appear; unsupported family base is absent');assert.equal(await modal.locator('[data-emoji-variants-trigger]').count(),0,'no unsupported tones in the variant menu');await modal.locator('[data-emoji-pick="😂"]').first().click();await own('😂',true);assert.deepEqual(state.own,['😂']);state.allowed=null;state.max=8;emit();findings.push('The composer and reactions reuse category navigation, bilingual search, shared device recents and tone variants; protocol allowlists filter individual tones and full selection limits disable extra choices without changing drafts');
+  const composeTrigger=page.locator('#oie-emoji-picker [data-emoji-trigger]');await composeTrigger.click();const composePicker=page.locator('#oie-emoji-picker-panel');await composePicker.waitFor({state:'visible'});await composePicker.locator('[data-emoji-jump=recent]').click();await composePicker.locator('#emoji-section-recent [data-emoji-pick="👍🏽"]').waitFor({state:'visible'});await composePicker.locator('#emoji-search').fill('rocket');await composePicker.locator('[data-emoji-pick="🚀"]').click();const composerDraft=await input.inputValue();assert(composerDraft.includes('🚀'));await react();await modal.waitFor({state:'visible'});await modal.locator('[data-emoji-jump=recent]').click();await modal.locator('#reaction-emoji-section-recent [data-emoji-pick="🚀"]').waitFor({state:'visible'});await dismissCatalog();assert.equal(await input.inputValue(),composerDraft);
+  state.max=2;emit();await react();await modal.locator('#reaction-emoji-search').fill('😂');await until(async()=>await modal.locator('[data-emoji-pick="😂"]').count()>0,'limit choice rendered');assert.equal(await modal.locator('[data-emoji-pick="😂"]').first().isDisabled(),true,'full multi-selection limit disables additional choices');await dismissCatalog();
+  state.allowed=['👍🏽','😂'];state.max=1;emit();await openReact();
+  await quick.waitFor({state:'visible'});
+  assert.deepEqual(await quick.locator('[data-reaction-quick-emoji]:visible').allTextContents(),['😂']);
+  await quick.locator('[data-reaction-more]').click();await modal.waitFor({state:'visible'});await until(async()=>await modal.locator('[data-emoji-pick="😂"]').count()>0,'allowed choices');const choices=await modal.locator('[data-emoji-pick]').evaluateAll(nodes=>[...new Set(nodes.map(n=>n.dataset.emojiPick))].sort());assert.deepEqual(choices,['👍🏽','😂'].sort(),'only allowed tones/emoji appear; unsupported family base is absent');assert.equal(await modal.locator('[data-emoji-variants-trigger]').count(),0,'no unsupported tones in the variant menu');await modal.locator('[data-emoji-pick="😂"]').first().click();await own('😂',true);assert.deepEqual(state.own,['😂']);state.allowed=null;state.max=8;emit();findings.push('The composer and reactions reuse category navigation, bilingual search, shared device recents and tone variants; protocol allowlists filter individual tones and full selection limits disable extra choices without changing drafts');
+  // A protected room row must lose public actor data even if the batch read
+  // fails, and an older in-flight preparation must not restore that data.
+  conversation.kind='room';conversation.address='room@fixture';conversation.title='Fixture room';
+  state.own=[];state.ownRevision=null;state.eligible=true;state.baseReactions=true;
+  await page.goto(route('pt-BR','dark'));
+  const roomState=page.locator('[data-room-state]'),roomSummary=region.locator('[data-reaction-summary]');
+  const publicActor=region.locator('[data-reaction-actor="bob@fixture"]');
+  await until(async()=>await roomState.getAttribute('data-room-state')==='joined','room joined');
+  await roomSummary.press('Enter');
+  await publicActor.waitFor({state:'visible'});
+  await until(async()=>await region.locator('[data-reaction-details]').evaluate(node=>node.contains(document.activeElement)),'reaction details received keyboard focus');
+  const privacyPosts=state.posts;
+  state.eligible=false;state.noBatch=true;emit('conversation.room_session_changed');
+  await until(async()=>await roomState.getAttribute('data-room-state')==='not_joined','leave during failed snapshot read');
+  await publicActor.waitFor({state:'detached'});
+  assert(!(await region.getAttribute('data-reaction-state')).includes('bob@fixture'));
+  state.noBatch=false;state.baseReactions=false;emit('conversation.updated');
+  await roomSummary.waitFor({state:'hidden'});
+  await region.locator('[data-reaction-details]').waitFor({state:'hidden'});
+  await until(async()=>await page.locator('[data-message-menu-trigger="'+message+'"]').evaluate(node=>node===document.activeElement),'empty details restored focus to the message');
+  state.eligible=true;state.baseReactions=true;emit('conversation.room_session_changed');
+  await until(async()=>await roomState.getAttribute('data-room-state')==='joined','room rejoined');
+  await publicActor.waitFor({state:'attached'});
+  state.delay=1300;
+  const roomRead=state.reads;
+  await openReact();
+  await until(()=>state.reads>roomRead,'pending room reaction preparation');
+  state.eligible=false;state.baseReactions=false;emit('conversation.room_session_changed');
+  await until(async()=>await roomState.getAttribute('data-room-state')==='not_joined','leave during room reaction preparation');
+  await wait(1400);
+  assert.equal(await quick.isVisible(),false);
+  assert.equal(await publicActor.count(),0);
+  assert(!(await region.getAttribute('data-reaction-state')).includes('bob@fixture'));
+  assert.equal(state.posts,privacyPosts);
+  // A pre-change context may arrive after a fresh room snapshot without
+  // any presence change. Keep its messages and discard its public roster.
+  state.delay=0;state.eligible=true;state.baseReactions=true;emit('conversation.room_session_changed');
+  await until(async()=>await roomState.getAttribute('data-room-state')==='joined','room joined again');
+  await publicActor.waitFor({state:'attached'});
+  let captured=false,releaseContext;
+  const heldContext=new Promise(resolve=>{releaseContext=resolve});
+  await page.route('**/ui/timeline?*',async route=>{
+   if(new URL(route.request().url()).searchParams.get('mode')!=='context')return route.continue();
+   const response=await route.fetch(),body=await response.text();
+   assert(response.ok()&&body.includes('bob@fixture'));
+   captured=true;
+   await heldContext;
+   return route.fulfill({response,body});
+  });
+  const focusRequest=page.evaluate(id=>window.OieTimeline.focus(id,{focus:false}),older.id);
+  try{
+   await until(()=>captured,'captured an older public room snapshot');
+   state.peerOccupant='occupant:'+'a'.repeat(64);state.roomPrivate=true;emit('conversation.updated');
+   await region.locator('[data-reaction-actor="'+state.peerOccupant+'"]').waitFor({state:'attached'});
+  }finally{releaseContext()}
+  assert.equal(await focusRequest,true);
+  const olderRegion=page.locator('[data-reaction-source="'+older.id+'"]');
+  await olderRegion.waitFor({state:'attached'});
+  assert.equal(await page.locator('[data-reaction-actor="bob@fixture"]').count(),0);
+  assert(!(await olderRegion.getAttribute('data-reaction-state')).includes('bob@fixture'));
+  assert.equal(await roomState.getAttribute('data-room-state'),'joined');
+  await page.unroute('**/ui/timeline?*');
+  findings.push('Room exit clears cached actor details on a failed snapshot read and discards a delayed preflight');
   assert.deepEqual(errors,[]);await fs.writeFile(path.join(__dirname,'artifacts/reactions-report.json'),JSON.stringify({findings,effects:state.effects,posts:state.posts,posted:state.posted,frames:frames.length,pageErrors:errors},null,2));console.log('PASS: scoped reactions, set/clear, bilingual picker, unknown receipt and same-key retry, no preflight shift, draft/keyboard preservation and responsive accessibility');
  }finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(r=>api.close(r))}
 })().catch(error=>{console.error(error);process.exitCode=1});

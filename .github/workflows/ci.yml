@@ -49,6 +49,11 @@ jobs:
       - run: |
           make build
           go build -o bin/oie-mock ./cmd/oie-mock
+      - &ubuntu_archive
+        name: Use the Princeton Ubuntu mirror
+        run: |
+          sudo sed -Ei 's@mirror[+]file:/etc/apt/apt-mirrors\.txt|https?://(azure\.)?archive\.ubuntu\.com/ubuntu/?@https://mirror.math.princeton.edu/pub/ubuntu/@g' /etc/apt/sources.list.d/ubuntu.sources
+          grep '^URIs:' /etc/apt/sources.list.d/ubuntu.sources
       - working-directory: tests/browser
         run: |
           npm ci
@@ -88,6 +93,7 @@ jobs:
           cache: npm
           cache-dependency-path: tests/browser/package-lock.json
       - run: make dev-up
+      - *ubuntu_archive
       - working-directory: tests/browser
         run: |
           npm ci

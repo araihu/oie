@@ -25,8 +25,7 @@ func appearanceOption(v view, value, label string, symbol icon.Symbol) radio.Con
 
 templ appearanceSettings(v view) {
 	<h2>{ v.Text.Appearance }</h2>
-	<p id="appearance-help">{ v.Text.ThemeHelp }</p>
-	<div role="radiogroup" aria-label={ v.Text.Appearance } aria-describedby="appearance-help" x-data={ "{ appearance: " + strconv.Quote(v.Theme) + " }" }>
+	<div role="radiogroup" aria-label={ v.Text.Appearance } x-data={ "{ appearance: " + strconv.Quote(v.Theme) + " }" }>
 		@radio.RadioBar() {
 			@radio.Radio(appearanceOption(v, "system", v.Text.System, heroicons.Icon16SolidWindow))
 			@radio.Radio(appearanceOption(v, "light", v.Text.Light, heroicons.Icon16SolidSun))

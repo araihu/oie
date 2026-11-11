@@ -17,27 +17,27 @@ func TestArchiveSenderCorrelationAndForwardedScope(t *testing.T) {
 	if err := xml.Unmarshal([]byte(raw), &result); err != nil {
 		t.Fatal(err)
 	}
-	in, ok, err := archivedIncoming(account, account.Address, &result)
+	in, ok, err := archivedIncoming(account, account.Address, &result, archiveTrust{})
 	if err != nil || !ok || in.OriginalText != "retained & original" || in.Address != "bob@localhost" || in.IsOwn || !in.Historical {
 		t.Fatalf("forwarded parse: %+v %v %v", in, ok, err)
 	}
 	manager := New(t.TempDir(), nil)
-	entry := &entry{account: account, archive: &archiveQuery{ID: "expected", Scope: account.Address}}
+	entry := &entry{account: account, archives: map[string]*archiveQuery{"expected": {ID: "expected", Scope: account.Address}}}
 	bad, _ := jid.Parse("mallory@localhost")
-	if err = manager.captureArchive(entry, stanza.Message{From: bad}, &result); err != nil || len(entry.archive.Messages) != 0 {
+	if err = manager.captureArchive(entry, stanza.Message{From: bad}, &result); err != nil || len(entry.archives["expected"].Messages) != 0 {
 		t.Fatal("foreign archive accepted")
 	}
 	result.QueryID = "stale"
-	if err = manager.captureArchive(entry, stanza.Message{}, &result); err != nil || len(entry.archive.Messages) != 0 {
+	if err = manager.captureArchive(entry, stanza.Message{}, &result); err != nil || len(entry.archives["expected"].Messages) != 0 {
 		t.Fatal("stale archive accepted")
 	}
 	result.QueryID = "expected"
-	if err = manager.captureArchive(entry, stanza.Message{}, &result); err != nil || len(entry.archive.Messages) != 1 {
+	if err = manager.captureArchive(entry, stanza.Message{}, &result); err != nil || len(entry.archives["expected"].Messages) != 1 {
 		t.Fatal("authenticated archive result lost")
 	}
 	foreign, _ := jid.Parse("carol@localhost")
 	result.Forwarded.Message.To = foreign
-	if _, _, err = archivedIncoming(account, account.Address, &result); err == nil {
+	if _, _, err = archivedIncoming(account, account.Address, &result, archiveTrust{}); err == nil {
 		t.Fatal("foreign forwarded recipient accepted")
 	}
 }
@@ -71,7 +71,7 @@ func TestRoomOwnAuthorRequiresUnambiguousArchivedJID(t *testing.T) {
 		if err := xml.Unmarshal([]byte(raw), &result); err != nil {
 			t.Fatal(err)
 		}
-		in, ok, err := archivedIncoming(account, "room@conference.localhost", &result)
+		in, ok, err := archivedIncoming(account, "room@conference.localhost", &result, archiveTrust{})
 		if err != nil || !ok || in.IsOwn != test.own {
 			t.Fatalf("own classification: %v %+v", err, in)
 		}

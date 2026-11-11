@@ -45,7 +45,7 @@ window.OieRuntime.register('video-thumbnails', life => {
   if(life.signal.aborted||active.get(item)!==token)return;
   if(!same(item).length||attempt>=45){active.delete(item);if(attempt>=45)fail(item);return}
   try{
-   const response=await jsonRequest('/api/v1/shared-content/'+item+'/thumbnail',{credentials:'same-origin',cache:'no-store',headers:{'X-Oie-Engine-ID':engine}});
+   const response=await jsonRequest('/ui/api/v1/shared-content/'+item+'/thumbnail',{credentials:'same-origin',cache:'no-store',headers:{'X-Oie-Engine-ID':engine}});
    const p=response.data;if(life.signal.aborted||active.get(item)!==token)return;
    if(!response.ok||!validate(p,origin))throw Error('thumbnail_unavailable');apply(p);
    if(p.state!=='queued'){active.delete(item);for(const current of same(item))controls(current);return}

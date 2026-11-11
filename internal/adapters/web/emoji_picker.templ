@@ -4,10 +4,27 @@ import (
  "strconv"
  "github.com/araihu/goshtoso/components/button"
  "github.com/araihu/goshtoso/components/icon/heroicons"
+ "github.com/araihu/goshtoso/components/panel"
  "github.com/araihu/goshtoso/components/popover"
  "github.com/araihu/goshtoso/components/textinput"
  "github.com/araihu/goshtoso/expressions"
 )
+
+templ emojiCompletion(v view) {
+if v.composeAllowed() {
+<div id="oie-emoji-completion" class="oie-emoji-completion" hidden data-emoji-url={"/ui/emoji/"+v.Locale+".json"} data-emoji-loading={v.Text.EmojiLoading}>
+@panel.Panel(panel.Config{Density:panel.DensityCompact,RootClass:"oie-emoji-completion-panel",BodyClass:"oie-completion-body"}) {
+<p class="oie-completion-status" role="status"></p>
+<div id="oie-emoji-options" class="oie-completion-options" role="listbox" aria-label={v.Text.EmojiSuggestions}></div>
+}
+<template>
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-completion-option"),button.WithAttrs(templ.Attributes{"role":"option","tabindex":"-1","aria-selected":"false","data-emoji-option":""})){
+<span class="oie-completion-glyph" aria-hidden="true" data-emoji-glyph></span><span data-emoji-shortcode></span>
+}
+</template>
+</div>
+}
+}
 
 templ emojiPicker(v view) {
 if !v.composeAllowed() {

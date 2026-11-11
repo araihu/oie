@@ -22,6 +22,7 @@ type Store struct {
 	db        *sql.DB
 	queries   *dbgen.Queries
 	lock      *flock.Flock
+	dir       string
 	closeOnce sync.Once
 	closeErr  error
 }
@@ -46,16 +47,32 @@ func Open(ctx context.Context, dir string, initialID domain.ID) (_ *Store, err e
 			_ = owner.Close()
 		}
 	}()
+	store := &Store{lock: owner, dir: dir}
+	if _, markerErr := os.Lstat(filepath.Join(dir, resetMarker)); markerErr == nil {
+		if err = store.removeData(); err != nil {
+			return nil, err
+		}
+	} else if !errors.Is(markerErr, os.ErrNotExist) {
+		return nil, markerErr
+	}
+	if err = store.openDatabase(ctx, initialID); err != nil {
+		return nil, err
+	}
+	return store, nil
+}
+
+func (s *Store) openDatabase(ctx context.Context, initialID domain.ID) (err error) {
+	dir := s.dir
 	path, err := filepath.Abs(filepath.Join(dir, "oie.sqlite"))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if err = file.Close(); err != nil {
-		return nil, err
+		return err
 	}
 	u := url.URL{Scheme: "file", Path: path}
 	q := u.Query()
@@ -64,7 +81,7 @@ func Open(ctx context.Context, dir string, initialID domain.ID) (_ *Store, err e
 	u.RawQuery = q.Encode()
 	db, err := sql.Open("sqlite", u.String())
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer func() {
 		if err != nil {
@@ -73,22 +90,32 @@ func Open(ctx context.Context, dir string, initialID domain.ID) (_ *Store, err e
 	}()
 	db.SetMaxOpenConns(1)
 	if err = migrateDatabase(ctx, db); err != nil {
-		return nil, err
+		return err
 	}
 	queries := dbgen.New(db)
+	// A previous connection cannot vouch for the current room configuration.
+	if err = queries.ResetAllRoomReactionPrivacy(ctx); err != nil {
+		return err
+	}
 	if err = queries.InsertEngineIdentity(ctx, string(initialID)); err != nil {
-		return nil, err
+		return err
 	}
 	if _, err = db.ExecContext(ctx, "PRAGMA journal_mode=WAL"); err != nil {
-		return nil, err
+		return err
 	}
 	if err = os.MkdirAll(filepath.Join(dir, "media"), 0700); err != nil {
-		return nil, err
+		return err
 	}
-	return &Store{db: db, queries: queries, lock: owner}, nil
+	s.db, s.queries = db, queries
+	return nil
 }
 func (s *Store) Close() error {
-	s.closeOnce.Do(func() { s.closeErr = errors.Join(s.db.Close(), s.lock.Close()) })
+	s.closeOnce.Do(func() {
+		if s.db != nil {
+			s.closeErr = s.db.Close()
+		}
+		s.closeErr = errors.Join(s.closeErr, s.lock.Close())
+	})
 	return s.closeErr
 }
 func (s *Store) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }

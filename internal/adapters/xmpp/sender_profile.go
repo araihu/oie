@@ -182,6 +182,10 @@ func liveRoomSenderAddress(e *entry, from jid.JID, stamp, delayFrom string) stri
 	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+	return liveRoomSenderAddressLocked(e, from)
+}
+
+func liveRoomSenderAddressLocked(e *entry, from jid.JID) string {
 	room := from.Bare().String()
 	slot := e.rooms[room]
 	if e.state.State != "connected" || e.session == nil || slot == nil || slot.session != e.session || slot.snapshot.State != "joined" {

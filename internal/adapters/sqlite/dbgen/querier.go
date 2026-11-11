@@ -10,11 +10,15 @@ import (
 
 type Querier interface {
 	AcquireWriteLock(ctx context.Context) error
+	ArchivedReactionNeighbors(ctx context.Context, arg ArchivedReactionNeighborsParams) (ArchivedReactionNeighborsRow, error)
 	ClearCanonicalAliases(ctx context.Context, ids string) error
 	ClearContentHeads(ctx context.Context, ids string) error
+	ClearRoomReactionVisibility(ctx context.Context, arg ClearRoomReactionVisibilityParams) error
 	ConversationUnreadSummary(ctx context.Context, conversationID string) (ConversationUnreadSummaryRow, error)
 	CorrectionNeighbors(ctx context.Context, arg CorrectionNeighborsParams) ([]CorrectionNeighborsRow, error)
+	CountRoomArchiveMessages(ctx context.Context, arg CountRoomArchiveMessagesParams) (int64, error)
 	DeleteObsoleteSharedContent(ctx context.Context, arg DeleteObsoleteSharedContentParams) error
+	DeleteReactionObservation(ctx context.Context, ordinal int64) error
 	FindAvatar(ctx context.Context, arg FindAvatarParams) (Avatar, error)
 	FindConversation(ctx context.Context, arg FindConversationParams) (Conversation, error)
 	FindMessagePreview(ctx context.Context, arg FindMessagePreviewParams) (MessagePreview, error)
@@ -43,7 +47,9 @@ type Querier interface {
 	GetMessageReply(ctx context.Context, arg GetMessageReplyParams) (string, error)
 	GetMessageStar(ctx context.Context, messageID string) (GetMessageStarRow, error)
 	GetOperation(ctx context.Context, id string) (Operation, error)
+	GetRoomArchive(ctx context.Context, conversationID string) (GetRoomArchiveRow, error)
 	GetRoomIntent(ctx context.Context, conversationID string) (RoomIntent, error)
+	GetRoomReactionPrivacy(ctx context.Context, arg GetRoomReactionPrivacyParams) (GetRoomReactionPrivacyRow, error)
 	GetSharedContentItem(ctx context.Context, arg GetSharedContentItemParams) (GetSharedContentItemRow, error)
 	HasMessageRead(ctx context.Context, canonicalID string) (bool, error)
 	InsertAccount(ctx context.Context, arg InsertAccountParams) error
@@ -94,6 +100,7 @@ type Querier interface {
 	ListMessageHistorySources(ctx context.Context, arg ListMessageHistorySourcesParams) ([]ListMessageHistorySourcesRow, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
 	ListMessagesAfter(ctx context.Context, arg ListMessagesAfterParams) ([]Message, error)
+	ListRoomArchiveConversations(ctx context.Context, accountID string) ([]Conversation, error)
 	ListRoomIntents(ctx context.Context) ([]RoomIntent, error)
 	ListSharedContent(ctx context.Context, arg ListSharedContentParams) ([]ListSharedContentRow, error)
 	ListStarredMessages(ctx context.Context, arg ListStarredMessagesParams) ([]ListStarredMessagesRow, error)
@@ -113,19 +120,26 @@ type Querier interface {
 	PutConversationReadHead(ctx context.Context, arg PutConversationReadHeadParams) error
 	PutHistoryStatus(ctx context.Context, arg PutHistoryStatusParams) error
 	PutMessageStar(ctx context.Context, arg PutMessageStarParams) error
+	PutRoomArchiveMode(ctx context.Context, arg PutRoomArchiveModeParams) error
+	PutRoomArchiveProgress(ctx context.Context, arg PutRoomArchiveProgressParams) error
 	PutRoomIntent(ctx context.Context, arg PutRoomIntentParams) error
 	PutSharedContent(ctx context.Context, arg PutSharedContentParams) error
 	ReactionActorProfile(ctx context.Context, arg ReactionActorProfileParams) (ReactionActorProfileRow, error)
 	ReactionObservationsForTargets(ctx context.Context, arg ReactionObservationsForTargetsParams) ([]ReactionObservationsForTargetsRow, error)
 	ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error
+	ReconcileReactionObservation(ctx context.Context, arg ReconcileReactionObservationParams) error
 	RecordOriginalTransmission(ctx context.Context, id string) error
+	ResetAllRoomReactionPrivacy(ctx context.Context) error
+	ResetRoomReactionPrivacy(ctx context.Context, accountID string) error
 	ResolveMessageAlias(ctx context.Context, aliasID string) (string, error)
 	SearchContacts(ctx context.Context, arg SearchContactsParams) ([]SearchContactsRow, error)
 	SearchMessages(ctx context.Context, arg SearchMessagesParams) ([]SearchMessagesRow, error)
 	SetOperationResult(ctx context.Context, arg SetOperationResultParams) error
 	SetRoomObservation(ctx context.Context, arg SetRoomObservationParams) error
+	SetRoomReactionPrivacy(ctx context.Context, arg SetRoomReactionPrivacyParams) (int64, error)
 	SharedContentCandidates(ctx context.Context, arg SharedContentCandidatesParams) ([]Message, error)
 	SharedContentIndexStatus(ctx context.Context, arg SharedContentIndexStatusParams) (SharedContentIndexStatusRow, error)
+	ShiftArchivedReactions(ctx context.Context, arg ShiftArchivedReactionsParams) error
 	Snapshot(ctx context.Context) (SnapshotRow, error)
 	UpdateAvatar(ctx context.Context, arg UpdateAvatarParams) error
 	UpdateConversation(ctx context.Context, arg UpdateConversationParams) error

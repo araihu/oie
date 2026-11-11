@@ -1,4 +1,8 @@
 GO ?= go
+# Keep the existing HTTP checks/build independent of native WebView libraries.
+# The desktop target and native CI lane explicitly clear this build tag.
+GOFLAGS ?= -tags=server
+export GOFLAGS
 COMPOSE ?= docker compose
 CODEGEN = GOWORK=off $(GO) tool -modfile=tools/go.mod
 VACUUM = GOWORK=off $(GO) -C tools/vacuum tool vacuum
@@ -32,6 +36,10 @@ lint-go:
 build:
 	GOWORK=off $(GO) build -trimpath -o bin/oie ./cmd/oie
 
+.PHONY: build-desktop
+build-desktop:
+	GOFLAGS= GOWORK=off $(GO) build -trimpath -tags production -o bin/oie-desktop ./cmd/oie-desktop
+
 build-cli:
 	GOWORK=off $(GO) -C cli build -trimpath -o ../bin/oiectl ./cmd/oiectl
 
@@ -48,7 +56,7 @@ test-race:
 check-generated:
 	sh scripts/check-generated.sh
 
-check: lint lint-go check-generated check-ci-tools
+check: lint lint-go check-generated check-api-compatibility check-ci-tools test-packaging
 	@test -z "$$(gofmt -l cmd internal api/spec.go tests tools/cmd)" || { echo 'Go formatting drift'; exit 1; }
 	GOWORK=off $(GO) vet ./...
 	GOWORK=off $(GO) -C cli vet ./...
@@ -93,12 +101,22 @@ dev-bridge: build-dev-bridge
 test-live-browser: build
 	sh scripts/test-live-browser.sh
 
-.PHONY: ci ci-check
+.PHONY: ci ci-check ci-desktop package-linux test-packaging
 ci:
 	sh tools/ci/run.sh all
 
 ci-check:
 	sh tools/ci/run.sh checks
+
+ci-desktop:
+	sh tools/ci/run.sh desktop
+
+package-linux:
+	sh tools/ci/run.sh release
+
+test-packaging:
+	sh -n scripts/install.sh scripts/package-desktop.sh
+	python3 -m unittest discover -s tests/packaging -p 'test_*.py'
 
 # Restart only the frontend/BFF. Run the engine separately to retain XMPP sessions.
 DEV_ENGINE_URL ?= http://127.0.0.1:18084
@@ -111,3 +129,11 @@ dev-web:
 dev-web-build:
 	$(CODEGEN) templ generate
 	GOWORK=off $(GO) build -o bin/oie-dev-web ./cmd/oie
+
+.PHONY: check-api-compatibility test-cli-xmpp
+check-api-compatibility:
+	$(CODEGEN) oasdiff breaking api/compatibility/engine-0.27.0.json api/openapi.yaml --fail-on ERR
+	python3 -m unittest discover -s tests/contracts -p 'test_*.py'
+
+test-cli-xmpp:
+	OIE_XMPP_INTEGRATION=1 GOWORK=off $(GO) test -count=1 -v -run TestCLIDataOnlyXMPP ./tests/cli

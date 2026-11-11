@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"unicode/utf8"
 
+	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
-	mx "mellium.im/xmpp"
 	"mellium.im/xmpp/disco"
 	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/stanza"
@@ -29,15 +29,12 @@ func decodeCorrectionMetadata(meta correctionMetadata, msg stanza.Message, room,
 	author := msg.From.Bare().String()
 	scope := "xmpp:correct:sender:" + author
 	if room {
-		if msg.From.Resourcepart() == "" || !occupantVerified || len(meta.Occupants) != 1 {
-			return nil
-		}
-		occupant := meta.Occupants[0]
-		if !usableID(occupant.ID) || utf8.RuneCountInString(occupant.ID) > 128 || occupant.Text != "" || occupant.By != "" || len(occupant.Children) != 0 {
+		occupant := verifiedOccupantID(meta.Occupants)
+		if msg.From.Resourcepart() == "" || !occupantVerified || occupant == "" {
 			return nil
 		}
 		author = msg.From.String()
-		sum := sha256.Sum256([]byte(author + "\x00" + occupant.ID))
+		sum := sha256.Sum256([]byte(author + "\x00" + occupant))
 		scope = "xmpp:correct:room:" + msg.From.Bare().String() + ":" + hex.EncodeToString(sum[:])
 	}
 	result := &domain.MessageCorrection{Scope: scope, Author: author, ID: msg.ID}
@@ -51,32 +48,53 @@ func decodeCorrectionMetadata(meta correctionMetadata, msg stanza.Message, room,
 	return result
 }
 
+func verifiedOccupantID(occupants []wireID) string {
+	if len(occupants) != 1 {
+		return ""
+	}
+	occupant := occupants[0]
+	if !usableID(occupant.ID) || utf8.RuneCountInString(occupant.ID) > 128 || occupant.Text != "" || occupant.By != "" || len(occupant.Children) != 0 {
+		return ""
+	}
+	return occupant.ID
+}
+
 // A matching tag is not proof: rooms must advertise XEP-0421, otherwise a
 // participant could inject a pseudonym and correct another occupant's text.
-func recordOccupantSupport(e *entry, s *mx.Session, address string, info disco.Info) {
+// The caller holds e.mu and e.historyMu.
+func recordRoomIdentity(e *entry, address string, info disco.Info) (roomDiscovered bool, mode string) {
 	room, err := jid.Parse(address)
 	if err != nil || room.Localpart() == "" || room.Resourcepart() != "" || address == e.account.Address {
-		return
+		return false, ""
 	}
-	conference, advertised := false, false
+	conference, advertised, semianonymous, nonanonymous, anonymous := false, false, false, false, false
 	for _, identity := range info.Identity {
 		conference = conference || (identity.Category == "conference" && identity.Type == "text")
 	}
 	for _, feature := range info.Features {
 		advertised = advertised || feature.Var == occupantIDNS
+		semianonymous = semianonymous || feature.Var == "muc_semianonymous"
+		nonanonymous = nonanonymous || feature.Var == "muc_nonanonymous"
+		anonymous = anonymous || feature.Var == "muc_fullyanonymous"
 	}
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	if e.session != s || e.state.State != "connected" {
-		return
-	}
-	e.historyMu.Lock()
-	defer e.historyMu.Unlock()
 	if e.occupantScopes == nil {
 		e.occupantScopes = map[string]bool{}
 	}
 	if _, exists := e.occupantScopes[address]; len(e.occupantScopes) >= maxRoomSessions && !exists {
-		return
+		return false, ""
 	}
 	e.occupantScopes[address] = conference && advertised
+	if e.semianonymousRooms == nil {
+		e.semianonymousRooms = map[string]bool{}
+	}
+	e.semianonymousRooms[address] = conference && semianonymous && !nonanonymous && !anonymous
+	switch {
+	case conference && nonanonymous && !semianonymous && !anonymous:
+		mode = application.RoomReactionsNonanonymous
+	case e.semianonymousRooms[address]:
+		mode = application.RoomReactionsSemianonymous
+	case conference && anonymous && !nonanonymous && !semianonymous:
+		mode = application.RoomReactionsAnonymous
+	}
+	return conference, mode
 }

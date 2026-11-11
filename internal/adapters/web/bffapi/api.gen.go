@@ -105,6 +105,21 @@ func (e PendingSubmissionTheme) Valid() bool {
 	}
 }
 
+// Defines values for ResetBrowserEngineDataFormdataBodyConfirmation.
+const (
+	Delete ResetBrowserEngineDataFormdataBodyConfirmation = "delete"
+)
+
+// Valid indicates whether the value is a known member of the ResetBrowserEngineDataFormdataBodyConfirmation enum.
+func (e ResetBrowserEngineDataFormdataBodyConfirmation) Valid() bool {
+	switch e {
+	case Delete:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GetBrowserMessageEditTargetParamsLang.
 const (
 	GetBrowserMessageEditTargetParamsLangEn   GetBrowserMessageEditTargetParamsLang = "en"
@@ -583,6 +598,56 @@ type SubmissionReceipt struct {
 	State string `json:"state"`
 }
 
+// GetBrowserReadStateParams defines parameters for GetBrowserReadState.
+type GetBrowserReadStateParams struct {
+	// XOieEngineID Selected engine identity.
+	XOieEngineID *openapi_types.UUID `json:"X-Oie-Engine-ID,omitempty"`
+}
+
+// MarkBrowserMessagesReadParams defines parameters for MarkBrowserMessagesRead.
+type MarkBrowserMessagesReadParams struct {
+	// IdempotencyKey Original operation identity.
+	IdempotencyKey openapi_types.UUID `json:"Idempotency-Key"`
+
+	// XOieAccountID Selected account identity.
+	XOieAccountID openapi_types.UUID `json:"X-Oie-Account-ID"`
+
+	// XCSRFToken Matching browser CSRF token.
+	XCSRFToken string `json:"X-CSRF-Token"`
+
+	// XOieEngineID Selected engine identity.
+	XOieEngineID *openapi_types.UUID `json:"X-Oie-Engine-ID,omitempty"`
+}
+
+// GetBrowserPreviewParams defines parameters for GetBrowserPreview.
+type GetBrowserPreviewParams struct {
+	// XOieEngineID Selected engine identity.
+	XOieEngineID *openapi_types.UUID `json:"X-Oie-Engine-ID,omitempty"`
+}
+
+// GetBrowserVideoThumbnailParams defines parameters for GetBrowserVideoThumbnail.
+type GetBrowserVideoThumbnailParams struct {
+	// XOieEngineID Selected engine identity.
+	XOieEngineID *openapi_types.UUID `json:"X-Oie-Engine-ID,omitempty"`
+}
+
+// ResetBrowserEngineDataFormdataBody defines parameters for ResetBrowserEngineData.
+type ResetBrowserEngineDataFormdataBody struct {
+	// Confirmation Example: delete
+	Confirmation ResetBrowserEngineDataFormdataBodyConfirmation `form:"confirmation" json:"confirmation"`
+
+	// Csrf Example: example-browser-token
+	Csrf string `form:"csrf" json:"csrf"`
+
+	// EngineId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	EngineId externalRef0.ID `form:"engineId" json:"engineId"`
+}
+
+// ResetBrowserEngineDataFormdataBodyConfirmation defines parameters for ResetBrowserEngineData.
+type ResetBrowserEngineDataFormdataBodyConfirmation string
+
 // GetBrowserMessageEditTargetParams defines parameters for GetBrowserMessageEditTarget.
 type GetBrowserMessageEditTargetParams struct {
 	// EngineId Owning engine identity.
@@ -679,6 +744,30 @@ type SearchBrowserMessagesParams struct {
 // SearchBrowserMessagesParamsLang defines parameters for SearchBrowserMessages.
 type SearchBrowserMessagesParamsLang string
 
+// RequestBrowserRoomArchiveParams defines parameters for RequestBrowserRoomArchive.
+type RequestBrowserRoomArchiveParams struct {
+	// XOieEngineID Selected engine identity.
+	XOieEngineID openapi_types.UUID `json:"X-Oie-Engine-ID"`
+
+	// XOieAccountID Owning account identity.
+	XOieAccountID openapi_types.UUID `json:"X-Oie-Account-ID"`
+
+	// XCSRFToken Same-origin browser token.
+	XCSRFToken string `json:"X-CSRF-Token"`
+}
+
+// SetBrowserRoomArchiveModeParams defines parameters for SetBrowserRoomArchiveMode.
+type SetBrowserRoomArchiveModeParams struct {
+	// XOieEngineID Selected engine identity.
+	XOieEngineID openapi_types.UUID `json:"X-Oie-Engine-ID"`
+
+	// XOieAccountID Owning account identity.
+	XOieAccountID openapi_types.UUID `json:"X-Oie-Account-ID"`
+
+	// XCSRFToken Same-origin browser token.
+	XCSRFToken string `json:"X-CSRF-Token"`
+}
+
 // GetBrowserMessageSenderParams defines parameters for GetBrowserMessageSender.
 type GetBrowserMessageSenderParams struct {
 	// EngineId Identity of the engine that owns the retained message.
@@ -700,11 +789,17 @@ type GetBrowserMessageSenderParams struct {
 // GetBrowserMessageSenderParamsLang defines parameters for GetBrowserMessageSender.
 type GetBrowserMessageSenderParamsLang string
 
+// MarkBrowserMessagesReadJSONRequestBody defines body for MarkBrowserMessagesRead for application/json ContentType.
+type MarkBrowserMessagesReadJSONRequestBody = externalRef0.MarkMessagesRead
+
 // UpdateBrowserConversationPreferencesFormdataRequestBody defines body for UpdateBrowserConversationPreferences for application/x-www-form-urlencoded ContentType.
 type UpdateBrowserConversationPreferencesFormdataRequestBody = ConversationPreferenceIntent
 
 // RenderDocumentMarkdownJSONRequestBody defines body for RenderDocumentMarkdown for application/json ContentType.
 type RenderDocumentMarkdownJSONRequestBody = MarkdownSource
+
+// ResetBrowserEngineDataFormdataRequestBody defines body for ResetBrowserEngineData for application/x-www-form-urlencoded ContentType.
+type ResetBrowserEngineDataFormdataRequestBody ResetBrowserEngineDataFormdataBody
 
 // SubmitBrowserMessageEditFormdataRequestBody defines body for SubmitBrowserMessageEdit for application/x-www-form-urlencoded ContentType.
 type SubmitBrowserMessageEditFormdataRequestBody = BrowserEditIntent
@@ -720,6 +815,12 @@ type SetBrowserMessageReactionsFormdataRequestBody = BrowserReactionIntent
 
 // ReconcileBrowserSubmissionFormdataRequestBody defines body for ReconcileBrowserSubmission for application/x-www-form-urlencoded ContentType.
 type ReconcileBrowserSubmissionFormdataRequestBody = PendingSubmission
+
+// RequestBrowserRoomArchiveJSONRequestBody defines body for RequestBrowserRoomArchive for application/json ContentType.
+type RequestBrowserRoomArchiveJSONRequestBody = externalRef0.RoomArchiveRequest
+
+// SetBrowserRoomArchiveModeJSONRequestBody defines body for SetBrowserRoomArchiveMode for application/json ContentType.
+type SetBrowserRoomArchiveModeJSONRequestBody = externalRef0.SetRoomArchiveMode
 
 // AsConversationPreferenceIntent0 returns the union data inside the ConversationPreferenceIntent as a ConversationPreferenceIntent0
 func (t ConversationPreferenceIntent) AsConversationPreferenceIntent0() (ConversationPreferenceIntent0, error) {

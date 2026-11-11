@@ -9,6 +9,9 @@ import (
 //go:embed emoji-picker.js
 var emojiScript []byte
 
+//go:embed emoji-completion.js
+var emojiCompletionScript []byte
+
 //go:embed emoji-picker.css
 var emojiStylesheet []byte
 
@@ -16,13 +19,15 @@ var emojiStylesheet []byte
 var emojiFiles embed.FS
 
 // Emoji catalogs are static UI assets, not an engine operation. The browser
-// loads its localized catalog only when the picker is first opened.
+// loads its localized catalog when emoji browsing or completion begins.
 func serveEmojiAsset(w http.ResponseWriter, r *http.Request) bool {
 	var data []byte
 	mime := "text/javascript"
 	switch r.URL.Path {
 	case "/ui/emoji-picker.js":
 		data = emojiScript
+	case "/ui/emoji-completion.js":
+		data = emojiCompletionScript
 	case "/ui/emoji-picker.css":
 		data, mime = emojiStylesheet, "text/css"
 	case "/ui/emoji/en.json", "/ui/emoji/pt-BR.json":

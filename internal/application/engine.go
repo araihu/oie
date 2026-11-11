@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -92,13 +93,20 @@ type Engine struct {
 	mediaFiles       MediaFiles
 	previewWork      chan struct{}
 	work             chan struct{}
+	roomWork         chan struct{}
+	eventMu          sync.Mutex
+	eventWake        chan struct{}
 }
 
 func New(repo Repository, role string, ids NewID, now func() time.Time) (*Engine, error) {
 	if role != "local" && role != "hosted" {
 		return nil, ErrInvalid
 	}
-	return &Engine{repo: repo, role: role, newID: ids, now: now, work: make(chan struct{}, 1), previewWork: make(chan struct{}, 1)}, nil
+	return &Engine{
+		repo: repo, role: role, newID: ids, now: now,
+		work: make(chan struct{}, 1), roomWork: make(chan struct{}, 1),
+		previewWork: make(chan struct{}, 1), eventWake: make(chan struct{}),
+	}, nil
 }
 
 func (e *Engine) Ping(ctx context.Context) error { return e.repo.Ping(ctx) }
@@ -183,4 +191,19 @@ func (e *Engine) Events(ctx context.Context, after int64) ([]Event, error) {
 		return nil, ErrInvalidCursor
 	}
 	return e.repo.Events(ctx, after, 100)
+}
+
+// EventWake broadcasts a hint to read the durable event log. Take the channel
+// before reading Events so a concurrent commit also wakes an idle subscriber.
+func (e *Engine) EventWake() <-chan struct{} {
+	e.eventMu.Lock()
+	defer e.eventMu.Unlock()
+	return e.eventWake
+}
+
+func (e *Engine) notifyEvents() {
+	e.eventMu.Lock()
+	defer e.eventMu.Unlock()
+	close(e.eventWake)
+	e.eventWake = make(chan struct{})
 }

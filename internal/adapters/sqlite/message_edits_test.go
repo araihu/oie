@@ -624,7 +624,7 @@ func TestSentEditMigrationFourteenPreservesTransmissionOrderAndData(t *testing.T
 	}
 	var version int
 	var dirty bool
-	if err = reopened.db.QueryRow("SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != 16 || dirty {
+	if err = reopened.db.QueryRow("SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != 20 || dirty {
 		t.Fatal(version, dirty, err)
 	}
 	queuedEdit(t, upgraded, second.ID, "New correction after safe schema upgrade")

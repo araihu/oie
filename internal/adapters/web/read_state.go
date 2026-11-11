@@ -28,7 +28,7 @@ func (s *Server) readState(w http.ResponseWriter, r *http.Request) {
 		fail(405)
 		return
 	}
-	id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/v1/conversations/"), "/read-state")
+	id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/ui/api/v1/conversations/"), "/read-state")
 	engineID, accountID := r.Header.Get("X-Oie-Engine-ID"), r.Header.Get("X-Oie-Account-ID")
 	if !validOperationKey(id) || !validOperationKey(engineID) || !validOperationKey(accountID) {
 		fail(400)

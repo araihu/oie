@@ -71,17 +71,34 @@ const {chromium} = require('playwright');
     await choice.click();
     await page.waitForURL(url => (url.searchParams.get('account') || '') === account);
     assert.equal(await page.locator('[data-account-switcher]:visible').textContent().then(t=>t.includes(label)),true);
-    await until(async()=>page.evaluate(({expectedAccount,generation,empty})=>{
-      if(document.readyState!=='complete'||window.OieRuntime.generation<=generation)return false;
-      const pane=document.getElementById('conversation-pane');
-      if(!pane||pane.dataset.accountId!==document.body.dataset.accountId||pane.dataset.engineId!==document.body.dataset.engineId||pane.dataset.conversationId!==document.body.dataset.conversationId)return false;
-      const input=document.querySelector('#message-composer');
-      if(empty)return !pane.dataset.accountId&&!pane.dataset.conversationId&&!input;
-      if(pane.dataset.accountId!==expectedAccount||!pane.dataset.conversationId||!input)return false;
-      const key=['oie.draft.v1',document.body.dataset.engineId,expectedAccount,document.body.dataset.conversationId].join(':');
-      const raw=localStorage.getItem(key),saved=raw?JSON.parse(raw):null;
-      return input.value===(saved?.text||'');
-    },{expectedAccount:account,generation,empty}), (empty?'empty account view for ':'initialized account-scoped device draft for ')+label);
+    const conversationsBefore = await api('/api/v1/conversations?accountId=' + account);
+    const expectedEngine = (await api('/api/v1/engine')).id;
+    assert(conversationsBefore.items.every(item => item.accountId === account), 'engine conversation list is account-scoped');
+    const emptyInbox = conversationsBefore.items.length === 0;
+    if(empty) assert(emptyInbox, 'the newly connected account has an empty inbox');
+    try {
+      await until(async()=>page.evaluate(({expectedAccount,expectedEngine,generation,emptyInbox})=>{
+        if(document.readyState!=='complete'||window.OieRuntime.generation<=generation)return false;
+        const pane=document.getElementById('conversation-pane');
+        if(!pane||document.body.dataset.engineId!==expectedEngine||pane.dataset.engineId!==expectedEngine||pane.dataset.conversationId!==document.body.dataset.conversationId)return false;
+        const input=document.querySelector('#message-composer');
+        if(emptyInbox)return !input&&!document.body.dataset.accountId&&!document.body.dataset.conversationId&&!pane.dataset.accountId&&pane.dataset.openChat==='false';
+        if(document.body.dataset.accountId!==expectedAccount||pane.dataset.accountId!==expectedAccount||!pane.dataset.conversationId||!input)return false;
+        const key=['oie.draft.v1',document.body.dataset.engineId,expectedAccount,document.body.dataset.conversationId].join(':');
+        const raw=localStorage.getItem(key),saved=raw?JSON.parse(raw):null;
+        return input.value===(saved?.text||'');
+      },{expectedAccount:account,expectedEngine,generation,emptyInbox}),'initialized account-scoped inbox or device draft for '+label);
+      if(emptyInbox) {
+        assert.deepEqual((await api('/api/v1/conversations?accountId='+account)).items, [], 'selecting a fresh account does not create a conversation');
+        evidence.workflows.push('Select an account with a verified empty engine inbox: settled matching pane, no selected conversation, composer or cross-account draft');
+      }
+    } catch(error) {
+      const state=await page.evaluate(()=>({url:location.href,ready:document.readyState,body:{...document.body.dataset},pane:document.getElementById('conversation-pane')?{...document.getElementById('conversation-pane').dataset}:null,composer:!!document.querySelector('#message-composer'),generation:window.OieRuntime.generation}));
+      const conversations=await api('/api/v1/conversations?accountId='+account);
+      await fs.writeFile('artifacts/'+prefix+'-account-draft-timeout.json',JSON.stringify({label,expectedAccount:account,previousGeneration:generation,state,conversations},null,2));
+      await page.screenshot({path:'artifacts/'+prefix+'-account-draft-timeout.png',fullPage:true});
+      throw error;
+    }
 
   };
   try {

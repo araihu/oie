@@ -4,6 +4,10 @@ window.OieRuntime.register('previews', life => {
   const viewer=document.querySelector('[data-image-viewer]');
   const dialog=document.querySelector('#oie-image-viewer');
   const csrf=document.querySelector('meta[name="oie-csrf"]')?.content || '';
+  async function saveFile(path,name){
+    if(window.OieDesktop?.saveFile)return window.OieDesktop.saveFile(path,name);
+    const anchor=document.createElement('a');anchor.href=path;anchor.download=name;document.body.append(anchor);anchor.click();anchor.remove();return true;
+  }
   const downloading=new Set(),refreshing=new Set();
   const preferenceKey='oie.device.auto-image-downloads.v1';
   let automatic=true;
@@ -185,11 +189,11 @@ window.OieRuntime.register('previews', life => {
         const current=findAll(id)[0];if(!current)throw Error('preview_missing');
         const file=current.dataset.previewFile;
         if(/^\/ui\/media\/[0-9a-f]{64}$/.test(file||'')){
-          saving.delete(id);
-          const anchor=document.createElement('a');anchor.href=file+'?download='+encodeURIComponent(current.dataset.previewName||'image');anchor.download=current.dataset.previewName||'image';document.body.append(anchor);anchor.click();anchor.remove();notify('saved');return;
+          const name=current.dataset.previewName||'image';
+          const saved=await saveFile(file+'?download='+encodeURIComponent(name),name);notify(saved?'saved':'cancelled');return;
         }
         if(current.dataset.previewDownload==='failed')throw Error('download_failed');
-        const response=await life.fetch('/api/v1/previews/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store',headers:{'X-Oie-Engine-ID':request.engineId},signal:controller.signal});
+        const response=await life.fetch('/ui/api/v1/previews/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store',headers:{'X-Oie-Engine-ID':request.engineId},signal:controller.signal});
         const preview=await response.json();if(!active())return;
         if(!response.ok||!matches(preview))throw Error('invalid_preview');
         for(const matching of findAll(id))apply(matching,{previewFile:preview.downloadState==='ready'?source(preview.fileHash):'',previewImage:source(preview.imageHash),previewDownload:preview.downloadState,previewRevision:preview.revisionId});
@@ -245,7 +249,7 @@ window.OieRuntime.register('previews', life => {
     finally{refreshing.delete(id);if(button)button.disabled=scope.dataset.previewState==='queued';if(!life.signal.aborted)document.dispatchEvent(new CustomEvent('oie:actions-refreshed'));}
   }
   life.on(document,'click',event=>{const button=event.target.closest('[id^="refresh-preview-"]');if(!button)return;const scope=button.closest('[data-preview-id]');if(!scope||scope.dataset.previewKind!=='link')return;event.preventDefault();refreshLink(scope)});
-  life.on(document,'click',event=>{
+  life.on(document,'click',async event=>{
     const menu=event.target.closest('[id^="open-preview-"],[id^="info-preview-"],[id^="save-preview-"]');
     const button=menu||event.target.closest('button[data-preview-download],button[data-preview-expand]');if(!button)return;
     const id=menu?menu.id.slice(menu.id.indexOf('-preview-')+9):'';
@@ -253,7 +257,8 @@ window.OieRuntime.register('previews', life => {
     event.preventDefault();
     if(menu?.id.startsWith('save-preview-')){
       const path=scope.dataset.previewFile;if(!/^\/ui\/media\/[0-9a-f]{64}$/.test(path||''))return;
-      const link=document.createElement('a');link.href=path+'?download='+encodeURIComponent(scope.dataset.previewName||'image');link.download=scope.dataset.previewName||'image';document.body.append(link);link.click();link.remove();return;
+      const name=scope.dataset.previewName||'image';
+      try{await saveFile(path+'?download='+encodeURIComponent(name),name);}catch{if(!life.signal.aborted)window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:labels.failed||''}}));}return;
     }
     if(menu?.id.startsWith('info-preview-')){
       expand(scope,true);life.timeout(()=>{viewer.querySelector('[data-viewer-info]')?.click();},40);return;

@@ -1,9 +1,11 @@
 package web
 
 import (
+ "github.com/araihu/goshtoso/components/button"
  "github.com/araihu/goshtoso/components/emptystate"
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/link"
+ "github.com/araihu/goshtoso/components/skeleton"
  "strconv"
 )
 
@@ -39,8 +41,20 @@ templ conversationPane(v view){
 					<p class="oie-preview-note">{ v.Text.PreviewNote }</p>
 				}
 				<div id="context-notice" class="oie-context-notice" role="status">@contextNotice(v)</div>
-<div class="oie-timeline" id="message-timeline" tabindex="0" aria-label={v.Text.Conversations} data-version={v.timelineVersion()}>
+<div class="oie-timeline-frame">
+<div class="oie-timeline" id="message-timeline" tabindex="0" aria-label={v.Text.Conversations} data-version={v.timelineVersion()}
+ if v.RoomArchive != nil {
+  data-room-archive={string(v.RoomArchive.Availability)}
+  data-archive-text-search={string(v.RoomArchive.TextSearch)}
+  data-archive-initial={strconv.FormatBool(v.RoomArchive.InitialComplete)}
+  data-archive-complete={strconv.FormatBool(v.RoomArchive.OlderComplete)}
+  if v.RoomArchive.OldestCoveredAt != nil {
+   data-archive-covered={strconv.FormatInt(v.RoomArchive.OldestCoveredAt.UnixMilli(),10)}
+  }
+ }
+>
 @timeline(v)
+</div>
 </div>
 <button type="button" class="oie-jump-latest" data-jump-latest hidden?={!v.ContextHasNewer&&!v.ContextMissing}>{v.Text.JumpToLatest}</button>
 
@@ -52,9 +66,35 @@ templ conversationPane(v view){
 				</div>
 			}
 		</section>
+@conversationSkeleton(v)
 @roomSessionDialog(v)
 @conversationDetails(v)
 @senderDrawer(v)
 @messageHistoryDrawer(v)
+</div>
+}
+
+templ conversationSkeleton(v view) {
+<div class="oie-chat-skeleton" data-conversation-loading hidden>
+ <div class="sr-only" role="status">{v.Text.TimelineLoading}</div>
+ <div class="oie-chat-skeleton-header">
+  @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-chat-skeleton-back"),button.WithAttrs(templ.Attributes{"data-cancel-conversation-loading":"","aria-label":v.Text.Back})){
+   @glyph(heroicons.Icon16SolidChevronLeft)
+  }
+  <div class="oie-chat-skeleton-identity" aria-hidden="true">
+   @skeleton.Skeleton(skeleton.Config{Shape:skeleton.ShapeCircle,RootClass:"oie-chat-skeleton-avatar"})
+   @skeleton.Skeleton(skeleton.Config{Count:2,RootClass:"oie-chat-skeleton-title"})
+  </div>
+ </div>
+ <div class="oie-chat-skeleton-timeline" aria-hidden="true">
+  @skeleton.Skeleton(skeleton.Config{Shape:skeleton.ShapeRectangle,RootClass:"oie-chat-skeleton-message"})
+  @skeleton.Skeleton(skeleton.Config{Shape:skeleton.ShapeRectangle,RootClass:"oie-chat-skeleton-message oie-chat-skeleton-outgoing"})
+  @skeleton.Skeleton(skeleton.Config{Shape:skeleton.ShapeRectangle,RootClass:"oie-chat-skeleton-message"})
+  @skeleton.Skeleton(skeleton.Config{Shape:skeleton.ShapeRectangle,RootClass:"oie-chat-skeleton-message"})
+  @skeleton.Skeleton(skeleton.Config{Shape:skeleton.ShapeRectangle,RootClass:"oie-chat-skeleton-message oie-chat-skeleton-outgoing"})
+ </div>
+ <div class="oie-chat-skeleton-composer" aria-hidden="true">
+  @skeleton.Skeleton(skeleton.Config{Shape:skeleton.ShapeRectangle,ItemClass:"oie-chat-skeleton-input"})
+ </div>
 </div>
 }

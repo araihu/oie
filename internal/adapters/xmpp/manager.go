@@ -35,53 +35,59 @@ type configuration struct {
 	Enabled            bool
 }
 type entry struct {
-	account           domain.Account
-	config            configuration
-	cancel            context.CancelFunc
-	mu                sync.RWMutex
-	sendMu            sync.Mutex
-	roomNotifyMu      sync.Mutex
-	rooms             map[string]*roomSlot
-	ownRoomMessages   map[string]ownRoomMessage
-	correctionSession string
-	correctionSources map[string]ownCorrectionSource
-	correctionLatest  map[string]domain.ID
-	reactionLimits    map[string]reactionLimit
-	reactionCommands  map[string]reactionDestination
-	state             domain.Connection
-	session           *mx.Session
-	raw               net.Conn
-	historyMu         sync.Mutex
-	archive           *archiveQuery
-	sidScopes         map[string]bool
-	occupantScopes    map[string]bool
-	discovery         domain.CapabilityDiscovery
-	discoveryPartial  bool
-	detailsWake       chan struct{}
-	details           map[domain.ID]*detailSlot
-	peerPresence      map[string]map[string]peerResource
-	avatarWake        chan struct{}
-	avatarMu          sync.Mutex
-	avatarTargets     map[string]string
-	avatarDirty       map[string]string
-	contactsWake      chan struct{}
-	profiles          map[string]*profileSlot
+	account             domain.Account
+	config              configuration
+	cancel              context.CancelFunc
+	mu                  sync.RWMutex
+	sendMu              sync.Mutex
+	roomNotifyMu        sync.Mutex
+	rooms               map[string]*roomSlot
+	ownRoomMessages     map[string]ownRoomMessage
+	correctionSession   string
+	correctionSources   map[string]ownCorrectionSource
+	correctionLatest    map[string]domain.ID
+	reactionLimits      map[string]reactionLimit
+	reactionCommands    map[string]reactionDestination
+	state               domain.Connection
+	session             *mx.Session
+	raw                 net.Conn
+	historyMu           sync.Mutex
+	archives            map[string]*archiveQuery
+	historyWake         chan struct{}
+	archiveSessionCtx   context.Context
+	archiveCapabilities map[string]roomArchiveCapability
+	sidScopes           map[string]bool
+	occupantScopes      map[string]bool
+	semianonymousRooms  map[string]bool
+	roomConfigurations  map[string]roomConfiguration
+	discovery           domain.CapabilityDiscovery
+	discoveryPartial    bool
+	detailsWake         chan struct{}
+	details             map[domain.ID]*detailSlot
+	peerPresence        map[string]map[string]peerResource
+	avatarWake          chan struct{}
+	avatarMu            sync.Mutex
+	avatarTargets       map[string]string
+	avatarDirty         map[string]string
+	contactsWake        chan struct{}
+	profiles            map[string]*profileSlot
 }
 type Manager struct {
-	dir         string
-	roots       *x509.CertPool
-	mu          sync.RWMutex
-	entries     map[domain.ID]*entry
-	ctx         context.Context
-	cancel      context.CancelFunc
-	host        application.ProtocolHost
-	workers     sync.WaitGroup
-	historyGate chan struct{}
-	avatarGate  chan struct{}
+	dir             string
+	roots           *x509.CertPool
+	mu              sync.RWMutex
+	entries         map[domain.ID]*entry
+	ctx             context.Context
+	cancel          context.CancelFunc
+	host            application.ProtocolHost
+	workers         sync.WaitGroup
+	archiveQueuesMu sync.Mutex
+	archiveQueues   map[string]*archiveQueue
+	avatarGate      chan struct{}
 }
 
 func New(dir string, roots *x509.CertPool) *Manager {
-	return &Manager{dir: dir, roots: roots, entries: make(map[domain.ID]*entry), historyGate: make(chan struct{}, 1), avatarGate: make(chan struct{}, 1)}
+	return &Manager{dir: dir, roots: roots, entries: make(map[domain.ID]*entry), avatarGate: make(chan struct{}, 1)}
 }
 func (m *Manager) NormalizeAddress(protocol, address string) (string, error) {
 	if protocol != "xmpp" {
@@ -146,9 +152,11 @@ func (e *entry) stop() {
 	if e.cancel != nil {
 		e.cancel()
 	}
-	e.mu.RLock()
+	e.mu.Lock()
+	// A queued writer must see the transport detach before the worker exits.
 	raw := e.raw
-	e.mu.RUnlock()
+	e.raw = nil
+	e.mu.Unlock()
 	if raw != nil {
 		_ = raw.Close()
 	}
@@ -289,6 +297,8 @@ func (m *Manager) publish(ctx context.Context, e *entry, state, code string) err
 	e.state = domain.Connection{AccountID: e.account.ID, State: state, LastErrorCode: code, UpdatedAt: time.Now().UTC()}
 	e.historyMu.Lock()
 	e.occupantScopes = nil
+	e.semianonymousRooms = nil
+	e.roomConfigurations = nil
 	e.historyMu.Unlock()
 	if state != "connected" {
 		e.discovery = domain.CapabilityDiscovery{State: "not_connected", Services: []domain.DiscoveredService{}}
@@ -317,7 +327,9 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 		session, raw, err := m.connect(ctx, e)
 		if err == nil {
 			e.mu.Lock()
+			historyCtx, historyCancel := context.WithCancel(ctx)
 			e.session = session
+			e.archiveSessionCtx = historyCtx
 			e.raw = raw
 			e.correctionSession = randomQueryID()
 			e.correctionSources = map[string]ownCorrectionSource{}
@@ -325,14 +337,18 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.reactionLimits = nil
 			e.reactionCommands = nil
 			e.contactsWake = make(chan struct{}, 1)
+			e.historyWake = make(chan struct{}, 1)
+			e.historyMu.Lock()
+			e.archiveCapabilities = nil
+			e.historyMu.Unlock()
 			contactsWake := e.contactsWake
 			e.mu.Unlock()
 			if ctx.Err() != nil {
+				historyCancel()
 				_ = raw.Close()
 				return
 			}
 			if err = m.publish(ctx, e, "connected", ""); err == nil {
-				historyCtx, historyCancel := context.WithCancel(ctx)
 				m.workers.Add(4)
 				go func() { defer m.workers.Done(); m.historyLoop(historyCtx, e, session) }()
 				go func() { defer m.workers.Done(); m.avatarLoop(historyCtx, e, session) }()
@@ -349,8 +365,8 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 				err = session.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
 					return m.handle(ctx, e, tokens, start)
 				}))
-				historyCancel()
 			}
+			historyCancel()
 			_ = raw.Close()
 			m.resetRoomSessions(ctx, e, session)
 			e.mu.Lock()
@@ -481,12 +497,8 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 		e.mu.Unlock()
 		return application.Failed
 	}
-	if out.Reaction != nil && !validFrozenReaction(e, a, out) {
-		e.mu.Unlock()
-		return application.Failed
-	}
 	e.mu.Unlock()
-	if out.Kind == "room" {
+	if out.Kind == "room" && out.Reaction == nil {
 		e.mu.Lock()
 		slot := e.rooms[out.Address]
 		if slot == nil || slot.session != session || slot.snapshot.State != "joined" || slot.snapshot.IntentRevisionID != out.RoomIntentRevisionID {
@@ -497,23 +509,24 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 			return application.NotSent
 		}
 		payload.Mentions = roomMentionReferences(slot, payload.Mentions)
-		if out.Reaction == nil && e.ownRoomMessages == nil {
+		if e.ownRoomMessages == nil {
 			e.ownRoomMessages = map[string]ownRoomMessage{}
 		}
-		if out.Reaction == nil && len(e.ownRoomMessages) >= maxOwnRoomMessages {
+		if len(e.ownRoomMessages) >= maxOwnRoomMessages {
 			for id := range e.ownRoomMessages {
 				delete(e.ownRoomMessages, id)
 				break
 			}
 		}
-		if out.Reaction == nil {
-			e.ownRoomMessages[string(out.ID)] = ownRoomMessage{address: out.Address, body: out.OriginalText}
-		}
+		e.ownRoomMessages[string(out.ID)] = ownRoomMessage{address: out.Address, body: out.OriginalText}
 		e.mu.Unlock()
 	}
 
 	if ctx.Err() != nil {
 		return application.NotSent
+	}
+	if out.Reaction != nil {
+		return sendFrozenReaction(ctx, e, session, raw, a, out, payload)
 	}
 	deadline, ok := ctx.Deadline()
 	if !ok {
@@ -522,11 +535,7 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	_ = raw.SetWriteDeadline(deadline)
 	defer func() { _ = raw.SetWriteDeadline(time.Time{}) }()
 	e.mu.Lock()
-	if out.Reaction != nil {
-		trackReactionCommand(e, out)
-	} else {
-		trackCorrectionSource(e, a, out)
-	}
+	trackCorrectionSource(e, a, out)
 	e.mu.Unlock()
 
 	if err = session.Encode(ctx, payload); err != nil {
@@ -580,6 +589,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 					Node string `xml:"node,attr"`
 				} `xml:"items"`
 			} `xml:"http://jabber.org/protocol/pubsub#event event"`
+			MUC   *mucUser `xml:"http://jabber.org/protocol/muc#user x"`
 			Delay struct {
 				From  string `xml:"from,attr"`
 				Stamp string `xml:"stamp,attr"`
@@ -599,6 +609,11 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		}
 		if msg.Archive != nil {
 			return m.captureArchive(e, msg.Message, msg.Archive)
+		}
+		if msg.MUC != nil && msg.Delay.Stamp == "" && msg.Delay.From == "" {
+			if err := m.invalidateRoomConfiguration(ctx, e, msg.Message, msg.MUC); err != nil {
+				return err
+			}
 		}
 		if msg.Type == stanza.ErrorMessage {
 			if handled, err := m.rejectReaction(ctx, e, msg.Message); handled {
@@ -631,7 +646,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			return m.host.Reject(ctx, application.Rejected{AccountID: e.account.ID, MessageID: msg.ID, Address: address, FromServer: fromServer, FromParticipant: msg.From.Resourcepart() != ""})
 		}
 		if len(msg.Reactions) != 0 {
-			return m.receiveReaction(ctx, e, msg.Message, msg.reactionMetadata, msg.Delay.Stamp, msg.Delay.From)
+			return m.receiveReaction(ctx, e, msg.Message, msg.reactionMetadata, msg.replyMetadata, msg.Occupants, msg.Delay.Stamp, msg.Delay.From)
 		}
 		if msg.Type == stanza.GroupChatMessage {
 			return m.receiveRoomMessage(ctx, e, msg.Message, msg.replyMetadata, msg.Body, msg.Delay.Stamp, msg.Delay.From, msg.fileSharingMetadata, msg.correctionMetadata)
@@ -664,8 +679,8 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			return err
 		}
 		captureRoomMentionPresence(e, presence)
-		if m.captureRoomPresence(ctx, e, presence) {
-			return nil
+		if handled, err := m.captureRoomPresence(ctx, e, presence); handled {
+			return err
 		}
 		capturePeerPresence(e, presence)
 		if presence.Update != nil && presence.Update.Photo != nil {

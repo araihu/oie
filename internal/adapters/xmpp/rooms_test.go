@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	"io"
+
 	"net"
 	"strings"
 	"testing"
@@ -12,8 +14,10 @@ import (
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	mx "mellium.im/xmpp"
+
 	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/stanza"
+	"mellium.im/xmpp/stream"
 )
 
 type roomHostStub struct {
@@ -44,7 +48,9 @@ func feedRoomPresence(t *testing.T, m *Manager, e *entry, raw string) {
 	if err := xml.Unmarshal([]byte(raw), &p); err != nil {
 		t.Fatal(err)
 	}
-	m.captureRoomPresence(t.Context(), e, p)
+	if _, err := m.captureRoomPresence(t.Context(), e, p); err != nil {
+		t.Fatal(err)
+	}
 }
 func TestRoomJoinRequiresScopedSelfPresenceAndInvalidatesLeave(t *testing.T) {
 	m, e, slot, host := roomFixture(t)
@@ -193,5 +199,72 @@ func TestRoomJoinTimeoutAndDisconnectedObservationKeepIntentBinding(t *testing.T
 	snapshot, err = m.RoomSession(t.Context(), e.account, slot.conversation)
 	if err != nil || snapshot.State != "not_joined" || snapshot.LastErrorCode != "not_connected" || snapshot.IntentRevisionID != binding {
 		t.Fatal("retired connection still proved membership", snapshot, err)
+	}
+}
+
+type roomPrivacyTestHost struct {
+	roomHostStub
+	privacy application.RoomReactionPrivacy
+}
+
+func (h *roomPrivacyTestHost) SetRoomReactionPrivacy(_ context.Context, _ domain.ID, _ string, privacy application.RoomReactionPrivacy) error {
+	h.privacy = privacy
+	return nil
+}
+
+func TestNonanonymousReactionPrivacyRequiresCurrentPresence(t *testing.T) {
+	for _, action := range []string{"unjoined discovery", "leave", "kick"} {
+		t.Run(action, func(t *testing.T) {
+			m, e, slot, _ := roomFixture(t)
+			host := &roomPrivacyTestHost{}
+			m.host = host
+			room := slot.conversation.Address
+			slot.snapshot.State = "joined"
+			if action == "unjoined discovery" {
+				slot.snapshot.State = "not_joined"
+			}
+			disco := `<query xmlns="http://jabber.org/protocol/disco#info"><identity category="conference" type="text"/><feature var="muc_nonanonymous"/><feature var="urn:xmpp:sid:0"/></query>`
+			if _, err := m.decodeDiscoInfo(t.Context(), e, e.session, room, disco, 0); err != nil {
+				t.Fatal(err)
+			}
+			if host.privacy.Public != (action != "unjoined discovery") || host.privacy.Mode != application.RoomReactionsNonanonymous {
+				t.Fatal("discovery applied the wrong privacy", host.privacy)
+			}
+			switch action {
+			case "leave":
+				left, right := net.Pipe()
+				t.Cleanup(func() { _ = left.Close(); _ = right.Close() })
+				session, err := mx.NewSession(t.Context(), jid.MustParse("example.test"), jid.MustParse("alice@example.test/test"), left, mx.Ready, func(context.Context, *stream.Info, *stream.Info, *mx.Session, any) (mx.SessionState, io.ReadWriter, any, error) {
+					return mx.Ready, nil, nil, nil
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				e.session, e.raw, slot.session = session, left, session
+				received := make(chan stanza.Presence, 1)
+				go func() {
+					_ = right.SetReadDeadline(time.Now().Add(time.Second))
+					var p stanza.Presence
+					_ = xml.NewDecoder(right).Decode(&p)
+					received <- p
+				}()
+				if _, err := m.LeaveRoom(t.Context(), e.account, slot.conversation, slot.snapshot.IntentRevisionID); err != nil {
+					t.Fatal(err)
+				}
+				if p := <-received; p.Type != stanza.UnavailablePresence {
+					t.Fatal("room did not receive an unavailable presence", p)
+				}
+			case "kick":
+				feedRoomPresence(t, m, e, `<presence xmlns="jabber:client" from="`+room+`/Oie" type="unavailable"><x xmlns="http://jabber.org/protocol/muc#user"><status code="110"/><status code="307"/></x></presence>`)
+			}
+			if host.privacy.Public {
+				t.Fatal("room without presence can expose peer addresses")
+			}
+			if action != "unjoined discovery" {
+				if _, err := m.decodeDiscoInfo(t.Context(), e, e.session, room, disco, 0); err == nil {
+					t.Fatal("discovery started before losing presence restored visibility")
+				}
+			}
+		})
 	}
 }
