@@ -10,9 +10,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/a-h/templ"
 	"github.com/araihu/goshtoso/assets"
 	"github.com/araihu/goshtoso/components/dropdown"
 	"github.com/araihu/goshtoso/components/head"
+	"github.com/araihu/goshtoso/components/link"
 	"github.com/araihu/goshtoso/components/splitbutton"
 )
 
@@ -21,9 +23,19 @@ func main() {
 	flag.Parse()
 
 	ctx := context.Background()
-	var dependencies, composer bytes.Buffer
+	var dependencies, navigation, composer bytes.Buffer
 	if err := head.Dependencies(head.WithLocalRuntime()).Render(ctx, &dependencies); err != nil {
 		log.Fatal(err)
+	}
+	for _, item := range []struct{ id, label string }{
+		{"chats", "Conversas"},
+		{"scheduled", "Agendadas"},
+	} {
+		if err := link.Link("#"+item.id, link.WithRootClass("main-nav-link"),
+			link.WithAttrs(templ.Attributes{"data-view": item.id, "data-copy": item.id}),
+		).Render(templ.WithChildren(ctx, templ.Raw(templ.EscapeString(item.label))), &navigation); err != nil {
+			log.Fatal(err)
+		}
 	}
 	if err := splitbutton.SplitButton(splitbutton.Config{
 		ID: "composer-actions", MenuLabel: "Opções de envio", MenuAlign: dropdown.AlignEnd,
@@ -47,6 +59,7 @@ func main() {
 			return
 		}
 		page = bytes.Replace(page, []byte("<!-- goshtoso-dependencies -->"), dependencies.Bytes(), 1)
+		page = bytes.Replace(page, []byte("<!-- main-navigation -->"), navigation.Bytes(), 1)
 		page = bytes.Replace(page, []byte("<!-- composer-actions -->"), composer.Bytes(), 1)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")

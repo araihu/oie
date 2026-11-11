@@ -331,9 +331,14 @@ discards the edit. Scheduled items offer Send now, which makes the same intent
 eligible immediately and uses the same atomic cutoff as edit, reschedule and
 cancel. Delivery still depends on the owning engine and provider connectivity.
 
+**AGREED:** Scheduled appears in the main navigation and lists pending
+scheduled messages across conversations. Each entry identifies its destination.
+Users can filter by conversation, open the destination, edit in that
+conversation's composer, reschedule, cancel or send now.
+
 The [OpenAPI draft](../api/message-scheduling.overlay.yaml) covers the earlier
 plain-text increment. Full composition and Send now need contract revisions,
-including attachment staging under O09. The
+including attachment staging under O09 and a cross-conversation listing. The
 [scheduling prototype](prototypes/message-scheduling.html) demonstrates the
 agreed controls with local example data.
 
