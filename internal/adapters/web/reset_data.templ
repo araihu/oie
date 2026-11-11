@@ -10,7 +10,6 @@ templ resetDataEntry(v view) {
 	@button.Button(
 		button.WithType("button"),
 		button.WithTone(button.ToneDanger),
-		button.WithAppearance(button.AppearancePlain),
 		button.WithAttrs(templ.Attributes{"aria-haspopup": "dialog", "data-reset-data-open": ""}),
 	) {
 		{ v.Text.DeleteAllData }

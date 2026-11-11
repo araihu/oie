@@ -449,9 +449,11 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-sender-context dd{margin:0;color:var(--oie-muted)}
 .oie-sender-retry{display:block;margin-top:16px}
 
+#settings-body{display:flex;flex-direction:column;overflow:hidden}
+.oie-settings-scroll{flex:1;min-height:0;overflow-y:auto}
+.oie-settings-footer{display:grid;flex:none;padding:8px;border-top:1px solid var(--oie-border)}
 .oie-about-entry{
- justify-content:space-between;padding-inline:12px;border-top:1px solid var(--oie-border);
- border-radius:0;color:var(--oie-text);font-weight:650
+ justify-content:space-between;min-height:44px;padding-inline:12px;color:var(--oie-text);font-weight:650
 }
 .oie-about{display:grid;gap:24px;padding:12px 24px 28px;color:var(--oie-text)}
 .oie-about-back{justify-self:start;gap:6px;padding-inline:0;color:var(--oie-accent-text)}

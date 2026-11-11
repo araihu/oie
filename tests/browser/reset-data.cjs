@@ -9,8 +9,34 @@ const { chromium } = require('playwright');
 const binary = process.env.OIE_WEB_BINARY || path.resolve(__dirname, '../../bin/oie');
 
 async function openSettings(page, url, fixture) {
-  await page.goto(url + '/?open=settings&lang=' + fixture.locale + '&theme=dark');
+  await page.goto(url + '/?open=settings&lang=' + fixture.locale + '&theme=' + fixture.theme);
+  const settings = page.getByRole('dialog', { name: fixture.settings, exact: true });
+  const footer = settings.locator('footer');
+  await footer.getByRole('button', { name: fixture.about, exact: true }).waitFor();
+  await page.setViewportSize({ width: fixture.viewport.width, height: 480 });
+  const placement = await footer.evaluate(node => {
+    const panel = node.closest('[role="dialog"]');
+    const content = panel.querySelector('.oie-settings-scroll');
+    const before = node.getBoundingClientRect().bottom;
+    content.scrollTop = content.scrollHeight;
+    return {
+      scrolled: content.scrollTop > 0,
+      shift: Math.abs(node.getBoundingClientRect().bottom - before),
+      gap: Math.abs(node.getBoundingClientRect().bottom - panel.getBoundingClientRect().bottom),
+    };
+  });
+  assert(placement.scrolled && placement.shift <= 1 && placement.gap <= 1, JSON.stringify(placement));
+  await page.setViewportSize(fixture.viewport);
+
   const action = page.getByRole('button', { name: fixture.action, exact: true }).first();
+  const [red, green, blue, alpha] = await action.evaluate(node => {
+    const canvas = document.createElement('canvas');
+    const paint = canvas.getContext('2d');
+    paint.fillStyle = getComputedStyle(node).backgroundColor;
+    paint.fillRect(0, 0, 1, 1);
+    return Array.from(paint.getImageData(0, 0, 1, 1).data);
+  });
+  assert(alpha === 255 && red > green + 30 && red > blue + 30, 'reset action uses a filled red background');
   await action.click();
   return page.getByRole('dialog', { name: fixture.action });
 }
@@ -140,10 +166,12 @@ async function testReset(browser, url, fixture) {
     const url = await address;
     await testReset(browser, url, {
       locale: 'en', viewport: { width: 1440, height: 900 }, action: 'Delete all data',
+      settings: 'Settings', about: 'About', theme: 'light',
       confirmation: 'Type delete to confirm', failure: 'Could not delete all data.',
     });
     await testReset(browser, url, {
       locale: 'pt-BR', viewport: { width: 390, height: 844 }, action: 'Apagar todos os dados',
+      settings: 'Configurações', about: 'Sobre', theme: 'dark',
       confirmation: 'Digite delete para confirmar', failure: 'Não foi possível apagar todos os dados.',
     });
     console.log('PASS: typed reset confirmation, cancellation, refusal, stable pending dialog and empty installation');

@@ -422,7 +422,7 @@ func sendKey(v view)string{if v.FormTarget=="send"&&v.field("operationKey")!=""{
 
 templ settings(v view) {
 	@drawer.Drawer(drawer.Config{ID: "settings", Title: v.Text.Settings}) {
-		<div class="oie-settings">
+		<div class="oie-settings oie-settings-scroll">
 			@appearanceSettings(v)
 			@languageSettings(v)
 			<h2>{v.Text.DevicePreferences}</h2>
@@ -438,11 +438,13 @@ templ settings(v view) {
 			if v.Preview {
 				<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
 			}
-			@aboutEntry(v)
 			if v.CanResetData {
 				@resetDataEntry(v)
 			}
 		</div>
+		<footer class="oie-settings-footer">
+			@aboutEntry(v)
+		</footer>
 	}
 }
 

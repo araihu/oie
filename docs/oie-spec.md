@@ -557,7 +557,7 @@ Separate devices notify independently even if another device is active. Activity
 
 Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screenshots. On wide screens, use navigation, a searchable/filterable conversation list, and the active conversation workspace. Include account identity, message bubbles, composer, media/link cards, room/contact details, and settings.
 
-**AGREED:** general app settings have one entry in the main navigation footer beside the account switcher. On mobile, use that same footer inside the navigation menu. Do not repeat general settings in the conversation-list footer, chat actions, or Media and Links header. Account connection management remains available through the account switcher. The desktop navigation has no logo header. General settings include an About drawer with the Oiê logo, license, and third-party attributions.
+**AGREED:** general app settings have one entry in the main navigation footer beside the account switcher. On mobile, use that same footer inside the navigation menu. Do not repeat general settings in the conversation-list footer, chat actions, or Media and Links header. Account connection management remains available through the account switcher. The desktop navigation has no logo header. The settings drawer keeps About in its footer. About shows the Oiê logo, license, and third-party attributions.
 
 **AGREED:** the default conversation wallpaper uses subtle outline doodles of a hammer, sickle, GNU mascot, Brazil outline, Christ the Redeemer, football, mobile phone, paper plane, speech balloon, stars and Go gopher. Keep the repeating artwork readable in light and dark themes without competing with message content.
 
@@ -662,9 +662,9 @@ Use UTC internally for timestamps and scheduling. Convert local input into an in
 ### 11.6 Delete all Oiê data
 
 **AGREED:** Settings offers an installation-wide reset on engines that support
-it. The user must type the exact word `delete` to confirm. Delete the engine's
-accounts and credentials, retained history and indexes, queued operations, and
-managed media. Start an empty engine with a new identity so requests from the
+it. The reset button uses the filled red danger style. The user must type the
+exact word `delete` to confirm. Delete the engine's accounts and credentials,
+retained history and indexes, queued operations, and managed media. Start an empty engine with a new identity so requests from the
 old installation cannot repeat the reset. Clear Oiê's settings, drafts and
 preview cache in the browser that initiated the reset. Other browser profiles,
 exported files and protocol-server data are outside the operation. When an
