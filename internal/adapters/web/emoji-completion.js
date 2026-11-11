@@ -73,32 +73,52 @@
         enabled = decodePreference(localStorage.getItem(preferenceKey));
       } catch { storageDenied = true; }
     }
-    const controls = [...document.querySelectorAll('[data-emoji-shortcut-language]')];
+    const languagePicker = document.getElementById('emoji-shortcut-languages');
+    const languageOptions = languagePicker?.querySelector('[role=listbox]');
+    languageOptions?.setAttribute('aria-multiselectable', 'true');
+    // The option carries selection semantics. The checkbox is its visual indicator.
+    for (const indicator of languageOptions?.querySelectorAll('input[type=checkbox]') ?? []) {
+      indicator.inert = true;
+    }
     const form = document.getElementById('send-message-form');
-    function syncPreference() {
-      for (const control of controls) control.checked = enabled.includes(control.value);
+    function applyPreference() {
       if (storageDenied) {
         const warning = document.querySelector('[data-device-preference-warning]');
         if (warning) warning.hidden = false;
       }
       form?.dispatchEvent(new Event('oie:emoji-languages'));
     }
-    syncPreference();
-    for (const control of controls) {
-      life.on(control, 'change', () => {
-        enabled = controls.filter(input => input.checked).map(input => input.value);
-        try {
-          localStorage.setItem(preferenceKey, JSON.stringify(enabled));
-          preferenceNotSaved = false;
-        } catch { preferenceNotSaved = storageDenied = true; }
-        syncPreference();
-      });
+    function syncLanguagePicker() {
+      languagePicker?.dispatchEvent(new CustomEvent('combobox:load', {
+        bubbles: true, detail: {id: languagePicker.id, values: enabled},
+      }));
+      applyPreference();
     }
+    syncLanguagePicker();
+    life.on(languagePicker, 'combobox:change', event => {
+      if (event.detail?.id !== languagePicker.id || !Array.isArray(event.detail.values)) return;
+      enabled = languages.filter(lang => event.detail.values.includes(lang));
+      try {
+        localStorage.setItem(preferenceKey, JSON.stringify(enabled));
+        preferenceNotSaved = false;
+      } catch { preferenceNotSaved = storageDenied = true; }
+      applyPreference();
+    });
+    // Let the picker handle Escape before the enclosing drawer can close.
+    let dismissingLanguages = false;
+    life.on(languagePicker, 'keydown', event => {
+      if (event.key !== 'Escape' || !languagePicker.querySelector('[role=combobox][aria-expanded=true]')) return;
+      dismissingLanguages = true;
+      life.timeout(() => { dismissingLanguages = false; }, 0);
+    });
+    life.on(document, 'drawer:close-request', event => {
+      if (dismissingLanguages && event.detail?.id === 'settings') event.preventDefault();
+    });
     life.on(window, 'storage', event => {
       if (event.key !== preferenceKey && event.key !== null) return;
       enabled = decodePreference(event.newValue);
       preferenceNotSaved = false;
-      syncPreference();
+      syncLanguagePicker();
     });
 
     const input = document.getElementById('message-composer');

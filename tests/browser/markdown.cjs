@@ -44,7 +44,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const row=(page,n)=>page.locator(`[data-message-id="${messages[n].id}"]`);
  const paragraphs=(page,n)=>row(page,n).locator('[data-rendered-message] p').evaluateAll(nodes=>nodes.map(node=>{let depth=0;for(let parent=node.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='BLOCKQUOTE')depth++;return{text:node.textContent.trim(),depth}}));
  const copyOriginal=async(page,n)=>{await row(page,n).locator('[data-message-menu-trigger]').click();const action=page.locator('#copy-message-'+messages[n].id);await action.waitFor({state:'visible'});await action.click();};
- const setting=async(page,on)=>{await page.evaluate(()=>window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'settings'}})));await page.locator('label[for="render-markdown"]').waitFor({state:'visible'});await page.waitForTimeout(250);if(await page.locator('[data-render-markdown]').isChecked()!==on)await page.locator('label[for="render-markdown"]').click();};
+ const setting=async(page,on)=>{await page.evaluate(()=>window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'settings'}})));await page.getByRole('tab',{name:(await page.locator('html').getAttribute('lang'))==='pt-BR'?'Este dispositivo':'This device',exact:true}).click();await page.locator('label[for="render-markdown"]').waitFor({state:'visible'});await page.waitForTimeout(250);if(await page.locator('[data-render-markdown]').isChecked()!==on)await page.locator('label[for="render-markdown"]').click();};
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
   const context=await browser.newContext({viewport:{width:1440,height:1000},locale:'en'});

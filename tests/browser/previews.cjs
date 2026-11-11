@@ -75,6 +75,7 @@ function thumbnail(color,width=8,height=8){
   const resetImage=p=>{p.downloadState='not_downloaded';delete p.fileHash;delete p.fileMimeType;delete p.fileSize;delete p.integrity;delete p.lastErrorCode;if(p!==previews[2])delete p.imageHash;p.revisionId=id(800+state.seq);};
   const changeSetting=async(page,enabled)=>{
    await page.evaluate(()=>window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'settings'}})));
+   await page.getByRole('tab',{name:'This device',exact:true}).click();
    const control=page.locator('[data-auto-image-downloads]');await page.locator('label[for="auto-image-downloads"]').waitFor({state:'visible'});await page.waitForTimeout(250);
    if(await control.isChecked()!==enabled)await page.locator('label[for="auto-image-downloads"]').click();
    assert.equal(await control.isChecked(),enabled);await page.keyboard.press('Escape');await page.waitForTimeout(250);

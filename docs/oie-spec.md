@@ -602,6 +602,10 @@ Internationalization is required from the start. Ship **English (`en`) and Brazi
 
 **AGREED:** settings use a language selector with a leading flag emoji in each option and in the selected value.
 
+**AGREED:** the settings drawer groups preferences into General, Composition,
+and This device tabs. Composition uses a searchable multi-select for emoji
+shortcut languages.
+
 Use and expand reusable Goshtoso expression support rather than hardcoding user-facing expressions. Oiê owns product copy, locale selection, complete parameterized/plural messages, and locale-aware date/time/number/size formatting. Cover labels, statuses, errors, notifications, accessibility text, and offline UI.
 
 Do not mutate a process-global locale for a hosted engine's devices. Full-page rendering, HTMX fragments, SSE-driven rendering, and cached offline presentation need the same resolved device locale.

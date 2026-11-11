@@ -3,7 +3,6 @@ package web
 import (
  "strconv"
  "github.com/araihu/goshtoso/components/button"
- "github.com/araihu/goshtoso/components/checkbox"
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/panel"
  "github.com/araihu/goshtoso/components/popover"
@@ -25,15 +24,6 @@ if v.composeAllowed() {
 </template>
 </div>
 }
-}
-
-templ compositionSettings(v view) {
-<h2>{v.Text.Composition}</h2>
-<fieldset class="oie-emoji-languages">
-<legend>{v.Text.EmojiShortcutLanguages}</legend>
-@checkbox.Checkbox(checkbox.Config{ID:"emoji-shortcuts-en",Name:"emoji-shortcut-language",Value:"en",Label:v.Text.English,Checked:true,InputAttrs:templ.Attributes{"data-emoji-shortcut-language":""}})
-@checkbox.Checkbox(checkbox.Config{ID:"emoji-shortcuts-pt",Name:"emoji-shortcut-language",Value:"pt-BR",Label:v.Text.Portuguese,Checked:true,InputAttrs:templ.Attributes{"data-emoji-shortcut-language":""}})
-</fieldset>
 }
 
 templ emojiPicker(v view) {

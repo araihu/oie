@@ -117,8 +117,11 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 .oie-chat-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:18px;padding:28px;flex:1;min-width:0}
 .oie-empty-mark{font-size:90px;line-height:1;color:var(--oie-muted);font-weight:600;opacity:.5}
 .oie-list-state{padding:25px 12px;text-align:center}
-.oie-settings{padding:8px;display:flex;flex-direction:column;gap:14px;color:var(--oie-text)}
-.oie-settings h2{margin:15px 0 0;font-weight:650;font-size:14px}.oie-settings p{font-size:13px;line-height:1.6;color:var(--oie-muted)}
+.oie-settings{padding:8px;color:var(--oie-text)}
+.oie-settings [role=tab]{white-space:nowrap}
+.oie-settings-section{display:flex;flex-direction:column;gap:14px}
+.oie-settings-section h2{margin:8px 0 0;font-weight:650;font-size:14px}
+.oie-settings-section p,.oie-settings>.oie-settings-note{font-size:13px;line-height:1.6;color:var(--oie-muted)}
 .oie-settings-links{display:flex;gap:15px;flex-wrap:wrap}.oie-settings-note{border-top:1px solid var(--oie-border);padding-top:16px}
 .oie-accounts{list-style:none;margin:0;padding:0}.oie-accounts li{padding:16px 0;border-bottom:1px solid var(--oie-border)}.oie-accounts span{font-size:11px;color:var(--oie-muted)}
 .oie-details{display:flex;flex-direction:column;gap:20px;padding:12px}.oie-details h2{font-size:20px;font-weight:650}.oie-details h3{font-size:13px;font-weight:650}.oie-details p,.oie-details li{font-size:13px;color:var(--oie-muted)}.oie-details ul{display:flex;flex-direction:column;gap:12px}

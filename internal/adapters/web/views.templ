@@ -22,7 +22,6 @@ import (
 	"github.com/araihu/goshtoso/components/textinput"
 	"github.com/araihu/goshtoso/components/toast"
  "github.com/araihu/goshtoso/expressions"
- "github.com/araihu/goshtoso/components/toggle"
 "github.com/araihu/goshtoso/components/form"
 selectfield "github.com/araihu/goshtoso/components/select"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -415,30 +414,6 @@ templ composer(v view){
 </form>
 }
 func sendKey(v view)string{if v.FormTarget=="send"&&v.field("operationKey")!=""{return v.field("operationKey")};return newOperationKey()}
-
-templ settings(v view) {
-	@drawer.Drawer(drawer.Config{ID: "settings", Title: v.Text.Settings}) {
-		<div class="oie-settings">
-			@appearanceSettings(v)
-			@languageSettings(v)
-			@compositionSettings(v)
-			<h2>{v.Text.DevicePreferences}</h2>
-@toggle.Toggle(toggle.Config{ID:"render-markdown",Label:v.Text.RenderMarkdown,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-render-markdown":"","aria-describedby":"render-markdown-help"}})
-<p id="render-markdown-help">{v.Text.RenderMarkdownHelp}</p>
-@toggle.Toggle(toggle.Config{ID:"auto-image-downloads",Label:v.Text.AutoImageDownloads,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-auto-image-downloads":"","aria-describedby":"auto-image-downloads-help"}})
-<p id="auto-image-downloads-help">{v.Text.AutoImageDownloadsHelp}</p>
-@toggle.Toggle(toggle.Config{ID:"auto-video-thumbnails",Label:v.Text.AutoVideoThumbnails,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-auto-video-thumbnails":"","aria-describedby":"auto-video-thumbnails-help"}})
-<p id="auto-video-thumbnails-help">{v.Text.AutoVideoThumbnailsHelp}</p>
-<p class="oie-settings-note" data-device-preference-warning role="status" hidden>{v.Text.DevicePreferenceUnavailable}</p>
-<h2>{ v.Text.EngineState }</h2>
-			<p>{ v.Role }</p>
-			if v.Preview {
-				<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
-			}
-			@aboutEntry(v)
-		</div>
-	}
-}
 
 templ accounts(v view){
 @drawer.Drawer(drawer.Config{ID:"accounts",Title:v.Text.Accounts,PanelClass:v.accountDrawerClass()}){

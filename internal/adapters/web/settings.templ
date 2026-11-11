@@ -1,0 +1,75 @@
+package web
+
+import (
+	"strconv"
+	"strings"
+
+	"github.com/araihu/goshtoso/components/combobox"
+	"github.com/araihu/goshtoso/components/drawer"
+	"github.com/araihu/goshtoso/components/tabs"
+	"github.com/araihu/goshtoso/components/toggle"
+	"github.com/araihu/goshtoso/expressions"
+)
+
+templ settings(v view) {
+	{{ ctx = expressions.With(ctx, expressions.Set{Tabs: expressions.Tabs{OptionsAriaLabel: v.Text.Settings}}) }}
+	@drawer.Drawer(drawer.Config{ID: "settings", Title: v.Text.Settings}) {
+		<div class="oie-settings">
+			@tabs.Tabs(tabs.Config{
+				ID: "settings-tabs",
+				Tabs: []tabs.Tab{
+					{ID: "general", Label: v.Text.SettingsGeneral, Content: generalSettings(v)},
+					{ID: "composition", Label: v.Text.Composition, Content: compositionSettings(v)},
+					{ID: "device", Label: v.Text.DevicePreferences, Content: deviceSettings(v)},
+				},
+			})
+			<p class="oie-settings-note" data-device-preference-warning role="status" hidden>{ v.Text.DevicePreferenceUnavailable }</p>
+		</div>
+	}
+}
+
+templ generalSettings(v view) {
+	<div class="oie-settings-section">
+		@appearanceSettings(v)
+		@languageSettings(v)
+		<h2>{ v.Text.EngineState }</h2>
+		<p>{ v.Role }</p>
+		if v.Preview {
+			<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
+		}
+		@aboutEntry(v)
+	</div>
+}
+
+func emojiLanguageCombobox(v view) combobox.Config {
+	return combobox.Config{
+		ID: "emoji-shortcut-languages", Name: "emoji-shortcut-language",
+		Label: v.Text.EmojiShortcutLanguages, Placeholder: v.Text.EmojiShortcutsOff,
+		Mode: combobox.ModeMultiple, EnableSearch: true, DisablePersistence: true,
+		Source: combobox.Source{Static: []combobox.Option{
+			{Value: "en", Label: v.Text.English},
+			{Value: "pt-BR", Label: v.Text.Portuguese},
+		}},
+		Selected: []string{"en", "pt-BR"},
+	}
+}
+
+templ compositionSettings(v view) {
+	{{ ctx = expressions.With(ctx, expressions.Set{Combobox: expressions.Combobox{
+		SearchPlaceholder: v.Text.SearchLanguages, EmptyText: v.Text.NoLanguagesFound,
+		SelectedLabel: func(count int) string { return strings.ReplaceAll(v.Text.EmojiShortcutLanguageCount, "{count}", strconv.Itoa(count)) },
+	}}) }}
+	{{ config := emojiLanguageCombobox(v) }}
+	@combobox.Combobox(config, config.InitialState())
+}
+
+templ deviceSettings(v view) {
+	<div class="oie-settings-section">
+		@toggle.Toggle(toggle.Config{ID:"render-markdown",Label:v.Text.RenderMarkdown,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-render-markdown":"","aria-describedby":"render-markdown-help"}})
+		<p id="render-markdown-help">{ v.Text.RenderMarkdownHelp }</p>
+		@toggle.Toggle(toggle.Config{ID:"auto-image-downloads",Label:v.Text.AutoImageDownloads,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-auto-image-downloads":"","aria-describedby":"auto-image-downloads-help"}})
+		<p id="auto-image-downloads-help">{ v.Text.AutoImageDownloadsHelp }</p>
+		@toggle.Toggle(toggle.Config{ID:"auto-video-thumbnails",Label:v.Text.AutoVideoThumbnails,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-auto-video-thumbnails":"","aria-describedby":"auto-video-thumbnails-help"}})
+		<p id="auto-video-thumbnails-help">{ v.Text.AutoVideoThumbnailsHelp }</p>
+	</div>
+}

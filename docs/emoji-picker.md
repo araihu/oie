@@ -22,7 +22,8 @@ closing colon and preserves adjacent text. It updates the existing draft and
 recent choices. The picker provides skin-tone variants.
 
 **Settings → Composition → Emoji shortcut languages** defaults to both English
-and Brazilian Portuguese. Clearing both choices disables shortcuts. The device
+and Brazilian Portuguese in a searchable multi-select. Deselecting both
+languages disables shortcuts. The device
 preference takes effect immediately and falls back to tab memory if storage is
 unavailable. The interface language still supplies accessible emoji names. The
 picker searches both languages.
