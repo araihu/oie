@@ -186,6 +186,8 @@ persistent engine caches.
 The runner prints stage progress every 30 seconds and saves command output under
 `tests/browser/artifacts/ci`. Browser evidence is under its `browser` subdirectory.
 `checks`, `race` and `build` run as separate stages with their own logs.
+The Go XMPP integration and the real-engine browser workflow use separate
+Prosody instances so browser accounts start with an empty message archive.
 Go and browser stages use a bounded memory-backed `TMPDIR` for disposable
 SQLite databases, compiler scratch files and browser profiles. The binaries,
 logs and browser exit receipt live outside those temporary mounts.

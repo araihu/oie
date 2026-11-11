@@ -207,8 +207,14 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 	for _, port := range []int{80, 443, 5269, 5280, 5281, 5347} {
 		prosody = prosody.WithoutExposedPort(port)
 	}
-	xmpp := prosody.WithExposedPort(5222).AsService(dagger.ContainerAsServiceOpts{Args: []string{"sh", "/opt/oie/start.sh"}})
-	integrated := goContainer.WithServiceBinding("xmpp", xmpp).WithFile("/tmp/xmpp-ca.crt", ca).
+	prosody = prosody.WithExposedPort(5222)
+	// The integration suite writes to the same fixture accounts the browser
+	// opens. Give each stage its own service and message archive.
+	prosodyService := func(stage string) *dagger.Service {
+		return prosody.WithEnvVariable("OIE_CI_STAGE", stage).
+			AsService(dagger.ContainerAsServiceOpts{Args: []string{"sh", "/opt/oie/start.sh"}})
+	}
+	integrated := goContainer.WithServiceBinding("xmpp", prosodyService("xmpp")).WithFile("/tmp/xmpp-ca.crt", ca).
 		WithEnvVariable("OIE_XMPP_INTEGRATION", "1").WithEnvVariable("OIE_XMPP_CA_FILE", "/tmp/xmpp-ca.crt").
 		WithEnvVariable("OIE_XMPP_ENDPOINT", "xmpp:5222").WithEnvVariable("OIE_CI_RUN_ID", runID).
 		WithExec([]string{"go", "test", "-race", "-count=1", "-v", "./tests/xmpp"})
@@ -229,7 +235,7 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 	const browserScratch = "/tmp/oie-browser"
 	browser = browser.WithDirectory("/src", source).
 		WithFile("/src/bin/oie", checked.File("/src/bin/oie")).WithFile("/src/bin/oie-mock", checked.File("/src/bin/oie-mock")).
-		WithFile("/tmp/xmpp-ca.crt", ca).WithWorkdir("/src").WithServiceBinding("xmpp", xmpp).
+		WithFile("/tmp/xmpp-ca.crt", ca).WithWorkdir("/src").WithServiceBinding("xmpp", prosodyService("browser")).
 		WithMountedTemp(browserScratch, dagger.ContainerWithMountedTempOpts{Size: 2 << 30}).
 		WithEnvVariable("TMPDIR", browserScratch).
 		WithEnvVariable("OIE_XMPP_CA_FILE", "/tmp/xmpp-ca.crt").WithEnvVariable("OIE_XMPP_ENDPOINT", "xmpp:5222").
