@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +17,7 @@ import (
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	"github.com/getkin/kin-openapi/routers"
+	"github.com/getkin/kin-openapi/routers/legacy"
 	middleware "github.com/oapi-codegen/nethttp-middleware"
 )
 
@@ -33,46 +36,76 @@ func NewResettable(engine *application.Engine, reset func(domain.ID) error) (htt
 		return nil, err
 	}
 	schema.Servers = nil
+	router, err := legacy.NewRouter(schema)
+	if err != nil {
+		return nil, err
+	}
 	s := &Server{engine: engine, reset: reset}
 	handler := engineapi.HandlerWithOptions(engineapi.NewStrictHandlerWithOptions(s, nil, engineapi.StrictHTTPServerOptions{
-		RequestErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, _ error) {
-			WriteProblem(w, application.ErrInvalid)
+		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, _ error) {
+			WriteProblem(w, r, application.ErrInvalid)
 		},
-		ResponseErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
-			WriteProblem(w, err)
+		ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+			WriteProblem(w, r, err)
 		},
 	}), engineapi.StdHTTPServerOptions{
-		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, _ error) {
-			WriteProblem(w, application.ErrInvalid)
+		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, _ error) {
+			WriteProblem(w, r, application.ErrInvalid)
 		},
 	})
 	validated := middleware.OapiRequestValidatorWithOptions(schema, &middleware.Options{
-		ErrorHandlerWithOpts: func(_ context.Context, err error, w http.ResponseWriter, _ *http.Request, opts middleware.ErrorHandlerOpts) {
+		ErrorHandlerWithOpts: func(_ context.Context, err error, w http.ResponseWriter, r *http.Request, opts middleware.ErrorHandlerOpts) {
 			if errors.Is(err, routers.ErrMethodNotAllowed) {
-				writeProblem(w, http.StatusMethodNotAllowed, "invalid_request")
+				var allowed []string
+				for _, method := range []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE"} {
+					candidate := r.Clone(r.Context())
+					candidate.Method = method
+					if _, _, routeErr := router.FindRoute(candidate); routeErr == nil {
+						allowed = append(allowed, method)
+					}
+				}
+				sort.Strings(allowed)
+				w.Header().Set("Allow", strings.Join(allowed, ", "))
+				writeProblem(w, r, http.StatusMethodNotAllowed, "invalid_request")
 				return
 			}
 			if opts.StatusCode == http.StatusNotFound {
-				WriteProblem(w, application.ErrNotFound)
+				WriteProblem(w, r, application.ErrNotFound)
 				return
 			}
-			WriteProblem(w, application.ErrInvalid)
+			var tooLarge *http.MaxBytesError
+			if errors.As(err, &tooLarge) {
+				writeProblem(w, r, http.StatusRequestEntityTooLarge, "invalid_request")
+				return
+			}
+			WriteProblem(w, r, application.ErrInvalid)
 		},
 	})(handler)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
 		if r.Method == http.MethodHead && strings.HasPrefix(r.URL.Path, "/api/v1/shared-content/") && strings.HasSuffix(r.URL.Path, "/content") {
 			w.Header().Set("Allow", http.MethodGet)
-			writeProblem(w, http.StatusMethodNotAllowed, "invalid_request")
+			writeProblem(w, r, http.StatusMethodNotAllowed, "invalid_request")
 			return
 		}
-		w.Header().Set("Cache-Control", "no-store")
+		if route, _, routeErr := router.FindRoute(r); routeErr == nil && route.Operation.RequestBody != nil && r.Header.Get("Content-Type") != "" {
+			mediaType, _, parseErr := mime.ParseMediaType(r.Header.Get("Content-Type"))
+			if parseErr != nil {
+				WriteProblem(w, r, application.ErrInvalid)
+				return
+			}
+			if route.Operation.RequestBody.Value.Content.Get(mediaType) == nil {
+				writeProblem(w, r, http.StatusUnsupportedMediaType, "invalid_request")
+				return
+			}
+		}
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 		validated.ServeHTTP(w, r)
 	}), nil
 }
 
 // WriteProblem deliberately exposes stable codes, never raw database/input errors.
-func WriteProblem(w http.ResponseWriter, err error) {
+func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 	status, code := http.StatusServiceUnavailable, "unavailable"
 	switch {
 	case errors.Is(err, application.ErrInvalid):
@@ -112,51 +145,103 @@ func WriteProblem(w http.ResponseWriter, err error) {
 		if mediaFailure.Code == "range_not_satisfiable" && mediaFailure.Total >= 0 {
 			w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", mediaFailure.Total))
 		}
-		writeProblem(w, status, mediaFailure.Code)
+		writeProblem(w, r, status, mediaFailure.Code)
 		return
 	}
+	problem := newProblem(status, code)
 	var roomConflict application.RoomStateConflict
-	if errors.As(err, &roomConflict) {
-		current := roomSession(roomConflict.Current)
-		w.Header().Set("Content-Type", "application/problem+json")
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(engineapi.Problem{Type: "urn:oie:problem:" + code, Title: http.StatusText(status), Status: status, Code: engineapi.ProblemCode(code), CurrentRoomSession: &current})
-		return
-	}
 	var preferenceConflict application.ConversationPreferencesConflict
-	if errors.As(err, &preferenceConflict) {
-		current := conversation(preferenceConflict.Current)
-		w.Header().Set("Content-Type", "application/problem+json")
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(engineapi.Problem{Type: "urn:oie:problem:" + code, Title: http.StatusText(status), Status: status, Code: engineapi.ProblemCode(code), CurrentConversation: &current})
-		return
-	}
-	var conflict application.StateConflict
 	var starConflict application.StarConflict
-	if errors.As(err, &starConflict) {
+	var conflict application.StateConflict
+	switch {
+	case errors.As(err, &roomConflict):
+		current := roomSession(roomConflict.Current)
+		problem.CurrentRoomSession = &current
+	case errors.As(err, &preferenceConflict):
+		current := conversation(preferenceConflict.Current)
+		problem.CurrentConversation = &current
+	case errors.As(err, &starConflict):
 		current := star(starConflict.Current)
-		w.Header().Set("Content-Type", "application/problem+json")
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(engineapi.Problem{Type: "urn:oie:problem:" + code, Title: http.StatusText(status), Status: status, Code: engineapi.ProblemCode(code), CurrentStar: &current})
-		return
-	}
-	if errors.As(err, &conflict) {
+		problem.CurrentStar = &current
+	case errors.As(err, &conflict):
 		current := message(conflict.Current)
-		w.Header().Set("Content-Type", "application/problem+json")
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(engineapi.Problem{Type: "urn:oie:problem:" + code, Title: http.StatusText(status), Status: status, Code: engineapi.ProblemCode(code), CurrentMessage: &current})
-		return
+		problem.CurrentMessage = &current
 	}
-	writeProblem(w, status, code)
+	writeProblemDocument(w, r, problem)
 }
 
-func writeProblem(w http.ResponseWriter, status int, code string) {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(engineapi.Problem{
-		Type: "urn:oie:problem:" + code, Title: http.StatusText(status),
+var problemTitles = map[string]string{
+	"invalid_request":       "Invalid request",
+	"not_found":             "Not Found",
+	"idempotency_conflict":  "Idempotency key conflict",
+	"account_exists":        "Account already exists",
+	"invalid_cursor":        "Invalid event cursor",
+	"history_changed":       "History changed",
+	"unavailable":           "Service Unavailable",
+	"state_conflict":        "State conflict",
+	"protocol_unavailable":  "Protocol unavailable",
+	"media_blocked":         "Media access blocked",
+	"media_fetch_failed":    "Media fetch failed",
+	"media_too_large":       "Media too large",
+	"media_unsupported":     "Unsupported media",
+	"range_not_satisfiable": "Range not satisfiable",
+	"media_busy":            "Media service busy",
+	"media_timeout":         "Media request timed out",
+}
+
+const problemDocumentationURL = "https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md"
+
+func newProblem(status int, code string) engineapi.Problem {
+	return engineapi.Problem{
+		Type: "urn:oie:problem:" + code, Title: problemTitles[code],
 		Status: status, Code: engineapi.ProblemCode(code),
-	})
+	}
+}
+
+func writeProblem(w http.ResponseWriter, r *http.Request, status int, code string) {
+	writeProblemDocument(w, r, newProblem(status, code))
+}
+
+const problemDocumentationPreference = "oie-problem-documentation"
+
+func prefersProblemDocumentation(header http.Header) bool {
+	for _, field := range header.Values("Prefer") {
+		start := 0
+		var quoted, escaped bool
+		for i, char := range field + "," {
+			switch {
+			case escaped:
+				escaped = false
+			case quoted && char == '\\':
+				escaped = true
+			case char == '"':
+				quoted = !quoted
+			case !quoted && char == ',':
+				item, _, _ := strings.Cut(field[start:i], ";")
+				name, value, assigned := strings.Cut(item, "=")
+				if strings.EqualFold(strings.TrimSpace(name), problemDocumentationPreference) {
+					return !assigned || strings.TrimSpace(value) == `""`
+				}
+				start = i + 1
+			}
+		}
+	}
+	return false
+}
+
+func writeProblemDocument(w http.ResponseWriter, r *http.Request, problem engineapi.Problem) {
+	if _, documented := problemTitles[string(problem.Code)]; documented {
+		documentation := problemDocumentationURL + "#" + string(problem.Code)
+		w.Header().Add("Link", "<"+documentation+`>; rel="help"`)
+		w.Header().Add("Vary", "Prefer")
+		if prefersProblemDocumentation(r.Header) {
+			problem.Documentation = &documentation
+			w.Header().Set("Preference-Applied", problemDocumentationPreference)
+		}
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(problem.Status)
+	_ = json.NewEncoder(w).Encode(problem)
 }
 
 func (s *Server) GetHealth(ctx context.Context, _ engineapi.GetHealthRequestObject) (engineapi.GetHealthResponseObject, error) {

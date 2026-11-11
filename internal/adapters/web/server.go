@@ -586,11 +586,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if strings.HasPrefix(r.URL.Path, "/api/v1/conversations/") && strings.HasSuffix(r.URL.Path, "/read-state") {
+	if strings.HasPrefix(r.URL.Path, "/ui/api/v1/conversations/") && strings.HasSuffix(r.URL.Path, "/read-state") {
 		s.readState(w, r)
 		return
 	}
-	if strings.HasPrefix(r.URL.Path, "/api/v1/previews/") {
+	if strings.HasPrefix(r.URL.Path, "/ui/api/v1/previews/") {
 		s.previewStatus(w, r)
 		return
 	}
@@ -671,7 +671,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		cachehttp.PrivateImmutable.Wrap(http.HandlerFunc(s.mediaImage)).ServeHTTP(w, r)
 		return
 	}
-	if strings.HasPrefix(r.URL.Path, "/api/v1/shared-content/") && strings.HasSuffix(r.URL.Path, "/thumbnail") {
+	if strings.HasPrefix(r.URL.Path, "/ui/api/v1/shared-content/") && strings.HasSuffix(r.URL.Path, "/thumbnail") {
 		s.videoThumbnailStatus(w, r)
 		return
 	}

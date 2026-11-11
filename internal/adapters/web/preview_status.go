@@ -19,7 +19,7 @@ func (s *Server) previewStatus(w http.ResponseWriter, r *http.Request) {
 		previewStatusProblem(w, http.StatusMethodNotAllowed, "method_not_allowed")
 		return
 	}
-	id := strings.TrimPrefix(r.URL.Path, "/api/v1/previews/")
+	id := strings.TrimPrefix(r.URL.Path, "/ui/api/v1/previews/")
 	if !validOperationKey(id) {
 		previewStatusProblem(w, http.StatusBadRequest, "invalid_request")
 		return

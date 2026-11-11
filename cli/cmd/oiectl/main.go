@@ -19,7 +19,8 @@ func main() {
 		err = root.ExecuteContext(ctx)
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		documentation := map[string]string{"transport_error": "https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#transport_error", "usage_error": "https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#usage_error"}
+		fmt.Fprintln(os.Stderr, cliruntime.Diagnostic("oiectl", documentation, root, os.Args[1:], err))
 		os.Exit(cliruntime.ExitCode(err))
 	}
 }

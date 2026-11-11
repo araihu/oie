@@ -56,7 +56,7 @@ test-race:
 check-generated:
 	sh scripts/check-generated.sh
 
-check: lint lint-go check-generated check-ci-tools test-packaging
+check: lint lint-go check-generated check-api-compatibility check-ci-tools test-packaging
 	@test -z "$$(gofmt -l cmd internal api/spec.go tests tools/cmd)" || { echo 'Go formatting drift'; exit 1; }
 	GOWORK=off $(GO) vet ./...
 	GOWORK=off $(GO) -C cli vet ./...
@@ -129,3 +129,11 @@ dev-web:
 dev-web-build:
 	$(CODEGEN) templ generate
 	GOWORK=off $(GO) build -o bin/oie-dev-web ./cmd/oie
+
+.PHONY: check-api-compatibility test-cli-xmpp
+check-api-compatibility:
+	$(CODEGEN) oasdiff breaking api/compatibility/engine-0.27.0.json api/openapi.yaml --fail-on ERR
+	python3 -m unittest discover -s tests/contracts -p 'test_*.py'
+
+test-cli-xmpp:
+	OIE_XMPP_INTEGRATION=1 GOWORK=off $(GO) test -count=1 -v -run TestCLIDataOnlyXMPP ./tests/cli

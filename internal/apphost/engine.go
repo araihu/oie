@@ -105,7 +105,7 @@ func (h *engineHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	instance := h.instance
 	if instance == nil {
 		h.mu.Unlock()
-		httpapi.WriteProblem(w, application.ErrProtocolUnavailable)
+		httpapi.WriteProblem(w, r, application.ErrProtocolUnavailable)
 		return
 	}
 	// The reset request coordinates draining and cannot itself be counted.

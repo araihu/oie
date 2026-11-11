@@ -2,9 +2,11 @@ openapi: 3.0.3
 info:
   title: Oie Engine API
   version: 0.29.0
-  description: Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
+  description: >-
+    Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
-    are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.
+    are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel="help".
+    Send Prefer: oie-problem-documentation to include the URL in the Problem Details body.
   contact:
     name: Arai Hû
     url: https://github.com/araihu/oie
@@ -594,6 +596,16 @@ paths:
             schema:
               $ref: '#/components/schemas/SetMessageStar'
       responses:
+        '413':
+          description: Request body exceeds the one MiB engine limit.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '415':
+          description: Request media type is not supported.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
         '200':
           description: Committed star state or original operation snapshot
           content:
@@ -654,6 +666,16 @@ paths:
             schema:
               $ref: '#/components/schemas/MarkMessagesRead'
       responses:
+        '413':
+          description: Request body exceeds the one MiB engine limit.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '415':
+          description: Request media type is not supported.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
         '200':
           description: Committed read state or original operation snapshot
           content:
@@ -1096,6 +1118,16 @@ paths:
               address: alice@localhost
               label: Personal
       responses:
+        '413':
+          description: Request body exceeds the one MiB engine limit.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '415':
+          description: Request media type is not supported.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
         '201':
           description: Account registered
           headers:
@@ -1426,7 +1458,21 @@ paths:
         network failures reconnect with bounded backoff; invalid credentials or TLS verification failures require
         corrected configuration. Ordinary engine restart reloads enabled configurations.
       responses:
+        '413':
+          description: Request body exceeds the one MiB engine limit.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '415':
+          description: Request media type is not supported.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
         '202':
+          headers:
+            Location:
+              description: Connection state; acceptance is not connection success.
+              schema: {type: string, format: uri-reference}
           description: Connection configuration accepted
           content:
             application/json:
@@ -1556,7 +1602,21 @@ paths:
       description: Finds an existing conversation for the canonical account/peer or creates one. Durable operation
         keys retain original results. Does not add a contact or send presence subscriptions.
       responses:
+        '413':
+          description: Request body exceeds the one MiB engine limit.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '415':
+          description: Request media type is not supported.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
         '201':
+          headers:
+            Location:
+              description: New conversation resource.
+              schema: {type: string, format: uri-reference}
           description: Direct conversation opened
           content:
             application/json:
@@ -1658,6 +1718,16 @@ paths:
             schema:
               $ref: '#/components/schemas/JoinRoom'
       responses:
+        '413':
+          description: Request body exceeds the one MiB engine limit.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '415':
+          description: Request media type is not supported.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
         '200':
           description: Join intent durably accepted or replayed
           content:
@@ -1695,6 +1765,16 @@ paths:
             schema:
               $ref: '#/components/schemas/LeaveRoom'
       responses:
+        '413':
+          description: Request body exceeds the one MiB engine limit.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '415':
+          description: Request media type is not supported.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
         '200':
           description: Leave intent durably accepted or replayed
           content:
@@ -1838,6 +1918,11 @@ paths:
         message. Occupant discovery is a bounded snapshot, never a complete member
         roster. Missing presence remains unknown. Disconnect clears observations.
       responses:
+        '503':
+          description: Engine state is temporarily unavailable.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
         '200':
           description: Available metadata and explicit field availability for this conversation
           content:
@@ -1916,6 +2001,16 @@ paths:
               expectedRevisionId: 019a5df0-0000-7000-8000-000000000002
               archived: true
       responses:
+        '413':
+          description: Request body exceeds the one MiB engine limit.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '415':
+          description: Request media type is not supported.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
         '200':
           description: Accepted conversation snapshot, or its original idempotent replay
           headers:
@@ -2006,7 +2101,21 @@ paths:
         cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous
         transmission becomes unknown, never a blind retry.
       responses:
+        '413':
+          description: Request body exceeds the one MiB engine limit.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '415':
+          description: Request media type is not supported.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
         '202':
+          headers:
+            Location:
+              description: Accepted message; poll for current send state.
+              schema: {type: string, format: uri-reference}
           description: Message and send intent committed
           content:
             application/json:
@@ -2107,7 +2216,21 @@ paths:
             schema:
               $ref: '#/components/schemas/SetMessageReactions'
       responses:
+        '413':
+          description: Request body exceeds the one MiB engine limit.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '415':
+          description: Request media type is not supported.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
         '202':
+          headers:
+            Location:
+              description: Accepted reaction command; poll for current dispatch state.
+              schema: {type: string, format: uri-reference}
           description: Durable reaction command committed
           content:
             application/json:
@@ -2254,7 +2377,21 @@ paths:
             schema:
               $ref: '#/components/schemas/EditMessage'
       responses:
+        '413':
+          description: Request body exceeds the one MiB engine limit.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '415':
+          description: Request media type is not supported.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
         '202':
+          headers:
+            Location:
+              description: Accepted edit command; poll for current dispatch state.
+              schema: {type: string, format: uri-reference}
           description: Correction command committed without claiming delivery
           content:
             application/json:
@@ -2342,7 +2479,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
-              example: {type: 'urn:oie:problem:history_changed', title: Conflict, status: 409, code: history_changed}
+              example:
+                type: urn:oie:problem:history_changed
+                title: History changed
+                status: 409
+                code: history_changed
+                documentation: https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#history_changed
         '503':
           $ref: '#/components/responses/Unavailable'
   /api/v1/messages/{messageId}/sender-profile:
@@ -2354,6 +2496,11 @@ paths:
       summary: Read the author's available published profile
       description: Resolves the author from the retained message and message-time protocol identity evidence. May issue a bounded read-only profile query to a known personal address. Room nicknames and current same-name occupants never establish a historical author's personal JID. Missing or undisclosed identity remains unavailable; user-provided vCard JABBERID does not establish it. Does not join rooms, add contacts, subscribe to presence or mark messages read.
       responses:
+        '503':
+          description: Engine state is temporarily unavailable.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
         '200':
           description: Scoped profile availability and optional published full name and personal address
           content:
@@ -2420,6 +2567,16 @@ paths:
       description: Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage
         and makes no change. Cancelled intents never resume on ordinary restart.
       responses:
+        '413':
+          description: Request body exceeds the one MiB engine limit.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '415':
+          description: Request media type is not supported.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
         '200':
           description: Current resource
           content:
@@ -2494,9 +2651,10 @@ components:
             $ref: '#/components/schemas/Problem'
           example:
             type: urn:oie:problem:invalid_request
-            title: Bad Request
+            title: Invalid request
             status: 400
             code: invalid_request
+            documentation: https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#invalid_request
     NotFound:
       description: Resource not found
       content:
@@ -2508,6 +2666,7 @@ components:
             title: Not Found
             status: 404
             code: not_found
+            documentation: https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#not_found
     Conflict:
       description: Idempotency conflict, duplicate address, invalid stream cursor, or message state conflict
       content:
@@ -2516,9 +2675,10 @@ components:
             $ref: '#/components/schemas/Problem'
           example:
             type: urn:oie:problem:idempotency_conflict
-            title: Conflict
+            title: Idempotency key conflict
             status: 409
             code: idempotency_conflict
+            documentation: https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#idempotency_conflict
     Unavailable:
       description: Engine persistence or protocol service temporarily unavailable
       content:
@@ -2530,6 +2690,7 @@ components:
             title: Service Unavailable
             status: 503
             code: unavailable
+            documentation: https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#unavailable
   schemas:
     ID:
       type: string
@@ -2707,10 +2868,8 @@ components:
           - hosted
         apiVersion:
           type: string
-          enum:
-          - 0.11.0
-          - 0.12.0
-          - 0.29.0
+          description: Engine contract revision, independent of URL major and application release.
+          pattern: '^\d+\.\d+\.\d+$'
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -3053,8 +3212,17 @@ components:
         title: Service Unavailable
         status: 503
         code: unavailable
+        documentation: https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#unavailable
       additionalProperties: false
-      description: Stable codes for presentation-owned localization; no raw storage errors or credentials.
+      description: >-
+        RFC 9457 Problem Details served as application/problem+json. The type URI identifies
+        the problem. The code extension is a stable short identifier for display and localization.
+        The Link response header with rel="help" provides guidance for known problem types.
+        The body includes documentation when the request applies the oie-problem-documentation preference.
+        Responses exclude raw storage errors and credentials.
+      externalDocs:
+        description: RFC 9457 Problem Details for HTTP APIs
+        url: https://www.rfc-editor.org/rfc/rfc9457.html
       required:
       - type
       - title
@@ -3063,12 +3231,16 @@ components:
       properties:
         type:
           type: string
+          description: Stable absolute problem type URI in the form urn:oie:problem:<code>.
         title:
           type: string
+          description: Short human-readable summary that is stable for a problem type.
         status:
           type: integer
+          description: HTTP status code of this response.
         code:
           type: string
+          description: Oiê extension for the short problem code.
           enum:
           - invalid_request
           - not_found
@@ -3086,6 +3258,13 @@ components:
           - range_not_satisfiable
           - media_busy
           - media_timeout
+        documentation:
+          type: string
+          format: uri
+          description: >-
+            Absolute HTTPS link to human-readable guidance for this problem type.
+            Included when Prefer requests oie-problem-documentation with no value or an empty
+            quoted value. The URL may change independently of the type URI and code.
         currentConversation:
           $ref: '#/components/schemas/Conversation'
         currentStar:

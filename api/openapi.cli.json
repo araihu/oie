@@ -3,7 +3,7 @@
   "info": {
     "title": "Oie Engine API",
     "version": "0.29.0",
-    "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.",
+    "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel=\"help\". Send Prefer: oie-problem-documentation to include the URL in the Problem Details body.",
     "contact": {
       "name": "Arai Hû",
       "url": "https://github.com/araihu/oie"
@@ -117,7 +117,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "contacts"
       }
     },
     "/api/v1/messages/search": {
@@ -207,7 +208,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "search"
       }
     },
     "/api/v1/shared-content": {
@@ -319,7 +321,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "shared",
+          "content"
+        ],
+        "x-cli-name": "list"
       }
     },
     "/api/v1/shared-content/{itemId}/thumbnail": {
@@ -361,7 +368,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "previews",
+          "thumbnails"
+        ],
+        "x-cli-name": "get"
       },
       "post": {
         "tags": [
@@ -403,7 +415,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "previews",
+          "thumbnails"
+        ],
+        "x-cli-name": "request"
       }
     },
     "/api/v1/shared-content/{itemId}/content": {
@@ -734,7 +751,14 @@
             }
           }
         },
-        "x-cli-ignore": true
+        "x-cli-group": [
+          "shared",
+          "content"
+        ],
+        "x-cli-name": "download",
+        "x-cli-ignore": false,
+        "x-cli-description": "Download the original bytes of a shared item.",
+        "x-cli-example": "oiectl shared content download --item-id ITEM_UUID --output raw \u003e download\n"
       }
     },
     "/api/v1/conversations/{conversationId}/messages/{messageId}/context": {
@@ -786,7 +810,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "context"
       }
     },
     "/api/v1/messages/{messageId}/star": {
@@ -822,7 +847,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "messages",
+          "stars"
+        ],
+        "x-cli-name": "get"
       },
       "put": {
         "operationId": "setMessageStar",
@@ -854,6 +884,26 @@
           }
         },
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "200": {
             "description": "Committed star state or original operation snapshot",
             "content": {
@@ -876,7 +926,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "messages",
+          "stars"
+        ],
+        "x-cli-name": "set"
       }
     },
     "/api/v1/conversations/{conversationId}/read-state": {
@@ -912,7 +967,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "conversations",
+          "reads"
+        ],
+        "x-cli-name": "get"
       },
       "post": {
         "operationId": "markConversationMessagesRead",
@@ -944,6 +1004,26 @@
           }
         },
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "200": {
             "description": "Committed read state or original operation snapshot",
             "content": {
@@ -966,7 +1046,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "conversations",
+          "reads"
+        ],
+        "x-cli-name": "mark"
       }
     },
     "/api/v1/conversations/{conversationId}/message-stars": {
@@ -1026,7 +1111,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "messages",
+          "stars"
+        ],
+        "x-cli-name": "states"
       }
     },
     "/api/v1/starred-messages": {
@@ -1097,7 +1187,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "messages",
+          "stars"
+        ],
+        "x-cli-name": "list"
       }
     },
     "/api/v1/conversations/{conversationId}/previews": {
@@ -1159,7 +1254,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "list"
       }
     },
     "/api/v1/previews/{previewId}": {
@@ -1201,7 +1297,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "get"
       }
     },
     "/api/v1/previews/{previewId}/refresh": {
@@ -1246,7 +1343,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "refresh"
       }
     },
     "/api/v1/previews/{previewId}/download": {
@@ -1298,7 +1396,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "previews",
+          "images"
+        ],
+        "x-cli-name": "request"
       }
     },
     "/api/v1/media/{hash}": {
@@ -1382,7 +1485,14 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-cli-ignore": true
+        "x-cli-group": [
+          "previews",
+          "images"
+        ],
+        "x-cli-name": "download",
+        "x-cli-ignore": false,
+        "x-cli-description": "Download a retained preview image by its hash.",
+        "x-cli-example": "oiectl previews images download --hash IMAGE_HASH --output raw \u003e preview-image\n"
       }
     },
     "/api/v1/health": {
@@ -1410,7 +1520,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "health"
       }
     },
     "/api/v1/engine": {
@@ -1441,7 +1552,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "engine"
       }
     },
     "/api/v1/engine/reset": {
@@ -1497,7 +1609,9 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "reset",
+        "x-cli-description": "Permanently delete data held by the selected engine. The JSON body must contain its current engineId and confirmation set to delete."
       }
     },
     "/api/v1/accounts": {
@@ -1559,7 +1673,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "list"
       },
       "post": {
         "tags": [
@@ -1596,6 +1711,26 @@
           }
         },
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "201": {
             "description": "Account registered",
             "headers": {
@@ -1665,7 +1800,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "register"
       }
     },
     "/api/v1/accounts/{accountId}": {
@@ -1710,7 +1846,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "get"
       }
     },
     "/api/v1/accounts/{accountId}/avatars": {
@@ -1770,7 +1907,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "accounts",
+          "avatars"
+        ],
+        "x-cli-name": "list"
       }
     },
     "/api/v1/avatars/{hash}": {
@@ -1842,7 +1984,14 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-cli-ignore": true
+        "x-cli-group": [
+          "accounts",
+          "avatars"
+        ],
+        "x-cli-name": "download",
+        "x-cli-ignore": false,
+        "x-cli-description": "Download a PNG using the imageHash from accounts avatars list.",
+        "x-cli-example": "oiectl accounts avatars download --hash IMAGE_HASH --output raw \u003e avatar.png\n"
       }
     },
     "/api/v1/accounts/{accountId}/history": {
@@ -1885,7 +2034,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "history"
       }
     },
     "/api/v1/accounts/{accountId}/capabilities": {
@@ -1931,7 +2081,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "capabilities"
       }
     },
     "/api/v1/operations/{operationId}": {
@@ -1980,7 +2131,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "get"
       }
     },
     "/api/v1/events": {
@@ -1992,9 +2144,12 @@
         "x-sse-event-schema": {
           "$ref": "#/components/schemas/Event"
         },
-        "x-cli-ignore": true,
+        "x-cli-name": "stream",
         "summary": "Replay durable changes and follow new events",
+        "x-cli-ignore": false,
         "description": "SSE id is engineUUID:sequence; event is the event type; data is Event JSON.\nLast-Event-ID resumes strictly after its sequence. Without a cursor replay\nfrom zero. Cursors from another engine or ahead of current state return 409\nbefore streaming. Heartbeat comments are not durable events.\nThis engine retains the complete change log. Clients deduplicate by event\nID and refresh snapshots if a future retention policy expires a cursor.\n",
+        "x-cli-description": "Print events as they arrive. The stream runs until it closes or reaches the request timeout (one minute by default). Resume from the last event ID you processed.",
+        "x-cli-example": "oiectl events stream\noiectl events stream --timeout 10m --last-event-id ENGINE_UUID:SEQUENCE\n",
         "parameters": [
           {
             "name": "Last-Event-ID",
@@ -2068,7 +2223,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "connection"
       },
       "put": {
         "operationId": "configureAccountConnection",
@@ -2078,7 +2234,36 @@
         "summary": "Configure and connect an account",
         "description": "Persists write-only credentials before starting an asynchronous TLS/SASL connection. Transient network failures reconnect with bounded backoff; invalid credentials or TLS verification failures require corrected configuration. Ordinary engine restart reloads enabled configurations.",
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "202": {
+            "headers": {
+              "Location": {
+                "description": "Connection state; acceptance is not connection success.",
+                "schema": {
+                  "type": "string",
+                  "format": "uri-reference"
+                }
+              }
+            },
             "description": "Connection configuration accepted",
             "content": {
               "application/json": {
@@ -2116,7 +2301,10 @@
               }
             }
           }
-        }
+        },
+        "x-cli-name": "connect",
+        "x-cli-description": "Connect an account using credentials from a private JSON file or stdin.",
+        "x-cli-example": "oiectl accounts connect --account-id ACCOUNT_UUID --body-file connection.json\n"
       },
       "delete": {
         "operationId": "disconnectAccount",
@@ -2150,7 +2338,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "disconnect"
       }
     },
     "/api/v1/conversations": {
@@ -2260,7 +2449,8 @@
               ]
             }
           }
-        ]
+        ],
+        "x-cli-name": "list"
       },
       "post": {
         "operationId": "openConversation",
@@ -2270,7 +2460,36 @@
         "summary": "Open a direct conversation",
         "description": "Finds an existing conversation for the canonical account/peer or creates one. Durable operation keys retain original results. Does not add a contact or send presence subscriptions.",
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "201": {
+            "headers": {
+              "Location": {
+                "description": "New conversation resource.",
+                "schema": {
+                  "type": "string",
+                  "format": "uri-reference"
+                }
+              }
+            },
             "description": "Direct conversation opened",
             "content": {
               "application/json": {
@@ -2354,7 +2573,8 @@
               }
             }
           }
-        }
+        },
+        "x-cli-name": "open"
       }
     },
     "/api/v1/conversations/{conversationId}/room-session": {
@@ -2390,7 +2610,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "conversations",
+          "rooms"
+        ],
+        "x-cli-name": "status"
       },
       "post": {
         "operationId": "joinRoom",
@@ -2422,6 +2647,26 @@
           }
         },
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "200": {
             "description": "Join intent durably accepted or replayed",
             "content": {
@@ -2444,7 +2689,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "conversations",
+          "rooms"
+        ],
+        "x-cli-name": "join"
       }
     },
     "/api/v1/conversations/{conversationId}/room-session/leave": {
@@ -2483,6 +2733,26 @@
           }
         },
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "200": {
             "description": "Leave intent durably accepted or replayed",
             "content": {
@@ -2505,7 +2775,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "conversations",
+          "rooms"
+        ],
+        "x-cli-name": "leave"
       }
     },
     "/api/v1/conversations/{conversationId}/mention-candidates": {
@@ -2555,7 +2830,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "mentions"
       }
     },
     "/api/v1/conversations/{conversationId}/archive": {
@@ -2599,7 +2875,13 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "conversations",
+          "rooms",
+          "archive"
+        ],
+        "x-cli-name": "status"
       },
       "put": {
         "operationId": "setRoomArchiveMode",
@@ -2650,7 +2932,13 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "conversations",
+          "rooms",
+          "archive"
+        ],
+        "x-cli-name": "set"
       }
     },
     "/api/v1/conversations/{conversationId}/archive/requests": {
@@ -2712,7 +3000,13 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "conversations",
+          "rooms",
+          "archive"
+        ],
+        "x-cli-name": "request"
       }
     },
     "/api/v1/conversations/{conversationId}/details": {
@@ -2729,6 +3023,16 @@
         "summary": "Read scoped conversation details",
         "description": "Read the current account connection and session-local conversation metadata. Returns immediately; a connected adapter may schedule a deduplicated, serialized discovery refresh no more often than once per sixty seconds. This never joins a room, requests a subscription, probes a peer or sends a message. Occupant discovery is a bounded snapshot, never a complete member roster. Missing presence remains unknown. Disconnect clears observations.",
         "responses": {
+          "503": {
+            "description": "Engine state is temporarily unavailable.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "200": {
             "description": "Available metadata and explicit field availability for this conversation",
             "content": {
@@ -2745,7 +3049,8 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           }
-        }
+        },
+        "x-cli-name": "details"
       }
     },
     "/api/v1/conversations/{conversationId}": {
@@ -2794,7 +3099,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "get"
       },
       "patch": {
         "operationId": "updateConversationPreferences",
@@ -2831,6 +3137,26 @@
           }
         },
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "200": {
             "description": "Accepted conversation snapshot, or its original idempotent replay",
             "headers": {
@@ -2874,7 +3200,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "conversations",
+          "preferences"
+        ],
+        "x-cli-name": "set"
       }
     },
     "/api/v1/conversations/{conversationId}/messages": {
@@ -2947,7 +3278,8 @@
               "default": 50
             }
           }
-        ]
+        ],
+        "x-cli-name": "list"
       },
       "post": {
         "operationId": "sendMessage",
@@ -2957,7 +3289,36 @@
         "summary": "Accept an immediate text message",
         "description": "Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.",
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "202": {
+            "headers": {
+              "Location": {
+                "description": "Accepted message; poll for current send state.",
+                "schema": {
+                  "type": "string",
+                  "format": "uri-reference"
+                }
+              }
+            },
             "description": "Message and send intent committed",
             "content": {
               "application/json": {
@@ -3042,7 +3403,10 @@
               }
             }
           }
-        }
+        },
+        "x-cli-name": "send",
+        "x-cli-description": "Queue a text message for delivery. Use the returned message ID to check its delivery state with messages get. To retry the same request, reuse the key and body.",
+        "x-cli-example": "printf '%s\\n' '{\"originalText\":\"Olá!\"}' | oiectl messages send \\\n  --conversation-id CONVERSATION_UUID --idempotency-key REQUEST_UUID --body-stdin\n"
       }
     },
     "/api/v1/messages/{messageId}/reactions": {
@@ -3078,7 +3442,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "messages",
+          "reactions"
+        ],
+        "x-cli-name": "get"
       },
       "post": {
         "operationId": "setMessageReactions",
@@ -3110,7 +3479,36 @@
           }
         },
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "202": {
+            "headers": {
+              "Location": {
+                "description": "Accepted reaction command; poll for current dispatch state.",
+                "schema": {
+                  "type": "string",
+                  "format": "uri-reference"
+                }
+              }
+            },
             "description": "Durable reaction command committed",
             "content": {
               "application/json": {
@@ -3142,7 +3540,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "messages",
+          "reactions"
+        ],
+        "x-cli-name": "set"
       }
     },
     "/api/v1/conversations/{conversationId}/reactions": {
@@ -3200,7 +3603,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "messages",
+          "reactions"
+        ],
+        "x-cli-name": "list"
       }
     },
     "/api/v1/message-reaction-commands/{commandId}": {
@@ -3242,7 +3650,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "messages",
+          "reactions"
+        ],
+        "x-cli-name": "command"
       }
     },
     "/api/v1/messages/{messageId}/edit-target": {
@@ -3278,7 +3691,13 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "messages",
+          "edits",
+          "targets"
+        ],
+        "x-cli-name": "get"
       }
     },
     "/api/v1/conversations/{conversationId}/edit-target": {
@@ -3314,7 +3733,13 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "messages",
+          "edits",
+          "targets"
+        ],
+        "x-cli-name": "latest"
       }
     },
     "/api/v1/messages/{messageId}/edits": {
@@ -3353,7 +3778,36 @@
           }
         },
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "202": {
+            "headers": {
+              "Location": {
+                "description": "Accepted edit command; poll for current dispatch state.",
+                "schema": {
+                  "type": "string",
+                  "format": "uri-reference"
+                }
+              }
+            },
             "description": "Correction command committed without claiming delivery",
             "content": {
               "application/json": {
@@ -3385,7 +3839,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "messages",
+          "edits"
+        ],
+        "x-cli-name": "submit"
       }
     },
     "/api/v1/message-edits/{editId}": {
@@ -3427,7 +3886,12 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-group": [
+          "messages",
+          "edits"
+        ],
+        "x-cli-name": "get"
       }
     },
     "/api/v1/messages/{messageId}/edit-history": {
@@ -3500,9 +3964,10 @@
                 },
                 "example": {
                   "type": "urn:oie:problem:history_changed",
-                  "title": "Conflict",
+                  "title": "History changed",
                   "status": 409,
-                  "code": "history_changed"
+                  "code": "history_changed",
+                  "documentation": "https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#history_changed"
                 }
               }
             }
@@ -3510,7 +3975,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "revisions"
       }
     },
     "/api/v1/messages/{messageId}/sender-profile": {
@@ -3527,6 +3993,16 @@
         "summary": "Read the author's available published profile",
         "description": "Resolves the author from the retained message and message-time protocol identity evidence. May issue a bounded read-only profile query to a known personal address. Room nicknames and current same-name occupants never establish a historical author's personal JID. Missing or undisclosed identity remains unavailable; user-provided vCard JABBERID does not establish it. Does not join rooms, add contacts, subscribe to presence or mark messages read.",
         "responses": {
+          "503": {
+            "description": "Engine state is temporarily unavailable.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "200": {
             "description": "Scoped profile availability and optional published full name and personal address",
             "content": {
@@ -3556,7 +4032,8 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           }
-        }
+        },
+        "x-cli-name": "author"
       }
     },
     "/api/v1/messages/{messageId}": {
@@ -3606,7 +4083,8 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
-        }
+        },
+        "x-cli-name": "get"
       }
     },
     "/api/v1/messages/{messageId}/cancel": {
@@ -3623,6 +4101,26 @@
         "summary": "Cancel a queued send",
         "description": "Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.",
         "responses": {
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "200": {
             "description": "Current resource",
             "content": {
@@ -3684,7 +4182,12 @@
               }
             }
           }
-        }
+        },
+        "x-cli-group": [
+          "messages",
+          "outbox"
+        ],
+        "x-cli-name": "cancel"
       }
     }
   },
@@ -3728,9 +4231,10 @@
             },
             "example": {
               "type": "urn:oie:problem:invalid_request",
-              "title": "Bad Request",
+              "title": "Invalid request",
               "status": 400,
-              "code": "invalid_request"
+              "code": "invalid_request",
+              "documentation": "https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#invalid_request"
             }
           }
         }
@@ -3746,7 +4250,8 @@
               "type": "urn:oie:problem:not_found",
               "title": "Not Found",
               "status": 404,
-              "code": "not_found"
+              "code": "not_found",
+              "documentation": "https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#not_found"
             }
           }
         }
@@ -3760,9 +4265,10 @@
             },
             "example": {
               "type": "urn:oie:problem:idempotency_conflict",
-              "title": "Conflict",
+              "title": "Idempotency key conflict",
               "status": 409,
-              "code": "idempotency_conflict"
+              "code": "idempotency_conflict",
+              "documentation": "https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#idempotency_conflict"
             }
           }
         }
@@ -3778,7 +4284,8 @@
               "type": "urn:oie:problem:unavailable",
               "title": "Service Unavailable",
               "status": 503,
-              "code": "unavailable"
+              "code": "unavailable",
+              "documentation": "https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#unavailable"
             }
           }
         }
@@ -4132,11 +4639,8 @@
           },
           "apiVersion": {
             "type": "string",
-            "enum": [
-              "0.11.0",
-              "0.12.0",
-              "0.29.0"
-            ]
+            "description": "Engine contract revision, independent of URL major and application release.",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
           },
           "eventCursor": {
             "type": "string",
@@ -4650,10 +5154,15 @@
           "type": "urn:oie:problem:unavailable",
           "title": "Service Unavailable",
           "status": 503,
-          "code": "unavailable"
+          "code": "unavailable",
+          "documentation": "https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#unavailable"
         },
         "additionalProperties": false,
-        "description": "Stable codes for presentation-owned localization; no raw storage errors or credentials.",
+        "description": "RFC 9457 Problem Details served as application/problem+json. The type URI identifies the problem. The code extension is a stable short identifier for display and localization. The Link response header with rel=\"help\" provides guidance for known problem types. The body includes documentation when the request applies the oie-problem-documentation preference. Responses exclude raw storage errors and credentials.",
+        "externalDocs": {
+          "description": "RFC 9457 Problem Details for HTTP APIs",
+          "url": "https://www.rfc-editor.org/rfc/rfc9457.html"
+        },
         "required": [
           "type",
           "title",
@@ -4662,16 +5171,20 @@
         ],
         "properties": {
           "type": {
-            "type": "string"
+            "type": "string",
+            "description": "Stable absolute problem type URI in the form urn:oie:problem:\u003ccode\u003e."
           },
           "title": {
-            "type": "string"
+            "type": "string",
+            "description": "Short human-readable summary that is stable for a problem type."
           },
           "status": {
-            "type": "integer"
+            "type": "integer",
+            "description": "HTTP status code of this response."
           },
           "code": {
             "type": "string",
+            "description": "Oiê extension for the short problem code.",
             "enum": [
               "invalid_request",
               "not_found",
@@ -4691,6 +5204,11 @@
               "media_timeout"
             ]
           },
+          "documentation": {
+            "type": "string",
+            "format": "uri",
+            "description": "Absolute HTTPS link to human-readable guidance for this problem type. Included when Prefer requests oie-problem-documentation with no value or an empty quoted value. The URL may change independently of the type URI and code."
+          },
           "currentConversation": {
             "$ref": "#/components/schemas/Conversation"
           },
@@ -4702,6 +5220,28 @@
           },
           "currentRoomSession": {
             "$ref": "#/components/schemas/RoomSession"
+          }
+        },
+        "x-cli-problem-catalog": {
+          "type-prefix": "urn:oie:problem:",
+          "documentation-base": "https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md",
+          "titles": {
+            "invalid_request": "Invalid request",
+            "not_found": "Not Found",
+            "idempotency_conflict": "Idempotency key conflict",
+            "account_exists": "Account already exists",
+            "invalid_cursor": "Invalid event cursor",
+            "history_changed": "History changed",
+            "unavailable": "Service Unavailable",
+            "state_conflict": "State conflict",
+            "protocol_unavailable": "Protocol unavailable",
+            "media_blocked": "Media access blocked",
+            "media_fetch_failed": "Media fetch failed",
+            "media_too_large": "Media too large",
+            "media_unsupported": "Unsupported media",
+            "range_not_satisfiable": "Range not satisfiable",
+            "media_busy": "Media service busy",
+            "media_timeout": "Media request timed out"
           }
         }
       },
@@ -7231,5 +7771,9 @@
         }
       }
     }
+  },
+  "x-cli-local-problem-documentation": {
+    "usage_error": "https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#usage_error",
+    "transport_error": "https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#transport_error"
   }
 }

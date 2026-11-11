@@ -261,17 +261,17 @@ func TestNativePresentationKeepsValidatedBFFJSONRoutes(t *testing.T) {
 		s.Handler().ServeHTTP(w, r)
 		return w
 	}
-	for _, path := range []string{previewPath, thumbnailPath, readPath} {
+	for _, path := range []string{"/ui" + previewPath, "/ui" + thumbnailPath, "/ui" + readPath} {
 		w := request(http.MethodGet, path, "")
 		if w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" || !json.Valid(w.Body.Bytes()) {
 			t.Fatalf("native BFF query %s failed: %d %s", path, w.Code, w.Body)
 		}
 	}
 	before := calls.Load()
-	if w := request(http.MethodPost, readPath, "forged"); w.Code != 403 || calls.Load() != before || writes.Load() != 0 {
+	if w := request(http.MethodPost, "/ui"+readPath, "forged"); w.Code != 403 || calls.Load() != before || writes.Load() != 0 {
 		t.Fatalf("forged CSRF reached engine: status=%d calls=%d writes=%d", w.Code, calls.Load(), writes.Load())
 	}
-	w := request(http.MethodPost, readPath, csrf)
+	w := request(http.MethodPost, "/ui"+readPath, csrf)
 	var marked engineapi.ConversationReadState
 	if err := json.Unmarshal(w.Body.Bytes(), &marked); err != nil || w.Code != 200 || marked.UnreadCount != 0 || writes.Load() != 1 {
 		t.Fatalf("valid native read-state mutation failed: %d %s %v", w.Code, w.Body, err)
@@ -456,5 +456,74 @@ func TestCloseDeadlineKeepsStoreOwnedUntilNativeRequestFinishes(t *testing.T) {
 	}
 	if err = extra.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDataOnlyRolesExposeEngineWithoutPresentation(t *testing.T) {
+	for _, role := range []string{"local", "hosted"} {
+		t.Run(role, func(t *testing.T) {
+			s := testServer(t, Config{Role: role, DataOnly: true, Listen: "127.0.0.1:0", DataDir: t.TempDir()})
+			// Use one test-owned transport and finish each response before shutdown.
+			transport := http.DefaultTransport.(*http.Transport).Clone()
+			transport.DisableKeepAlives = true
+			client := &http.Client{Transport: transport, Timeout: 2 * time.Second}
+			c, err := engineapi.NewClientWithResponses(s.URL(), engineapi.WithHTTPClient(client))
+			if err != nil {
+				t.Fatal(err)
+			}
+			identity, err := c.GetEngineWithResponse(t.Context())
+			if err != nil || identity.JSON200 == nil || string(identity.JSON200.Role) != role {
+				t.Fatalf("engine identity: %v %#v", err, identity)
+			}
+			checkStatus := func(path string, status int) {
+				t.Helper()
+				res, err := client.Get(s.URL() + path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, readErr := io.Copy(io.Discard, res.Body)
+				closeErr := res.Body.Close()
+				if err := errors.Join(readErr, closeErr); err != nil {
+					t.Fatal(err)
+				}
+				if res.StatusCode != status {
+					t.Fatalf("data-only %s: status %d, want %d", path, res.StatusCode, status)
+				}
+			}
+			for _, path := range []string{"/", "/ui/events", "/assets/", "/ui/api/v1/previews/" + uuid.Must(uuid.NewV7()).String()} {
+				checkStatus(path, http.StatusNotFound)
+			}
+			checkStatus("/api/openapi.yaml", http.StatusOK)
+			w := httptest.NewRecorder()
+			s.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/engine", nil))
+			if w.Code != 404 {
+				t.Fatal("data-only exposed a native presentation handler")
+			}
+		})
+	}
+	for _, cfg := range []Config{{Role: "bff", DataOnly: true}, {Role: "local", DataOnly: true, PrivateAPI: true}} {
+		if err := validate(cfg); err == nil {
+			t.Fatal("accepted incompatible data-only composition")
+		}
+	}
+}
+
+func TestEngineReadStateHasSameSemanticsWithAndWithoutBFF(t *testing.T) {
+	for _, dataOnly := range []bool{false, true} {
+		s := testServer(t, Config{Role: "local", DataOnly: dataOnly, Listen: "127.0.0.1:0", DataDir: t.TempDir()})
+		client := engineClient(t, s)
+		a, err := client.RegisterAccountWithResponse(t.Context(), &engineapi.RegisterAccountParams{IdempotencyKey: uuid.Must(uuid.NewV7()).String()}, engineapi.RegisterAccountJSONRequestBody{Protocol: "xmpp", Address: "alice@localhost", Label: "CLI"})
+		if err != nil || a.JSON201 == nil {
+			t.Fatal("register", err)
+		}
+		c, err := client.OpenConversationWithResponse(t.Context(), &engineapi.OpenConversationParams{IdempotencyKey: uuid.Must(uuid.NewV7()).String()}, engineapi.OpenConversationJSONRequestBody{AccountId: a.JSON201.Id, Address: "bob@localhost"})
+		if err != nil || c.JSON201 == nil {
+			t.Fatal("conversation", err)
+		}
+		// Public engine data does not inherit browser header, cookie or CSRF rules.
+		state, err := client.GetConversationReadStateWithResponse(t.Context(), c.JSON201.Id)
+		if err != nil || state.JSON200 == nil || state.JSON200.AccountId != a.JSON201.Id || state.HTTPResponse.Header.Get("Cache-Control") != "no-store" {
+			t.Fatalf("data-only=%t engine read-state: %v %#v", dataOnly, err, state)
+		}
 	}
 }

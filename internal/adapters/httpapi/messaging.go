@@ -87,7 +87,8 @@ func (s *Server) ConfigureAccountConnection(ctx context.Context, r engineapi.Con
 	if err != nil {
 		return nil, err
 	}
-	return engineapi.ConfigureAccountConnection202JSONResponse(connection(c)), nil
+	location := "/api/v1/accounts/" + string(c.AccountID) + "/connection"
+	return engineapi.ConfigureAccountConnection202JSONResponse{Body: connection(c), Headers: engineapi.ConfigureAccountConnection202ResponseHeaders{Location: &location}}, nil
 }
 func (s *Server) DisconnectAccount(ctx context.Context, r engineapi.DisconnectAccountRequestObject) (engineapi.DisconnectAccountResponseObject, error) {
 	c, err := s.engine.Disconnect(ctx, domain.ID(r.AccountId))
@@ -107,7 +108,8 @@ func (s *Server) OpenConversation(ctx context.Context, r engineapi.OpenConversat
 	if result.Replayed || result.Existing {
 		return engineapi.OpenConversation200JSONResponse(conversation(result.Conversation)), nil
 	}
-	return engineapi.OpenConversation201JSONResponse(conversation(result.Conversation)), nil
+	location := "/api/v1/conversations/" + string(result.Conversation.ID)
+	return engineapi.OpenConversation201JSONResponse{Body: conversation(result.Conversation), Headers: engineapi.OpenConversation201ResponseHeaders{Location: &location}}, nil
 }
 func (s *Server) GetConversation(ctx context.Context, r engineapi.GetConversationRequestObject) (engineapi.GetConversationResponseObject, error) {
 	c, err := s.engine.Conversation(ctx, domain.ID(r.ConversationId))
@@ -189,7 +191,8 @@ func (s *Server) SendMessage(ctx context.Context, r engineapi.SendMessageRequest
 	if result.Replayed {
 		return engineapi.SendMessage200JSONResponse(message(result.Message)), nil
 	}
-	return engineapi.SendMessage202JSONResponse(message(result.Message)), nil
+	location := "/api/v1/messages/" + string(result.Message.ID)
+	return engineapi.SendMessage202JSONResponse{Body: message(result.Message), Headers: engineapi.SendMessage202ResponseHeaders{Location: &location}}, nil
 }
 func (s *Server) GetMessage(ctx context.Context, r engineapi.GetMessageRequestObject) (engineapi.GetMessageResponseObject, error) {
 	m, err := s.engine.Message(ctx, domain.ID(r.MessageId))

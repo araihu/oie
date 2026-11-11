@@ -13,7 +13,7 @@ import (
 func (s *Server) videoThumbnailStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/v1/shared-content/"), "/thumbnail")
+	id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/ui/api/v1/shared-content/"), "/thumbnail")
 	if r.Method != http.MethodGet || !validOperationKey(id) || r.URL.RawQuery != "" {
 		previewStatusProblem(w, 400, "invalid_request")
 		return
