@@ -37,12 +37,13 @@ templ about(v view) {
 			</div>
 			<section aria-labelledby="about-license">
 				<h3 id="about-license">{ v.Text.License }</h3>
-				@aboutLink(brandURL("Apache-2.0.txt"), "Apache License 2.0")
+				@aboutLink(brandURL("GPL-3.0.txt"), "GNU GPLv3")
 			</section>
 			<section aria-labelledby="about-attributions">
 				<h3 id="about-attributions">{ v.Text.Attributions }</h3>
 				<ul>
 					<li>@aboutLink(brandURL("NOTICE.txt"), v.Text.LogoAttribution)</li>
+					<li>@aboutLink(brandURL("Apache-2.0.txt"), "Noto Emoji (Apache 2.0)")</li>
 					<li>@aboutLink("https://github.com/araihu/goshtoso/blob/83aed4efdc31/LICENSE", "Goshtoso")</li>
 					<li>@aboutLink("/ui/pdfjs/LICENSE", "PDF.js")</li>
 					<li>@aboutLink("/ui/cache/LICENSE.md", "lru-cache")</li>

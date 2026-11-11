@@ -11,6 +11,7 @@ const {spawn}=require('node:child_process'),{once}=require('node:events'),{chrom
  const probe=http.createServer();probe.listen(0,'127.0.0.1');await once(probe,'listening');const port=probe.address().port;await new Promise(r=>probe.close(r));
  const address='http://127.0.0.1:'+port,binary=process.env.OIE_WEB_BINARY||path.resolve(__dirname,'../../bin/oie');
  const child=spawn(binary,['--role','bff','--listen','127.0.0.1:'+port,'--engine-url','http://127.0.0.1:'+api.address().port],{stdio:['ignore','ignore','pipe']});let log='';child.stderr.on('data',data=>log+=data);
+ const licenseText=await fs.readFile(path.resolve(__dirname,'../../LICENSE'),'utf8');
  const browser=await chromium.launch({headless:true}),findings=[];
  try{
   for(let i=0;i<100;i++){try{if((await fetch(address)).ok)break}catch{}if(i===99)throw Error('BFF not ready '+log);await new Promise(r=>setTimeout(r,100))}
@@ -36,12 +37,14 @@ const {spawn}=require('node:child_process'),{once}=require('node:events'),{chrom
    assert.equal(await logo.count(),1);
    assert((await logo.getAttribute('src')).includes('logo-'+mode+'.svg'));
    assert(await logo.evaluate(img=>img.naturalWidth>0&&img.naturalHeight>0));
-   const license=about.getByRole('link',{name:'Apache License 2.0',exact:true});
-   const licenseResponse=await page.request.get(new URL(await license.getAttribute('href'),address).href);
+   const license=about.getByRole('link',{name:'GNU GPLv3',exact:true});
+   const licenseURL=new URL(await license.getAttribute('href'),address);
+   assert.equal(licenseURL.origin,address);
+   const licenseResponse=await page.request.get(licenseURL.href);
    assert.equal(licenseResponse.status(),200);
-   assert.match(await licenseResponse.text(),/Apache License/);
+   assert.equal(await licenseResponse.text(),licenseText);
    const credits=about.getByRole('region',{name:lang==='en'?'Attributions':'Créditos'});
-   assert.equal(await credits.getByRole('link').count(),5);
+   assert.equal(await credits.getByRole('link').count(),6);
    for(const href of await credits.getByRole('link').evaluateAll(links=>links.map(link=>link.getAttribute('href')).filter(href=>href.startsWith('/')))){
     assert.equal((await page.request.get(new URL(href,address).href)).status(),200,href);
    }
