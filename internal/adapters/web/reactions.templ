@@ -18,7 +18,13 @@ templ messageReactions(v view,m messageView){
 }
 
 templ reactionSummaryTrigger(v view,m messageView){
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-summary"),button.WithAttrs(templ.Attributes{"data-reaction-summary":m.Id,"hidden":len(v.Reactions[m.Id].Items)==0,"aria-label":v.Text.Reactions})) {<span data-reaction-summary-emojis aria-hidden="true">{reactionSummaryEmojis(v.Reactions[m.Id])}</span><small data-reaction-summary-count>{strconv.Itoa(reactionSummaryCount(v.Reactions[m.Id]))}</small>}
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-summary"),button.WithAttrs(templ.Attributes{"data-reaction-summary":m.Id,"hidden":len(v.Reactions[m.Id].Items)==0,"aria-label":v.Text.Reactions})) {
+<span data-reaction-summary-emojis aria-hidden="true">{reactionSummaryEmojis(v.Reactions[m.Id])}</span>
+<span class="oie-reaction-count-slot" aria-hidden="true">
+<small data-reaction-summary-count>{strconv.Itoa(reactionSummaryCount(v.Reactions[m.Id]))}</small>
+@spinner.Spinner(spinner.Config{Size:spinner.SizeSM,RootClass:"oie-reaction-count-spinner"})
+</span>
+}
 }
 
 templ reactionDetails(v view,m messageView){
@@ -74,7 +80,7 @@ templ reactionPickerContent(v view){
 <template data-reaction-own-emoji-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-own-emoji"),button.WithAttrs(templ.Attributes{"data-reaction-emoji":""})){<span data-reaction-remove-glyph></span>}</template>
 <template data-reaction-filter-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-filter"),button.WithAttrs(templ.Attributes{"data-reaction-filter":""})) {<span></span>}</template>
 <template data-reaction-remove-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-remove"),button.WithAttrs(templ.Attributes{"data-reaction-emoji":"","aria-label":v.Text.ReactionRemove,"title":v.Text.ReactionRemove})) {@glyph(heroicons.Icon16SolidXMark)}</template>
-<template data-reaction-status-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-chip oie-reaction-recovery"),button.WithAttrs(templ.Attributes{"data-reaction-check":""})){<span data-reaction-check-icon>@glyph(heroicons.Icon16SolidArrowPath)</span><span data-reaction-status-spinner hidden>@spinner.Spinner(spinner.Config{Size:spinner.SizeSM,RootClass:"oie-reaction-spinner"})</span>}</template>
+<template data-reaction-status-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-chip oie-reaction-recovery"),button.WithAttrs(templ.Attributes{"data-reaction-check":""})){@glyph(heroicons.Icon16SolidArrowPath)}</template>
 </div>
 }
 

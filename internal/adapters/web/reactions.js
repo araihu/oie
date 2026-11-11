@@ -105,23 +105,39 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
   for(const region of document.querySelectorAll('[data-reaction-source]')){
    const id=region.dataset.reactionSource,s=snapshots.get(id);if(!s)continue;restore(id);const pending=journals.get(id),selected=s.items.some(item=>item.emoji===filters.get(id))?filters.get(id):'',active=region.contains(document.activeElement)?document.activeElement:null;
    const activeEmoji=active?.dataset.reactionEmoji,activeFilter=active?.dataset.reactionFilter;
-   const signature=JSON.stringify([s.items,s.actors,s.eligible,pending?.operationKey,pending?.command?.state,busy.has(id),selected]);if(region.dataset.reactionRendered===signature)continue;
+   const signature=JSON.stringify([s.items,s.actors,s.eligible,pending?.operationKey,pending?.command?.state,pending?.missingReceipt,busy.has(id),selected]);if(region.dataset.reactionRendered===signature)continue;
    const summary=region.querySelector('[data-reaction-summary]'),total=s.items.reduce((sum,item)=>sum+item.count,0),details=region.querySelector('[data-reaction-details]');
+   const waiting=!!pending&&(busy.has(id)||['queued','dispatching'].includes(pending.command?.state));
+   const previewEmoji=total===0&&waiting?pending.emojis[0]:'';
    const closingEmpty=total===0&&summary.getAttribute('aria-expanded')==='true';
    if(closingEmpty)summary.click();
-   summary.hidden=total===0;summary.querySelector('[data-reaction-summary-emojis]').textContent=s.items.slice(0,3).map(item=>item.emoji).join(' ');summary.querySelector('[data-reaction-summary-count]').textContent=String(total);summary.setAttribute('aria-label',labels.reactSummary+' · '+total);
+   region.toggleAttribute('data-reaction-preview',!!previewEmoji);
+   summary.hidden=total===0&&!previewEmoji;
+   summary.disabled=total===0;
+   summary.setAttribute('aria-busy',String(waiting));
+   summary.querySelector('[data-reaction-summary-emojis]').textContent=previewEmoji||s.items.slice(0,3).map(item=>item.emoji).join(' ');
+   summary.querySelector('[data-reaction-summary-count]').textContent=String(total);
+   const countLabel=labels.reactSummary+' · '+total;
+   summary.setAttribute('aria-label',previewEmoji?labels.pending:waiting?countLabel+' · '+labels.pending:countLabel);
    details.querySelector('[data-reaction-total]').textContent=String(total);const filterRow=details.querySelector('[data-reaction-filters]'),rows=details.querySelector('[data-reaction-detail-list]');
    filterRow.replaceChildren(detailFilter(id,'',total,!selected),...s.items.map(item=>detailFilter(id,item.emoji,item.count,selected===item.emoji)));
    rows.replaceChildren(reactionRows(s,id,selected,!!pending||busy.has(id)));
    details.querySelector('[data-reaction-open]').disabled=!s.eligible||!!pending||busy.has(id);
    const pendingSlot=region.querySelector('[data-reaction-pending]');pendingSlot.replaceChildren();
-   if(pending){const button=picker.querySelector('[data-reaction-status-template]').content.firstElementChild.cloneNode(true),state=pending.command?.state,waiting=busy.has(id)||['queued','dispatching'].includes(state);button.dataset.reactionMessage=id;button.disabled=busy.has(id);const actionLabel=waiting?labels.pending:!pending.command&&pending.missingReceipt?labels.retry:labels.check;button.setAttribute('aria-label',actionLabel);button.title=actionLabel;button.setAttribute('aria-busy',String(waiting));button.querySelector('[data-reaction-check-icon]').hidden=waiting;button.querySelector('[data-reaction-status-spinner]').hidden=!waiting;pendingSlot.append(button)}
+   if(pending&&!waiting){
+    const button=picker.querySelector('[data-reaction-status-template]').content.firstElementChild.cloneNode(true);
+    const actionLabel=!pending.command&&pending.missingReceipt?labels.retry:labels.check;
+    button.dataset.reactionMessage=id;
+    button.setAttribute('aria-label',actionLabel);
+    button.title=actionLabel;
+    pendingSlot.append(button);
+   }
    region.dataset.reactionRendered=signature;
    if(closingEmpty&&active){
     region.closest('[data-message-bubble]')?.querySelector('[data-message-menu-trigger]')?.focus({preventScroll:true});
    }else if(active&&!active.isConnected){
     const replacement=activeFilter!==undefined?[...filterRow.querySelectorAll('[data-reaction-filter]')].find(button=>button.dataset.reactionFilter===activeFilter):activeEmoji?[...rows.querySelectorAll('[data-reaction-emoji]')].find(button=>button.dataset.reactionEmoji===activeEmoji):pendingSlot.querySelector('[data-reaction-check]');
-    (replacement||summary)?.focus({preventScroll:true});
+    (replacement||(summary.disabled?region.closest('[data-message-bubble]')?.querySelector('[data-message-menu-trigger]'):summary))?.focus({preventScroll:true});
    }
   }
   for(const button of document.querySelectorAll('[data-reaction-open]')){const s=snapshots.get(button.dataset.reactionOpen),pending=journals.get(button.dataset.reactionOpen),slot=button.closest('[data-reaction-shortcut-slot]');if(slot)slot.hidden=!s||(!s.eligible&&!pending);if(slot)button.setAttribute('aria-busy',String(busy.has(button.dataset.reactionOpen)))}
@@ -144,7 +160,7 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
   if(result.rejected===true){clear(intent.messageId);render();notify(result.message||labels.unavailable);refresh();return true}return false;
  }
  async function submit(intent,receiptOnly=false){
-  if(!validIntent(intent,intent.messageId)||busy.has(intent.messageId))return;save(intent);busy.add(intent.messageId);render();const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),12000);
+  if(!validIntent(intent,intent.messageId)||busy.has(intent.messageId))return;busy.add(intent.messageId);save(intent);const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),12000);
   try{const values=new URLSearchParams({...scope,messageId:intent.messageId,operationKey:intent.operationKey,expectedOwnRevisionId:intent.expectedOwnRevisionId||'',emojis:JSON.stringify(intent.emojis),csrf,lang:document.documentElement.lang});const response=await life.fetch(receiptOnly?'/ui/messages/reaction-receipt':'/ui/messages/reactions',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-Token':csrf},body:values,signal:controller.signal}),result=await response.json();if(life.signal.aborted||journals.get(intent.messageId)?.operationKey!==intent.operationKey)return;if(!accept(result,intent)){save({...intent,unconfirmed:true,missingReceipt:receiptOnly&&response.status===404});notify(result.message||labels.unknown)}}
   catch{if(!life.signal.aborted&&journals.get(intent.messageId)?.operationKey===intent.operationKey){save({...intent,unconfirmed:true});notify(labels.unknown)}}
   finally{

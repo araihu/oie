@@ -32,9 +32,10 @@ A choice freezes its operation UUID, full desired own set and own revision
 precondition. BFF submission reads an existing command receipt before creating
 anything. Receipt reconciliation performs only an engine GET and checks all
 scope and intent fields before exposing it. The browser retains unresolved
-intents in device storage with a memory fallback. Known queued or dispatching
-commands are polled, with a spinner beside retained chips. Counts remain observed
-state rather than an optimistic delivery claim. Unknown outcomes offer Check;
+intents in device storage with a memory fallback. While a reaction is sending,
+a small spinner takes the place of the capsule count. The first reaction shows
+the selected emoji in a temporary capsule until an observed count is available.
+Message events prompt receipt checks, with polling as a fallback. Unknown outcomes offer Check;
 they never blindly repeat provider transmission. A missing receipt offers an
 explicit Retry of the same immutable operation and key. The engine can then
 return an existing receipt or accept a command that never arrived.
