@@ -448,7 +448,7 @@ templ settings(v view) {
 
 templ accounts(v view){
 @drawer.Drawer(drawer.Config{ID:"accounts",Title:v.Text.Accounts,PanelClass:v.accountDrawerClass()}){
-<div class={"oie-account-workspace",templ.KV("oie-account-list-workspace",v.accountScreen()=="list")}>
+<div class={"oie-account-workspace",templ.KV("oie-account-list-workspace",v.accountScreen()=="list"),templ.KV("oie-account-detail-workspace",v.accountScreen()=="detail")}>
 switch v.accountScreen() {
 case "add":
 @accountBack(v)
@@ -508,6 +508,7 @@ templ mutationFields(v view,target,key string){
 }
 templ accountDetail(v view,a engineapi.Account){
 <section class="oie-account-detail" data-account-id={a.Id}>
+<div id="account-detail-scroll" class="oie-account-detail-content">
 <header class="oie-account-detail-heading">
 @accountAvatar(v,a,avatar.SizeLG)
 <div><h2>{a.Label}</h2><p>{a.Address}</p></div>
@@ -520,6 +521,8 @@ if problem:=v.connectionError(a.Id);problem!="" {
 </div>
 @accountConnectionControls(v,a.Id)
 @link.Link(v.capabilitiesHref(a.Id),link.WithRootClass("oie-capabilities-link"),link.WithAttrs(templ.Attributes{"data-account-capabilities":a.Id})){<span><strong>{v.Text.Capabilities}</strong><small>{v.Text.CapabilitiesIntro}</small></span>@glyph(heroicons.Icon16SolidChevronRight)}
+</div>
+<footer class="oie-account-detail-footer">@disconnectAction(v,a.Id)</footer>
 </section>
 }
 templ accountAvatar(v view,a engineapi.Account,size avatar.Size){
@@ -539,7 +542,6 @@ if state:=connectionState(v,id);state=="not_connected"||state=="error" {
 <div data-form-feedback role="status" aria-live="polite"></div>
 }
 }
-@disconnectAction(v,id)
 </div>
 }
 templ connectionEndpoint(v view,id string){
@@ -551,7 +553,6 @@ if state:=connectionState(v,id);state=="connected"||state=="connecting"||state==
 @mutationFields(v,"disconnect-"+id,newOperationKey())
 <input type="hidden" name="accountId" value={id}/>
 @button.Button(button.WithType("submit"),button.WithAppearance(button.AppearancePlain)){ {v.Text.Disconnect} }
-<div data-form-feedback role="status" aria-live="polite"></div>
 }
 }
 }

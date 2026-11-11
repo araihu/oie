@@ -530,9 +530,11 @@ window.OieRuntime.register('live', life => {
           // State transitions replace obsolete actions. Same-state refreshes keep
           // password/endpoint edits, accordion state and pending feedback intact.
           if(controls&&nextControls&&controls.dataset.connectionState!==nextControls.dataset.connectionState){
-            const restoreFocus=controls.contains(document.activeElement);
+            const footer=existing.querySelector('.oie-account-detail-footer'),nextFooter=fresh.querySelector('.oie-account-detail-footer');
+            const restoreFocus=controls.contains(document.activeElement)||footer?.contains(document.activeElement);
             mutateDOM(controls,nextControls.innerHTML);controls.dataset.connectionState=nextControls.dataset.connectionState;
-            if(restoreFocus)controls.querySelector('button[type="submit"]')?.focus({preventScroll:true});
+            if(footer&&nextFooter)mutateDOM(footer,nextFooter.innerHTML);
+            if(restoreFocus)(controls.querySelector('button[type="submit"]')||footer?.querySelector('button[type="submit"]')||existing.closest('#accounts-body')?.querySelector('[data-account-back]'))?.focus({preventScroll:true});
           }
         }
       }

@@ -217,7 +217,6 @@ html[data-sidebar-collapsed] .oie-list-account{display:flex}
 .oie-account-detail-heading p{font-size:13px;line-height:1.5;color:var(--oie-muted);margin:0;overflow-wrap:anywhere}
 .oie-account-connection{padding:12px 14px;margin-bottom:24px;border-radius:9px;background:var(--oie-raised);font-size:13px;line-height:1.5}
 .oie-account-workspace form{display:flex;flex-direction:column;gap:18px}
-.oie-account-workspace [data-disconnect-account]{margin-top:20px;padding-top:16px;border-top:1px solid var(--oie-border)}
 .oie-account-advanced{font-size:13px;margin:0}
 @media(max-width:720px){.oie-account-workspace{padding:12px 8px 20px}}
 .oie-history-status{font-size:11px;line-height:1.5;color:var(--oie-muted);padding:0 16px 10px;overflow-wrap:anywhere}
@@ -360,12 +359,16 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-account-connection-dot{display:block;width:8px;height:8px;min-width:8px;padding:0;border:0;border-radius:50%}
 .oie-account-status[data-connection-state="unknown"] .oie-account-connection-dot,.oie-account-status[data-connection-state="not_connected"] .oie-account-connection-dot{background:var(--oie-muted)}
 
-/* The public Drawer body hosts an app-owned scrolling list and fixed action. */
-.oie-account-list-drawer #accounts-body{display:flex;flex-direction:column;overflow:hidden}
-.oie-account-list-workspace{display:flex;flex:1;min-height:0;flex-direction:column;padding-bottom:0}
-.oie-account-list-workspace #account-overview{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+/* The public Drawer body hosts scrolling content and fixed actions. */
+.oie-account-list-drawer #accounts-body,.oie-account-detail-drawer #accounts-body{display:flex;flex-direction:column;overflow:hidden}
+.oie-account-list-workspace,.oie-account-detail-workspace{display:flex;flex:1;min-height:0;flex-direction:column;padding-bottom:0}
+.oie-account-detail-workspace #account-blocks,.oie-account-detail{display:flex;flex:1;min-height:0;flex-direction:column}
+.oie-account-detail-workspace>.oie-account-back{align-self:flex-start;flex-shrink:0}
+.oie-account-list-workspace #account-overview,.oie-account-detail-content{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .oie-account-list-workspace .oie-account-list{margin-bottom:0}
-.oie-account-list-footer{flex-shrink:0;border-top:1px solid var(--oie-border);background:var(--oie-panel);padding:14px 0 max(14px,env(safe-area-inset-bottom))}
+.oie-account-list-footer,.oie-account-detail-footer{flex-shrink:0;border-top:1px solid var(--oie-border);background:var(--oie-panel);padding:14px 0 max(14px,env(safe-area-inset-bottom))}
+.oie-account-detail-footer:empty{display:none}
+.oie-account-detail-footer button{min-height:44px}
 
 .oie-conversation-details-drawer{width:min(440px,100vw);max-width:100vw;background:var(--oie-panel);color:var(--oie-text)}
 .oie-conversation-details{display:flex;flex-direction:column;gap:18px;padding:18px 14px 28px}

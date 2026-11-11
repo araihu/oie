@@ -3,7 +3,7 @@
  const runtime=window.OieRuntime;
  let booted=false,epoch=0,currentURL=location.href,infoReturnScroll=0,infoRequestGeneration=0,inboxScroll=0;
  const positions=new Map(),app=()=>document.getElementById('oie-app');
- const scrollIDs=['conversation-list','message-timeline','shared-content-scroll','details-body','accounts-body'];
+ const scrollIDs=['conversation-list','message-timeline','shared-content-scroll','details-body','accounts-body','account-detail-scroll'];
  const routeFields=['openDrawer','engineId','eventCursor','conversationId','accountId','focusMessage','contextNewer','contextMissing','mock'];
  const kinds=['oie-app','chat-info-content','conversation-pane','shared-content-scroll'];
  const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');

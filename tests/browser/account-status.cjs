@@ -41,7 +41,7 @@ function image(){
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
   for(const config of [{width:1440,locale:'en',mode:'dark'},{width:390,locale:'pt-BR',mode:'light'}])for(const theme of ['goshtoso','minimal']){
    state.connection='connected';state.avatars=new Map([[bob,hash]]);
-   const page=await browser.newPage({viewport:{width:config.width,height:900},locale:config.locale});page.on('pageerror',error=>errors.push(error.message));
+   const page=await browser.newPage({viewport:{width:config.width,height:900},locale:config.locale,reducedMotion:'reduce'});page.on('pageerror',error=>errors.push(error.message));
    await page.goto(`${base}/?lang=${config.locale}&theme=${config.mode}`);await page.evaluate(value=>document.documentElement.dataset.theme=value,theme);
    await until(()=>streams.size>0,'live event stream');await page.locator('[data-account-switcher]:visible').click();
    const menu=page.getByRole('dialog',{name:config.locale==='en'?'Switch account':'Trocar de conta',exact:true});await menu.waitFor({state:'visible'});
@@ -76,8 +76,32 @@ function image(){
    await page.goto(`${base}/?open=accounts&managedAccount=${bob}&lang=${config.locale}&theme=${config.mode}`);await page.evaluate(value=>document.documentElement.dataset.theme=value,theme);
    const detail=page.locator('.oie-account-detail'),detailStatus=detail.locator(`[data-account-status="${bob}"]`),connect=detail.locator('[data-connect-account]');await detail.waitFor({state:'visible'});
    assert.equal(await connect.count(),0);assert.equal(await detail.locator('input[name=password],input[name=endpoint]').count(),0);assert.equal(await detail.locator('[id^=connection-status-]').count(),0);assert(await detail.locator('[data-disconnect-account]').isVisible());await placement(bob,detailStatus);
+   const footer=detail.locator('footer'),disconnect=footer.locator('[data-disconnect-account] button[type=submit]');
+   await page.setViewportSize({width:config.width,height:245});
+   const layout=await footer.evaluate(node=>{
+    const body=node.closest('#accounts-body'),content=body.querySelector('#account-detail-scroll');
+    const bottom=node.getBoundingClientRect().bottom;
+    content.scrollTop=content.scrollHeight;
+    return {scrolled:content.scrollTop>0,shift:Math.abs(node.getBoundingClientRect().bottom-bottom),gap:Math.abs(bottom-body.getBoundingClientRect().bottom)};
+   });
+   assert(layout.scrolled&&layout.shift<=1&&layout.gap<=1,JSON.stringify(layout));
+   await page.setViewportSize({width:config.width,height:900});
+   let release;
+   const pending=new Promise(resolve=>{release=resolve});
+   await page.route('**/ui/accounts/disconnect',async route=>{
+    await pending;
+    await route.fulfill({status:503,json:{ok:false,message:'Fixture disconnect failed'}});
+   },{times:1});
+   const before=await disconnect.boundingBox();
+   try{
+    await disconnect.click();await footer.locator('form[aria-busy=true]').waitFor();
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    assert.deepEqual(await disconnect.boundingBox(),before);
+   }finally{release();}
+   await page.getByText('Fixture disconnect failed',{exact:true}).waitFor();
+   assert(await disconnect.isEnabled());
    const transition=async(value,form)=>{state.connection=value;emit('account.connection_changed');await until(async()=>await detailStatus.getAttribute('data-connection-state')===value&&await connect.count()===form,'account detail '+value);assert.equal(await detailStatus.getAttribute('title'),labels[value]);assert.equal(await detailStatus.getAttribute('aria-label'),labels[value]);await placement(bob,detailStatus)};
-   await transition('not_connected',1);assert.equal(await detail.locator('[data-disconnect-account]').count(),0);
+   await transition('not_connected',1);assert.equal(await detail.locator('[data-disconnect-account]').count(),0);assert(await footer.isHidden());
    const endpoint=connect.locator('[name=endpoint]');assert(await endpoint.isHidden());await connect.getByRole('button',{name:config.locale==='en'?'Advanced connection settings':'Configurações avançadas',exact:true}).click();await endpoint.fill('127.0.0.1:5222');
    const password=connect.locator('[name=password]');await password.fill('Unsaved fixture password');await password.focus();await password.evaluate(node=>window.accountStatusInput=node);
    await page.evaluate(()=>{window.accountStatusRefreshed=false;document.addEventListener('oie:stars-refresh',()=>window.accountStatusRefreshed=true,{once:true})});emit('account.history_changed');await until(()=>page.evaluate(()=>window.accountStatusRefreshed),'same-state detail refresh');
