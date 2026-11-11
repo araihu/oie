@@ -60,7 +60,7 @@ func TestTimelineHTTPWalksNearestBothDirectionsWithoutEffects(t *testing.T) {
 	if !reflect.DeepEqual(older, wantOlder) {
 		t.Fatal("older chronology changed", older)
 	}
-	direction := engineapi.Newer
+	direction := engineapi.ListMessagesParamsDirectionNewer
 	cursor = string(timelineHTTPID(1))
 	var newer []domain.ID
 	for page := 0; page < 10; page++ {
@@ -155,7 +155,7 @@ func TestTimelineHTTPNewerResolvesCorrectionAlias(t *testing.T) {
 		t.Fatal(err)
 	}
 	client, _ := engineapi.NewClientWithResponses(server.URL)
-	direction := engineapi.Newer
+	direction := engineapi.ListMessagesParamsDirectionNewer
 	cursor := string(aliasID)
 	response, err := client.ListMessagesWithResponse(t.Context(), string(c.ID), &engineapi.ListMessagesParams{Direction: &direction, Cursor: &cursor})
 	if err != nil || response.JSON200 == nil || len(response.JSON200.Items) != 1 || response.JSON200.Items[0].Id != string(neighborID) {

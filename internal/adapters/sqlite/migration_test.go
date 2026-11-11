@@ -81,7 +81,7 @@ func TestLegacyFoundationMigratesWithoutDiscardingData(t *testing.T) {
 	}
 	var version int
 	var dirty bool
-	if err = store.db.QueryRow("SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != 16 || dirty {
+	if err = store.db.QueryRow("SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != 17 || dirty {
 		t.Fatalf("migrate journal: %d %v %v", version, dirty, err)
 	}
 }
@@ -91,7 +91,7 @@ func TestDirtyAndFutureMigrationsAreNotForced(t *testing.T) {
 		version int
 		dirty   bool
 		want    string
-	}{{"dirty", 2, true, "dirty"}, {"future", 17, false, "newer"}} {
+	}{{"dirty", 2, true, "dirty"}, {"future", 18, false, "newer"}} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			store, err := Open(t.Context(), dir, migrationID())

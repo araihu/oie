@@ -101,7 +101,7 @@ func timelineInitialParams(v view) *engineapi.ListMessagesParams {
 	if validOperationKey(v.TimelineCursor) {
 		p.Cursor = &v.TimelineCursor
 		if v.TimelineDirection == "newer" {
-			direction := engineapi.Newer
+			direction := engineapi.ListMessagesParamsDirectionNewer
 			p.Direction = &direction
 		}
 	}
@@ -313,7 +313,7 @@ func (s *Server) timelinePage(w http.ResponseWriter, r *http.Request) {
 		} else {
 			next := high.Id
 			bound := high
-			dir := engineapi.Older
+			dir := engineapi.ListMessagesParamsDirectionOlder
 			for page := 0; page < 2; page++ {
 				limit := min(100, 200-len(items))
 				response, e := s.client.ListMessagesWithResponse(ctx, conversation, &engineapi.ListMessagesParams{Cursor: &next, Direction: &dir, Limit: &limit})

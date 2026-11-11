@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.27.0
+  version: 0.28.0
   description: Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
     are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.
@@ -1694,6 +1694,93 @@ paths:
               schema:
                 $ref: '#/components/schemas/MentionCandidates'
               example: {conversationId: '019a5df0-0000-7000-8000-000000000001', accountId: '019a5df0-0000-7000-8000-000000000002', state: known, items: [{id: 'room@conference.example/Juliet', displayName: Juliet, insertText: '@Juliet', referenceMode: text}], truncated: false}
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/conversations/{conversationId}/archive:
+    parameters:
+    - $ref: '#/components/parameters/ConversationID'
+    get:
+      operationId: getRoomArchive
+      tags: [Conversations]
+      summary: Read room archive recovery settings and progress
+      description: Reads retained state for the room without sending a protocol request.
+      responses:
+        '200':
+          description: Current room archive state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomArchive'
+              example: {conversationId: 019a5df0-0000-7000-8000-000000000003, mode: gradual, initialComplete: false, olderComplete: false, availability: supported, textSearch: unsupported}
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      operationId: setRoomArchiveMode
+      tags: [Conversations]
+      summary: Set the room archive recovery mode
+      description: Replaces the mode idempotently. Existing messages and progress are retained. Gradual mode resumes eligible automatic recovery.
+      requestBody:
+        description: Requested archive action or room recovery preference.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetRoomArchiveMode'
+            example: {mode: on_demand}
+      responses:
+        '200':
+          description: Saved mode and current progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomArchive'
+              example: {conversationId: 019a5df0-0000-7000-8000-000000000003, mode: gradual, initialComplete: false, olderComplete: false, availability: supported, textSearch: unsupported}
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/conversations/{conversationId}/archive/requests:
+    parameters:
+    - $ref: '#/components/parameters/ConversationID'
+    post:
+      operationId: requestRoomArchive
+      tags: [Conversations]
+      summary: Request a bounded room archive read
+      description: >-
+        Request the next initial page (focus), an older page (older), context
+        around a retained message (context), or a text search page (search).
+        Search requires a query and accepts an optional cursor from the same
+        room and query. Context requires messageId. Older accepts a retained
+        messageId as a boundary. The owning account and room determine the
+        archive. Successful imports are retained with historical semantics.
+        Search and context do not advance background recovery checkpoints.
+        Results are bounded. A capability failure does not affect local reads.
+      requestBody:
+        description: Requested archive action or room recovery preference.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomArchiveRequest'
+            example: {action: focus}
+      responses:
+        '200':
+          description: Archive read outcome and canonical stored messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomArchiveResult'
+              example: {archive: {conversationId: 019a5df0-0000-7000-8000-000000000003, mode: gradual, initialComplete: false, olderComplete: false, availability: supported, textSearch: unsupported}, outcome: stored, items: []}
         '400':
           $ref: '#/components/responses/Invalid'
         '404':
@@ -3472,6 +3559,101 @@ components:
           maxLength: 255
       example:
         password: alice-local-only
+    RoomArchiveMode:
+      description: Automatic recovery policy for older room history.
+      type: string
+      enum: [gradual, on_demand]
+      example: gradual
+    SetRoomArchiveMode:
+      description: Replacement room recovery preference.
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode:
+          $ref: '#/components/schemas/RoomArchiveMode'
+    RoomArchive:
+      description: Retained recovery progress for one room. Coverage describes archive pages, not isolated search hits.
+      type: object
+      additionalProperties: false
+      required: [conversationId, mode, initialComplete, olderComplete, availability, textSearch]
+      properties:
+        conversationId:
+          $ref: '#/components/schemas/ID'
+        mode:
+          $ref: '#/components/schemas/RoomArchiveMode'
+        initialComplete:
+          type: boolean
+          example: false
+        olderComplete:
+          type: boolean
+          example: false
+        availability:
+          type: string
+          enum: [unknown, supported, unsupported, unavailable]
+          example: supported
+        textSearch:
+          type: string
+          enum: [unknown, supported, unsupported, unavailable]
+          example: supported
+        windowStart:
+          type: string
+          format: date-time
+          example: "2026-11-08T12:00:00Z"
+        windowEnd:
+          type: string
+          format: date-time
+          example: "2026-11-08T12:00:00Z"
+        oldestCoveredAt:
+          description: Oldest confirmed boundary of continuous recovered history.
+          type: string
+          format: date-time
+          example: "2026-11-08T12:00:00Z"
+    RoomArchiveRequest:
+      description: One user-initiated room archive action.
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [focus, older, context, search]
+          example: focus
+        messageId:
+          $ref: '#/components/schemas/ID'
+        query:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: conference
+        cursor:
+          description: Opaque position scoped to this room and search term.
+          type: string
+          maxLength: 8192
+          example: opaque-page-position
+    RoomArchiveResult:
+      description: Outcome of the requested archive operation.
+      type: object
+      additionalProperties: false
+      required: [archive, outcome, items]
+      properties:
+        archive:
+          $ref: '#/components/schemas/RoomArchive'
+        outcome:
+          type: string
+          enum: [stored, complete, unsupported, unavailable]
+          example: stored
+        items:
+          type: array
+          maxItems: 50
+          example: []
+          items:
+            $ref: '#/components/schemas/Message'
+        nextCursor:
+          description: Next bounded search page for the same room and term.
+          type: string
+          maxLength: 8192
+          example: opaque-page-position
     OpenConversation:
       type: object
       description: Open or find a direct conversation in a registered account.
