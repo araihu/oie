@@ -325,7 +325,8 @@ This reachability restriction is temporary. Full centralized sync should eventua
 
 **AGREED:** The composer uses Goshtoso Split Button for Send and Schedule.
 Scheduling captures the full composition, including text, links, images and
-other supported attachments and message content. Edit opens that composition
+other supported attachments and message content. The scheduling dialog previews
+the outgoing message bubble for final review. Edit opens that composition
 in the same composer and restores any prior draft when the user saves or
 discards the edit. Scheduled items offer Send now, which makes the same intent
 eligible immediately and uses the same atomic cutoff as edit, reschedule and

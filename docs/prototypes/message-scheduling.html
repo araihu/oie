@@ -76,11 +76,16 @@
     }
     .clock::before { content:""; position:absolute; top:3px; left:6px; height:4px; border-left:1.5px solid currentColor }
     .clock::after { content:""; position:absolute; top:6px; left:6px; width:4px; border-top:1.5px solid currentColor; transform:rotate(24deg); transform-origin:left }
-    .timeline {
-      min-height:0; overflow:auto; padding:20px clamp(14px,4vw,56px);
-      display:flex; flex-direction:column; gap:12px; background-color:var(--chat);
+    .timeline, .schedule-preview {
+      display:flex; flex-direction:column; background-color:var(--chat);
       background-image:radial-gradient(#587d691f 1px,transparent 1px); background-size:23px 23px;
     }
+    .timeline { min-height:0; overflow:auto; padding:20px clamp(14px,4vw,56px); gap:12px }
+    .schedule-preview {
+      padding:12px; border:1px solid var(--line); border-radius:8px;
+      max-height:min(30dvh,16rem); overflow:auto;
+    }
+    .schedule-preview:focus-visible { outline:2px solid var(--ring); outline-offset:2px }
     .timeline::before { content:""; flex:1 }
     .day {
       align-self:center; padding:4px 10px; border-radius:6px; margin:0 0 8px;
@@ -247,7 +252,7 @@
   <dialog id="editor" aria-labelledby="editor-title">
     <form id="edit-form">
       <h2 id="editor-title"></h2>
-      <div class="composition-content" id="schedule-content"></div>
+      <div class="schedule-preview" id="schedule-content" role="group" tabindex="0" hidden></div>
       <label class="field" id="date-field"><span data-copy="sendAt"></span><input id="send-at" type="datetime-local" aria-describedby="zone-note form-error"></label>
       <p class="zone-note" id="zone-note"></p>
       <p class="confirm-text" id="confirm-text" data-copy="cancelPrompt" hidden></p>
@@ -265,6 +270,7 @@
         prototype:'Oiê · Protótipo de agendamento', language:'Idioma', zone:'Fuso de exibição', chats:'Conversas',
         scheduled:'Agendadas', today:'Hoje', message:'Mensagem', placeholder:'Digite uma mensagem',
         schedule:'Agendar mensagem', send:'Enviar', sendNow:'Enviar agora', sendOptions:'Opções de envio',
+        messagePreview:'Prévia da mensagem',
         close:'Fechar', empty:'Nenhuma mensagem agendada nesta conversa.',
         navigation:'Navegação principal', room:'Conversa', allRooms:'Todas as conversas', allEmpty:'Nenhuma mensagem agendada.',
         finishCurrentEdit:'Salve ou descarte a edição atual para trocar de conversa.',
@@ -285,6 +291,7 @@
         prototype:'Oiê · Scheduling prototype', language:'Language', zone:'Display time zone', chats:'Chats',
         scheduled:'Scheduled', today:'Today', message:'Message', placeholder:'Type a message',
         schedule:'Schedule message', send:'Send', sendNow:'Send now', sendOptions:'Send options',
+        messagePreview:'Message preview',
         close:'Close', empty:'No scheduled messages in this chat.',
         navigation:'Main navigation', room:'Conversation', allRooms:'All conversations', allEmpty:'No scheduled messages.',
         finishCurrentEdit:'Save or discard the current edit to switch conversations.',
@@ -461,6 +468,13 @@
       return node;
     }
 
+    function renderBubble(item) {
+      const bubble = document.createElement('article');
+      bubble.className = 'bubble' + (item.own ? ' own' : '');
+      bubble.append(renderContent(item), time(item.at, {timeStyle:'short'}));
+      return bubble;
+    }
+
     function renderChat() {
       const timeline = $('timeline');
       const fragment = document.createDocumentFragment();
@@ -476,10 +490,7 @@
           fragment.append(divider);
           previousDay = day;
         }
-        const bubble = document.createElement('article');
-        bubble.className = 'bubble' + (item.own ? ' own' : '');
-        bubble.append(renderContent(item), time(item.at, {timeStyle:'short'}));
-        fragment.append(bubble);
+        fragment.append(renderBubble(item));
       }
       timeline.replaceChildren(fragment);
     }
@@ -654,12 +665,18 @@
     function openEditor(kind, item, trigger, draft) {
       action = {kind, item, trigger, draft};
       const timing = kind !== 'cancel';
-      $('schedule-content').replaceChildren();
-      $('schedule-content').hidden = kind !== 'schedule';
-      if (draft) $('schedule-content').append(renderContent(draft));
+      const preview = $('schedule-content');
+      preview.replaceChildren();
+      preview.hidden = kind !== 'schedule';
       $('date-field').hidden = $('zone-note').hidden = !timing;
       $('confirm-text').hidden = kind !== 'cancel';
-      $('send-at').value = wallTime(item?.at ?? Date.now() + 60 * minute);
+      const at = item?.at ?? Date.now() + 60 * minute;
+      $('send-at').value = wallTime(at);
+      if (draft) {
+        preview.setAttribute('aria-label', text('messagePreview'));
+        preview.append(renderBubble({...draft, at, own:true}));
+        updatePreviewTime();
+      }
       $('zone-note').textContent = $('zone').selectedOptions[0].label;
       $('editor-title').textContent = text(kind);
       $('confirm').textContent = text(kind);
@@ -667,6 +684,16 @@
       $('form-error').textContent = '';
       $('editor').showModal();
       $(timing ? 'send-at' : 'dismiss').focus();
+    }
+
+    function updatePreviewTime() {
+      if (action?.kind !== 'schedule') return;
+      const timestamp = $('schedule-content').querySelector('time');
+      const candidates = wallTimeCandidates($('send-at').value);
+      timestamp.style.visibility = candidates.length === 1 ? '' : 'hidden';
+      if (candidates.length !== 1) return;
+      timestamp.dateTime = new Date(candidates[0]).toISOString();
+      timestamp.textContent = dateTime(candidates[0], {timeStyle:'short'});
     }
 
     function announce(key) {
@@ -789,6 +816,7 @@
       else $('conversation').inert = false;
     });
     $('dismiss').addEventListener('click', () => $('editor').close());
+    $('send-at').addEventListener('input', updatePreviewTime);
     $('editor').addEventListener('close', () => {
       const {trigger,item,kind} = action;
       if (trigger.isConnected && !trigger.closest('[inert]')) trigger.focus();
