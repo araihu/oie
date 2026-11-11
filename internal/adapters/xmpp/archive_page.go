@@ -70,8 +70,13 @@ func (m *Manager) readArchivePage(ctx context.Context, e *entry, s *mx.Session, 
 	}
 	e.mu.RLock()
 	e.historyMu.Lock()
+	if e.session != s || e.roomConfigurations[scope].pending {
+		e.historyMu.Unlock()
+		e.mu.RUnlock()
+		return archivePage{}, errArchive
+	}
 	q.SIDVerified = e.sidScopes[scope]
-	q.OccupantVerified = e.occupantScopes[scope] && !e.roomConfigurations[scope].pending
+	q.OccupantVerified = e.occupantScopes[scope]
 	q.Semianonymous = e.semianonymousRooms[scope]
 	if q.SIDVerified && q.OccupantVerified && q.Semianonymous {
 		slot := e.rooms[scope]

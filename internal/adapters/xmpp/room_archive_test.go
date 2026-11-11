@@ -420,3 +420,62 @@ func TestDeferredRoomReactionsSurviveCatchupBeforeJoin(t *testing.T) {
 		t.Fatalf("text caught up through %v but replay recovered %d reactions", p.CaughtUpThrough, len(host.reactions))
 	}
 }
+
+type archiveConfigChangeHost struct {
+	*testArchiveHost
+	beforeSave func()
+}
+
+func (h *archiveConfigChangeHost) StoreRoomArchiveProgress(ctx context.Context, id domain.ID, p domain.RoomArchiveProgress) error {
+	if h.beforeSave != nil {
+		beforeSave := h.beforeSave
+		h.beforeSave = nil
+		beforeSave()
+	}
+	return h.testArchiveHost.StoreRoomArchiveProgress(ctx, id, p)
+}
+
+func TestRoomArchiveKeepsCheckpointWhenConfigurationChangesBeforeQuery(t *testing.T) {
+	at := time.Date(2026, 11, 10, 22, 0, 0, 0, time.UTC)
+	cutoff := at.Add(time.Minute)
+	m, e, host := archiveFixture(t, func(iq testArchiveIQ, i int) string {
+		payload := `<occupant-id xmlns="urn:xmpp:occupant-id:0" id="peer"/><reactions xmlns="urn:xmpp:reactions:0" id="source"><reaction>❤</reaction></reactions>`
+		page := iq.page(true, testArchiveMessage{id: "old-reaction", at: at}, testArchiveMessage{id: "newer-text", at: at.Add(time.Second)})
+		return strings.Replace(page, `id="old-reaction" type="groupchat"><body>Fixture message</body>`, `id="old-reaction" type="groupchat">`+payload, 1)
+	})
+	room := host.room.Address
+	e.archiveCapabilities = map[string]roomArchiveCapability{room: {mam: true}}
+	e.semianonymousRooms = map[string]bool{room: true}
+	e.occupantScopes = map[string]bool{room: true}
+	slot := e.rooms[room]
+	slot.session, slot.snapshot.State, slot.ownOccupantID = e.session, "joined", "self"
+	slot.recentReactionsRecovered = true
+	host.archive.RoomArchiveProgress = domain.RoomArchiveProgress{
+		WindowStart: at.Add(-time.Hour), WindowEnd: at.Add(-time.Second), CaughtUpThrough: at.Add(-time.Second),
+		RecentComplete: true, InitialComplete: true, OlderComplete: true, Availability: "unknown", TextSearch: "unknown",
+	}
+	// The authenticated notice arrives after roomArchiveSupport validated the
+	// previously cached capabilities, while availability is saved before catch-up.
+	wrapped := &archiveConfigChangeHost{testArchiveHost: host, beforeSave: func() {
+		feedReaction(t, m, e, `<message xmlns="jabber:client" type="groupchat" from="`+room+`"><x xmlns="http://jabber.org/protocol/muc#user"><status code="104"/></x></message>`)
+	}}
+	m.host = wrapped
+	_, err := m.roomArchiveTurn(t.Context(), t.Context(), wrapped, e, e.session, host.room, domain.RoomArchiveRequest{}, archiveAutomatic, cutoff)
+	if !currentRoomConfiguration(e, room).pending {
+		t.Fatal("fixture failed to invalidate discovery")
+	}
+	if !errors.Is(err, errArchive) || !host.archive.CaughtUpThrough.Equal(at.Add(-time.Second)) || len(host.messages) != 0 {
+		t.Fatalf("pending configuration changed archive progress: %v, %+v", err, host.archive)
+	}
+	discovery := `<query xmlns="http://jabber.org/protocol/disco#info"><identity category="conference" type="text"/><feature var="muc_semianonymous"/><feature var="urn:xmpp:occupant-id:0"/><feature var="urn:xmpp:sid:0"/></query>`
+	if _, err := m.decodeDiscoInfo(t.Context(), e, e.session, room, discovery, 1); err != nil {
+		t.Fatal(err)
+	}
+	e.archiveCapabilities[room] = roomArchiveCapability{mam: true}
+	if _, err := m.roomArchiveTurn(t.Context(), t.Context(), wrapped, e, e.session, host.room, domain.RoomArchiveRequest{}, archiveAutomatic, cutoff); err != nil {
+		t.Fatal(err)
+	}
+	if !host.archive.CaughtUpThrough.Equal(cutoff) || len(host.reactions) != 1 || len(host.messages) != 1 {
+		t.Fatal("catch-up did not resume from the original checkpoint", host.archive, host.reactions)
+	}
+}
