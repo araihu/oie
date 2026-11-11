@@ -247,6 +247,12 @@ make ci        # Also isolated Prosody integration and all browser workflows
 
 GitHub Actions runs the same `make ci` command and uploads its stage logs and
 test evidence as `dagger-ci-evidence`, including when tests fail.
+The workflow uses `hostinger-vps-trusted` for allowlisted pushes to `main` and
+`hostinger-vps-pr` for ready pull requests opened by allowlisted actors from
+branches in the same repository. The allowlist comes from the organization
+variable `HOSTINGER_PR_ACTORS_JSON`. Other events, including fork pull requests,
+run on `ubuntu-latest`. The Hostinger runners supply separate Dagger sockets and
+caches for the two lanes.
 
 The Dagger Go graph and shell entrypoint are under `tools/ci`. Dagger dependencies
 remain separate from the root application and generation-tool modules. Images

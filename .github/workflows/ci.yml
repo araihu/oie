@@ -3,16 +3,35 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 permissions:
   contents: read
 jobs:
   dagger:
-    runs-on: ubuntu-latest
+    # Match the Hostinger admission policy and keep other events on GitHub runners.
+    runs-on: >-
+      ${{
+        github.event_name == 'pull_request' &&
+        github.event.pull_request.draft == false &&
+        github.event.pull_request.user.login == github.actor &&
+        github.event.pull_request.base.repo.full_name == github.repository &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.head.repo.fork == false &&
+        contains(fromJSON(vars.HOSTINGER_PR_ACTORS_JSON || '[]'), github.actor) &&
+        fromJSON('["self-hosted","Linux","X64","hostinger-vps-pr"]') ||
+        github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+        contains(fromJSON(vars.HOSTINGER_PR_ACTORS_JSON || '[]'), github.actor) &&
+        fromJSON('["self-hosted","Linux","X64","hostinger-vps-trusted"]') ||
+        'ubuntu-latest'
+      }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: ${{ runner.environment == 'github-hosted' }}
           cache-dependency-path: tools/ci/go.sum
       - run: make ci
       - if: always()
