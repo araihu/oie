@@ -1,12 +1,54 @@
 package web
 
 import (
+	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
+
+func TestConversationFragmentDoesNotLoadInbox(t *testing.T) {
+	engine := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var response any
+		switch r.URL.Path {
+		case "/api/v1/engine":
+			response = map[string]string{"id": testEngine, "role": "hosted"}
+		case "/api/v1/accounts":
+			response = map[string]any{"items": []engineapi.Account{{Id: testAccount, Address: "alice@fixture", Label: "Personal"}}}
+		case "/api/v1/accounts/" + testAccount + "/avatars", "/api/v1/conversations/" + testChat + "/messages":
+			response = map[string]any{"items": []any{}}
+		case "/api/v1/conversations", "/api/v1/accounts/" + testAccount + "/connection":
+			t.Errorf("fragment requested %s", r.URL.Path)
+			http.Error(w, "unexpected request", http.StatusServiceUnavailable)
+			return
+		case "/api/v1/conversations/" + testChat:
+			response = engineapi.Conversation{Id: testChat, AccountId: testAccount, Title: "Selected conversation", Address: "peer@fixture", Kind: "direct"}
+		case "/api/v1/conversations/" + testChat + "/details":
+			response = map[string]any{"conversationId": testChat, "accountId": testAccount, "kind": "direct", "address": "peer@fixture", "accountConnection": map[string]string{"accountId": testAccount, "state": "connected"}, "participants": map[string]string{"scope": "peer"}}
+		default:
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer engine.Close()
+	server, err := New(engine.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodGet, "/?chat="+testChat+"&lang=en", nil)
+	r.Header.Set("HX-Request", "true")
+	r.Header.Set("X-Oie-Fragment", "conversation")
+	w := httptest.NewRecorder()
+	server.ServeHTTP(w, r)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Personal · alice@fixture · Connected") {
+		t.Fatalf("conversation fragment lost the selected account's connection state (HTTP %d)", w.Code)
+	}
+}
 
 func TestConversationFragmentOwnsItsStateAndDetailsWithoutTheInbox(t *testing.T) {
 	catalogs, err := loadCatalogs()

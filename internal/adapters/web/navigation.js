@@ -137,6 +137,15 @@
  }
  function selectFor(kind){return '#'+kind+(kind==='shared-content-scroll'?' > *':'')}
  function fragment(kind){return kind===inboxID?'inbox':kind==='conversation-pane'?'conversation':kind==='chat-info-content'?'info':'app';}
+ function conversationResponse(ctx){
+  if(!(ctx.response?.status>=200&&ctx.response.status<300))return false;
+  // Validate the fragment root before HTMX updates history. HTMX parses the
+  // timeline itself when it swaps, so only read the opening tag here.
+  const markup=ctx.text?.trimStart()||'',end=markup.indexOf('>');
+  if(end<0)return false;
+  const next=new DOMParser().parseFromString(markup.slice(0,end+1),'text/html').body.firstElementChild;
+  return next?.id==='conversation-pane'&&next.dataset.conversationScope===ctx.oieScope&&next.dataset.engineId===document.body.dataset.engineId&&(ctx.oieChat?next.dataset.conversationId===ctx.oieChat:next.dataset.openChat==='false');
+ }
  async function showError(ctx){
   if(ctx.oieErrorShown)return;
   ctx.oieErrorShown=true;
@@ -184,8 +193,10 @@
  function closeOverlays(){for(const id of ['oie-image-viewer','oie-document-viewer']){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id}}));const dialog=document.getElementById(id);if(dialog?.open)dialog.close()}for(const id of ['details','accounts','settings','about','newchat','sender','message-history'])window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id}}));}
  document.addEventListener('htmx:before:request',event=>{
   const ctx=event.detail.ctx;if(ctx?.target?.id==='shared-search-results'){stopConversationLoading();epoch++;document.getElementById('shared-content-scroll')?.removeAttribute('aria-busy')}if(!ctx||!kinds.includes(ctx.target?.id))return;
+  const previousConversation=pendingConversation?.ctx;
   stopConversationLoading();
   ctx.oieEpoch=++epoch;ctx.oieKind=ctx.target.id;
+  previousConversation?.request.abort();
   if(ctx.oieKind==='shared-content-scroll'){ctx.oieSharedFields=sharedFields();ctx.target.setAttribute('aria-busy','true')}ctx.oieStarGeneration=Number(document.body.dataset.starGeneration||0);
   if(ctx.oieKind==='conversation-pane'){
    ctx.oieScope=ctx.target.dataset.conversationScope;
@@ -198,11 +209,14 @@
  document.addEventListener('htmx:after:request',event=>{
   const ctx=event.detail.ctx;if(!ctx?.oieKind)return;if(ctx.oieEpoch!==epoch){event.preventDefault();return}
   if(pendingConversation?.ctx===ctx)clearTimeout(pendingConversation.timer);
+  if(ctx.oieKind==='conversation-pane'){
+   if(!conversationResponse(ctx)){event.preventDefault();showError(ctx);}
+   return;
+  }
   const parsed=new DOMParser().parseFromString(ctx.text||'','text/html'),next=parsed.querySelector('#'+ctx.oieKind);
   let valid=!!next;
   if(ctx.oieKind==='shared-content-scroll'){valid=valid&&ctx.response?.status>=200&&ctx.response.status<300&&parsed.querySelector('#oie-app')?.dataset.engineId===document.body.dataset.engineId&&sharedFields()===ctx.oieSharedFields;ctx.oieSharedPage=parsed}
   if(ctx.oieKind==='chat-info-content')valid=valid&&next.dataset.detailsConversation===document.body.dataset.conversationId;
-  if(ctx.oieKind==='conversation-pane')valid=valid&&ctx.response?.status>=200&&ctx.response.status<300&&next.dataset.conversationScope===ctx.oieScope&&next.dataset.engineId===document.body.dataset.engineId&&(ctx.oieChat?next.dataset.conversationId===ctx.oieChat:next.dataset.openChat==='false');
   if(ctx.oieKind===inboxID){
    const url=new URL(ctx.request.action,location.href);
    valid=valid&&ctx.response?.status===200&&next.dataset.inboxScope===ctx.target.dataset.inboxScope&&next.dataset.inboxFilter===(url.searchParams.get('filter')||'all');
@@ -251,7 +265,7 @@
    if(pendingConversation&&!pendingConversation.overlay.isConnected)stopConversationLoading();
    const pane=root.id==='conversation-pane'?root:null;
    if(!pane)inboxScroll=0;
-   routeState(pane);syncFilterLinks();upgrade(app());
+   routeState(pane);syncFilterLinks();upgrade(pane||app());
    // Alpine's HTMX hook flushes after settle. Initialize the new pane now
    // so the first scroll calculation already includes revealed previews.
    if(pane)window.Alpine?.initTree(pane);

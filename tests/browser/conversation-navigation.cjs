@@ -33,8 +33,10 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    if(url.pathname===prefix)return send(200,chat);
    if(url.pathname===prefix+'/messages'){
     if(state.hold?.chat===chat){
-     state.hold.requested=true;
-     await state.hold.gate;
+     const hold=state.hold;
+     hold.requested=true;
+     res.on('close',()=>{if(!res.writableEnded)hold.aborted=true});
+     await hold.gate;
     }
     const all=chat===c?Array.from({length:60},(_,index)=>({...message(chat),id:id(2000+index),originalText:index===55?photoURL:'Long conversation message '+index})):[message(chat)];
     const limit=Number(url.searchParams.get('limit')||50),direction=url.searchParams.get('direction')||'older',cursor=url.searchParams.get('cursor'),index=cursor?all.findIndex(item=>item.id===cursor):all.length;
@@ -136,7 +138,9 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    await route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2iEAAAAASUVORK5CYII=','base64')});
   });
   await recordTimelineFrames(c);
+  const superseded=state.hold;
   await click(c);await skeleton().waitFor({state:'hidden'});
+  await until(()=>superseded.aborted,'superseded conversation request aborted at engine');
   const image=page.locator('[data-message-id="'+photoMessage+'"] .oie-preview-thumbnail');
   const beforeDecode=await image.boundingBox();
   releasePhoto();

@@ -756,7 +756,12 @@ func (s *Server) baseView(r *http.Request) view {
 	return v
 }
 func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
-	listOnly := r.URL.Path == "/" && r.Header.Get("HX-Request") == "true" && r.Header.Get("X-Oie-Fragment") == "inbox" && v.Section != "media"
+	fragment := ""
+	if r.URL.Path == "/" && r.Header.Get("HX-Request") == "true" && v.Section != "media" {
+		fragment = r.Header.Get("X-Oie-Fragment")
+	}
+	listOnly := fragment == "inbox"
+	paneOnly := fragment == "conversation" && v.ChatID != ""
 	editor := func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept-Language", v.Locale)
 		return nil
@@ -782,12 +787,12 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		s.loadMessageSearch(ctx, v)
 		return
 	}
-	if !listOnly {
+	if !listOnly && !paneOnly {
 		v.AccountUnread = s.accountUnread(ctx)
 	}
 	for _, a := range v.Accounts {
 		s.loadAvatars(ctx, v, a.Id)
-		if listOnly {
+		if listOnly || paneOnly {
 			continue
 		}
 		if !v.Preview && v.accountScreen() == "detail" && a.Id == v.managedAccountID() {
@@ -796,18 +801,33 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 				v.Histories[a.Id] = *h.JSON200
 			}
 		}
-		connection, err := s.client.GetAccountConnectionWithResponse(ctx, a.Id, editor)
-		if err == nil && connection.JSON200 != nil {
-			v.Connections[a.Id] = connectionView{Known: true, Value: *connection.JSON200}
-		}
+		s.loadAccountConnection(ctx, v, a.Id, editor)
 	}
-	if !listOnly {
+	if !listOnly && !paneOnly {
 		s.loadCapabilities(ctx, v)
 	}
 	if v.Section == "media" {
 		s.loadSharedContent(ctx, v)
 		return
 	}
+	if !paneOnly && !s.loadInbox(ctx, v, editor) {
+		return
+	}
+	if listOnly {
+		return
+	}
+	s.loadConversation(ctx, r, v, paneOnly, editor)
+}
+
+func (s *Server) loadAccountConnection(ctx context.Context, v *view, accountID string, editor engineapi.RequestEditorFn) {
+	connection, err := s.client.GetAccountConnectionWithResponse(ctx, accountID, editor)
+	if err == nil && connection.JSON200 != nil {
+		v.Connections[accountID] = connectionView{Known: true, Value: *connection.JSON200}
+	}
+}
+
+func (s *Server) loadInbox(ctx context.Context, v *view, editor engineapi.RequestEditorFn) bool {
+	limit := 100
 	params := &engineapi.ListConversationsParams{Limit: &limit}
 	archived := v.Section == "archived"
 	params.Archived = &archived
@@ -832,23 +852,24 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	chats, err := s.client.ListConversationsWithResponse(ctx, params, editor)
 	if err != nil {
 		v.Unavailable = true
-		return
+		return false
 	}
 	if chats.JSON200 == nil {
 		if chats.StatusCode() != 404 {
 			v.Unavailable = true
 		}
-		return
+		return false
 	}
 	v.Chats = chats.JSON200.Items
-	if listOnly {
-		return
-	}
+	return true
+}
+
+func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view, paneOnly bool, editor engineapi.RequestEditorFn) {
 	selected := v.ChatID
 	if selected == "" && !v.InboxOnly && len(v.Chats) > 0 {
 		selected = v.Chats[0].Id
 	}
-	if selected == "" || v.Section == "media" {
+	if selected == "" {
 		return
 	}
 	conversation, err := s.client.GetConversationWithResponse(ctx, selected, editor)
@@ -872,6 +893,13 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	v.ChatID = selected
 	s.loadRoomArchive(ctx, v)
 	s.loadConversationDetails(ctx, v)
+	if paneOnly {
+		if v.ConversationInfo != nil {
+			v.Connections[v.Selected.AccountId] = connectionView{Known: true, Value: v.ConversationInfo.AccountConnection}
+		} else {
+			s.loadAccountConnection(ctx, v, v.Selected.AccountId, editor)
+		}
+	}
 	s.loadMessaging(ctx, v)
 	s.latestEditTarget(ctx, v)
 	s.loadChatInfo(ctx, v)
