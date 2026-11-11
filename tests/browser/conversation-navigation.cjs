@@ -8,6 +8,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const chats=Array.from({length:24},(_,index)=>({id:id(100+index),revisionId:revision,accountId:index%2?other:account,address:'chat'+index+'@fixture',title:'Conversation '+index,kind:'direct',updatedAt:'2026-11-08T12:00:00Z',lastMessage:'Fixture',unreadCount:0,archived:false,favorite:false}));
  const [a,b,c,room]=[chats[0],chats[8],chats[9],chats[23]];
  room.kind='room';c.favorite=true;
+ const photoURL='https://images.fixture/photo.png',photoPath='/ui/media/'+'a'.repeat(64),photoMessage=id(2055);
+ const photo={id:id(2100),revisionId:revision,accountId:c.accountId,conversationId:c.id,messageId:photoMessage,url:photoURL,kind:'image',state:'ready',downloadState:'ready',imageHash:'a'.repeat(64),updatedAt:c.updatedAt};
  const message=chat=>({id:id(1000+chats.indexOf(chat)),revisionId:revision,conversationId:chat.id,accountId:chat.accountId,sender:{id:id(5),displayName:'Peer'},originalText:'Text for '+chat.title,createdAt:'2026-11-08T12:00:00Z',isOwn:false,sendState:'received'});
  const api=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://fixture');reads.push(url.pathname+url.search);res.setHeader('Content-Type','application/json');const send=(status,value)=>{res.statusCode=status;res.end(JSON.stringify(value))};
@@ -16,7 +18,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(url.pathname==='/api/v1/accounts')return send(200,{items:accounts});
   if(url.pathname.endsWith('/connection'))return send(200,{accountId:url.pathname.includes(other)?other:account,state:'connected',updatedAt:'2026-11-08T12:00:00Z'});
   if(url.pathname.endsWith('/history'))return send(200,{accountId:account,state:'partial',retainedMessages:24,conversations:24,updatedAt:'2026-11-08T12:00:00Z'});
-  if(url.pathname.endsWith('/avatars')||url.pathname==='/api/v1/shared-content'||url.pathname.endsWith('/previews')||url.pathname.endsWith('/message-stars'))return send(200,{items:[]});
+  if(url.pathname.endsWith('/previews'))return send(200,{items:url.searchParams.getAll('messageId').includes(photoMessage)?[photo]:[]});
+  if(url.pathname.endsWith('/avatars')||url.pathname==='/api/v1/shared-content'||url.pathname.endsWith('/message-stars'))return send(200,{items:[]});
   if(url.pathname==='/api/v1/contacts')return send(200,{items:[],sources:accounts.filter(value=>!url.searchParams.get('accountId')||value.id===url.searchParams.get('accountId')).map(value=>({accountId:value.id,state:'known'}))});
   if(url.pathname==='/api/v1/messages/search'){
    const q=(url.searchParams.get('q')||'').trim(),accountId=url.searchParams.get('accountId')||'',conversationId=url.searchParams.get('conversationId')||'',includeEditHistory=url.searchParams.get('includeEditHistory')==='true',limit=Number(url.searchParams.get('limit')||50);
@@ -33,7 +36,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
      state.hold.requested=true;
      await state.hold.gate;
     }
-    const all=chat===c?Array.from({length:60},(_,index)=>({...message(chat),id:id(2000+index),originalText:'Long conversation message '+index})):[message(chat)];
+    const all=chat===c?Array.from({length:60},(_,index)=>({...message(chat),id:id(2000+index),originalText:index===55?photoURL:'Long conversation message '+index})):[message(chat)];
     const limit=Number(url.searchParams.get('limit')||50),direction=url.searchParams.get('direction')||'older',cursor=url.searchParams.get('cursor'),index=cursor?all.findIndex(item=>item.id===cursor):all.length;
     if(!Number.isInteger(limit)||limit<1||limit>100||!['older','newer'].includes(direction))return send(400,{status:400});
     if(index<0)return send(409,{status:409,code:'invalid_cursor'});
@@ -54,6 +57,28 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const layout=async()=>{const size=await page.evaluate(()=>{const rect=selector=>{const r=document.querySelector(selector).getBoundingClientRect();return{top:r.top,bottom:r.bottom}};const timeline=document.querySelector('#message-timeline');return{viewport:innerHeight,workspace:rect('#workspace'),pane:rect('.oie-chat-pane'),composer:rect('.oie-composer'),footer:document.querySelector('.oie-list-account').getBoundingClientRect().height?rect('.oie-list-account'):null,pageHeight:document.documentElement.scrollHeight,timelineHeight:timeline.clientHeight,timelineContent:timeline.scrollHeight}});assert(Math.abs(size.workspace.bottom-size.viewport)<1,JSON.stringify(size));assert(Math.abs(size.pane.bottom-size.workspace.bottom)<1,JSON.stringify(size));assert(Math.abs(size.composer.bottom-size.workspace.bottom)<1,JSON.stringify(size));if(size.footer)assert(Math.abs(size.footer.bottom-size.workspace.bottom)<1,JSON.stringify(size));assert(size.timelineHeight>0&&size.pageHeight<=size.viewport+1,JSON.stringify(size));return size};
  const ready=async(chat)=>{await until(async()=>await page.locator('#message-composer').count()===1&&await page.evaluate(()=>document.body.dataset.conversationId)===chat.id,'selected '+chat.title);await until(()=>streams.size===1,'one event stream');await layout()};
  const skeleton=()=>page.locator('[data-conversation-loading]');
+ const recordTimelineFrames=async(chat)=>{
+  await page.evaluate(id=>{
+   const samples=[];
+   const sample=()=>{
+    const pane=document.getElementById('conversation-pane'),timeline=document.getElementById('message-timeline');
+    if(pane?.dataset.conversationId===id&&timeline?.getClientRects().length)samples.push({
+     ready:document.body.dataset.conversationId===id,
+     scroll:timeline.scrollTop,
+     end:timeline.scrollHeight-timeline.clientHeight,
+    });
+    window.timelineFrame=requestAnimationFrame(sample);
+   };
+   window.timelineFrames=samples;
+   sample();
+  },chat.id);
+ };
+ const timelineFrames=async()=>{
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  const samples=await page.evaluate(()=>{cancelAnimationFrame(window.timelineFrame);return window.timelineFrames});
+  assert(samples.length>0);
+  return samples;
+ };
  const sampleOpening=async(chat,selectors)=>{
   const row=page.locator('#conversation-list a[data-conversation-id="'+chat.id+'"]');
   await row.scrollIntoViewIfNeeded();
@@ -103,7 +128,24 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await click(b);await page.locator('[data-sidebar-toggle]').click();await page.locator('.oie-list-account').waitFor();
   await sampleOpening(a,['#conversation-list','.oie-list-account','#message-timeline','.oie-composer']);
   assert.equal(await page.locator('#message-composer').inputValue(),'Draft B');
-  await click(c);await skeleton().waitFor({state:'hidden'});const longLayout=await layout();assert(longLayout.timelineContent>longLayout.timelineHeight);await page.setViewportSize({width:1280,height:650});await layout();await page.setViewportSize({width:1440,height:950});state.hold=null;state.release();state.release=null;await new Promise(resolve=>setTimeout(resolve,200));assert.equal(await page.evaluate(()=>document.body.dataset.conversationId),c.id);
+  const settleDelay=await page.evaluate(()=>{const delay=window.htmx.config.defaultSettleDelay;window.htmx.config.defaultSettleDelay=180;return delay});
+  let releasePhoto;
+  const photoGate=new Promise(resolve=>releasePhoto=resolve);
+  await page.route(url=>url.pathname===photoPath,async route=>{
+   await photoGate;
+   await route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2iEAAAAASUVORK5CYII=','base64')});
+  });
+  await recordTimelineFrames(c);
+  await click(c);await skeleton().waitFor({state:'hidden'});
+  const image=page.locator('[data-message-id="'+photoMessage+'"] .oie-preview-thumbnail');
+  const beforeDecode=await image.boundingBox();
+  releasePhoto();
+  assert(beforeDecode?.height>=100,JSON.stringify(beforeDecode));
+  await image.evaluate(node=>node.decode());
+  const afterDecode=await image.boundingBox();
+  assert(Math.abs(afterDecode.height-beforeDecode.height)<=1&&Math.abs(afterDecode.width-beforeDecode.width)<=1,JSON.stringify({beforeDecode,afterDecode}));
+  for(const sample of await timelineFrames())assert(sample.ready&&sample.end>0&&Math.abs(sample.scroll-sample.end)<=1,JSON.stringify(sample));
+  const longLayout=await layout();assert(longLayout.timelineContent>longLayout.timelineHeight);await page.setViewportSize({width:1280,height:650});await layout();await page.setViewportSize({width:1440,height:950});state.hold=null;state.release();state.release=null;await new Promise(resolve=>setTimeout(resolve,200));assert.equal(await page.evaluate(()=>document.body.dataset.conversationId),c.id);
   const failureURL=url=>url.searchParams.get('chat')===a.id;
   let releaseFailure;
   const failureGate=new Promise(resolve=>releaseFailure=resolve);
@@ -113,11 +155,27 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   },{times:1});
   const beforeFailure=await page.evaluate(()=>{window.failedOpenPane=document.getElementById('conversation-pane');return location.href});
   await page.locator('#conversation-list a[data-conversation-id="'+a.id+'"]').click();
-  try{await skeleton().waitFor({state:'visible'});assert(await page.locator('.oie-chat-pane').evaluate(node=>node.inert));}finally{releaseFailure();}
+  try{
+   await skeleton().waitFor({state:'visible'});
+   assert(await page.locator('#message-timeline').evaluate(node=>node.inert));
+   assert(await skeleton().locator('.oie-chat-skeleton-header').isHidden());
+   assert(await skeleton().locator('.oie-chat-skeleton-composer').isHidden());
+   assert(await page.locator('#chat-header').isVisible());
+   assert(await page.locator('#message-composer').isVisible());
+  }finally{releaseFailure();}
   await page.locator('[data-toast-container]').getByText('Could not open this view. Try again.',{exact:true}).waitFor();
   await skeleton().waitFor({state:'hidden'});
-  assert(await page.evaluate(()=>window.failedOpenPane===document.getElementById('conversation-pane')&&window.savedList===document.getElementById('conversation-list')&&!document.querySelector('.oie-chat-pane').inert));
+  assert(await page.evaluate(()=>window.failedOpenPane===document.getElementById('conversation-pane')&&window.savedList===document.getElementById('conversation-list')&&!document.getElementById('message-timeline').inert));
   assert.equal(page.url(),beforeFailure);
+  const savedChatScroll=await page.locator('#message-timeline').evaluate(node=>{
+   node.scrollTop=Math.floor((node.scrollHeight-node.clientHeight)/2);
+   return node.scrollTop;
+  });
+  await click(b);
+  await recordTimelineFrames(c);
+  await page.goBack();await ready(c);
+  for(const sample of await timelineFrames())assert(sample.ready&&Math.abs(sample.scroll-savedChatScroll)<=1,JSON.stringify(sample));
+  await page.evaluate(delay=>{window.htmx.config.defaultSettleDelay=delay;},settleDelay);
   const liveTop=await page.locator('#conversation-list').evaluate(node=>node.scrollTop);chats[8].lastMessage='Updated live preview';state.seq++;for(const stream of streams)stream.write('id: '+engine+':'+state.seq+'\nevent: conversation.updated\ndata: {}\n\n');await until(async()=>await page.locator('#conversation-list').textContent().then(text=>text.includes('Updated live preview')),'changed inbox data updates');assert(await page.evaluate(()=>window.savedList===document.getElementById('conversation-list')));assert.equal(await page.locator('#conversation-list').evaluate(node=>node.scrollTop),liveTop);assert.equal(await page.evaluate(()=>window.documentToken),token);assert.equal(requests.filter(request=>request.kind==='document').length,startDocuments);assert(requests.some(request=>request.headers['x-oie-fragment']==='conversation'));
   await opened.context.close();await until(()=>streams.size===0,'desktop stream closed');
   opened=await fresh({viewport:{width:390,height:844}});page=opened.page;await page.goto(base+'/?lang=en&theme=dark');await until(async()=>await page.locator('#conversation-list').isVisible(),'mobile inbox');await page.evaluate(()=>{window.savedList=document.getElementById('conversation-list');window.savedApp=document.getElementById('oie-app');window.savedSidebar=document.querySelector('.oie-sidebar')});const mobileTop=await click(b);assert.equal(await page.locator('.oie-list-pane').isVisible(),false);await page.locator('.oie-back-button').click();await until(async()=>await page.locator('#conversation-list').isVisible(),'mobile back');assert.equal(await page.locator('#conversation-list').evaluate(node=>node.scrollTop),mobileTop);assert(await page.evaluate(()=>window.savedList===document.getElementById('conversation-list')));await opened.context.close();await until(()=>streams.size===0,'mobile stream closed');

@@ -13,29 +13,37 @@
  const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
  function stopConversationLoading(){
   if(!pendingConversation)return;
-  const {timer,overlay,covered,focus}=pendingConversation;
+  const {timer,pane,overlay,covered,focus}=pendingConversation;
   pendingConversation=null;
   clearTimeout(timer);
-  if(covered)covered.inert=false;
+  for(const node of covered??[])node.inert=false;
   const restoreFocus=focus?.isConnected&&(document.activeElement===document.body||overlay.contains(document.activeElement));
   overlay.hidden=true;
+  if(overlay.parentElement!==pane)pane.append(overlay);
   if(restoreFocus)focus.focus({preventScroll:true});
  }
  function startConversationLoading(ctx){
   const pane=ctx.target,overlay=pane.querySelector('[data-conversation-loading]');
   if(!overlay)return;
-  const pending={ctx,overlay};
+  const pending={ctx,pane,overlay};
   pendingConversation=pending;
   pending.timer=setTimeout(()=>{
    if(!overlay.isConnected||ctx.oieEpoch!==epoch)return;
    const chat=pane.querySelector('.oie-chat-pane');
-   const covered=chat.getClientRects().length?chat:document.querySelector('#workspace > .oie-list-pane');
-   pending.covered=covered;
+   const visible=chat.getClientRects().length>0;
+   const timeline=visible&&chat.querySelector('.oie-timeline-frame');
+   const covered=visible?chat:document.querySelector('#workspace > .oie-list-pane');
    if(covered?.contains(document.activeElement))pending.focus=document.activeElement;
-   if(covered)covered.inert=true;
+   if(timeline){
+    // Keep the real header and composer in place. The skeleton must be
+    // outside the inert content so its status stays available.
+    timeline.append(overlay);
+    pending.covered=[...chat.children].flatMap(node=>node===timeline?[timeline.firstElementChild]:[node]);
+    for(const node of pending.covered)node.inert=true;
+   }else if(covered){covered.inert=true;pending.covered=[covered];}
    overlay.hidden=false;
-   if(pending.focus)overlay.querySelector('[data-cancel-conversation-loading]').focus({preventScroll:true});
-  },120);
+   if(!timeline&&pending.focus)overlay.querySelector('[data-cancel-conversation-loading]').focus({preventScroll:true});
+  },250);
  }
  function cancelConversationLoading(){
   if(!pendingConversation)return;
@@ -122,7 +130,11 @@
   return key(url)===key(current);
  }
  function sharedFields(){const form=document.getElementById('shared-content-search');return form?JSON.stringify(['q','account'].map(name=>new FormData(form).get(name)||'')):''}
- function swapFor(kind){return kind==='shared-content-scroll'?'innerHTML swap:'+(reducedMotion.matches?'0ms':'75ms')+' settle:0ms show:none':'outerHTML show:none'}
+ function swapFor(kind){
+  if(kind==='shared-content-scroll')return 'innerHTML swap:'+(reducedMotion.matches?'0ms':'75ms')+' settle:0ms show:none';
+  if(kind==='conversation-pane')return 'outerHTML settle:0ms show:none';
+  return 'outerHTML show:none';
+ }
  function selectFor(kind){return '#'+kind+(kind==='shared-content-scroll'?' > *':'')}
  function fragment(kind){return kind===inboxID?'inbox':kind==='conversation-pane'?'conversation':kind==='chat-info-content'?'info':'app';}
  async function showError(ctx){
@@ -237,8 +249,20 @@
   else if(root.id==='chat-info-content')infoReady(infoRequestGeneration);
   else{
    if(pendingConversation&&!pendingConversation.overlay.isConnected)stopConversationLoading();
-   if(root.id==='oie-app')inboxScroll=0;routeState(root.id==='conversation-pane'?root:null);syncFilterLinks();upgrade(app());if(booted)runtime.start();const saved=positions.get(location.href);
-   requestAnimationFrame(()=>{if(!root.isConnected||root!==document.getElementById(root.id))return;if(saved)for(const [id,top]of Object.entries(saved)){if(root.id==='conversation-pane'&&id!=='message-timeline')continue;if(id==='message-timeline'&&new URL(location.href).searchParams.has('message'))continue;const node=document.getElementById(id);if(node)node.scrollTop=top}const info=document.getElementById('chat-info-content');if(info)document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root:info,generation:Number(document.body.dataset.starGeneration||0)}}));});
+   const pane=root.id==='conversation-pane'?root:null;
+   if(!pane)inboxScroll=0;
+   routeState(pane);syncFilterLinks();upgrade(app());
+   // Alpine's HTMX hook flushes after settle. Initialize the new pane now
+   // so the first scroll calculation already includes revealed previews.
+   if(pane)window.Alpine?.initTree(pane);
+   if(booted)runtime.start();
+   const saved=positions.get(location.href);
+   const savedTimelineTop=saved?.['message-timeline'];
+   if(savedTimelineTop!==undefined&&!new URL(location.href).searchParams.has('message')){
+    const timeline=document.getElementById('message-timeline');
+    if(timeline)timeline.scrollTop=savedTimelineTop;
+   }
+   requestAnimationFrame(()=>{if(!root.isConnected||root!==document.getElementById(root.id))return;if(saved&&root.id==='oie-app')for(const [id,top]of Object.entries(saved)){if(id==='message-timeline')continue;const node=document.getElementById(id);if(node)node.scrollTop=top}const info=document.getElementById('chat-info-content');if(info)document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root:info,generation:Number(document.body.dataset.starGeneration||0)}}));});
   }
  });
  document.addEventListener('htmx:error',event=>{const ctx=event.detail.ctx;if(ctx?.oieKind&&ctx.oieEpoch===epoch){ctx.target?.removeAttribute('aria-busy');showError(ctx)}});

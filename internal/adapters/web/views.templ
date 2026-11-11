@@ -705,8 +705,14 @@ templ profileAvatarContent(v view,account,address string,cfg avatar.Config){
  cfg.Src=v.avatarSource(account,address);cfg.SrcExpr="oieAvatarSrc"
  fallback:=cfg;fallback.Src="";fallback.SrcExpr=""
 }}
-<div class="oie-avatar-initials" data-avatar-initials x-show="!oieAvatarSrc">@avatar.Avatar(fallback)</div>
-<template x-if="oieAvatarSrc">@avatar.Avatar(cfg)</template>
+<div class="oie-avatar-stack" x-data="{oieAvatarReady:false}" x-effect="oieAvatarSrc; oieAvatarReady=false" x-bind:data-avatar-ready="oieAvatarReady ? 'true' : 'false'"
+ x-on:load.capture="if ($event.target.getAttribute('src') === oieAvatarSrc && $event.target.naturalWidth > 0) oieAvatarReady=true"
+ x-on:error.capture="if ($event.target.getAttribute('src') === oieAvatarSrc) oieAvatarReady=false">
+ <div class="oie-avatar-initials" data-avatar-initials>@avatar.Avatar(fallback)</div>
+ <template x-if="oieAvatarSrc">
+  <div class="oie-avatar-photo">@avatar.Avatar(cfg)</div>
+ </template>
+</div>
 }
 
 templ avatarData(v view){

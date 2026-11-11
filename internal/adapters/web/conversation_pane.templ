@@ -41,6 +41,7 @@ templ conversationPane(v view){
 					<p class="oie-preview-note">{ v.Text.PreviewNote }</p>
 				}
 				<div id="context-notice" class="oie-context-notice" role="status">@contextNotice(v)</div>
+<div class="oie-timeline-frame">
 <div class="oie-timeline" id="message-timeline" tabindex="0" aria-label={v.Text.Conversations} data-version={v.timelineVersion()}
  if v.RoomArchive != nil {
   data-room-archive={string(v.RoomArchive.Availability)}
@@ -53,6 +54,7 @@ templ conversationPane(v view){
  }
 >
 @timeline(v)
+</div>
 </div>
 <button type="button" class="oie-jump-latest" data-jump-latest hidden?={!v.ContextHasNewer&&!v.ContextMissing}>{v.Text.JumpToLatest}</button>
 
