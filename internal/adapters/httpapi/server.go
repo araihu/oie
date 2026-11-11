@@ -35,15 +35,15 @@ func New(engine *application.Engine) (http.Handler, error) {
 	}
 	s := &Server{engine: engine}
 	handler := engineapi.HandlerWithOptions(engineapi.NewStrictHandlerWithOptions(s, nil, engineapi.StrictHTTPServerOptions{
-		RequestErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, _ error) {
-			WriteProblem(w, application.ErrInvalid)
+		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, _ error) {
+			WriteProblem(w, r, application.ErrInvalid)
 		},
-		ResponseErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
-			WriteProblem(w, err)
+		ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+			WriteProblem(w, r, err)
 		},
 	}), engineapi.StdHTTPServerOptions{
-		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, _ error) {
-			WriteProblem(w, application.ErrInvalid)
+		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, _ error) {
+			WriteProblem(w, r, application.ErrInvalid)
 		},
 	})
 	validated := middleware.OapiRequestValidatorWithOptions(schema, &middleware.Options{
@@ -59,36 +59,36 @@ func New(engine *application.Engine) (http.Handler, error) {
 				}
 				sort.Strings(allowed)
 				w.Header().Set("Allow", strings.Join(allowed, ", "))
-				writeProblem(w, http.StatusMethodNotAllowed, "invalid_request")
+				writeProblem(w, r, http.StatusMethodNotAllowed, "invalid_request")
 				return
 			}
 			if opts.StatusCode == http.StatusNotFound {
-				WriteProblem(w, application.ErrNotFound)
+				WriteProblem(w, r, application.ErrNotFound)
 				return
 			}
 			var tooLarge *http.MaxBytesError
 			if errors.As(err, &tooLarge) {
-				writeProblem(w, http.StatusRequestEntityTooLarge, "invalid_request")
+				writeProblem(w, r, http.StatusRequestEntityTooLarge, "invalid_request")
 				return
 			}
-			WriteProblem(w, application.ErrInvalid)
+			WriteProblem(w, r, application.ErrInvalid)
 		},
 	})(handler)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if r.Method == http.MethodHead && strings.HasPrefix(r.URL.Path, "/api/v1/shared-content/") && strings.HasSuffix(r.URL.Path, "/content") {
 			w.Header().Set("Allow", http.MethodGet)
-			writeProblem(w, http.StatusMethodNotAllowed, "invalid_request")
+			writeProblem(w, r, http.StatusMethodNotAllowed, "invalid_request")
 			return
 		}
 		if route, _, routeErr := router.FindRoute(r); routeErr == nil && route.Operation.RequestBody != nil && r.Header.Get("Content-Type") != "" {
 			mediaType, _, parseErr := mime.ParseMediaType(r.Header.Get("Content-Type"))
 			if parseErr != nil {
-				WriteProblem(w, application.ErrInvalid)
+				WriteProblem(w, r, application.ErrInvalid)
 				return
 			}
 			if route.Operation.RequestBody.Value.Content.Get(mediaType) == nil {
-				writeProblem(w, http.StatusUnsupportedMediaType, "invalid_request")
+				writeProblem(w, r, http.StatusUnsupportedMediaType, "invalid_request")
 				return
 			}
 		}
@@ -98,7 +98,7 @@ func New(engine *application.Engine) (http.Handler, error) {
 }
 
 // WriteProblem deliberately exposes stable codes, never raw database/input errors.
-func WriteProblem(w http.ResponseWriter, err error) {
+func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 	status, code := http.StatusServiceUnavailable, "unavailable"
 	switch {
 	case errors.Is(err, application.ErrInvalid):
@@ -138,7 +138,7 @@ func WriteProblem(w http.ResponseWriter, err error) {
 		if mediaFailure.Code == "range_not_satisfiable" && mediaFailure.Total >= 0 {
 			w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", mediaFailure.Total))
 		}
-		writeProblem(w, status, mediaFailure.Code)
+		writeProblem(w, r, status, mediaFailure.Code)
 		return
 	}
 	problem := newProblem(status, code)
@@ -160,7 +160,7 @@ func WriteProblem(w http.ResponseWriter, err error) {
 		current := message(conflict.Current)
 		problem.CurrentMessage = &current
 	}
-	writeProblemDocument(w, problem)
+	writeProblemDocument(w, r, problem)
 }
 
 var problemTitles = map[string]string{
@@ -185,23 +185,52 @@ var problemTitles = map[string]string{
 const problemDocumentationURL = "https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md"
 
 func newProblem(status int, code string) engineapi.Problem {
-	title, documented := problemTitles[code]
-	problem := engineapi.Problem{
-		Type: "urn:oie:problem:" + code, Title: title,
+	return engineapi.Problem{
+		Type: "urn:oie:problem:" + code, Title: problemTitles[code],
 		Status: status, Code: engineapi.ProblemCode(code),
 	}
-	if documented {
-		documentation := problemDocumentationURL + "#" + code
-		problem.Documentation = &documentation
+}
+
+func writeProblem(w http.ResponseWriter, r *http.Request, status int, code string) {
+	writeProblemDocument(w, r, newProblem(status, code))
+}
+
+const problemDocumentationPreference = "oie-problem-documentation"
+
+func prefersProblemDocumentation(header http.Header) bool {
+	for _, field := range header.Values("Prefer") {
+		start := 0
+		var quoted, escaped bool
+		for i, char := range field + "," {
+			switch {
+			case escaped:
+				escaped = false
+			case quoted && char == '\\':
+				escaped = true
+			case char == '"':
+				quoted = !quoted
+			case !quoted && char == ',':
+				item, _, _ := strings.Cut(field[start:i], ";")
+				if strings.EqualFold(strings.TrimSpace(item), problemDocumentationPreference) {
+					return true
+				}
+				start = i + 1
+			}
+		}
 	}
-	return problem
+	return false
 }
 
-func writeProblem(w http.ResponseWriter, status int, code string) {
-	writeProblemDocument(w, newProblem(status, code))
-}
-
-func writeProblemDocument(w http.ResponseWriter, problem engineapi.Problem) {
+func writeProblemDocument(w http.ResponseWriter, r *http.Request, problem engineapi.Problem) {
+	if _, documented := problemTitles[string(problem.Code)]; documented {
+		documentation := problemDocumentationURL + "#" + string(problem.Code)
+		w.Header().Add("Link", "<"+documentation+`>; rel="help"`)
+		w.Header().Add("Vary", "Prefer")
+		if prefersProblemDocumentation(r.Header) {
+			problem.Documentation = &documentation
+			w.Header().Set("Preference-Applied", problemDocumentationPreference)
+		}
+	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(problem.Status)
 	_ = json.NewEncoder(w).Encode(problem)

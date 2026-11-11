@@ -218,9 +218,6 @@ func TestConversationPreferencesHTTPRejectsInvalidOrStaleIntentsAtomically(t *te
 			if err := json.Unmarshal(data, &problem); err != nil || status != test.status || string(problem.Code) != test.code {
 				t.Fatalf("unexpected rejection: %d %s %v", status, data, err)
 			}
-			if problem.Documentation == nil || !strings.HasSuffix(*problem.Documentation, "#"+test.code) {
-				t.Fatalf("missing problem documentation: %s", data)
-			}
 			if test.code == "state_conflict" && (problem.CurrentConversation == nil || problem.CurrentConversation.RevisionId != string(current.RevisionID) || !problem.CurrentConversation.Favorite) {
 				t.Fatal("stale request omitted canonical current preference", problem)
 			}

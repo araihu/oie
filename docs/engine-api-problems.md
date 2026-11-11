@@ -3,9 +3,10 @@
 The engine returns [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457.html)
 as `application/problem+json`. Each problem has a stable `type` URI of the
 form `urn:oie:problem:<code>`, a short `code`, a `title`, and the HTTP
-`status`. When present, `documentation` is an HTTPS link to guidance for
-the problem. Its destination may change. Use `type` to identify the problem
-in client code.
+`status`. The HTTP `Link` header with `rel="help"` points to guidance.
+Send `Prefer: oie-problem-documentation` to include the URL as
+`documentation` in the JSON body. The link can change independently of the
+problem's identity. Use `type` to identify the problem in client code.
 
 ## invalid_request
 

@@ -294,6 +294,7 @@ func testLocalDiagnostics(t *testing.T, binary, serverURL string) {
 	}{
 		{"usage", serverURL, "usage_error", "Invalid command usage", "invalid --message-id: required", 2, []string{"messages", "author"}},
 		{"connection", closed.URL, "transport_error", "Transport error", "request transport failed", 3, []string{"system", "health"}},
+		{"missing response header", serverURL, "transport_error", "Transport error", "response header is absent", 3, []string{"system", "health", "--response-header", "ETag"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			args := append([]string{"--server", tc.server}, tc.args...)

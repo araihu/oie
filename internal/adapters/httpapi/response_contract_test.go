@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers"
 	"github.com/getkin/kin-openapi/routers/legacy"
@@ -129,8 +130,9 @@ func TestHTTPBoundaryProblemsAndAllow(t *testing.T) {
 				t.Fatalf("problem status/leak: %s", data)
 			}
 			const documentation = "https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md#invalid_request"
-			if problem.Documentation == nil || *problem.Documentation != documentation {
-				t.Fatalf("missing problem documentation link: %s", data)
+			if problem.Documentation != nil || res.Header.Get("Link") != "<"+documentation+`>; rel="help"` ||
+				res.Header.Get("Vary") != "Prefer" || res.Header.Get("Preference-Applied") != "" {
+				t.Fatalf("incorrect legacy problem response: %v %s", res.Header, data)
 			}
 			validateResponseContract(t, req, res, data)
 		})
@@ -138,6 +140,50 @@ func TestHTTPBoundaryProblemsAndAllow(t *testing.T) {
 	_, seq, err := store.Snapshot(t.Context())
 	if err != nil || seq != 0 {
 		t.Fatal("boundary rejection mutated engine", seq, err)
+	}
+}
+
+func TestProblemDocumentationPreservesPublishedDefaultSchema(t *testing.T) {
+	server, _ := start(t, t.TempDir())
+	baseline, err := openapi3.NewLoader().LoadFromFile("../../../api/compatibility/engine-0.27.0.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := baseline.Components.Schemas["Problem"].Value
+	for _, tc := range []struct {
+		prefer            string
+		wantDocumentation bool
+	}{
+		{"", false},
+		{`other="before, oie-problem-documentation, after"`, false},
+		{"respond-async, oie-problem-documentation", true},
+	} {
+		req, err := http.NewRequest(http.MethodGet, server.URL+"/api/v1/accounts/not-a-uuid", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Prefer", tc.prefer)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := io.ReadAll(res.Body)
+		_ = res.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var problem map[string]any
+		if err := json.Unmarshal(data, &problem); err != nil || res.StatusCode != 400 {
+			t.Fatalf("Prefer %q: status=%d body=%s err=%v", tc.prefer, res.StatusCode, data, err)
+		}
+		_, hasDocumentation := problem["documentation"]
+		if hasDocumentation != tc.wantDocumentation || (schema.VisitJSON(problem) != nil) != tc.wantDocumentation {
+			t.Fatalf("Prefer %q: unexpected compatibility for %s", tc.prefer, data)
+		}
+		if tc.wantDocumentation && (res.Header.Get("Preference-Applied") != "oie-problem-documentation" ||
+			res.Header.Get("Link") != fmt.Sprintf(`<%s>; rel="help"`, problem["documentation"])) {
+			t.Fatalf("Prefer %q: headers=%v body=%s", tc.prefer, res.Header, data)
+		}
 	}
 }
 

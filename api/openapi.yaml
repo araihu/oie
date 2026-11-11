@@ -2,9 +2,11 @@ openapi: 3.0.3
 info:
   title: Oie Engine API
   version: 0.27.0
-  description: Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
+  description: >-
+    Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
-    are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF.
+    are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel="help".
+    Send Prefer: oie-problem-documentation to include the URL in the Problem Details body.
   contact:
     name: Arai Hû
     url: https://github.com/araihu/oie
@@ -3089,7 +3091,8 @@ components:
       description: >-
         RFC 9457 Problem Details served as application/problem+json. The type URI identifies
         the problem. The code extension is a stable short identifier for display and localization.
-        The optional documentation extension links to guidance for the problem type.
+        The Link response header with rel="help" provides guidance for known problem types.
+        The body includes documentation when the request applies the oie-problem-documentation preference.
         Responses exclude raw storage errors and credentials.
       externalDocs:
         description: RFC 9457 Problem Details for HTTP APIs
@@ -3134,7 +3137,8 @@ components:
           format: uri
           description: >-
             Absolute HTTPS link to human-readable guidance for this problem type.
-            The URL may change independently of the type URI and code.
+            Included for requests with Prefer: oie-problem-documentation. The URL may change
+            independently of the type URI and code.
         currentConversation:
           $ref: '#/components/schemas/Conversation'
         currentStar:

@@ -65,18 +65,21 @@ The engine returns `application/problem+json` as defined by
 URI is the primary identifier, in the form `urn:oie:problem:<code>`. The
 `title` summarizes the type and stays consistent across occurrences. The
 `status` matches the HTTP response. The `code` extension gives clients a
-short label for diagnostics and localized messages. The optional `documentation`
-extension is an HTTPS link to guidance for the problem type. Its destination
-can change independently of the URN and code. See the
-[engine API error catalog](engine-api-problems.md) for the meaning and recovery
-steps for each code.
+short label for diagnostics and localized messages. Known problems provide an
+HTTPS link with `Link: <URL>; rel="help"`. Send
+`Prefer: oie-problem-documentation` to include the URL as `documentation` in
+the JSON body. A response that honors the preference also sends
+`Preference-Applied: oie-problem-documentation`. The default body remains
+compatible with the published closed 0.27.0 schema. The link can change
+independently of the URN and code. See the
+[engine API error catalog](engine-api-problems.md) for recovery steps.
 
 For example, a 409 response with type
 `urn:oie:problem:idempotency_conflict` means the idempotency key was already
 used with different input. A 409 with type `urn:oie:problem:state_conflict`
 can include the current resource in a documented extension so the caller can
-refresh its state. The CLI prints the declared short code on stderr and
-includes the documentation link when available.
+refresh its state. The CLI uses the declared short code and its bundled
+catalog for the title, type and documentation link on stderr.
 
 ## Standards used in the review
 

@@ -8,6 +8,28 @@ actions:
       x-cli-local-problem-documentation:
         usage_error: https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md#usage_error
         transport_error: https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md#transport_error
+  - target: $.components.schemas.Problem
+    update:
+      x-cli-problem-catalog:
+        type-prefix: 'urn:oie:problem:'
+        documentation-base: https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md
+        titles:
+          invalid_request: Invalid request
+          not_found: Not Found
+          idempotency_conflict: Idempotency key conflict
+          account_exists: Account already exists
+          invalid_cursor: Invalid event cursor
+          history_changed: History changed
+          unavailable: Service Unavailable
+          state_conflict: State conflict
+          protocol_unavailable: Protocol unavailable
+          media_blocked: Media access blocked
+          media_fetch_failed: Media fetch failed
+          media_too_large: Media too large
+          media_unsupported: Unsupported media
+          range_not_satisfiable: Range not satisfiable
+          media_busy: Media service busy
+          media_timeout: Media request timed out
   # accounts
   - target: $.paths['/api/v1/avatars/{hash}'].get
     update:
