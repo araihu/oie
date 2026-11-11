@@ -5,8 +5,8 @@ Issued 2026-11-10. Updated 2026-11-11.
 The independent engine and CLI milestone is implemented in
 `codex/engine-api-cli`. The independently reviewed Oiê revision is `4ef445c`.
 The current tools pin is `v0.0.0-20261111033254-90684aaa8e38`, from the
-generator's `main`. The engine build now uses Go 1.27.4. Integration with Oiê
-`main` is pending. The original brief follows this status update.
+generator's `main`. The integrated engine build uses Go 1.27.4. The original
+brief follows the integration record.
 
 ## Final independent reviews
 
@@ -74,43 +74,30 @@ The Oiê tools module now pins the merged commit `90684aa`. Regeneration
 preserved the committed CLI files byte for byte, and the CLI was rebuilt
 with Go 1.27.4.
 
-### Oiê worktree
+### Oiê integration
 
-On 2026-11-11, Oiê `origin/main` was `ac34a2c`. The merge base with the
-reviewed CLI revision `4ef445c` is `115e8eb`. At that revision, `main` has
-9 commits on its side and the CLI line has 47. Of those 47, 23 are inherited Wails and rc.0
-commits through `47870bd` (the tip of `origin/codex/wails-integration`) and
-24 are the API and CLI milestone. The published source tag `v0.0.1-rc.0`
-points to `e8ffe5d` on the inherited line, outside the ancestry of the
-current `origin/main`.
+The initial candidate `3a3b1ff` combined the engine and CLI with Oiê `main`
+at `ac34a2c` and the published Wails and rc.0 baseline `47870bd`. Its native
+checks, isolated Prosody CLI proof, sidebar and About drawer tests, and Dagger
+Go checks passed. `main` advanced during its desktop run. Merge `5f931eb`
+integrated Wails, initial room history, and the engine reset workflow. The
+first candidate's Dagger run was stopped after that change.
 
-A `git merge-tree --write-tree` simulation against `origin/main` found one
-textual conflict in `docs/oie-spec.md`. Both sides use **B24** for different
-items (room invitation links and desktop icons). The merged text also assigns
-**B25** to two different items (post-alpha search filters and the alpha
-room-history requirement) without a conflict marker. Preserve both topics in
-each case and reconcile the IDs and references.
+The integration merge `93b7986` uses `388de70` as its first parent and the
+reviewed engine and CLI line through `9988790` as its second. The combined
+engine and BFF contracts retain the room archive and reset routes. Generated
+clients and `oiectl` come from those combined contracts. The command reference
+includes `conversations rooms archive status`, `set`, and `request`, and the
+existing engine reset operation is available as `system reset` with explicit
+confirmation. Problem Details diagnostics link to the
+[catalog on `main`](https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md).
 
-1. Decide how to bring in the Wails/rc.0 baseline. The recommended order for
-   separate review is the remote Wails baseline `47870bd` first, then the 24
-   milestone commits. If the baseline is squashed, replay the milestone from
-   its explicit boundary at `47870bd`.
-2. Coordinate with the separate initial-history work before preparing an alpha
-   candidate. Its implementation commits `01c0c0b` and `8d1bdc7` are on the
-   local `codex/wails-integration` line. A simulation against that line at
-   `68c06cd` found overlaps in the engine and BFF OpenAPI sources and the
-   engine HTTP adapter, plus conflicts in generated output. If that line
-   lands first, reconcile the source contracts and regenerate the bindings
-   and CLI from the combined source.
-3. Carry the merged generator pin and the Go 1.27.4 toolchain update into the
-   integration candidate. Regenerate from its resolved source contracts. Run
-   `make check` and the complete Dagger graph (`make ci`) for the combined
-   CLI/XMPP, desktop, and browser regressions.
-   The passing checks above cover the current feature branch.
-4. Follow the existing Oiê PR policy in [AGENTS.md](../../AGENTS.md).
-   A new Oiê PR remains tied to readiness for alpha `v0.0.1`, including
-   usable initial room history. The generator PRs and preparation of the
-   local integration candidate are separate from alpha publication.
+The engine still reports API `0.29.0`. It derives the runtime value from the
+OpenAPI document and checks that it belongs to the published response enum.
+The schema retains the enum from `main` and the version pattern from the
+normalized 0.27.0 compatibility baseline. The [specification](../oie-spec.md)
+uses the IDs already assigned on `main`, including B25 for initial room history.
+Alpha publication follows the [Oiê contributor policy](../../AGENTS.md).
 
 ## User direction and scope
 

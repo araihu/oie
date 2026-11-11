@@ -22,8 +22,9 @@ import (
 )
 
 type Server struct {
-	engine *application.Engine
-	reset  func(domain.ID) error
+	engine     *application.Engine
+	reset      func(domain.ID) error
+	apiVersion engineapi.EngineApiVersion
 }
 
 func New(engine *application.Engine) (http.Handler, error) {
@@ -40,7 +41,11 @@ func NewResettable(engine *application.Engine, reset func(domain.ID) error) (htt
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{engine: engine, reset: reset}
+	version := engineapi.EngineApiVersion(schema.Info.Version)
+	if !version.Valid() {
+		return nil, fmt.Errorf("OpenAPI version %q is absent from Engine.apiVersion", version)
+	}
+	s := &Server{engine: engine, reset: reset, apiVersion: version}
 	handler := engineapi.HandlerWithOptions(engineapi.NewStrictHandlerWithOptions(s, nil, engineapi.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, _ error) {
 			WriteProblem(w, r, application.ErrInvalid)
@@ -263,7 +268,7 @@ func (s *Server) GetEngine(ctx context.Context, _ engineapi.GetEngineRequestObje
 	supported := s.reset != nil
 	return engineapi.GetEngine200JSONResponse{
 		Id: string(state.ID), Role: engineapi.EngineRole(state.Role),
-		ApiVersion: "0.29.0", EventCursor: cursor(state.ID, state.Sequence),
+		ApiVersion: s.apiVersion, EventCursor: cursor(state.ID, state.Sequence),
 		CanResetData: &supported,
 	}, nil
 }

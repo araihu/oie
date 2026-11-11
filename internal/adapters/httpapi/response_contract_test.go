@@ -65,10 +65,11 @@ func validateResponseContract(t *testing.T, req *http.Request, res *http.Respons
 func TestResponseValidatorRejectsRuntimeSchemaDrift(t *testing.T) {
 	req, _ := http.NewRequest("GET", "http://engine/api/v1/engine", nil)
 	res := &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}}
-	good := []byte(`{"id":"019a5df0-0000-7000-8000-000000000003","role":"local","apiVersion":"0.27.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:0"}`)
+	good := []byte(`{"id":"019a5df0-0000-7000-8000-000000000003","role":"local","apiVersion":"0.29.0","eventCursor":"019a5df0-0000-7000-8000-000000000003:0"}`)
 	validateResponseContract(t, req, res, good)
 	for _, bad := range [][]byte{
-		bytes.ReplaceAll(good, []byte(`"0.27.0"`), []byte(`"not-a-version"`)),
+		bytes.ReplaceAll(good, []byte(`"0.29.0"`), []byte(`"not-a-version"`)),
+		bytes.ReplaceAll(good, []byte(`"0.29.0"`), []byte(`"0.99.0"`)),
 		bytes.ReplaceAll(good, []byte(`"role":"local",`), nil),
 		bytes.ReplaceAll(good, []byte(`"role":"local"`), []byte(`"role":"bff"`)),
 	} {
