@@ -22,7 +22,7 @@ templ resetDataDialog(v view) {
 
 templ resetDataForm(v view) {
 	<form id="reset-data-form" method="post" action="/ui/engine/reset" class="grid gap-4" data-failure={ v.Text.DeleteDataFailed }>
-		if v.Role == v.Text.Hosted {
+		if v.Role == "hosted" {
 			<p>{ v.Text.DeleteHostedDataWarning }</p>
 		} else {
 			<p>{ v.Text.DeleteDataWarning }</p>

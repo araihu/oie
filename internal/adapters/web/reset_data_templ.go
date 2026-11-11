@@ -126,7 +126,7 @@ func resetDataForm(v view) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if v.Role == v.Text.Hosted {
+		if v.Role == "hosted" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err

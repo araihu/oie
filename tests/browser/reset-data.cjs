@@ -13,6 +13,8 @@ async function openSettings(page, url, fixture) {
   const settings = page.getByRole('dialog', { name: fixture.settings, exact: true });
   const footer = settings.locator('footer');
   await footer.getByRole('button', { name: fixture.about, exact: true }).waitFor();
+  assert.equal(await settings.getByText(fixture.engineHeading, { exact: true }).count(), 0);
+  assert.equal(await settings.getByText(fixture.engineLabel, { exact: true }).count(), 0);
   await page.setViewportSize({ width: fixture.viewport.width, height: 480 });
   const placement = await footer.evaluate(node => {
     const panel = node.closest('[role="dialog"]');
@@ -188,12 +190,14 @@ async function testReset(browser, url, fixture) {
     await testReset(browser, url, {
       locale: 'en', viewport: { width: 1440, height: 900 }, action: 'Delete all data',
       settings: 'Settings', about: 'About', theme: 'light',
+      engineHeading: 'Engine', engineLabel: 'Hosted engine',
       confirmation: 'Type delete to confirm', failure: 'Could not delete all data.',
       pending: 'Deleting…', success: 'All Oiê data was deleted. Add an account to start again.', addAccount: 'Add account',
     });
     await testReset(browser, url, {
       locale: 'pt-BR', viewport: { width: 390, height: 844 }, action: 'Apagar todos os dados',
       settings: 'Configurações', about: 'Sobre', theme: 'dark',
+      engineHeading: 'Motor', engineLabel: 'Motor hospedado',
       confirmation: 'Digite delete para confirmar', failure: 'Não foi possível apagar todos os dados.',
       pending: 'Apagando…', success: 'Todos os dados do Oiê foram apagados. Adicione uma conta para recomeçar.',
       addAccount: 'Adicionar conta', blockCompletionStorage: true,

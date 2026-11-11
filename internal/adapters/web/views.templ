@@ -433,8 +433,6 @@ templ settings(v view) {
 @toggle.Toggle(toggle.Config{ID:"auto-video-thumbnails",Label:v.Text.AutoVideoThumbnails,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-auto-video-thumbnails":"","aria-describedby":"auto-video-thumbnails-help"}})
 <p id="auto-video-thumbnails-help">{v.Text.AutoVideoThumbnailsHelp}</p>
 <p class="oie-settings-note" data-device-preference-warning role="status" hidden>{v.Text.DevicePreferenceUnavailable}</p>
-<h2>{ v.Text.EngineState }</h2>
-			<p>{ v.Role }</p>
 			if v.Preview {
 				<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
 			}

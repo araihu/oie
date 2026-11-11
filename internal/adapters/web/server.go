@@ -134,6 +134,7 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	Role             engineapi.EngineRole
 	CanResetData     bool
 	LatestEditTarget *engineapi.MessageEditTarget
 
@@ -157,7 +158,7 @@ type view struct {
 	SharedContent                                                                                 *engineapi.SharedContentPage
 	SharedInvalid                                                                                 bool
 	SharedCard                                                                                    bool
-	Locale, Theme, Role                                                                           string
+	Locale, Theme                                                                                 string
 	Text                                                                                          copy
 	Avatars                                                                                       map[avatarIdentity]string
 	AvatarAccounts                                                                                []string
@@ -450,7 +451,7 @@ type copy struct {
 	CapabilityReceivedRepliesNote                                                                                                                                        string
 	CapabilityLocalNote                                                                                                                                                  string
 	Accounts, EmptyTitle, EmptyBody, NotConnected, Conversations                                                                                                         string
-	Unavailable, UnavailableBody, Retry, Local, Hosted                                                                                                                   string
+	Unavailable, UnavailableBody, Retry                                                                                                                                  string
 	Skip, Languages, Appearance, System, Light                                                                                                                           string
 	Dark, Next, English, Portuguese, NotFound                                                                                                                            string
 	NotFoundBody, Chats, Favorites, Archived, SharedMedia                                                                                                                string
@@ -463,7 +464,7 @@ type copy struct {
 	SendingUnavailable, Back, Today, Navigation, Active                                                                                                                  string
 	OpenNavigation, Close, Details, Participants, MediaEmpty                                                                                                             string
 	ExpandNavigation, CollapseNavigation                                                                                                                                 string
-	MediaBody, SelectChat, SelectChatBody, EngineState, AccountHelp                                                                                                      string
+	MediaBody, SelectChat, SelectChatBody, AccountHelp                                                                                                                   string
 	PreviewOnly, ThemeHelp, LanguageHelp, NoChats, NoChatsBody                                                                                                           string
 	AddAccount, AccountAddress, AccountLabel, AddressPlaceholder, LabelPlaceholder                                                                                       string
 	RegisterAccount, Password, PasswordHelp, Endpoint, EndpointHelp                                                                                                      string
@@ -767,10 +768,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	v.CanResetData = engine.JSON200.CanResetData != nil && *engine.JSON200.CanResetData
 	v.EventCursor = engine.JSON200.EventCursor
 	v.Preview = engine.HTTPResponse.Header.Get("X-Oie-Mock") == "true"
-	v.Role = v.Text.Local
-	if engine.JSON200.Role == "hosted" {
-		v.Role = v.Text.Hosted
-	}
+	v.Role = engine.JSON200.Role
 	limit := 100
 	accounts, err := s.client.ListAccountsWithResponse(ctx, &engineapi.ListAccountsParams{Limit: &limit}, editor)
 	if err != nil || accounts.JSON200 == nil {
