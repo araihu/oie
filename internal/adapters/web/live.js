@@ -6,6 +6,7 @@ window.OieRuntime.register('live', life => {
   const text = key => labels[key] || '';
   const status = document.querySelector('[data-live-status]');
   const announce = (message, quiet = false) => { if (status) { status.textContent = message; status.hidden = quiet || !message; } };
+  const errorToast = message => { if (message) window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message}})); };
   const mock = body.dataset.mock === 'true';
   const csrf = document.querySelector('meta[name="oie-csrf"]')?.content || '';
   let pendingRequests = 0, refreshTimer, refreshing = false, refreshAgain = false;
@@ -117,7 +118,7 @@ window.OieRuntime.register('live', life => {
       saveDraft(draftRecord(false));
       keepEdit({engineId:body.dataset.engineId,accountId:body.dataset.accountId,conversationId:body.dataset.conversationId,messageId:target.messageId,expectedRevisionId:target.currentRevisionId,operationKey:value.operationKey,text:target.originalText,submitted:false});
       input.value=target.originalText;restoreMentions([]);announceEdit(editText('mode'));input.focus({preventScroll:true});input.setSelectionRange(input.value.length,input.value.length);const bubble=editMessageBody(target.messageId),viewport=document.querySelector('#message-timeline')?.getBoundingClientRect(),bounds=bubble?.getBoundingClientRect();if(bounds&&viewport&&(bounds.bottom<=viewport.top||bounds.top>=viewport.bottom))bubble.scrollIntoView({block:'nearest',behavior:'auto'});
-    }catch{if(!life.signal.aborted&&epoch===editEpoch){window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:editText('unavailable')}}));}}
+    }catch{if(!life.signal.aborted&&epoch===editEpoch){errorToast(editText('unavailable'));}}
     finally{clearTimeout(timeout);if(!life.signal.aborted&&epoch===editEpoch){editPreparing=false;renderReply();renderEdit();}}
   }
   function editValues(intent=editSession){return new URLSearchParams({engineId:intent.engineId,accountId:intent.accountId,conversationId:intent.conversationId,messageId:intent.messageId,expectedRevisionId:intent.expectedRevisionId,operationKey:intent.operationKey,originalText:intent.text,csrf,lang:document.documentElement.lang});}
@@ -264,10 +265,12 @@ window.OieRuntime.register('live', life => {
     event.preventDefault();composer.requestSubmit();
   });
   function feedback(form, message, error = false) {
+    if(error&&form.matches('[data-cancel-message]')){errorToast(message);return;}
     const region = form.querySelector('[data-form-feedback]');
     if(form===composer&&journal?.pending){if(region)region.textContent='';renderPendingSend(error?'uncertain':'sending');announce(message,true);return;}
     if (region) { region.textContent = message; region.dataset.error = String(error);region.setAttribute('role',error?'alert':'status'); if(error&&form.dataset.oieAction!=='send'){region.tabIndex=-1;region.focus({preventScroll:true});} }
-    announce(message);
+    if (error && !region) errorToast(message);
+    else announce(message);
   }
   function lockComposer(locked) {
     if (!input || !composer) return;
@@ -481,7 +484,7 @@ window.OieRuntime.register('live', life => {
       if (!regions || regions.dataset.unavailable === 'true') { announce(text('liveRetry')); return; }
       if (body.dataset.engineId && regions.dataset.engineId !== body.dataset.engineId) {
         stopped = true; source?.close(); if (composer) composer.querySelector('[data-send-message]').disabled = true;
-        announce(text('engineChanged')); return;
+        errorToast(text('engineChanged')); return;
       }
       body.dataset.contextNewer=regions.dataset.contextNewer||'false';body.dataset.contextMissing=regions.dataset.contextMissing||'false';
       const contextNotice=document.querySelector('#context-notice'),newNotice=page.querySelector('#live-context-notice');if(contextNotice&&newNotice&&contextNotice.innerHTML!==newNotice.innerHTML)mutateDOM(contextNotice,newNotice.innerHTML);
@@ -500,7 +503,6 @@ window.OieRuntime.register('live', life => {
         }
         restoreRoomOperation();renderReply();syncRoomLeave();
       }
-      const history=document.querySelector('#history-status'),newHistory=page.querySelector('#live-history-status');if(history&&newHistory&&history.innerHTML!==newHistory.innerHTML)mutateDOM(history,newHistory.innerHTML);
       const preferencesCurrent=preferenceGeneration===Number(body.dataset.conversationPreferenceGeneration||0);
       const list = document.querySelector('#conversation-list'),nextList=page.querySelector('#live-list');
       if(preferencesCurrent&&list&&nextList&&list.dataset.version!==nextList.dataset.version){
@@ -699,7 +701,7 @@ window.OieRuntime.register('live', life => {
     life.on(source,'oie.reset', event => {
       try {
         const reset=JSON.parse(event.data);
-        if (body.dataset.engineId && reset.engineId !== body.dataset.engineId) {stopped=true;source.close();announce(text('engineChanged'));return;}
+        if (body.dataset.engineId && reset.engineId !== body.dataset.engineId) {stopped=true;source.close();errorToast(text('engineChanged'));return;}
         scheduleRefresh();connect(reset.cursor);
       }catch{announce(text('liveRetry'))}
     });

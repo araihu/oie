@@ -146,9 +146,8 @@ window.OieRuntime.register('shared-search', life => {
   previous?.dispose();bindings.delete(info);if(!form||!input)return null;
   const events=new AbortController(),active=new Set();let accepted=null,pending=0,composing=false,paused=false,disposed=false;
   const on=(target,name,handler,options={})=>target.addEventListener(name,handler,{...options,signal:events.signal});
-  const region=()=>document.getElementById(targetID),status=()=>document.querySelector('[data-navigation-status]');
+  const region=()=>document.getElementById(targetID);
   const connected=()=>!disposed&&!paused&&form.isConnected&&document.getElementById(formID)===form;
-  function announce(error=false){if(!connected())return;const node=status();if(node){node.textContent=document.getElementById('oie-app')?.dataset[error?'routeError':'routeLoading']||'';node.hidden=false}}
   function scope(){return new URLSearchParams(new FormData(form)).toString()}
   function alignTabs(){
    const values=new FormData(form),root=info?form.closest('#chat-info-content'):form.closest('#workspace');
@@ -157,7 +156,7 @@ window.OieRuntime.register('shared-search', life => {
   const owned=ctx=>ctx?.target?.id===targetID&&ctx.sourceElement===input;
   function cancel(){clearTimeout(pending);for(const ctx of active)ctx.request.abort();active.clear();accepted=null;region()?.removeAttribute('aria-busy')}
   function schedule(){clearTimeout(pending);pending=setTimeout(()=>{if(connected()&&!composing&&input.value!==region()?.dataset.searchQuery)input.dispatchEvent(new CustomEvent('oie:shared-search',{bubbles:true}))},300)}
-  const binding={form,dispose(){disposed=true;cancel();events.abort()},pause(){paused=true;cancel();const node=status();if(node)node.hidden=true},resume(){paused=false;alignTabs();if(input.value!==region()?.dataset.searchQuery)schedule()}};bindings.set(info,binding);
+  const binding={form,dispose(){disposed=true;cancel();events.abort()},pause(){paused=true;cancel()},resume(){paused=false;alignTabs();if(input.value!==region()?.dataset.searchQuery)schedule()}};bindings.set(info,binding);
   on(input,'input',event=>{if(!event.isComposing&&!composing){alignTabs();schedule()}});
   on(input,'compositionstart',()=>{composing=true;clearTimeout(pending)});
   on(input,'compositionend',()=>{composing=false;alignTabs();schedule()});
@@ -165,14 +164,14 @@ window.OieRuntime.register('shared-search', life => {
   on(form,'combobox:change',event=>{alignTabs();if(!info&&event.detail?.id==='shared-account'&&connected()){cancel();form.requestSubmit()}});
   on(document,'htmx:before:request',event=>{
    const ctx=event.detail.ctx;if(['oie-app','chat-info-content','shared-content-scroll'].includes(ctx?.target?.id))cancel();if(!owned(ctx)||!connected())return;
-   active.add(ctx);ctx.oieSearch={form,scope:scope(),generation:Number(document.body.dataset.starGeneration||0),engine:document.body.dataset.engineId,conversation:document.body.dataset.conversationId};accepted=null;region()?.setAttribute('aria-busy','true');announce();
+   active.add(ctx);ctx.oieSearch={form,scope:scope(),generation:Number(document.body.dataset.starGeneration||0),engine:document.body.dataset.engineId,conversation:document.body.dataset.conversationId};accepted=null;region()?.setAttribute('aria-busy','true');
   },{capture:true});
   on(document,'htmx:finally:request',event=>active.delete(event.detail.ctx),{capture:true});
   on(document,'htmx:before:swap',event=>{
    const ctx=event.detail.ctx;if(!owned(ctx))return;const request=ctx.oieSearch;
    if(!request||!connected()||request.scope!==scope()||request.engine!==document.body.dataset.engineId||request.conversation!==document.body.dataset.conversationId){event.preventDefault();return}
    const page=new DOMParser().parseFromString(ctx.text||'','text/html'),fresh=page.querySelector('#'+targetID);
-   if(!fresh||info&&page.querySelector('#chat-info-content')?.dataset.detailsConversation!==request.conversation){event.preventDefault();announce(true);return}
+   if(!fresh||info&&page.querySelector('#chat-info-content')?.dataset.detailsConversation!==request.conversation){event.preventDefault();region()?.removeAttribute('aria-busy');window.OieNavigation.showError(ctx);return}
    accepted={...request,page};
   },{capture:true});
   on(document,'htmx:after:settle',event=>{
@@ -180,9 +179,9 @@ window.OieRuntime.register('shared-search', life => {
    const fresh=accepted;accepted=null;root.removeAttribute('aria-busy');
    document.dispatchEvent(new CustomEvent(info?'oie:info-shared-search-settled':'oie:shared-search-settled',{detail:{root,page:fresh.page}}));
    document.dispatchEvent(new CustomEvent('oie:stars-refresh',{detail:{page:fresh.page,generation:fresh.generation}}));
-   document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:fresh.page}));document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));const node=status();if(node)node.hidden=true;
+   document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:fresh.page}));document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));
   });
-  on(document,'htmx:error',event=>{if(owned(event.detail.ctx)&&connected()){region()?.removeAttribute('aria-busy');announce(true)}});
+  on(document,'htmx:error',event=>{const ctx=event.detail.ctx;if(owned(ctx)&&connected()){region()?.removeAttribute('aria-busy');window.OieNavigation.showError(ctx)}});
   return binding;
  }
  bind(false);bind(true);

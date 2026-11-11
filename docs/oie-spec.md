@@ -208,6 +208,8 @@ Support, subject to protocol support and permissions:
 - A room-details panel with name, topic, and the available participant list.
 - Name/topic editing where permitted.
 
+**BACKLOG B24:** open XMPP room invitation links from messages.
+
 Do not imply that an available participant list is a complete persistent membership roster. Conversation details show available room metadata, visible occupants and connection/presence observations with their scope. The owning account connection is separate from room-session and participant presence. Missing observations remain unknown. Reading details does not automatically join a room or request presence subscriptions.
 
 Rejoin previously active rooms after reconnecting unless the user explicitly left or access was revoked. Preserve explicit leave decisions across restart. Leaving a room does not delete stored history. Leave room is a direct conversation-menu action with a leading icon. It is disabled while pending or inactive; an uncertain result opens the room controls for recovery. Room-session status and other join/leave/refresh controls are accessed on demand through the conversation action menu, rather than in a persistent block above the message timeline. Opening those controls does not change the room session. Kicking, banning, and role-management controls are backlogged; incoming removal/permission changes still need truthful handling.
@@ -495,11 +497,11 @@ Separate devices notify independently even if another device is active. Activity
 
 ### 11.1 WhatsApp-like presentation
 
-**AGREED:** the public brand is **Oiê**, with uppercase O and a circumflex on ê. It is a friendly Portuguese greeting expressing warmth and proximity. Use the approved flat Noto-derived moon-face chat balloon in navigation, favicons and PWA icons, distributed through `araihu/assets`. Technical identifiers retain `oie`. The icon blue `#6092AB` is the primary action color in light and dark modes. Use dark foregrounds on filled primary controls and contrasting blue variants for text, selected surfaces and outgoing bubbles.
+**AGREED:** the public brand is **Oiê**, with uppercase O and a circumflex on ê. It is a friendly Portuguese greeting expressing warmth and proximity. Use the approved flat Noto-derived moon-face chat balloon in mobile navigation, About, favicons and PWA icons, distributed through `araihu/assets`. Technical identifiers retain `oie`. The icon blue `#6092AB` is the primary action color in light and dark modes. Use dark foregrounds on filled primary controls and contrasting blue variants for text, selected surfaces and outgoing bubbles.
 
 Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screenshots. On wide screens, use navigation, a searchable/filterable conversation list, and the active conversation workspace. Include account identity, message bubbles, composer, media/link cards, room/contact details, and settings.
 
-**AGREED:** general app settings have one entry in the main navigation footer beside the account switcher. On mobile, use that same footer inside the navigation menu. Do not repeat general settings in the conversation-list footer, chat actions, or Media and Links header. Account connection management remains available through the account switcher.
+**AGREED:** general app settings have one entry in the main navigation footer beside the account switcher. On mobile, use that same footer inside the navigation menu. Do not repeat general settings in the conversation-list footer, chat actions, or Media and Links header. Account connection management remains available through the account switcher. The desktop navigation has no logo header. General settings include an About drawer with the Oiê logo, license, and third-party attributions.
 
 **AGREED:** the default conversation wallpaper uses subtle outline doodles of a hammer, sickle, GNU mascot, Brazil outline, Christ the Redeemer, football, mobile phone, paper plane, speech balloon, stars and Go gopher. Keep the repeating artwork readable in light and dark themes without competing with message content.
 
@@ -509,7 +511,7 @@ Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screen
 
 **AGREED:** show a reaction shortcut beside the message bubble on hover and keyboard focus, on the right of received messages and the left of sent messages. Existing reactions use a compact capsule slightly overlapping the bubble's bottom border. Opening its summary and filtering by emoji are read-only actions. Clicking the capsule lists verified actors with name, cached avatar or initials and their emoji set. Emoji filters narrow that list. Own emoji actions remove only the current account's reaction. Show participant identities only when the API provides authoritative identity data. On touch devices, double-tapping a message opens the reaction selector; holding opens the existing message actions. Scrolling, canceled touches and navigation must cancel pending gestures without affecting the composer or sending a reaction. Preserve native links and playback controls. See [reaction interactions](reaction-interactions.md).
 
-**AGREED:** ordinary in-app navigation and filtering should use HTMX fragment swaps rather than full-document reloads. Selecting a conversation within the same inbox replaces only the conversation region, preserving the navigation and conversation-list DOM, unfinished search input and list scroll. Preserve addressable URLs, browser Back/Forward, account/conversation isolation, drafts and meaningful focus/scroll. Keep native links/forms as a fallback. Dispose obsolete listeners, timers and live subscriptions when a fragment replaces their owning screen; stale responses must not overwrite a newer screen or repeat a mutation.
+**AGREED:** ordinary in-app navigation and filtering should use HTMX fragment swaps rather than full-document reloads. Selecting a conversation within the same inbox replaces only the conversation region, preserving the navigation and conversation-list DOM, unfinished search input and list scroll. Preserve addressable URLs, browser Back/Forward, account/conversation isolation, drafts and meaningful focus/scroll. Keep native links/forms as a fallback. Dispose obsolete listeners, timers and live subscriptions when a fragment replaces their owning screen; stale responses must not overwrite a newer screen or repeat a mutation. Keep the inbox free of history status banners and visible navigation progress text. Use a dismissible notification when a view fails to open.
 
 Alpha is responsive: on phones, show one primary panel at a time with access to the other views. The screenshots do not require native window controls or add stories, calls, AI, communities, or recording features.
 
@@ -735,8 +737,21 @@ Manual link stars/export, separate threads, automatic protocol relaying, multi-e
 | **B21** | Returning to Conversations from another navigation section restores the previously selected conversation in the same engine/account context, if it still exists and is accessible. |
 | **B22** | Package-manager distribution: Homebrew, MacPorts, APT packages/repositories and other popular Linux distribution package managers. Start with `go install` and the cross-platform GitHub Release installer; concrete additional managers and package formats remain to be selected. |
 | **B23** | Automatic in-app updates. The first alpha updates manually through the same release installer, or through `go install` for source installations, while preserving user data. |
+| **B24** | Recognize room invitation links such as `xmpp:room@example.org?join` in messages. Open the room-entry flow with the destination prefilled so the user can review the room, select the XMPP account, and confirm entry. |
 
 A separate native daemon is an accepted future option. Wails desktop packaging is now selected for v0.0.1 under section 2.1.1. Matrix, IRC, and Nostr remain likely future protocol candidates; desktop packaging does not select a separate daemon or implement those protocols.
+
+### 16.1 Post-alpha priorities from the Gajim comparison
+
+| ID | Deferred item, in priority order |
+| --- | --- |
+| **B25** | Message search by sender, date range, and content type. Start with sender and date range in the current conversation. See O08 for search filter design. |
+| **B26** | A per-account **Note to self** shortcut for sending text and links to the account's own address. Verify that messages appear in both Oiê and Gajim when using the same XMPP account. |
+| **B27** | Activity for incoming mentions and reactions to the user's messages. Start by highlighting incoming mentions in rooms and marking the corresponding conversations. Then explore a reaction activity view that opens the source message and follows the existing active-conversation, mute, and Do Not Disturb policies. |
+| **B28** | Select multiple messages and export an individual conversation as a readable file. Start with copying selected messages. Bulk deletion depends on the deletion scopes and recovery behavior in section 9.1 and O10. |
+| **B29** | Organize chats across accounts. Start with filtering by existing contact groups. Explore user-defined workspaces that can contain direct chats and rooms from several accounts. |
+| **B30** | Start a private chat with a room occupant when the room does not disclose the occupant's personal address. Use the identity exposed by the room and respect room permissions. |
+| **B31** | Moderate messages sent by other room participants where the protocol and the user's permissions allow it. Represent received moderation events in the timeline. See section 6 for retraction of one's own messages and B04 for participant moderation. |
 
 ## 17. Recommended delivery sequence and validation
 
