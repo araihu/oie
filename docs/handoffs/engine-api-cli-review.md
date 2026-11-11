@@ -105,6 +105,21 @@ with Go 1.27.4 in both binaries. The contract comparison passed against both
 confirmed reset, conversation navigation, and retained and room archive
 search. Logs are in `tests/browser/artifacts/oie-main-final-native/`.
 
+The final candidate incorporates the CI dependency updates through `adf823c`.
+Dagger verified the Go checks and race tests, Linux amd64 desktop build and
+WebView, and the isolated Prosody tests for the CLI and room archive recovery.
+The browser suites passed across targeted reruns. The avatar test now counts
+painted indicators, the video test exercises both tablet sidebar layouts, and
+the mention test retries the pending operation by its key. Application source
+is identical across these runs. The evidence is in these directories under
+`tests/browser/artifacts/`:
+
+- `oie-main-final-ci-retry/` records the desktop and WebView pass on `3ea8b65`.
+- `oie-main-browser-ci/` records the browser scenarios through the emoji picker
+  on `df66d52`, including avatar and video regressions.
+- `oie-main-browser-tail-ci/` records checks, XMPP and the browser scenarios
+  from mentions through the live engine proof on `71dadb2`.
+
 ## User direction and scope
 
 The user wants any interface to operate Oiê through a distinct data/operations
