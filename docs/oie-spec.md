@@ -323,6 +323,10 @@ This reachability restriction is temporary. Full centralized sync should eventua
 
 **OPEN O06:** permanent-failure recovery, ambiguous acceptance, ordering of eligible sends, staged-upload cutoff, and explicit engine migration/ownership transfer. Recurring schedules are not selected.
 
+The [scheduling API contract](../api/message-scheduling.overlay.yaml) records
+the accepted HTTP shape. The [scheduling prototype](prototypes/message-scheduling.html)
+illustrates one placement for the scheduler and pending actions for design review.
+
 ### 5.4 Explicit Send while the UI is offline
 
 When the PWA cannot reach its selected engine, an explicit Send saves a durable device-local pending submission and automatically submits it when the engine becomes reachable and the client runtime executes again. Display **Waiting for connection** until engine acceptance is confirmed.

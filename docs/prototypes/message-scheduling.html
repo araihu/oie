@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Oiê · Agendamento de mensagens</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink:#172725; --muted:#51645f; --line:#d7e0dc; --paper:#fff; --base:#eff3f0;
+      --chat:#e6ede8; --bubble:#d7e9ee; --accent:#254d61; --accent-light:#e5eff3;
+      --danger:#932e36; --ring:#1c6488;
+      font-family:system-ui,sans-serif; color:var(--ink); background:var(--base);
+    }
+    * { box-sizing:border-box }
+    body { margin:0; min-width:320px }
+    [hidden] { display:none !important }
+    :is(button,select,input,textarea) { font:inherit; color:inherit }
+    :is(button,select,input,textarea):focus-visible { outline:2px solid var(--ring); outline-offset:3px }
+    button { cursor:pointer }
+    .preview-bar {
+      max-width:1600px; margin:auto; min-height:65px; padding:12px 24px;
+      display:flex; align-items:center; justify-content:space-between; gap:16px;
+    }
+    .preview-bar h1 { margin:0; font-size:15px; font-weight:650 }
+    .preview-tools { display:flex; align-items:center; flex-wrap:wrap; gap:8px }
+    .preview-tools select {
+      border:1px solid var(--line); background:var(--paper); border-radius:8px;
+      padding:7px 8px; max-width:min(100%,17rem); font-size:13px;
+    }
+    .frame {
+      width:calc(100% - 48px); max-width:1552px; height:min(780px, calc(100dvh - 89px)); min-height:520px;
+      margin:0 auto 24px; background:var(--paper); border:1px solid var(--line);
+      border-radius:14px; overflow:hidden; box-shadow:0 15px 40px #21372d10;
+      display:grid; grid-template-columns:240px minmax(0,1fr) auto;
+    }
+    .inbox { padding:20px 12px; border-right:1px solid var(--line) }
+    .brand { margin:0 8px 27px; color:var(--accent); font-size:26px; font-weight:750; letter-spacing:-.06em }
+    .inbox h2 { margin:0 8px 10px; font-size:15px }
+    .chat-row { display:flex; align-items:center; gap:10px; border-radius:9px; padding:10px; background:var(--accent-light) }
+    .chat-row div { min-width:0 }
+    .chat-row small { display:block; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+    .avatar {
+      width:40px; height:40px; border-radius:50%; display:grid; place-items:center; flex:none;
+      background:#dce8de; color:#294e3a; font-size:13px; font-weight:700;
+    }
+    .conversation { min-width:0; min-height:0; display:grid; grid-template-rows:auto 1fr auto }
+    .conversation header,.drawer header {
+      min-height:70px; border-bottom:1px solid var(--line);
+      display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 18px;
+    }
+    .contact { display:flex; align-items:center; gap:10px }
+    .contact h2,.drawer h2 { margin:0; font-size:16px }
+    .btn {
+      display:inline-flex; align-items:center; justify-content:center; gap:7px;
+      border:1px solid var(--line); background:var(--paper); padding:8px 12px; min-height:38px;
+      border-radius:8px; white-space:nowrap; font-size:13px; font-weight:650;
+    }
+    .btn:hover { background:var(--accent-light) }
+    .primary { background:var(--accent); color:white; border-color:var(--accent) }
+    .primary:hover { background:#183b4c }
+    .danger { background:var(--danger); color:white; border-color:var(--danger) }
+    .danger:hover { background:#75242c }
+    .quiet { background:transparent; border-color:transparent; padding:6px; color:var(--accent) }
+    .icon-only { min-width:40px; padding:6px }
+    .clock {
+      width:16px; height:16px; border:1.6px solid currentColor; border-radius:50%;
+      position:relative; flex:none;
+    }
+    .clock::before { content:""; position:absolute; top:3px; left:6px; height:4px; border-left:1.5px solid currentColor }
+    .clock::after { content:""; position:absolute; top:6px; left:6px; width:4px; border-top:1.5px solid currentColor; transform:rotate(24deg); transform-origin:left }
+    .timeline {
+      min-height:0; overflow:auto; padding:20px clamp(14px,4vw,56px);
+      display:flex; flex-direction:column; gap:12px; background-color:var(--chat);
+      background-image:radial-gradient(#587d691f 1px,transparent 1px); background-size:23px 23px;
+    }
+    .timeline::before { content:""; flex:1 }
+    .day {
+      align-self:center; padding:4px 10px; border-radius:6px; margin:0 0 8px;
+      background:#f3f7f3; color:var(--muted); font-size:12px;
+    }
+    .bubble {
+      align-self:flex-start; background:var(--paper); padding:10px 12px; border-radius:12px 12px 12px 3px;
+      max-width:min(85%,470px); display:flex; align-items:end; gap:12px;
+      box-shadow:0 1px 2px #21372d13; font-size:14px;
+    }
+    .bubble.own { align-self:flex-end; background:var(--bubble); border-radius:12px 12px 3px 12px }
+    .bubble p { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; min-width:0 }
+    .bubble time { color:var(--muted); font-size:11px; white-space:nowrap }
+    .composer { display:flex; align-items:end; gap:8px; padding:12px; border-top:1px solid var(--line) }
+    .composer textarea {
+      min-width:0; flex:1; resize:none; min-height:42px; max-height:110px; padding:10px 12px;
+      background:var(--base); border:1px solid var(--line); border-radius:9px;
+    }
+    .drawer {
+      width:min(330px,30vw); display:flex; flex-direction:column; min-height:0;
+      border-left:1px solid var(--line); background:var(--paper);
+    }
+    .queue { margin:0; padding:6px 16px 12px; overflow:auto; list-style:none }
+    .queue li { padding:15px 0; border-bottom:1px solid var(--line) }
+    .queue .when {
+      display:flex; align-items:center; gap:7px; color:var(--accent); font-size:13px; font-weight:700;
+    }
+    .queue p { margin:7px 0; font-size:14px; overflow-wrap:anywhere; white-space:pre-wrap }
+    .queue .state { color:var(--muted); font-size:12px; margin:2px 0 }
+    .actions { display:flex; flex-wrap:wrap; gap:6px; margin-inline-start:-6px }
+    .actions .cancel { color:var(--danger) }
+    .empty { margin:18px; color:var(--muted); font-size:14px }
+    dialog {
+      width:min(430px,calc(100vw - 26px)); color:var(--ink); padding:0; background:var(--paper);
+      border:1px solid var(--line); border-radius:14px; box-shadow:0 20px 70px #12252245;
+    }
+    dialog::backdrop { background:#10251f66 }
+    dialog form { padding:20px; display:grid; gap:14px }
+    dialog h2 { font-size:19px; margin:0 }
+    .field { display:grid; gap:5px; font-size:13px; font-weight:600; min-width:0 }
+    .field :is(input,textarea) { width:100%; border:1px solid var(--line); border-radius:7px; padding:8px; background:var(--paper) }
+    .field textarea { resize:vertical }
+    .zone-note,.confirm-text { margin:0; font-size:13px; color:var(--muted); overflow-wrap:anywhere }
+    .form-error { margin:0; min-height:1lh; font-size:13px; color:var(--danger) }
+    .dialog-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:8px }
+    .toast {
+      position:fixed; z-index:3; inset:auto 16px 17px auto; max-width:calc(100vw - 32px); padding:10px 14px;
+      border-radius:8px; background:var(--accent); color:white; box-shadow:0 8px 24px #12252230; font-size:14px;
+    }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; clip-path:inset(50%); overflow:hidden; white-space:nowrap }
+    @media (max-width:1000px) {
+      .frame { grid-template-columns:174px minmax(0,1fr) auto }
+      .drawer { width:280px }
+    }
+    @media (max-width:760px) {
+      .preview-bar { padding:10px 12px; gap:8px; flex-wrap:wrap }
+      .preview-tools select { max-width:220px }
+      .frame { width:100%; height:calc(100dvh - 80px); min-height:400px; margin:0; border-radius:0; border-inline:0; grid-template-columns:minmax(0,1fr); position:relative }
+      .inbox { display:none }
+      .drawer { position:absolute; z-index:2; inset:0 0 0 auto; width:min(100%,330px); box-shadow:-8px 0 22px #12252221 }
+      .conversation header { padding-inline:12px }
+    }
+  </style>
+</head>
+<body>
+  <header class="preview-bar">
+    <h1 data-copy="prototype"></h1>
+    <div class="preview-tools">
+      <label class="sr-only" for="locale" data-copy="language"></label>
+      <select id="locale"><option value="pt-BR">Português (Brasil)</option><option value="en">English</option></select>
+      <label class="sr-only" for="zone" data-copy="zone"></label>
+      <select id="zone">
+        <option value="America/Sao_Paulo">São Paulo</option>
+        <option value="America/New_York">New York</option>
+        <option value="Europe/Lisbon">Lisboa</option>
+        <option value="Asia/Tokyo">Tokyo</option>
+        <option value="UTC">UTC</option>
+      </select>
+    </div>
+  </header>
+  <main class="frame">
+    <aside class="inbox" aria-labelledby="chats">
+      <div class="brand">Oiê</div>
+      <h2 id="chats" data-copy="chats"></h2>
+      <div class="chat-row"><span class="avatar" aria-hidden="true">AM</span><div><strong>Ana Martins</strong><small data-copy="received2"></small></div></div>
+    </aside>
+    <section class="conversation" id="conversation" aria-labelledby="contact-name">
+      <header>
+        <div class="contact"><span class="avatar" aria-hidden="true">AM</span><h2 id="contact-name">Ana Martins</h2></div>
+        <button class="btn" id="queue-trigger" type="button" aria-controls="drawer"><i class="clock" aria-hidden="true"></i><span data-copy="scheduled"></span><span id="count"></span></button>
+      </header>
+      <div class="timeline" id="timeline" role="log" aria-labelledby="contact-name"></div>
+      <form class="composer" id="composer">
+        <label class="sr-only" for="draft" data-copy="message"></label>
+        <textarea id="draft" rows="1" maxlength="16384"></textarea>
+        <button class="btn icon-only" id="schedule-trigger" type="button" aria-haspopup="dialog"><i class="clock" aria-hidden="true"></i><span class="sr-only" data-copy="schedule"></span></button>
+        <button class="btn primary" type="submit" data-copy="send"></button>
+      </form>
+    </section>
+    <aside class="drawer" id="drawer" aria-labelledby="drawer-title" hidden>
+      <header><h2 id="drawer-title" data-copy="scheduled"></h2><button class="btn quiet icon-only" type="button" id="close-drawer"><span aria-hidden="true">×</span><span class="sr-only" data-copy="close"></span></button></header>
+      <ul class="queue" id="queue"></ul>
+      <p class="empty" id="empty" data-copy="empty" hidden></p>
+    </aside>
+  </main>
+  <dialog id="editor" aria-labelledby="editor-title">
+    <form id="edit-form">
+      <h2 id="editor-title"></h2>
+      <label class="field" id="body-field"><span data-copy="message"></span><textarea id="body" rows="3" maxlength="16384"></textarea></label>
+      <label class="field" id="date-field"><span data-copy="sendAt"></span><input id="send-at" type="datetime-local" aria-describedby="zone-note form-error"></label>
+      <p class="zone-note" id="zone-note"></p>
+      <p class="confirm-text" id="confirm-text" data-copy="cancelPrompt" hidden></p>
+      <p class="form-error" id="form-error" role="status"></p>
+      <div class="dialog-actions">
+        <button class="btn" type="button" id="dismiss" data-copy="back"></button>
+        <button class="btn primary" type="submit" id="confirm"></button>
+      </div>
+    </form>
+  </dialog>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <script>
+    const copy = {
+      'pt-BR': {
+        prototype:'Oiê · Protótipo de agendamento', language:'Idioma', zone:'Fuso de exibição', chats:'Conversas',
+        scheduled:'Agendadas', today:'Hoje', message:'Mensagem', placeholder:'Digite uma mensagem',
+        schedule:'Agendar mensagem', send:'Enviar', close:'Fechar', empty:'Nenhuma mensagem agendada nesta conversa.',
+        sendAt:'Enviar em', cancelPrompt:'Deseja cancelar o envio desta mensagem?', back:'Voltar', edit:'Editar',
+        reschedule:'Reagendar', cancel:'Cancelar envio', editTitle:'Editar mensagem agendada', save:'Salvar',
+        waiting:'Aguardando conexão', scheduledOK:'Mensagem agendada.', saved:'Alterações salvas.',
+        cancelled:'Envio cancelado.', missing:'Digite uma mensagem.', future:'Escolha uma data e hora no futuro.',
+        invalidTime:'Esse horário não está disponível neste fuso. Escolha outro.',
+        ambiguous:'Esse horário ocorre duas vezes neste fuso. Escolha outro.',
+        received1:'Oi! Você pode me mandar o endereço do estúdio?', sent1:'Claro. Vou conferir a entrada certa.',
+        received2:'Perfeito, obrigada!', exampleDraft:'Oi, Ana! A entrada é pela Rua das Flores, 28.',
+        queued1:'Lembrete: amanhã a gente se encontra às 10h.', queued2:'Te mando as referências assim que chegar.',
+      },
+      en: {
+        prototype:'Oiê · Scheduling prototype', language:'Language', zone:'Display time zone', chats:'Chats',
+        scheduled:'Scheduled', today:'Today', message:'Message', placeholder:'Type a message',
+        schedule:'Schedule message', send:'Send', close:'Close', empty:'No scheduled messages in this chat.',
+        sendAt:'Send at', cancelPrompt:'Cancel this scheduled message?', back:'Back', edit:'Edit',
+        reschedule:'Reschedule', cancel:'Cancel send', editTitle:'Edit scheduled message', save:'Save',
+        waiting:'Waiting for connection', scheduledOK:'Message scheduled.', saved:'Changes saved.',
+        cancelled:'Send cancelled.', missing:'Enter a message.', future:'Choose a date and time in the future.',
+        invalidTime:'This time is unavailable in this zone. Choose another.',
+        ambiguous:'This time occurs twice in this zone. Choose another.',
+        received1:'Hi! Can you send me the studio address?', sent1:'Of course. I’ll check which entrance to use.',
+        received2:'Perfect, thanks!', exampleDraft:'Hi Ana! Use the entrance at 28 Rua das Flores.',
+        queued1:'Reminder: we’re meeting tomorrow at 10.', queued2:'I’ll send the references when I arrive.',
+      },
+    };
+    const $ = id => document.getElementById(id);
+    const text = key => copy[document.documentElement.lang][key];
+    const zone = () => $('zone').value;
+    const minute = 60_000;
+    const now = Date.now();
+    const messages = [
+      {key:'received1', at:now - 8 * minute},
+      {key:'sent1', at:now - 5 * minute, own:true},
+      {key:'received2', at:now - 2 * minute},
+    ];
+    const queue = [
+      {id:1, key:'queued1', at:now + 21 * 60 * minute},
+      {id:2, key:'queued2', at:now - 5 * minute},
+    ];
+    let nextId = 3;
+    let action, toastTimer;
+    const mobile = matchMedia('(max-width:760px)');
+    let drawerOpen = !mobile.matches;
+
+    function dateTime(instant, options) {
+      return new Intl.DateTimeFormat(document.documentElement.lang, {timeZone:zone(), ...options}).format(instant);
+    }
+
+    function wallTime(instant) {
+      const parts = new Intl.DateTimeFormat('en', {
+        timeZone:zone(), year:'numeric', month:'2-digit', day:'2-digit',
+        hour:'2-digit', minute:'2-digit', hourCycle:'h23',
+      }).formatToParts(instant);
+      const value = Object.fromEntries(parts.map(({type,value}) => [type,value]));
+      return value.year + '-' + value.month + '-' + value.day + 'T' + value.hour + ':' + value.minute;
+    }
+
+    function wallTimeCandidates(value) {
+      const clock = Date.parse(value + ':00Z');
+      if (!Number.isFinite(clock)) return [];
+      const day = 24 * 60 * minute;
+      const offsets = new Set([-day, 0, day].map(delta => Date.parse(wallTime(clock + delta) + ':00Z') - (clock + delta)));
+      return [...offsets].map(offset => clock - offset).filter(instant => wallTime(instant) === value);
+    }
+
+    function name(item) {
+      return item.key ? text(item.key) : item.body;
+    }
+
+    function time(instant, options) {
+      const node = document.createElement('time');
+      node.dateTime = new Date(instant).toISOString();
+      node.textContent = dateTime(instant, options);
+      return node;
+    }
+
+    function renderChat() {
+      const timeline = $('timeline');
+      const fragment = document.createDocumentFragment();
+      const today = wallTime(Date.now()).slice(0,10);
+      let previousDay;
+      for (const item of messages) {
+        const day = wallTime(item.at).slice(0,10);
+        if (day !== previousDay) {
+          const divider = document.createElement('p');
+          divider.className = 'day';
+          divider.textContent = day === today ? text('today') : dateTime(item.at, {dateStyle:'medium'});
+          fragment.append(divider);
+          previousDay = day;
+        }
+        const bubble = document.createElement('article');
+        bubble.className = 'bubble' + (item.own ? ' own' : '');
+        const body = document.createElement('p');
+        body.textContent = name(item);
+        bubble.append(body, time(item.at, {timeStyle:'short'}));
+        fragment.append(bubble);
+      }
+      timeline.replaceChildren(fragment);
+    }
+
+    function renderQueue() {
+      $('drawer').hidden = !drawerOpen;
+      $('conversation').inert = drawerOpen && mobile.matches;
+      $('queue-trigger').setAttribute('aria-expanded', String(drawerOpen));
+      $('count').textContent = queue.length;
+      $('empty').hidden = queue.length > 0;
+      $('queue').replaceChildren();
+      for (const item of [...queue].sort((a,b) => a.at - b.at)) {
+        const row = document.createElement('li');
+        const when = document.createElement('div');
+        when.className = 'when';
+        const clock = document.createElement('i');
+        clock.className = 'clock';
+        clock.setAttribute('aria-hidden','true');
+        when.append(clock, time(item.at, {dateStyle:'medium',timeStyle:'short'}));
+        const body = document.createElement('p');
+        body.textContent = name(item);
+        row.append(when, body);
+        if (item.at <= Date.now()) {
+          const state = document.createElement('p');
+          state.className = 'state';
+          state.textContent = text('waiting');
+          row.append(state);
+        }
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        for (const kind of ['edit','reschedule','cancel']) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'btn quiet ' + kind;
+          button.dataset.item = item.id;
+          button.dataset.action = kind;
+          button.textContent = text(kind);
+          button.addEventListener('click', () => openEditor(kind,item,button));
+          actions.append(button);
+        }
+        row.append(actions);
+        $('queue').append(row);
+      }
+    }
+
+    function translate() {
+      document.title = text('prototype');
+      for (const node of document.querySelectorAll('[data-copy]')) node.textContent = text(node.dataset.copy);
+      $('draft').placeholder = text('placeholder');
+      renderChat();
+      renderQueue();
+    }
+
+    function openEditor(kind, item, trigger) {
+      action = {kind, item, trigger};
+      const editing = kind === 'edit' || kind === 'schedule';
+      const timing = kind === 'reschedule' || kind === 'schedule';
+      $('body-field').hidden = !editing;
+      $('date-field').hidden = $('zone-note').hidden = !timing;
+      $('confirm-text').hidden = kind !== 'cancel';
+      $('body').value = item ? name(item) : $('draft').value;
+      $('send-at').value = wallTime(item?.at ?? Date.now() + 60 * minute);
+      $('zone-note').textContent = $('zone').selectedOptions[0].label;
+      $('editor-title').textContent = text(kind === 'edit' ? 'editTitle' : kind);
+      $('confirm').textContent = text(kind === 'edit' ? 'save' : kind);
+      $('confirm').className = 'btn ' + (kind === 'cancel' ? 'danger' : 'primary');
+      $('form-error').textContent = '';
+      $('editor').showModal();
+      $(timing ? 'send-at' : editing ? 'body' : 'dismiss').focus();
+    }
+
+    function announce(key) {
+      $('toast').hidden = false;
+      $('toast').textContent = text(key);
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {$('toast').hidden = true;}, 2600);
+    }
+
+    $('composer').addEventListener('submit', event => {
+      event.preventDefault();
+      const body = $('draft').value;
+      if (!body.trim()) return $('draft').focus();
+      messages.push({body, at:Date.now(), own:true});
+      $('draft').value = '';
+      renderChat();
+      $('timeline').scrollTop = $('timeline').scrollHeight;
+      $('draft').focus();
+    });
+    $('schedule-trigger').addEventListener('click', event => openEditor('schedule',null,event.currentTarget));
+    $('queue-trigger').addEventListener('click', () => {drawerOpen = !drawerOpen; renderQueue(); if(drawerOpen) $('close-drawer').focus();});
+    function closeDrawer() {
+      drawerOpen = false;
+      renderQueue();
+      $('queue-trigger').focus();
+    }
+    $('close-drawer').addEventListener('click', closeDrawer);
+    $('drawer').addEventListener('keydown', event => {
+      if (event.key === 'Escape') closeDrawer();
+    });
+    mobile.addEventListener('change', () => {
+      if (mobile.matches && drawerOpen) closeDrawer();
+      else $('conversation').inert = false;
+    });
+    $('dismiss').addEventListener('click', () => $('editor').close());
+    $('editor').addEventListener('close', () => {
+      const {trigger,item,kind} = action;
+      const matching = item && $('queue').querySelector('[data-item="' + item.id + '"][data-action="' + kind + '"]');
+      const fallback = $('conversation').inert ? $('close-drawer') : $('queue-trigger');
+      (trigger.isConnected && !trigger.closest('[inert]') ? trigger : matching || fallback).focus();
+    });
+    $('edit-form').addEventListener('submit', event => {
+      event.preventDefault();
+      const {kind,item} = action;
+      const body = $('body').value;
+      const error = key => {$('form-error').textContent = text(key);};
+      if ((kind === 'schedule' || kind === 'edit') && !body.trim()) return error('missing');
+      let at;
+      if (kind === 'schedule' || kind === 'reschedule') {
+        if (!$('send-at').value) return error('future');
+        const candidates = wallTimeCandidates($('send-at').value);
+        if (candidates.length === 0) return error('invalidTime');
+        if (candidates.length > 1) return error('ambiguous');
+        [at] = candidates;
+        if (at <= Date.now()) return error('future');
+      }
+      if (kind === 'schedule') {
+        queue.push({id:nextId++, body, at});
+        drawerOpen = true;
+        $('draft').value = '';
+      } else if (kind === 'edit') {
+        delete item.key;
+        item.body = body;
+      } else if (kind === 'reschedule') {
+        item.at = at;
+      } else {
+        queue.splice(queue.indexOf(item),1);
+      }
+      renderQueue();
+      $('editor').close();
+      announce(kind === 'cancel' ? 'cancelled' : kind === 'schedule' ? 'scheduledOK' : 'saved');
+    });
+    $('locale').addEventListener('change', event => {
+      const wasExample = $('draft').value === text('exampleDraft');
+      document.documentElement.lang = event.target.value;
+      if (wasExample) $('draft').value = text('exampleDraft');
+      translate();
+    });
+    $('zone').addEventListener('change', () => {renderChat(); renderQueue();});
+    $('draft').value = text('exampleDraft');
+    translate();
+  </script>
+</body>
+</html>
