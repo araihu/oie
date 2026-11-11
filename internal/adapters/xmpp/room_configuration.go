@@ -13,6 +13,7 @@ import (
 type roomConfiguration struct {
 	revision uint64
 	pending  bool
+	mode     string
 }
 
 func currentRoomConfiguration(e *entry, room string) roomConfiguration {
@@ -30,7 +31,7 @@ func (m *Manager) recordDiscoInfo(ctx context.Context, e *entry, s *mx.Session, 
 	if e.session != s || e.state.State != "connected" || configuration.revision != revision {
 		return errArchive
 	}
-	room, public := recordRoomIdentity(e, address, info)
+	room, mode := recordRoomIdentity(e, address, info)
 	if room || configuration.pending {
 		stable := false
 		for _, feature := range info.Features {
@@ -41,18 +42,23 @@ func (m *Manager) recordDiscoInfo(ctx context.Context, e *entry, s *mx.Session, 
 		}
 		e.sidScopes[address] = room && stable
 	}
-	if room || configuration.pending {
-		if host, ok := m.host.(application.RoomReactionPrivacyHost); ok {
-			if err := host.SetRoomReactionPrivacy(ctx, e.account.ID, address, public); err != nil {
-				return err
-			}
+	if room || configuration.pending || configuration.mode != "" {
+		slot := e.rooms[address]
+		joined := slot != nil && slot.session == s && slot.snapshot.State == "joined" && !slot.leaving
+		if slot != nil && !e.occupantScopes[address] {
+			slot.ownOccupantID = ""
+			slot.recentReactionsRecovered = false
 		}
-	}
-	recordReactionRestrictionsLocked(e, address, info)
-	if configuration.pending {
-		configuration.pending = false
+		if err := m.setRoomReactionPrivacy(ctx, e, address, mode, joined); err != nil {
+			return err
+		}
+		configuration.pending, configuration.mode = false, mode
+		if e.roomConfigurations == nil {
+			e.roomConfigurations = make(map[string]roomConfiguration)
+		}
 		e.roomConfigurations[address] = configuration
 	}
+	recordReactionRestrictionsLocked(e, address, info)
 	return nil
 }
 
@@ -89,20 +95,67 @@ func (m *Manager) invalidateRoomConfiguration(ctx context.Context, e *entry, msg
 			delete(e.reactionLimits, room)
 			if detail := e.details[slot.conversation.ID]; detail != nil {
 				detail.info = domain.EmptyConversationInfo("room", "pending")
-				detail.queued = true
-				select {
-				case e.detailsWake <- struct{}{}:
-				default:
-				}
 			}
-			var err error
-			if host, ok := m.host.(application.RoomReactionPrivacyHost); ok {
-				err = host.SetRoomReactionPrivacy(ctx, e.account.ID, room, false)
+			queueRoomDetailsLocked(e, slot.conversation)
+			var mode string
+			switch status.Code {
+			case 172:
+				mode = application.RoomReactionsNonanonymous
+			case 173:
+				mode = application.RoomReactionsSemianonymous
+			case 174:
+				mode = application.RoomReactionsAnonymous
 			}
+			err := m.setRoomReactionPrivacy(ctx, e, room, mode, false)
 			e.mu.Unlock()
 			m.WakeRoomArchive(e.account.ID)
 			return err
 		}
 	}
 	return nil
+}
+
+// The caller holds e.mu. An empty mode suspends address visibility while
+// preserving the last verified identity mode in the repository.
+func (m *Manager) setRoomReactionPrivacy(ctx context.Context, e *entry, room, mode string, joined bool) error {
+	host, ok := m.host.(application.RoomReactionPrivacyHost)
+	if !ok {
+		return nil
+	}
+	return host.SetRoomReactionPrivacy(ctx, e.account.ID, room, application.RoomReactionPrivacy{
+		Mode: mode, Public: joined && mode == application.RoomReactionsNonanonymous,
+	})
+}
+
+// A discovery response from before a room presence transition cannot grant
+// address visibility to the new presence.
+func advanceRoomPresenceLocked(e *entry, room string) roomConfiguration {
+	e.historyMu.Lock()
+	defer e.historyMu.Unlock()
+	configuration := e.roomConfigurations[room]
+	configuration.revision++
+	if e.roomConfigurations == nil {
+		e.roomConfigurations = make(map[string]roomConfiguration)
+	}
+	e.roomConfigurations[room] = configuration
+	return configuration
+}
+
+func queueRoomDetailsLocked(e *entry, c domain.Conversation) {
+	detail := e.details[c.ID]
+	if detail == nil {
+		if len(e.details) >= maxDetailConversations {
+			return
+		}
+		if e.details == nil {
+			e.details = make(map[domain.ID]*detailSlot)
+		}
+		detail = &detailSlot{conversation: c, info: domain.EmptyConversationInfo("room", "pending")}
+		e.details[c.ID] = detail
+	}
+	detail.queued = true
+	select {
+	case e.detailsWake <- struct{}{}:
+	default:
+	}
 }

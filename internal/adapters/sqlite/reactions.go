@@ -94,14 +94,14 @@ func readReactions(ctx context.Context, q *dbgen.Queries, id domain.ID) (applica
 	if err != nil {
 		return out, err
 	}
-	publicRoom := false
+	var privacy dbgen.GetRoomReactionPrivacyRow
 	if c.Kind == "room" {
-		visibility, err := q.RoomReactionPrivacy(ctx, dbgen.RoomReactionPrivacyParams{AccountID: string(c.AccountID), Address: c.Address})
+		privacy, err = getRoomReactionPrivacy(ctx, q, m.AccountID, c.Address)
 		if err != nil {
 			return out, err
 		}
-		publicRoom = visibility == 1
 	}
+	publicRoom := privacy.Public == 1
 	refs, err := q.ListCanonicalMessageReferences(ctx, string(m.ID))
 	if err != nil {
 		return out, err
@@ -126,7 +126,7 @@ func readReactions(ctx context.Context, q *dbgen.Queries, id domain.ID) (applica
 		}
 		safeRefs = append(safeRefs, reference{ref.RemoteID, ref.Scope, ref.Author, found})
 	}
-	observations, err := q.ReactionObservationsForTargets(ctx, dbgen.ReactionObservationsForTargetsParams{AccountID: string(m.AccountID), Address: c.Address, Kind: c.Kind, MessageID: string(m.ID), References: jsonText(safeRefs)})
+	observations, err := q.ReactionObservationsForTargets(ctx, dbgen.ReactionObservationsForTargetsParams{AccountID: string(m.AccountID), Address: c.Address, Kind: c.Kind, MessageID: string(m.ID), References: jsonText(safeRefs), RoomEpoch: privacy.Epoch})
 	if err != nil {
 		return out, err
 	}
@@ -140,10 +140,12 @@ func readReactions(ctx context.Context, q *dbgen.Queries, id domain.ID) (applica
 		if in.Kind != c.Kind {
 			continue
 		}
-		if in.Kind == "room" && !in.IsOwn && publicRoom == domain.IsRoomReactionActor(in.Actor) {
-			// There is no verified mapping between a legacy JID and an
-			// occupant ID. Only project peers in the current identity mode.
-			continue
+		if in.Kind == "room" && !in.IsOwn {
+			opaque := domain.IsRoomReactionActor(in.Actor)
+			if privacy.IdentityMode == application.RoomReactionsAnonymous ||
+				opaque && privacy.IdentityMode == application.RoomReactionsNonanonymous || !opaque && !publicRoom {
+				continue
+			}
 		}
 		var linked domain.ID
 		if observation.CommandID != "" {
@@ -259,6 +261,9 @@ func (h reactionHead) after(prior reactionHead) bool {
 	}
 	if h.archiveOrder != prior.archiveOrder {
 		return h.archiveOrder > prior.archiveOrder
+	}
+	if h.in.Kind == "room" && h.in.ArchiveID == "" && h.ordinal != prior.ordinal {
+		return h.ordinal > prior.ordinal
 	}
 	if h.in.ProviderID != prior.in.ProviderID {
 		return h.in.ProviderID > prior.in.ProviderID
@@ -489,76 +494,125 @@ func insertReactionObservation(ctx context.Context, q *dbgen.Queries, in applica
 	if err != nil {
 		return false, err
 	}
-	if in.ArchiveID == "" && len(matches) != 0 {
-		old := matches[0]
-		if old.ArchiveID != "" || old.ProviderID == in.ProviderID {
-			return false, nil
-		}
-		// A verified room echo replaces a local submission under its own ID.
-		if at, err := time.Parse(time.RFC3339Nano, old.OccurredAt); err == nil {
-			in.CreatedAt = at
-		}
+	if len(matches) != 0 {
+		return reconcileReactionObservation(ctx, q, in, command, matches)
 	}
-	var archived *dbgen.MessageReactionObservation
-	for i := range matches {
-		old := &matches[i]
-		if old.ArchiveID != "" {
-			archived = old
-		}
-		if command == "" && old.CommandID != "" {
-			command = domain.ID(old.CommandID)
-		}
-	}
-	if archived != nil {
-		var stored application.IncomingReaction
-		if err := json.Unmarshal([]byte(archived.Payload), &stored); err != nil {
-			return false, err
-		}
-		if in.ArchiveID == "" || stored.ProviderID == in.ProviderID && len(matches) == 1 && archived.CommandID == string(command) {
-			return false, nil
-		}
-		// An already archived event keeps its order when replay adds an alias.
-		stored.ProviderID = in.ProviderID
-		if err := q.UpdateArchivedReactionIdentity(ctx, dbgen.UpdateArchivedReactionIdentityParams{
-			ProviderID: stored.ProviderID, Payload: jsonText(stored), CommandID: string(command), Ordinal: archived.Ordinal,
-		}); err != nil {
-			return false, err
-		}
-	}
-	for _, old := range matches {
-		if archived != nil && archived.Ordinal == old.Ordinal {
-			continue
-		}
-		if err := q.DeleteReactionObservation(ctx, old.Ordinal); err != nil {
-			return false, err
-		}
-	}
-	if archived != nil {
-		return true, nil
-	}
-	occurredAt := stamp(in.CreatedAt)
-	var archiveOrder int64
-	if in.ArchiveID != "" {
-		var prepend int64
-		if in.ArchivePrepend {
-			prepend = 1
-		}
-		archiveOrder, err = q.ArchivedReactionPlacement(ctx, dbgen.ArchivedReactionPlacementParams{
-			AccountID: string(in.AccountID), ArchiveScope: in.ArchiveScope, OccurredAt: occurredAt,
-			Earlier: jsonText(in.ArchiveEarlier), Later: jsonText(in.ArchiveLater), Prepend: prepend,
-		})
+	var epoch int64
+	if in.Kind == "room" && !in.IsOwn {
+		privacy, err := getRoomReactionPrivacy(ctx, q, in.AccountID, in.Address)
 		if err != nil {
 			return false, err
 		}
-		if err := q.ShiftArchivedReactions(ctx, dbgen.ShiftArchivedReactionsParams{
-			AccountID: string(in.AccountID), ArchiveScope: in.ArchiveScope, OccurredAt: occurredAt, Placement: archiveOrder,
-		}); err != nil {
+		epoch = privacy.Epoch
+		// A newly discovered archived event from before a known mode change
+		// must not reintroduce a peer set into the current identity mode.
+		if epoch > 0 && in.ArchiveID != "" && stamp(in.CreatedAt) < privacy.ChangedAt {
+			epoch--
+		}
+	}
+	order, err := placeArchivedReaction(ctx, q, in, dbgen.MessageReactionObservation{})
+	if err != nil {
+		return false, err
+	}
+	err = q.InsertReactionObservation(ctx, dbgen.InsertReactionObservationParams{
+		ID: string(revision), AccountID: string(in.AccountID), Address: in.Address, Kind: in.Kind, Actor: in.Actor,
+		ProviderID: in.ProviderID, ArchiveScope: in.ArchiveScope, ArchiveID: in.ArchiveID,
+		TargetID: in.Target.ID, TargetScope: in.Target.Scope, TargetAuthor: in.Target.Author, Fingerprint: digest,
+		OccurredAt: stamp(in.CreatedAt), Payload: jsonText(in), CommandID: string(command), ArchiveOrder: order, RoomEpoch: epoch,
+	})
+	return err == nil, err
+}
+
+func reconcileReactionObservation(ctx context.Context, q *dbgen.Queries, in application.IncomingReaction, command domain.ID, matches []dbgen.MessageReactionObservation) (bool, error) {
+	old := matches[0]
+	for _, candidate := range matches {
+		if old.ArchiveID == "" && candidate.ArchiveID != "" {
+			old = candidate
+		}
+		if command == "" && candidate.CommandID != "" {
+			command = domain.ID(candidate.CommandID)
+		}
+	}
+	var merged application.IncomingReaction
+	if err := json.Unmarshal([]byte(old.Payload), &merged); err != nil {
+		return false, err
+	}
+	switch {
+	case in.ArchiveID != "" && old.ArchiveID == "":
+		merged = in
+	case in.ArchiveID != "":
+		merged.ProviderID = in.ProviderID
+	case old.ArchiveID == "" && (old.ProviderID == string(command) ||
+		strings.HasPrefix(old.ProviderID, "room-live:") && strings.HasPrefix(in.ProviderID, "room-reaction:")):
+		merged.ProviderID = in.ProviderID
+	}
+	var order = old.ArchiveOrder
+	if in.ArchiveID != "" {
+		merged.ArchiveEarlier, merged.ArchiveLater, merged.ArchivePrepend = in.ArchiveEarlier, in.ArchiveLater, in.ArchivePrepend
+		var err error
+		order, err = placeArchivedReaction(ctx, q, merged, old)
+		if err != nil {
 			return false, err
 		}
 	}
-	err = q.InsertReactionObservation(ctx, dbgen.InsertReactionObservationParams{ID: string(revision), AccountID: string(in.AccountID), Address: in.Address, Kind: in.Kind, Actor: in.Actor, ProviderID: in.ProviderID, ArchiveScope: in.ArchiveScope, ArchiveID: in.ArchiveID, TargetID: in.Target.ID, TargetScope: in.Target.Scope, TargetAuthor: in.Target.Author, Fingerprint: digest, OccurredAt: occurredAt, Payload: jsonText(in), CommandID: string(command), ArchiveOrder: archiveOrder})
+	for _, duplicate := range matches {
+		if duplicate.Ordinal != old.Ordinal {
+			if err := q.DeleteReactionObservation(ctx, duplicate.Ordinal); err != nil {
+				return false, err
+			}
+		}
+	}
+	if old.ProviderID == merged.ProviderID && old.ArchiveID == merged.ArchiveID &&
+		old.ArchiveOrder == order && old.CommandID == string(command) {
+		return len(matches) > 1, nil
+	}
+	// An echo or archive copy changes the evidence for the same logical
+	// reaction. Keep the revision that subsequent own commands may rely on.
+	err := q.ReconcileReactionObservation(ctx, dbgen.ReconcileReactionObservationParams{
+		Ordinal: old.Ordinal, ProviderID: merged.ProviderID, ArchiveScope: merged.ArchiveScope, ArchiveID: merged.ArchiveID,
+		OccurredAt: stamp(merged.CreatedAt), ArchiveOrder: order, Payload: jsonText(merged), CommandID: string(command),
+	})
 	return err == nil, err
 }
+
+func placeArchivedReaction(ctx context.Context, q *dbgen.Queries, in application.IncomingReaction, old dbgen.MessageReactionObservation) (int64, error) {
+	if in.ArchiveID == "" {
+		return 0, nil
+	}
+	if old.ArchiveID != "" && len(in.ArchiveEarlier) == 0 && len(in.ArchiveLater) == 0 {
+		return old.ArchiveOrder, nil
+	}
+	at := stamp(in.CreatedAt)
+	neighbors, err := q.ArchivedReactionNeighbors(ctx, dbgen.ArchivedReactionNeighborsParams{
+		AccountID: string(in.AccountID), ArchiveScope: in.ArchiveScope, OccurredAt: at,
+		Earlier: jsonText(in.ArchiveEarlier), Later: jsonText(in.ArchiveLater), ExcludedOrdinal: old.Ordinal,
+	})
+	if err != nil {
+		return 0, err
+	}
+	earlier, later := neighbors.EarlierCount != 0, neighbors.LaterCount != 0
+	if old.ArchiveID != "" && (!earlier || old.ArchiveOrder > neighbors.EarlierOrder) &&
+		(!later || old.ArchiveOrder < neighbors.LaterOrder) {
+		return old.ArchiveOrder, nil
+	}
+	// Prefer the neighbor already visited in this page's traversal when
+	// older evidence disagrees. Subsequent events repair the other bound.
+	order := neighbors.LastOrder + 1
+	switch {
+	case later && (in.ArchivePrepend || !earlier):
+		order = neighbors.LaterOrder
+	case earlier:
+		order = neighbors.EarlierOrder + 1
+	case in.ArchivePrepend:
+		order = neighbors.FirstOrder - 1
+	}
+	err = q.ShiftArchivedReactions(ctx, dbgen.ShiftArchivedReactionsParams{
+		AccountID: string(in.AccountID), ArchiveScope: in.ArchiveScope, OccurredAt: at,
+		Placement: order, ExcludedOrdinal: old.Ordinal,
+	})
+	return order, err
+}
+
 func (s *Store) FinishMessageReaction(ctx context.Context, id domain.ID, state string, revision domain.ID, at, next time.Time, reason string) (domain.MessageReactionCommand, error) {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
@@ -704,18 +758,28 @@ func (s *Store) RejectMessageReaction(ctx context.Context, id, revision domain.I
 	return tx.Commit()
 }
 
-func (s *Store) SetRoomReactionPrivacy(ctx context.Context, account domain.ID, address string, public bool) error {
+func getRoomReactionPrivacy(ctx context.Context, q *dbgen.Queries, account domain.ID, address string) (dbgen.GetRoomReactionPrivacyRow, error) {
+	row, err := q.GetRoomReactionPrivacy(ctx, dbgen.GetRoomReactionPrivacyParams{AccountID: string(account), Address: address})
+	if errors.Is(err, sql.ErrNoRows) {
+		err = nil
+	}
+	return row, err
+}
+
+func (s *Store) SetRoomReactionPrivacy(ctx context.Context, account domain.ID, address string, privacy application.RoomReactionPrivacy) error {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	now := time.Now().UTC()
 	var visibility int64
-	if public {
+	if privacy.Public && privacy.Mode == application.RoomReactionsNonanonymous {
 		visibility = 1
 	}
 	changed, err := q.SetRoomReactionPrivacy(ctx, dbgen.SetRoomReactionPrivacyParams{
 		AccountID: string(account), Address: address, Public: visibility,
+		IdentityMode: privacy.Mode, ChangedAt: stamp(now),
 	})
 	if err != nil {
 		return err
@@ -733,7 +797,7 @@ func (s *Store) SetRoomReactionPrivacy(ctx context.Context, account domain.ID, a
 			if conversation.Kind != "room" {
 				return tx.Commit()
 			}
-			if _, err = change(ctx, q, "conversation.updated", conversation, time.Now().UTC()); err != nil {
+			if _, err = change(ctx, q, "conversation.updated", conversation, now); err != nil {
 				return err
 			}
 		}

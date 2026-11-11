@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/araihu/oie/internal/application"
+	"github.com/araihu/oie/internal/domain"
 	mx "mellium.im/xmpp"
 	"mellium.im/xmpp/stanza"
 )
@@ -22,13 +23,15 @@ type archivePageRequest struct {
 	Backward              bool
 	Prepend               bool
 	Limit                 int
+	ReactionAnchor        domain.ArchiveReactionAnchor
 }
 
 type archivePage struct {
-	Query       *archiveQuery
-	First, Last string
-	Complete    bool
-	Prepend     bool
+	Query          *archiveQuery
+	First, Last    string
+	Complete       bool
+	Prepend        bool
+	ReactionAnchor domain.ArchiveReactionAnchor
 }
 
 func (r archivePageRequest) payload(id string) string {
@@ -122,7 +125,7 @@ func (m *Manager) readArchivePage(ctx context.Context, e *entry, s *mx.Session, 
 		(request.Before != "" && first == request.Before) || (request.After != "" && last == request.After) {
 		return archivePage{}, errArchive
 	}
-	return archivePage{Query: q, First: first, Last: last, Complete: fin.Complete, Prepend: request.Prepend}, nil
+	return archivePage{Query: q, First: first, Last: last, Complete: fin.Complete, Prepend: request.Prepend, ReactionAnchor: request.ReactionAnchor}, nil
 }
 
 func (m *Manager) ingestArchivePage(ctx context.Context, page archivePage) error {
@@ -144,10 +147,20 @@ func (m *Manager) ingestArchivePage(ctx context.Context, page archivePage) error
 			group.events = append(group.events, r)
 		}
 	}
-	for _, group := range ties {
+	for at, group := range ties {
+		anchor := page.ReactionAnchor
+		offset := 0
+		if anchor.ID != "" && anchor.At.Equal(at) && !slices.Contains(group.ids, anchor.ID) {
+			if page.Prepend {
+				group.ids = append(group.ids, anchor.ID)
+			} else {
+				group.ids = append([]string{anchor.ID}, group.ids...)
+				offset = 1
+			}
+		}
 		for i, r := range group.events {
 			r.ArchivePrepend = page.Prepend
-			r.ArchiveEarlier, r.ArchiveLater = group.ids[:i], group.ids[i+1:]
+			r.ArchiveEarlier, r.ArchiveLater = group.ids[:i+offset], group.ids[i+offset+1:]
 		}
 	}
 	receive := func(in application.Incoming) error {
@@ -175,4 +188,26 @@ func (m *Manager) ingestArchivePage(ctx context.Context, page archivePage) error
 		}
 	}
 	return nil
+}
+
+// A cursor can fall on text rather than a reaction. Carry the closest
+// reaction through intervening pages as long as the archive stamp is tied.
+func (page archivePage) nextReactionAnchor(backward bool) domain.ArchiveReactionAnchor {
+	at := page.Query.LastAt
+	if backward {
+		at = page.Query.FirstAt
+	}
+	var anchor domain.ArchiveReactionAnchor
+	if page.ReactionAnchor.At.Equal(at) {
+		anchor = page.ReactionAnchor
+	}
+	for _, in := range page.Query.Messages {
+		if r := in.Reaction; r != nil && r.CreatedAt.Equal(at) {
+			anchor = domain.ArchiveReactionAnchor{At: at, ID: r.ArchiveID}
+			if backward {
+				break
+			}
+		}
+	}
+	return anchor
 }

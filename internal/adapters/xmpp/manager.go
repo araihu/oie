@@ -680,8 +680,8 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			return err
 		}
 		captureRoomMentionPresence(e, presence)
-		if m.captureRoomPresence(ctx, e, presence) {
-			return nil
+		if handled, err := m.captureRoomPresence(ctx, e, presence); handled {
+			return err
 		}
 		capturePeerPresence(e, presence)
 		if presence.Update != nil && presence.Update.Photo != nil {

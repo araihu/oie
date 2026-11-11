@@ -1035,18 +1035,25 @@ can supply XEP-0421 occupant IDs for live and authenticated archive reactions,
 including the account's own ID in verified self-presence. Those reactions are
 scoped to the account and room and projected with nicknames and opaque keys.
 Authenticated room configuration notices revoke cached reaction capabilities
-until discovery confirms them again. Public-room JID observations stop contributing
-to counts and actor details when room identities become private.
+until discovery confirms them again. History checkpoints wait for that discovery.
+Real room addresses and contact avatars require current presence and verified
+non-anonymous discovery. After an observed identity-mode change, older peer sets
+stay out of counts if the room later returns to a previous mode. A fresh verified
+self-presence can restore occupant-based reactions during an existing room session.
 If a room archive page is read before self-presence establishes the account’s
 occupant ID, its skipped reaction range is stored with the text checkpoint.
 Joining resumes that range in bounded pages, or replays the latest page when no
 range was recorded.
 
 Bodyless reaction controls never become timeline messages. Room updates use the
-room-issued stanza or archive ID for deduplication. A confirmed archive copy can
-replace the live receipt timestamp, and equal archive timestamps follow the
-server’s result order. Unresolved original references can resolve when the source
-is subsequently retained.
+room-issued stanza or archive ID for deduplication. If the room leaves a live
+reaction without its own stanza ID, the engine records that delivery under a
+local identifier after verifying the sender. The client-provided stanza ID can
+correlate the account's own command echo. Echoes and archive copies preserve the
+reaction's revision when they enrich the same observation. Equal archive
+timestamps use the server’s result order across contiguous pages, and later
+replays can repair older ordering. Unresolved original references can resolve
+when the source is subsequently retained.
 
 Freeze the desired set, operation UUID, target and sending session. Revalidate
 constraints at acceptance and dispatch. Known-unsent attempts may retry; ambiguous

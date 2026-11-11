@@ -65,10 +65,11 @@ func (m *Manager) isolatedRoomPage(ctx context.Context, host application.RoomArc
 		next := archivePageRequest{Limit: req.Limit, Start: request.Anchor.CreatedAt.UTC()}
 		if req.Before != "" {
 			next.After, next.Start = req.Before, time.Time{}
+			next.ReactionAnchor = page.nextReactionAnchor(false)
 		}
 		forward, err := m.readArchivePage(ctx, e, s, c.Address, next)
 		if errors.Is(err, errArchiveCursor) && next.After != "" {
-			next.After, next.Start = "", request.Anchor.CreatedAt.UTC()
+			next.After, next.Start, next.ReactionAnchor = "", request.Anchor.CreatedAt.UTC(), domain.ArchiveReactionAnchor{}
 			forward, err = m.readArchivePage(ctx, e, s, c.Address, next)
 		}
 		if err != nil {

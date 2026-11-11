@@ -10,7 +10,7 @@ import (
 
 type Querier interface {
 	AcquireWriteLock(ctx context.Context) error
-	ArchivedReactionPlacement(ctx context.Context, arg ArchivedReactionPlacementParams) (int64, error)
+	ArchivedReactionNeighbors(ctx context.Context, arg ArchivedReactionNeighborsParams) (ArchivedReactionNeighborsRow, error)
 	ClearCanonicalAliases(ctx context.Context, ids string) error
 	ClearContentHeads(ctx context.Context, ids string) error
 	CorrectionNeighbors(ctx context.Context, arg CorrectionNeighborsParams) ([]CorrectionNeighborsRow, error)
@@ -48,6 +48,7 @@ type Querier interface {
 	GetOperation(ctx context.Context, id string) (Operation, error)
 	GetRoomArchive(ctx context.Context, conversationID string) (GetRoomArchiveRow, error)
 	GetRoomIntent(ctx context.Context, conversationID string) (RoomIntent, error)
+	GetRoomReactionPrivacy(ctx context.Context, arg GetRoomReactionPrivacyParams) (GetRoomReactionPrivacyRow, error)
 	GetSharedContentItem(ctx context.Context, arg GetSharedContentItemParams) (GetSharedContentItemRow, error)
 	HasMessageRead(ctx context.Context, canonicalID string) (bool, error)
 	InsertAccount(ctx context.Context, arg InsertAccountParams) error
@@ -125,11 +126,11 @@ type Querier interface {
 	ReactionActorProfile(ctx context.Context, arg ReactionActorProfileParams) (ReactionActorProfileRow, error)
 	ReactionObservationsForTargets(ctx context.Context, arg ReactionObservationsForTargetsParams) ([]ReactionObservationsForTargetsRow, error)
 	ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error
+	ReconcileReactionObservation(ctx context.Context, arg ReconcileReactionObservationParams) error
 	RecordOriginalTransmission(ctx context.Context, id string) error
 	ResetAllRoomReactionPrivacy(ctx context.Context) error
 	ResetRoomReactionPrivacy(ctx context.Context, accountID string) error
 	ResolveMessageAlias(ctx context.Context, aliasID string) (string, error)
-	RoomReactionPrivacy(ctx context.Context, arg RoomReactionPrivacyParams) (int64, error)
 	SearchContacts(ctx context.Context, arg SearchContactsParams) ([]SearchContactsRow, error)
 	SearchMessages(ctx context.Context, arg SearchMessagesParams) ([]SearchMessagesRow, error)
 	SetOperationResult(ctx context.Context, arg SetOperationResultParams) error
@@ -139,7 +140,6 @@ type Querier interface {
 	SharedContentIndexStatus(ctx context.Context, arg SharedContentIndexStatusParams) (SharedContentIndexStatusRow, error)
 	ShiftArchivedReactions(ctx context.Context, arg ShiftArchivedReactionsParams) error
 	Snapshot(ctx context.Context) (SnapshotRow, error)
-	UpdateArchivedReactionIdentity(ctx context.Context, arg UpdateArchivedReactionIdentityParams) error
 	UpdateAvatar(ctx context.Context, arg UpdateAvatarParams) error
 	UpdateConversation(ctx context.Context, arg UpdateConversationParams) error
 	UpdateConversationPreferences(ctx context.Context, arg UpdateConversationPreferencesParams) (int64, error)

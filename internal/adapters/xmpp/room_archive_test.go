@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -155,6 +156,7 @@ type testArchiveIQ struct {
 		Set struct {
 			Max    int    `xml:"max"`
 			Before string `xml:"before"`
+			After  string `xml:"after"`
 		} `xml:"http://jabber.org/protocol/rsm set"`
 	} `xml:"urn:xmpp:mam:2 query"`
 }
@@ -477,5 +479,44 @@ func TestRoomArchiveKeepsCheckpointWhenConfigurationChangesBeforeQuery(t *testin
 	}
 	if !host.archive.CaughtUpThrough.Equal(cutoff) || len(host.reactions) != 1 || len(host.messages) != 1 {
 		t.Fatal("catch-up did not resume from the original checkpoint", host.archive, host.reactions)
+	}
+}
+
+func TestDeferredRoomReactionReplayCarriesTieAnchorAcrossTextPage(t *testing.T) {
+	at := time.Date(2026, 11, 10, 22, 0, 0, 0, time.UTC)
+	m, e, host := archiveFixture(t, func(iq testArchiveIQ, index int) string {
+		ids := []string{"add", "text", "clear"}
+		if index >= len(ids) {
+			t.Error("unexpected page")
+			return iq.page(true)
+		}
+		if index > 0 && iq.Query.Set.After != ids[index-1] {
+			t.Error("replay lost its cursor", iq.Query.Set.After)
+		}
+		page := iq.page(index == 2, testArchiveMessage{id: ids[index], at: at})
+		if index == 1 {
+			return page
+		}
+		payload := `<occupant-id xmlns="urn:xmpp:occupant-id:0" id="peer"/><reactions xmlns="urn:xmpp:reactions:0" id="source">`
+		if index == 0 {
+			payload += `<reaction>❤</reaction>`
+		}
+		return strings.Replace(page, "<body>Fixture message</body>", payload+"</reactions>", 1)
+	})
+	room := host.room.Address
+	e.semianonymousRooms = map[string]bool{room: true}
+	e.occupantScopes = map[string]bool{room: true}
+	slot := e.rooms[room]
+	slot.session, slot.snapshot.State, slot.ownOccupantID = e.session, "joined", "self"
+	host.archive.DeferredReactions = domain.DeferredRoomReactions{Start: at, End: at}
+	for range 3 {
+		p := host.archive.RoomArchiveProgress
+		if stored, err := m.recoverDeferredRoomReactions(t.Context(), host, e, e.session, host.room, &p, slot); err != nil || !stored {
+			t.Fatal("deferred page was not stored", err)
+		}
+	}
+	if len(host.reactions) != 2 || !slices.Equal(host.reactions[1].ArchiveEarlier, []string{"add"}) ||
+		len(host.messages) != 0 || !host.archive.DeferredReactions.Start.IsZero() {
+		t.Fatal("reaction ordering evidence was lost across the text-only page", host.reactions, host.archive)
 	}
 }

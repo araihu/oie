@@ -210,7 +210,7 @@ func TestSemianonymousRoomReactionsUseVerifiedOccupantIDs(t *testing.T) {
 	if validFrozenReaction(e, e.account, out) {
 		t.Fatal("frozen command rebound to a different occupant")
 	}
-	if _, err = m.decodeDiscoInfo(t.Context(), e, e.session, c.Address, strings.Replace(discoXML, `<feature var="urn:xmpp:occupant-id:0"/>`, "", 1), 0); err != nil {
+	if _, err = m.decodeDiscoInfo(t.Context(), e, e.session, c.Address, strings.Replace(discoXML, `<feature var="urn:xmpp:occupant-id:0"/>`, "", 1), currentRoomConfiguration(e, c.Address).revision); err != nil {
 		t.Fatal(err)
 	}
 	reaction("Bob", "unverified", peer)
@@ -417,5 +417,37 @@ func TestReactionErrorAcceptsOnlyTrackedPeerOrRoomAuthority(t *testing.T) {
 	}
 	if !slices.Contains(features, reactionsNS) {
 		t.Fatal("client does not advertise implemented reactions")
+	}
+}
+
+func TestRoomReactionsRecoverAfterEnablingOccupantIDs(t *testing.T) {
+	m, e, slot, host := reactionRoomFixture(t)
+	c := slot.conversation
+	slot.snapshot.State = "joining"
+	disco := `<query xmlns="http://jabber.org/protocol/disco#info"><identity category="conference" type="text"/><feature var="muc_semianonymous"/><feature var="urn:xmpp:sid:0"/></query>`
+	if _, err := m.decodeDiscoInfo(t.Context(), e, e.session, c.Address, disco, 0); err != nil {
+		t.Fatal(err)
+	}
+	presence := `<presence xmlns="jabber:client" from="` + c.Address + `/Oie" id="join-request"><occupant-id xmlns="urn:xmpp:occupant-id:0" id="unverified"/><x xmlns="http://jabber.org/protocol/muc#user"><status code="110"/></x></presence>`
+	feedReaction(t, m, e, presence)
+	if slot.ownOccupantID != "" || slot.snapshot.State != "joined" {
+		t.Fatal("unadvertised occupant identity was retained")
+	}
+	feedReaction(t, m, e, `<message xmlns="jabber:client" from="`+c.Address+`" type="groupchat"><x xmlns="http://jabber.org/protocol/muc#user"><status code="104"/></x></message>`)
+	fresh := strings.Replace(disco, "</query>", `<feature var="urn:xmpp:occupant-id:0"/></query>`, 1)
+	if _, err := m.decodeDiscoInfo(t.Context(), e, e.session, c.Address, fresh, currentRoomConfiguration(e, c.Address).revision); err != nil {
+		t.Fatal(err)
+	}
+	feedReaction(t, m, e, strings.Replace(presence, "unverified", "self", 1))
+	plan, err := m.PrepareReaction(t.Context(), e.account, c, reactionTarget(e, c))
+	if err != nil || plan.RoomActor != roomReactionActor(e.account.ID, c.Address, "self") || pendingRoomReactionReplay(e, e.session, c.Address, true) == nil {
+		t.Fatal("fresh self-presence did not restore reactions and archive recovery", plan, err)
+	}
+	peer := `<message xmlns="jabber:client" from="` + c.Address + `/Bob" id="reused" type="groupchat"><occupant-id xmlns="urn:xmpp:occupant-id:0" id="bob"/><reactions xmlns="urn:xmpp:reactions:0" id="room-assigned-original"><reaction>👍</reaction></reactions></message>`
+	feedReaction(t, m, e, peer)
+	feedReaction(t, m, e, strings.Replace(peer, "<reaction>👍</reaction>", "", 1))
+	if len(host.received) != 2 || host.received[0].Reaction.ProviderID == host.received[1].Reaction.ProviderID ||
+		host.received[0].Reaction.Actor != host.received[1].Reaction.Actor || len(host.received[1].Reaction.Emojis) != 0 {
+		t.Fatal("valid live reaction sets without a room event SID were lost or conflated", host.received)
 	}
 }

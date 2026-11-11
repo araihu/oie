@@ -218,6 +218,7 @@ type MessageReactionObservation struct {
 	Payload      string
 	CommandID    string
 	ArchiveOrder int64
+	RoomEpoch    int64
 }
 
 type MessageRead struct {
@@ -328,9 +329,12 @@ type RoomIntent struct {
 }
 
 type RoomReactionPrivacy struct {
-	AccountID string
-	Address   string
-	Public    int64
+	AccountID    string
+	Address      string
+	Public       int64
+	IdentityMode string
+	Epoch        int64
+	ChangedAt    string
 }
 
 type SharedContent struct {

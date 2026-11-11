@@ -469,15 +469,17 @@ func (m *Manager) recoverArchive(ctx context.Context, host application.HistoryHo
 	}
 	seen := map[string]bool{}
 	reset := false
+	var reactionAnchor domain.ArchiveReactionAnchor
 	for ctx.Err() == nil {
 		release, err := m.acquireArchive(ctx, scope, archiveAutomatic)
 		if err != nil {
 			return err
 		}
-		page, err := m.readArchivePage(ctx, e, s, scope, archivePageRequest{After: after})
+		page, err := m.readArchivePage(ctx, e, s, scope, archivePageRequest{After: after, ReactionAnchor: reactionAnchor})
 		release()
 		if errors.Is(err, errArchiveCursor) && after != "" && !reset {
 			after = ""
+			reactionAnchor = domain.ArchiveReactionAnchor{}
 			reset = true
 			if err = host.CommitHistoryCheckpoint(ctx, e.account.ID, scope, ""); err != nil {
 				return err
@@ -499,7 +501,7 @@ func (m *Manager) recoverArchive(ctx context.Context, host application.HistoryHo
 			if err = host.CommitHistoryCheckpoint(ctx, e.account.ID, scope, last); err != nil {
 				return err
 			}
-			after = last
+			after, reactionAnchor = last, page.nextReactionAnchor(false)
 		} else if !page.Complete {
 			return errArchive
 		}

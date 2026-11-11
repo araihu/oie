@@ -13,7 +13,7 @@ import (
 
 func downReactionMigration(t *testing.T, s *Store) {
 	t.Helper()
-	for _, name := range []string{"000018_room_reaction_reconciliation", "000017_room_archives", "000016_message_reactions"} {
+	for _, name := range []string{"000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation", "000017_room_archives", "000016_message_reactions"} {
 		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
 		if err != nil {
 			t.Fatal(err)
@@ -442,7 +442,7 @@ func TestSemianonymousReactionProjectionAndCommandEcho(t *testing.T) {
 	incoming := application.IncomingReaction{AccountID: c.AccountID, Address: c.Address, Kind: "room", ProviderID: "peer-first", CreatedAt: at, Actor: peer, ActorName: "Bob", Target: ref, Emojis: []string{"👍"}}
 	public := incoming
 	public.Actor, public.ProviderID = "bob@localhost", "public-reaction"
-	if err := e.SetRoomReactionPrivacy(ctx, c.AccountID, c.Address, true); err != nil {
+	if err := e.SetRoomReactionPrivacy(ctx, c.AccountID, c.Address, application.RoomReactionPrivacy{Mode: application.RoomReactionsNonanonymous, Public: true}); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.ReceiveReaction(ctx, public); err != nil {
@@ -451,7 +451,7 @@ func TestSemianonymousReactionProjectionAndCommandEcho(t *testing.T) {
 	if got := reactionSnapshot(t, e, m.ID); len(got.Actors) != 1 || got.Actors[0].Address != public.Actor {
 		t.Fatal("verified public actor not visible", got)
 	}
-	if err := e.SetRoomReactionPrivacy(ctx, c.AccountID, c.Address, false); err != nil {
+	if err := e.SetRoomReactionPrivacy(ctx, c.AccountID, c.Address, application.RoomReactionPrivacy{Mode: application.RoomReactionsSemianonymous}); err != nil {
 		t.Fatal(err)
 	}
 	if got := reactionSnapshot(t, e, m.ID); len(got.Actors) != 0 || len(got.Items) != 0 {
@@ -556,5 +556,204 @@ func TestRoomArchiveReconcilesReceiptTimeAndPreservesEqualTimestampOrder(t *test
 		if got := reactionSnapshot(t, e, msg.ID); len(got.Items) != 0 || len(got.Actors) != 0 {
 			t.Fatal("the later archived clear lost to receipt time or lexicographic ID", got)
 		}
+	}
+}
+
+func TestLateRoomReactionEchoKeepsQueuedClearValid(t *testing.T) {
+	s, e, base := outboxFixture(t)
+	own := domain.RoomReactionActorPrefix + strings.Repeat("a", 64)
+	p := &reactionProtocol{max: 8, roomActor: own}
+	p.autoJoined = true
+	e.SetProtocols(p)
+	ctx := t.Context()
+	c := outboundRoom(t, s, base.AccountID, "room@rooms.localhost")
+	joined, err := e.JoinRoom(ctx, migrationID(), c.ID, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := e.Account(ctx, c.AccountID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = p.JoinRoom(ctx, a, c, "My room nickname", joined.Session.IntentRevisionID); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().UTC().Add(-time.Minute)
+	ref := domain.MessageReference{ID: "room-original", Scope: "room:" + c.Address, Author: c.Address + "/Bob"}
+	m := domain.Message{ID: migrationID(), RevisionID: migrationID(), AccountID: c.AccountID, OriginalText: "retained source", CreatedAt: at, Historical: true, ProviderID: "source-provider-id", References: []domain.MessageReference{ref}, SendState: "received"}
+	if err = s.ReceiveMessage(ctx, c, m, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+
+	ref.Author = ""
+	add := migrationID()
+	if _, err := e.SetMessageReactions(ctx, add, m.ID, "", []string{"👍"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ClaimMessageReaction(ctx, add, migrationID(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.FinishMessageReaction(ctx, add, "submitted", migrationID(), time.Now(), time.Now(), ""); err != nil {
+		t.Fatal(err)
+	}
+	before := reactionSnapshot(t, e, m.ID)
+	clear := migrationID()
+	if _, err := e.SetMessageReactions(ctx, clear, m.ID, before.OwnRevisionID, []string{}); err != nil {
+		t.Fatal(err)
+	}
+	echo := application.IncomingReaction{
+		AccountID: c.AccountID, Address: c.Address, Kind: "room", ProviderID: "room-reaction:stable-own-add", CommandEchoID: string(add),
+		CreatedAt: time.Now(), IsOwn: true, Actor: own, ActorName: "My room nickname", Target: ref, Emojis: []string{"👍"},
+	}
+	if err := e.ReceiveReaction(ctx, echo); err != nil {
+		t.Fatal(err)
+	}
+	after := reactionSnapshot(t, e, m.ID)
+	if _, err := s.ClaimMessageReaction(ctx, clear, migrationID(), time.Now()); err != nil {
+		t.Fatalf("late echo changed own revision %s -> %s while own emojis stayed %v -> %v, queued clear failed: %v", before.OwnRevisionID, after.OwnRevisionID, before.OwnEmojis, after.OwnEmojis, err)
+	}
+}
+
+func TestLaterLegacyRoomReactionClearBeatsEarlierArchiveAdd(t *testing.T) {
+	s, e, base := outboxFixture(t)
+	e.SetProtocols(&reactionProtocol{max: 8})
+	ctx := t.Context()
+	c := outboundRoom(t, s, base.AccountID, "room@rooms.localhost")
+	stamp := time.Now().UTC().Add(-time.Minute)
+	ref := domain.MessageReference{ID: "source", Scope: "room:" + c.Address}
+	msg := domain.Message{
+		ID: migrationID(), RevisionID: migrationID(), AccountID: c.AccountID, OriginalText: "source",
+		CreatedAt: stamp.Add(-time.Second), Historical: true, ProviderID: "source",
+		References: []domain.MessageReference{ref}, SendState: "received",
+	}
+	if err := s.ReceiveMessage(ctx, c, msg, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+
+	add := application.IncomingReaction{
+		AccountID: c.AccountID, Address: c.Address, Kind: "room", ProviderID: "legacy-client-add", ArchiveID: "room-archive-add", ArchiveScope: c.Address,
+		Historical: true, CreatedAt: stamp, Actor: domain.RoomReactionActorPrefix + strings.Repeat("a", 64),
+		ActorName: "Bob", Target: ref, Emojis: []string{"👍"},
+	}
+	clear := add
+	clear.ProviderID, clear.ArchiveID, clear.ArchiveScope, clear.Historical = "legacy-client-clear", "", "", false
+	clear.CreatedAt, clear.Emojis = stamp.Add(time.Second), []string{}
+	for _, in := range []application.IncomingReaction{add, clear} {
+		if err := e.ReceiveReaction(ctx, in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := reactionSnapshot(t, e, msg.ID); len(got.Items) != 0 {
+		t.Fatalf("older archived add resurfaced despite later retained v17 live clear: %+v", got.Items)
+	}
+}
+
+func roomReactionReplayFixture(t *testing.T) (*Store, *application.Engine, domain.Message, application.IncomingReaction, application.IncomingReaction) {
+	s, e, base := outboxFixture(t)
+	e.SetProtocols(&reactionProtocol{max: 8})
+	c := outboundRoom(t, s, base.AccountID, "room@rooms.localhost")
+	at := time.Now().UTC().Add(-time.Minute)
+	ref := domain.MessageReference{ID: "source", Scope: "room:" + c.Address}
+	msg := domain.Message{ID: migrationID(), RevisionID: migrationID(), AccountID: c.AccountID, OriginalText: "source", CreatedAt: at.Add(-time.Second), Historical: true, ProviderID: "source", References: []domain.MessageReference{ref}, SendState: "received"}
+	if err := s.ReceiveMessage(t.Context(), c, msg, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+	add := application.IncomingReaction{AccountID: c.AccountID, Address: c.Address, Kind: "room", ProviderID: "z-add", ArchiveScope: c.Address, ArchiveID: "mam-add", CreatedAt: at, Historical: true, Target: ref, Actor: domain.RoomReactionActorPrefix + strings.Repeat("a", 64), ActorName: "Bob", Emojis: []string{"👍"}}
+	clear := add
+	clear.ProviderID, clear.ArchiveID, clear.Emojis = "a-clear", "mam-clear", []string{}
+	return s, e, msg, add, clear
+}
+
+func TestRoomReactionReplayRepairsV17BackwardPageOrder(t *testing.T) {
+	s, e, msg, add, clear := roomReactionReplayFixture(t)
+	// V17 ingested newest backward pages first, with no ordering hints.
+	for _, in := range []application.IncomingReaction{clear, add} {
+		if err := e.ReceiveReaction(t.Context(), in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Downgrade the scratch database to the actual V17 migration state.
+	for _, name := range []string{"000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
+		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = s.db.Exec(string(down)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.db.Exec("UPDATE schema_migrations SET version=17"); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateDatabase(t.Context(), s.db); err != nil {
+		t.Fatal(err)
+	}
+	// Read both events together, in the authoritative order from the archive.
+	add.ProviderID, clear.ProviderID = "room-reaction:z-add", "room-reaction:a-clear"
+	add.ArchiveLater = []string{clear.ArchiveID}
+	clear.ArchiveEarlier = []string{add.ArchiveID}
+	for range 2 {
+		for _, in := range []application.IncomingReaction{add, clear} {
+			if err := e.ReceiveReaction(t.Context(), in); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if got := reactionSnapshot(t, e, msg.ID); len(got.Items) != 0 {
+		t.Fatalf("an older addition still overrides the newer clear after full authoritative replay: %v", got.Items)
+	}
+}
+
+func TestRoomReactionReplayRepairsSeparatePages(t *testing.T) {
+	_, e, msg, add, clear := roomReactionReplayFixture(t)
+	add.ProviderID, clear.ProviderID = "room-reaction:z-add", "room-reaction:a-clear"
+	// A context or recent archive read sees the clear. A separate bounded
+	// forward replay contains only the earlier add at the same timestamp.
+	for _, in := range []application.IncomingReaction{clear, add} {
+		if err := e.ReceiveReaction(t.Context(), in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	clear.ArchiveEarlier = []string{add.ArchiveID}
+	for _, in := range []application.IncomingReaction{add, clear} {
+		if err := e.ReceiveReaction(t.Context(), in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := reactionSnapshot(t, e, msg.ID); len(got.Items) != 0 {
+		t.Fatalf("an older addition still overrides the newer clear after full authoritative replay: %v", got.Items)
+	}
+}
+
+func TestRoomReactionModeRoundTripKeepsClearedPeerHidden(t *testing.T) {
+	_, e, msg, add, clear := roomReactionReplayFixture(t)
+	ctx := t.Context()
+	add.ArchiveID, add.ArchiveScope, add.Historical = "", "", false
+	add.Actor, add.ProviderID = "bob@localhost", "room-reaction:public-add"
+	if err := e.SetRoomReactionPrivacy(ctx, add.AccountID, add.Address, application.RoomReactionPrivacy{Mode: application.RoomReactionsNonanonymous, Public: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.ReceiveReaction(ctx, add); err != nil {
+		t.Fatal(err)
+	}
+	if got := reactionSnapshot(t, e, msg.ID); len(got.Items) != 1 {
+		t.Fatal("fixture public reaction missing", got.Items)
+	}
+	if err := e.SetRoomReactionPrivacy(ctx, add.AccountID, add.Address, application.RoomReactionPrivacy{Mode: application.RoomReactionsSemianonymous}); err != nil {
+		t.Fatal(err)
+	}
+	clear.CreatedAt = add.CreatedAt.Add(time.Second)
+	clear.ProviderID = "room-reaction:private-clear"
+	if err := e.ReceiveReaction(ctx, clear); err != nil {
+		t.Fatal(err)
+	}
+	if got := reactionSnapshot(t, e, msg.ID); len(got.Items) != 0 {
+		t.Fatal("prior public reaction visible while private", got.Items)
+	}
+	if err := e.SetRoomReactionPrivacy(ctx, add.AccountID, add.Address, application.RoomReactionPrivacy{Mode: application.RoomReactionsNonanonymous, Public: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got := reactionSnapshot(t, e, msg.ID); len(got.Items) != 0 {
+		t.Fatalf("the previously cleared reaction has resurfaced in public mode: %v", got.Items)
 	}
 }

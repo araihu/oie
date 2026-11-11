@@ -235,17 +235,17 @@ func rememberDeferredRoomReactions(p *domain.RoomArchiveProgress, skipped domain
 		r.End = skipped.End
 	}
 	if !r.Boundary.IsZero() && !skipped.Start.After(r.Boundary) {
-		r.Boundary, r.Cursor = time.Time{}, ""
+		r.Boundary, r.Cursor, r.Anchor = time.Time{}, "", domain.ArchiveReactionAnchor{}
 	}
 	return previous != *r
 }
 
 func (m *Manager) recoverDeferredRoomReactions(ctx context.Context, host application.RoomArchiveHost, e *entry, s *mx.Session, c domain.Conversation, p *domain.RoomArchiveProgress, slot *roomSlot) (bool, error) {
 	r := &p.DeferredReactions
-	req := archivePageRequest{Start: r.Start, End: r.End, After: r.Cursor}
+	req := archivePageRequest{Start: r.Start, End: r.End, After: r.Cursor, ReactionAnchor: r.Anchor}
 	page, err := m.readArchivePage(ctx, e, s, c.Address, req)
 	if errors.Is(err, errArchiveCursor) && req.After != "" && !r.Boundary.IsZero() {
-		req.After, req.Start = "", r.Boundary
+		req.After, req.Start, req.ReactionAnchor = "", r.Boundary, domain.ArchiveReactionAnchor{}
 		page, err = m.readArchivePage(ctx, e, s, c.Address, req)
 		if err == nil && !page.Complete && page.Last == r.Cursor {
 			return false, errArchive
@@ -260,7 +260,7 @@ func (m *Manager) recoverDeferredRoomReactions(ctx context.Context, host applica
 	if page.Complete {
 		*r = domain.DeferredRoomReactions{}
 	} else {
-		r.Boundary, r.Cursor = page.Query.LastAt, page.Last
+		r.Boundary, r.Cursor, r.Anchor = page.Query.LastAt, page.Last, page.nextReactionAnchor(false)
 	}
 	if err := host.StoreRoomArchiveProgress(ctx, c.ID, *p); err != nil {
 		return false, err
@@ -272,7 +272,7 @@ func (m *Manager) recoverDeferredRoomReactions(ctx context.Context, host applica
 }
 
 func (m *Manager) extendRoomArchive(ctx context.Context, host application.RoomArchiveHost, e *entry, s *mx.Session, c domain.Conversation, p *domain.RoomArchiveProgress) error {
-	req := archivePageRequest{Backward: true, Before: p.Cursor, End: p.WindowStart, Prepend: p.Cursor != "" || p.RecentComplete}
+	req := archivePageRequest{Backward: true, Before: p.Cursor, End: p.WindowStart, Prepend: p.Cursor != "" || p.RecentComplete, ReactionAnchor: p.OlderReactionAnchor}
 	if !p.RecentComplete {
 		req.Start, req.End = p.WindowStart, p.WindowEnd
 	} else if !p.InitialComplete {
@@ -291,7 +291,7 @@ func (m *Manager) extendRoomArchive(ctx context.Context, host application.RoomAr
 	}
 	page, err := m.readArchivePage(ctx, e, s, c.Address, req)
 	if errors.Is(err, errArchiveCursor) && req.Before != "" && !p.Boundary.IsZero() {
-		req.Before, req.End = "", p.Boundary
+		req.Before, req.End, req.ReactionAnchor = "", p.Boundary, domain.ArchiveReactionAnchor{}
 		page, err = m.readArchivePage(ctx, e, s, c.Address, req)
 		if err == nil && !page.Complete && page.First == p.Cursor {
 			return errArchive
@@ -306,7 +306,7 @@ func (m *Manager) extendRoomArchive(ctx context.Context, host application.RoomAr
 	}
 	rememberDeferredRoomReactions(p, page.Query.Deferred)
 	if !page.Query.FirstAt.IsZero() {
-		p.Boundary, p.Cursor = page.Query.FirstAt, page.First
+		p.Boundary, p.Cursor, p.OlderReactionAnchor = page.Query.FirstAt, page.First, page.nextReactionAnchor(true)
 	}
 	if page.Complete {
 		if p.RecentComplete {
@@ -315,7 +315,7 @@ func (m *Manager) extendRoomArchive(ctx context.Context, host application.RoomAr
 			p.RecentComplete = true
 			p.Boundary = p.WindowStart
 		}
-		p.Cursor, p.ResumeEnd = "", time.Time{}
+		p.Cursor, p.ResumeEnd, p.OlderReactionAnchor = "", time.Time{}, domain.ArchiveReactionAnchor{}
 	}
 	if p.RecentComplete && !p.InitialComplete {
 		count, err := host.CountRoomArchiveMessages(ctx, c.ID, p.Boundary, p.WindowEnd)
@@ -331,10 +331,10 @@ func (m *Manager) catchUpRoomArchive(ctx context.Context, host application.RoomA
 	if p.CatchupEnd.IsZero() {
 		p.CatchupStart, p.CatchupEnd = p.CaughtUpThrough, cutoff
 	}
-	req := archivePageRequest{Start: p.CatchupStart, End: p.CatchupEnd, After: p.CatchupCursor}
+	req := archivePageRequest{Start: p.CatchupStart, End: p.CatchupEnd, After: p.CatchupCursor, ReactionAnchor: p.CatchupReactionAnchor}
 	page, err := m.readArchivePage(ctx, e, s, c.Address, req)
 	if errors.Is(err, errArchiveCursor) && req.After != "" && !p.CatchupBoundary.IsZero() {
-		req.After, req.Start = "", p.CatchupBoundary
+		req.After, req.Start, req.ReactionAnchor = "", p.CatchupBoundary, domain.ArchiveReactionAnchor{}
 		page, err = m.readArchivePage(ctx, e, s, c.Address, req)
 		if err == nil && !page.Complete && page.Last == p.CatchupCursor {
 			return errArchive
@@ -351,8 +351,9 @@ func (m *Manager) catchUpRoomArchive(ctx context.Context, host application.RoomA
 	if page.Complete {
 		p.CaughtUpThrough = p.CatchupEnd
 		p.CatchupStart, p.CatchupEnd, p.CatchupBoundary, p.CatchupCursor = time.Time{}, time.Time{}, time.Time{}, ""
+		p.CatchupReactionAnchor = domain.ArchiveReactionAnchor{}
 	} else {
-		p.CatchupBoundary, p.CatchupCursor = page.Query.LastAt, page.Last
+		p.CatchupBoundary, p.CatchupCursor, p.CatchupReactionAnchor = page.Query.LastAt, page.Last, page.nextReactionAnchor(false)
 	}
 	return host.StoreRoomArchiveProgress(ctx, c.ID, *p)
 }

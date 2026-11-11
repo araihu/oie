@@ -27,18 +27,29 @@ type ReactionProvider interface {
 	PrepareReaction(context.Context, domain.Account, domain.Conversation, domain.Message) (domain.OutgoingReaction, error)
 }
 
-// RoomReactionPrivacyHost records whether current room discovery permits
-// projecting a participant's address from stored reaction observations.
-type RoomReactionPrivacyHost interface {
-	SetRoomReactionPrivacy(context.Context, domain.ID, string, bool) error
+// RoomReactionPrivacy distinguishes a verified identity mode from permission
+// to show real addresses, which requires current room presence.
+type RoomReactionPrivacy struct {
+	Mode   string
+	Public bool
 }
 
-func (e *Engine) SetRoomReactionPrivacy(ctx context.Context, account domain.ID, address string, public bool) error {
+const (
+	RoomReactionsNonanonymous  = "nonanonymous"
+	RoomReactionsSemianonymous = "semianonymous"
+	RoomReactionsAnonymous     = "anonymous"
+)
+
+type RoomReactionPrivacyHost interface {
+	SetRoomReactionPrivacy(context.Context, domain.ID, string, RoomReactionPrivacy) error
+}
+
+func (e *Engine) SetRoomReactionPrivacy(ctx context.Context, account domain.ID, address string, privacy RoomReactionPrivacy) error {
 	repo, ok := e.repo.(RoomReactionPrivacyHost)
 	if !ok {
 		return ErrProtocolUnavailable
 	}
-	return repo.SetRoomReactionPrivacy(ctx, account, address, public)
+	return repo.SetRoomReactionPrivacy(ctx, account, address, privacy)
 }
 
 type MessageReactionCandidate struct {

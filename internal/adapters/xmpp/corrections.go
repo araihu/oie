@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"unicode/utf8"
 
+	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	"mellium.im/xmpp/disco"
 	"mellium.im/xmpp/jid"
@@ -61,10 +62,10 @@ func verifiedOccupantID(occupants []wireID) string {
 // A matching tag is not proof: rooms must advertise XEP-0421, otherwise a
 // participant could inject a pseudonym and correct another occupant's text.
 // The caller holds e.mu and e.historyMu.
-func recordRoomIdentity(e *entry, address string, info disco.Info) (roomDiscovered, public bool) {
+func recordRoomIdentity(e *entry, address string, info disco.Info) (roomDiscovered bool, mode string) {
 	room, err := jid.Parse(address)
 	if err != nil || room.Localpart() == "" || room.Resourcepart() != "" || address == e.account.Address {
-		return false, false
+		return false, ""
 	}
 	conference, advertised, semianonymous, nonanonymous, anonymous := false, false, false, false, false
 	for _, identity := range info.Identity {
@@ -80,12 +81,20 @@ func recordRoomIdentity(e *entry, address string, info disco.Info) (roomDiscover
 		e.occupantScopes = map[string]bool{}
 	}
 	if _, exists := e.occupantScopes[address]; len(e.occupantScopes) >= maxRoomSessions && !exists {
-		return false, false
+		return false, ""
 	}
 	e.occupantScopes[address] = conference && advertised
 	if e.semianonymousRooms == nil {
 		e.semianonymousRooms = map[string]bool{}
 	}
 	e.semianonymousRooms[address] = conference && semianonymous && !nonanonymous && !anonymous
-	return conference, conference && nonanonymous && !semianonymous && !anonymous
+	switch {
+	case conference && nonanonymous && !semianonymous && !anonymous:
+		mode = application.RoomReactionsNonanonymous
+	case e.semianonymousRooms[address]:
+		mode = application.RoomReactionsSemianonymous
+	case conference && anonymous && !nonanonymous && !semianonymous:
+		mode = application.RoomReactionsAnonymous
+	}
+	return conference, mode
 }
