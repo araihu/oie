@@ -99,6 +99,12 @@ normalized 0.27.0 compatibility baseline. The [specification](../oie-spec.md)
 uses the IDs already assigned on `main`, including B25 for initial room history.
 Alpha publication follows the [Oiê contributor policy](../../AGENTS.md).
 
+Native `make check`, `make build`, and `make build-cli` passed on `f76a2a4`,
+with Go 1.27.4 in both binaries. The contract comparison passed against both
+`388de70` and the normalized 0.27.0 baseline. Native browser tests passed for
+confirmed reset, conversation navigation, and retained and room archive
+search. Logs are in `tests/browser/artifacts/oie-main-final-native/`.
+
 ## User direction and scope
 
 The user wants any interface to operate Oiê through a distinct data/operations
