@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -22,6 +23,18 @@ import (
 const documentMarkdownLimit = 2 << 20
 
 var documentMarkdownSlots = make(chan struct{}, 2)
+
+// Margo's compiler is safe for concurrent use. Build the fixed configuration
+// once so request deadlines cover rendering the document.
+var documentMarkdownCompiler = sync.OnceValue(func() *margo.Compiler {
+	policy := margo.DefaultPolicy()
+	policy.RawHTML = margo.RawHTMLSanitized
+	policy.InputBytes = documentMarkdownLimit
+	policy.OutputBytes = 8 << 20
+	// An unescaped <user> placeholder should not disable an entire changelog.
+	// Only the static allowlist below is sent to the browser.
+	return margo.New(margo.WithHostPolicy(policy), margo.WithUnsafeHTML())
+})
 
 // This operation only projects caller-supplied text; it never fetches a URL or
 // changes engine data. Original-file streaming remains a separate operation.
@@ -77,9 +90,7 @@ func (s *Server) documentMarkdown(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(503)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-	defer cancel()
-	fragment, err := renderDocumentMarkdown(ctx, input.Source)
+	fragment, err := renderDocumentMarkdown(r.Context(), input.Source)
 	if err != nil {
 		w.WriteHeader(422)
 		return
@@ -89,14 +100,9 @@ func (s *Server) documentMarkdown(w http.ResponseWriter, r *http.Request) {
 }
 
 func renderDocumentMarkdown(ctx context.Context, source string) (string, error) {
-	policy := margo.DefaultPolicy()
-	policy.RawHTML = margo.RawHTMLSanitized
-	policy.InputBytes = documentMarkdownLimit
-	policy.OutputBytes = 8 << 20
-	// Source tags such as an unescaped <user> placeholder must not disable an
-	// entire changelog. Only the static allowlist below is sent to the browser;
-	// Margo's intermediate document HTML is never served or initialized.
-	compiler := margo.New(margo.WithHostPolicy(policy), margo.WithUnsafeHTML())
+	compiler := documentMarkdownCompiler()
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 	document, err := compiler.Compile(ctx, margo.Source{Name: "document.md", Content: []byte(source)})
 	if err != nil {
 		return "", err

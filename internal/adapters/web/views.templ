@@ -119,7 +119,9 @@ templ page(v view) {
 <script src="/ui/documents.js" defer></script>
 <script src="/ui/shared-content.js" defer></script>
 <script src="/ui/shared-actions.js" defer></script>
+<script src="/ui/room-archive.js" defer></script>
 <script src="/ui/timeline.js" defer></script>
+<script src="/ui/reset-data.js" defer></script>
 <script src="/ui/live.js" defer></script><script src="/ui/read-state.js" defer></script>
 <script src="/ui/emoji-picker.js" defer></script><script src="/ui/emoji-completion.js" defer></script><script src="/ui/mentions.js" defer></script>
 <script src="/ui/navigation.js"></script>
@@ -129,7 +131,7 @@ if v.DevBuildID!="" {
 <meta name="oie-csrf" content={v.CSRF}/>
 <noscript><style>.oie-cancel-form{display:flex!important}.oie-message-meta:has(>.oie-cancel-form){margin-top:4px}</style></noscript>
 		</head>
-		<body data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
+		<body data-reset-complete={v.Text.DeleteDataComplete} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
 @appFragment(v)
 		</body>
 	</html>
@@ -160,6 +162,9 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 			<h1 class="sr-only">{v.Text.AppName}</h1>
 			@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: desktopNavigation(v), SidebarAttrs: templ.Attributes{"id": "desktop-navigation"}, Content: workspace(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
 			@settings(v)
+			if v.CanResetData {
+				@resetDataDialog(v)
+			}
 			@about(v)
 			@accounts(v)
 @newConversation(v)
@@ -269,17 +274,7 @@ if v.NativeMessageSearch {
 				@textinput.TextInput(textinput.Config{ID: "conversation-search", Name: "q", Value: v.Query, Type: textinput.TypeSearch, Placeholder: v.Text.SearchEverything, InputAttrs: templ.Attributes{"aria-label":v.Text.SearchEverything,"style": "padding-left:2.5rem;border-radius:1.4rem;background:var(--oie-raised);border-color:var(--oie-border);color:var(--oie-text)"}})
 			</form>
 @messageSearchSlot(v)
-<div id="conversation-list-default" class="oie-list-default" hidden?={v.GlobalMessageSearch}>
-			<nav class="oie-filters" aria-label={ v.Text.Chats }>
-				@filterLink(v, "all", v.Text.All)
-				@filterLink(v, "unread", v.Text.Unread)
-				@filterLink(v, "favorites", v.Text.Favorites)
-				@filterLink(v, "groups", v.Text.Groups)
-			</nav>
-<div class="oie-conversation-scroll" id="conversation-list" data-version={v.conversationListVersion()}>
-@conversationList(v)
-</div>
-</div>
+@inboxList(v)
 			<div class="oie-list-account" x-data="{}">
 @profile(v,"compact")
 
@@ -296,15 +291,29 @@ templ menuTrigger(label string) {
 	}
 }
 
+templ inboxList(v view) {
+<div id="conversation-list-default" class="oie-list-default" data-inbox-scope={v.conversationScope()} data-inbox-filter={v.Filter} hidden?={v.GlobalMessageSearch}>
+			<nav class="oie-filters" aria-label={ v.Text.Chats }>
+				@filterLink(v, "all", v.Text.All)
+				@filterLink(v, "unread", v.Text.Unread)
+				@filterLink(v, "favorites", v.Text.Favorites)
+				@filterLink(v, "groups", v.Text.Groups)
+			</nav>
+<div class="oie-conversation-scroll" id="conversation-list" data-version={v.conversationListVersion()}>
+@conversationList(v)
+</div>
+</div>
+}
+
 templ filterLink(v view, key, label string) {
-	@link.Link(v.href("filter", key, "chat", ""), link.WithRootClass("oie-filter"), link.WithAttrs(templ.Attributes{"aria-current": strconv.FormatBool(v.Filter == key), "data-filter": key})) {
+	@link.Link(v.filterHref(key), link.WithRootClass("oie-filter"), link.WithAttrs(templ.Attributes{"aria-current": strconv.FormatBool(v.Filter == key), "data-filter": key})) {
 		{ label }
 	}
 }
 
 templ conversationRow(v view, c engineapi.Conversation) {
 	<li data-conversation-row={c.Id} data-version={v.conversationRowVersion(c)}>
-		@link.Link(v.href("chat", c.Id,"message","","infoView","","infoType","","infoCursor","","infoQuery","","infoFocus","","lang",v.Locale,"theme",v.Theme), link.WithRootClass("oie-chat-link"), link.WithAttrs(templ.Attributes{"data-conversation-id": c.Id, "aria-current": strconv.FormatBool(v.Selected != nil && v.Selected.Id == c.Id)})) {
+		@link.Link(v.href("chat", c.Id,"message","","infoView","","infoType","","infoCursor","","infoQuery","","infoFocus","","lang",v.Locale,"theme",v.Theme), link.WithRootClass("oie-chat-link"), link.WithAttrs(templ.Attributes{"data-conversation-id": c.Id, "aria-current": strconv.FormatBool(v.ChatID == c.Id)})) {
 			@profileAvatar(v,c.AccountId,c.Address,avatar.Config{Name: c.Title, Initials: chatInitials(c), Size: avatar.SizeSM, RootClass: "oie-chat-avatar"})
 			<div class="oie-row-content">
 				<div class="oie-row-top"><strong>{ c.Title }</strong><time datetime={ c.UpdatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ c.UpdatedAt.Format("15:04") }</time></div>
@@ -417,7 +426,7 @@ func sendKey(v view)string{if v.FormTarget=="send"&&v.field("operationKey")!=""{
 
 templ accounts(v view){
 @drawer.Drawer(drawer.Config{ID:"accounts",Title:v.Text.Accounts,PanelClass:v.accountDrawerClass()}){
-<div class={"oie-account-workspace",templ.KV("oie-account-list-workspace",v.accountScreen()=="list")}>
+<div class={"oie-account-workspace",templ.KV("oie-account-list-workspace",v.accountScreen()=="list"),templ.KV("oie-account-detail-workspace",v.accountScreen()=="detail")}>
 switch v.accountScreen() {
 case "add":
 @accountBack(v)
@@ -477,6 +486,7 @@ templ mutationFields(v view,target,key string){
 }
 templ accountDetail(v view,a engineapi.Account){
 <section class="oie-account-detail" data-account-id={a.Id}>
+<div id="account-detail-scroll" class="oie-account-detail-content">
 <header class="oie-account-detail-heading">
 @accountAvatar(v,a,avatar.SizeLG)
 <div><h2>{a.Label}</h2><p>{a.Address}</p></div>
@@ -489,6 +499,8 @@ if problem:=v.connectionError(a.Id);problem!="" {
 </div>
 @accountConnectionControls(v,a.Id)
 @link.Link(v.capabilitiesHref(a.Id),link.WithRootClass("oie-capabilities-link"),link.WithAttrs(templ.Attributes{"data-account-capabilities":a.Id})){<span><strong>{v.Text.Capabilities}</strong><small>{v.Text.CapabilitiesIntro}</small></span>@glyph(heroicons.Icon16SolidChevronRight)}
+</div>
+<footer class="oie-account-detail-footer">@disconnectAction(v,a.Id)</footer>
 </section>
 }
 templ accountAvatar(v view,a engineapi.Account,size avatar.Size){
@@ -508,7 +520,6 @@ if state:=connectionState(v,id);state=="not_connected"||state=="error" {
 <div data-form-feedback role="status" aria-live="polite"></div>
 }
 }
-@disconnectAction(v,id)
 </div>
 }
 templ connectionEndpoint(v view,id string){
@@ -520,7 +531,6 @@ if state:=connectionState(v,id);state=="connected"||state=="connecting"||state==
 @mutationFields(v,"disconnect-"+id,newOperationKey())
 <input type="hidden" name="accountId" value={id}/>
 @button.Button(button.WithType("submit"),button.WithAppearance(button.AppearancePlain)){ {v.Text.Disconnect} }
-<div data-form-feedback role="status" aria-live="polite"></div>
 }
 }
 }
@@ -610,6 +620,10 @@ if v.Unavailable {
 @emptystate.EmptyState(emptystate.Config{Title:v.Text.Unavailable,Description:v.Text.UnavailableBody})
 @link.Link(v.href()){ {v.Text.Retry} }
 </div>
+}else if len(v.Accounts)==0 {
+<div class="oie-list-state">
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.EmptyTitle,Action:emptyAccountAction(v)})
+</div>
 }else if len(v.Chats)==0 {
 <div class="oie-list-state">
 if v.Query!=""||v.Filter!="all" {
@@ -625,6 +639,12 @@ for _,c:=range v.Chats {
 }
 </ul>
 }
+}
+
+templ emptyAccountAction(v view) {
+	@link.Link(v.addAccountHref(), link.WithAppearance(link.AppearanceButton)) {
+		{ v.Text.AddAccount }
+	}
 }
 
 templ timeline(v view){
@@ -659,8 +679,14 @@ templ profileAvatarContent(v view,account,address string,cfg avatar.Config){
  cfg.Src=v.avatarSource(account,address);cfg.SrcExpr="oieAvatarSrc"
  fallback:=cfg;fallback.Src="";fallback.SrcExpr=""
 }}
-<div class="oie-avatar-initials" data-avatar-initials x-show="!oieAvatarSrc">@avatar.Avatar(fallback)</div>
-<template x-if="oieAvatarSrc">@avatar.Avatar(cfg)</template>
+<div class="oie-avatar-stack" x-data="{oieAvatarReady:false}" x-effect="oieAvatarSrc; oieAvatarReady=false" x-bind:data-avatar-ready="oieAvatarReady ? 'true' : 'false'"
+ x-on:load.capture="if ($event.target.getAttribute('src') === oieAvatarSrc && $event.target.naturalWidth > 0) oieAvatarReady=true"
+ x-on:error.capture="if ($event.target.getAttribute('src') === oieAvatarSrc) oieAvatarReady=false">
+ <div class="oie-avatar-initials" data-avatar-initials>@avatar.Avatar(fallback)</div>
+ <template x-if="oieAvatarSrc">
+  <div class="oie-avatar-photo">@avatar.Avatar(cfg)</div>
+ </template>
+</div>
 }
 
 templ avatarData(v view){

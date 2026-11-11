@@ -14,7 +14,7 @@ import (
 templ settings(v view) {
 	{{ ctx = expressions.With(ctx, expressions.Set{Tabs: expressions.Tabs{OptionsAriaLabel: v.Text.Settings}}) }}
 	@drawer.Drawer(drawer.Config{ID: "settings", Title: v.Text.Settings}) {
-		<div class="oie-settings">
+		<div class="oie-settings oie-settings-scroll">
 			@tabs.Tabs(tabs.Config{
 				ID: "settings-tabs",
 				Tabs: []tabs.Tab{
@@ -25,6 +25,9 @@ templ settings(v view) {
 			})
 			<p class="oie-settings-note" data-device-preference-warning role="status" hidden>{ v.Text.DevicePreferenceUnavailable }</p>
 		</div>
+		<footer class="oie-settings-footer">
+			@aboutEntry(v)
+		</footer>
 	}
 }
 
@@ -32,12 +35,12 @@ templ generalSettings(v view) {
 	<div class="oie-settings-section">
 		@appearanceSettings(v)
 		@languageSettings(v)
-		<h2>{ v.Text.EngineState }</h2>
-		<p>{ v.Role }</p>
 		if v.Preview {
 			<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
 		}
-		@aboutEntry(v)
+		if v.CanResetData {
+			@resetDataEntry(v)
+		}
 	</div>
 }
 

@@ -56,6 +56,19 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
   await open(2);const video=page.waitForEvent('download');await menu(2).getByRole('menuitem',{name:'Download',exact:true}).click();assert.equal((await video).suggestedFilename(),items[2].fileName);
   await page.locator('[data-shared-tab=documents]').click();await card(3).waitFor();await open(3);const doc=page.waitForEvent('download');await menu(3).getByRole('menuitem',{name:'Download',exact:true}).click();assert.equal(await fs.readFile(await (await doc).path(),'utf8'),'Document fixture\n');
   await open(6);assert.equal(await menu(6).getByRole('menuitem',{name:'Download',exact:true}).count(),0);await page.keyboard.press('Escape');
+  // Native file selection is asynchronous. Cancel must stay quiet, a failed
+  // save must be reported, and neither case may fall back to an anchor download.
+  await page.evaluate(()=>{window.nativeSaves=[];window.OieDesktop={saveFile:(url,name)=>{nativeSaves.push({url,name});return new Promise((resolve,reject)=>{window.finishNativeSave=resolve;window.failNativeSave=reject;});}};});
+  let nativeAnchorDownloads=0;const nativeDownload=()=>nativeAnchorDownloads++;page.on('download',nativeDownload);
+  await open(3);await menu(3).getByRole('menuitem',{name:'Download',exact:true}).click();await until(async()=>await page.evaluate(()=>nativeSaves.length)===1,'native document save requested');
+  assert.equal((await page.evaluate(()=>nativeSaves[0])).url,`/ui/shared-content/${items[3].id}/content?engineId=${engine}&download=1`);
+  await page.evaluate(()=>finishNativeSave(false));await until(async()=>await card(3).locator('[data-shared-action-status]').isHidden(),'cancelled document save stays quiet');
+  await open(3);await menu(3).getByRole('menuitem',{name:'Download',exact:true}).click();await until(async()=>await page.evaluate(()=>nativeSaves.length)===2,'second native document save');
+  await page.evaluate(()=>failNativeSave(Error('native_write_failed')));await until(async()=>await card(3).locator('[data-shared-action-status]').isVisible(),'failed document save feedback');
+  await page.locator('[data-shared-tab=media]').click();await card(0).waitFor();await open(0);await menu(0).getByRole('menuitem',{name:'Download',exact:true}).click();await until(async()=>await page.evaluate(()=>nativeSaves.length)===3,'native cached image save requested');
+  assert.equal((await page.evaluate(()=>nativeSaves[2])).url,`/ui/media/${hash}?download=${encodeURIComponent(items[0].fileName)}`);
+  await page.evaluate(()=>finishNativeSave(false));await until(async()=>await card(0).locator('[data-shared-action-status]').isHidden(),'cancelled image save stays quiet');
+  assert.equal(nativeAnchorDownloads,0);page.off('download',nativeDownload);await page.evaluate(()=>{delete window.OieDesktop;});
   await page.locator('[data-shared-tab=media]').click();await card(0).waitFor();await open(0);
   // A snapshot announces shared content before synchronizing message-menu slots.
   // Capture the surviving node only after that synchronization completes. Menu
@@ -73,7 +86,7 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
   await menu(0).getByRole('menuitem',{name:'Go to message',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#message-timeline'));assert.equal(documents.length,1);assert.equal(new URL(page.url()).searchParams.get('message'),items[0].message.id);
   // Network completion is earlier than application consumption. Wait for the
   // actual source-route settlement and its scoped SSE snapshot to be applied.
-  await until(async()=>await snapshotApplied()&&await page.evaluate(()=>{const s=window.catalogActionSettlement,generation=window.OieRuntime.generation;return s.routeGeneration===generation&&s.swapGeneration===generation&&generation===s.previousGeneration+1&&document.querySelector('#message-timeline')?.dataset.timelineBusy!=='true'&&document.querySelector('[data-navigation-status]')?.hidden}),'source route and initial live snapshot applied');
+  await until(async()=>await snapshotApplied()&&await page.evaluate(()=>{const s=window.catalogActionSettlement,generation=window.OieRuntime.generation;return s.routeGeneration===generation&&s.swapGeneration===generation&&generation===s.previousGeneration+1&&document.querySelector('#message-timeline')?.dataset.timelineBusy!=='true'}),'source route and initial live snapshot applied');
   assert(await page.evaluate(()=>window.catalogActionSettlement.copy.isConnected),'menu measurement starts from the applied live DOM');
   // Exercise the actual message action menu with the consumer theme overrides.
   const painted=el=>{

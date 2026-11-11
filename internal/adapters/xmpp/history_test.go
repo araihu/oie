@@ -22,17 +22,17 @@ func TestArchiveSenderCorrelationAndForwardedScope(t *testing.T) {
 		t.Fatalf("forwarded parse: %+v %v %v", in, ok, err)
 	}
 	manager := New(t.TempDir(), nil)
-	entry := &entry{account: account, archive: &archiveQuery{ID: "expected", Scope: account.Address}}
+	entry := &entry{account: account, archives: map[string]*archiveQuery{"expected": {ID: "expected", Scope: account.Address}}}
 	bad, _ := jid.Parse("mallory@localhost")
-	if err = manager.captureArchive(entry, stanza.Message{From: bad}, &result); err != nil || len(entry.archive.Messages) != 0 {
+	if err = manager.captureArchive(entry, stanza.Message{From: bad}, &result); err != nil || len(entry.archives["expected"].Messages) != 0 {
 		t.Fatal("foreign archive accepted")
 	}
 	result.QueryID = "stale"
-	if err = manager.captureArchive(entry, stanza.Message{}, &result); err != nil || len(entry.archive.Messages) != 0 {
+	if err = manager.captureArchive(entry, stanza.Message{}, &result); err != nil || len(entry.archives["expected"].Messages) != 0 {
 		t.Fatal("stale archive accepted")
 	}
 	result.QueryID = "expected"
-	if err = manager.captureArchive(entry, stanza.Message{}, &result); err != nil || len(entry.archive.Messages) != 1 {
+	if err = manager.captureArchive(entry, stanza.Message{}, &result); err != nil || len(entry.archives["expected"].Messages) != 1 {
 		t.Fatal("authenticated archive result lost")
 	}
 	foreign, _ := jid.Parse("carol@localhost")

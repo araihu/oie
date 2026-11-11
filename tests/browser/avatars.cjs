@@ -71,8 +71,23 @@ function thumbnail(color){
   const draft='Keep this draft while profile photos arrive';await page.locator('#message-composer').fill(draft);
   await page.locator('[data-account-switcher]:visible').click();const choice=page.locator(`[data-switch-account="${other}"]:visible`);await choice.focus();
   await page.evaluate(()=>{window.avatarFocus=document.activeElement;window.avatarRow=document.querySelector('[data-message-id]');const timeline=document.querySelector('#message-timeline');timeline.scrollTop=200;window.avatarScroll=timeline.scrollTop});
+  const stack=page.locator('#chat-header .oie-avatar-stack'),initialsLayer=stack.locator('[data-avatar-initials]'),photoLayer=stack.locator('.oie-avatar-photo');
+  const initialBounds=await stack.boundingBox();
+  let releaseAvatar;
+  const avatarGate=new Promise(resolve=>releaseAvatar=resolve);
+  const avatarURL=url=>url.pathname==='/ui/avatars/'+hashes[0];
+  await page.route(avatarURL,async route=>{await avatarGate;await route.continue();});
   set(account,'alice@fixture',hashes[0]);set(account,'bob@fixture',hashes[0]);set(account,'room@fixture',hashes[1]);set(other,'alice@fixture',hashes[1]);emit();
-  await until(async()=>await page.locator(peer).getAttribute('src')==='/ui/avatars/'+hashes[0],'late direct avatar');
+  try{
+   await until(async()=>await page.locator(peer).getAttribute('src')==='/ui/avatars/'+hashes[0],'late direct avatar');
+   assert(await initialsLayer.isVisible());
+   assert.equal(await photoLayer.evaluate(node=>getComputedStyle(node).opacity),'0');
+   assert.deepEqual(await stack.boundingBox(),initialBounds);
+  }finally{releaseAvatar();}
+  await until(async()=>await photoLayer.evaluate(node=>getComputedStyle(node).opacity==='1'),'avatar fade completed');
+  assert(await initialsLayer.isHidden());
+  assert.deepEqual(await stack.boundingBox(),initialBounds);
+  await page.unroute(avatarURL);
   await until(async()=>await page.locator(`${own}:visible img`).first().evaluate(img=>img.naturalWidth>0),'late own avatar');
   assert(await page.evaluate(()=>document.activeElement===window.avatarFocus));assert(await page.evaluate(()=>document.querySelector('[data-message-id]')===window.avatarRow));assert(await page.evaluate(()=>Math.abs(document.querySelector('#message-timeline').scrollTop-window.avatarScroll)<2));
   assert.equal(await page.locator('#message-composer').inputValue(),draft);

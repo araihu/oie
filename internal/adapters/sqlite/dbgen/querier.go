@@ -14,6 +14,7 @@ type Querier interface {
 	ClearContentHeads(ctx context.Context, ids string) error
 	CorrectionNeighbors(ctx context.Context, arg CorrectionNeighborsParams) ([]CorrectionNeighborsRow, error)
 	CountConversationUnread(ctx context.Context, conversationID string) (int64, error)
+	CountRoomArchiveMessages(ctx context.Context, arg CountRoomArchiveMessagesParams) (int64, error)
 	DeleteObsoleteSharedContent(ctx context.Context, arg DeleteObsoleteSharedContentParams) error
 	FindAvatar(ctx context.Context, arg FindAvatarParams) (Avatar, error)
 	FindConversation(ctx context.Context, arg FindConversationParams) (Conversation, error)
@@ -43,6 +44,7 @@ type Querier interface {
 	GetMessageReply(ctx context.Context, arg GetMessageReplyParams) (string, error)
 	GetMessageStar(ctx context.Context, messageID string) (GetMessageStarRow, error)
 	GetOperation(ctx context.Context, id string) (Operation, error)
+	GetRoomArchive(ctx context.Context, conversationID string) (GetRoomArchiveRow, error)
 	GetRoomIntent(ctx context.Context, conversationID string) (RoomIntent, error)
 	GetSharedContentItem(ctx context.Context, arg GetSharedContentItemParams) (GetSharedContentItemRow, error)
 	HasMessageRead(ctx context.Context, canonicalID string) (bool, error)
@@ -94,6 +96,7 @@ type Querier interface {
 	ListMessageHistorySources(ctx context.Context, arg ListMessageHistorySourcesParams) ([]ListMessageHistorySourcesRow, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
 	ListMessagesAfter(ctx context.Context, arg ListMessagesAfterParams) ([]Message, error)
+	ListRoomArchiveConversations(ctx context.Context, accountID string) ([]Conversation, error)
 	ListRoomIntents(ctx context.Context) ([]RoomIntent, error)
 	ListSharedContent(ctx context.Context, arg ListSharedContentParams) ([]ListSharedContentRow, error)
 	ListStarredMessages(ctx context.Context, arg ListStarredMessagesParams) ([]ListStarredMessagesRow, error)
@@ -113,6 +116,8 @@ type Querier interface {
 	PutConversationReadHead(ctx context.Context, arg PutConversationReadHeadParams) error
 	PutHistoryStatus(ctx context.Context, arg PutHistoryStatusParams) error
 	PutMessageStar(ctx context.Context, arg PutMessageStarParams) error
+	PutRoomArchiveMode(ctx context.Context, arg PutRoomArchiveModeParams) error
+	PutRoomArchiveProgress(ctx context.Context, arg PutRoomArchiveProgressParams) error
 	PutRoomIntent(ctx context.Context, arg PutRoomIntentParams) error
 	PutSharedContent(ctx context.Context, arg PutSharedContentParams) error
 	ReactionActorProfile(ctx context.Context, arg ReactionActorProfileParams) (ReactionActorProfileRow, error)

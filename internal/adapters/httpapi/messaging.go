@@ -210,7 +210,7 @@ func (s *Server) ListMessages(ctx context.Context, r engineapi.ListMessagesReque
 	if r.Params.Direction != nil && !r.Params.Direction.Valid() {
 		return nil, application.ErrInvalid
 	}
-	newer := r.Params.Direction != nil && *r.Params.Direction == engineapi.Newer
+	newer := r.Params.Direction != nil && *r.Params.Direction == engineapi.ListMessagesParamsDirectionNewer
 	var list []domain.Message
 	var err error
 	if newer {

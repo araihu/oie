@@ -21,7 +21,7 @@ if p.Kind=="link" {
 if !v.SharedCard && len(v.imagePreviews(p.MessageId))>1 {
 @dropdown.Dropdown(dropdown.Config{ID:"image-menu-"+p.Id,Label:v.Text.ImageActions,Trigger:imageMenuTrigger(v,p.Id),RootClass:"oie-image-menu",MenuAlign:dropdown.AlignEnd,Sections:imageActions(v,p)})
 }
-@previewThumbnail(v,p)
+<div class="oie-image-frame">@previewThumbnail(v,p)</div>
 <p class="oie-preview-status" x-show="previewStatus" x-text="previewStatus">{v.previewStatus(p)}</p>
 @previewImageActions(v)
 </div>

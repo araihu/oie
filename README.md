@@ -9,8 +9,18 @@ provenance are documented in [Branding](docs/branding.md).
 The alpha targets one owner with multiple protocol accounts. Device sync remains
 planned.
 
+The current release candidate is **v0.0.1-rc.0**. The first alpha, **v0.0.1**,
+requires improved initial room-history recovery. That is the first backlog
+priority, tracked as [B25](docs/history-bootstrap-discussion.md); the current
+recovery behavior is accepted in rc.0. macOS Apple Silicon and Ubuntu Linux
+x86_64 release packages and the per-user installer are available on
+[GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.0). See the
+[release notes](docs/releases/v0.0.1-rc.0.md).
+
+- [Desktop installation on macOS and Linux](docs/installation.md)
 - [Live browser setup and development accounts](docs/live-preview.md)
 - [Local CI loop](docs/local-ci.md)
+- [Native desktop build and lifecycle](docs/desktop.md)
 - [First specification](docs/oie-spec.md)
 - [Decision history](docs/unified-chat-discussion.md)
 - [Formatting feasibility](docs/oie-formatting-feasibility.md)
@@ -34,6 +44,12 @@ Attachment uploads, schedules, sync, PWA/offline and backup/restore remain later
 work.
 See [history recovery scope](docs/milestone-three-history.md). See [engine milestone notes](docs/milestone-two-engine.md) and
 [foundation notes](docs/milestone-one.md) for scope and invariants.
+
+The Wails desktop command embeds this same engine and interface. Closing its
+window keeps the engine running; explicit Quit stops it. See the
+[installation instructions](docs/installation.md) for the release installer,
+runtime dependencies and source installation through Go. The installer checks
+archive checksums and preserves app data during manual updates.
 
 Published account, peer and saved-room profile images now load into a local
 thumbnail cache and appear in the interface. Missing or inaccessible images keep

@@ -3,3 +3,12 @@
 .oie-conversation-search-up{display:inline-flex;transform:rotate(180deg)}
 
 .oie-conversation-search-coverage{margin:.25rem 0 0;font-size:.75rem;color:var(--oie-muted)}
+
+.oie-conversation-search[data-has-room-archive] .oie-conversation-search-coverage {
+ display:block!important;
+ block-size:1.25em;
+ overflow:hidden;
+ text-overflow:ellipsis;
+ white-space:nowrap;
+}
+.oie-conversation-search[data-has-room-archive] .oie-conversation-search-coverage[hidden] { visibility:hidden }
