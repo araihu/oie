@@ -4,18 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Oiê · Agendamento de mensagens</title>
+  <!-- goshtoso-dependencies -->
   <style>
     :root {
       color-scheme: light;
       --ink:#172725; --muted:#51645f; --line:#d7e0dc; --paper:#fff; --base:#eff3f0;
       --chat:#e6ede8; --bubble:#d7e9ee; --accent:#254d61; --accent-light:#e5eff3;
       --danger:#932e36; --ring:#1c6488;
+      --color-primary:var(--accent); --color-on-primary:#fff;
+      --color-surface:var(--paper); --color-on-surface:var(--ink); --color-outline:var(--line);
       font-family:system-ui,sans-serif; color:var(--ink); background:var(--base);
     }
     * { box-sizing:border-box }
     body { margin:0; min-width:320px }
     [hidden] { display:none !important }
-    :is(button,select,input,textarea) { font:inherit; color:inherit }
+    :is(select,input,textarea) { font:inherit; color:inherit }
     :is(button,select,input,textarea):focus-visible { outline:2px solid var(--ring); outline-offset:3px }
     button { cursor:pointer }
     .preview-bar {
@@ -87,7 +90,26 @@
     .bubble.own { align-self:flex-end; background:var(--bubble); border-radius:12px 12px 3px 12px }
     .bubble p { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; min-width:0 }
     .bubble time { color:var(--muted); font-size:11px; white-space:nowrap }
-    .composer { display:flex; align-items:end; gap:8px; padding:12px; border-top:1px solid var(--line) }
+    .composer { display:grid; gap:8px; padding:12px; border-top:1px solid var(--line) }
+    .composer-row { display:flex; align-items:end; gap:8px; min-width:0 }
+    #composer-actions { flex:none }
+    .edit-context {
+      display:flex; align-items:center; justify-content:space-between; gap:6px;
+      font-size:13px; color:var(--accent); border-inline-start:3px solid var(--accent); padding-inline-start:8px;
+    }
+    .edit-context button { min-height:30px; padding:2px 8px }
+    .composition-content { min-width:0 }
+    .attachments { display:flex; flex-wrap:wrap; gap:6px; margin:0; padding:0; list-style:none }
+    #draft-attachments { max-height:110px; overflow:auto }
+    .attachments li {
+      display:flex; align-items:center; min-width:0; max-width:100%; gap:7px; margin:0; padding:4px 7px;
+      border:1px solid var(--line); border-radius:7px; color:var(--ink); background:var(--paper); font-size:12px;
+    }
+    .attachments img { width:32px; height:32px; flex:none; object-fit:cover; border-radius:4px }
+    .attachments span { overflow-wrap:anywhere }
+    .attachments button { padding:0 4px; border:0; background:transparent; color:var(--accent) }
+    .composition-content .attachments { margin-block:5px }
+    .composition-content a { color:var(--accent); text-decoration:underline }
     .composer textarea {
       min-width:0; flex:1; resize:none; min-height:42px; max-height:110px; padding:10px 12px;
       background:var(--base); border:1px solid var(--line); border-radius:9px;
@@ -97,25 +119,28 @@
       border-left:1px solid var(--line); background:var(--paper);
     }
     .queue { margin:0; padding:6px 16px 12px; overflow:auto; list-style:none }
-    .queue li { padding:15px 0; border-bottom:1px solid var(--line) }
+    .queue > li { padding:15px 0; border-bottom:1px solid var(--line) }
     .queue .when {
       display:flex; align-items:center; gap:7px; color:var(--accent); font-size:13px; font-weight:700;
     }
     .queue p { margin:7px 0; font-size:14px; overflow-wrap:anywhere; white-space:pre-wrap }
     .queue .state { color:var(--muted); font-size:12px; margin:2px 0 }
-    .actions { display:flex; flex-wrap:wrap; gap:6px; margin-inline-start:-6px }
+    .actions { display:flex; flex-wrap:wrap; gap:2px; margin-inline-start:-5px }
+    .actions button { padding-inline:5px }
+    .actions button:disabled { opacity:.55; cursor:default }
     .actions .cancel { color:var(--danger) }
+    .actions .sendNow { font-weight:750 }
     .empty { margin:18px; color:var(--muted); font-size:14px }
     dialog {
       width:min(430px,calc(100vw - 26px)); color:var(--ink); padding:0; background:var(--paper);
       border:1px solid var(--line); border-radius:14px; box-shadow:0 20px 70px #12252245;
+      position:fixed; inset:0; margin:auto; max-height:calc(100dvh - 28px);
     }
     dialog::backdrop { background:#10251f66 }
     dialog form { padding:20px; display:grid; gap:14px }
     dialog h2 { font-size:19px; margin:0 }
     .field { display:grid; gap:5px; font-size:13px; font-weight:600; min-width:0 }
     .field :is(input,textarea) { width:100%; border:1px solid var(--line); border-radius:7px; padding:8px; background:var(--paper) }
-    .field textarea { resize:vertical }
     .zone-note,.confirm-text { margin:0; font-size:13px; color:var(--muted); overflow-wrap:anywhere }
     .form-error { margin:0; min-height:1lh; font-size:13px; color:var(--danger) }
     .dialog-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:8px }
@@ -166,11 +191,19 @@
         <button class="btn" id="queue-trigger" type="button" aria-controls="drawer"><i class="clock" aria-hidden="true"></i><span data-copy="scheduled"></span><span id="count"></span></button>
       </header>
       <div class="timeline" id="timeline" role="log" aria-labelledby="contact-name"></div>
-      <form class="composer" id="composer">
-        <label class="sr-only" for="draft" data-copy="message"></label>
-        <textarea id="draft" rows="1" maxlength="16384"></textarea>
-        <button class="btn icon-only" id="schedule-trigger" type="button" aria-haspopup="dialog"><i class="clock" aria-hidden="true"></i><span class="sr-only" data-copy="schedule"></span></button>
-        <button class="btn primary" type="submit" data-copy="send"></button>
+      <form class="composer" id="composer" x-data>
+        <div class="edit-context" id="edit-context" hidden>
+          <span data-copy="editTitle"></span>
+          <button class="btn quiet" type="button" id="discard-edit" data-copy="discardEdit"></button>
+        </div>
+        <ul class="attachments" id="draft-attachments" hidden></ul>
+        <div class="composer-row">
+          <input type="file" id="files" multiple hidden>
+          <button class="btn icon-only" id="attach" type="button"><span aria-hidden="true">＋</span><span class="sr-only" data-copy="attach"></span></button>
+          <label class="sr-only" for="draft" data-copy="message"></label>
+          <textarea id="draft" rows="1" maxlength="16384"></textarea>
+          <!-- composer-actions -->
+        </div>
       </form>
     </section>
     <aside class="drawer" id="drawer" aria-labelledby="drawer-title" hidden>
@@ -182,7 +215,7 @@
   <dialog id="editor" aria-labelledby="editor-title">
     <form id="edit-form">
       <h2 id="editor-title"></h2>
-      <label class="field" id="body-field"><span data-copy="message"></span><textarea id="body" rows="3" maxlength="16384"></textarea></label>
+      <div class="composition-content" id="schedule-content"></div>
       <label class="field" id="date-field"><span data-copy="sendAt"></span><input id="send-at" type="datetime-local" aria-describedby="zone-note form-error"></label>
       <p class="zone-note" id="zone-note"></p>
       <p class="confirm-text" id="confirm-text" data-copy="cancelPrompt" hidden></p>
@@ -199,30 +232,34 @@
       'pt-BR': {
         prototype:'Oiê · Protótipo de agendamento', language:'Idioma', zone:'Fuso de exibição', chats:'Conversas',
         scheduled:'Agendadas', today:'Hoje', message:'Mensagem', placeholder:'Digite uma mensagem',
-        schedule:'Agendar mensagem', send:'Enviar', close:'Fechar', empty:'Nenhuma mensagem agendada nesta conversa.',
+        schedule:'Agendar mensagem', send:'Enviar', sendNow:'Enviar agora', sendOptions:'Opções de envio',
+        close:'Fechar', empty:'Nenhuma mensagem agendada nesta conversa.',
         sendAt:'Enviar em', cancelPrompt:'Deseja cancelar o envio desta mensagem?', back:'Voltar', edit:'Editar',
-        reschedule:'Reagendar', cancel:'Cancelar envio', editTitle:'Editar mensagem agendada', save:'Salvar',
+        reschedule:'Reagendar', cancel:'Cancelar envio', editTitle:'Editando mensagem agendada', save:'Salvar',
+        discardEdit:'Cancelar edição', attach:'Anexar arquivos', remove:'Remover {file}', sent:'Mensagem enviada.',
         waiting:'Aguardando conexão', scheduledOK:'Mensagem agendada.', saved:'Alterações salvas.',
-        cancelled:'Envio cancelado.', missing:'Digite uma mensagem.', future:'Escolha uma data e hora no futuro.',
+        cancelled:'Envio cancelado.', missing:'Digite uma mensagem ou anexe um arquivo.', future:'Escolha uma data e hora no futuro.',
         invalidTime:'Esse horário não está disponível neste fuso. Escolha outro.',
         ambiguous:'Esse horário ocorre duas vezes neste fuso. Escolha outro.',
         received1:'Oi! Você pode me mandar o endereço do estúdio?', sent1:'Claro. Vou conferir a entrada certa.',
         received2:'Perfeito, obrigada!', exampleDraft:'Oi, Ana! A entrada é pela Rua das Flores, 28.',
-        queued1:'Lembrete: amanhã a gente se encontra às 10h.', queued2:'Te mando as referências assim que chegar.',
+        queued1:'Lembrete: amanhã a gente se encontra às 10h.', queued2:'Aqui estão as referências para o estúdio. https://example.org/studio',
       },
       en: {
         prototype:'Oiê · Scheduling prototype', language:'Language', zone:'Display time zone', chats:'Chats',
         scheduled:'Scheduled', today:'Today', message:'Message', placeholder:'Type a message',
-        schedule:'Schedule message', send:'Send', close:'Close', empty:'No scheduled messages in this chat.',
+        schedule:'Schedule message', send:'Send', sendNow:'Send now', sendOptions:'Send options',
+        close:'Close', empty:'No scheduled messages in this chat.',
         sendAt:'Send at', cancelPrompt:'Cancel this scheduled message?', back:'Back', edit:'Edit',
-        reschedule:'Reschedule', cancel:'Cancel send', editTitle:'Edit scheduled message', save:'Save',
+        reschedule:'Reschedule', cancel:'Cancel send', editTitle:'Editing scheduled message', save:'Save',
+        discardEdit:'Discard changes', attach:'Attach files', remove:'Remove {file}', sent:'Message sent.',
         waiting:'Waiting for connection', scheduledOK:'Message scheduled.', saved:'Changes saved.',
-        cancelled:'Send cancelled.', missing:'Enter a message.', future:'Choose a date and time in the future.',
+        cancelled:'Send cancelled.', missing:'Enter a message or attach a file.', future:'Choose a date and time in the future.',
         invalidTime:'This time is unavailable in this zone. Choose another.',
         ambiguous:'This time occurs twice in this zone. Choose another.',
         received1:'Hi! Can you send me the studio address?', sent1:'Of course. I’ll check which entrance to use.',
         received2:'Perfect, thanks!', exampleDraft:'Hi Ana! Use the entrance at 28 Rua das Flores.',
-        queued1:'Reminder: we’re meeting tomorrow at 10.', queued2:'I’ll send the references when I arrive.',
+        queued1:'Reminder: we’re meeting tomorrow at 10.', queued2:'Here are the studio references. https://example.org/studio',
       },
     };
     const $ = id => document.getElementById(id);
@@ -237,10 +274,12 @@
     ];
     const queue = [
       {id:1, key:'queued1', at:now + 21 * 60 * minute},
-      {id:2, key:'queued2', at:now - 5 * minute},
+      {id:2, key:'queued2', at:now - 5 * minute, attachments:[{name:'studio-reference.pdf'}]},
     ];
     let nextId = 3;
-    let action, toastTimer;
+    let action, toastTimer, editing;
+    let draftFiles = [];
+    const previewURLs = new Set();
     const mobile = matchMedia('(max-width:760px)');
     let drawerOpen = !mobile.matches;
 
@@ -269,6 +308,101 @@
       return item.key ? text(item.key) : item.body;
     }
 
+    const menuTrigger = () => $('composer-actions-menu').querySelector('[data-popover-trigger] button');
+    const hasContent = item => !!(item.body.trim() || item.attachments.length);
+
+    function composition() {
+      return {body:$('draft').value, attachments:[...draftFiles]};
+    }
+
+    function setComposition(item) {
+      $('draft').value = item.body;
+      draftFiles = [...item.attachments];
+      renderComposer();
+    }
+
+    function prunePreviews() {
+      const retained = new Set();
+      for (const item of [...queue, ...messages, {attachments:draftFiles}, editing?.draft]) {
+        for (const file of item?.attachments ?? []) retained.add(file.preview);
+      }
+      for (const url of previewURLs) {
+        if (retained.has(url)) continue;
+        URL.revokeObjectURL(url);
+        previewURLs.delete(url);
+      }
+    }
+
+    function renderFiles(list, files, remove) {
+      list.replaceChildren();
+      list.hidden = files.length === 0;
+      for (const [index,file] of files.entries()) {
+        const row = document.createElement('li');
+        if (file.preview) {
+          const image = document.createElement('img');
+          image.src = file.preview;
+          image.alt = '';
+          row.append(image);
+        }
+        const label = document.createElement('span');
+        label.textContent = file.name;
+        row.append(label);
+        if (remove) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = '×';
+          button.setAttribute('aria-label', text('remove').replace('{file}',file.name));
+          button.addEventListener('click', () => remove(index));
+          row.append(button);
+        }
+        list.append(row);
+      }
+    }
+
+    function renderContent(item) {
+      const content = document.createElement('div');
+      content.className = 'composition-content';
+      const body = name(item);
+      if (body) {
+        const paragraph = document.createElement('p');
+        let offset = 0;
+        for (const match of body.matchAll(/https?:\/\/[^\s<>]+/g)) {
+          const url = match[0].replace(/[.,!?;)]+$/, '');
+          const link = document.createElement('a');
+          link.href = url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = url;
+          paragraph.append(body.slice(offset,match.index),link);
+          offset = match.index + url.length;
+        }
+        paragraph.append(body.slice(offset));
+        content.append(paragraph);
+      }
+      if (item.attachments?.length) {
+        const list = document.createElement('ul');
+        list.className = 'attachments';
+        renderFiles(list,item.attachments);
+        content.append(list);
+      }
+      return content;
+    }
+
+    function renderComposer() {
+      $('edit-context').hidden = !editing;
+      $('send-action').querySelector('span span').textContent = text(editing ? 'save' : 'send');
+      $('schedule-action').querySelector('span').textContent = text('schedule');
+      $('composer-actions').setAttribute('aria-label', text('sendOptions'));
+      menuTrigger().setAttribute('aria-label', text('sendOptions'));
+      menuTrigger().disabled = !!editing;
+      renderFiles($('draft-attachments'), draftFiles, index => {
+        draftFiles.splice(index,1);
+        renderComposer();
+        prunePreviews();
+        $('attach').focus();
+      });
+    }
+
     function time(instant, options) {
       const node = document.createElement('time');
       node.dateTime = new Date(instant).toISOString();
@@ -292,9 +426,7 @@
         }
         const bubble = document.createElement('article');
         bubble.className = 'bubble' + (item.own ? ' own' : '');
-        const body = document.createElement('p');
-        body.textContent = name(item);
-        bubble.append(body, time(item.at, {timeStyle:'short'}));
+        bubble.append(renderContent(item), time(item.at, {timeStyle:'short'}));
         fragment.append(bubble);
       }
       timeline.replaceChildren(fragment);
@@ -315,9 +447,7 @@
         clock.className = 'clock';
         clock.setAttribute('aria-hidden','true');
         when.append(clock, time(item.at, {dateStyle:'medium',timeStyle:'short'}));
-        const body = document.createElement('p');
-        body.textContent = name(item);
-        row.append(when, body);
+        row.append(when, renderContent(item));
         if (item.at <= Date.now()) {
           const state = document.createElement('p');
           state.className = 'state';
@@ -326,14 +456,26 @@
         }
         const actions = document.createElement('div');
         actions.className = 'actions';
-        for (const kind of ['edit','reschedule','cancel']) {
+        for (const kind of ['sendNow','edit','reschedule','cancel']) {
           const button = document.createElement('button');
           button.type = 'button';
           button.className = 'btn quiet ' + kind;
           button.dataset.item = item.id;
           button.dataset.action = kind;
           button.textContent = text(kind);
-          button.addEventListener('click', () => openEditor(kind,item,button));
+          button.disabled = editing?.item === item || kind === 'edit' && !!editing;
+          button.addEventListener('click', () => {
+            if (kind === 'sendNow') {
+              queue.splice(queue.indexOf(item),1);
+              send({body:name(item), attachments:item.attachments});
+              renderQueue();
+              $('close-drawer').focus();
+            } else if (kind === 'edit') {
+              startEdit(item);
+            } else {
+              openEditor(kind,item,button);
+            }
+          });
           actions.append(button);
         }
         row.append(actions);
@@ -345,26 +487,27 @@
       document.title = text('prototype');
       for (const node of document.querySelectorAll('[data-copy]')) node.textContent = text(node.dataset.copy);
       $('draft').placeholder = text('placeholder');
+      renderComposer();
       renderChat();
       renderQueue();
     }
 
-    function openEditor(kind, item, trigger) {
-      action = {kind, item, trigger};
-      const editing = kind === 'edit' || kind === 'schedule';
-      const timing = kind === 'reschedule' || kind === 'schedule';
-      $('body-field').hidden = !editing;
+    function openEditor(kind, item, trigger, draft) {
+      action = {kind, item, trigger, draft};
+      const timing = kind !== 'cancel';
+      $('schedule-content').replaceChildren();
+      $('schedule-content').hidden = kind !== 'schedule';
+      if (draft) $('schedule-content').append(renderContent(draft));
       $('date-field').hidden = $('zone-note').hidden = !timing;
       $('confirm-text').hidden = kind !== 'cancel';
-      $('body').value = item ? name(item) : $('draft').value;
       $('send-at').value = wallTime(item?.at ?? Date.now() + 60 * minute);
       $('zone-note').textContent = $('zone').selectedOptions[0].label;
-      $('editor-title').textContent = text(kind === 'edit' ? 'editTitle' : kind);
-      $('confirm').textContent = text(kind === 'edit' ? 'save' : kind);
+      $('editor-title').textContent = text(kind);
+      $('confirm').textContent = text(kind);
       $('confirm').className = 'btn ' + (kind === 'cancel' ? 'danger' : 'primary');
       $('form-error').textContent = '';
       $('editor').showModal();
-      $(timing ? 'send-at' : editing ? 'body' : 'dismiss').focus();
+      $(timing ? 'send-at' : 'dismiss').focus();
     }
 
     function announce(key) {
@@ -374,17 +517,82 @@
       toastTimer = setTimeout(() => {$('toast').hidden = true;}, 2600);
     }
 
-    $('composer').addEventListener('submit', event => {
-      event.preventDefault();
-      const body = $('draft').value;
-      if (!body.trim()) return $('draft').focus();
-      messages.push({body, at:Date.now(), own:true});
-      $('draft').value = '';
+    function send(item) {
+      messages.push({...item, at:Date.now(), own:true});
       renderChat();
       $('timeline').scrollTop = $('timeline').scrollHeight;
+      announce('sent');
+    }
+
+    function startEdit(item) {
+      if (editing) return;
+      editing = {
+        item,
+        draft:composition(),
+        selection:[$('draft').selectionStart,$('draft').selectionEnd],
+      };
+      if (mobile.matches) drawerOpen = false;
+      setComposition({body:name(item), attachments:item.attachments ?? []});
+      renderQueue();
+      $('draft').focus();
+      $('draft').setSelectionRange($('draft').value.length,$('draft').value.length);
+    }
+
+    function finishEdit() {
+      const {draft,selection} = editing;
+      editing = null;
+      setComposition(draft);
+      renderQueue();
+      prunePreviews();
+      $('draft').focus();
+      $('draft').setSelectionRange(...selection);
+    }
+
+    $('attach').addEventListener('click', () => $('files').click());
+    $('files').addEventListener('change', event => {
+      for (const file of event.target.files) {
+        const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : '';
+        if (preview) previewURLs.add(preview);
+        draftFiles.push({name:file.name, preview});
+      }
+      event.target.value = '';
+      renderComposer();
+    });
+    $('discard-edit').addEventListener('click', finishEdit);
+    $('composer').addEventListener('keydown', event => {
+      if (event.key === 'Escape' && editing) {
+        event.preventDefault();
+        finishEdit();
+      }
+    });
+    $('composer').addEventListener('submit', event => {
+      event.preventDefault();
+      const draft = composition();
+      if (!hasContent(draft)) {
+        announce('missing');
+        return $('draft').focus();
+      }
+      if (editing) {
+        delete editing.item.key;
+        Object.assign(editing.item,draft);
+        finishEdit();
+        return announce('saved');
+      }
+      send(draft);
+      setComposition({body:'', attachments:[]});
       $('draft').focus();
     });
-    $('schedule-trigger').addEventListener('click', event => openEditor('schedule',null,event.currentTarget));
+    window.openSchedulingDialog = () => {
+      if (editing) return;
+      const trigger = menuTrigger();
+      if (trigger.getAttribute('aria-expanded') === 'true') trigger.click();
+      const draft = composition();
+      if (!hasContent(draft)) {
+        announce('missing');
+        return requestAnimationFrame(() => $('draft').focus());
+      }
+      requestAnimationFrame(() => openEditor('schedule',null,trigger,draft));
+    };
     $('queue-trigger').addEventListener('click', () => {drawerOpen = !drawerOpen; renderQueue(); if(drawerOpen) $('close-drawer').focus();});
     function closeDrawer() {
       drawerOpen = false;
@@ -408,10 +616,8 @@
     });
     $('edit-form').addEventListener('submit', event => {
       event.preventDefault();
-      const {kind,item} = action;
-      const body = $('body').value;
+      const {kind,item,draft} = action;
       const error = key => {$('form-error').textContent = text(key);};
-      if ((kind === 'schedule' || kind === 'edit') && !body.trim()) return error('missing');
       let at;
       if (kind === 'schedule' || kind === 'reschedule') {
         if (!$('send-at').value) return error('future');
@@ -422,12 +628,9 @@
         if (at <= Date.now()) return error('future');
       }
       if (kind === 'schedule') {
-        queue.push({id:nextId++, body, at});
+        queue.push({id:nextId++, ...draft, at});
         drawerOpen = true;
-        $('draft').value = '';
-      } else if (kind === 'edit') {
-        delete item.key;
-        item.body = body;
+        setComposition({body:'', attachments:[]});
       } else if (kind === 'reschedule') {
         item.at = at;
       } else {
@@ -435,10 +638,11 @@
       }
       renderQueue();
       $('editor').close();
+      prunePreviews();
       announce(kind === 'cancel' ? 'cancelled' : kind === 'schedule' ? 'scheduledOK' : 'saved');
     });
     $('locale').addEventListener('change', event => {
-      const wasExample = $('draft').value === text('exampleDraft');
+      const wasExample = !editing && $('draft').value === text('exampleDraft');
       document.documentElement.lang = event.target.value;
       if (wasExample) $('draft').value = text('exampleDraft');
       translate();

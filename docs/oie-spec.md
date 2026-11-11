@@ -323,9 +323,19 @@ This reachability restriction is temporary. Full centralized sync should eventua
 
 **OPEN O06:** permanent-failure recovery, ambiguous acceptance, ordering of eligible sends, staged-upload cutoff, and explicit engine migration/ownership transfer. Recurring schedules are not selected.
 
-The [scheduling API contract](../api/message-scheduling.overlay.yaml) records
-the accepted HTTP shape. The [scheduling prototype](prototypes/message-scheduling.html)
-illustrates one placement for the scheduler and pending actions for design review.
+**AGREED:** The composer uses Goshtoso Split Button for Send and Schedule.
+Scheduling captures the full composition, including text, links, images and
+other supported attachments and message content. Edit opens that composition
+in the same composer and restores any prior draft when the user saves or
+discards the edit. Scheduled items offer Send now, which makes the same intent
+eligible immediately and uses the same atomic cutoff as edit, reschedule and
+cancel. Delivery still depends on the owning engine and provider connectivity.
+
+The [OpenAPI draft](../api/message-scheduling.overlay.yaml) covers the earlier
+plain-text increment. Full composition and Send now need contract revisions,
+including attachment staging under O09. The
+[scheduling prototype](prototypes/message-scheduling.html) demonstrates the
+agreed controls with local example data.
 
 ### 5.4 Explicit Send while the UI is offline
 

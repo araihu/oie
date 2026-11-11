@@ -48,3 +48,11 @@ BFF, then triggering a new source rebuild. The engine stayed running. A later
 automatic reload with an open event stream passed. This recovery does not fix
 Air's overlapping-build race. Coalescing rapid edits may reduce its frequency;
 an upstream ownership fix remains development-tool follow-up work.
+
+## Scheduling prototype
+
+From the repository root, run `go run ./docs/prototypes/scheduling-preview`
+and open [the prototype](http://localhost:58887/message-scheduling.html).
+The server reads the HTML on each request and renders the Split Button using
+the pinned Goshtoso dependency. The example conversation and selected files
+stay in the browser.
