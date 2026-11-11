@@ -21,14 +21,15 @@ const maxRoomSessions = 256
 const maxOwnRoomMessages = 512
 
 type roomSlot struct {
-	conversation     domain.Conversation
-	snapshot         domain.RoomSession
-	session          *mx.Session
-	requestID        string
-	joinDeadline     time.Time
-	leaving          bool
-	mentionOccupants map[string]observedMention
-	ownOccupantID    string
+	conversation             domain.Conversation
+	snapshot                 domain.RoomSession
+	session                  *mx.Session
+	requestID                string
+	joinDeadline             time.Time
+	leaving                  bool
+	mentionOccupants         map[string]observedMention
+	ownOccupantID            string
+	recentReactionsRecovered bool
 }
 type ownRoomMessage struct{ address, body string }
 type roomSessionHost interface {
@@ -406,8 +407,12 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 		return true
 	}
 	snapshot := slot.snapshot
+	session := slot.session
 	e.mu.Unlock()
 	m.notifyRoom(ctx, e, slot, snapshot)
+	if snapshot.State == "joined" && pendingRoomReactionReplay(e, session, address) != nil {
+		m.WakeRoomArchive(e.account.ID)
+	}
 	return true
 }
 func (m *Manager) resetRoomSessions(ctx context.Context, e *entry, s *mx.Session) {

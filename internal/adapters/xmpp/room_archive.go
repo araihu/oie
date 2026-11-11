@@ -3,6 +3,7 @@ package xmpp
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/araihu/oie/internal/application"
@@ -110,7 +111,11 @@ func (m *Manager) roomArchiveTurn(waitCtx, sessionCtx context.Context, host appl
 		return domain.RoomArchiveResult{}, err
 	}
 	result := domain.RoomArchiveResult{Archive: a, Outcome: "complete"}
-	if priority == archiveAutomatic && a.InitialComplete && (a.OlderComplete || a.Mode == "on_demand") && !a.CaughtUpThrough.Before(cutoff) {
+	var reactionReplay *roomSlot
+	if a.InitialComplete && (priority == archiveAutomatic || request.Action == "focus") {
+		reactionReplay = pendingRoomReactionReplay(e, s, c.Address)
+	}
+	if priority == archiveAutomatic && a.InitialComplete && (a.OlderComplete || a.Mode == "on_demand") && !a.CaughtUpThrough.Before(cutoff) && reactionReplay == nil {
 		return result, nil
 	}
 	capability, err := roomArchiveSupport(sessionCtx, e, s, c.Address)
@@ -135,6 +140,11 @@ func (m *Manager) roomArchiveTurn(waitCtx, sessionCtx context.Context, host appl
 	if availability != "supported" {
 		result.Outcome = availability
 		return result, nil
+	}
+	if reactionReplay != nil {
+		if err := m.recoverRecentRoomReactions(sessionCtx, e, s, c.Address, cutoff, reactionReplay); err != nil {
+			return result, err
+		}
 	}
 	if request.Action == "search" || request.Action == "context" || request.Action == "older" && request.Anchor != nil &&
 		(p.Boundary.IsZero() || request.Anchor.CreatedAt.UnixMilli() < p.Boundary.UnixMilli()) {
@@ -162,6 +172,37 @@ func (m *Manager) roomArchiveTurn(waitCtx, sessionCtx context.Context, host appl
 		result.Outcome = "stored"
 	}
 	return result, err
+}
+
+func pendingRoomReactionReplay(e *entry, session *mx.Session, room string) *roomSlot {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	slot, semianonymous, verified := roomReactionSupport(e, room)
+	if slot == nil || slot.session != session || !semianonymous || !verified || slot.ownOccupantID == "" || slot.recentReactionsRecovered {
+		return nil
+	}
+	return slot
+}
+
+// A room can be caught up before self-presence identifies our occupant. Read
+// its latest page again once per join, without advancing the text checkpoints.
+func (m *Manager) recoverRecentRoomReactions(ctx context.Context, e *entry, s *mx.Session, room string, cutoff time.Time, slot *roomSlot) error {
+	page, err := m.readArchivePage(ctx, e, s, room, archivePageRequest{Backward: true, End: cutoff})
+	if err != nil || page.Query.OwnReactionActor == "" {
+		return err
+	}
+	page.Query.Messages = slices.DeleteFunc(page.Query.Messages, func(in application.Incoming) bool {
+		return in.Reaction == nil
+	})
+	if err = m.ingestArchivePage(ctx, page); err != nil {
+		return err
+	}
+	e.mu.Lock()
+	if e.rooms[room] == slot && slot.session == s && page.Query.OwnReactionActor == roomReactionActor(e.account.ID, room, slot.ownOccupantID) {
+		slot.recentReactionsRecovered = true
+	}
+	e.mu.Unlock()
+	return nil
 }
 
 func (m *Manager) extendRoomArchive(ctx context.Context, host application.RoomArchiveHost, e *entry, s *mx.Session, c domain.Conversation, p *domain.RoomArchiveProgress) error {

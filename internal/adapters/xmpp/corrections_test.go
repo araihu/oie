@@ -121,7 +121,7 @@ func TestArchiveCorrectionKeepsSourceIDSeparateFromRoomSID(t *testing.T) {
 	}
 	account := domain.Account{ID: "019a5df0-0000-7000-8000-000000000001", Address: "alice@example.test"}
 	for _, trusted := range []bool{false, true} {
-		in, ok, err := archivedIncoming(account, "room@conference.example.test", &result, true, trusted)
+		in, ok, err := archivedIncoming(account, "room@conference.example.test", &result, archiveTrust{SIDVerified: true, OccupantVerified: trusted})
 		if err != nil || !ok {
 			t.Fatal(err)
 		}

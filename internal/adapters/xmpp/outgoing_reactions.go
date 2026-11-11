@@ -139,7 +139,7 @@ func ownRoomReactionActor(e *entry, room string) (*roomSlot, string) {
 		if !occupantVerified {
 			return nil, ""
 		}
-		return slot, roomReactionActor(e, room, slot.ownOccupantID)
+		return slot, roomReactionActor(e.account.ID, room, slot.ownOccupantID)
 	}
 	from, err := jid.Parse(room + "/" + slot.snapshot.Nickname)
 	if err != nil || liveRoomSenderAddressLocked(e, from) != e.account.Address {

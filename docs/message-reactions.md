@@ -56,12 +56,15 @@ The XMPP adapter uses XEP-0444. Direct messages use origin/message identifiers;
 room targets require room-issued stanza identifiers from a room advertising
 stable assignment. In a joined non-anonymous room, live reactions use the
 verified real bare JID. In a joined semianonymous room advertising XEP-0421,
-live reactions use a validated occupant ID. The engine binds its own ID to the
-room's self-presence confirmation and scopes opaque actor keys to the account
-and room. The reaction list shows those participants by room nickname, without
-contact addresses or profile photos. A verified target can be a retained
-historical message. Historical room reaction controls and unverifiable live
-actors are skipped. Advertised restrictions constrain outgoing choices;
+live and archived reactions use a validated occupant ID. The engine binds its
+own ID to the room's self-presence confirmation and scopes opaque actor keys
+to the account and room. The reaction list shows those participants by room
+nickname, without contact addresses or profile photos. The engine accepts
+archived reactions from authenticated, stable room archive pages and orders
+them by the archive timestamp. Once per join, it rereads the latest archive
+page for already synchronized rooms to recover recent reactions previously
+skipped. That read leaves text history checkpoints intact. Advertised
+restrictions constrain outgoing choices;
 an absent advertisement is distinct from a known zero or empty allowlist.
 
 Own and incoming sets are bounded to eight distinct Unicode emoji graphemes.

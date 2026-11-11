@@ -98,6 +98,7 @@ type testArchiveHost struct {
 	archive    domain.RoomArchive
 	messages   map[string]domain.Message
 	failInsert bool
+	reactions  []application.IncomingReaction
 }
 
 func (h *testArchiveHost) RoomArchive(context.Context, domain.ID) (domain.RoomArchive, error) {
@@ -122,6 +123,10 @@ func (h *testArchiveHost) CountRoomArchiveMessages(_ context.Context, _ domain.I
 func (h *testArchiveHost) Receive(_ context.Context, in application.Incoming) error {
 	if h.failInsert {
 		return errors.New("test write failure")
+	}
+	if in.Reaction != nil {
+		h.reactions = append(h.reactions, *in.Reaction)
+		return nil
 	}
 	h.messages[in.ArchiveID] = domain.Message{
 		ID: domain.ID(in.ArchiveID), AccountID: h.room.AccountID, ConversationID: h.room.ID,
@@ -294,5 +299,67 @@ func TestRoomArchiveSearchDiscoversCapabilityAndKeepsCoverage(t *testing.T) {
 	}
 	if _, err := m.RequestRoomArchive(t.Context(), e.account, host.room, domain.RoomArchiveRequest{Action: "search", Query: "changed", Cursor: result.NextCursor}); !errors.Is(err, application.ErrInvalid) {
 		t.Fatal("search cursor accepted for a different term", err)
+	}
+}
+
+func TestSemianonymousRoomRecoversRecentArchivedReactionsAfterJoin(t *testing.T) {
+	at := time.Date(2026, 11, 10, 22, 0, 0, 0, time.UTC)
+	cutoff := at.Add(time.Minute)
+	queries := make(chan testArchiveIQ, 4)
+	m, e, host := archiveFixture(t, func(iq testArchiveIQ, _ int) string {
+		queries <- iq
+		page := iq.page(true, testArchiveMessage{id: "peer", at: at},
+			testArchiveMessage{id: "own", at: at.Add(time.Second)},
+			testArchiveMessage{id: "foreign", at: at.Add(2 * time.Second)},
+			testArchiveMessage{id: "ordinary", at: at.Add(3 * time.Second)})
+		// The fixtures share nicknames to verify that only the occupant ID
+		// distinguishes ownership. The foreign inner sender is never trusted.
+		peer := `<occupant-id xmlns="urn:xmpp:occupant-id:0" id="peer-id"/><reactions xmlns="urn:xmpp:reactions:0" id="source"><reaction>❤</reaction></reactions>`
+		own := `<occupant-id xmlns="urn:xmpp:occupant-id:0" id="own-id"/><reactions xmlns="urn:xmpp:reactions:0" id="source"/>`
+		page = strings.Replace(page, `id="peer" type="groupchat"><body>Fixture message</body>`, `id="peer" type="groupchat">`+peer, 1)
+		page = strings.Replace(page, `id="own" type="groupchat"><body>Fixture message</body>`, `id="own" type="groupchat">`+own, 1)
+		page = strings.Replace(page, iq.To.String()+`/Bob" id="foreign" type="groupchat"><body>Fixture message</body>`, `other@conference.example.test/Bob" id="foreign" type="groupchat">`+peer, 1)
+		return page
+	})
+	room := host.room.Address
+	e.archiveCapabilities = map[string]roomArchiveCapability{room: {mam: true}}
+	e.semianonymousRooms = map[string]bool{room: true}
+	e.occupantScopes = map[string]bool{room: true}
+	slot := e.rooms[room]
+	slot.session = e.session
+	original := domain.RoomArchiveProgress{WindowStart: at.Add(-time.Hour), WindowEnd: at, CaughtUpThrough: cutoff,
+		RecentComplete: true, InitialComplete: true, OlderComplete: true, Availability: "supported", TextSearch: "unsupported"}
+	host.archive.RoomArchiveProgress = original
+	replay := func() {
+		t.Helper()
+		if _, err := m.roomArchiveTurn(t.Context(), t.Context(), host, e, e.session, host.room, domain.RoomArchiveRequest{}, archiveAutomatic, cutoff); err != nil {
+			t.Fatal(err)
+		}
+	}
+	replay()
+	if len(queries) != 0 {
+		t.Fatal("replayed before verified self-presence")
+	}
+	e.mu.Lock()
+	slot.snapshot.State, slot.ownOccupantID = "joined", "own-id"
+	e.mu.Unlock()
+	replay()
+	replay()
+	if len(queries) != 1 || len(host.messages) != 0 || host.archive.RoomArchiveProgress != original {
+		t.Fatal("reaction replay queried repeatedly, reimported text, or moved coverage", len(queries), len(host.messages), host.archive)
+	}
+	iq := <-queries
+	if iq.Query.Set.Max != archivePageSize || iq.field("end") != cutoff.Format(time.RFC3339Nano) {
+		t.Fatal("replay was not bounded to the latest archive page", iq)
+	}
+	if len(host.reactions) != 2 {
+		t.Fatal("expected only the two verified reactions", host.reactions)
+	}
+	peer, own := host.reactions[0], host.reactions[1]
+	if peer.IsOwn || !peer.Historical || peer.ActorName != "Bob" || peer.ArchiveID != "peer" || peer.ArchiveScope != room ||
+		peer.Actor != roomReactionActor(e.account.ID, room, "peer-id") || peer.Target.Scope != "room:"+room || peer.Target.ID != "source" ||
+		!peer.CreatedAt.Equal(at) || len(peer.Emojis) != 1 || peer.Emojis[0] != "❤" ||
+		!own.IsOwn || len(own.Emojis) != 0 || own.Actor != roomReactionActor(e.account.ID, room, "own-id") {
+		t.Fatal("archive lost identity, timestamp, target or clear semantics", peer, own)
 	}
 }

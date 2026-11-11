@@ -65,14 +65,22 @@ func (m *Manager) readArchivePage(ctx context.Context, e *entry, s *mx.Session, 
 	if q.ID == "" {
 		return archivePage{}, errArchive
 	}
+	e.mu.RLock()
 	e.historyMu.Lock()
 	q.SIDVerified = e.sidScopes[scope]
 	q.OccupantVerified = e.occupantScopes[scope]
+	if q.SIDVerified && q.OccupantVerified && e.semianonymousRooms[scope] {
+		slot := e.rooms[scope]
+		if e.session == s && slot != nil && slot.session == s && slot.snapshot.State == "joined" && !slot.leaving {
+			q.OwnReactionActor = roomReactionActor(e.account.ID, scope, slot.ownOccupantID)
+		}
+	}
 	if e.archives == nil {
 		e.archives = make(map[string]*archiveQuery)
 	}
 	e.archives[q.ID] = q
 	e.historyMu.Unlock()
+	e.mu.RUnlock()
 	payload, err := readArchiveIQ(ctx, e, s, scope, stanza.SetIQ, request.payload(q.ID))
 	e.historyMu.Lock()
 	delete(e.archives, q.ID)

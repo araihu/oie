@@ -17,7 +17,7 @@ func TestArchiveSenderCorrelationAndForwardedScope(t *testing.T) {
 	if err := xml.Unmarshal([]byte(raw), &result); err != nil {
 		t.Fatal(err)
 	}
-	in, ok, err := archivedIncoming(account, account.Address, &result)
+	in, ok, err := archivedIncoming(account, account.Address, &result, archiveTrust{})
 	if err != nil || !ok || in.OriginalText != "retained & original" || in.Address != "bob@localhost" || in.IsOwn || !in.Historical {
 		t.Fatalf("forwarded parse: %+v %v %v", in, ok, err)
 	}
@@ -37,7 +37,7 @@ func TestArchiveSenderCorrelationAndForwardedScope(t *testing.T) {
 	}
 	foreign, _ := jid.Parse("carol@localhost")
 	result.Forwarded.Message.To = foreign
-	if _, _, err = archivedIncoming(account, account.Address, &result); err == nil {
+	if _, _, err = archivedIncoming(account, account.Address, &result, archiveTrust{}); err == nil {
 		t.Fatal("foreign forwarded recipient accepted")
 	}
 }
@@ -71,7 +71,7 @@ func TestRoomOwnAuthorRequiresUnambiguousArchivedJID(t *testing.T) {
 		if err := xml.Unmarshal([]byte(raw), &result); err != nil {
 			t.Fatal(err)
 		}
-		in, ok, err := archivedIncoming(account, "room@conference.localhost", &result)
+		in, ok, err := archivedIncoming(account, "room@conference.localhost", &result, archiveTrust{})
 		if err != nil || !ok || in.IsOwn != test.own {
 			t.Fatalf("own classification: %v %+v", err, in)
 		}

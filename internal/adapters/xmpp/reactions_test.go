@@ -88,13 +88,13 @@ func TestDirectArchivedReactionsCarryStableDelayAndOwnIdentity(t *testing.T) {
 			t.Fatal(err)
 		}
 		r.Forwarded.Message = &msg
-		in, ok, err := archivedIncoming(a, a.Address, &r)
+		in, ok, err := archivedIncoming(a, a.Address, &r, archiveTrust{})
 		if err != nil || !ok || in.AccountID != a.ID || in.Reaction == nil || !in.Reaction.Historical || in.Reaction.ArchiveID != r.ID || in.Reaction.ArchiveScope != a.Address || in.Reaction.CreatedAt.Format(time.RFC3339) != r.Forwarded.Delay.Stamp || in.Reaction.Address != "bob@example.test" || !strings.HasPrefix(in.Reaction.ProviderID, "archive-reaction:") || in.Reaction.IsOwn != strings.HasPrefix(from, a.Address) {
 			t.Fatal("archive reaction lost identity/delay", in, ok, err)
 		}
 	}
 	r.Forwarded.Message.Type = stanza.GroupChatMessage
-	if _, ok, err := archivedIncoming(a, "room@conference.example.test", &r, true, true); err != nil || ok {
+	if _, ok, err := archivedIncoming(a, "room@conference.example.test", &r, archiveTrust{SIDVerified: true, OccupantVerified: true}); err != nil || ok {
 		t.Fatal("archived room nickname/occupant metadata cannot establish reaction actor")
 	}
 }
@@ -180,7 +180,7 @@ func TestSemianonymousRoomReactionsUseVerifiedOccupantIDs(t *testing.T) {
 		replacement.Actor == first.Actor || first.IsOwn || !own.IsOwn || own.Actor != plan.RoomActor {
 		t.Fatal("occupant aliases were not scoped by verified identity", first, renamed, own, replacement)
 	}
-	if first.Actor == roomReactionActor(e, "other@conference.example.test", "peer-id") {
+	if first.Actor == roomReactionActor(e.account.ID, "other@conference.example.test", "peer-id") {
 		t.Fatal("occupant identifier linked across rooms")
 	}
 	slot.ownOccupantID = "replacement-id"
