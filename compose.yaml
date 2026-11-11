@@ -4,6 +4,8 @@ services:
     build: ./dev/xmpp
     hostname: localhost
     entrypoint: ["/bin/sh", "/opt/oie/start.sh"]
+    environment:
+      OIE_XMPP_BROWSER_FIXTURES: ${OIE_XMPP_BROWSER_FIXTURES:-0}
     ports:
       - "127.0.0.1:${OIE_XMPP_PORT:-5222}:5222"
       - "127.0.0.1:${OIE_XMPP_HTTPS_PORT:-5281}:5281"

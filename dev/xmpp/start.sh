@@ -19,4 +19,11 @@ if [ ! -f /var/lib/prosody/.oie-fixtures-v1 ]; then
   touch /var/lib/prosody/.oie-fixtures-v1
   chown prosody:prosody /var/lib/prosody/.oie-fixtures-v1
 fi
+# The browser workflow expects an empty mailbox even after the wire and Go tests.
+if [ "${OIE_XMPP_BROWSER_FIXTURES:-0}" = 1 ] && [ ! -f /var/lib/prosody/.oie-browser-fixtures-v1 ]; then
+  prosodyctl --config /etc/prosody/prosody.cfg.lua register browser-alice localhost alice-local-only
+  prosodyctl --config /etc/prosody/prosody.cfg.lua register browser-bob localhost bob-local-only
+  touch /var/lib/prosody/.oie-browser-fixtures-v1
+  chown prosody:prosody /var/lib/prosody/.oie-browser-fixtures-v1
+fi
 exec /entrypoint.sh prosody -F --config /etc/prosody/prosody.cfg.lua

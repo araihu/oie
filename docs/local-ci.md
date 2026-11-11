@@ -272,8 +272,20 @@ edits. It excludes Git internals, data directories, credentials, binaries, brows
 artifacts and dependency directories before invoking Dagger. A source-boundary
 test verifies those exclusions, including an accidentally tracked data file.
 
-The full pipeline creates its own Prosody service and development certificates.
-It does not use the live-preview engine, account credentials or data directory.
+The full Dagger pipeline starts one disposable Prosody service and shares its
+TLS certificate between the Go integration tests and the live browser workflow.
+GitHub Actions runs the protocol smoke check, Go integration tests and live
+browser workflow on the runner against one Compose service. Each workflow
+attempt uses a fresh Compose project and removes its volume at the end.
+Playwright setup overlaps the Go integration tests in both CI paths.
+
+Both CI paths set `OIE_XMPP_BROWSER_FIXTURES=1` for Prosody and the live browser
+workflow. This provisions separate `browser-alice@localhost` and
+`browser-bob@localhost` accounts so the browser's empty-inbox check is independent
+of the messages, rosters and profiles from the other suites. The browser still
+uses a fresh Oie data directory. Standalone runs default to the standard
+development accounts.
+
 The profile integration test requires the repository's Prosody configuration,
 which enables `vcard_legacy`. If a local Compose server returns
 `service-unavailable` for the fixture vCard, run `make dev-up` to rebuild the

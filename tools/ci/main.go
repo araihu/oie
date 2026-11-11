@@ -195,27 +195,44 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 	if err := r.desktop(ctx, source); err != nil {
 		return err
 	}
+	return r.integration(ctx, source, goContainer, checked)
+}
+
+func (r runner) integration(ctx context.Context, source *dagger.Directory, goContainer, checked *dagger.Container) (err error) {
 	runID := os.Getenv("OIE_CI_RUN_ID")
 	if runID == "" {
 		return errors.New("OIE_CI_RUN_ID is required for isolated services")
 	}
+	client := r.client
+	const browserFixtures = "OIE_XMPP_BROWSER_FIXTURES"
 	prosody := client.Container().From(xmppImage).WithoutEntrypoint().
 		WithFile("/etc/prosody/prosody.cfg.lua", source.File("dev/xmpp/prosody.cfg.lua")).
 		WithFile("/opt/oie/start.sh", source.File("dev/xmpp/start.sh")).
 		WithEnvVariable("OIE_CI_RUN_ID", runID).
+		WithEnvVariable(browserFixtures, "1").
 		WithExec([]string{"sh", "-c", "mkdir -p /var/lib/prosody/certs && openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj /CN=localhost -addext subjectAltName=DNS:localhost,IP:127.0.0.1 -keyout /var/lib/prosody/certs/localhost.key -out /var/lib/prosody/certs/localhost.crt"})
 	ca := prosody.File("/var/lib/prosody/certs/localhost.crt")
 	for _, port := range []int{80, 443, 5269, 5280, 5281, 5347} {
 		prosody = prosody.WithoutExposedPort(port)
 	}
 	xmpp := prosody.WithExposedPort(5222).AsService(dagger.ContainerAsServiceOpts{Args: []string{"sh", "/opt/oie/start.sh"}})
+	// Hold a service reference across the Go and browser stages. A binding
+	// alone can stop Prosody while Playwright is being prepared.
+	xmpp, err = xmpp.Start(ctx)
+	if err != nil {
+		return fmt.Errorf("start integration Prosody: %w", err)
+	}
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		if _, stopErr := xmpp.Stop(stopCtx); stopErr != nil {
+			err = errors.Join(err, fmt.Errorf("stop integration Prosody: %w", stopErr))
+		}
+	}()
 	integrated := goContainer.WithServiceBinding("xmpp", xmpp).WithFile("/tmp/xmpp-ca.crt", ca).
 		WithEnvVariable("OIE_XMPP_INTEGRATION", "1").WithEnvVariable("OIE_XMPP_CA_FILE", "/tmp/xmpp-ca.crt").
 		WithEnvVariable("OIE_XMPP_ENDPOINT", "xmpp:5222").WithEnvVariable("OIE_CI_RUN_ID", runID).
 		WithExec([]string{"go", "test", "-race", "-count=1", "-p", "1", "-v", "./tests/xmpp", "./tests/cli"})
-	if _, err := r.stage(ctx, "xmpp", integrated); err != nil {
-		return err
-	}
 	browser := client.Container().From(nodeImage).
 		WithMountedCache("/root/.npm", client.CacheVolume("oie-ci-npm-v1")).
 		WithMountedCache("/root/.cache/ms-playwright", client.CacheVolume("oie-ci-playwright-1.62.1")).
@@ -223,14 +240,20 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 		WithFile("package.json", source.File("tests/browser/package.json")).
 		WithFile("package-lock.json", source.File("tests/browser/package-lock.json")).
 		WithExec([]string{"npm", "ci"}).WithExec([]string{"npx", "playwright", "install", "--with-deps", "chromium"})
-	browser, err = r.stage(ctx, "browser-setup", browser)
-	if err != nil {
+	xmppResult := make(chan error, 1)
+	go func() {
+		_, err := r.stage(ctx, "xmpp", integrated)
+		xmppResult <- err
+	}()
+	browser, browserSetupErr := r.stage(ctx, "browser-setup", browser)
+	if err := errors.Join(<-xmppResult, browserSetupErr); err != nil {
 		return err
 	}
 	browser = browser.WithDirectory("/src", source).
 		WithFile("/src/bin/oie", checked.File("/src/bin/oie")).WithFile("/src/bin/oie-mock", checked.File("/src/bin/oie-mock")).
 		WithFile("/tmp/xmpp-ca.crt", ca).WithWorkdir("/src").WithServiceBinding("xmpp", xmpp).
 		WithEnvVariable("OIE_XMPP_CA_FILE", "/tmp/xmpp-ca.crt").WithEnvVariable("OIE_XMPP_ENDPOINT", "xmpp:5222").
+		WithEnvVariable(browserFixtures, "1").
 		WithEnvVariable("OIE_CI_RUN_ID", runID).WithExec([]string{"sh", "-c", browserCommand}, dagger.ContainerWithExecOpts{Expect: dagger.ReturnTypeAny})
 	browser, err = r.stage(ctx, "browser", browser)
 	if err != nil {
