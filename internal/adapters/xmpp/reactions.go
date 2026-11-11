@@ -106,9 +106,6 @@ func (m *Manager) receiveReaction(ctx context.Context, e *entry, msg stanza.Mess
 			return nil
 		}
 		id := roomStanzaID(msg.From, reply.Stable)
-		if id == "" {
-			return nil
-		}
 		actor, own := incomingRoomReactionActor(e, msg.From, occupants)
 		var ok bool
 		in, ok = groupReaction(e.account.ID, room, msg, meta, reply, id, actor, own, at)
@@ -180,9 +177,19 @@ func groupReaction(account domain.ID, room string, msg stanza.Message, meta reac
 	if !ok || actor == "" || msg.From.Localpart() == "" || msg.From.Resourcepart() == "" || msg.From.Bare().String() != room {
 		return nil, false
 	}
-	event := sha256.Sum256([]byte(room + "\x00" + eventID))
+	var provider string
+	if eventID != "" {
+		event := sha256.Sum256([]byte(room + "\x00" + eventID))
+		provider = "room-reaction:" + hex.EncodeToString(event[:])
+	} else if local := randomQueryID(); local != "" {
+		// Without an ID assigned by the room, the authenticated live delivery
+		// is the observation. Client IDs can be reused across deliveries.
+		provider = "room-live:" + local
+	} else {
+		return nil, false
+	}
 	in := &application.IncomingReaction{
-		AccountID: account, Address: room, Kind: "room", ProviderID: "room-reaction:" + hex.EncodeToString(event[:]),
+		AccountID: account, Address: room, Kind: "room", ProviderID: provider,
 		CreatedAt: at, Actor: actor, ActorName: msg.From.Resourcepart(), IsOwn: own,
 		Target: domain.MessageReference{Scope: "room:" + room, ID: target}, Emojis: emojis,
 	}
