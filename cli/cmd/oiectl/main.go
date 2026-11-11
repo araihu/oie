@@ -19,7 +19,7 @@ func main() {
 		err = root.ExecuteContext(ctx)
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, cliruntime.Diagnostic(root, os.Args[1:], err))
 		os.Exit(cliruntime.ExitCode(err))
 	}
 }

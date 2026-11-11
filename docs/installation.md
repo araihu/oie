@@ -402,7 +402,10 @@ With `--output json`, an HTTP failure writes one Problem Details object to
 stderr and leaves stdout empty. The exit code is still 4. The diagnostic
 includes the HTTP status and validated problem metadata. If the API response
 has no recognized Problem Details, the object uses `about:blank` and the HTTP
-status title.
+status title. Usage and transport failures also leave stdout empty and emit a
+JSON object with `code`, `message`, and `exitCode` on stderr. Usage failures
+use `usage_error` (exit 2). Transport failures, timeouts, and cancellations
+use `transport_error` (exit 3).
 
 See [the engine API policy](engine-api-policy.md) and
 [CLI verification](engine-api-cli-verification.md) for scope and fixture commands.

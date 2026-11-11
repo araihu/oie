@@ -57,6 +57,7 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	}
 	server := httptest.NewServer(handler)
 	defer server.Close()
+	testLocalDiagnostics(t, binary, server.URL)
 	key, _ := ids()
 	body := `{"protocol":"xmpp","address":"alice@localhost","label":"Personal"}`
 	run := func(input string, args ...string) ([]byte, error) {
@@ -280,4 +281,39 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 		t.Fatalf("CLI room operation receipt: %v %s", err, output)
 	}
 
+}
+
+func testLocalDiagnostics(t *testing.T, binary, serverURL string) {
+	t.Helper()
+	closed := httptest.NewServer(nil)
+	closed.Close()
+	for _, tc := range []struct {
+		name, server, code, message string
+		exitCode                    int
+		args                        []string
+	}{
+		{"usage", serverURL, "usage_error", "invalid --message-id: required", 2, []string{"messages", "author"}},
+		{"connection", closed.URL, "transport_error", "request transport failed", 3, []string{"system", "health"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			args := append([]string{"--server", tc.server}, tc.args...)
+			cmd := exec.CommandContext(t.Context(), binary, append(args, "--output", "json")...)
+			var stdout, stderr bytes.Buffer
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
+			err := cmd.Run()
+			var exit *exec.ExitError
+			var got struct {
+				Code     string `json:"code"`
+				Message  string `json:"message"`
+				ExitCode int    `json:"exitCode"`
+			}
+			if !errors.As(err, &exit) || exit.ExitCode() != tc.exitCode || stdout.Len() != 0 ||
+				json.Unmarshal(stderr.Bytes(), &got) != nil || got.Code != tc.code ||
+				got.ExitCode != tc.exitCode || got.Message != tc.message {
+				t.Fatalf("CLI diagnostic: %v stdout=%q stderr=%q", err, stdout.String(), stderr.String())
+			}
+			t.Logf("oiectl stderr:\n%s", stderr.String())
+		})
+	}
 }
