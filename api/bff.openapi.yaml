@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie browser presentation API
-  version: 0.4.0
+  version: 0.5.0
   description: Browser-only presentation operations. Engine data and protocol operations remain in the engine API.
   contact:
     name: Arai Hû
@@ -10,6 +10,8 @@ servers:
 - url: http://127.0.0.1:8080
 security: []
 tags:
+- name: Settings
+  description: Browser settings actions
 - name: Documents
   description: Static document presentation
 - name: Conversations
@@ -17,6 +19,95 @@ tags:
 - name: Messages
   description: Browser submission receipt recovery
 paths:
+  /ui/engine/reset:
+    post:
+      operationId: resetBrowserEngineData
+      tags: [Settings]
+      summary: Confirm deletion of all Oiê data
+      description: Resets the selected engine and clears browser preference cookies on success.
+      requestBody:
+        description: Confirmation from the settings dialog, bound to the current engine.
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            example: {engineId: 019a5df0-0000-7000-8000-000000000003, confirmation: delete, csrf: example-browser-token}
+            schema:
+              type: object
+              required: [engineId, confirmation, csrf]
+              properties:
+                engineId: {$ref: './openapi.yaml#/components/schemas/ID'}
+                confirmation: {type: string, enum: [delete], example: delete}
+                csrf: {type: string, example: example-browser-token}
+      responses:
+        '204': {description: Installation reset and empty engine ready.}
+        '400': {description: Invalid confirmation or request.}
+        '403': {description: Browser token missing or invalid.}
+        '409': {description: Engine identity changed.}
+        '503': {description: Engine data could not be reset.}
+  /ui/room-archive/{conversationId}:
+    parameters:
+    - {$ref: './openapi.yaml#/components/parameters/ConversationID'}
+    - name: X-Oie-Engine-ID
+      in: header
+      required: true
+      description: Selected engine identity.
+      schema: {type: string, format: uuid}
+    - name: X-Oie-Account-ID
+      in: header
+      required: true
+      description: Owning account identity.
+      schema: {type: string, format: uuid}
+    - name: X-CSRF-Token
+      in: header
+      required: true
+      description: Same-origin browser token.
+      schema: {type: string}
+    post:
+      operationId: requestBrowserRoomArchive
+      tags: [Conversations]
+      summary: Request an archive page for the selected room
+      requestBody:
+        description: Room archive action or mode submitted by the current view.
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './openapi.yaml#/components/schemas/RoomArchiveRequest'}
+            example: {action: focus}
+      responses:
+        '200':
+          description: Verified room archive request result.
+          content:
+            application/json:
+              schema: {$ref: './openapi.yaml#/components/schemas/RoomArchiveResult'}
+              example: {archive: {conversationId: 019a5df0-0000-7000-8000-000000000003, mode: gradual, initialComplete: false, olderComplete: false, availability: supported, textSearch: unsupported}, outcome: stored, items: []}
+        '400': {description: Invalid scope or request body.}
+        '403': {description: Browser token missing or invalid.}
+        '404': {description: Room unavailable in the selected account.}
+        '409': {description: Engine changed.}
+        '503': {description: Engine unavailable.}
+    put:
+      operationId: setBrowserRoomArchiveMode
+      tags: [Conversations]
+      summary: Set the archive mode for the selected room
+      requestBody:
+        description: Room archive action or mode submitted by the current view.
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './openapi.yaml#/components/schemas/SetRoomArchiveMode'}
+            example: {mode: on_demand}
+      responses:
+        '200':
+          description: Verified room archive settings.
+          content:
+            application/json:
+              schema: {$ref: './openapi.yaml#/components/schemas/RoomArchive'}
+              example: {conversationId: 019a5df0-0000-7000-8000-000000000003, mode: gradual, initialComplete: false, olderComplete: false, availability: supported, textSearch: unsupported}
+        '400': {description: Invalid scope or request body.}
+        '403': {description: Browser token missing or invalid.}
+        '404': {description: Room unavailable in the selected account.}
+        '409': {description: Engine changed.}
+        '503': {description: Engine unavailable.}
   /ui/message-reactions:
     get:
       operationId: getBrowserMessageReactions

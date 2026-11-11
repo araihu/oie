@@ -2,7 +2,7 @@
 set -eu
 umask 077
 mode=${1:-all}
-case "$mode" in all|checks) ;; *) echo 'usage: tools/ci/run.sh [all|checks]' >&2; exit 2;; esac
+case "$mode" in all|checks|desktop|release) ;; *) echo 'usage: tools/ci/run.sh [all|checks|desktop|release]' >&2; exit 2;; esac
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 ci_artifacts=${OIE_CI_ARTIFACTS:-"$root/tests/browser/artifacts/ci"}
 case "$ci_artifacts" in /*) ;; *) ci_artifacts="$root/$ci_artifacts" ;; esac
@@ -61,6 +61,24 @@ trap 'exit 143' TERM
 GOWORK=off go -C "$root/tools/ci" test -tags=http2legacy ./...
 GOWORK=off go -C "$root/tools/ci" build -tags=http2legacy -o "$task_tmp/oie-ci" .
 python3 "$root/tools/ci/materialize.py" "$root" "$task_tmp/source"
+if [ "$mode" = release ]; then
+  release_version=${OIE_RELEASE_VERSION:-v0.0.1-rc.0}
+  case "$release_version" in v[0-9]*) ;; *) echo 'OIE_RELEASE_VERSION must be a version tag beginning with v and a digit' >&2; exit 2;; esac
+  release_revision=$(git -C "$root" rev-parse --verify "$release_version^{commit}")
+  git -C "$root" archive --format=tar --output="$task_tmp/release-source.tar" "$release_revision"
+  mkdir "$task_tmp/source/.release-source"
+  tar -xf "$task_tmp/release-source.tar" -C "$task_tmp/source/.release-source"
+  python3 - "$release_version" "$release_revision" "$(git -C "$root" rev-parse HEAD)" "$task_tmp/release-source.tar" > "$task_tmp/source/.release-identity.json" <<'PY_RELEASE'
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+version, revision, packaging_revision, archive = sys.argv[1:]
+json.dump({"version": version, "revision": revision, "packagingRevision": packaging_revision,
+           "sourceArchiveSHA256": hashlib.sha256(Path(archive).read_bytes()).hexdigest()}, sys.stdout)
+PY_RELEASE
+fi
 # Optional independent Unix-socket forwarding avoids disrupting shared tunnels.
 if [ -n "${OIE_CI_SSH_HOST:-}" ]; then
   ssh -NT -o BatchMode=yes -o ExitOnForwardFailure=yes -o ControlMaster=no -o ControlPath=none \

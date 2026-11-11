@@ -7,6 +7,73 @@ Silent CLI mode did not prevent the failure. The direct client omits those
 subscriptions, captures command output per stage, and treats execution,
 artifact-export and session-close errors as failures.
 
+The Wails integration adds `make ci-desktop` and includes that lane in
+`make ci`. It uses Ubuntu 24.04 with GTK 4/WebKitGTK 6, explicitly selecting
+`linux/amd64` even when Dagger runs on an arm64 host. Native build, production
+golangci-lint, vet, race tests and an actual WebView smoke run there. Xvfb,
+a private D-Bus session and xdotool exercise the native Save/Cancel chooser.
+See [desktop verification](desktop.md#verification).
+
+Release packaging has its own `make package-linux` Dagger lane. It obtains the
+application tree from the selected immutable tag, then uses current packaging
+tooling to build on Ubuntu 24.04 amd64. A separate runtime container installs
+the actual archive with no Go, compiler or development headers. It waits for
+the branded WebView content, initializes SQLite, quits through Ctrl+Q and
+reinstalls while preserving the profile. The installer fixture suite covers
+platform selection, checksums, unsafe archives, dependency checks, escaped paths
+and update rollback. `make check` includes these 27 installer cases.
+
+The rc.0 archive lane passed with packaging revision
+`6711a951c4343bf81e9a6c9c4bf4f913fb255056` and application source
+`e8ffe5d0d924727478b8a5cbe3567a4240d7ae48`. Logs, the painted production window,
+archive and source receipt are under
+`tests/browser/artifacts/ci-rc0-packaging-painted`. The native macOS bundle
+installation, LaunchServices launch, signature and retained-profile checks
+passed under `tests/desktop/artifacts/rc0-packaged-macos`. These package checks
+use isolated profiles; they do not replace messaging integration coverage.
+
+The final packaging-tooling checks passed through `make ci-check` on
+2026-11-10, including lint, generated-file verification, 27 installer fixtures,
+race tests and builds. Evidence is under
+`tests/browser/artifacts/ci-rc0-final-check`; setup took 51s, checks 6m39s and
+the mock build 3s. The application source was unchanged from rc.0. After
+publication, all five release assets downloaded over public HTTPS and matched
+`SHA256SUMS`. The published installer also installed the Mac archive with only
+system commands on PATH, with Go excluded, and its bundle signature verified.
+Logs are retained under `bin/rc0-published-downloads.log` and
+`bin/rc0-published-install-macos.log`.
+
+`make check` remains independent of native libraries through the `server` build
+tag. Desktop targets clear that tag. The Ubuntu desktop container explicitly
+sets `GOPATH=/go` to use the mounted module cache; copying the Go toolchain alone
+does not inherit the Go image's environment. Native build and lint caches are
+separate from the headless arm64 lane. This avoids downloading tool dependencies
+again whenever a source edit invalidates a container layer.
+
+The real-engine browser fixture verifies a fresh account's empty conversation
+list against the API and waits for the matching empty pane. A selected
+conversation still requires the account/engine/conversation draft scope and
+restored text to match. This covers first-run accounts as well as accounts with
+retained history. Timeout diagnostics preserve the DOM scope, API list and
+screenshot.
+
+On 2026-11-10, the complete Wails integration graph passed with exit 0 on
+`7499ad1b12a237196080a0c1ea398a72c5f5f5b9`. This includes checks, generation,
+lint, race tests, builds, the Ubuntu 24.04 amd64 desktop/WebView lane, isolated
+XMPP integration and all 43 browser workflows including the real-engine flow.
+Evidence is under `tests/browser/artifacts/ci-wails-release-ready`, with the
+exact materialized source hashes in `source-snapshot.json` and the final result
+in `integration-receipt.json`. Subsequent application changes for the rc.0 tag
+are documentation only; later packaging and installer tooling has the separate
+validation described above.
+
+Checks took 24s, desktop dependency setup 4m36s, native build/lint/race 6m35s,
+native WebView 58s, XMPP 50s and browser checks 10m49s. Native amd64 execution
+uses emulation on this arm64 runner. The same host integration also passed
+actual macOS Apple Silicon source installation, vet/race checks, two complete
+native lifecycle runs and a separate real video/PDF probe. macOS file-chooser
+completion remains a manual check; the Linux lane drives the actual GTK chooser.
+
 The Go container limits `GOMAXPROCS` to four, which also bounds the Go command's
 default package/build parallelism on shared runners. The real FFmpeg fixture
 exceeded its five-second deadline during concurrent unrestricted race runs on

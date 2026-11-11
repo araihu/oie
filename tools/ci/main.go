@@ -25,6 +25,7 @@ const (
 	dockerImage   = "docker:28-cli@sha256:625d9431a9f54c5a2bc90f24f0e1c3d55b1349fd857dd85035f98c2c9acbdd4d"
 	xmppImage     = "prosodyim/prosody:13.0@sha256:c54842dec520463e3557a2d26df3312338003feb4cc943afa92d287a30c02b58"
 	nodeImage     = "node:24.19.0-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03"
+	desktopImage  = "ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852"
 	setupCommand  = "apt-get update -qq && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*"
 )
 
@@ -35,13 +36,13 @@ type runner struct {
 }
 
 func main() {
-	mode := flag.String("mode", "checks", "checks or all")
+	mode := flag.String("mode", "checks", "checks, desktop, release, or all")
 	source := flag.String("source", "", "materialized source directory")
 	artifacts := flag.String("artifacts", "", "host evidence directory")
 	limit := flag.Duration("timeout", 30*time.Minute, "overall execution deadline")
 	flag.Parse()
-	if (*mode != "checks" && *mode != "all") || *source == "" || *artifacts == "" || *limit <= 0 {
-		fmt.Fprintln(os.Stderr, "ci requires -mode checks|all, -source, -artifacts and a positive timeout")
+	if (*mode != "checks" && *mode != "desktop" && *mode != "release" && *mode != "all") || *source == "" || *artifacts == "" || *limit <= 0 {
+		fmt.Fprintln(os.Stderr, "ci requires -mode checks|desktop|release|all, -source, -artifacts and a positive timeout")
 		os.Exit(2)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -153,6 +154,12 @@ func (r runner) writeLog(name, stdout, stderr string) error {
 func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 	client := r.client
 	source := client.Host().Directory(sourcePath)
+	if mode == "release" {
+		return r.release(ctx, source)
+	}
+	if mode == "desktop" {
+		return r.desktop(ctx, source)
+	}
 	// Install system tools before adding source, so edits reuse the apt layer.
 	base := client.Container().From(goImage).
 		WithMountedCache("/go/pkg/mod", client.CacheVolume("oie-ci-go-mod-v1")).
@@ -170,7 +177,11 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 	goContainer := base.WithDirectory("/src", source).WithWorkdir("/src").
 		WithFile("/usr/local/bin/docker", docker.File("/usr/local/bin/docker")).
 		WithDirectory("/usr/local/libexec/docker/cli-plugins", docker.Directory("/usr/local/libexec/docker/cli-plugins"))
-	checked, err := r.stage(ctx, "checks", goContainer.WithExec([]string{"make", "check", "test-race", "build", "build-cli"}))
+	// SQLite tests create fresh databases and run migrations in temporary
+	// directories. Keep that scratch I/O off the shared runner disk.
+	checked, err := r.stage(ctx, "checks", goContainer.
+		WithMountedTemp("/tmp", dagger.ContainerWithMountedTempOpts{Size: 2 << 30}).
+		WithExec([]string{"make", "check", "test-race", "build", "build-cli"}))
 	if err != nil {
 		return err
 	}
@@ -180,6 +191,9 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 	}
 	if mode == "checks" {
 		return nil
+	}
+	if err := r.desktop(ctx, source); err != nil {
+		return err
 	}
 	runID := os.Getenv("OIE_CI_RUN_ID")
 	if runID == "" {

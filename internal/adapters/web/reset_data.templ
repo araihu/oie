@@ -1,0 +1,49 @@
+package web
+
+import (
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/modal"
+	"github.com/araihu/goshtoso/components/textinput"
+)
+
+templ resetDataEntry(v view) {
+	@button.Button(
+		button.WithType("button"),
+		button.WithTone(button.ToneDanger),
+		button.WithAttrs(templ.Attributes{"aria-haspopup": "dialog", "data-reset-data-open": ""}),
+	) {
+		{ v.Text.DeleteAllData }
+	}
+}
+
+templ resetDataDialog(v view) {
+	@modal.Dialog(modal.DialogConfig{ID: "reset-data", Title: v.Text.DeleteAllData, Content: resetDataForm(v)})
+}
+
+templ resetDataForm(v view) {
+	<form id="reset-data-form" method="post" action="/ui/engine/reset" class="grid gap-4" data-failure={ v.Text.DeleteDataFailed }>
+		if v.Role == "hosted" {
+			<p>{ v.Text.DeleteHostedDataWarning }</p>
+		} else {
+			<p>{ v.Text.DeleteDataWarning }</p>
+		}
+		<input type="hidden" name="csrf" value={ v.CSRF }/>
+		<input type="hidden" name="engineId" value={ v.EngineID }/>
+		@textinput.TextInput(textinput.Config{
+			ID: "reset-data-confirmation", Name: "confirmation", Label: v.Text.DeleteDataConfirmation,
+			Required: true, Autocomplete: "off",
+			InputAttrs: templ.Attributes{"pattern": "delete", "autocapitalize": "none", "spellcheck": "false"},
+		})
+		<div class="flex flex-wrap justify-end gap-2">
+			@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-reset-data-cancel": ""})) {
+				{ v.Text.DeleteDataCancel }
+			}
+			@button.Button(button.WithType("submit"), button.WithTone(button.ToneDanger), button.WithAttrs(templ.Attributes{"disabled": true})) {
+				<span class="oie-reset-submit-label">
+					<span>{ v.Text.DeleteAllData }</span>
+					<span>{ v.Text.DeleteDataPending }</span>
+				</span>
+			}
+		</div>
+	</form>
+}

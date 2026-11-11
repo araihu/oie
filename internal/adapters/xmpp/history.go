@@ -49,9 +49,12 @@ type archiveResult struct {
 }
 type archiveQuery struct {
 	ID, Scope        string
+	FirstID, LastID  string
 	SIDVerified      bool
 	OccupantVerified bool
 	Messages         []application.Incoming
+	FirstAt, LastAt  time.Time
+	Start, End       time.Time
 	Bytes, Seen      int
 	Err              error
 }
@@ -67,7 +70,7 @@ func archiveSender(from jid.JID, scope, account string) bool {
 func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResult) error {
 	e.historyMu.Lock()
 	defer e.historyMu.Unlock()
-	q := e.archive
+	q := e.archives[r.QueryID]
 	if q == nil || r.QueryID != q.ID || !archiveSender(outer.From, q.Scope, e.account.Address) {
 		return nil
 	}
@@ -79,6 +82,15 @@ func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResul
 	if q.Err != nil {
 		return nil
 	}
+	at, err := time.Parse(time.RFC3339Nano, r.Forwarded.Delay.Stamp)
+	if err != nil || r.ID == "" || len(r.ID) > 4096 || !q.Start.IsZero() && at.Before(q.Start) || !q.End.IsZero() && at.After(q.End) {
+		q.Err = errArchive
+		return nil
+	}
+	if q.FirstAt.IsZero() {
+		q.FirstAt, q.FirstID = at.UTC(), r.ID
+	}
+	q.LastAt, q.LastID = at.UTC(), r.ID
 	in, ok, err := archivedIncoming(e.account, q.Scope, r, q.SIDVerified, q.OccupantVerified)
 	if err != nil {
 		q.Err = err
@@ -188,19 +200,16 @@ func escaped(s string) string {
 	_ = xml.EscapeText(&b, []byte(s))
 	return b.String()
 }
-func (m *Manager) acquireHistory(ctx context.Context) error {
-	select {
-	case m.historyGate <- struct{}{}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
 func (m *Manager) readHistoryIQ(ctx context.Context, e *entry, s *mx.Session, scope string, kind stanza.IQType, payload string) (string, error) {
-	if err := m.acquireHistory(ctx); err != nil {
+	release, err := m.acquireArchive(ctx, scope, archiveMaintenance)
+	if err != nil {
 		return "", err
 	}
-	defer func() { <-m.historyGate }()
+	defer release()
+	return readArchiveIQ(ctx, e, s, scope, kind, payload)
+}
+
+func readArchiveIQ(ctx context.Context, e *entry, s *mx.Session, scope string, kind stanza.IQType, payload string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	to, err := jid.Parse(scope)
@@ -389,7 +398,6 @@ func (m *Manager) recoverHistory(ctx context.Context, e *entry, s *mx.Session) {
 		partial = true
 		discoveryFailed = true
 	}
-	scopes := []string{e.account.Address}
 	seen := map[string]bool{e.account.Address: true}
 	for _, room := range rooms {
 		j, err := jid.Parse(room.Address)
@@ -408,31 +416,16 @@ func (m *Manager) recoverHistory(ctx context.Context, e *entry, s *mx.Session) {
 			continue
 		}
 		m.wakeAvatars(e)
-		scopes = append(scopes, address)
 	}
+	outcomes := m.recoverAccountArchives(ctx, host, e, s)
 	anySupported := false
-	for _, scope := range scopes {
-		if ctx.Err() != nil {
-			return
-		}
-		supported, err := m.supportsArchive(ctx, e, s, scope)
-		if err != nil {
-			partial = true
-			discoveryFailed = true
-			continue
-		}
-		if !supported {
-			partial = true
-			continue
-		}
-		anySupported = true
-		if err = m.recoverArchive(ctx, host, e, s, scope); err != nil {
-			if ctx.Err() != nil {
-				return
-			}
-			partial = true
+	for _, outcome := range outcomes {
+		anySupported = anySupported || outcome.supported
+		partial = partial || outcome.partial
+		discoveryFailed = discoveryFailed || outcome.discoveryFailed
+		if outcome.err != nil {
 			status.LastErrorCode = "archive_failed"
-			if errors.Is(err, errUnstable) {
+			if errors.Is(outcome.err, errUnstable) {
 				status.LastErrorCode = "unstable_archive"
 			}
 		}
@@ -461,23 +454,12 @@ func (m *Manager) recoverArchive(ctx context.Context, host application.HistoryHo
 	seen := map[string]bool{}
 	reset := false
 	for ctx.Err() == nil {
-		query := &archiveQuery{ID: randomQueryID(), Scope: scope}
-		if query.ID == "" {
-			return errArchive
+		release, err := m.acquireArchive(ctx, scope, archiveAutomatic)
+		if err != nil {
+			return err
 		}
-		e.historyMu.Lock()
-		query.SIDVerified = e.sidScopes[scope]
-		query.OccupantVerified = e.occupantScopes[scope]
-		e.archive = query
-		e.historyMu.Unlock()
-		set := `<max>50</max>`
-		if after != "" {
-			set += `<after>` + escaped(after) + `</after>`
-		}
-		payload, err := m.readHistoryIQ(ctx, e, s, scope, stanza.SetIQ, `<query xmlns="urn:xmpp:mam:2" queryid="`+query.ID+`"><set xmlns="http://jabber.org/protocol/rsm">`+set+`</set></query>`)
-		e.historyMu.Lock()
-		e.archive = nil
-		e.historyMu.Unlock()
+		page, err := m.readArchivePage(ctx, e, s, scope, archivePageRequest{After: after})
+		release()
 		if errors.Is(err, errArchiveCursor) && after != "" && !reset {
 			after = ""
 			reset = true
@@ -489,34 +471,10 @@ func (m *Manager) recoverArchive(ctx context.Context, host application.HistoryHo
 		if err != nil {
 			return err
 		}
-		if query.Err != nil {
-			return query.Err
+		if err = m.ingestArchivePage(ctx, page); err != nil {
+			return err
 		}
-		var result struct {
-			Fin *struct {
-				Complete bool   `xml:"complete,attr"`
-				Stable   string `xml:"stable,attr"`
-				Set      struct {
-					Last string `xml:"last"`
-				} `xml:"http://jabber.org/protocol/rsm set"`
-			} `xml:"urn:xmpp:mam:2 fin"`
-		}
-		decodeErr := xml.Unmarshal([]byte("<root>"+payload+"</root>"), &result)
-		if decodeErr != nil || result.Fin == nil {
-			return errArchive
-		}
-		for _, in := range query.Messages {
-			if err = m.host.Receive(ctx, in); err != nil {
-				if in.Reaction != nil && errors.Is(err, application.ErrInvalid) {
-					continue
-				}
-				return err
-			}
-		}
-		if result.Fin.Stable == "false" {
-			return errUnstable
-		}
-		last := result.Fin.Set.Last
+		last := page.Last
 		if last != "" {
 			if len(last) > 4096 || last == after || seen[last] {
 				return errArchive
@@ -526,22 +484,16 @@ func (m *Manager) recoverArchive(ctx context.Context, host application.HistoryHo
 				return err
 			}
 			after = last
-		} else if !result.Fin.Complete {
+		} else if !page.Complete {
 			return errArchive
 		}
 		if err = host.HistoryChanged(ctx, domain.HistoryStatus{AccountID: e.account.ID, State: "syncing"}); err != nil {
 			return err
 		}
-		if result.Fin.Complete {
+		if page.Complete {
 			return nil
 		}
-		timer := time.NewTimer(time.Second)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		case <-timer.C:
-		}
+
 	}
 	return ctx.Err()
 }
@@ -553,6 +505,9 @@ func (m *Manager) historyLoop(ctx context.Context, e *entry, s *mx.Session) {
 	if !ok {
 		return
 	}
+	e.mu.RLock()
+	wake := e.historyWake
+	e.mu.RUnlock()
 	delay := time.Minute
 	for ctx.Err() == nil {
 		m.recoverHistory(ctx, e, s)
@@ -560,8 +515,17 @@ func (m *Manager) historyLoop(ctx context.Context, e *entry, s *mx.Session) {
 			return
 		}
 		status, err := host.History(ctx, e.account.ID)
-		if err != nil || (status.State != "partial" && status.State != "error") {
+		if err != nil {
 			return
+		}
+		if status.State != "partial" && status.State != "error" {
+			select {
+			case <-ctx.Done():
+				return
+			case <-wake:
+				delay = time.Minute
+				continue
+			}
 		}
 		timer := time.NewTimer(delay)
 		select {
@@ -569,6 +533,10 @@ func (m *Manager) historyLoop(ctx context.Context, e *entry, s *mx.Session) {
 			timer.Stop()
 			return
 		case <-timer.C:
+		case <-wake:
+			timer.Stop()
+			delay = time.Minute
+			continue
 		}
 		delay *= 2
 		if delay > 5*time.Minute {

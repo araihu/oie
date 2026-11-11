@@ -4,7 +4,7 @@ window.OieRuntime.register('shared-actions', life => {
  const pending=new Set();
  function feedback(scope,message){const node=scope.closest('[data-shared-item]')?.querySelector('[data-shared-action-status]');if(node){node.textContent=message||'';node.hidden=!message;}}
  function close(item){item.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));}
- function save(url,name){const anchor=document.createElement('a');anchor.href=url;anchor.download=name||'';document.body.append(anchor);anchor.click();anchor.remove();}
+ async function save(url,name){if(window.OieDesktop?.saveFile)return window.OieDesktop.saveFile(url,name||'');const anchor=document.createElement('a');anchor.href=url;anchor.download=name||'';document.body.append(anchor);anchor.click();anchor.remove();return true;}
  async function copy(value){
   if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(value);return;}
   const previous=document.activeElement,field=document.createElement('textarea');field.value=value;field.readOnly=true;field.style.cssText='position:fixed;left:-10000px;top:0';document.body.append(field);field.select();
@@ -33,6 +33,9 @@ window.OieRuntime.register('shared-actions', life => {
   }
   const path=scope.dataset.sharedDownload,expected='/ui/shared-content/'+encodeURIComponent(key)+'/content';let target;try{target=new URL(path,location.origin);}catch{return;}
   if(!['video','document'].includes(scope.dataset.sharedKind)||target.origin!==location.origin||target.pathname!==expected||target.searchParams.get('engineId')!==document.body.dataset.engineId){feedback(scope,labels.failed);return;}
-  target.searchParams.set('download','1');save(target.pathname+target.search,scope.dataset.sharedName);feedback(scope,'');
+  target.searchParams.set('download','1');pending.add(key);
+  try{await save(target.pathname+target.search,scope.dataset.sharedName);if(!life.signal.aborted&&scope.isConnected)feedback(scope,'');}
+  catch{if(!life.signal.aborted&&scope.isConnected)feedback(scope,labels.failed);}
+  finally{pending.delete(key);}
  });
 });

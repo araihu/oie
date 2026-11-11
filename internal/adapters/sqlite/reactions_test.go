@@ -13,12 +13,14 @@ import (
 
 func downReactionMigration(t *testing.T, s *Store) {
 	t.Helper()
-	down, err := migrations.ReadFile("migrations/000016_message_reactions.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.db.Exec(string(down)); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"000017_room_archives", "000016_message_reactions"} {
+		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = s.db.Exec(string(down)); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

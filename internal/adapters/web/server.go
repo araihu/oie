@@ -48,10 +48,12 @@ var themeScript []byte
 var localeFiles embed.FS
 
 type Server struct {
-	devBuildID   string
-	client       *engineapi.ClientWithResponses
-	streamClient *engineapi.Client
-	catalogs     map[string]copy
+	devBuildID    string
+	engineEditors []engineapi.RequestEditorFn
+	client        *engineapi.ClientWithResponses
+	archiveClient *engineapi.ClientWithResponses
+	streamClient  *engineapi.Client
+	catalogs      map[string]copy
 }
 
 func New(engineURL string, options ...Option) (*Server, error) {
@@ -63,7 +65,21 @@ func New(engineURL string, options ...Option) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	client, err := engineapi.NewClientWithResponses(engineURL, engineapi.WithHTTPClient(&http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}))
+	server := &Server{catalogs: catalogs}
+	for _, option := range options {
+		if option != nil {
+			option(server)
+		}
+	}
+	optionsFor := func(client *http.Client) []engineapi.ClientOption {
+		client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+		options := []engineapi.ClientOption{engineapi.WithHTTPClient(client)}
+		for _, editor := range server.engineEditors {
+			options = append(options, engineapi.WithRequestEditorFn(editor))
+		}
+		return options
+	}
+	client, err := engineapi.NewClientWithResponses(engineURL, optionsFor(&http.Client{Timeout: 5 * time.Second})...)
 	if err != nil {
 		return nil, err
 	}
@@ -71,17 +87,31 @@ func New(engineURL string, options ...Option) (*Server, error) {
 	transport.DialContext = (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext
 	transport.ResponseHeaderTimeout = 5 * time.Second
 	transport.TLSHandshakeTimeout = 5 * time.Second
-	streamClient, err := engineapi.NewClient(engineURL, engineapi.WithHTTPClient(&http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}))
+	streamClient, err := engineapi.NewClient(engineURL, optionsFor(&http.Client{Transport: transport})...)
 	if err != nil {
 		return nil, err
 	}
-	server := &Server{client: client, streamClient: streamClient, catalogs: catalogs}
-	for _, option := range options {
-		if option != nil {
-			option(server)
+	archiveTransport := transport.Clone()
+	// Archive actions can wait for a provider page. The request context
+	// bounds the wait without extending deadlines for ordinary local reads.
+	archiveTransport.ResponseHeaderTimeout = 0
+	archiveClient, err := engineapi.NewClientWithResponses(engineURL, optionsFor(&http.Client{Transport: archiveTransport})...)
+	if err != nil {
+		return nil, err
+	}
+	server.client, server.streamClient, server.archiveClient = client, streamClient, archiveClient
+	return server, nil
+}
+
+// WithEngineRequestEditor configures the BFF's private engine transport. The
+// editor applies to ordinary queries, live events and streaming media, and is
+// never derived from a browser request or exposed in rendered content.
+func WithEngineRequestEditor(editor engineapi.RequestEditorFn) Option {
+	return func(s *Server) {
+		if editor != nil {
+			s.engineEditors = append(s.engineEditors, editor)
 		}
 	}
-	return server, nil
 }
 
 type errInvalidURL struct{}
@@ -104,10 +134,14 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	InboxOnly        bool
+	Role             engineapi.EngineRole
+	CanResetData     bool
 	LatestEditTarget *engineapi.MessageEditTarget
 
 	SenderInfo                                                                                    *senderInfoView
 	GlobalMessageSearch                                                                           bool
+	RoomArchive                                                                                   *engineapi.RoomArchive
 	ConversationSearchOpen                                                                        bool
 	ConversationSearchQuery                                                                       string
 	ConversationSearchHistory                                                                     bool
@@ -125,7 +159,7 @@ type view struct {
 	SharedContent                                                                                 *engineapi.SharedContentPage
 	SharedInvalid                                                                                 bool
 	SharedCard                                                                                    bool
-	Locale, Theme, Role                                                                           string
+	Locale, Theme                                                                                 string
 	Text                                                                                          copy
 	Avatars                                                                                       map[avatarIdentity]string
 	AvatarAccounts                                                                                []string
@@ -159,7 +193,8 @@ type view struct {
 }
 
 type copy struct {
-	Reactions, ReactMessage, ReactionUnavailable, ReactionPending, ReactionUnknown, ReactionFailed, ReactionCheck, ReactionRemove string
+	DeleteAllData, DeleteDataWarning, DeleteHostedDataWarning, DeleteDataConfirmation, DeleteDataCancel, DeleteDataFailed, DeleteDataPending, DeleteDataComplete string
+	Reactions, ReactMessage, ReactionUnavailable, ReactionPending, ReactionUnknown, ReactionFailed, ReactionCheck, ReactionRemove                                string
 
 	CapabilitySendCorrectionsNote string
 
@@ -181,6 +216,7 @@ type copy struct {
 	MessageStarred                                                                                                                                                                                           string
 	AutoVideoThumbnails, AutoVideoThumbnailsHelp, VideoThumbnailLoad, VideoThumbnailLoading, VideoThumbnailFailed                                                                                            string
 	ReadFailed                                                                                                                                                                                               string
+	RoomArchiveMode, RoomArchiveAutomatic, RoomArchiveModeHelp, RoomArchiveModeFailed, RoomArchiveLocalResults                                                                                               string
 	TimelineOlder, TimelineNewer, TimelineLoading, TimelineFailed, TimelinePaused                                                                                                                            string
 	SharedItemActions                                                                                                                                                                                        string
 	SharedCopyLink                                                                                                                                                                                           string
@@ -416,7 +452,7 @@ type copy struct {
 	CapabilityReceivedRepliesNote                                                                                                                                        string
 	CapabilityLocalNote                                                                                                                                                  string
 	Accounts, EmptyTitle, EmptyBody, NotConnected, Conversations                                                                                                         string
-	Unavailable, UnavailableBody, Retry, Local, Hosted                                                                                                                   string
+	Unavailable, UnavailableBody, Retry                                                                                                                                  string
 	Skip, Languages, Appearance, System, Light                                                                                                                           string
 	Dark, Next, English, Portuguese, NotFound                                                                                                                            string
 	NotFoundBody, Chats, Favorites, Archived, SharedMedia                                                                                                                string
@@ -429,7 +465,7 @@ type copy struct {
 	SendingUnavailable, Back, Today, Navigation, Active                                                                                                                  string
 	OpenNavigation, Close, Details, Participants, MediaEmpty                                                                                                             string
 	ExpandNavigation, CollapseNavigation                                                                                                                                 string
-	MediaBody, SelectChat, SelectChatBody, EngineState, AccountHelp                                                                                                      string
+	MediaBody, SelectChat, SelectChatBody, AccountHelp                                                                                                                   string
 	PreviewOnly, ThemeHelp, LanguageHelp, NoChats, NoChatsBody                                                                                                           string
 	AddAccount, AccountAddress, AccountLabel, AddressPlaceholder, LabelPlaceholder                                                                                       string
 	RegisterAccount, Password, PasswordHelp, Endpoint, EndpointHelp                                                                                                      string
@@ -521,7 +557,18 @@ var videosStylesheet []byte
 //go:embed live.js
 var liveScript []byte
 
+//go:embed room-archive.js
+var roomArchiveScript []byte
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/ui/engine/reset" {
+		s.resetData(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, browserRoomArchivePath) {
+		s.browserRoomArchive(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/message-reactions" {
 		s.prepareReactions(w, r)
 		return
@@ -581,9 +628,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mime string
 		body []byte
 	}{
-		"/ui/sidebar.js":  {"text/javascript", sidebarScript},
-		"/ui/mentions.js": {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
-		"/ui/timeline.js": {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
+		"/ui/sidebar.js":    {"text/javascript", sidebarScript},
+		"/ui/reset-data.js": {"text/javascript", resetDataScript},
+		"/ui/mentions.js":   {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
+		"/ui/room-archive.js": {"text/javascript", roomArchiveScript},
+		"/ui/timeline.js":     {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/cache.js": {"text/javascript", cacheScript}, "/ui/cache/LICENSE.md": {"text/plain; charset=utf-8", cacheLibraryLicense}, "/ui/cache/lru-cache.min.mjs": {"text/javascript", cacheLibrary}, "/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
 		"/ui/video-thumbnails.js": {"text/javascript", videoThumbnailsScript}, "/ui/videos.js": {"text/javascript", videosScript}, "/ui/video.css": {"text/css", videosStylesheet},
 		"/ui/reactions.js": {"text/javascript", reactionsScript}, "/ui/reactions.css": {"text/css", reactionsStylesheet}, "/ui/message-correction.css": {"text/css", messageCorrectionStylesheet}, "/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/read-state.js": {"text/javascript", readStateScript}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/message-history.js": {"text/javascript", messageHistoryScript}, "/ui/message-history.css": {"text/css", messageHistoryStylesheet}, "/ui/sender.js": {"text/javascript", senderScript}, "/ui/message-search.js": {"text/javascript", messageSearchScript}, "/ui/message-search.css": {"text/css", messageSearchStylesheet}, "/ui/conversation-search.js": {"text/javascript", conversationSearchScript}, "/ui/conversation-search.css": {"text/css", conversationSearchStylesheet}, "/ui/conversation-preferences.js": {"text/javascript", conversationPreferencesScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
@@ -707,6 +756,12 @@ func (s *Server) baseView(r *http.Request) view {
 	return v
 }
 func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
+	fragment := ""
+	if r.URL.Path == "/" && r.Header.Get("HX-Request") == "true" && v.Section != "media" {
+		fragment = r.Header.Get("X-Oie-Fragment")
+	}
+	listOnly := fragment == "inbox"
+	paneOnly := fragment == "conversation" && v.ChatID != ""
 	editor := func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept-Language", v.Locale)
 		return nil
@@ -717,12 +772,10 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		return
 	}
 	v.EngineID = engine.JSON200.Id
+	v.CanResetData = engine.JSON200.CanResetData != nil && *engine.JSON200.CanResetData
 	v.EventCursor = engine.JSON200.EventCursor
 	v.Preview = engine.HTTPResponse.Header.Get("X-Oie-Mock") == "true"
-	v.Role = v.Text.Local
-	if engine.JSON200.Role == "hosted" {
-		v.Role = v.Text.Hosted
-	}
+	v.Role = engine.JSON200.Role
 	limit := 100
 	accounts, err := s.client.ListAccountsWithResponse(ctx, &engineapi.ListAccountsParams{Limit: &limit}, editor)
 	if err != nil || accounts.JSON200 == nil {
@@ -734,25 +787,47 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		s.loadMessageSearch(ctx, v)
 		return
 	}
-	v.AccountUnread = s.accountUnread(ctx)
+	if !listOnly && !paneOnly {
+		v.AccountUnread = s.accountUnread(ctx)
+	}
 	for _, a := range v.Accounts {
 		s.loadAvatars(ctx, v, a.Id)
+		if listOnly || paneOnly {
+			continue
+		}
 		if !v.Preview && v.accountScreen() == "detail" && a.Id == v.managedAccountID() {
 			h, err := s.client.GetAccountHistoryWithResponse(ctx, a.Id, editor)
 			if err == nil && h.JSON200 != nil {
 				v.Histories[a.Id] = *h.JSON200
 			}
 		}
-		connection, err := s.client.GetAccountConnectionWithResponse(ctx, a.Id, editor)
-		if err == nil && connection.JSON200 != nil {
-			v.Connections[a.Id] = connectionView{Known: true, Value: *connection.JSON200}
-		}
+		s.loadAccountConnection(ctx, v, a.Id, editor)
 	}
-	s.loadCapabilities(ctx, v)
+	if !listOnly && !paneOnly {
+		s.loadCapabilities(ctx, v)
+	}
 	if v.Section == "media" {
 		s.loadSharedContent(ctx, v)
 		return
 	}
+	if !paneOnly && !s.loadInbox(ctx, v, editor) {
+		return
+	}
+	if listOnly {
+		return
+	}
+	s.loadConversation(ctx, r, v, paneOnly, editor)
+}
+
+func (s *Server) loadAccountConnection(ctx context.Context, v *view, accountID string, editor engineapi.RequestEditorFn) {
+	connection, err := s.client.GetAccountConnectionWithResponse(ctx, accountID, editor)
+	if err == nil && connection.JSON200 != nil {
+		v.Connections[accountID] = connectionView{Known: true, Value: *connection.JSON200}
+	}
+}
+
+func (s *Server) loadInbox(ctx context.Context, v *view, editor engineapi.RequestEditorFn) bool {
+	limit := 100
 	params := &engineapi.ListConversationsParams{Limit: &limit}
 	archived := v.Section == "archived"
 	params.Archived = &archived
@@ -777,20 +852,24 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	chats, err := s.client.ListConversationsWithResponse(ctx, params, editor)
 	if err != nil {
 		v.Unavailable = true
-		return
+		return false
 	}
 	if chats.JSON200 == nil {
 		if chats.StatusCode() != 404 {
 			v.Unavailable = true
 		}
-		return
+		return false
 	}
 	v.Chats = chats.JSON200.Items
+	return true
+}
+
+func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view, paneOnly bool, editor engineapi.RequestEditorFn) {
 	selected := v.ChatID
-	if selected == "" && len(v.Chats) > 0 {
+	if selected == "" && !v.InboxOnly && len(v.Chats) > 0 {
 		selected = v.Chats[0].Id
 	}
-	if selected == "" || v.Section == "media" {
+	if selected == "" {
 		return
 	}
 	conversation, err := s.client.GetConversationWithResponse(ctx, selected, editor)
@@ -812,7 +891,15 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	}
 	v.Selected = conversation.JSON200
 	v.ChatID = selected
+	s.loadRoomArchive(ctx, v)
 	s.loadConversationDetails(ctx, v)
+	if paneOnly {
+		if v.ConversationInfo != nil {
+			v.Connections[v.Selected.AccountId] = connectionView{Known: true, Value: v.ConversationInfo.AccountConnection}
+		} else {
+			s.loadAccountConnection(ctx, v, v.Selected.AccountId, editor)
+		}
+	}
 	s.loadMessaging(ctx, v)
 	s.latestEditTarget(ctx, v)
 	s.loadChatInfo(ctx, v)
@@ -974,6 +1061,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	component := page(v)
 	if r.Header.Get("HX-Request") == "true" {
 		component = appFragment(v)
+		if r.URL.Path == "/" && r.Header.Get("X-Oie-Fragment") == "inbox" && v.Section != "media" {
+			component = inboxList(v)
+		}
 		if r.Header.Get("X-Oie-Fragment") == "conversation" && v.Section != "media" {
 			component = conversationPane(v)
 		}
