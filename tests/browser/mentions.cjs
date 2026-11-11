@@ -6,6 +6,12 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const engine=id(1),account=id(2),room=id(3),direct=id(4),other=id(5),revision=id(6),streams=new Set(),receipts=new Map(),messages=[];
  const chats=[{id:room,kind:'room',title:'Room'},{id:direct,kind:'direct',title:'Direct'},{id:other,kind:'room',title:'Other room'}].map(c=>({...c,accountId:account,revisionId:revision,address:c.id+'@fixture',updatedAt:'2026-11-09T12:00:00Z',unreadCount:0,archived:false,favorite:false,lastMessage:''}));
  const candidates=[{id:'occupant/ana',displayName:'Ána',insertText:'@ana',referenceMode:'text'},{id:'occupant/zoe',displayName:'Zoë 🐻',insertText:'@zoë',referenceMode:'structured'},{id:'occupant/caio',displayName:'<b>Caio</b>',insertText:'@caio',referenceMode:'text'},...Array.from({length:65},(_,n)=>({id:'occupant/'+n,displayName:'User '+n,insertText:'@user'+n,referenceMode:'text'}))];
+ candidates.push(
+  {id:'occupant/abruno',displayName:'Abruno',insertText:'@abruno',referenceMode:'text'},
+  {id:'occupant/bruno',displayName:'Bruno',insertText:'@bruno',referenceMode:'text'},
+  {id:'occupant/bruna',displayName:'Bruna',insertText:'@bruna',referenceMode:'text'},
+  {id:'occupant/lia',displayName:'Lia Braga',insertText:'@lia',referenceMode:'text'}
+ );
  const state={reads:0,posts:0,effects:0,fail:false,delay:0,partial:false};
  const api=http.createServer(async(req,res)=>{
   const u=new URL(req.url,'http://fixture'),parts=u.pathname.split('/');res.setHeader('Content-Type','application/json');const send=(code,data)=>{res.statusCode=code;res.end(JSON.stringify(data))};
@@ -56,8 +62,18 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await page.reload();await until(async()=>await input.inputValue()==='é 😀 @ana ','draft restored');assert.deepEqual(await metadata(),[{participantId:'occupant/ana',begin:4,end:8}]);
   await input.focus();await input.evaluate(e=>e.setSelectionRange(6,7));await page.keyboard.type('X');assert.deepEqual(await metadata(),[],'editing selected mention must discard only metadata');
   await input.fill('@');await menu.waitFor({state:'visible'});await until(async()=>await options.count()===50,'bounded suggestions');await input.press('ArrowDown');assert(await input.getAttribute('aria-activedescendant'));await input.press('Escape');assert(await menu.isHidden());assert.equal(await input.inputValue(),'@');
+  await input.click();await menu.waitFor({state:'visible'});await input.press('Tab');assert.equal(await input.inputValue(),'@');assert(await input.evaluate(e=>document.activeElement!==e));
+  await input.fill('@');await menu.waitFor({state:'visible'});
+  await input.pressSequentially('br');
+  assert.deepEqual(await options.locator('[data-mention-name]').allTextContents(),['Bruna','Bruno','Abruno','Lia Braga']);
+  assert.equal(await options.first().getAttribute('aria-selected'),'true');
+  await input.press('Shift+Tab');assert.equal(await input.inputValue(),'@br');assert(await input.evaluate(e=>document.activeElement!==e));assert(await menu.isHidden());
+  await input.focus();await menu.waitFor({state:'visible'});await input.press('ArrowDown');await input.press('Tab');
+  assert.equal(await input.inputValue(),'@bruno ');assert.deepEqual(await metadata(),[{participantId:'occupant/bruno',begin:0,end:6}]);assert(await input.evaluate(e=>document.activeElement===e));assert(await menu.isHidden());assert.equal(state.effects,0);
+  await input.fill('@nomatch');await menu.waitFor({state:'visible'});assert.equal(await options.count(),0);await input.press('Tab');assert.equal(await input.inputValue(),'@nomatch');assert(await input.evaluate(e=>document.activeElement!==e));
+  await input.fill('@');await menu.waitFor({state:'visible'});
   await input.click();await menu.waitFor({state:'visible'});await page.locator('.oie-mention-panel').focus();await page.keyboard.press('Escape');assert(await menu.isHidden(),'Escape from the scrollable panel must stay dismissed after returning focus');assert(await input.evaluate(e=>document.activeElement===e));
-  findings.push('Nickname completion preserves existing suffixes and punctuation; Escape also dismisses the focused suggestion panel');
+  findings.push('Nickname prefixes rank first, Tab confirms a filtered selection without sending, Shift+Tab moves focus, and Escape dismisses the focused panel');
   await input.fill('');await input.evaluate(e=>{e.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));e.value='@an';e.dispatchEvent(new InputEvent('input',{bubbles:true,isComposing:true}));e.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,isComposing:true}));});assert(await menu.isHidden());assert.equal(state.effects,0);await input.evaluate(e=>e.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true})));await menu.waitFor({state:'visible'});await input.press('Escape');
   await input.fill('@ca');await until(async()=>await options.count()===1,'escaped name');assert.equal(await options.locator('b').count(),0);assert.match(await options.textContent(),/<b>Caio<\/b>/);
   await input.press('Escape');await input.fill('@zo');await until(async()=>await options.count()===1,'unicode nickname');await input.press('Enter');assert.deepEqual(await metadata(),[{participantId:'occupant/zoe',begin:0,end:4}]);
@@ -76,7 +92,24 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   state.delay=300;await page.goto(url());await input.fill('@');await menu.waitFor({state:'visible'});await page.goto(url(other));state.delay=0;await new Promise(r=>setTimeout(r,400));assert.equal(await input.inputValue(),'');assert(await menu.isHidden());assert.deepEqual(await metadata(),[]);
   await context.close();findings.push('Direct chats unchanged, failed/partial lists remain editable, retry and delayed cross-room response isolation');
   for(const width of [390,1440])for(const lang of ['en','pt-BR'])for(const theme of ['light','dark'])for(const libraryTheme of ['goshtoso','minimal']){
-   const ctx=await browser.newContext({viewport:{width,height:900},locale:lang});page=await ctx.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(url(room,lang,theme));await page.evaluate(value=>document.documentElement.dataset.theme=value,libraryTheme);const field=page.locator('#message-composer');await field.fill('@an');await until(async()=>await page.locator('[data-mention-option]').count()===1,'matrix option');await page.locator('[data-mention-option]').click();assert.equal(await field.inputValue(),'@ana ');assert(await field.evaluate(e=>document.activeElement===e));await field.fill('@');await until(async()=>await page.locator('[data-mention-option]').count()===50,'matrix list');
+   const ctx=await browser.newContext({viewport:{width,height:900},locale:lang});page=await ctx.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(url(room,lang,theme));await page.evaluate(value=>document.documentElement.dataset.theme=value,libraryTheme);const field=page.locator('#message-composer');
+   await field.focus();
+   await page.evaluate(()=>{
+    const nodes=['.oie-composer','#message-timeline','[data-send-message]'].map(selector=>document.querySelector(selector));
+    const measure=()=>nodes.flatMap(node=>{const {x,y,width,height}=node.getBoundingClientRect();return [x,y,width,height,node.scrollTop]});
+    const frames=window.mentionFrames={baseline:measure(),samples:[],id:0};
+    const sample=()=>{frames.samples.push(measure());frames.id=requestAnimationFrame(sample)};
+    frames.id=requestAnimationFrame(sample);
+   });
+   state.delay=200;
+   await field.fill('@br');await until(async()=>await page.locator('[data-mention-option]').count()===4,'matrix option');
+   await field.press('Escape');assert(await page.locator('#oie-mention-picker').isHidden());
+   await field.press('u');await field.press('Tab');assert.equal(await field.inputValue(),'@bruna ');assert(await field.evaluate(e=>document.activeElement===e));
+   const frames=await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>{cancelAnimationFrame(mentionFrames.id);resolve(mentionFrames)})));
+   assert(frames.samples.length>1);
+   for(const sample of frames.samples)assert(sample.every((value,index)=>Math.abs(value-frames.baseline[index])<=1),JSON.stringify({width,lang,theme,baseline:frames.baseline,sample}));
+   state.delay=0;
+   await field.fill('@an');await until(async()=>await page.locator('[data-mention-option]').count()===1,'matrix click option');await page.locator('[data-mention-option]').click();assert.equal(await field.inputValue(),'@ana ');assert(await field.evaluate(e=>document.activeElement===e));await field.fill('@');await until(async()=>await page.locator('[data-mention-option]').count()===50,'matrix list');
    const geometry=await page.locator('#oie-mention-picker').boundingBox();assert(geometry&&geometry.x>=0&&geometry.y>=0&&geometry.x+geometry.width<=width+1&&geometry.height>0,JSON.stringify({width,geometry}));
    await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const a11y=await page.evaluate(async()=>{const result=await axe.run(document.querySelector('#send-message-form'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}});return result.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.html)}))});assert.deepEqual(a11y,[],JSON.stringify({width,lang,theme,a11y}));
    if(width===390&&lang==='pt-BR'&&theme==='dark'){await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});await page.screenshot({path:path.join(__dirname,'artifacts/mentions-mobile.png')})}

@@ -5,8 +5,9 @@ window.OieRuntime.register('mentions',life=>{
  const field=form.elements.namedItem('mentions'),list=root.querySelector('#oie-mention-options'),status=root.querySelector('[data-mention-status]'),retry=root.querySelector('[data-mention-retry]'),partial=root.querySelector('[data-mention-partial]'),template=form.querySelector('[data-mention-option-template]');
  if(!field||!list||!template)return;
  const scope={engineId:root.dataset.engineId,accountId:root.dataset.accountId,conversationId:root.dataset.conversationId};
+ const nicknameOrder=new Intl.Collator(document.documentElement.lang,{sensitivity:'base'});
  const fold=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase(document.documentElement.lang),points=value=>Array.from(value),writable=()=>input.isConnected&&!input.disabled&&!input.readOnly&&form.dataset.busy!=='true'&&form.dataset.editing!=='true'&&form.dataset.composeAllowed==='true';
- let previous=input.value,tokens=[],catalog=null,loadedAt=0,loading=false,failed=false,epoch=0,controller=null,visible=[],active=-1,composing=false,dismissed='',geometryFrame=false;
+ let previous=input.value,tokens=[],catalog=null,loadedAt=0,loading=false,failed=false,epoch=0,controller=null,visible=[],active=-1,renderedQuery='',composing=false,dismissed='',geometryFrame=false;
  function sync(){field.value=JSON.stringify(tokens.map(({participantId,begin,end})=>({participantId,begin,end})));}
  function restore(){
   let value=[];try{value=JSON.parse(field.value||'[]')}catch{}
@@ -63,12 +64,19 @@ window.OieRuntime.register('mentions',life=>{
  function show(){root.hidden=false;schedulePosition();}
  function render(){
   const current=trigger();if(!current){hide();return;}
-  const terms=fold(current.query).trim().split(/\s+/u).filter(Boolean),oldId=visible[active]?.id;
+  const query=fold(current.query).trim(),terms=query.split(/\s+/u).filter(Boolean);
+  const oldId=query===renderedQuery?visible[active]?.id:undefined;
+  renderedQuery=query;
   clearOptions();show();retry.hidden=!failed;partial.hidden=true;
   if(loading){status.textContent=root.dataset.mentionLoading;return;}
   if(failed){status.textContent=root.dataset.mentionFailed;return;}
   if(!catalog){status.textContent='';return;}
   const matches=catalog.items.filter(item=>terms.every(term=>item.match.includes(term)));
+  matches.sort((a,b)=>{
+   const aStartsWithQuery=a.nickname.startsWith(query),bStartsWithQuery=b.nickname.startsWith(query);
+   if(aStartsWithQuery!==bStartsWithQuery)return aStartsWithQuery?-1:1;
+   return nicknameOrder.compare(a.insertText,b.insertText);
+  });
   visible=matches.slice(0,50);status.textContent=visible.length?'':root.dataset.mentionEmpty;
   partial.hidden=!(catalog.truncated||catalog.state==='partial'||matches.length>50);
   const fragment=document.createDocumentFragment();
@@ -88,7 +96,7 @@ window.OieRuntime.register('mentions',life=>{
   const ids=new Set(),items=[];
   for(const item of data.items){
    if(!item||typeof item.id!=='string'||!item.id||item.id.length>1024||ids.has(item.id)||typeof item.displayName!=='string'||!item.displayName||points(item.displayName).length>300||typeof item.insertText!=='string'||!item.insertText.startsWith('@')||points(item.insertText).length>301||/[\r\n\u0000]/u.test(item.insertText)||!['text','structured'].includes(item.referenceMode))throw Error('invalid_candidate');
-   ids.add(item.id);items.push({...item,match:fold(item.displayName+' '+item.insertText)});
+   ids.add(item.id);items.push({...item,nickname:fold(item.insertText.slice(1)),match:fold(item.displayName+' '+item.insertText)});
   }
   if(['unavailable','not_connected'].includes(data.state))throw Error('unavailable_candidates');
   return{state:data.state,truncated:data.truncated,items};
@@ -124,12 +132,20 @@ window.OieRuntime.register('mentions',life=>{
  life.on(input,'compositionstart',()=>{composing=true;hide()});life.on(input,'compositionend',()=>{composing=false;update()});
  life.on(input,'keydown',event=>{
   if(event.isComposing||event.keyCode===229||composing||root.hidden)return;
+  if(event.key==='Tab'){
+   if(event.shiftKey||event.altKey||event.ctrlKey||event.metaKey||active<0||!trigger()?.query.trim()){
+    hide();
+    return;
+   }
+   event.preventDefault();event.stopImmediatePropagation();choose(active);
+   return;
+  }
   if(['ArrowDown','ArrowUp','Enter','Escape'].includes(event.key)){
    event.preventDefault();event.stopImmediatePropagation();
    if(event.key==='ArrowDown'||event.key==='ArrowUp')setActive(active+(event.key==='ArrowDown'?1:-1),true);
    else if(event.key==='Enter'){if(active>=0)choose(active);else dismiss();}
    else dismiss();
-  }else if(event.key==='Tab')hide();
+  }
  },{capture:true});
  life.on(input,'focus',update);
  for(const name of ['keyup','click','select'])life.on(input,name,event=>{if(event.key&&['Escape','Tab','Enter','ArrowDown','ArrowUp'].includes(event.key))return;if(name==='click')dismissed='';update()});

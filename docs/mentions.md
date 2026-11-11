@@ -1,9 +1,14 @@
 # Room mentions
 
 AGREED: typing `@` at a word boundary opens participant suggestions in a room.
-Typing filters the available names and nicknames. Selecting a participant inserts
-readable text without sending. Escape dismisses the list. Keyboard selection,
-touch, IME composition and the existing composer draft behavior remain available.
+Typing filters the available names and nicknames. Nicknames starting with the
+query appear first, and matches in each group are ordered by nickname in the UI
+language. Enter and Tab confirm a selected match for a typed query. Enter also
+works with the initial list after `@`. Selecting a participant inserts readable
+`@nickname` text without sending. Escape dismisses the list and Shift+Tab moves
+focus. Tab also moves focus during loading, with an empty query, or without a
+match. Touch, IME composition and the existing composer draft behavior remain
+available.
 
 The menu lists only participants the owning account can currently observe.
 It never joins a room or requests hidden identities. An incomplete list is not
@@ -26,13 +31,32 @@ The browser sends only the opaque participant selection and authored-text ranges
 The engine validates the current room, freezes the delivery plan in the durable
 send intent, and owns protocol translation. The frontend has no XMPP client.
 
+## Gajim interoperability
+
+Gajim opens nickname completion after `@` followed by a query. It searches
+current participants, known offline members and recent nicknames, ranks prefix
+matches first, and accepts Enter or Tab. It inserts the nickname as plain text,
+with a configurable separator (comma by default) at the start of the message.
+[Gajim completion](https://github.com/gajim/gajim/blob/ad5a7d6b5dce3cd420fd4a3799b2f827c4f2c6a7/src/gajim/gtk/completion/nickname.py#L147-L208)
+· [Insertion](https://github.com/gajim/gajim/blob/ad5a7d6b5dce3cd420fd4a3799b2f827c4f2c6a7/src/gajim/gtk/message_input.py#L276-L298)
+· [Keyboard](https://github.com/gajim/gajim/blob/ad5a7d6b5dce3cd420fd4a3799b2f827c4f2c6a7/src/gajim/gtk/completion/popover.py#L145-L168)
+
+Gajim detects mentions from the message text. For the nickname `Ana`, its
+matcher recognizes `Ana`, `Ana:`, `Ana,`, and `@Ana`. It checks the
+characters around the match, so `Anabela` does not mention `Ana`. Oiê's text
+therefore works with Gajim's nickname matcher in both anonymous and
+non-anonymous rooms. Highlighting incoming mentions in Oiê is tracked in
+[B27](oie-spec.md#161-post-alpha-priorities-from-the-gajim-comparison).
+[Gajim matcher](https://github.com/gajim/gajim/blob/ad5a7d6b5dce3cd420fd4a3799b2f827c4f2c6a7/src/gajim/common/util/muc.py#L102-L151)
+[Gajim matcher tests](https://github.com/gajim/gajim/blob/ad5a7d6b5dce3cd420fd4a3799b2f827c4f2c6a7/tests/common/test_message_needs_highlight.py#L24-L69)
+
 ## State and action invariants
 
 | State | Action | Required result |
 | --- | --- | --- |
 | Room draft | Type `@`, then a query | Read-only candidate load, local filtering, no send or join |
 | Loading/error/partial candidates | Continue typing or retry | Preserve text/caret; explain incomplete observations or failure |
-| Candidate selected | Enter/click/tap | Complete the nickname without duplicating letters after the caret, preserve adjacent punctuation/spacing and retain textarea focus |
+| Candidate selected | Enter/Tab with query/click/tap | Complete the nickname without duplicating letters after the caret, preserve adjacent punctuation/spacing and retain textarea focus |
 | Focus leaves the composer | Tab or outside click while loading | Keep suggestions closed when the delayed response arrives |
 | Suggestion panel focused | Escape | Return focus to the composer without reopening the dismissed list |
 | IME composition or email text | Type/confirm | Preserve normal text input; no accidental selection or send |
