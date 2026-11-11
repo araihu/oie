@@ -133,9 +133,8 @@ time.sleep(30)
             env['OIE_CI_CLEANUP_GRACE_SECONDS'] = '.15'
         child = subprocess.Popen(self.command, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, start_new_session=True)
         try:
-            for _ in range(100):
-                if self.capture.exists():
-                    break
+            deadline = time.monotonic() + 10
+            while not self.capture.exists() and child.poll() is None and time.monotonic() < deadline:
                 time.sleep(.02)
             self.assertTrue(self.capture.exists())
             record = json.loads(self.capture.read_text())
