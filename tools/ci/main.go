@@ -169,7 +169,7 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 		// shared runners. Child processes still keep their production deadlines.
 		WithEnvVariable("GOMAXPROCS", "4").
 		WithEnvVariable("GOWORK", "off").WithExec([]string{"sh", "-c", setupCommand})
-	base, err := r.withLinters(ctx, base)
+	base, err := r.withVacuum(ctx, base)
 	if err != nil {
 		return err
 	}

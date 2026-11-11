@@ -275,10 +275,11 @@ memory-backed check stage.
 `OIE_CI_TIMEOUT` sets the overall execution deadline, defaulting to 30 minutes.
 Failure and interruption preserve a failing exit status and clean only the
 snapshot, runner process and optional SSH tunnel owned by that invocation.
-The Dagger checks download the precompiled Vacuum and golangci-lint releases
-for the engine's architecture and verify their SHA-256 digests. The desktop lane
-uses the amd64 golangci-lint binary. Direct `make check` runs the versions pinned
-in the tools modules, with optional `VACUUM` and `GOLANGCI_LINT` overrides.
+The Dagger checks download the precompiled Vacuum release for the engine's
+architecture and verify its SHA-256 digest. Both Go lanes compile the pinned
+golangci-lint with the same Go toolchain they use for the application so its
+type checker can read Go export data. Direct `make check` runs the versions
+pinned in the tools modules, with optional `VACUUM` and `GOLANGCI_LINT` overrides.
 
 `make check-ci-tools` checks the CI module and shell lifecycle regressions and is
 part of `make check`. The CI module uses the `http2legacy` build tag for Dagger's
