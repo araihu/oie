@@ -226,16 +226,17 @@ func (q *Queries) InsertMessageRevision(ctx context.Context, arg InsertMessageRe
 }
 
 const insertOutbox = `-- name: InsertOutbox :exec
-INSERT INTO outbox(message_id,state,next_attempt_at) VALUES(?,'queued',?)
+INSERT INTO outbox(message_id,state,next_attempt_at,scheduled_at) VALUES(?,'queued',?,?)
 `
 
 type InsertOutboxParams struct {
 	MessageID     string
 	NextAttemptAt string
+	ScheduledAt   string
 }
 
 func (q *Queries) InsertOutbox(ctx context.Context, arg InsertOutboxParams) error {
-	_, err := q.db.ExecContext(ctx, insertOutbox, arg.MessageID, arg.NextAttemptAt)
+	_, err := q.db.ExecContext(ctx, insertOutbox, arg.MessageID, arg.NextAttemptAt, arg.ScheduledAt)
 	return err
 }
 
@@ -343,7 +344,7 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 }
 
 const listMessages = `-- name: ListMessages :many
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms FROM messages AS m WHERE m.conversation_id=?1 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id) AND (
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms FROM messages AS m WHERE m.conversation_id=?1 AND NOT EXISTS(SELECT 1 FROM outbox o WHERE o.message_id=m.id AND o.scheduled_at<>'' AND o.state IN ('queued','cancelled')) AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id) AND (
 CAST(?2 AS TEXT)='' OR
 m.created_at_ms<(SELECT x.created_at_ms FROM messages AS x WHERE x.id=CAST(?2 AS TEXT) AND x.conversation_id=?1) OR
 (m.created_at_ms=(SELECT x.created_at_ms FROM messages AS x WHERE x.id=CAST(?2 AS TEXT) AND x.conversation_id=?1) AND m.id<CAST(?2 AS TEXT))
@@ -394,6 +395,7 @@ SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is
 JOIN messages AS anchor ON anchor.id=?1 AND anchor.conversation_id=?2
 WHERE m.conversation_id=?2
 AND (m.created_at_ms,m.id)>(anchor.created_at_ms,anchor.id)
+AND NOT EXISTS (SELECT 1 FROM outbox o WHERE o.message_id=m.id AND o.scheduled_at<>'' AND o.state IN ('queued','cancelled'))
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
 ORDER BY m.created_at_ms ASC,m.id ASC LIMIT ?3
 `
@@ -566,12 +568,13 @@ func (q *Queries) UpdateMessage(ctx context.Context, arg UpdateMessageParams) er
 }
 
 const updateOutbox = `-- name: UpdateOutbox :exec
-UPDATE outbox SET state=?1,next_attempt_at=?2,attempt_count=attempt_count+?3 WHERE message_id=?4
+UPDATE outbox SET state=?1,next_attempt_at=?2,scheduled_at=?3,attempt_count=attempt_count+?4 WHERE message_id=?5
 `
 
 type UpdateOutboxParams struct {
 	State            string
 	NextAttemptAt    string
+	ScheduledAt      string
 	AttemptIncrement int64
 	MessageID        string
 }
@@ -580,6 +583,7 @@ func (q *Queries) UpdateOutbox(ctx context.Context, arg UpdateOutboxParams) erro
 	_, err := q.db.ExecContext(ctx, updateOutbox,
 		arg.State,
 		arg.NextAttemptAt,
+		arg.ScheduledAt,
 		arg.AttemptIncrement,
 		arg.MessageID,
 	)

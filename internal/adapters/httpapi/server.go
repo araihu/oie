@@ -88,12 +88,14 @@ func NewResettable(engine *application.Engine, reset func(domain.ID) error) (htt
 	})(handler)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		if r.Method == http.MethodHead && strings.HasPrefix(r.URL.Path, "/api/v1/shared-content/") && strings.HasSuffix(r.URL.Path, "/content") {
 			w.Header().Set("Allow", http.MethodGet)
 			writeProblem(w, r, http.StatusMethodNotAllowed, "invalid_request")
 			return
 		}
-		if route, _, routeErr := router.FindRoute(r); routeErr == nil && route.Operation.RequestBody != nil && r.Header.Get("Content-Type") != "" {
+		route, _, routeErr := router.FindRoute(r)
+		if routeErr == nil && route.Operation.RequestBody != nil && r.Header.Get("Content-Type") != "" {
 			mediaType, _, parseErr := mime.ParseMediaType(r.Header.Get("Content-Type"))
 			if parseErr != nil {
 				WriteProblem(w, r, application.ErrInvalid)
@@ -104,6 +106,13 @@ func NewResettable(engine *application.Engine, reset func(domain.ID) error) (htt
 				return
 			}
 		}
+		// The strict multipart handler streams the validated single file and
+		// validates the destination and attachment IDs before opening storage.
+		if routeErr == nil && route.Operation.OperationID == "stageMessageAttachment" {
+			r.Body = http.MaxBytesReader(w, r.Body, application.MaxStagedAttachmentSize+64<<10)
+			handler.ServeHTTP(w, r)
+			return
+		}
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 		validated.ServeHTTP(w, r)
 	}), nil
@@ -112,7 +121,10 @@ func NewResettable(engine *application.Engine, reset func(domain.ID) error) (htt
 // WriteProblem deliberately exposes stable codes, never raw database/input errors.
 func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 	status, code := http.StatusServiceUnavailable, "unavailable"
+	var tooLarge *http.MaxBytesError
 	switch {
+	case errors.Is(err, application.ErrAttachmentTooLarge), errors.As(err, &tooLarge):
+		status, code = http.StatusRequestEntityTooLarge, "media_too_large"
 	case errors.Is(err, application.ErrInvalid):
 		status, code = http.StatusBadRequest, "invalid_request"
 	case errors.Is(err, application.ErrNotFound):
@@ -353,6 +365,9 @@ func (s *Server) GetOperation(ctx context.Context, r engineapi.GetOperationReque
 	op, err := s.engine.Operation(ctx, domain.ID(r.OperationId))
 	if err != nil {
 		return nil, err
+	}
+	if op.Kind == "update_pending_message" || op.Kind == "send_scheduled_message_now" {
+		return nil, application.ErrNotFound
 	}
 	return engineapi.GetOperation200JSONResponse{
 		Id: string(op.ID), ResourceId: string(op.ResourceID), CreatedAt: op.CreatedAt,

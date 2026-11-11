@@ -187,6 +187,10 @@ func (s *Store) RecordRoomSession(ctx context.Context, state domain.RoomSession)
 }
 
 func (s *Store) ReplayAcceptedMessage(ctx context.Context, id domain.ID, fingerprint string) (*domain.Message, error) {
+	return s.ReplayMessageMutation(ctx, id, "send_message", fingerprint)
+}
+
+func (s *Store) ReplayMessageMutation(ctx context.Context, id domain.ID, kind, fingerprint string) (*domain.Message, error) {
 	row, err := s.queries.GetOperation(ctx, string(id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -194,7 +198,7 @@ func (s *Store) ReplayAcceptedMessage(ctx context.Context, id domain.ID, fingerp
 	if err != nil {
 		return nil, err
 	}
-	if row.Kind != "send_message" || row.Fingerprint != fingerprint {
+	if row.Kind != kind || row.Fingerprint != fingerprint {
 		return nil, application.ErrIdempotencyConflict
 	}
 	var result domain.Message

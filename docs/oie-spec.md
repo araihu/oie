@@ -299,7 +299,7 @@ Missing optional delivery/read receipts must not trigger indefinite resending of
 
 | State/evidence | Cancel, edit pending content, reschedule or send now |
 | --- | --- |
-| Scheduled, queued, or waiting for retry with known-unsent status, before dispatch | Allowed through an atomic engine-side guard. |
+| Scheduled or queued with known-unsent status, before the first dispatch claim | Allowed through an atomic engine-side guard. |
 | Dispatch has started or the original transmission is in flight | Reject the mutation and return actual status. |
 | A previous transmission may have been accepted, but its outcome is unknown | Preserve uncertainty; do not present this as a safely unsent item. Reconciliation policy is open. |
 | Provider-accepted/delivered/read | Pending-send mutation no longer applies. Supported correction/retraction is a separate operation. |
@@ -337,13 +337,17 @@ scheduled messages across conversations. Each entry identifies its destination.
 Users can filter by conversation, open the destination, edit in that
 conversation's composer, reschedule, cancel or send now.
 
-The [OpenAPI draft](../api/message-scheduling.overlay.yaml) proposes the
-contract for complete compositions, attachment staging, cross-conversation
-listing and Send now. It proposes a shared cutoff before the first provider
-attempt, including an attachment upload. Attachment limits, staging retention
-and transfer resume remain open under O09. The
+The [engine OpenAPI contract](../api/openapi.yaml) defines complete
+compositions, attachment staging, cross-conversation listing and Send now.
+Edit, reschedule, cancel and Send now share an atomic cutoff at the dispatch
+claim, before the first provider attempt. The engine stores staged bytes and
+their SHA-256 in its data directory and keeps the dispatch instant in UTC.
+This increment accepts up to 16 files per message, each at most 20 MiB.
+An advertised provider limit can be lower. XMPP dispatch uploads the files
+and sends their ordered HTTPS links in the outgoing message body. Staging
+retention and resumable transfer remain open under O09. The
 [scheduling prototype](prototypes/message-scheduling.html) demonstrates the
-agreed controls with local example data.
+agreed controls with example data.
 
 ### 5.4 Explicit Send while the UI is offline
 

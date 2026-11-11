@@ -58,6 +58,7 @@ func message(m domain.Message) engineapi.Message {
 			out.Reply.SenderName = &name
 		}
 	}
+	addSchedulingFields(&out, m)
 	return out
 }
 func (s *Server) currentAccount(ctx context.Context, a domain.Account) engineapi.Account {
@@ -169,17 +170,8 @@ func (s *Server) SendMessage(ctx context.Context, r engineapi.SendMessageRequest
 	if r.Body == nil {
 		return nil, application.ErrInvalid
 	}
-	target := domain.ID("")
-	if r.Body.ReplyToMessageId != nil {
-		target = domain.ID(*r.Body.ReplyToMessageId)
-	}
-	mentions := []domain.MentionSelection{}
-	if r.Body.Mentions != nil {
-		for _, mention := range *r.Body.Mentions {
-			mentions = append(mentions, domain.MentionSelection{ParticipantID: mention.ParticipantId, Begin: mention.Begin, End: mention.End})
-		}
-	}
-	result, err := s.engine.SendMessageWithMentions(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.ConversationId), r.Body.OriginalText, target, mentions)
+	input := compositionInput(r.Body.OriginalText, r.Body.ReplyToMessageId, r.Body.Mentions, r.Body.AttachmentIds)
+	result, err := s.engine.SendComposition(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.ConversationId), input, r.Body.ScheduledAt)
 	if errors.Is(err, application.ErrRoomNotJoined) {
 		if current, readErr := s.engine.RoomSession(ctx, domain.ID(r.ConversationId)); readErr == nil {
 			return nil, application.RoomStateConflict{Current: current}

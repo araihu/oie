@@ -142,6 +142,43 @@ func updateConversation(ctx context.Context, q *dbgen.Queries, c domain.Conversa
 	}
 	return q.InsertConversationRevision(ctx, dbgen.InsertConversationRevisionParams{ID: string(revision), EntityID: string(c.ID), Parents: parents, Payload: jsonText(c), CreatedAt: stamp(at)})
 }
+func checkPendingReplyTarget(ctx context.Context, q *dbgen.Queries, m *domain.Message) error {
+	if plan := m.OutboundReply; plan != nil {
+		target, err := q.GetMessage(ctx, string(plan.TargetID))
+		if err != nil {
+			return notFound(err)
+		}
+		source, err := decodeMessage(target)
+		if err != nil {
+			return err
+		}
+		if err = hydrateMessageProjection(ctx, q, &source); err != nil {
+			return err
+		}
+		if source.AccountID != m.AccountID || source.ConversationID != m.ConversationID || bodyHash(source.OriginalText) != plan.TargetBodyHash {
+			return application.ErrStateConflict
+		}
+		if plan.Reference != nil {
+			if err = hydrateReferences(ctx, q, &source); err != nil {
+				return err
+			}
+			found := false
+			for _, ref := range source.References {
+				if ref == *plan.Reference {
+					found = true
+					break
+				}
+			}
+			if !found {
+				plan.Reference = nil
+				m.ReplyReference = nil
+			}
+		}
+
+	}
+	return nil
+}
+
 func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutation) (application.MessageResult, error) {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
@@ -180,47 +217,19 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 			return application.MessageResult{}, application.ErrRoomNotJoined
 		}
 	}
-	if plan := in.Message.OutboundReply; plan != nil {
-		target, err := q.GetMessage(ctx, string(plan.TargetID))
-		if err != nil {
-			return application.MessageResult{}, notFound(err)
-		}
-		source, err := decodeMessage(target)
-		if err != nil {
-			return application.MessageResult{}, err
-		}
-		if err = hydrateMessageProjection(ctx, q, &source); err != nil {
-			return application.MessageResult{}, err
-		}
-		if source.AccountID != in.Message.AccountID || source.ConversationID != in.Message.ConversationID || bodyHash(source.OriginalText) != plan.TargetBodyHash {
-			return application.MessageResult{}, application.ErrStateConflict
-		}
-		if plan.Reference != nil {
-			if err = hydrateReferences(ctx, q, &source); err != nil {
-				return application.MessageResult{}, err
-			}
-			found := false
-			for _, ref := range source.References {
-				if ref == *plan.Reference {
-					found = true
-					break
-				}
-			}
-			if !found {
-				plan.Reference = nil
-				in.Message.ReplyReference = nil
-			}
-		}
-
+	if err = checkPendingReplyTarget(ctx, q, &in.Message); err != nil {
+		return application.MessageResult{}, err
 	}
 	if err = insertMessage(ctx, q, in.Message); err != nil {
 		return application.MessageResult{}, err
 	}
-	if err = q.InsertOutbox(ctx, dbgen.InsertOutboxParams{MessageID: string(in.Message.ID), NextAttemptAt: stamp(in.Message.CreatedAt)}); err != nil {
+	if err = q.InsertOutbox(ctx, dbgen.InsertOutboxParams{MessageID: string(in.Message.ID), NextAttemptAt: eligibleAt(in.Message, in.Message.CreatedAt), ScheduledAt: scheduleStamp(in.Message.ScheduledAt)}); err != nil {
 		return application.MessageResult{}, err
 	}
-	if err = updateConversation(ctx, q, c, in.Message, in.ConversationRevisionID, in.Message.CreatedAt); err != nil {
-		return application.MessageResult{}, err
+	if in.Message.ScheduledAt == nil {
+		if err = updateConversation(ctx, q, c, in.Message, in.ConversationRevisionID, in.Message.CreatedAt); err != nil {
+			return application.MessageResult{}, err
+		}
 	}
 	if err = hydrateReply(ctx, q, &in.Message); err != nil {
 		return application.MessageResult{}, err
@@ -387,9 +396,24 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	return tx.Commit()
 }
 func updateMessage(ctx context.Context, q *dbgen.Queries, m domain.Message, state string, revision domain.ID, at, next time.Time) (domain.Message, error) {
+	if state == "dispatching" {
+		outbox, err := q.GetOutbox(ctx, string(m.ID))
+		if err != nil {
+			return m, err
+		}
+		if outbox.State != "queued" || outbox.ScheduledAt > stamp(at) {
+			return m, application.StateConflict{Current: m}
+		}
+	}
+	if m.ScheduledAt != nil && state == "submitted" {
+		if err := publishScheduledSend(ctx, q, m, revision, at); err != nil {
+			return m, err
+		}
+	}
 	parents := jsonText([]domain.ID{m.RevisionID})
 	m.RevisionID = revision
 	m.SendState = state
+	m.DispatchStarted = m.DispatchStarted || state == "dispatching"
 	if err := q.UpdateMessage(ctx, dbgen.UpdateMessageParams{RevisionID: string(revision), State: state, Payload: jsonText(m), ID: string(m.ID)}); err != nil {
 		return m, err
 	}
@@ -403,7 +427,7 @@ func updateMessage(ctx context.Context, q *dbgen.Queries, m domain.Message, stat
 			return m, err
 		}
 	}
-	if err := q.UpdateOutbox(ctx, dbgen.UpdateOutboxParams{State: state, NextAttemptAt: stamp(next), AttemptIncrement: increment, MessageID: string(m.ID)}); err != nil {
+	if err := q.UpdateOutbox(ctx, dbgen.UpdateOutboxParams{State: state, NextAttemptAt: eligibleAt(m, next), ScheduledAt: scheduleStamp(m.ScheduledAt), AttemptIncrement: increment, MessageID: string(m.ID)}); err != nil {
 		return m, err
 	}
 	if err := hydrateReply(ctx, q, &m); err != nil {
@@ -412,6 +436,19 @@ func updateMessage(ctx context.Context, q *dbgen.Queries, m domain.Message, stat
 	_, err := emitCanonicalMessageEvent(ctx, q, "message.updated", m, at)
 	return m, err
 }
+func publishScheduledSend(ctx context.Context, q *dbgen.Queries, m domain.Message, revision domain.ID, at time.Time) error {
+	row, err := q.GetConversation(ctx, string(m.ConversationID))
+	if err != nil {
+		return err
+	}
+	conversation, err := decodeConversation(row)
+	if err != nil {
+		return err
+	}
+	m.CreatedAt = at
+	return updateConversation(ctx, q, conversation, m, revision, at)
+}
+
 func (s *Store) CancelMessage(ctx context.Context, in application.CancelMutation) (application.MessageResult, error) {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
@@ -439,6 +476,13 @@ func (s *Store) CancelMessage(ctx context.Context, in application.CancelMutation
 		return application.MessageResult{}, err
 	}
 	if !m.IsOwn || m.SendState != "queued" || m.RevisionID != in.ExpectedRevisionID {
+		return application.MessageResult{}, application.StateConflict{Current: m}
+	}
+	outbox, err := q.GetOutbox(ctx, string(m.ID))
+	if err != nil {
+		return application.MessageResult{}, err
+	}
+	if outbox.AttemptCount != 0 {
 		return application.MessageResult{}, application.StateConflict{Current: m}
 	}
 	m, err = updateMessage(ctx, q, m, "cancelled", in.RevisionID, in.Operation.CreatedAt, in.Operation.CreatedAt)

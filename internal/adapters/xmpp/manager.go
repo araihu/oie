@@ -60,6 +60,7 @@ type entry struct {
 	occupantScopes      map[string]bool
 	discovery           domain.CapabilityDiscovery
 	discoveryPartial    bool
+	uploadLimits        map[string]int64
 	detailsWake         chan struct{}
 	details             map[domain.ID]*detailSlot
 	peerPresence        map[string]map[string]peerResource
@@ -300,6 +301,7 @@ func (m *Manager) publish(ctx context.Context, e *entry, state, code string) err
 		e.details = nil
 		e.peerPresence = nil
 		e.reactionLimits = nil
+		e.uploadLimits = nil
 		e.reactionCommands = nil
 	} else {
 		e.discovery = domain.CapabilityDiscovery{State: "pending", Services: []domain.DiscoveredService{}}
@@ -329,6 +331,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.correctionSources = map[string]ownCorrectionSource{}
 			e.correctionLatest = map[string]domain.ID{}
 			e.reactionLimits = nil
+			e.uploadLimits = nil
 			e.reactionCommands = nil
 			e.contactsWake = make(chan struct{}, 1)
 			e.historyWake = make(chan struct{}, 1)
@@ -472,6 +475,16 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	e.mu.RUnlock()
 	if session == nil || raw == nil || state != "connected" {
 		return application.NotSent
+	}
+	if len(out.Attachments) != 0 {
+		wireBody, outcome := m.uploadMessageAttachments(ctx, e, session, out)
+		if outcome != "" {
+			return outcome
+		}
+		if out.RecordWireText == nil || out.RecordWireText(ctx, wireBody) != nil {
+			return application.NotSent
+		}
+		out.OriginalText = wireBody
 	}
 	payload, err := buildOutgoing(a, out)
 	if err != nil {

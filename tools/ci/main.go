@@ -203,12 +203,13 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 		WithFile("/etc/prosody/prosody.cfg.lua", source.File("dev/xmpp/prosody.cfg.lua")).
 		WithFile("/opt/oie/start.sh", source.File("dev/xmpp/start.sh")).
 		WithEnvVariable("OIE_CI_RUN_ID", runID).
-		WithExec([]string{"sh", "-c", "mkdir -p /var/lib/prosody/certs && openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj /CN=localhost -addext subjectAltName=DNS:localhost,IP:127.0.0.1 -keyout /var/lib/prosody/certs/localhost.key -out /var/lib/prosody/certs/localhost.crt"})
+		WithExec([]string{"sed", "-i", "-e", `s/http_host = "localhost"/http_host = "xmpp"/`, "-e", `s|https://localhost:5281|https://xmpp:5281|`, "/etc/prosody/prosody.cfg.lua"}).
+		WithExec([]string{"sh", "-c", "mkdir -p /var/lib/prosody/certs && openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj /CN=localhost -addext subjectAltName=DNS:localhost,DNS:xmpp,IP:127.0.0.1 -keyout /var/lib/prosody/certs/localhost.key -out /var/lib/prosody/certs/localhost.crt"})
 	ca := prosody.File("/var/lib/prosody/certs/localhost.crt")
 	for _, port := range []int{80, 443, 5269, 5280, 5281, 5347} {
 		prosody = prosody.WithoutExposedPort(port)
 	}
-	xmpp := prosody.WithExposedPort(5222).AsService(dagger.ContainerAsServiceOpts{Args: []string{"sh", "/opt/oie/start.sh"}})
+	xmpp := prosody.WithExposedPort(5222).WithExposedPort(5281).AsService(dagger.ContainerAsServiceOpts{Args: []string{"sh", "/opt/oie/start.sh"}})
 	integrated := goContainer.WithServiceBinding("xmpp", xmpp).WithFile("/tmp/xmpp-ca.crt", ca).
 		WithEnvVariable("OIE_XMPP_INTEGRATION", "1").WithEnvVariable("OIE_XMPP_CA_FILE", "/tmp/xmpp-ca.crt").
 		WithEnvVariable("OIE_XMPP_ENDPOINT", "xmpp:5222").WithEnvVariable("OIE_CI_RUN_ID", runID).

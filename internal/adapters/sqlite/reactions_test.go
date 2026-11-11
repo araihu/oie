@@ -13,7 +13,7 @@ import (
 
 func downReactionMigration(t *testing.T, s *Store) {
 	t.Helper()
-	for _, name := range []string{"000017_room_archives", "000016_message_reactions"} {
+	for _, name := range []string{"000018_scheduled_sends", "000017_room_archives", "000016_message_reactions"} {
 		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
 		if err != nil {
 			t.Fatal(err)

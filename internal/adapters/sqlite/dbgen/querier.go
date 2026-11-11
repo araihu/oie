@@ -16,6 +16,7 @@ type Querier interface {
 	CountConversationUnread(ctx context.Context, conversationID string) (int64, error)
 	CountRoomArchiveMessages(ctx context.Context, arg CountRoomArchiveMessagesParams) (int64, error)
 	DeleteObsoleteSharedContent(ctx context.Context, arg DeleteObsoleteSharedContentParams) error
+	DeletePendingReplyMetadata(ctx context.Context, messageID string) error
 	FindAvatar(ctx context.Context, arg FindAvatarParams) (Avatar, error)
 	FindConversation(ctx context.Context, arg FindConversationParams) (Conversation, error)
 	FindMessagePreview(ctx context.Context, arg FindMessagePreviewParams) (MessagePreview, error)
@@ -44,9 +45,11 @@ type Querier interface {
 	GetMessageReply(ctx context.Context, arg GetMessageReplyParams) (string, error)
 	GetMessageStar(ctx context.Context, messageID string) (GetMessageStarRow, error)
 	GetOperation(ctx context.Context, id string) (Operation, error)
+	GetOutbox(ctx context.Context, messageID string) (Outbox, error)
 	GetRoomArchive(ctx context.Context, conversationID string) (GetRoomArchiveRow, error)
 	GetRoomIntent(ctx context.Context, conversationID string) (RoomIntent, error)
 	GetSharedContentItem(ctx context.Context, arg GetSharedContentItemParams) (GetSharedContentItemRow, error)
+	GetStagedAttachment(ctx context.Context, id string) (StagedAttachment, error)
 	HasMessageRead(ctx context.Context, canonicalID string) (bool, error)
 	InsertAccount(ctx context.Context, arg InsertAccountParams) error
 	InsertAccountRevision(ctx context.Context, arg InsertAccountRevisionParams) error
@@ -75,6 +78,7 @@ type Querier interface {
 	InsertPreviewRevision(ctx context.Context, arg InsertPreviewRevisionParams) error
 	InsertReactionObservation(ctx context.Context, arg InsertReactionObservationParams) error
 	InsertReadRevision(ctx context.Context, arg InsertReadRevisionParams) error
+	InsertStagedAttachment(ctx context.Context, arg InsertStagedAttachmentParams) error
 	InterruptedMessageEditCommands(ctx context.Context) ([]MessageEditCommand, error)
 	InterruptedMessageReactionCommands(ctx context.Context) ([]MessageReactionCommand, error)
 	InterruptedMessages(ctx context.Context) ([]Message, error)
@@ -98,6 +102,7 @@ type Querier interface {
 	ListMessagesAfter(ctx context.Context, arg ListMessagesAfterParams) ([]Message, error)
 	ListRoomArchiveConversations(ctx context.Context, accountID string) ([]Conversation, error)
 	ListRoomIntents(ctx context.Context) ([]RoomIntent, error)
+	ListScheduledMessages(ctx context.Context, arg ListScheduledMessagesParams) ([]ListScheduledMessagesRow, error)
 	ListSharedContent(ctx context.Context, arg ListSharedContentParams) ([]ListSharedContentRow, error)
 	ListStarredMessages(ctx context.Context, arg ListStarredMessagesParams) ([]ListStarredMessagesRow, error)
 	MarkSharedContentIndexed(ctx context.Context, arg MarkSharedContentIndexedParams) error

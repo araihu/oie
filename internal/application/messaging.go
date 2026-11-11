@@ -56,6 +56,8 @@ type Outgoing struct {
 	Reply                 *domain.ReplyReference
 	Mentions              []domain.MessageMention
 	Correction            *domain.OutgoingCorrection
+	Attachments           []OutgoingAttachment
+	RecordWireText        func(context.Context, string) error
 }
 
 // Outcomes distinguish definitely unsent failures from ambiguous external effects.
@@ -266,17 +268,32 @@ func (e *Engine) SendMessageWithReply(ctx context.Context, key, conversationID d
 }
 
 func (e *Engine) SendMessageWithMentions(ctx context.Context, key, conversationID domain.ID, text string, replyTo domain.ID, mentions []domain.MentionSelection) (MessageResult, error) {
-	if err := validateMentionSelections(text, mentions); err != nil {
-		return MessageResult{}, err
-	}
-	if !validID(key) || !validID(conversationID) || !validMessage(text) || (replyTo != "" && !validID(replyTo)) {
+	return e.SendComposition(ctx, key, conversationID, domain.OutgoingComposition{OriginalText: text, ReplyTo: replyTo, Mentions: mentions}, nil)
+}
+
+func (e *Engine) SendComposition(ctx context.Context, key, conversationID domain.ID, in domain.OutgoingComposition, at *time.Time) (MessageResult, error) {
+	if !validID(key) || !validID(conversationID) {
 		return MessageResult{}, ErrInvalid
 	}
-	parts := []string{string(conversationID), text}
-	if replyTo != "" {
-		parts = append(parts, string(replyTo))
+	if err := validateComposition(in); err != nil {
+		return MessageResult{}, err
 	}
-	requestFingerprint := fingerprint("send_message", mentionFingerprint(parts, mentions))
+	parts := []string{string(conversationID), in.OriginalText}
+	if in.ReplyTo != "" {
+		parts = append(parts, string(in.ReplyTo))
+	}
+	requestFingerprint := fingerprint("send_message", mentionFingerprint(parts, in.Mentions))
+	if at != nil || len(in.AttachmentIDs) != 0 {
+		if at != nil {
+			utc := at.UTC()
+			at = &utc
+		}
+		requestFingerprint = fingerprint("send_composition", struct {
+			Destination domain.ID
+			Composition domain.OutgoingComposition
+			At          *time.Time
+		}{conversationID, in, at})
+	}
 	repo, err := e.messaging()
 	if err != nil {
 		return MessageResult{}, err
@@ -313,21 +330,6 @@ func (e *Engine) SendMessageWithMentions(ctx context.Context, key, conversationI
 	if err != nil {
 		return MessageResult{}, err
 	}
-	frozenMentions, err := e.freezeMentions(ctx, a, c, text, mentions)
-	if err != nil {
-		return MessageResult{}, err
-	}
-	var plan *domain.OutboundReply
-	if replyTo != "" {
-		target, err := repo.Message(ctx, replyTo)
-		if err != nil {
-			return MessageResult{}, err
-		}
-		if target.AccountID != c.AccountID || target.ConversationID != c.ID {
-			return MessageResult{}, ErrInvalid
-		}
-		plan = outboundReply(a, c, target, text, e.protocols)
-	}
 	id, err := e.newID()
 	if err != nil {
 		return MessageResult{}, err
@@ -341,17 +343,13 @@ func (e *Engine) SendMessageWithMentions(ctx context.Context, key, conversationI
 		return MessageResult{}, err
 	}
 	now := e.now().UTC()
-	m := domain.Message{ID: id, RevisionID: rev, AccountID: c.AccountID, ConversationID: c.ID, Sender: domain.Sender{ID: a.ID, DisplayName: a.Address}, OriginalText: text, CreatedAt: now, IsOwn: true, SendState: "queued", ProviderID: string(id), OutboundReply: plan, Mentions: frozenMentions}
-	if plan != nil {
-		m.OriginalText = quotedReplyBody(plan)
-		m.Reply = &domain.MessageReply{MessageID: plan.TargetID, Available: true, SenderName: plan.SenderName, Excerpt: plan.Excerpt, BodyText: plan.BodyText}
-		if plan.Reference != nil {
-			m.ReplyReference = &domain.ReplyReference{Target: *plan.Reference, Fallback: append([]domain.TextRange(nil), plan.Fallback...)}
-		}
+	if at != nil && !at.After(now) {
+		return MessageResult{}, ErrInvalid
 	}
-	outgoing := outgoingMessage(m, c)
-	if refs, ok := e.protocols.(OutgoingReferenceProvider); ok {
-		m.References = refs.OutgoingReferences(a, outgoing)
+	m := domain.Message{ID: id, RevisionID: rev, AccountID: c.AccountID, ConversationID: c.ID, Sender: domain.Sender{ID: a.ID, DisplayName: a.Address}, CreatedAt: now, IsOwn: true, SendState: "queued", ProviderID: string(id), ScheduledAt: at}
+	m, err = e.prepareComposition(ctx, a, c, m, in)
+	if err != nil {
+		return MessageResult{}, err
 	}
 	result, err := repo.AcceptMessage(ctx, MessageMutation{Operation: Operation{ID: key, ResourceID: id, CreatedAt: now, Kind: "send_message"}, Fingerprint: requestFingerprint, Message: m, ConversationRevisionID: cr})
 	if err == nil {
@@ -428,7 +426,7 @@ func (e *Engine) Receive(ctx context.Context, in Incoming) error {
 		if lookupErr != nil && !errors.Is(lookupErr, ErrNotFound) {
 			return lookupErr
 		}
-		if lookupErr == nil && existing.IsOwn && existing.AccountID == a.ID && existing.OriginalText == in.OriginalText {
+		if lookupErr == nil && existing.IsOwn && existing.AccountID == a.ID && (existing.OriginalText == in.OriginalText || (existing.AttachmentWireText != "" && existing.AttachmentWireText == in.OriginalText)) {
 			chat, err := r.Conversation(ctx, existing.ConversationID)
 			if err != nil {
 				return err
@@ -605,10 +603,17 @@ func (e *Engine) runOutbox(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
-				sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				timeout := 10 * time.Second
+				if len(claimed.Attachments) != 0 {
+					timeout = 3 * time.Minute
+				}
+				sendCtx, cancel := context.WithTimeout(ctx, timeout)
 				outgoing := outgoingMessage(claimed, c)
 				outgoing.RoomIntentRevisionID = roomRevision
-				outcome := e.protocols.Send(sendCtx, a, outgoing)
+				outcome := Failed
+				if err := e.attachOutgoingFiles(&outgoing, claimed); err == nil {
+					outcome = e.protocols.Send(sendCtx, a, outgoing)
+				}
 				cancel()
 				stateName := outcome
 				if outcome == NotSent {

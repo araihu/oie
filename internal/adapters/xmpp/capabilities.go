@@ -136,6 +136,7 @@ func decodeDiscoInfo(e *entry, s *mx.Session, address, body string) (disco.Info,
 	}
 	recordOccupantSupport(e, s, address, *result.Query)
 	recordReactionRestrictions(e, s, address, *result.Query)
+	recordUploadLimit(e, s, address, *result.Query)
 	return *result.Query, nil
 }
 

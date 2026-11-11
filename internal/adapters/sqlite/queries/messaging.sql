@@ -27,7 +27,7 @@ SELECT * FROM messages WHERE id=?;
 -- name: FindProviderMessage :one
 SELECT * FROM messages WHERE account_id=? AND conversation_id=? AND provider_id=? AND is_own=?;
 -- name: ListMessages :many
-SELECT m.* FROM messages AS m WHERE m.conversation_id=sqlc.arg(page_conversation_id) AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id) AND (
+SELECT m.* FROM messages AS m WHERE m.conversation_id=sqlc.arg(page_conversation_id) AND NOT EXISTS(SELECT 1 FROM outbox o WHERE o.message_id=m.id AND o.scheduled_at<>'' AND o.state IN ('queued','cancelled')) AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id) AND (
 CAST(sqlc.arg(page_cursor) AS TEXT)='' OR
 m.created_at_ms<(SELECT x.created_at_ms FROM messages AS x WHERE x.id=CAST(sqlc.arg(page_cursor) AS TEXT) AND x.conversation_id=sqlc.arg(page_conversation_id)) OR
 (m.created_at_ms=(SELECT x.created_at_ms FROM messages AS x WHERE x.id=CAST(sqlc.arg(page_cursor) AS TEXT) AND x.conversation_id=sqlc.arg(page_conversation_id)) AND m.id<CAST(sqlc.arg(page_cursor) AS TEXT))
@@ -35,9 +35,9 @@ m.created_at_ms<(SELECT x.created_at_ms FROM messages AS x WHERE x.id=CAST(sqlc.
 -- name: UpdateMessage :exec
 UPDATE messages SET revision_id=?,state=?,payload=? WHERE id=?;
 -- name: InsertOutbox :exec
-INSERT INTO outbox(message_id,state,next_attempt_at) VALUES(?,'queued',?);
+INSERT INTO outbox(message_id,state,next_attempt_at,scheduled_at) VALUES(?,'queued',?,?);
 -- name: UpdateOutbox :exec
-UPDATE outbox SET state=sqlc.arg(state),next_attempt_at=sqlc.arg(next_attempt_at),attempt_count=attempt_count+sqlc.arg(attempt_increment) WHERE message_id=sqlc.arg(message_id);
+UPDATE outbox SET state=sqlc.arg(state),next_attempt_at=sqlc.arg(next_attempt_at),scheduled_at=sqlc.arg(scheduled_at),attempt_count=attempt_count+sqlc.arg(attempt_increment) WHERE message_id=sqlc.arg(message_id);
 -- name: PendingMessages :many
 SELECT m.* FROM outbox o JOIN messages m ON o.message_id=m.id WHERE o.state='queued' AND o.next_attempt_at<=? ORDER BY o.next_attempt_at,m.id LIMIT 100;
 -- name: InterruptedMessages :many
@@ -53,6 +53,7 @@ SELECT m.* FROM messages AS m
 JOIN messages AS anchor ON anchor.id=sqlc.arg(cursor_id) AND anchor.conversation_id=sqlc.arg(conversation_id)
 WHERE m.conversation_id=sqlc.arg(conversation_id)
 AND (m.created_at_ms,m.id)>(anchor.created_at_ms,anchor.id)
+AND NOT EXISTS (SELECT 1 FROM outbox o WHERE o.message_id=m.id AND o.scheduled_at<>'' AND o.state IN ('queued','cancelled'))
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
 ORDER BY m.created_at_ms ASC,m.id ASC LIMIT sqlc.arg(page_limit);
 

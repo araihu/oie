@@ -1,12 +1,16 @@
 package xmpp_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/xml"
 	"io"
+	"mime/multipart"
 	"net"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -152,8 +156,8 @@ func TestDevelopmentServerMessageExchange(t *testing.T) {
 		t.Fatal("actual server/account discovery absent")
 	}
 	for _, row := range discovered.JSON200.Features {
-		if row.Id == "file_upload" && row.AppSupport != "unsupported" {
-			t.Fatal("discovery enabled unimplemented upload")
+		if row.Id == "file_upload" && row.AppSupport != "supported" {
+			t.Fatal("implemented upload missing from app capabilities")
 		}
 		if row.Id == "reactions" && row.ServerSupport != "scope_dependent" {
 			t.Fatal("peer feature classified as server flag")
@@ -336,6 +340,9 @@ func TestDevelopmentServerMessageExchange(t *testing.T) {
 		}
 		return err == nil && r.JSON200 != nil && r.JSON200.SendState == "failed"
 	})
+	t.Run("scheduled attachment delivered through HTTP upload", func(t *testing.T) {
+		testScheduledAttachmentUpload(t, ctx, client, roots, conversation, receivedConversation)
+	})
 	// Incorrect authentication must produce a stable non-secret error.
 	connect(alice, "incorrect-fixture-password")
 	eventually(t, func() bool { return state(alice) == "error" })
@@ -377,6 +384,77 @@ func TestDevelopmentServerMessageExchange(t *testing.T) {
 			t.Fatal("incoming history missing or duplicated")
 		}
 	}
+}
+
+func testScheduledAttachmentUpload(t *testing.T, ctx context.Context, client *engineapi.ClientWithResponses, roots *x509.CertPool, sender, recipient string) {
+	t.Helper()
+	content := "Oie attachment " + string(id())
+	var body bytes.Buffer
+	multipartBody := multipart.NewWriter(&body)
+	file, err := multipartBody.CreateFormFile("file", "references.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = io.WriteString(file, content); err != nil {
+		t.Fatal(err)
+	}
+	if err = multipartBody.Close(); err != nil {
+		t.Fatal(err)
+	}
+	attachment := string(id())
+	staged, err := client.StageMessageAttachmentWithBodyWithResponse(ctx, sender, attachment, multipartBody.FormDataContentType(), &body)
+	if err != nil || staged.JSON201 == nil {
+		t.Fatalf("stage file: %+v %v", staged, err)
+	}
+	at := time.Now().Add(2 * time.Second).UTC()
+	files := []string{attachment}
+	caption := "Scheduled references " + string(id())
+	message, err := client.SendMessageWithResponse(ctx, sender, &engineapi.SendMessageParams{IdempotencyKey: string(id())},
+		engineapi.SendMessage{OriginalText: caption, ScheduledAt: &at, AttachmentIds: &files})
+	if err != nil || message.JSON202 == nil || message.JSON202.ScheduledAt == nil {
+		t.Fatalf("schedule file: %+v %v", message, err)
+	}
+	if current, err := client.GetMessageWithResponse(ctx, message.JSON202.Id); err != nil || current.JSON200 == nil ||
+		(time.Now().Before(at) && current.JSON200.SendState != "queued") {
+		t.Fatalf("attachment became eligible early: %+v %v", current, err)
+	}
+	var download string
+	eventually(t, func() bool {
+		page, err := client.ListMessagesWithResponse(ctx, recipient, nil)
+		if err != nil || page.JSON200 == nil {
+			return false
+		}
+		for _, m := range page.JSON200.Items {
+			if link, found := strings.CutPrefix(m.OriginalText, caption+"\n"); found {
+				download = link
+				if m.CreatedAt.Before(at.Add(-time.Millisecond)) {
+					t.Fatalf("recipient received the attachment before the schedule: %v < %v", m.CreatedAt, at)
+				}
+				return strings.HasPrefix(download, "https://")
+			}
+		}
+		return false
+	})
+	transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}}
+	defer transport.CloseIdleConnections()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, download, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := (&http.Client{Transport: transport, Timeout: 5 * time.Second}).Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	data, err := io.ReadAll(response.Body)
+	if err != nil || response.StatusCode != 200 || string(data) != content {
+		t.Fatalf("recipient could not download exact bytes: %d %v", response.StatusCode, err)
+	}
+	eventually(t, func() bool {
+		retained, err := client.GetMessageWithResponse(ctx, message.JSON202.Id)
+		return err == nil && retained.JSON200 != nil && retained.JSON200.SendState == "submitted" &&
+			retained.JSON200.OriginalText == caption && retained.JSON200.Attachments != nil && len(*retained.JSON200.Attachments) == 1
+	})
 }
 
 // This proxy injects a real stream interruption; no protocol callbacks or send
