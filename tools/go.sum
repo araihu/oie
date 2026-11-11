@@ -188,6 +188,8 @@ github.com/araihu/oapi-cli-gen v0.0.0-20261111030200-7d45bc2f805d h1:EQxmB1cyqCm
 github.com/araihu/oapi-cli-gen v0.0.0-20261111030200-7d45bc2f805d/go.mod h1:3rhTL/t8BD0I4nNgZAxUXLx+WeAuCgMGrMJHRaDi+VI=
 github.com/araihu/oapi-cli-gen v0.0.0-20261111030706-3de8ea18e334 h1:byPddampdSt3I13AkjUKhgDBJh+gN+Bbl5sdpYWLT8c=
 github.com/araihu/oapi-cli-gen v0.0.0-20261111030706-3de8ea18e334/go.mod h1:3rhTL/t8BD0I4nNgZAxUXLx+WeAuCgMGrMJHRaDi+VI=
+github.com/araihu/oapi-cli-gen v0.0.0-20261111033254-90684aaa8e38 h1:9dk/kyUheX720k+MFV80qVU0hDG5l03BwTR3NoktcXk=
+github.com/araihu/oapi-cli-gen v0.0.0-20261111033254-90684aaa8e38/go.mod h1:BpdyfgfJjuaJsII9fwS8Ad9rer581rdqX2QEkegqSz0=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
 github.com/ashanbrown/forbidigo/v2 v2.3.1 h1:KAZijvQ7zeIBKbhikT4jCm0TLYXC4u78bTiLh/8JROI=

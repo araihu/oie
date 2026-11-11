@@ -3,9 +3,9 @@
 Issued 2026-11-10. Updated 2026-11-11.
 
 The independent engine and CLI milestone is implemented in
-`codex/engine-api-cli`. The reviewed Oiê revision is `4ef445c` and its
-generator pin is `v0.0.0-20261111030706-3de8ea18e334` in `tools/go.mod`.
-Integration with Oiê `main` is pending. The original brief follows this
+`codex/engine-api-cli`. The independently reviewed Oiê revision is `4ef445c`.
+The current tools pin is `v0.0.0-20261111033254-90684aaa8e38`, from the
+generator's `main`. Integration with Oiê `main` is pending. The original brief follows this
 status update.
 
 ## Final independent reviews
@@ -37,22 +37,21 @@ for the fixture, evidence, and limits of those runs.
 
 ### Generator PRs
 
-| PR | State checked 2026-11-11 | Next action |
-| --- | --- | --- |
-| [oapi-cli-gen #2](https://github.com/araihu/oapi-cli-gen/pull/2) | Draft and mergeable into `main` at `ca5a6b8`. Head `d0484f3`. GitHub check and CodeQL passed. | Mark ready and squash-merge the nested-group support first. |
-| [oapi-cli-gen #3](https://github.com/araihu/oapi-cli-gen/pull/3) | Draft and mergeable into the #2 branch at `d0484f3`. Head `3de8ea1`. Local `make check` passed. GitHub reports no checks on the stacked base. | After #2 lands, verify the base is `main`, rebase the #3-only commits onto the squash result, mark ready, and verify the GitHub checks before squash-merging. |
+| PR | Result on 2026-11-11 |
+| --- | --- |
+| [oapi-cli-gen #2](https://github.com/araihu/oapi-cli-gen/pull/2) | Nested command groups squash-merged into `main` at `1a98fcb`. GitHub check and CodeQL passed. |
+| [oapi-cli-gen #3](https://github.com/araihu/oapi-cli-gen/pull/3) | Ten commits rebased onto the #2 squash. The PR then passed GitHub check and CodeQL and squash-merged into `main` at `90684aa`. |
 
-The generator repository allows squash merges only and deletes merged head
-branches. GitHub can retarget #3 automatically when the #2 branch is deleted.
-Keep `d0484f3` as the old base for the rebase and verify the resulting diff
-contains only #3 changes. The `check` workflow targets PRs into `main`.
-[GitHub's PR merge behavior](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/merging-a-pull-request)
+The rebase preserved the reviewed generator tree. The subsequent PR check
+flagged a Go standard-library issue with the runner's Go 1.27.3. The generator
+now selects Go 1.27.4 for development and CI. Its module and generated CLI
+still target Go 1.27.3 as the minimum version. The merged implementation
+matches the independently reviewed generator code.
+[Go advisory GO-2026-6859](https://vuln.go.dev/ID/GO-2026-6859.json)
 
-Once #3 is in generator `main`, pin the Oiê tools module with
-`GOWORK=off go -C tools get github.com/araihu/oapi-cli-gen@<merged-commit>`
-and run `make generate build-cli`. The current pin is verified on this worktree. Pinning
-the merged commit gives the integrated build a revision reachable from
-upstream `main`.
+The Oiê tools module now pins the merged commit `90684aa`. Regeneration
+preserved the committed CLI files byte for byte, and the CLI was rebuilt
+with Go 1.27.4.
 
 ### Oiê worktree
 
@@ -82,14 +81,18 @@ each case and reconcile the IDs and references.
    engine HTTP adapter, plus conflicts in generated output. If that line
    lands first, reconcile the source contracts and regenerate the bindings
    and CLI from the combined source.
-3. Apply the final generator pin, regenerate, and validate the exact
-   integration candidate. Run `make check` and the complete Dagger graph
+3. Carry the merged generator pin into the integration candidate and
+   regenerate from its resolved source contracts. Run `make check` and the complete Dagger graph
    (`make ci`) for the combined CLI/XMPP, desktop, and browser regressions.
    The passing checks above cover the current feature branch.
 4. Follow the existing Oiê PR policy in [AGENTS.md](../../AGENTS.md).
    A new Oiê PR remains tied to readiness for alpha `v0.0.1`, including
    usable initial room history. The generator PRs and preparation of the
    local integration candidate are separate from alpha publication.
+
+The Oiê Dagger image currently selects Go 1.27.3, and the engine HTTP adapter
+uses `http.MaxBytesReader`, which is listed in GO-2026-6859. Review the engine
+and packaging toolchains separately before release.
 
 ## User direction and scope
 
