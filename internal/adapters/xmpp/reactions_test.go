@@ -311,14 +311,7 @@ func TestReactionSendWritesBodylessWireWithoutChangingOriginalSendTracking(t *te
 			if kind == "direct" {
 				c.Kind, c.Address = "direct", "bob@example.test"
 			}
-			left, right := net.Pipe()
-			t.Cleanup(func() { _ = left.Close(); _ = right.Close() })
-			s, err := mx.NewSession(t.Context(), jid.MustParse("example.test"), jid.MustParse("alice@example.test/test"), left, mx.Ready, func(context.Context, *stream.Info, *stream.Info, *mx.Session, any) (mx.SessionState, io.ReadWriter, any, error) {
-				return mx.Ready, nil, nil, nil
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			s, left, right := reactionWireSession(t)
 			e.raw, e.session, slot.session = left, s, s
 			plan, err := m.PrepareReaction(t.Context(), e.account, c, reactionTarget(e, c))
 			if err != nil {
@@ -348,6 +341,19 @@ func TestReactionSendWritesBodylessWireWithoutChangingOriginalSendTracking(t *te
 	}
 }
 
+func reactionWireSession(t *testing.T) (*mx.Session, net.Conn, net.Conn) {
+	t.Helper()
+	left, right := net.Pipe()
+	t.Cleanup(func() { _ = left.Close(); _ = right.Close() })
+	s, err := mx.NewSession(t.Context(), jid.MustParse("example.test"), jid.MustParse("alice@example.test/test"), left, mx.Ready, func(context.Context, *stream.Info, *stream.Info, *mx.Session, any) (mx.SessionState, io.ReadWriter, any, error) {
+		return mx.Ready, nil, nil, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s, left, right
+}
+
 type reactionDeadlineConn struct {
 	net.Conn
 	onDeadline func()
@@ -365,16 +371,9 @@ func (c *reactionDeadlineConn) SetWriteDeadline(at time.Time) error {
 func TestReactionSendRechecksRoomConfigurationAtStreamWrite(t *testing.T) {
 	m, e, slot, _ := reactionRoomFixture(t)
 	c := slot.conversation
-	left, right := net.Pipe()
-	t.Cleanup(func() { _ = left.Close(); _ = right.Close() })
+	s, left, right := reactionWireSession(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
-	s, err := mx.NewSession(ctx, jid.MustParse("example.test"), jid.MustParse("alice@example.test/test"), left, mx.Ready, func(context.Context, *stream.Info, *stream.Info, *mx.Session, any) (mx.SessionState, io.ReadWriter, any, error) {
-		return mx.Ready, nil, nil, nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	raw := &reactionDeadlineConn{Conn: left, onDeadline: func() {
 		feedReaction(t, m, e, `<message xmlns="jabber:client" from="`+c.Address+`" type="groupchat"><x xmlns="http://jabber.org/protocol/muc#user"><status code="104"/></x></message>`)
 	}}
@@ -414,6 +413,47 @@ func TestReactionSendRechecksRoomConfigurationAtStreamWrite(t *testing.T) {
 	res := <-received
 	if res.err != nil || res.wire.ID != string(message.ID) || res.wire.Body != message.OriginalText || len(res.wire.Reactions) != 0 {
 		t.Fatal("expected only the later room text on the wire", res.wire, res.err)
+	}
+}
+
+func TestReactionSendIsUnsentWhenAccountDisconnectsBeforeWriting(t *testing.T) {
+	m, e, slot, _ := reactionRoomFixture(t)
+	m.ctx = t.Context()
+	t.Cleanup(m.workers.Wait)
+	e.config = configuration{AccountID: e.account.ID, Enabled: true, Password: "fixture"}
+	c := slot.conversation
+	s, left, right := reactionWireSession(t)
+	started := make(chan struct{})
+	e.raw = &reactionDeadlineConn{Conn: left, onDeadline: func() { close(started) }}
+	e.session, slot.session = s, s
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	plan, err := m.PrepareReaction(ctx, e.account, c, reactionTarget(e, c))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := application.Outgoing{ID: "019a5df0-0000-7000-8000-000000000012", Kind: c.Kind, Address: c.Address, Reaction: &plan, ReactionEmojis: []string{"👍"}, RoomIntentRevisionID: plan.RoomIntentRevisionID}
+	writer := s.TokenWriter()
+	defer func() { _ = writer.Close() }()
+	outcome := make(chan string, 1)
+	go func() { outcome <- m.Send(ctx, e.account, out) }()
+	select {
+	case <-started:
+	case <-ctx.Done():
+		t.Fatal("reaction did not reach the occupied stream writer")
+	}
+	if state, err := m.Disconnect(ctx, e.account); err != nil || state.State != "not_connected" {
+		t.Fatal("account disconnect failed", state, err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if state := <-outcome; state != application.NotSent || len(e.reactionCommands) != 0 {
+		t.Fatal("reaction should remain unsent and untracked", state, e.reactionCommands)
+	}
+	_ = right.SetReadDeadline(time.Now().Add(time.Second))
+	if n, err := right.Read(make([]byte, 1)); n != 0 || err != io.EOF {
+		t.Fatal("expected the connection to close without a stanza", n, err)
 	}
 }
 

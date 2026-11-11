@@ -152,9 +152,11 @@ func (e *entry) stop() {
 	if e.cancel != nil {
 		e.cancel()
 	}
-	e.mu.RLock()
+	e.mu.Lock()
+	// A queued writer must see the transport detach before the worker exits.
 	raw := e.raw
-	e.mu.RUnlock()
+	e.raw = nil
+	e.mu.Unlock()
 	if raw != nil {
 		_ = raw.Close()
 	}
