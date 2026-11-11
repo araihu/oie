@@ -188,7 +188,10 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     assert.equal(new URL(page.url()).searchParams.get('message'),corpus[0].id);assert((await page.locator('[data-message-id="'+corpus[0].id+'"]').textContent()).includes(corpus[0].originalText));
     assert(state.contexts.some(c=>c.message===corpus[0].id&&c.limit<=50),'historical match opens only the bounded current canonical source context');
     assert((await page.locator('#message-timeline [data-message-id]').count())<=50);assert.equal(await page.locator('#message-composer').inputValue(),draft);
-    await page.goBack();await page.waitForURL(historicalReturnURL);await query(page).waitFor({state:'visible'});await until(async()=>await hits(page).count()===2,'restored historical search');assert.equal(await query(page).inputValue(),'Pineapple');assert(await form(page).locator('[name="includeEditHistory"]').isChecked());assert.equal(await hits(page).count(),2);
+    const beforeSearchRestore=await page.evaluate(()=>window.OieRuntime.generation);
+    await page.goBack();await page.waitForURL(historicalReturnURL);
+    await page.waitForFunction(generation=>window.OieRuntime.generation>generation&&!document.body.dataset.focusMessage,beforeSearchRestore);
+    await query(page).waitFor({state:'visible'});await until(async()=>await hits(page).count()===2,'restored historical search');assert.equal(await query(page).inputValue(),'Pineapple');assert(await form(page).locator('[name="includeEditHistory"]').isChecked());assert.equal(await hits(page).count(),2);
     findings.push('Edit history is explicit and labeled; prior-content hits navigate to the bounded canonical current source and Back restores the search context');
 
     // The global list search persists outside conversation swaps. Source navigation must not
