@@ -131,6 +131,7 @@ func updateConversation(ctx context.Context, q *dbgen.Queries, c domain.Conversa
 	}
 	if !m.IsOwn && !m.Historical {
 		c.UnreadCount++
+		c.UnreadMention = c.UnreadMention || m.MentionsYou
 	}
 	seq, err := change(ctx, q, "conversation.updated", c, at)
 	if err != nil {

@@ -4,10 +4,41 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/araihu/oie/internal/domain"
 )
+
+func incomingRoomMention(in Incoming) bool {
+	if in.Kind != "room" || in.IsOwn || in.OwnRoomNickname == "" {
+		return false
+	}
+	body := in.OriginalText
+	if in.Reply != nil {
+		body, _ = domain.ReplyBody(body, in.Reply.Fallback)
+	}
+	body = strings.ToLower(body)
+	nickname := strings.ToLower(in.OwnRoomNickname)
+	_, firstSize := utf8.DecodeRuneInString(nickname)
+	for offset := 0; offset < len(body); {
+		index := strings.Index(body[offset:], nickname)
+		if index < 0 {
+			return false
+		}
+		start := offset + index
+		before, _ := utf8.DecodeLastRuneInString(body[:start])
+		after, _ := utf8.DecodeRuneInString(body[start+len(nickname):])
+		// Gajim skips nickname substrings inside words and after common
+		// command, URL and contraction delimiters.
+		if !unicode.IsLetter(before) && !unicode.IsMark(before) && !strings.ContainsRune("/-'", before) &&
+			!unicode.IsLetter(after) && !unicode.IsMark(after) {
+			return true
+		}
+		offset = start + firstSize
+	}
+	return false
+}
 
 // MentionProvider supplies only observed, room-scoped participants. Protocol
 // address interpretation and disclosed-target selection belong to the adapter.

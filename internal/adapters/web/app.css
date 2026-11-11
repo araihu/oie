@@ -87,6 +87,8 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-row-top time{color:var(--oie-muted);font-size:11px;flex-shrink:0}
 .oie-row-bottom>span:first-child{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--oie-muted);line-height:1.35}
 .oie-unread-count{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;font-size:10px;font-weight:700;background:var(--oie-accent);color:var(--oie-on-accent);flex-shrink:0}
+.oie-row-mention-slot{flex:0 0 18px;height:18px}
+.oie-row-mention{display:grid;place-items:center;height:100%;border-radius:50%;font-size:12px;font-weight:700;background:var(--oie-accent-soft);color:var(--oie-accent-text)}
 .oie-pin{color:var(--oie-muted)}.oie-pin .oie-icon{width:12px;height:12px}
 .oie-list-footer{height:48px;min-height:48px;padding:6px 12px;display:flex;align-items:center;gap:7px;border-top:1px solid var(--oie-border);font-size:11px;color:var(--oie-muted)}
 .oie-list-footer>span:nth-child(2){flex:1}.oie-status-dot{height:6px;width:6px;border-radius:50%;background:var(--oie-accent)}.oie-status-error{background:#e76e6e}
@@ -103,6 +105,8 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-message-own{margin-left:auto;--color-primary:#e1eef5;--color-on-primary:#274c5e;--color-primary-dark:#24495c;--color-on-primary-dark:#eff7fb}
 .oie-message:not(.oie-message-group-end)>.oie-message-content>.oie-avatar-scope{visibility:hidden}
 .oie-bubble{margin-top:0;font-family:var(--font-body);font-size:13px}
+.oie-message-mentioned :is(.oie-message-body,.oie-media-message){outline:2px solid var(--oie-accent);outline-offset:2px;border-radius:3px}
+.oie-message-mention-slot{flex:0 0 10px;height:14px;font-size:12px;font-weight:700;color:var(--oie-accent-text)}
 html:not(.dark) .oie-bubble{--color-surface-alt:var(--oie-panel);filter:drop-shadow(0 1px 1px rgb(23 33 28 / .1))}
 html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 .oie-message-time{display:block;text-align:right;color:var(--oie-muted);font-size:10px;margin-top:3px}

@@ -467,6 +467,8 @@ Automatically mark incoming messages read only when visible in the active, focus
 
 Implemented alpha scope: record exact visible incoming message identities in the owning engine, with durable independent UUID revisions and idempotent read batches. Reading does not alter message content or conversation activity ordering, and it does not clear other messages or subsequent arrivals. Hosted clients observe the shared counter through conversation events. Independent-engine read replication, manual unread reminders and provider receipt emission remain separate work.
 
+**AGREED:** highlight received room messages that mention the account's room nickname, with or without `@`. Show an `@` indicator on the conversation while it has any unread mentions. Reading clears the conversation indicator once all matching messages have been read. See [room mentions](mentions.md).
+
 **RECOMMENDED R12:** the current browser implementation requires 500 ms of foreground visibility and at least 60% of the message height, capped by the available timeline height for tall messages. Hidden tabs, unfocused documents and open modal overlays do not qualify. Visibility tuning remains open; these defaults are not a new device preference.
 
 Provide synced **Mark as read** and **Mark as unread**. Unread is a reminder, not reversal of delivery/read evidence. Explicit Mark as read sends supported/enabled protocol read receipts, respecting the account setting, without requiring every message to be individually viewed.
@@ -747,7 +749,7 @@ A separate native daemon is an accepted future option. Wails desktop packaging i
 | --- | --- |
 | **B25** | Message search by sender, date range, and content type. Start with sender and date range in the current conversation. See O08 for search filter design. |
 | **B26** | A per-account **Note to self** shortcut for sending text and links to the account's own address. Verify that messages appear in both Oiê and Gajim when using the same XMPP account. |
-| **B27** | Activity for incoming mentions and reactions to the user's messages. Start by highlighting incoming mentions in rooms and marking the corresponding conversations. Then explore a reaction activity view that opens the source message and follows the existing active-conversation, mute, and Do Not Disturb policies. |
+| **B27** | Explore an activity view for incoming mentions and reactions to the user's messages. Open the source message and follow the existing active-conversation, mute, and Do Not Disturb policies. |
 | **B28** | Select multiple messages and export an individual conversation as a readable file. Start with copying selected messages. Bulk deletion depends on the deletion scopes and recovery behavior in section 9.1 and O10. |
 | **B29** | Organize chats across accounts. Start with filtering by existing contact groups. Explore user-defined workspaces that can contain direct chats and rooms from several accounts. |
 | **B30** | Start a private chat with a room occupant when the room does not disclose the occupant's personal address. Use the identity exposed by the room and respect room permissions. |

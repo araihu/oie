@@ -438,7 +438,8 @@ func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.M
 		e.mu.RUnlock()
 		return nil
 	}
-	own := msg.From.Resourcepart() == slot.snapshot.Nickname
+	nickname := slot.snapshot.Nickname
+	own := msg.From.Resourcepart() == nickname
 	var canonical domain.ID
 	if own && len(meta.Origins) == 1 && usableID(meta.Origins[0].ID) && meta.Origins[0].Text == "" && len(meta.Origins[0].Children) == 0 {
 		origin := meta.Origins[0].ID
@@ -476,7 +477,7 @@ func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.M
 	if own && canonical != "" {
 		observeOwnCorrectionSource(e, string(canonical), correction, address, body)
 	}
-	err := m.host.Receive(ctx, application.Incoming{MediaThumbnails: decodeFileThumbnails(files), AccountID: e.account.ID, Address: address, Kind: "room", SenderName: msg.From.Resourcepart(), SenderAddress: liveRoomSenderAddress(e, msg.From, stamp, delayFrom), ProviderID: provider, OriginalText: body, CreatedAt: created, Historical: historical, IsOwn: own, References: refs, Reply: reply, CanonicalID: canonical, Correction: correction})
+	err := m.host.Receive(ctx, application.Incoming{MediaThumbnails: decodeFileThumbnails(files), AccountID: e.account.ID, Address: address, Kind: "room", OwnRoomNickname: nickname, SenderName: msg.From.Resourcepart(), SenderAddress: liveRoomSenderAddress(e, msg.From, stamp, delayFrom), ProviderID: provider, OriginalText: body, CreatedAt: created, Historical: historical, IsOwn: own, References: refs, Reply: reply, CanonicalID: canonical, Correction: correction})
 	if errors.Is(err, application.ErrInvalid) {
 		return nil
 	}

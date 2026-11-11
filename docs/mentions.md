@@ -50,10 +50,19 @@ Gajim detects mentions from the message text. For the nickname `Ana`, its
 matcher recognizes `Ana`, `Ana:`, `Ana,`, and `@Ana`. It checks the
 characters around the match, so `Anabela` does not mention `Ana`. Oiê's text
 therefore works with Gajim's nickname matcher in both anonymous and
-non-anonymous rooms. Highlighting incoming mentions in Oiê is tracked in
-[B27](oie-spec.md#161-post-alpha-priorities-from-the-gajim-comparison).
+non-anonymous rooms.
 [Gajim matcher](https://github.com/gajim/gajim/blob/ad5a7d6b5dce3cd420fd4a3799b2f827c4f2c6a7/src/gajim/common/util/muc.py#L102-L151)
 [Gajim matcher tests](https://github.com/gajim/gajim/blob/ad5a7d6b5dce3cd420fd4a3799b2f827c4f2c6a7/tests/common/test_message_needs_highlight.py#L24-L69)
+
+## Incoming mentions
+
+Oiê matches the nickname confirmed for the receiving account in that room.
+Matching ignores case and recognizes both `Ana` and `@Ana`. It checks the
+surrounding characters and skips protocol-marked reply quotes. The timeline
+highlights the message, and the conversation shows `@` until its last unread
+mention is read. Reading leaves the highlight on the message. Corrections
+reflect the current text. Previously retained messages and archive imports
+without a confirmed room nickname have no mention classification.
 
 ## State and action invariants
 

@@ -106,11 +106,12 @@ func (s *Store) MarkMessagesRead(ctx context.Context, in application.ReadMutatio
 			ids = append(ids, canonical)
 		}
 	}
-	unread, err := q.CountConversationUnread(ctx, string(c.ID))
+	summary, err := q.ConversationUnreadSummary(ctx, string(c.ID))
 	if err != nil {
 		return application.ReadResult{}, err
 	}
-	if len(ids) > 0 || int(unread) != c.UnreadCount {
+	unread, unreadMention := summary.UnreadCount, summary.UnreadMention != 0
+	if len(ids) > 0 || int(unread) != c.UnreadCount || unreadMention != c.UnreadMention {
 		parents := []domain.ID{}
 		if state.RevisionID != "" {
 			parents = append(parents, state.RevisionID)
@@ -127,6 +128,7 @@ func (s *Store) MarkMessagesRead(ctx context.Context, in application.ReadMutatio
 		conversationParents := jsonText([]domain.ID{c.RevisionID})
 		c.RevisionID = in.ConversationRevisionID
 		c.UnreadCount = int(unread)
+		c.UnreadMention = unreadMention
 		if err = q.UpdateConversation(ctx, dbgen.UpdateConversationParams{RevisionID: string(c.RevisionID), Payload: jsonText(c), ActivitySequence: c.ActivitySequence, UnreadCount: unread, ID: string(c.ID)}); err != nil {
 			return application.ReadResult{}, err
 		}

@@ -346,11 +346,20 @@ func refreshCorrectionConversation(ctx context.Context, q *dbgen.Queries, id dom
 	if err = hydrateMessageProjection(ctx, q, &m); err != nil {
 		return err
 	}
-	if c.LastMessage == m.OriginalText && c.UpdatedAt.Equal(m.CreatedAt) {
+	unreadMention := false
+	if c.Kind == "room" && c.UnreadCount > 0 {
+		summary, err := q.ConversationUnreadSummary(ctx, string(c.ID))
+		if err != nil {
+			return err
+		}
+		unreadMention = summary.UnreadMention != 0
+	}
+	if c.LastMessage == m.OriginalText && c.UpdatedAt.Equal(m.CreatedAt) && c.UnreadMention == unreadMention {
 		return nil
 	}
 	c.LastMessage = m.OriginalText
 	c.UpdatedAt = m.CreatedAt
+	c.UnreadMention = unreadMention
 	if err = q.UpdateConversation(ctx, dbgen.UpdateConversationParams{RevisionID: string(c.RevisionID), Payload: jsonText(c), ActivitySequence: c.ActivitySequence, UnreadCount: int64(c.UnreadCount), ID: string(c.ID)}); err != nil {
 		return err
 	}

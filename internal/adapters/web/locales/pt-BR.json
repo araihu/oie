@@ -439,6 +439,8 @@
   "TimelineFailed": "Não foi possível carregar as mensagens. Tente novamente.",
   "TimelinePaused": "Pause a reprodução ou afaste-se da outra extremidade e tente novamente.",
   "MentionUsers": "Mencionar participante",
+  "MentionedYou": "Você foi mencionado",
+  "UnreadMention": "Menção não lida",
   "MentionLoading": "Carregando participantes…",
   "MentionEmpty": "Nenhum participante encontrado",
   "MentionFailed": "Não foi possível carregar os participantes. Você ainda pode digitar um nome.",

@@ -14,6 +14,7 @@ type Conversation struct {
 	Kind, Address, Title, LastMessage string
 	UpdatedAt                         time.Time
 	UnreadCount                       int
+	UnreadMention                     bool `json:",omitempty"`
 	Archived, Favorite                bool
 	ActivitySequence                  int64
 }
@@ -34,6 +35,7 @@ type Message struct {
 	Sender                                    Sender
 	OriginalText                              string
 	Mentions                                  []MessageMention   `json:",omitempty"`
+	MentionsYou                               bool               `json:",omitempty"`
 	MediaThumbnails                           []MediaThumbnail   `json:",omitempty"`
 	Edited                                    bool               `json:",omitempty"`
 	EditedAt                                  time.Time          `json:",omitempty"`

@@ -74,6 +74,62 @@ func TestReadEvidenceKeepsUnseenMessagesAndActivity(t *testing.T) {
 		t.Fatal("reading queued protocol sends", err)
 	}
 }
+
+func TestUnreadRoomMentionsFollowCanonicalContentAndReadEvidence(t *testing.T) {
+	s, e, c := outboxFixture(t)
+	e.SetProtocols(&outboundProtocol{})
+	room := outboundRoom(t, s, c.AccountID, "room@rooms.localhost")
+	ctx := t.Context()
+	at := time.Now().UTC()
+	receive := func(id, body, target string, own, historical bool) {
+		t.Helper()
+		at = at.Add(time.Second)
+		in := application.Incoming{AccountID: room.AccountID, Kind: "room", Address: room.Address, OwnRoomNickname: "Ána", ProviderID: id, OriginalText: body, IsOwn: own, Historical: historical, CreatedAt: at}
+		if !own {
+			in.Correction = &domain.MessageCorrection{Scope: "room:" + room.Address, Author: "bob", ID: id, TargetID: target}
+		}
+		if err := e.Receive(ctx, in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	expectUnread := func(count int, mentioned bool) {
+		t.Helper()
+		chat, err := e.Conversation(ctx, room.ID)
+		if err != nil || chat.UnreadCount != count || chat.UnreadMention != mentioned {
+			t.Fatalf("unread count and mention = %d, %v, want %d, %v (%v)", chat.UnreadCount, chat.UnreadMention, count, mentioned, err)
+		}
+	}
+	receive("history", "Ána", "", false, true)
+	receive("own", "@Ána", "", true, false)
+	expectUnread(0, false)
+	receive("ordinary", "Olá, Ánabela", "", false, false)
+	expectUnread(1, false)
+	receive("one", "ÁNA, oi!", "", false, false)
+	first := correctionMessages(t, e, room)[0]
+	receive("two", "Olá @Ána", "", false, false)
+	second := correctionMessages(t, e, room)[0]
+	receive("two", "Olá @Ána", "", false, false)
+	expectUnread(3, true)
+	if !first.MentionsYou || !second.MentionsYou {
+		t.Fatal("room nickname mentions were lost", first, second)
+	}
+	if _, err := e.MarkMessagesRead(ctx, migrationID(), room.ID, []domain.ID{first.ID}); err != nil {
+		t.Fatal(err)
+	}
+	expectUnread(2, true)
+	receive("remove", "Olá", "two", false, false)
+	expectUnread(2, false)
+	receive("restore", "Ána!", "remove", false, false)
+	expectUnread(2, true)
+	if _, err := e.MarkMessagesRead(ctx, migrationID(), room.ID, []domain.ID{second.ID}); err != nil {
+		t.Fatal(err)
+	}
+	expectUnread(1, false)
+	message, err := e.Message(ctx, second.ID)
+	if err != nil || !message.MentionsYou || message.OriginalText != "Ána!" {
+		t.Fatal("reading cleared the message highlight", message, err)
+	}
+}
 func TestConcurrentReadBatchesMergeAndPreserveIncoming(t *testing.T) {
 	s, e, c := outboxFixture(t)
 	a := readMessage(t, s, c, false, false)

@@ -34,6 +34,7 @@ type Incoming struct {
 	IsOwn                                     bool
 	Historical                                bool
 	Kind, SenderName, ArchiveScope, ArchiveID string
+	OwnRoomNickname                           string
 	References                                []domain.MessageReference
 	Reply                                     *domain.ReplyReference
 	CanonicalID                               domain.ID
@@ -489,6 +490,7 @@ func (e *Engine) Receive(ctx context.Context, in Incoming) error {
 		}
 	}
 	m := domain.Message{ID: ids[3], RevisionID: ids[4], AccountID: a.ID, Sender: domain.Sender{DisplayName: address, PersonalAddress: in.SenderAddress}, OriginalText: in.OriginalText, CreatedAt: created, IsOwn: in.IsOwn, SendState: "received", ProviderID: in.ProviderID, ArchiveScope: in.ArchiveScope, ArchiveID: in.ArchiveID, Historical: in.Historical, MediaThumbnails: normalizeMediaThumbnails(in.OriginalText, in.MediaThumbnails), References: in.References, ReplyReference: in.Reply, Correction: in.Correction}
+	m.MentionsYou = incomingRoomMention(in)
 	if in.SenderName != "" {
 		m.Sender.DisplayName = in.SenderName
 	}

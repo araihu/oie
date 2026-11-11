@@ -263,6 +263,38 @@ func TestExplicitRoomJoinReplyWireReconnectAndLeave(t *testing.T) {
 		return err == nil && session.Active && session.State == "joined"
 	})
 
+	var receivedMentions []domain.ID
+	for _, body := range []string{"Oie reply, hello!", "Hello @OIE REPLY!"} {
+		payload := "<body>" + stanzaText(body) + "</body>"
+		if err = seed.Send(ctx, stanza.Message{To: room, Type: stanza.GroupChatMessage, ID: string(id())}.Wrap(xml.NewDecoder(strings.NewReader(payload)))); err != nil {
+			t.Fatal(err)
+		}
+		eventually(t, func() bool {
+			items, err := engine.Messages(ctx, conversation.ID, "", 100)
+			if err != nil {
+				return false
+			}
+			for _, item := range items {
+				if item.OriginalText == body && item.MentionsYou {
+					receivedMentions = append(receivedMentions, item.ID)
+					return true
+				}
+			}
+			return false
+		})
+	}
+	chat, err := engine.Conversation(ctx, conversation.ID)
+	if err != nil || !chat.UnreadMention {
+		t.Fatal("incoming nickname mention did not mark the room", chat, err)
+	}
+	if _, err = engine.MarkMessagesRead(ctx, id(), conversation.ID, receivedMentions); err != nil {
+		t.Fatal(err)
+	}
+	chat, err = engine.Conversation(ctx, conversation.ID)
+	if err != nil || chat.UnreadMention {
+		t.Fatal("read mentions kept the room marked", chat, err)
+	}
+
 	// The room explicitly discloses real JIDs. Verify an actual XEP-0372 stanza
 	// against Prosody rather than inferring support from a discovery flag alone.
 	var mention domain.MentionCandidate

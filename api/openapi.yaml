@@ -3560,6 +3560,9 @@ components:
         unreadCount:
           type: integer
           minimum: 0
+        unreadMention:
+          type: boolean
+          description: True when an unread incoming room message mentions the owning account by its room nickname. Omitted means false.
         archived:
           type: boolean
         favorite:
@@ -4224,6 +4227,9 @@ components:
           description: Frozen selected mentions with Unicode ranges in authored text, excluding any reply compatibility prefix.
           items:
             $ref: '#/components/schemas/MessageMention'
+        mentionsYou:
+          type: boolean
+          description: True when the current received room message text mentions the owning account by its observed room nickname. Omitted means false.
         reply:
           $ref: '#/components/schemas/MessageReply'
         replyToMessageId:

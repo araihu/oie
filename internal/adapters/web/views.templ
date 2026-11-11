@@ -311,6 +311,13 @@ templ conversationRow(v view, c engineapi.Conversation) {
 				<div class="oie-row-top"><strong>{ c.Title }</strong><time datetime={ c.UpdatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ c.UpdatedAt.Format("15:04") }</time></div>
 				<div class="oie-row-bottom">
 					<span>{ c.LastMessage }</span>
+					if c.Kind=="room" {
+						<span class="oie-row-mention-slot">
+							if c.UnreadMention!=nil && *c.UnreadMention {
+								<span class="oie-row-mention" data-unread-mention role="img" aria-label={ v.Text.UnreadMention } title={ v.Text.UnreadMention }>{ "@" }</span>
+							}
+						</span>
+					}
 					if c.UnreadCount>0 {
 						<span class="oie-unread-count" aria-label={ v.Text.Unread + ": " + strconv.Itoa(c.UnreadCount) }>{ strconv.Itoa(c.UnreadCount) }</span>
 					}
@@ -347,7 +354,7 @@ if v.Selected.Kind=="room" {
 }
 
 templ message(v view,m messageView,grouped,groupEnd bool){
-<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-grouped",grouped),templ.KV("oie-message-group-end",groupEnd)} tabindex="-1" data-message-id={m.Id} data-read-eligible={strconv.FormatBool(!m.IsOwn&&(m.Historical==nil||!*m.Historical))} data-starred={strconv.FormatBool(v.StarsKnown&&v.Stars[m.Id].Starred)} data-send-state={string(m.SendState)} data-created-at={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-created-ms={strconv.FormatInt(m.CreatedAt.UnixMilli(),10)} data-message-revision={m.RevisionId} data-message-previews-known={strconv.FormatBool(m.PresentationKnown&&m.VideosKnown)} data-message-account={m.AccountId} data-message-conversation={m.ConversationId} data-message-sender={m.Sender.Id} data-message-sender-name={m.Sender.DisplayName} data-message-groupable={strconv.FormatBool(m.Attachment==nil)} data-message-version={v.messageVersion(m)} data-message-source={originalMessageJSON(m.OriginalText)}>
+<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-mentioned",m.mentionsYou()),templ.KV("oie-message-grouped",grouped),templ.KV("oie-message-group-end",groupEnd)} tabindex="-1" data-message-id={m.Id} data-read-eligible={strconv.FormatBool(!m.IsOwn&&(m.Historical==nil||!*m.Historical))} data-starred={strconv.FormatBool(v.StarsKnown&&v.Stars[m.Id].Starred)} data-send-state={string(m.SendState)} data-created-at={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-created-ms={strconv.FormatInt(m.CreatedAt.UnixMilli(),10)} data-message-revision={m.RevisionId} data-message-previews-known={strconv.FormatBool(m.PresentationKnown&&m.VideosKnown)} data-message-account={m.AccountId} data-message-conversation={m.ConversationId} data-message-sender={m.Sender.Id} data-message-sender-name={m.Sender.DisplayName} data-message-groupable={strconv.FormatBool(m.Attachment==nil)} data-message-version={v.messageVersion(m)} data-message-source={originalMessageJSON(m.OriginalText)}>
 @viewerSource(v,m)
 if m.Attachment!=nil {
 <div class="oie-media-message">@card.Card(card.Config{Image:m.Attachment.PreviewUrl,ImageAlt:m.Attachment.Title,Title:m.Attachment.Title,Description:m.Attachment.Description,Density:card.DensityCompact,RootClass:"oie-media-card"})</div>
@@ -710,6 +717,13 @@ if !m.IsOwn && !grouped {
 }
 @messageBody(v,m)
 <div class="oie-message-stamp">
+if !m.IsOwn && v.Selected!=nil && v.Selected.Kind=="room" {
+	<span class="oie-message-mention-slot">
+		if m.mentionsYou() {
+			<span data-message-mention role="img" aria-label={v.Text.MentionedYou} title={v.Text.MentionedYou}>{ "@" }</span>
+		}
+	</span>
+}
 @messageEditIndicator(v,m)
 @messageSendIndicator(v,m)
 @messageStarIndicator(v,m.Id)
