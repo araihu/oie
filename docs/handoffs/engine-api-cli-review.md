@@ -1,8 +1,95 @@
 # Handoff: independent engine API and CLI proof
 
-Date: 2026-11-10. Status: authorized next milestone, after the Wails alpha work.
-This document commissions exploration, specification additions and implementation.
-It is not a completed architecture or API compliance review.
+Issued 2026-11-10. Updated 2026-11-11.
+
+The independent engine and CLI milestone is implemented in
+`codex/engine-api-cli`. The reviewed Oiê revision is `4ef445c` and its
+generator pin is `v0.0.0-20261111030706-3de8ea18e334` in `tools/go.mod`.
+Integration with Oiê `main` is pending. The original brief follows this
+status update.
+
+## Final independent reviews
+
+Three reviewers checked the live engine contract, the generic generator, and
+the rebuilt CLI independently. The seven findings and the follow-up cases
+closed at Oiê `4ef445c` and generator `3de8ea1` within the tested scope.
+
+| Finding | Verified result |
+| --- | --- |
+| Strict 0.27.0 Problem Details compatibility | Default engine responses 400, 404 and 405 validate against the published closed schema. The `Link` header carries the catalog URL. The named `Prefer` opt-in adds `documentation` to the body, including with an empty quoted value. |
+| Request data reflected in CLI stderr | The Oiê CLI uses its bundled catalog. The generic runtime suppresses response-supplied metadata for requests with input, a server path prefix, request Content-Type, or authentication. Tests covered an empty body with parametrized Content-Type and an authenticated HTTP proxy in text and JSON modes. |
+| Undeclared SSE handled as raw | `system health` rejects an unexpected SSE response. Declared `events stream` still emits frames incrementally and explicit `--output raw` is available. |
+| Problem Details identity lost | Public requests without private input preserve standard `type` and `title` without requiring a proprietary `code`. Relative type URIs resolve against the response request URL. Private requests use trusted catalog metadata when available. |
+| Deprecation notice on JSON stderr | Deprecated commands emit a single JSON diagnostic on failure. Text invocations retain the deprecation notice. |
+| Requested response header absent | A missing header on HTTP 200 or 304 emits a local transport problem and exits 3. An explicitly empty response header succeeds. |
+| Error body read failure classified as HTTP failure | Timeout, cancellation, and truncation detected while reading a declared Problem Details body exit 3 with empty stdout and a local JSON diagnostic. A complete HTTP error exits 4. Bodies that exceed the diagnostic byte limit use the HTTP status fallback. |
+
+At `4ef445c`, native `make check`, the focused CLI/HTTP tests, the
+0.27.0 compatibility gate, and Dagger `make ci-check` passed. The final
+Dagger logs are in
+`tests/browser/artifacts/engine-cli-edge-fixes-final-ci-retry/`. The isolated
+Prosody CLI proof passed for the changes recorded in `716ba7f`. The earlier
+complete Dagger graph, including desktop and browser coverage, was verified
+at `1927d5b`. See the [verification record](../engine-api-cli-verification.md)
+for the fixture, evidence, and limits of those runs.
+
+## Integration into main
+
+### Generator PRs
+
+| PR | State checked 2026-11-11 | Next action |
+| --- | --- | --- |
+| [oapi-cli-gen #2](https://github.com/araihu/oapi-cli-gen/pull/2) | Draft and mergeable into `main` at `ca5a6b8`. Head `d0484f3`. GitHub check and CodeQL passed. | Mark ready and squash-merge the nested-group support first. |
+| [oapi-cli-gen #3](https://github.com/araihu/oapi-cli-gen/pull/3) | Draft and mergeable into the #2 branch at `d0484f3`. Head `3de8ea1`. Local `make check` passed. GitHub reports no checks on the stacked base. | After #2 lands, verify the base is `main`, rebase the #3-only commits onto the squash result, mark ready, and verify the GitHub checks before squash-merging. |
+
+The generator repository allows squash merges only and deletes merged head
+branches. GitHub can retarget #3 automatically when the #2 branch is deleted.
+Keep `d0484f3` as the old base for the rebase and verify the resulting diff
+contains only #3 changes. The `check` workflow targets PRs into `main`.
+[GitHub's PR merge behavior](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/merging-a-pull-request)
+
+Once #3 is in generator `main`, pin the Oiê tools module with
+`GOWORK=off go -C tools get github.com/araihu/oapi-cli-gen@<merged-commit>`
+and run `make generate build-cli`. The current pin is verified on this worktree. Pinning
+the merged commit gives the integrated build a revision reachable from
+upstream `main`.
+
+### Oiê worktree
+
+On 2026-11-11, Oiê `origin/main` was `ac34a2c`. The merge base with the
+reviewed CLI revision `4ef445c` is `115e8eb`. At that revision, `main` has
+9 commits on its side and the CLI line has 47. Of those 47, 23 are inherited Wails and rc.0
+commits through `47870bd` (the tip of `origin/codex/wails-integration`) and
+24 are the API and CLI milestone. The published source tag `v0.0.1-rc.0`
+points to `e8ffe5d` on the inherited line, outside the ancestry of the
+current `origin/main`.
+
+A `git merge-tree --write-tree` simulation against `origin/main` found one
+textual conflict in `docs/oie-spec.md`. Both sides use **B24** for different
+items (room invitation links and desktop icons). The merged text also assigns
+**B25** to two different items (post-alpha search filters and the alpha
+room-history requirement) without a conflict marker. Preserve both topics in
+each case and reconcile the IDs and references.
+
+1. Decide how to bring in the Wails/rc.0 baseline. The recommended order for
+   separate review is the remote Wails baseline `47870bd` first, then the 24
+   milestone commits. If the baseline is squashed, replay the milestone from
+   its explicit boundary at `47870bd`.
+2. Coordinate with the separate initial-history work before preparing an alpha
+   candidate. Its implementation commits `01c0c0b` and `8d1bdc7` are on the
+   local `codex/wails-integration` line. A simulation against that line at
+   `68c06cd` found overlaps in the engine and BFF OpenAPI sources and the
+   engine HTTP adapter, plus conflicts in generated output. If that line
+   lands first, reconcile the source contracts and regenerate the bindings
+   and CLI from the combined source.
+3. Apply the final generator pin, regenerate, and validate the exact
+   integration candidate. Run `make check` and the complete Dagger graph
+   (`make ci`) for the combined CLI/XMPP, desktop, and browser regressions.
+   The passing checks above cover the current feature branch.
+4. Follow the existing Oiê PR policy in [AGENTS.md](../../AGENTS.md).
+   A new Oiê PR remains tied to readiness for alpha `v0.0.1`, including
+   usable initial room history. The generator PRs and preparation of the
+   local integration candidate are separate from alpha publication.
 
 ## User direction and scope
 
@@ -25,7 +112,7 @@ WASM remains a future execution target, not a currently implemented engine mode.
 Keep the release work separate. This handoff does not request stopping its CI,
 changing its running preview, merging its branch or publishing a release.
 
-## Starting procedure
+## Original starting procedure
 
 1. Read current `AGENTS.md`, `docs/oie-spec.md`, this handoff and the current
    release/integration notes. Preserve AGREED, RECOMMENDED, OPEN and BACKLOG labels.
@@ -70,9 +157,10 @@ to offer a data API without serving the BFF. Prefer a small composition change
 when necessary. Separate Go modules or an in-process API are not automatically
 needed; verify actual package/build dependencies before claiming independence.
 
-## Concrete observations to verify first
+## Observations at the start of the milestone
 
-These observations locate potential gaps. They are not a verdict on every route.
+These observations describe the baseline before implementation. See the
+[audit](../engine-api-audit.md) for the operation inventory and verdicts.
 
 - `api/openapi.yaml` declares `info.version: 0.27.0`. Its `Engine.apiVersion`
   schema still enumerates `0.11.0` and `0.12.0`, while the HTTP handler returns
@@ -243,8 +331,7 @@ timeouts/processes. Maintain the live preview through the owning workflow if
 later implementation needs to update it; never use a real personal account as
 an integration-test fixture. Do not add developer documentation to product UI.
 
-No file in the active release work was modified to prepare this handoff. The
-handoff itself does not mark audit findings fixed or authorize publishing alpha.
+Release publication is handled by the release workflow.
 
 ## Primary references for the review
 
