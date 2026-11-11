@@ -452,6 +452,11 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 #settings-body{display:flex;flex-direction:column;overflow:hidden}
 .oie-settings-scroll{flex:1;min-height:0;overflow-y:auto}
 .oie-settings-footer{display:grid;flex:none;padding:8px;border-top:1px solid var(--oie-border)}
+.oie-reset-submit-label{display:grid}
+.oie-reset-submit-label>span{grid-area:1/1}
+.oie-reset-submit-label>span:last-child,
+#reset-data-form[aria-busy=true] .oie-reset-submit-label>span:first-child{visibility:hidden}
+#reset-data-form[aria-busy=true] .oie-reset-submit-label>span:last-child{visibility:visible}
 .oie-about-entry{
  justify-content:space-between;min-height:44px;padding-inline:12px;color:var(--oie-text);font-weight:650
 }

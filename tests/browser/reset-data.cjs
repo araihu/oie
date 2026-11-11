@@ -52,10 +52,19 @@ async function testReset(browser, url, fixture) {
 
   const context = await browser.newContext({ locale: fixture.locale, viewport: fixture.viewport });
   try {
+    if (fixture.blockCompletionStorage) {
+      await context.addInitScript(() => {
+        const setItem = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (key, value) {
+          if (this === sessionStorage && key === 'oie.reset.complete') throw new Error('Storage unavailable');
+          return setItem.call(this, key, value);
+        };
+      });
+    }
     const page = await context.newPage();
     const dialog = await openSettings(page, url, fixture);
     const input = dialog.getByRole('textbox', { name: fixture.confirmation });
-    const submit = dialog.getByRole('button', { name: fixture.action, exact: true });
+    const submit = dialog.locator('button[type="submit"]');
     await dialog.waitFor();
     assert(await submit.isDisabled());
     await input.fill('Delete');
@@ -74,6 +83,7 @@ async function testReset(browser, url, fixture) {
     await submit.click();
     await dialog.waitFor({ state: 'hidden' });
     await page.getByText(fixture.failure, { exact: true }).waitFor();
+    assert.equal(await page.getByText(fixture.success, { exact: true }).count(), 0);
     assert.equal(await page.evaluate(() => document.body.dataset.engineId), before.id);
 
     const peer = await context.newPage();
@@ -91,6 +101,7 @@ async function testReset(browser, url, fixture) {
     });
     await entry.click();
     await input.fill('delete');
+    if (fixture.blockCompletionStorage) await page.evaluate(() => history.replaceState(history.state, '', '/'));
 
     let release;
     const gate = new Promise(resolve => { release = resolve; });
@@ -119,6 +130,7 @@ async function testReset(browser, url, fixture) {
     try {
       await submit.click();
       await page.locator('#reset-data-form[aria-busy="true"]').waitFor();
+      await dialog.getByRole('button', { name: fixture.pending, exact: true }).waitFor();
       await page.keyboard.press('Escape');
       assert(await dialog.isVisible());
       assert(await submit.isDisabled());
@@ -134,6 +146,10 @@ async function testReset(browser, url, fixture) {
 
     await Promise.all([page.waitForURL(url + '/'), peer.waitForURL(url + '/')]);
     await page.waitForFunction(id => document.body.dataset.engineId && document.body.dataset.engineId !== id, before.id);
+    await page.getByText(fixture.success, { exact: true }).waitFor();
+    const addAccount = page.locator('#conversation-list').getByRole('link', { name: fixture.addAccount, exact: true });
+    await addAccount.waitFor();
+    assert.equal(await peer.getByText(fixture.success, { exact: true }).count(), 0);
     await page.waitForFunction(async () => !(await indexedDB.databases()).some(db => db.name === 'oie.pdf-previews.v1'));
     const storage = await page.evaluate(() => ({
       draft: localStorage.getItem('oie.draft.test'),
@@ -143,6 +159,11 @@ async function testReset(browser, url, fixture) {
     assert.deepEqual(storage, { draft: null, session: null, unrelated: 'keep me' });
     assert(!(await context.cookies()).some(cookie => cookie.name === 'oie_theme' || cookie.name === 'oie_lang'));
     assert.deepEqual((await (await fetch(url + '/api/v1/accounts')).json()).items, []);
+    await page.reload();
+    await page.waitForFunction(() => window.OieRuntime?.generation > 0);
+    assert.equal(await page.getByText(fixture.success, { exact: true }).count(), 0);
+    await addAccount.click();
+    await page.locator('#register-address').waitFor();
   } finally {
     await context.close();
   }
@@ -168,11 +189,14 @@ async function testReset(browser, url, fixture) {
       locale: 'en', viewport: { width: 1440, height: 900 }, action: 'Delete all data',
       settings: 'Settings', about: 'About', theme: 'light',
       confirmation: 'Type delete to confirm', failure: 'Could not delete all data.',
+      pending: 'Deleting…', success: 'All Oiê data was deleted. Add an account to start again.', addAccount: 'Add account',
     });
     await testReset(browser, url, {
       locale: 'pt-BR', viewport: { width: 390, height: 844 }, action: 'Apagar todos os dados',
       settings: 'Configurações', about: 'Sobre', theme: 'dark',
       confirmation: 'Digite delete para confirmar', failure: 'Não foi possível apagar todos os dados.',
+      pending: 'Apagando…', success: 'Todos os dados do Oiê foram apagados. Adicione uma conta para recomeçar.',
+      addAccount: 'Adicionar conta', blockCompletionStorage: true,
     });
     console.log('PASS: typed reset confirmation, cancellation, refusal, stable pending dialog and empty installation');
   } finally {

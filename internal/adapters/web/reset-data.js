@@ -3,12 +3,14 @@
 
   const dialogID = 'reset-data';
   const noticeKey = 'oie.reset.notice';
+  const completeKey = 'oie.reset.complete';
+  const completeQuery = '?reset=complete';
   const changeDialog = action => window.dispatchEvent(new CustomEvent('modal:' + action, {detail: {id: dialogID}}));
   const form = () => document.getElementById('reset-data-form');
   const confirmation = node => node.elements.namedItem('confirmation');
   const submitButton = node => node.querySelector('button[type="submit"]');
 
-  function returnToEmptyApp() {
+  function returnToEmptyApp(confirmed = false) {
     window.OieRuntime?.stop();
     for (const name of ['localStorage', 'sessionStorage']) {
       try {
@@ -24,8 +26,32 @@
       // survives navigation and runs before a new tab can reopen this database.
       window.indexedDB?.deleteDatabase('oie.pdf-previews.v1');
     } catch {}
-    location.replace('/');
+    let destination = '/';
+    if (confirmed) {
+      try {
+        sessionStorage.setItem(completeKey, 'true');
+      } catch {
+        destination += completeQuery;
+      }
+    }
+    location.replace(destination);
   }
+
+  async function showCompletion() {
+    let confirmed = location.search === completeQuery;
+    if (location.pathname !== '/' || (location.search && !confirmed)) return;
+    if (confirmed) history.replaceState(history.state, '', '/');
+    try {
+      confirmed = sessionStorage.getItem(completeKey) === 'true' || confirmed;
+      sessionStorage.removeItem(completeKey);
+    } catch {}
+    if (!confirmed) return;
+    await window.goshtosoDependencies?.ready;
+    window.dispatchEvent(new CustomEvent('notify', {detail: {
+      kind: 'toast', tone: 'success', message: document.body.dataset.resetComplete,
+    }}));
+  }
+  showCompletion();
 
   window.addEventListener('storage', event => {
     if (event.key === noticeKey && event.newValue === document.body.dataset.engineId) returnToEmptyApp();
@@ -69,17 +95,17 @@
     try {
       const response = await fetch(node.action, {method: 'POST', body, credentials: 'same-origin'});
       if (response.status !== 204) throw new Error('reset failed');
-      try { localStorage.setItem(noticeKey, body.get('engineId')); } catch {}
-      returnToEmptyApp();
     } catch {
-      changeDialog('close');
-      window.dispatchEvent(new CustomEvent('notify', {detail: {kind: 'toast', tone: 'danger', message: node.dataset.failure}}));
-    } finally {
       node.removeAttribute('aria-busy');
       input.readOnly = false;
       input.value = '';
       for (const button of buttons) button.disabled = false;
       submitButton(node).disabled = true;
+      changeDialog('close');
+      window.dispatchEvent(new CustomEvent('notify', {detail: {kind: 'toast', tone: 'danger', message: node.dataset.failure}}));
+      return;
     }
+    try { localStorage.setItem(noticeKey, body.get('engineId')); } catch {}
+    returnToEmptyApp(true);
   });
 })();

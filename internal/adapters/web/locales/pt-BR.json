@@ -4,6 +4,8 @@
   "DeleteHostedDataWarning": "Isso apaga permanentemente as contas, mensagens e arquivos deste servidor Oiê para todos os dispositivos conectados. Também limpa suas configurações neste dispositivo. As cópias nos servidores de conversa permanecem lá.",
   "DeleteDataConfirmation": "Digite delete para confirmar",
   "DeleteDataCancel": "Cancelar",
+  "DeleteDataPending": "Apagando…",
+  "DeleteDataComplete": "Todos os dados do Oiê foram apagados. Adicione uma conta para recomeçar.",
   "DeleteDataFailed": "Não foi possível apagar todos os dados.",
   "Reactions": "Reações",
   "ReactMessage": "Reagir",

@@ -4,6 +4,8 @@
   "DeleteHostedDataWarning": "This permanently removes the accounts, messages, and files saved in this Oiê server for every connected device. It also clears your settings on this device. Copies on chat servers stay there.",
   "DeleteDataConfirmation": "Type delete to confirm",
   "DeleteDataCancel": "Cancel",
+  "DeleteDataPending": "Deleting…",
+  "DeleteDataComplete": "All Oiê data was deleted. Add an account to start again.",
   "DeleteDataFailed": "Could not delete all data.",
   "Reactions": "Reactions",
   "ReactMessage": "React",

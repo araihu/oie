@@ -132,7 +132,7 @@ if v.DevBuildID!="" {
 <meta name="oie-csrf" content={v.CSRF}/>
 <noscript><style>.oie-cancel-form{display:flex!important}.oie-message-meta:has(>.oie-cancel-form){margin-top:4px}</style></noscript>
 		</head>
-		<body data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
+		<body data-reset-complete={v.Text.DeleteDataComplete} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
 @appFragment(v)
 		</body>
 	</html>
@@ -643,6 +643,10 @@ if v.Unavailable {
 @emptystate.EmptyState(emptystate.Config{Title:v.Text.Unavailable,Description:v.Text.UnavailableBody})
 @link.Link(v.href()){ {v.Text.Retry} }
 </div>
+}else if len(v.Accounts)==0 {
+<div class="oie-list-state">
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.EmptyTitle,Action:emptyAccountAction(v)})
+</div>
 }else if len(v.Chats)==0 {
 <div class="oie-list-state">
 if v.Query!=""||v.Filter!="all" {
@@ -658,6 +662,12 @@ for _,c:=range v.Chats {
 }
 </ul>
 }
+}
+
+templ emptyAccountAction(v view) {
+	@link.Link(v.addAccountHref(), link.WithAppearance(link.AppearanceButton)) {
+		{ v.Text.AddAccount }
+	}
 }
 
 templ timeline(v view){

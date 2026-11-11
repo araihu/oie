@@ -664,12 +664,14 @@ Use UTC internally for timestamps and scheduling. Convert local input into an in
 **AGREED:** Settings offers an installation-wide reset on engines that support
 it. The reset button uses the filled red danger style. The user must type the
 exact word `delete` to confirm. Delete the engine's accounts and credentials,
-retained history and indexes, queued operations, and managed media. Start an empty engine with a new identity so requests from the
-old installation cannot repeat the reset. Clear Oiê's settings, drafts and
-preview cache in the browser that initiated the reset. Other browser profiles,
-exported files and protocol-server data are outside the operation. When an
-installation uses a shared hosted engine, this deletes the data held by that
-engine for all its clients.
+retained history and indexes, queued operations, and managed media. Start an
+empty engine with a new identity so requests from the old installation cannot
+repeat the reset. Clear Oiê's settings, drafts and preview cache in the browser
+that initiated the reset. Show progress in the confirmation dialog. After
+success, return to the empty home screen and show a confirmation toast. Other
+browser profiles, exported files and protocol-server data are outside the
+operation. When an installation uses a shared hosted engine, this deletes the
+data held by that engine for all its clients.
 
 ## 12. Backup and merge restore
 

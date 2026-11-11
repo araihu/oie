@@ -191,8 +191,8 @@ type view struct {
 }
 
 type copy struct {
-	DeleteAllData, DeleteDataWarning, DeleteHostedDataWarning, DeleteDataConfirmation, DeleteDataCancel, DeleteDataFailed         string
-	Reactions, ReactMessage, ReactionUnavailable, ReactionPending, ReactionUnknown, ReactionFailed, ReactionCheck, ReactionRemove string
+	DeleteAllData, DeleteDataWarning, DeleteHostedDataWarning, DeleteDataConfirmation, DeleteDataCancel, DeleteDataFailed, DeleteDataPending, DeleteDataComplete string
+	Reactions, ReactMessage, ReactionUnavailable, ReactionPending, ReactionUnknown, ReactionFailed, ReactionCheck, ReactionRemove                                string
 
 	CapabilitySendCorrectionsNote string
 

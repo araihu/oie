@@ -39,7 +39,10 @@ templ resetDataForm(v view) {
 				{ v.Text.DeleteDataCancel }
 			}
 			@button.Button(button.WithType("submit"), button.WithTone(button.ToneDanger), button.WithAttrs(templ.Attributes{"disabled": true})) {
-				{ v.Text.DeleteAllData }
+				<span class="oie-reset-submit-label">
+					<span>{ v.Text.DeleteAllData }</span>
+					<span>{ v.Text.DeleteDataPending }</span>
+				</span>
 			}
 		</div>
 	</form>
