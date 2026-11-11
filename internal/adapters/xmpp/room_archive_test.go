@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -98,6 +99,7 @@ type testArchiveHost struct {
 	archive    domain.RoomArchive
 	messages   map[string]domain.Message
 	failInsert bool
+	reactions  []application.IncomingReaction
 }
 
 func (h *testArchiveHost) RoomArchive(context.Context, domain.ID) (domain.RoomArchive, error) {
@@ -122,6 +124,10 @@ func (h *testArchiveHost) CountRoomArchiveMessages(_ context.Context, _ domain.I
 func (h *testArchiveHost) Receive(_ context.Context, in application.Incoming) error {
 	if h.failInsert {
 		return errors.New("test write failure")
+	}
+	if in.Reaction != nil {
+		h.reactions = append(h.reactions, *in.Reaction)
+		return nil
 	}
 	h.messages[in.ArchiveID] = domain.Message{
 		ID: domain.ID(in.ArchiveID), AccountID: h.room.AccountID, ConversationID: h.room.ID,
@@ -150,6 +156,7 @@ type testArchiveIQ struct {
 		Set struct {
 			Max    int    `xml:"max"`
 			Before string `xml:"before"`
+			After  string `xml:"after"`
 		} `xml:"http://jabber.org/protocol/rsm set"`
 	} `xml:"urn:xmpp:mam:2 query"`
 }
@@ -294,5 +301,256 @@ func TestRoomArchiveSearchDiscoversCapabilityAndKeepsCoverage(t *testing.T) {
 	}
 	if _, err := m.RequestRoomArchive(t.Context(), e.account, host.room, domain.RoomArchiveRequest{Action: "search", Query: "changed", Cursor: result.NextCursor}); !errors.Is(err, application.ErrInvalid) {
 		t.Fatal("search cursor accepted for a different term", err)
+	}
+}
+
+func TestSemianonymousRoomRecoversRecentArchivedReactionsAfterJoin(t *testing.T) {
+	at := time.Date(2026, 11, 10, 22, 0, 0, 0, time.UTC)
+	cutoff := at.Add(time.Minute)
+	queries := make(chan testArchiveIQ, 4)
+	m, e, host := archiveFixture(t, func(iq testArchiveIQ, _ int) string {
+		queries <- iq
+		page := iq.page(true, testArchiveMessage{id: "peer", at: at},
+			testArchiveMessage{id: "own", at: at.Add(time.Second)},
+			testArchiveMessage{id: "foreign", at: at.Add(2 * time.Second)},
+			testArchiveMessage{id: "ordinary", at: at.Add(3 * time.Second)})
+		// The fixtures share nicknames to verify that only the occupant ID
+		// distinguishes ownership. The foreign inner sender is never trusted.
+		peer := `<occupant-id xmlns="urn:xmpp:occupant-id:0" id="peer-id"/><reactions xmlns="urn:xmpp:reactions:0" id="source"><reaction>❤</reaction></reactions>`
+		own := `<occupant-id xmlns="urn:xmpp:occupant-id:0" id="own-id"/><reactions xmlns="urn:xmpp:reactions:0" id="source"/>`
+		page = strings.Replace(page, `id="peer" type="groupchat"><body>Fixture message</body>`, `id="peer" type="groupchat">`+peer, 1)
+		page = strings.Replace(page, `id="own" type="groupchat"><body>Fixture message</body>`, `id="own" type="groupchat">`+own, 1)
+		page = strings.Replace(page, iq.To.String()+`/Bob" id="foreign" type="groupchat"><body>Fixture message</body>`, `other@conference.example.test/Bob" id="foreign" type="groupchat">`+peer, 1)
+		return page
+	})
+	room := host.room.Address
+	e.archiveCapabilities = map[string]roomArchiveCapability{room: {mam: true}}
+	e.semianonymousRooms = map[string]bool{room: true}
+	e.occupantScopes = map[string]bool{room: true}
+	slot := e.rooms[room]
+	slot.session = e.session
+	original := domain.RoomArchiveProgress{WindowStart: at.Add(-time.Hour), WindowEnd: at, CaughtUpThrough: cutoff,
+		RecentComplete: true, InitialComplete: true, OlderComplete: true, Availability: "supported", TextSearch: "unsupported"}
+	host.archive.RoomArchiveProgress = original
+	replay := func() {
+		t.Helper()
+		if _, err := m.roomArchiveTurn(t.Context(), t.Context(), host, e, e.session, host.room, domain.RoomArchiveRequest{}, archiveAutomatic, cutoff); err != nil {
+			t.Fatal(err)
+		}
+	}
+	replay()
+	if len(queries) != 0 {
+		t.Fatal("replayed before verified self-presence")
+	}
+	e.mu.Lock()
+	slot.snapshot.State, slot.ownOccupantID = "joined", "own-id"
+	e.mu.Unlock()
+	replay()
+	replay()
+	if len(queries) != 1 || len(host.messages) != 0 || host.archive.RoomArchiveProgress != original {
+		t.Fatal("reaction replay queried repeatedly, reimported text, or moved coverage", len(queries), len(host.messages), host.archive)
+	}
+	iq := <-queries
+	if iq.Query.Set.Max != archivePageSize || iq.field("end") != cutoff.Format(time.RFC3339Nano) {
+		t.Fatal("replay was not bounded to the latest archive page", iq)
+	}
+	if len(host.reactions) != 2 {
+		t.Fatal("expected only the two verified reactions", host.reactions)
+	}
+	peer, own := host.reactions[0], host.reactions[1]
+	if peer.IsOwn || !peer.Historical || peer.ActorName != "Bob" || peer.ArchiveID != "peer" || peer.ArchiveScope != room ||
+		peer.Actor != roomReactionActor(e.account.ID, room, "peer-id") || peer.Target.Scope != "room:"+room || peer.Target.ID != "source" ||
+		!peer.CreatedAt.Equal(at) || len(peer.Emojis) != 1 || peer.Emojis[0] != "❤" ||
+		!own.IsOwn || len(own.Emojis) != 0 || own.Actor != roomReactionActor(e.account.ID, room, "own-id") {
+		t.Fatal("archive lost identity, timestamp, target or clear semantics", peer, own)
+	}
+}
+
+func TestDeferredRoomReactionsSurviveCatchupBeforeJoin(t *testing.T) {
+	at := time.Date(2026, 11, 10, 22, 0, 0, 0, time.UTC)
+	cutoff := at.Add(time.Minute)
+	recent := make([]testArchiveMessage, 50)
+	for i := range recent {
+		recent[i] = testArchiveMessage{id: fmt.Sprintf("text-%d", i), at: at.Add(time.Duration(i+1) * time.Second)}
+	}
+	m, e, host := archiveFixture(t, func(iq testArchiveIQ, index int) string {
+		if index == 0 || index == 2 {
+			messages := []testArchiveMessage{{id: "reaction", at: at}}
+			if index == 0 {
+				messages = append(messages, recent[:49]...)
+			} else if iq.field("start") != at.Format(time.RFC3339Nano) || iq.field("end") != at.Format(time.RFC3339Nano) || iq.Query.Set.Max != archivePageSize {
+				t.Error("expected bounded replay of the persisted skipped range")
+			}
+			page := iq.page(index == 2, messages...)
+			payload := `<occupant-id xmlns="urn:xmpp:occupant-id:0" id="peer"/><reactions xmlns="urn:xmpp:reactions:0" id="source"><reaction>❤</reaction></reactions>`
+			return strings.Replace(page, `id="reaction" type="groupchat"><body>Fixture message</body>`, `id="reaction" type="groupchat">`+payload, 1)
+		}
+		if index == 1 {
+			return iq.page(true, recent[49:]...)
+		}
+		return iq.page(true)
+	})
+	room := host.room.Address
+	e.archiveCapabilities = map[string]roomArchiveCapability{room: {mam: true}}
+	e.semianonymousRooms = map[string]bool{room: true}
+	e.occupantScopes = map[string]bool{room: true}
+	slot := e.rooms[room]
+	slot.session = e.session
+	p := &host.archive.RoomArchiveProgress
+	*p = domain.RoomArchiveProgress{WindowStart: at.Add(-time.Hour), WindowEnd: at.Add(-time.Second), CaughtUpThrough: at.Add(-time.Second), RecentComplete: true, InitialComplete: true, OlderComplete: true, Availability: "supported", TextSearch: "unsupported"}
+	for i := 0; i < 2; i++ {
+		if err := m.catchUpRoomArchive(t.Context(), host, e, e.session, host.room, p, cutoff); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !p.CaughtUpThrough.Equal(cutoff) || len(host.messages) != 50 {
+		t.Fatalf("unexpected fixture coverage %v messages=%d", p.CaughtUpThrough, len(host.messages))
+	}
+	if !p.DeferredReactions.Start.Equal(at) || !p.DeferredReactions.End.Equal(at) || len(host.reactions) != 0 {
+		t.Fatalf("expected persisted deferred range without reactions before join, got %+v", p.DeferredReactions)
+	}
+	e.mu.Lock()
+	slot.snapshot.State, slot.ownOccupantID = "joined", "self"
+	e.mu.Unlock()
+	if _, err := m.roomArchiveTurn(t.Context(), t.Context(), host, e, e.session, host.room, domain.RoomArchiveRequest{}, archiveAutomatic, cutoff); err != nil {
+		t.Fatal(err)
+	}
+	if !host.archive.DeferredReactions.Start.IsZero() {
+		t.Fatal("completed replay left a checkpoint")
+	}
+	if len(host.reactions) != 1 {
+		t.Fatalf("text caught up through %v but replay recovered %d reactions", p.CaughtUpThrough, len(host.reactions))
+	}
+}
+
+type archiveConfigChangeHost struct {
+	*testArchiveHost
+	beforeSave func()
+}
+
+func (h *archiveConfigChangeHost) StoreRoomArchiveProgress(ctx context.Context, id domain.ID, p domain.RoomArchiveProgress) error {
+	if h.beforeSave != nil {
+		beforeSave := h.beforeSave
+		h.beforeSave = nil
+		beforeSave()
+	}
+	return h.testArchiveHost.StoreRoomArchiveProgress(ctx, id, p)
+}
+
+func TestRoomArchiveKeepsCheckpointWhenConfigurationChangesBeforeQuery(t *testing.T) {
+	at := time.Date(2026, 11, 10, 22, 0, 0, 0, time.UTC)
+	cutoff := at.Add(time.Minute)
+	m, e, host := archiveFixture(t, func(iq testArchiveIQ, i int) string {
+		payload := `<occupant-id xmlns="urn:xmpp:occupant-id:0" id="peer"/><reactions xmlns="urn:xmpp:reactions:0" id="source"><reaction>❤</reaction></reactions>`
+		page := iq.page(true, testArchiveMessage{id: "old-reaction", at: at}, testArchiveMessage{id: "newer-text", at: at.Add(time.Second)})
+		return strings.Replace(page, `id="old-reaction" type="groupchat"><body>Fixture message</body>`, `id="old-reaction" type="groupchat">`+payload, 1)
+	})
+	room := host.room.Address
+	e.archiveCapabilities = map[string]roomArchiveCapability{room: {mam: true}}
+	e.semianonymousRooms = map[string]bool{room: true}
+	e.occupantScopes = map[string]bool{room: true}
+	slot := e.rooms[room]
+	slot.session, slot.snapshot.State, slot.ownOccupantID = e.session, "joined", "self"
+	slot.recentReactionsRecovered = true
+	host.archive.RoomArchiveProgress = domain.RoomArchiveProgress{
+		WindowStart: at.Add(-time.Hour), WindowEnd: at.Add(-time.Second), CaughtUpThrough: at.Add(-time.Second),
+		RecentComplete: true, InitialComplete: true, OlderComplete: true, Availability: "unknown", TextSearch: "unknown",
+	}
+	// The authenticated notice arrives after roomArchiveSupport validated the
+	// previously cached capabilities, while availability is saved before catch-up.
+	wrapped := &archiveConfigChangeHost{testArchiveHost: host, beforeSave: func() {
+		feedReaction(t, m, e, `<message xmlns="jabber:client" type="groupchat" from="`+room+`"><x xmlns="http://jabber.org/protocol/muc#user"><status code="104"/></x></message>`)
+	}}
+	m.host = wrapped
+	_, err := m.roomArchiveTurn(t.Context(), t.Context(), wrapped, e, e.session, host.room, domain.RoomArchiveRequest{}, archiveAutomatic, cutoff)
+	if !currentRoomConfiguration(e, room).pending {
+		t.Fatal("fixture failed to invalidate discovery")
+	}
+	if !errors.Is(err, errArchive) || !host.archive.CaughtUpThrough.Equal(at.Add(-time.Second)) || len(host.messages) != 0 {
+		t.Fatalf("pending configuration changed archive progress: %v, %+v", err, host.archive)
+	}
+	discovery := `<query xmlns="http://jabber.org/protocol/disco#info"><identity category="conference" type="text"/><feature var="muc_semianonymous"/><feature var="urn:xmpp:occupant-id:0"/><feature var="urn:xmpp:sid:0"/></query>`
+	if _, err := m.decodeDiscoInfo(t.Context(), e, e.session, room, discovery, 1); err != nil {
+		t.Fatal(err)
+	}
+	e.archiveCapabilities[room] = roomArchiveCapability{mam: true}
+	if _, err := m.roomArchiveTurn(t.Context(), t.Context(), wrapped, e, e.session, host.room, domain.RoomArchiveRequest{}, archiveAutomatic, cutoff); err != nil {
+		t.Fatal(err)
+	}
+	if !host.archive.CaughtUpThrough.Equal(cutoff) || len(host.reactions) != 1 || len(host.messages) != 1 {
+		t.Fatal("catch-up did not resume from the original checkpoint", host.archive, host.reactions)
+	}
+}
+
+func TestDeferredRoomReactionReplayCarriesTieAnchorAcrossTextPage(t *testing.T) {
+	at := time.Date(2026, 11, 10, 22, 0, 0, 0, time.UTC)
+	m, e, host := archiveFixture(t, func(iq testArchiveIQ, index int) string {
+		ids := []string{"add", "text", "clear"}
+		if index >= len(ids) {
+			t.Error("unexpected page")
+			return iq.page(true)
+		}
+		if index > 0 && iq.Query.Set.After != ids[index-1] {
+			t.Error("replay lost its cursor", iq.Query.Set.After)
+		}
+		page := iq.page(index == 2, testArchiveMessage{id: ids[index], at: at})
+		if index == 1 {
+			return page
+		}
+		payload := `<occupant-id xmlns="urn:xmpp:occupant-id:0" id="peer"/><reactions xmlns="urn:xmpp:reactions:0" id="source">`
+		if index == 0 {
+			payload += `<reaction>❤</reaction>`
+		}
+		return strings.Replace(page, "<body>Fixture message</body>", payload+"</reactions>", 1)
+	})
+	room := host.room.Address
+	e.semianonymousRooms = map[string]bool{room: true}
+	e.occupantScopes = map[string]bool{room: true}
+	slot := e.rooms[room]
+	slot.session, slot.snapshot.State, slot.ownOccupantID = e.session, "joined", "self"
+	host.archive.DeferredReactions = domain.DeferredRoomReactions{Start: at, End: at}
+	for range 3 {
+		p := host.archive.RoomArchiveProgress
+		if stored, err := m.recoverDeferredRoomReactions(t.Context(), host, e, e.session, host.room, &p, slot); err != nil || !stored {
+			t.Fatal("deferred page was not stored", err)
+		}
+	}
+	if len(host.reactions) != 2 || !slices.Equal(host.reactions[1].ArchiveEarlier, []string{"add"}) ||
+		len(host.messages) != 0 || !host.archive.DeferredReactions.Start.IsZero() {
+		t.Fatal("reaction ordering evidence was lost across the text-only page", host.reactions, host.archive)
+	}
+}
+
+func TestIsolatedRoomArchiveDefersReactionAtAmbiguousPageBoundary(t *testing.T) {
+	at := time.Date(2026, 11, 10, 22, 0, 0, 0, time.UTC)
+	m, e, host := archiveFixture(t, func(iq testArchiveIQ, index int) string {
+		payload := `<occupant-id xmlns="urn:xmpp:occupant-id:0" id="peer"/><reactions xmlns="urn:xmpp:reactions:0" id="source">`
+		if index == 0 {
+			page := iq.page(false, testArchiveMessage{id: "newer-add", at: at})
+			return strings.Replace(page, "<body>Fixture message</body>", payload+"<reaction>❤</reaction></reactions>", 1)
+		}
+		page := iq.page(true, testArchiveMessage{id: "older-clear", at: at}, testArchiveMessage{id: "newer-add", at: at})
+		page = strings.Replace(page, "<body>Fixture message</body>", payload+"</reactions>", 1)
+		return strings.Replace(page, "<body>Fixture message</body>", payload+"<reaction>❤</reaction></reactions>", 1)
+	})
+	room := host.room.Address
+	e.semianonymousRooms = map[string]bool{room: true}
+	e.occupantScopes = map[string]bool{room: true}
+	slot := e.rooms[room]
+	slot.session, slot.snapshot.State, slot.ownOccupantID = e.session, "joined", "self"
+	anchor := &domain.Message{ArchiveScope: room, ArchiveID: "context", CreatedAt: at}
+	result := domain.RoomArchiveResult{Archive: host.archive}
+	if _, err := m.isolatedRoomPage(t.Context(), host, e, e.session, host.room, result, domain.RoomArchiveRequest{Action: "older", Anchor: anchor}); err != nil {
+		t.Fatal(err)
+	}
+	p := host.archive.RoomArchiveProgress
+	if len(host.reactions) != 0 || !p.DeferredReactions.Start.Equal(at) || !p.DeferredReactions.End.Equal(at) {
+		t.Fatal("isolated boundary should wait for chronological evidence", host.reactions, p.DeferredReactions)
+	}
+	if stored, err := m.recoverDeferredRoomReactions(t.Context(), host, e, e.session, host.room, &p, slot); err != nil || !stored {
+		t.Fatal("deferred tie was not stored", err)
+	}
+	if len(host.reactions) != 2 || len(host.reactions[0].Emojis) != 0 || !slices.Equal(host.reactions[1].ArchiveEarlier, []string{"older-clear"}) {
+		t.Fatal("unfiltered replay did not establish the newer set", host.reactions)
 	}
 }

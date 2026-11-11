@@ -77,8 +77,9 @@ structured mentions are outside outgoing correction support.
 API 0.26 adds retained emoji reaction counts and full own-set replacement or
 removal, with a searchable English/Portuguese picker. Direct reactions have real
 development-server coverage. Room support requires trusted stanza IDs and current
-verified non-anonymous actor identity. See [reaction API and persistence scope](docs/message-reactions.md)
-and [reaction controls](docs/reactions.md).
+verified actor identity, including server-issued occupant IDs in semianonymous
+rooms. See [reaction API and persistence scope](docs/message-reactions.md) and
+[reaction controls](docs/reactions.md).
 
 ## Run
 

@@ -85,7 +85,7 @@ func directReaction(a domain.Account, msg stanza.Message, meta reactionMetadata,
 	return &application.IncomingReaction{AccountID: a.ID, Address: peer, Kind: "direct", ProviderID: msg.ID, CreatedAt: at.UTC(), IsOwn: own, Actor: actor, ActorName: actor, Target: domain.MessageReference{ID: target}, Emojis: emojis}, true
 }
 
-func (m *Manager) receiveReaction(ctx context.Context, e *entry, msg stanza.Message, meta reactionMetadata, stamp, delayFrom string) error {
+func (m *Manager) receiveReaction(ctx context.Context, e *entry, msg stanza.Message, meta reactionMetadata, reply replyMetadata, occupants []wireID, stamp, delayFrom string) error {
 	at := time.Now().UTC()
 	if stamp != "" {
 		parsed, err := time.Parse(time.RFC3339Nano, stamp)
@@ -96,25 +96,26 @@ func (m *Manager) receiveReaction(ctx context.Context, e *entry, msg stanza.Mess
 	} else if delayFrom != "" {
 		return nil
 	}
-	if !usableID(msg.ID) {
-		return nil
-	}
 	var in *application.IncomingReaction
 	if msg.Type == stanza.GroupChatMessage {
 		room := msg.From.Bare().String()
 		if msg.From.Localpart() == "" || msg.From.Resourcepart() == "" {
 			return nil
 		}
-		e.historyMu.Lock()
-		stable := e.sidScopes[room]
-		e.historyMu.Unlock()
-		actor := liveRoomSenderAddress(e, msg.From, stamp, delayFrom)
-		target, emojis, ok := reactionSet(meta)
-		if !stable || actor == "" || !ok {
+		if stamp != "" || delayFrom != "" {
 			return nil
 		}
-		in = &application.IncomingReaction{AccountID: e.account.ID, Address: room, Kind: "room", ProviderID: msg.ID, CreatedAt: at, Actor: actor, ActorName: msg.From.Resourcepart(), IsOwn: actor == e.account.Address, Target: domain.MessageReference{Scope: "room:" + room, ID: target}, Emojis: emojis}
+		id := roomStanzaID(msg.From, reply.Stable)
+		actor, own := incomingRoomReactionActor(e, msg.From, occupants)
+		var ok bool
+		in, ok = groupReaction(e.account.ID, room, msg, meta, reply, id, actor, own, at)
+		if !ok {
+			return nil
+		}
 	} else {
+		if !usableID(msg.ID) {
+			return nil
+		}
 		var ok bool
 		in, ok = directReaction(e.account, msg, meta, at)
 		if !ok {
@@ -128,9 +129,91 @@ func (m *Manager) receiveReaction(ctx context.Context, e *entry, msg stanza.Mess
 	return err
 }
 
-func archivedReaction(a domain.Account, scope string, r *archiveResult) (*application.IncomingReaction, bool, error) {
+// Hash room and account scope with the server-issued identifier. The result is
+// stable across nickname changes, and cannot be used as a contact address.
+func roomReactionActor(account domain.ID, room, occupant string) string {
+	if occupant == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(string(account) + "\x00" + room + "\x00" + occupant))
+	return domain.RoomReactionActorPrefix + hex.EncodeToString(sum[:])
+}
+
+// The caller holds e.mu for a consistent room and connection snapshot.
+func roomReactionSupport(e *entry, room string) (slot *roomSlot, semianonymous, occupantVerified bool) {
+	slot = e.rooms[room]
+	if e.state.State != "connected" || e.session == nil || slot == nil || slot.session != e.session || slot.snapshot.State != "joined" || slot.leaving {
+		return nil, false, false
+	}
+	e.historyMu.Lock()
+	defer e.historyMu.Unlock()
+	if !e.sidScopes[room] || e.roomConfigurations[room].pending {
+		return nil, false, false
+	}
+	return slot, e.semianonymousRooms[room], e.occupantScopes[room]
+}
+
+func incomingRoomReactionActor(e *entry, from jid.JID, occupants []wireID) (string, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	room := from.Bare().String()
+	slot, semianonymous, occupantVerified := roomReactionSupport(e, room)
+	if slot == nil {
+		return "", false
+	}
+	if !semianonymous {
+		actor := liveRoomSenderAddressLocked(e, from)
+		return actor, actor == e.account.Address
+	}
+	if !occupantVerified || slot.ownOccupantID == "" {
+		return "", false
+	}
+	occupant := verifiedOccupantID(occupants)
+	return roomReactionActor(e.account.ID, room, occupant), occupant == slot.ownOccupantID
+}
+
+func groupReaction(account domain.ID, room string, msg stanza.Message, meta reactionMetadata, reply replyMetadata, eventID, actor string, own bool, at time.Time) (*application.IncomingReaction, bool) {
+	target, emojis, ok := reactionSet(meta)
+	if !ok || actor == "" || msg.From.Localpart() == "" || msg.From.Resourcepart() == "" || msg.From.Bare().String() != room {
+		return nil, false
+	}
+	var provider string
+	if eventID != "" {
+		event := sha256.Sum256([]byte(room + "\x00" + eventID))
+		provider = "room-reaction:" + hex.EncodeToString(event[:])
+	} else if local := randomQueryID(); local != "" {
+		// Without an ID assigned by the room, the authenticated live delivery
+		// is the observation. Client IDs can be reused across deliveries.
+		provider = "room-live:" + local
+	} else {
+		return nil, false
+	}
+	in := &application.IncomingReaction{
+		AccountID: account, Address: room, Kind: "room", ProviderID: provider,
+		CreatedAt: at, Actor: actor, ActorName: msg.From.Resourcepart(), IsOwn: own,
+		Target: domain.MessageReference{Scope: "room:" + room, ID: target}, Emojis: emojis,
+	}
+	if own {
+		if usableID(msg.ID) {
+			in.CommandEchoID = msg.ID
+		}
+		if len(reply.Origins) == 1 {
+			origin := reply.Origins[0]
+			if usableID(origin.ID) && origin.Text == "" && len(origin.Children) == 0 {
+				in.CommandEchoID = origin.ID
+			}
+		}
+	}
+	return in, true
+}
+
+func archivedReaction(a domain.Account, scope string, r *archiveResult, trust archiveTrust) (*application.IncomingReaction, bool, error) {
 	msg := r.Forwarded.Message
-	if msg == nil || scope != a.Address || msg.Type == stanza.GroupChatMessage {
+	if msg == nil {
+		return nil, false, nil
+	}
+	group := msg.Type == stanza.GroupChatMessage
+	if group && (!trust.SIDVerified || !trust.OccupantVerified || !trust.Semianonymous) || !group && scope != a.Address {
 		return nil, false, nil
 	}
 	if !usableID(r.ID) {
@@ -140,7 +223,18 @@ func archivedReaction(a domain.Account, scope string, r *archiveResult) (*applic
 	if err != nil {
 		return nil, false, errArchive
 	}
-	in, ok := directReaction(a, msg.Message, msg.reactionMetadata, at)
+	var in *application.IncomingReaction
+	var ok bool
+	if group {
+		actor := roomReactionActor(a.ID, scope, verifiedOccupantID(msg.Occupants))
+		eventID := roomStanzaID(msg.From, msg.Stable)
+		if eventID == "" {
+			eventID = r.ID
+		}
+		in, ok = groupReaction(a.ID, scope, msg.Message, msg.reactionMetadata, msg.replyMetadata, eventID, actor, actor == trust.OwnReactionActor, at.UTC())
+	} else {
+		in, ok = directReaction(a, msg.Message, msg.reactionMetadata, at)
+	}
 	if !ok {
 		return nil, false, nil
 	}

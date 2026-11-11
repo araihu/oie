@@ -9,19 +9,97 @@ import (
 	"context"
 )
 
+const archivedReactionNeighbors = `-- name: ArchivedReactionNeighbors :one
+SELECT CAST(COALESCE(MIN(archive_order),0) AS INTEGER) AS first_order,
+ CAST(COALESCE(MAX(archive_order),0) AS INTEGER) AS last_order,
+ CAST(COALESCE(MAX(CASE WHEN archive_id IN (SELECT value FROM json_each(CAST(?1 AS TEXT))) THEN archive_order END),0) AS INTEGER) AS earlier_order,
+ CAST(COALESCE(MIN(CASE WHEN archive_id IN (SELECT value FROM json_each(CAST(?2 AS TEXT))) THEN archive_order END),0) AS INTEGER) AS later_order,
+ COUNT(CASE WHEN archive_id IN (SELECT value FROM json_each(CAST(?1 AS TEXT))) THEN 1 END) AS earlier_count,
+ COUNT(CASE WHEN archive_id IN (SELECT value FROM json_each(CAST(?2 AS TEXT))) THEN 1 END) AS later_count
+FROM message_reaction_observations
+WHERE account_id=?3 AND archive_scope=?4
+AND occurred_at=?5 AND archive_id<>'' AND ordinal<>?6
+`
+
+type ArchivedReactionNeighborsParams struct {
+	Earlier         string
+	Later           string
+	AccountID       string
+	ArchiveScope    string
+	OccurredAt      string
+	ExcludedOrdinal int64
+}
+
+type ArchivedReactionNeighborsRow struct {
+	FirstOrder   int64
+	LastOrder    int64
+	EarlierOrder int64
+	LaterOrder   int64
+	EarlierCount int64
+	LaterCount   int64
+}
+
+func (q *Queries) ArchivedReactionNeighbors(ctx context.Context, arg ArchivedReactionNeighborsParams) (ArchivedReactionNeighborsRow, error) {
+	row := q.db.QueryRowContext(ctx, archivedReactionNeighbors,
+		arg.Earlier,
+		arg.Later,
+		arg.AccountID,
+		arg.ArchiveScope,
+		arg.OccurredAt,
+		arg.ExcludedOrdinal,
+	)
+	var i ArchivedReactionNeighborsRow
+	err := row.Scan(
+		&i.FirstOrder,
+		&i.LastOrder,
+		&i.EarlierOrder,
+		&i.LaterOrder,
+		&i.EarlierCount,
+		&i.LaterCount,
+	)
+	return i, err
+}
+
+const clearRoomReactionVisibility = `-- name: ClearRoomReactionVisibility :exec
+UPDATE room_reaction_privacy SET public=0 WHERE account_id=? AND address=? AND public<>0
+`
+
+type ClearRoomReactionVisibilityParams struct {
+	AccountID string
+	Address   string
+}
+
+func (q *Queries) ClearRoomReactionVisibility(ctx context.Context, arg ClearRoomReactionVisibilityParams) error {
+	_, err := q.db.ExecContext(ctx, clearRoomReactionVisibility, arg.AccountID, arg.Address)
+	return err
+}
+
+const deleteReactionObservation = `-- name: DeleteReactionObservation :exec
+DELETE FROM message_reaction_observations WHERE ordinal=?
+`
+
+func (q *Queries) DeleteReactionObservation(ctx context.Context, ordinal int64) error {
+	_, err := q.db.ExecContext(ctx, deleteReactionObservation, ordinal)
+	return err
+}
+
 const findReactionObservation = `-- name: FindReactionObservation :many
-SELECT ordinal, id, account_id, address, kind, actor, provider_id, archive_scope, archive_id, target_id, target_scope, target_author, fingerprint, occurred_at, payload, command_id FROM message_reaction_observations WHERE account_id=?1 AND address=?2 AND actor=?3
-AND ((CAST(?4 AS TEXT)<>'' AND provider_id=?4) OR
-(CAST(?5 AS TEXT)<>'' AND archive_scope=?6 AND archive_id=?5)) LIMIT 3
+SELECT ordinal, id, account_id, address, kind, actor, provider_id, archive_scope, archive_id, target_id, target_scope, target_author, fingerprint, occurred_at, payload, command_id, archive_order, room_epoch FROM message_reaction_observations WHERE account_id=?1 AND address=?2 AND actor=?3
+AND fingerprint=?4
+AND ((CAST(?5 AS TEXT)<>'' AND provider_id=?5) OR
+(CAST(?6 AS TEXT)<>'' AND archive_scope=?7 AND archive_id=?6) OR
+(CAST(?8 AS TEXT)<>'' AND command_id=?8)) ORDER BY ordinal LIMIT 4
 `
 
 type FindReactionObservationParams struct {
 	AccountID    string
 	Address      string
 	Actor        string
+	Fingerprint  string
 	ProviderID   string
 	ArchiveID    string
 	ArchiveScope string
+	CommandID    string
 }
 
 func (q *Queries) FindReactionObservation(ctx context.Context, arg FindReactionObservationParams) ([]MessageReactionObservation, error) {
@@ -29,9 +107,11 @@ func (q *Queries) FindReactionObservation(ctx context.Context, arg FindReactionO
 		arg.AccountID,
 		arg.Address,
 		arg.Actor,
+		arg.Fingerprint,
 		arg.ProviderID,
 		arg.ArchiveID,
 		arg.ArchiveScope,
+		arg.CommandID,
 	)
 	if err != nil {
 		return nil, err
@@ -57,6 +137,8 @@ func (q *Queries) FindReactionObservation(ctx context.Context, arg FindReactionO
 			&i.OccurredAt,
 			&i.Payload,
 			&i.CommandID,
+			&i.ArchiveOrder,
+			&i.RoomEpoch,
 		); err != nil {
 			return nil, err
 		}
@@ -111,6 +193,28 @@ func (q *Queries) GetMessageReactionCommand(ctx context.Context, id string) (Mes
 	return i, err
 }
 
+const getRoomReactionPrivacy = `-- name: GetRoomReactionPrivacy :one
+SELECT public,identity_mode,epoch FROM room_reaction_privacy WHERE account_id=? AND address=?
+`
+
+type GetRoomReactionPrivacyParams struct {
+	AccountID string
+	Address   string
+}
+
+type GetRoomReactionPrivacyRow struct {
+	Public       int64
+	IdentityMode string
+	Epoch        int64
+}
+
+func (q *Queries) GetRoomReactionPrivacy(ctx context.Context, arg GetRoomReactionPrivacyParams) (GetRoomReactionPrivacyRow, error) {
+	row := q.db.QueryRowContext(ctx, getRoomReactionPrivacy, arg.AccountID, arg.Address)
+	var i GetRoomReactionPrivacyRow
+	err := row.Scan(&i.Public, &i.IdentityMode, &i.Epoch)
+	return i, err
+}
+
 const insertMessageReactionCommand = `-- name: InsertMessageReactionCommand :exec
 INSERT INTO message_reaction_commands(id,revision_id,message_id,account_id,conversation_id,state,payload,next_attempt_at) VALUES(?,?,?,?,?,?,?,?)
 `
@@ -141,8 +245,8 @@ func (q *Queries) InsertMessageReactionCommand(ctx context.Context, arg InsertMe
 }
 
 const insertReactionObservation = `-- name: InsertReactionObservation :exec
-INSERT INTO message_reaction_observations(id,account_id,address,kind,actor,provider_id,archive_scope,archive_id,target_id,target_scope,target_author,fingerprint,occurred_at,payload,command_id)
-VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+INSERT INTO message_reaction_observations(id,account_id,address,kind,actor,provider_id,archive_scope,archive_id,target_id,target_scope,target_author,fingerprint,occurred_at,payload,command_id,archive_order,room_epoch)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 `
 
 type InsertReactionObservationParams struct {
@@ -161,6 +265,8 @@ type InsertReactionObservationParams struct {
 	OccurredAt   string
 	Payload      string
 	CommandID    string
+	ArchiveOrder int64
+	RoomEpoch    int64
 }
 
 func (q *Queries) InsertReactionObservation(ctx context.Context, arg InsertReactionObservationParams) error {
@@ -180,6 +286,8 @@ func (q *Queries) InsertReactionObservation(ctx context.Context, arg InsertReact
 		arg.OccurredAt,
 		arg.Payload,
 		arg.CommandID,
+		arg.ArchiveOrder,
+		arg.RoomEpoch,
 	)
 	return err
 }
@@ -281,7 +389,7 @@ func (q *Queries) ReactionActorProfile(ctx context.Context, arg ReactionActorPro
 
 const reactionObservationsForTargets = `-- name: ReactionObservationsForTargets :many
 WITH matching AS (
-SELECT o.ordinal, o.id, o.account_id, o.address, o.kind, o.actor, o.provider_id, o.archive_scope, o.archive_id, o.target_id, o.target_scope, o.target_author, o.fingerprint, o.occurred_at, o.payload, o.command_id FROM message_reaction_observations o
+SELECT o.ordinal, o.id, o.account_id, o.address, o.kind, o.actor, o.provider_id, o.archive_scope, o.archive_id, o.target_id, o.target_scope, o.target_author, o.fingerprint, o.occurred_at, o.payload, o.command_id, o.archive_order, o.room_epoch FROM message_reaction_observations o
 LEFT JOIN message_reaction_commands command ON command.id=o.command_id
 WHERE o.account_id=?1 AND o.address=?2 AND o.kind=?3
 AND (command.message_id=?4 OR EXISTS(SELECT 1 FROM json_each(CAST(?5 AS TEXT)) ref
@@ -290,14 +398,18 @@ AND (command.message_id=?4 OR EXISTS(SELECT 1 FROM json_each(CAST(?5 AS TEXT)) r
  AND (o.target_scope='' OR json_extract(ref.value,'$.scope')=o.target_scope)
  AND (o.target_author='' OR json_extract(ref.value,'$.author')=o.target_author)))
 AND (command.id IS NULL OR command.state<>'failed')
+AND (o.kind<>'room' OR json_extract(o.payload,'$.IsOwn')=1 OR o.room_epoch=?6)
 AND NOT EXISTS(SELECT 1 FROM message_reaction_observations conflict
  WHERE conflict.account_id=o.account_id AND conflict.address=o.address AND conflict.actor=o.actor
  AND ((o.provider_id<>'' AND conflict.provider_id=o.provider_id) OR (o.archive_id<>'' AND conflict.archive_scope=o.archive_scope AND conflict.archive_id=o.archive_id))
  AND conflict.fingerprint<>o.fingerprint)
 ), ranked AS (
- SELECT matching.ordinal, matching.id, matching.account_id, matching.address, matching.kind, matching.actor, matching.provider_id, matching.archive_scope, matching.archive_id, matching.target_id, matching.target_scope, matching.target_author, matching.fingerprint, matching.occurred_at, matching.payload, matching.command_id,row_number() OVER(PARTITION BY actor ORDER BY occurred_at DESC,provider_id DESC,fingerprint DESC) AS position FROM matching
+ SELECT matching.ordinal, matching.id, matching.account_id, matching.address, matching.kind, matching.actor, matching.provider_id, matching.archive_scope, matching.archive_id, matching.target_id, matching.target_scope, matching.target_author, matching.fingerprint, matching.occurred_at, matching.payload, matching.command_id, matching.archive_order, matching.room_epoch,row_number() OVER(PARTITION BY actor ORDER BY occurred_at DESC,
+ (archive_id<>'') DESC,archive_order DESC,
+ CASE WHEN kind='room' AND archive_id='' THEN ordinal ELSE 0 END DESC,
+ provider_id DESC,fingerprint DESC) AS position FROM matching
 )
-SELECT ordinal,id,account_id,address,kind,actor,provider_id,archive_scope,archive_id,target_id,target_scope,target_author,fingerprint,occurred_at,payload,command_id
+SELECT ordinal,id,account_id,address,kind,actor,provider_id,archive_scope,archive_id,target_id,target_scope,target_author,fingerprint,occurred_at,payload,command_id,archive_order
 FROM ranked WHERE position=1 ORDER BY ordinal
 `
 
@@ -307,6 +419,7 @@ type ReactionObservationsForTargetsParams struct {
 	Kind       string
 	MessageID  string
 	References string
+	RoomEpoch  int64
 }
 
 type ReactionObservationsForTargetsRow struct {
@@ -326,6 +439,7 @@ type ReactionObservationsForTargetsRow struct {
 	OccurredAt   string
 	Payload      string
 	CommandID    string
+	ArchiveOrder int64
 }
 
 func (q *Queries) ReactionObservationsForTargets(ctx context.Context, arg ReactionObservationsForTargetsParams) ([]ReactionObservationsForTargetsRow, error) {
@@ -335,6 +449,7 @@ func (q *Queries) ReactionObservationsForTargets(ctx context.Context, arg Reacti
 		arg.Kind,
 		arg.MessageID,
 		arg.References,
+		arg.RoomEpoch,
 	)
 	if err != nil {
 		return nil, err
@@ -360,6 +475,7 @@ func (q *Queries) ReactionObservationsForTargets(ctx context.Context, arg Reacti
 			&i.OccurredAt,
 			&i.Payload,
 			&i.CommandID,
+			&i.ArchiveOrder,
 		); err != nil {
 			return nil, err
 		}
@@ -372,6 +488,109 @@ func (q *Queries) ReactionObservationsForTargets(ctx context.Context, arg Reacti
 		return nil, err
 	}
 	return items, nil
+}
+
+const reconcileReactionObservation = `-- name: ReconcileReactionObservation :exec
+UPDATE message_reaction_observations SET provider_id=?,archive_scope=?,archive_id=?,occurred_at=?,archive_order=?,payload=?,command_id=?
+WHERE ordinal=?
+`
+
+type ReconcileReactionObservationParams struct {
+	ProviderID   string
+	ArchiveScope string
+	ArchiveID    string
+	OccurredAt   string
+	ArchiveOrder int64
+	Payload      string
+	CommandID    string
+	Ordinal      int64
+}
+
+func (q *Queries) ReconcileReactionObservation(ctx context.Context, arg ReconcileReactionObservationParams) error {
+	_, err := q.db.ExecContext(ctx, reconcileReactionObservation,
+		arg.ProviderID,
+		arg.ArchiveScope,
+		arg.ArchiveID,
+		arg.OccurredAt,
+		arg.ArchiveOrder,
+		arg.Payload,
+		arg.CommandID,
+		arg.Ordinal,
+	)
+	return err
+}
+
+const resetAllRoomReactionPrivacy = `-- name: ResetAllRoomReactionPrivacy :exec
+UPDATE room_reaction_privacy SET public=0 WHERE public<>0
+`
+
+func (q *Queries) ResetAllRoomReactionPrivacy(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, resetAllRoomReactionPrivacy)
+	return err
+}
+
+const resetRoomReactionPrivacy = `-- name: ResetRoomReactionPrivacy :exec
+UPDATE room_reaction_privacy SET public=0 WHERE account_id=? AND public<>0
+`
+
+func (q *Queries) ResetRoomReactionPrivacy(ctx context.Context, accountID string) error {
+	_, err := q.db.ExecContext(ctx, resetRoomReactionPrivacy, accountID)
+	return err
+}
+
+const setRoomReactionPrivacy = `-- name: SetRoomReactionPrivacy :execrows
+INSERT INTO room_reaction_privacy(account_id,address,public,identity_mode) VALUES(?,?,?,?)
+ON CONFLICT(account_id,address) DO UPDATE SET
+ public=excluded.public,
+ identity_mode=CASE WHEN excluded.identity_mode<>'' THEN excluded.identity_mode ELSE room_reaction_privacy.identity_mode END,
+ epoch=room_reaction_privacy.epoch+CASE WHEN room_reaction_privacy.identity_mode<>'' AND excluded.identity_mode<>'' AND room_reaction_privacy.identity_mode<>excluded.identity_mode THEN 1 ELSE 0 END
+WHERE room_reaction_privacy.public<>excluded.public OR (excluded.identity_mode<>'' AND room_reaction_privacy.identity_mode<>excluded.identity_mode)
+`
+
+type SetRoomReactionPrivacyParams struct {
+	AccountID    string
+	Address      string
+	Public       int64
+	IdentityMode string
+}
+
+func (q *Queries) SetRoomReactionPrivacy(ctx context.Context, arg SetRoomReactionPrivacyParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setRoomReactionPrivacy,
+		arg.AccountID,
+		arg.Address,
+		arg.Public,
+		arg.IdentityMode,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const shiftArchivedReactions = `-- name: ShiftArchivedReactions :exec
+UPDATE message_reaction_observations SET archive_order=archive_order+1
+WHERE account_id=?1 AND archive_scope=?2
+AND occurred_at=?3 AND archive_id<>'' AND archive_order>=?4
+AND ordinal<>?5
+`
+
+type ShiftArchivedReactionsParams struct {
+	AccountID       string
+	ArchiveScope    string
+	OccurredAt      string
+	Placement       int64
+	ExcludedOrdinal int64
+}
+
+func (q *Queries) ShiftArchivedReactions(ctx context.Context, arg ShiftArchivedReactionsParams) error {
+	_, err := q.db.ExecContext(ctx, shiftArchivedReactions,
+		arg.AccountID,
+		arg.ArchiveScope,
+		arg.OccurredAt,
+		arg.Placement,
+		arg.ExcludedOrdinal,
+	)
+	return err
 }
 
 const updateMessageReactionCommand = `-- name: UpdateMessageReactionCommand :exec

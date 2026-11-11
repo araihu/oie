@@ -71,7 +71,7 @@ func (m *Manager) recoverRoomGroup(ctx context.Context, host application.RoomArc
 				if initial && a.InitialComplete {
 					continue
 				}
-				if !initial && a.InitialComplete && (a.Mode == "on_demand" || a.OlderComplete) && !a.CaughtUpThrough.Before(cutoff) {
+				if !initial && a.InitialComplete && (a.Mode == "on_demand" || a.OlderComplete) && !a.CaughtUpThrough.Before(cutoff) && pendingRoomReactionReplay(e, s, room.Address, !a.DeferredReactions.Start.IsZero()) == nil && !currentRoomConfiguration(e, room.Address).pending {
 					status.supported = status.supported || a.Availability == "supported"
 					continue
 				}

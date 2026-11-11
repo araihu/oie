@@ -494,8 +494,22 @@ func (s *Store) TransitionMessage(ctx context.Context, id domain.ID, expected, s
 	return m, tx.Commit()
 }
 func (s *Store) RecordConnection(ctx context.Context, c domain.Connection) error {
-	_, err := change(ctx, s.queries, "account.connection_changed", c, c.UpdatedAt)
-	return err
+	if c.State == "connected" {
+		_, err := change(ctx, s.queries, "account.connection_changed", c, c.UpdatedAt)
+		return err
+	}
+	tx, q, err := begin(ctx, s)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := q.ResetRoomReactionPrivacy(ctx, string(c.AccountID)); err != nil {
+		return err
+	}
+	if _, err := change(ctx, q, "account.connection_changed", c, c.UpdatedAt); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Replaying verified room identity metadata updates the retained projection and

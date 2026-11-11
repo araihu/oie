@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -55,6 +56,9 @@ func reactionRevision(id *engineapi.NullableReactionRevision) string {
 	}
 	return ""
 }
+
+var opaqueReactionActor = regexp.MustCompile(`^occupant:[0-9a-f]{64}$`)
+
 func validReactions(value engineapi.MessageReactions, account, conversation, message string) bool {
 	if value.AccountId != account || value.ConversationId != conversation || value.MessageId != message || value.MaxEmojis < 1 || value.MaxEmojis > 8 || !validReactionSet(value.OwnEmojis) {
 		return false
@@ -84,6 +88,10 @@ func validReactions(value engineapi.MessageReactions, account, conversation, mes
 		actors, totals := map[string]bool{}, map[string]int{}
 		ownActors := 0
 		for _, actor := range *value.Actors {
+			if strings.HasPrefix(actor.Address, "occupant:") &&
+				(!opaqueReactionActor.MatchString(actor.Address) || actor.AvatarHash != nil) {
+				return false
+			}
 			if actor.Address == "" || len(actor.Address) > 1023 || !utf8.ValidString(actor.Address) || strings.IndexFunc(actor.Address, unicode.IsControl) >= 0 || actors[actor.Address] || strings.TrimSpace(actor.DisplayName) == "" || len(actor.DisplayName) > 1023 || !utf8.ValidString(actor.DisplayName) || strings.IndexFunc(actor.DisplayName, unicode.IsControl) >= 0 || len(actor.Emojis) == 0 || !validReactionSet(actor.Emojis) || actor.AvatarHash != nil && !validAvatarHash(*actor.AvatarHash) {
 				return false
 			}
@@ -364,6 +372,18 @@ func (s *Server) setReactions(w http.ResponseWriter, r *http.Request) {
 	result.Rejected = problem.Code != "idempotency_conflict"
 	result.Message = v.Text.ReactionUnavailable
 	respond(status)
+}
+
+func reactionQuickChoices(text copy) []struct{ emoji, label string } {
+	return []struct{ emoji, label string }{
+		{"👍", text.ReactionThumbsUp},
+		{"❤️", text.ReactionHeart},
+		{"😂", text.ReactionLaugh},
+		{"😮", text.ReactionSurprise},
+		{"😢", text.ReactionCry},
+		{"🙏", text.ReactionPray},
+		{"👏", text.ReactionClap},
+	}
 }
 
 func reactionSummaryPlacement(own bool) popover.Placement {

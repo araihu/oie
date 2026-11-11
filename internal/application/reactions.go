@@ -3,16 +3,22 @@ package application
 import (
 	"context"
 	"errors"
-	"github.com/araihu/oie/internal/domain"
 	"reflect"
+	"strings"
 	"time"
+	"unicode"
+
+	"github.com/araihu/oie/internal/domain"
 )
 
 type IncomingReaction struct {
 	AccountID                                          domain.ID
 	Address, Kind, ProviderID, ArchiveScope, ArchiveID string
+	CommandEchoID                                      string
 	CreatedAt                                          time.Time
 	Historical, IsOwn                                  bool
+	ArchivePrepend                                     bool     `json:"-"`
+	ArchiveEarlier, ArchiveLater                       []string `json:"-"`
 	Target                                             domain.MessageReference
 	Actor, ActorName                                   string
 	Emojis                                             []string
@@ -20,6 +26,32 @@ type IncomingReaction struct {
 type ReactionProvider interface {
 	PrepareReaction(context.Context, domain.Account, domain.Conversation, domain.Message) (domain.OutgoingReaction, error)
 }
+
+// RoomReactionPrivacy distinguishes a verified identity mode from permission
+// to show real addresses, which requires current room presence.
+type RoomReactionPrivacy struct {
+	Mode   string
+	Public bool
+}
+
+const (
+	RoomReactionsNonanonymous  = "nonanonymous"
+	RoomReactionsSemianonymous = "semianonymous"
+	RoomReactionsAnonymous     = "anonymous"
+)
+
+type RoomReactionPrivacyHost interface {
+	SetRoomReactionPrivacy(context.Context, domain.ID, string, RoomReactionPrivacy) error
+}
+
+func (e *Engine) SetRoomReactionPrivacy(ctx context.Context, account domain.ID, address string, privacy RoomReactionPrivacy) error {
+	repo, ok := e.repo.(RoomReactionPrivacyHost)
+	if !ok {
+		return ErrProtocolUnavailable
+	}
+	return repo.SetRoomReactionPrivacy(ctx, account, address, privacy)
+}
+
 type MessageReactionCandidate struct {
 	Snapshot domain.MessageReactions
 	Source   domain.Message
@@ -100,6 +132,9 @@ func (e *Engine) prepareReaction(ctx context.Context, id domain.ID) (MessageReac
 	}
 	plan, err := provider.PrepareReaction(ctx, a, c, candidate.Source)
 	if err != nil || plan.TargetMessageID != candidate.Source.ID || plan.Reference.ID == "" || plan.Actor == "" || plan.Actor != a.Address || plan.SessionID == "" {
+		return deny("target_unavailable")
+	}
+	if plan.RoomActor != "" && (c.Kind != "room" || !domain.IsRoomReactionActor(plan.RoomActor) || !validRoomReactionName(plan.ActorName)) {
 		return deny("target_unavailable")
 	}
 	if plan.MaxEmojis <= 0 || plan.AllowedEmojis != nil && len(plan.AllowedEmojis) == 0 {
@@ -192,12 +227,20 @@ func (e *Engine) SetMessageReactions(ctx context.Context, key, id, expected doma
 	command := domain.MessageReactionCommand{ID: key, RevisionID: revision, MessageID: candidate.Source.ID, AccountID: candidate.Source.AccountID, ConversationID: candidate.Source.ConversationID, ExpectedOwnRevisionID: expected, Emojis: emojis, State: "queued", CreatedAt: now, UpdatedAt: now}
 	result, err := r.AcceptMessageReaction(ctx, MessageReactionMutation{Pending: domain.PendingMessageReaction{Command: command, Plan: plan}, Fingerprint: digest})
 	if err == nil {
-		e.wake()
+		e.outgoingWorkCommitted()
 	}
 	return result, err
 }
+func validRoomReactionName(name string) bool {
+	return len(name) <= 1023 && strings.TrimSpace(name) != "" && validText(name, 1023) &&
+		strings.IndexFunc(name, unicode.IsControl) < 0
+}
+
 func (e *Engine) ReceiveReaction(ctx context.Context, in IncomingReaction) error {
 	if !validID(in.AccountID) || !validText(in.Actor, 1023) || !validText(in.Target.ID, 4096) || in.Kind != "direct" && in.Kind != "room" || in.ProviderID == "" && in.ArchiveID == "" || len(in.ProviderID) > 4096 || len(in.ArchiveID) > 4096 || len(in.ArchiveScope) > 4096 || len(in.Target.Scope) > 4096 || len(in.Target.Author) > 4096 {
+		return ErrInvalid
+	}
+	if in.CommandEchoID != "" && (!in.IsOwn || in.Kind != "room" || !validText(in.CommandEchoID, 4096)) {
 		return ErrInvalid
 	}
 	emojis, err := NormalizeReactionEmojis(in.Emojis)
@@ -213,12 +256,15 @@ func (e *Engine) ReceiveReaction(ctx context.Context, in IncomingReaction) error
 	if err != nil {
 		return err
 	}
-	actor, err := e.canonical(a.Protocol, in.Actor)
-	if err != nil || actor != in.Actor {
-		return ErrInvalid
-	}
-	if in.IsOwn != (actor == a.Address) {
-		return ErrInvalid
+	if domain.IsRoomReactionActor(in.Actor) {
+		if in.Kind != "room" || in.Target.Scope != "room:"+in.Address || !validRoomReactionName(in.ActorName) {
+			return ErrInvalid
+		}
+	} else {
+		actor, err := e.canonical(a.Protocol, in.Actor)
+		if err != nil || actor != in.Actor || in.IsOwn != (actor == a.Address) {
+			return ErrInvalid
+		}
 	}
 	now := e.now().UTC()
 	if in.CreatedAt.IsZero() {
@@ -239,7 +285,11 @@ func (e *Engine) ReceiveReaction(ctx context.Context, in IncomingReaction) error
 	if err != nil {
 		return err
 	}
-	return r.ObserveMessageReaction(ctx, MessageReactionObservation{Incoming: in, RevisionID: revision, ObservedAt: now})
+	if err := r.ObserveMessageReaction(ctx, MessageReactionObservation{Incoming: in, RevisionID: revision, ObservedAt: now}); err != nil {
+		return err
+	}
+	e.notifyEvents()
+	return nil
 }
 func (e *Engine) recoverMessageReactions(ctx context.Context) error {
 	r, err := e.reactionRepository()
@@ -304,6 +354,7 @@ func (e *Engine) dispatchMessageReactions(ctx context.Context) error {
 		}
 		claimed, err := r.ClaimMessageReaction(ctx, p.Command.ID, revision, e.now().UTC())
 		if errors.Is(err, ErrStateConflict) {
+			e.notifyEvents()
 			continue
 		}
 		if err != nil {
@@ -338,6 +389,7 @@ func (e *Engine) dispatchMessageReactions(ctx context.Context) error {
 		if err != nil && !errors.Is(err, ErrStateConflict) {
 			return err
 		}
+		e.notifyEvents()
 	}
 	return nil
 }

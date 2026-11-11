@@ -93,6 +93,10 @@ func (s *Store) openDatabase(ctx context.Context, initialID domain.ID) (err erro
 		return err
 	}
 	queries := dbgen.New(db)
+	// A previous connection cannot vouch for the current room configuration.
+	if err = queries.ResetAllRoomReactionPrivacy(ctx); err != nil {
+		return err
+	}
 	if err = queries.InsertEngineIdentity(ctx, string(initialID)); err != nil {
 		return err
 	}

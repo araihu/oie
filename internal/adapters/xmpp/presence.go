@@ -13,11 +13,12 @@ type peerResource struct {
 }
 type incomingPresence struct {
 	stanza.Presence
-	Show     string   `xml:"jabber:client show"`
-	Status   string   `xml:"jabber:client status"`
-	Priority string   `xml:"jabber:client priority"`
-	MUC      *mucUser `xml:"http://jabber.org/protocol/muc#user x"`
-	Error    *struct {
+	Show      string   `xml:"jabber:client show"`
+	Status    string   `xml:"jabber:client status"`
+	Priority  string   `xml:"jabber:client priority"`
+	MUC       *mucUser `xml:"http://jabber.org/protocol/muc#user x"`
+	Occupants []wireID `xml:"urn:xmpp:occupant-id:0 occupant-id"`
+	Error     *struct {
 		Conflict             *struct{} `xml:"urn:ietf:params:xml:ns:xmpp-stanzas conflict"`
 		Forbidden            *struct{} `xml:"urn:ietf:params:xml:ns:xmpp-stanzas forbidden"`
 		NotAuthorized        *struct{} `xml:"urn:ietf:params:xml:ns:xmpp-stanzas not-authorized"`

@@ -92,23 +92,24 @@ func TestRoomCorrectionRequiresVerifiedOccupantAndFullSender(t *testing.T) {
 	}
 }
 func TestOccupantEvidenceIsBoundToDiscoveredRoomAndCurrentSession(t *testing.T) {
+	m := New(t.TempDir(), nil)
 	current, old := &mx.Session{}, &mx.Session{}
 	e := &entry{account: domain.Account{Address: "alice@example.test"}, session: current, state: domain.Connection{State: "connected"}}
 	supported := disco.Info{Identity: []info.Identity{{Category: "conference", Type: "text"}}, Features: []info.Feature{{Var: occupantIDNS}}}
 	room := "room@conference.example.test"
-	recordOccupantSupport(e, old, room, supported)
+	_ = m.recordDiscoInfo(t.Context(), e, old, room, 0, supported)
 	if e.occupantScopes[room] {
 		t.Fatal("old session advertised current authority")
 	}
-	recordOccupantSupport(e, current, room, supported)
+	_ = m.recordDiscoInfo(t.Context(), e, current, room, 0, supported)
 	if !e.occupantScopes[room] {
 		t.Fatal("room support not retained")
 	}
-	recordOccupantSupport(e, current, room, disco.Info{Identity: supported.Identity})
+	_ = m.recordDiscoInfo(t.Context(), e, current, room, 0, disco.Info{Identity: supported.Identity})
 	if e.occupantScopes[room] {
 		t.Fatal("removed feature remained trusted")
 	}
-	recordOccupantSupport(e, current, room, disco.Info{Features: supported.Features})
+	_ = m.recordDiscoInfo(t.Context(), e, current, room, 0, disco.Info{Features: supported.Features})
 	if e.occupantScopes[room] {
 		t.Fatal("client feature advertised room authority")
 	}
@@ -121,7 +122,7 @@ func TestArchiveCorrectionKeepsSourceIDSeparateFromRoomSID(t *testing.T) {
 	}
 	account := domain.Account{ID: "019a5df0-0000-7000-8000-000000000001", Address: "alice@example.test"}
 	for _, trusted := range []bool{false, true} {
-		in, ok, err := archivedIncoming(account, "room@conference.example.test", &result, true, trusted)
+		in, ok, err := archivedIncoming(account, "room@conference.example.test", &result, archiveTrust{SIDVerified: true, OccupantVerified: trusted})
 		if err != nil || !ok {
 			t.Fatal(err)
 		}

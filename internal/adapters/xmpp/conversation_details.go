@@ -114,9 +114,11 @@ func (m *Manager) detailsLoop(ctx context.Context, e *entry, s *mx.Session, wake
 			if selected == nil {
 				break
 			}
+			revision := currentRoomConfiguration(e, selected.conversation.Address).revision
 			info := m.fetchRoomDetails(ctx, e, s, selected.conversation.Address)
 			e.mu.Lock()
-			if e.session == s && e.state.State == "connected" && e.details[id] == selected {
+			if e.session == s && e.state.State == "connected" && e.details[id] == selected &&
+				currentRoomConfiguration(e, selected.conversation.Address).revision == revision {
 				selected.info = info
 			}
 			e.mu.Unlock()
