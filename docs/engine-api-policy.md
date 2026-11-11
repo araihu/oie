@@ -68,7 +68,8 @@ URI is the primary identifier, in the form `urn:oie:problem:<code>`. The
 short label for diagnostics and localized messages. Known problems provide an
 HTTPS link with `Link: <URL>; rel="help"`. Send
 `Prefer: oie-problem-documentation` to include the URL as `documentation` in
-the JSON body. A response that honors the preference also sends
+the JSON body. The preference also accepts an empty quoted value
+(`oie-problem-documentation=""`). A response that honors it sends
 `Preference-Applied: oie-problem-documentation`. The default body remains
 compatible with the published closed 0.27.0 schema. The link can change
 independently of the URN and code. See the

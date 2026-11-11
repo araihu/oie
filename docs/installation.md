@@ -413,8 +413,9 @@ failures.
 | [`urn:cli:oiectl:problem:usage_error`](engine-api-problems.md#usage_error) | Invalid command usage | `usage_error` | 2 |
 | [`urn:cli:oiectl:problem:transport_error`](engine-api-problems.md#transport_error) | Transport error | `transport_error` | 3 |
 
-Transport failures include timeouts, cancellations, and a requested
-`--response-header` missing from a successful response.
+Transport failures include timeouts, cancellations, truncated problem
+response bodies, and a requested `--response-header` missing from a
+successful response.
 
 See [the engine API policy](engine-api-policy.md) and
 [CLI verification](engine-api-cli-verification.md) for scope and fixture commands.

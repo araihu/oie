@@ -211,8 +211,9 @@ func prefersProblemDocumentation(header http.Header) bool {
 				quoted = !quoted
 			case !quoted && char == ',':
 				item, _, _ := strings.Cut(field[start:i], ";")
-				if strings.EqualFold(strings.TrimSpace(item), problemDocumentationPreference) {
-					return true
+				name, value, assigned := strings.Cut(item, "=")
+				if strings.EqualFold(strings.TrimSpace(name), problemDocumentationPreference) {
+					return !assigned || strings.TrimSpace(value) == `""`
 				}
 				start = i + 1
 			}

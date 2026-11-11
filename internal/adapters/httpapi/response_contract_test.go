@@ -157,6 +157,9 @@ func TestProblemDocumentationPreservesPublishedDefaultSchema(t *testing.T) {
 		{"", false},
 		{`other="before, oie-problem-documentation, after"`, false},
 		{"respond-async, oie-problem-documentation", true},
+		{`oie-problem-documentation=""`, true},
+		{`respond-async, OIE-PROBLEM-DOCUMENTATION=""; optional="a,b"`, true},
+		{`oie-problem-documentation="nonempty", oie-problem-documentation=""`, false},
 	} {
 		req, err := http.NewRequest(http.MethodGet, server.URL+"/api/v1/accounts/not-a-uuid", nil)
 		if err != nil {

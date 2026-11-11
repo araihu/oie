@@ -3137,8 +3137,8 @@ components:
           format: uri
           description: >-
             Absolute HTTPS link to human-readable guidance for this problem type.
-            Included for requests with Prefer: oie-problem-documentation. The URL may change
-            independently of the type URI and code.
+            Included when Prefer requests oie-problem-documentation with no value or an empty
+            quoted value. The URL may change independently of the type URI and code.
         currentConversation:
           $ref: '#/components/schemas/Conversation'
         currentStar:
