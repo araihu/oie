@@ -44,6 +44,9 @@ var formattingScript []byte
 //go:embed theme.js
 var themeScript []byte
 
+//go:embed presentation-time.js
+var presentationTimeScript []byte
+
 //go:embed locales/*.json
 var localeFiles embed.FS
 
@@ -246,6 +249,7 @@ type copy struct {
 	EmojiPicker                                                                                                                                                                                              string
 	Composition, EmojiShortcutLanguages, EmojiSuggestions                                                                                                                                                    string
 	SettingsGeneral, SearchLanguages, NoLanguagesFound, EmojiShortcutsOff, EmojiShortcutLanguageCount                                                                                                        string
+	PresentationTimeZone, SystemTimeZone                                                                                                                                                                     string
 	EmojiSearch                                                                                                                                                                                              string
 	EmojiCategories                                                                                                                                                                                          string
 	EmojiAll                                                                                                                                                                                                 string
@@ -630,9 +634,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mime string
 		body []byte
 	}{
-		"/ui/sidebar.js":    {"text/javascript", sidebarScript},
-		"/ui/reset-data.js": {"text/javascript", resetDataScript},
-		"/ui/mentions.js":   {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
+		"/ui/sidebar.js":           {"text/javascript", sidebarScript},
+		"/ui/presentation-time.js": {"text/javascript", presentationTimeScript},
+		"/ui/reset-data.js":        {"text/javascript", resetDataScript},
+		"/ui/mentions.js":          {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
 		"/ui/room-archive.js": {"text/javascript", roomArchiveScript},
 		"/ui/timeline.js":     {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/cache.js": {"text/javascript", cacheScript}, "/ui/cache/LICENSE.md": {"text/plain; charset=utf-8", cacheLibraryLicense}, "/ui/cache/lru-cache.min.mjs": {"text/javascript", cacheLibrary}, "/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},

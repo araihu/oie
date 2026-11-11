@@ -418,6 +418,8 @@
   "EmojiPicker": "Escolher emoji",
   "Composition": "Composição",
   "SettingsGeneral": "Geral",
+  "PresentationTimeZone": "Fuso horário de exibição",
+  "SystemTimeZone": "Fuso horário do sistema",
   "EmojiShortcutLanguages": "Idiomas dos atalhos de emoji",
   "SearchLanguages": "Buscar idiomas",
   "NoLanguagesFound": "Nenhum idioma encontrado",

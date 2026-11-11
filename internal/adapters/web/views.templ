@@ -89,7 +89,7 @@ templ page(v view) {
 <link rel="apple-touch-icon" sizes="180x180" href={templ.URL(brandURL("apple-touch-icon-180.png"))}/>
 <link rel="manifest" href={templ.SafeURL("/manifest.webmanifest?lang="+v.Locale)}/>
 <meta name="theme-color" content="#6092ab"/>
-			<script src="/ui/runtime.js"></script>
+			<script src="/ui/runtime.js"></script><script src="/ui/presentation-time.js" defer></script>
 <script src="/ui/theme.js"></script>
 <script src="/ui/sidebar.js"></script>
 <script src="/ui/formatting.js"></script>

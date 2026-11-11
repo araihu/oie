@@ -378,25 +378,32 @@ window.OieRuntime.register('live', life => {
     }
   }
   function localizeTimes(root=document) {
-    const locale=document.documentElement.lang || undefined;
-    const clock=new Intl.DateTimeFormat(locale,{hour:'2-digit',minute:'2-digit'});
-    for (const time of root.querySelectorAll('time[datetime]:not([data-day]):not([data-history-date])')) {
-      const date=new Date(time.dateTime);if(!Number.isNaN(date.getTime()))time.textContent=time.matches('[data-viewer-date],[data-capability-date],[data-details-date],[data-shared-source-date]')?new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(date):clock.format(date);
-    }
+    window.OieTime.localize(root);
     const timeline=root.querySelector('#message-timeline');if(!timeline)return;
     for(const divider of timeline.querySelectorAll('.oie-day-divider'))divider.remove();
-    const key=date=>[date.getFullYear(),date.getMonth(),date.getDate()].join('-');
+    const key=date=>window.OieTime.dateKey(date,'day');
     const today=key(new Date());let previous='';
     for(const row of timeline.querySelectorAll(':scope>[data-message-id],:scope>[data-pending-send]')){
       const date=new Date(row.dataset.createdAt);if(Number.isNaN(date.getTime()))continue;
       const current=key(date);if(current===previous)continue;previous=current;
       const divider=document.createElement('div');divider.className='oie-day-divider';
       const time=document.createElement('time');time.dateTime=row.dataset.createdAt;time.dataset.day='true';
-      time.textContent=current===today?text('today'):new Intl.DateTimeFormat(locale,{dateStyle:'medium'}).format(date);
+      time.textContent=current===today?text('today'):window.OieTime.format(date,{dateStyle:'medium'});
       divider.append(time);row.before(divider);
     }
   }
   function nearBottom(timeline) { return !timeline || timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 60; }
+  life.on(document,'oie:time-zone',()=>{
+    const timeline=document.querySelector('#message-timeline');
+    const follow=timeline&&nearBottom(timeline)&&!pinned();
+    const viewport=timeline?.getBoundingClientRect();
+    const row=viewport&&[...timeline.querySelectorAll(':scope>[data-message-id],:scope>[data-pending-send]')]
+      .find(node=>node.getBoundingClientRect().bottom>viewport.top);
+    const top=row?.getBoundingClientRect().top;
+    localizeTimes();
+    if(follow)timeline.scrollTop=timeline.scrollHeight;
+    else if(row)timeline.scrollTop+=row.getBoundingClientRect().top-top;
+  },{capture:true});
   let highlightedMessage='',highlightTimer;
   function pinned(){return !!body.dataset.focusMessage||!!window.OieTimeline?.hasNewer;}
   function showJump(show){const jump=document.querySelector('[data-jump-latest]');if(jump){jump.hidden=!show;jump.textContent=pinned()?text('latest'):text('newMessages');}}

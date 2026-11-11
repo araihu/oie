@@ -39,6 +39,7 @@ OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/settings-entry.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/reset-data.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/appearance-settings.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/language-settings.cjs
+node tests/browser/presentation-time.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/shared-content-scroll.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/link-fallbacks.cjs
 OIE_WEB_BINARY="$PWD/bin/oie" node tests/browser/video.cjs

@@ -674,6 +674,10 @@ Do not mutate a process-global locale for a hosted engine's devices. Full-page r
 
 Use UTC internally for timestamps and scheduling. Convert local input into an instant at the presentation boundary and format that instant locally. DST input ambiguity and exact wire precision are **OPEN O14**.
 
+**AGREED:** General settings offers a per-device display time zone. The default
+follows the system. An explicit IANA time zone changes displayed times and
+calendar groupings across the app without changing the underlying instants.
+
 ### 11.6 Delete all Oiê data
 
 **AGREED:** Settings offers an installation-wide reset on engines that support
