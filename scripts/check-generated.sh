@@ -1,5 +1,8 @@
 #!/bin/sh
 set -eu
+if [ "$#" -eq 0 ]; then
+  set -- env GOWORK=off go tool -modfile=tools/vacuum/go.mod vacuum
+fi
 python3 tools/generate-reaction-emoji-bases.py --check
 tmp=$(mktemp -d "./.codegen-check.XXXXXX")
 tmp=$(cd "$tmp" && pwd)
@@ -37,8 +40,8 @@ GOWORK=off go tool -modfile=tools/go.mod oapi-codegen --config "$tmp/cache-codeg
 cmp internal/adapters/web/cacheapi/api.gen.go "$tmp/cache.gen.go"
 GOWORK=off go tool -modfile=tools/go.mod templ generate -check
 root=$(pwd)
-GOWORK=off go -C tools/vacuum tool vacuum bundle --composed "$root/api/openapi.yaml" "$tmp/bundle.yaml" > /dev/null
-GOWORK=off go -C tools/vacuum tool vacuum apply-overlay --fail-on-warnings "$tmp/bundle.yaml" "$root/api/cli.overlay.yaml" "$tmp/cli.yaml" > /dev/null
-GOWORK=off go -C tools/vacuum tool vacuum bundle --composed --format json "$tmp/cli.yaml" "$tmp/cli.json" > /dev/null
+"$@" bundle --composed "$root/api/openapi.yaml" "$tmp/bundle.yaml" > /dev/null
+"$@" apply-overlay --fail-on-warnings "$tmp/bundle.yaml" "$root/api/cli.overlay.yaml" "$tmp/cli.yaml" > /dev/null
+"$@" bundle --composed --format json "$tmp/cli.yaml" "$tmp/cli.json" > /dev/null
 cmp api/openapi.cli.json "$tmp/cli.json"
 GOWORK=off go tool -modfile=tools/go.mod oapi-cli-gen generate --spec api/openapi.cli.json --name oiectl --module github.com/araihu/oie/cli --out cli --check

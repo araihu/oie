@@ -264,9 +264,10 @@ The runner prints stage progress every 30 seconds and saves command output under
 `OIE_CI_TIMEOUT` sets the overall execution deadline, defaulting to 30 minutes.
 Failure and interruption preserve a failing exit status and clean only the
 snapshot, runner process and optional SSH tunnel owned by that invocation.
-`make check` includes golangci-lint v2.13.1 pinned in the tools module.
-Its standard linters include errcheck, govet, ineffassign, staticcheck and unused.
-The first run populates those caches; later runs reuse them.
+The Dagger checks download the precompiled Vacuum and golangci-lint releases
+for the engine's architecture and verify their SHA-256 digests. The desktop lane
+uses the amd64 golangci-lint binary. Direct `make check` runs the versions pinned
+in the tools modules, with optional `VACUUM` and `GOLANGCI_LINT` overrides.
 
 `make check-ci-tools` checks the CI module and shell lifecycle regressions and is
 part of `make check`. The CI module uses the `http2legacy` build tag for Dagger's
