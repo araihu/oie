@@ -15,7 +15,7 @@ async function openSettings(page, url, fixture) {
   await footer.getByRole('button', { name: fixture.about, exact: true }).waitFor();
   assert.equal(await settings.getByText(fixture.engineHeading, { exact: true }).count(), 0);
   assert.equal(await settings.getByText(fixture.engineLabel, { exact: true }).count(), 0);
-  await page.setViewportSize({ width: fixture.viewport.width, height: 480 });
+  await page.setViewportSize({ width: fixture.viewport.width, height: 280 });
   const placement = await footer.evaluate(node => {
     const panel = node.closest('[role="dialog"]');
     const content = panel.querySelector('.oie-settings-scroll');

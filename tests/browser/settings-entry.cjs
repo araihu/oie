@@ -35,7 +35,34 @@ const id='019a5df0-0000-7000-8000-000000000001';
    assert(await page.evaluate(token=>token===window.settingsDocumentToken,token),'opening settings preserves document');
    if(width===390)await page.locator('#mobile-navigation-panel').waitFor({state:'hidden'});
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-   await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const result=await dialog.evaluate(node=>axe.run(node,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));if(result.violations.length)console.error(JSON.stringify(result.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>({target:n.target,html:n.html}))}))));assert.deepEqual(result.violations.map(v=>v.id),[]);
+   await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+   const audit=()=>dialog.evaluate(async node=>(await axe.run(node,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})));
+   if(section==='chats'){
+    const pt=locale==='pt-BR';
+    const general=dialog.getByRole('tab',{name:pt?'Geral':'General',exact:true});
+    const composition=dialog.getByRole('tab',{name:pt?'Composição':'Composition',exact:true});
+    const device=dialog.getByRole('tab',{name:pt?'Este dispositivo':'This device',exact:true});
+    assert.equal(await general.getAttribute('aria-selected'),'true');
+    await general.press('ArrowRight');
+    assert(await composition.evaluate(tab=>document.activeElement===tab));
+    await page.keyboard.press('Enter');
+    assert.equal(await composition.getAttribute('aria-selected'),'true');
+    const languages=dialog.getByRole('combobox',{name:pt?'Idiomas dos atalhos de emoji':'Emoji shortcut languages'});
+    await languages.click();
+    const search=dialog.getByRole('textbox',{name:pt?'Buscar idiomas':'Search languages'});
+    await search.fill('Portugu');
+    assert.deepEqual(await audit(),[]);
+    assert.equal(await dialog.getByRole('option').count(),1);
+    assert.equal(await dialog.getByRole('option',{name:'Português do Brasil'}).getAttribute('aria-selected'),'true');
+    const box=await search.boundingBox();
+    assert(box.x>=0&&box.x+box.width<=width+1);
+    await search.press('Escape');
+    await search.waitFor({state:'hidden'});
+    assert(await dialog.isVisible());
+    await device.click();
+    await dialog.locator('label[for="auto-image-downloads"]').waitFor({state:'visible'});
+   }
+   assert.deepEqual(await audit(),[]);
    await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});await context.close();
   }
   assert.deepEqual(errors,[]);console.log('PASS: one settings entry in the navigation footer across four sections, desktop/mobile, EN/PT, keyboard, drawer and accessibility');

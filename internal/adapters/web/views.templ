@@ -22,7 +22,6 @@ import (
 	"github.com/araihu/goshtoso/components/textinput"
 	"github.com/araihu/goshtoso/components/toast"
  "github.com/araihu/goshtoso/expressions"
- "github.com/araihu/goshtoso/components/toggle"
 "github.com/araihu/goshtoso/components/form"
 selectfield "github.com/araihu/goshtoso/components/select"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -124,7 +123,7 @@ templ page(v view) {
 <script src="/ui/timeline.js" defer></script>
 <script src="/ui/reset-data.js" defer></script>
 <script src="/ui/live.js" defer></script><script src="/ui/read-state.js" defer></script>
-<script src="/ui/emoji-picker.js" defer></script><script src="/ui/mentions.js" defer></script>
+<script src="/ui/emoji-picker.js" defer></script><script src="/ui/emoji-completion.js" defer></script><script src="/ui/mentions.js" defer></script>
 <script src="/ui/navigation.js"></script>
 if v.DevBuildID!="" {
 <script src="/ui/dev-reload.js" data-build-id={v.DevBuildID} defer></script>
@@ -417,38 +416,13 @@ templ composer(v view){
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button oie-edit-cancel"),button.WithAttrs(templ.Attributes{"data-edit-cancel":"","hidden":true,"aria-label":v.Text.CancelEdit,"title":v.Text.CancelEdit})){@glyph(heroicons.Icon16SolidXMark)}
 </div>
 @mentionPicker(v)
+@emojiCompletion(v)
 @emojiPicker(v)
 @button.Button(button.WithType("submit"),button.WithRootClass("oie-icon-button oie-send"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Send,"data-send-message":"","disabled":!v.sendAllowed()})){@glyph(heroicons.Icon16SolidArrowUp)}
 </div>
 </form>
 }
 func sendKey(v view)string{if v.FormTarget=="send"&&v.field("operationKey")!=""{return v.field("operationKey")};return newOperationKey()}
-
-templ settings(v view) {
-	@drawer.Drawer(drawer.Config{ID: "settings", Title: v.Text.Settings}) {
-		<div class="oie-settings oie-settings-scroll">
-			@appearanceSettings(v)
-			@languageSettings(v)
-			<h2>{v.Text.DevicePreferences}</h2>
-@toggle.Toggle(toggle.Config{ID:"render-markdown",Label:v.Text.RenderMarkdown,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-render-markdown":"","aria-describedby":"render-markdown-help"}})
-<p id="render-markdown-help">{v.Text.RenderMarkdownHelp}</p>
-@toggle.Toggle(toggle.Config{ID:"auto-image-downloads",Label:v.Text.AutoImageDownloads,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-auto-image-downloads":"","aria-describedby":"auto-image-downloads-help"}})
-<p id="auto-image-downloads-help">{v.Text.AutoImageDownloadsHelp}</p>
-@toggle.Toggle(toggle.Config{ID:"auto-video-thumbnails",Label:v.Text.AutoVideoThumbnails,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-auto-video-thumbnails":"","aria-describedby":"auto-video-thumbnails-help"}})
-<p id="auto-video-thumbnails-help">{v.Text.AutoVideoThumbnailsHelp}</p>
-<p class="oie-settings-note" data-device-preference-warning role="status" hidden>{v.Text.DevicePreferenceUnavailable}</p>
-			if v.Preview {
-				<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
-			}
-			if v.CanResetData {
-				@resetDataEntry(v)
-			}
-		</div>
-		<footer class="oie-settings-footer">
-			@aboutEntry(v)
-		</footer>
-	}
-}
 
 templ accounts(v view){
 @drawer.Drawer(drawer.Config{ID:"accounts",Title:v.Text.Accounts,PanelClass:v.accountDrawerClass()}){

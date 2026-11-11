@@ -1,8 +1,9 @@
 {
-  "👍": ["thumbs up", "thumbsup", "joinha", "positivo", "curtir", "aprovar"],
-  "👎": ["thumbs down", "thumbsdown", "negativo", "descurtir", "reprovar"],
-  "❤️": ["heart", "love", "coração", "amor"],
-  "😂": ["lol", "laugh", "risada", "rindo", "kkkk"],
-  "🙏": ["please", "thanks", "por favor", "obrigado", "obrigada"],
-  "🎉": ["party", "celebrate", "festa", "parabéns", "comemorar"]
+  "👍": {"en": ["thumbs up", "thumbsup", "+1"], "pt": ["joinha", "positivo", "curtir", "aprovar"]},
+  "👎": {"en": ["thumbs down", "thumbsdown", "-1"], "pt": ["negativo", "descurtir", "reprovar"]},
+  "❤️": {"en": ["heart", "love"], "pt": ["coração", "amor"]},
+  "😄": {"en": ["smile"], "pt": ["sorriso"]},
+  "😂": {"en": ["lol", "laugh", "joy"], "pt": ["risada", "rindo", "kkkk"]},
+  "🙏": {"en": ["please", "thanks", "pray"], "pt": ["por favor", "obrigado", "obrigada"]},
+  "🎉": {"en": ["party", "celebrate", "tada"], "pt": ["festa", "parabéns", "comemorar"]}
 }

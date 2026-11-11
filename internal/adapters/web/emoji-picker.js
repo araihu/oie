@@ -1,12 +1,70 @@
-// One catalog, category list, recent history and tone picker for both entry points.
-window.OieEmojiPicker={mount(root,life,options){
+window.OieEmojiPicker=(()=>{
+ 'use strict';
+ const memory=window.OieRuntime.memory,recentKey='oie.emoji-recent.v1';
+ let unsavedRecent=false;
+ const fold=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().trim();
+ function readRecent(){
+  let recent=memory.get(recentKey);
+  if(!unsavedRecent){
+   try{recent=JSON.parse(localStorage.getItem(recentKey)||'[]')}catch{}
+  }
+  return Array.isArray(recent)?recent.filter(value=>typeof value==='string').slice(0,24):[];
+ }
+ function remember(glyph){
+  const recent=[glyph,...readRecent().filter(value=>value!==glyph)].slice(0,24);
+  memory.set(recentKey,recent);
+  try{localStorage.setItem(recentKey,JSON.stringify(recent));unsavedRecent=false}catch{unsavedRecent=true}
+  return recent;
+ }
+ function insert(input,glyph,start,end){
+  input.setRangeText(glyph,start,end,'end');
+  input.dispatchEvent(new Event('input',{bubbles:true}));
+ }
+ const catalogKey=url=>'emoji-catalog-v3:'+url;
+ async function loadCatalog(url,locale,life){
+  const key=catalogKey(url),cached=memory.get(key);
+  if(cached)return cached;
+  const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),12000);
+  try{
+   const response=await life.fetch(url,{credentials:'same-origin',redirect:'error',signal:controller.signal});
+   if(!response.ok)throw Error('catalog_unavailable');
+   const data=await response.json();
+   if(life.signal.aborted)throw Error('catalog_aborted');
+   const catalog=prepare(data,locale);
+   memory.set(key,catalog);
+   return catalog;
+  }finally{clearTimeout(timeout)}
+ }
+ function prepare(data,locale){
+  if(!Array.isArray(data.items)||data.items.length>10000||data.locale!==locale||!data.families||typeof data.families!=='object'||Array.isArray(data.families))throw Error('invalid_catalog');
+  const shortcuts=new Map();
+  for(const [glyph,terms] of Object.entries(data.shortcuts??{})){
+   if(Array.isArray(terms)&&terms.length===2&&terms.every(term=>typeof term==='string'&&term))shortcuts.set(glyph,{en:terms[0],'pt-BR':terms[1]});
+  }
+  const items=new Map(),families=new Map();
+  for(const item of data.items){
+   if(!Array.isArray(item)||item.length!==4)throw Error('invalid_emoji');
+   const [glyph,name,search,group]=item;
+   if(typeof glyph!=='string'||!glyph||typeof name!=='string'||!name||typeof search!=='string'||!search||!Number.isInteger(group)||group<0||group>8||items.has(glyph))throw Error('invalid_emoji');
+   const family=Object.hasOwn(data.families,glyph)?data.families[glyph]:glyph;
+   if(typeof family!=='string')throw Error('invalid_family');
+   items.set(glyph,{glyph,name,match:fold(glyph+' '+search),group,family});
+  }
+  for(const item of items.values()){
+   const base=items.get(item.family);
+   if(!base||base.family!==base.glyph||base.group!==item.group)throw Error('invalid_family');
+   if(!families.has(base.glyph))families.set(base.glyph,{base,variants:[base]});
+   if(item.glyph!==base.glyph)families.get(base.glyph).variants.push(item);
+  }
+  return{items,families,shortcuts};
+ }
+ function mount(root,life,options){
  'use strict';
  options=options||{};
  const content=root.querySelector('[data-emoji-content]');if(!content)return null;
  const search=content.querySelector('[data-emoji-search]'),grid=content.querySelector('[data-emoji-grid]'),scroll=content.querySelector('[data-emoji-scroll]'),status=content.querySelector('[data-emoji-status]'),retry=content.querySelector('[data-emoji-retry]'),cell=content.querySelector('[data-emoji-button]'),choice=content.querySelector('[data-emoji-choice]'),sectionTemplate=content.querySelector('[data-emoji-section-template]'),jumps=[...content.querySelectorAll('[data-emoji-jump]')];
- const memory=window.OieRuntime.memory,cacheKey='emoji-catalog-v2:'+content.dataset.emojiUrl,recentKey='oie.emoji-recent.v1',fold=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase(document.documentElement.lang).trim();
- let catalog=memory.get(cacheKey),loading=false,sections=new Map(),scrollFrame=false,variantGeometry=null,recent=[];
- function readRecent(){try{recent=JSON.parse(localStorage.getItem(recentKey)||'[]')}catch{recent=memory.get(recentKey)||[]}if(!Array.isArray(recent))recent=[];recent=recent.filter(value=>typeof value==='string').slice(0,24)}
+ const url=content.dataset.emojiUrl,locale=document.documentElement.lang;
+ let catalog=memory.get(catalogKey(url)),loading=false,sections=new Map(),scrollFrame=false,variantGeometry=null,recent=[];
  const writable=()=>root.isConnected&&(options.available?.()??true),allowed=glyph=>options.allowed?.(glyph)??true,enabled=glyph=>writable()&&(options.enabled?.(glyph)??true);
  const mutate=fn=>window.Alpine?.mutateDom?window.Alpine.mutateDom(fn):fn();
  function clear(node){for(const child of node.children)window.Alpine?.destroyTree(child);node.replaceChildren()}
@@ -52,30 +110,13 @@ window.OieEmojiPicker={mount(root,life,options){
   if(glyph){const replacement=[...grid.querySelectorAll('[data-emoji-pick]')].find(button=>button.dataset.emojiPick===glyph&&button.closest('[data-emoji-section]')?.dataset.emojiSection===section);(replacement||search).focus()}
   updateFooter();
  }
- function prepare(data){
-  if(!Array.isArray(data.items)||data.items.length>10000||data.locale!==document.documentElement.lang||!data.families||typeof data.families!=='object'||Array.isArray(data.families))throw Error('invalid_catalog');
-  const items=new Map(),families=new Map();
-  for(const item of data.items){
-   if(!Array.isArray(item)||item.length!==4||item.slice(0,3).some(value=>typeof value!=='string'||!value)||!Number.isInteger(item[3])||item[3]<0||item[3]>8||items.has(item[0]))throw Error('invalid_emoji');
-   const family=Object.hasOwn(data.families,item[0])?data.families[item[0]]:item[0];if(typeof family!=='string')throw Error('invalid_family');
-   items.set(item[0],{glyph:item[0],name:item[1],match:fold(item[0]+' '+item[1]+' '+item[2]),group:item[3],family});
-  }
-  for(const item of items.values()){
-   const base=items.get(item.family);if(!base||base.family!==base.glyph||base.group!==item.group)throw Error('invalid_family');
-   if(!families.has(base.glyph))families.set(base.glyph,{base,variants:[base]});
-   if(item.glyph!==base.glyph)families.get(base.glyph).variants.push(item);
-  }
-  return{items,families};
- }
  async function load(){
   if(catalog){render();return}if(loading)return;loading=true;status.textContent=content.dataset.emojiLoading;retry.hidden=true;
-  const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),12000);
   try{
-   const response=await life.fetch(content.dataset.emojiUrl,{credentials:'same-origin',redirect:'error',signal:controller.signal});if(!response.ok)throw Error('catalog_unavailable');
-   const data=await response.json();if(life.signal.aborted||!root.isConnected)return;
-   catalog=prepare(data);memory.set(cacheKey,catalog);render();
+   catalog=await loadCatalog(url,locale,life);
+   if(!life.signal.aborted&&root.isConnected)render();
   }catch{if(!life.signal.aborted){status.textContent=content.dataset.emojiFailed;retry.hidden=false}}
-  finally{clearTimeout(timeout);loading=false}
+  finally{loading=false}
  }
  // The public popover owns positioning and collision handling. Center its
  // app-owned strip with CSS translation and keep the decorative tip on the
@@ -115,7 +156,7 @@ window.OieEmojiPicker={mount(root,life,options){
   const toggle=event.target.closest('[data-emoji-variants-trigger]');if(toggle){populateVariants(toggle);return}
   const chosen=event.target.closest('[data-emoji-pick]');if(!chosen||chosen.disabled||!writable()||!catalog?.items.has(chosen.dataset.emojiPick))return;
   event.preventDefault();const glyph=chosen.dataset.emojiPick;if(!allowed(glyph)||!enabled(glyph)||options.choose?.(glyph)===false)return;
-  recent=[glyph,...recent.filter(value=>value!==glyph)].slice(0,24);memory.set(recentKey,recent);try{localStorage.setItem(recentKey,JSON.stringify(recent))}catch{}
+  recent=remember(glyph);
   closeVariants();options.afterChoose?.();
  });
  life.on(root,'keydown',event=>{
@@ -124,15 +165,17 @@ window.OieEmojiPicker={mount(root,life,options){
   const buttons=[...region.querySelectorAll('[data-emoji-pick]')].filter(button=>!button.disabled&&button.closest('[data-emoji-variants],.oie-emoji-grid')===region),index=buttons.indexOf(event.target),columns=region.matches('[data-emoji-variants]')?1:8,delta={ArrowLeft:-1,ArrowRight:1,ArrowUp:-columns,ArrowDown:columns}[event.key];
   if(index<0||delta===undefined)return;event.preventDefault();buttons[Math.max(0,Math.min(buttons.length-1,index+delta))]?.focus();
  });
- return {search,open(resetSearch=false){readRecent();if(resetSearch)search.value='';void load()},close:closeVariants,escape(){const toggle=root.querySelector('[data-emoji-variants-trigger][aria-expanded="true"]');if(!toggle)return false;closeVariants();toggle.focus({preventScroll:true});return true}};
-}};
+ return {search,open(resetSearch=false){recent=readRecent();if(resetSearch)search.value='';void load()},close:closeVariants,escape(){const toggle=root.querySelector('[data-emoji-variants-trigger][aria-expanded="true"]');if(!toggle)return false;closeVariants();toggle.focus({preventScroll:true});return true}};
+ }
+ return {mount,loadCatalog,fold,insert,remember};
+})();
 window.OieRuntime.register('emoji-picker',life=>{
  const root=document.getElementById('oie-emoji-picker'),input=document.getElementById('message-composer'),form=document.getElementById('send-message-form');if(!root||!input||!form)return;
  const trigger=root.querySelector('[data-emoji-trigger]');let selection={start:input.selectionStart||0,end:input.selectionEnd||0};
  const writable=()=>input.isConnected&&!input.disabled&&!input.readOnly&&form.dataset.busy!=='true'&&form.dataset.composeAllowed==='true';
  function rememberSelection(){selection={start:input.selectionStart,end:input.selectionEnd}}
  for(const name of ['select','keyup','pointerup','input'])life.on(input,name,rememberSelection);life.on(trigger,'pointerdown',rememberSelection);
- const selector=window.OieEmojiPicker.mount(root,life,{input,available:writable,choose(glyph){const start=Math.min(selection.start,input.value.length),end=Math.min(selection.end,input.value.length);input.setRangeText(glyph,start,end,'end');input.dispatchEvent(new Event('input',{bubbles:true}));rememberSelection()},afterChoose(){if(trigger.getAttribute('aria-expanded')==='true')trigger.click();input.focus({preventScroll:true})}});
+ const selector=window.OieEmojiPicker.mount(root,life,{input,available:writable,choose(glyph){const start=Math.min(selection.start,input.value.length),end=Math.min(selection.end,input.value.length);window.OieEmojiPicker.insert(input,glyph,start,end);rememberSelection()},afterChoose(){if(trigger.getAttribute('aria-expanded')==='true')trigger.click();input.focus({preventScroll:true})}});
  function sync(){const disabled=!writable();if(disabled){selector.close();if(trigger.getAttribute('aria-expanded')==='true')trigger.click()}trigger.disabled=disabled}
  const observer=new MutationObserver(sync);observer.observe(input,{attributes:true,attributeFilter:['readonly','disabled']});observer.observe(form,{attributes:true,attributeFilter:['data-busy','data-compose-allowed']});life.cleanup(()=>observer.disconnect());sync();
  function focusSearch(attempt=0){life.raf(()=>{if(trigger.getAttribute('aria-expanded')!=='true'||document.activeElement===selector.search)return;const active=document.activeElement;if(active!==trigger&&active!==document.body&&active!==input)return;selector.search.focus({preventScroll:true});if(document.activeElement!==selector.search&&attempt<12)focusSearch(attempt+1)})}
