@@ -120,6 +120,13 @@ is identical across these runs. The evidence is in these directories under
 - `oie-main-browser-tail-ci/` records checks, XMPP and the browser scenarios
   from mentions through the live engine proof on `71dadb2`.
 
+After the push, GitHub's race job reported HTTP 503 while serving the maximum
+edit-history page from the test fixture. The fixture now encodes the same page
+before serving requests. The focused test passed three native race runs, and
+Dagger `make ci-check` passed in `tests/browser/artifacts/oie-main-history-check/`.
+The first two GitHub browser attempts failed during Playwright dependency
+installation because the Ubuntu mirror hostname could not be resolved.
+
 ## User direction and scope
 
 The user wants any interface to operate Oiê through a distinct data/operations
