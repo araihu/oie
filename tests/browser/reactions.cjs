@@ -8,9 +8,10 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
  const avatarImage=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jQ1kAAAAASUVORK5CYII=','base64'),avatarHash=createHash('sha256').update(avatarImage).digest('hex');
  const state={peerName:'Bob',peerOccupant:'',prepareEligible:null,effects:0,posts:0,seq:0,reads:0,baseReactions:true,eligible:true,delay:0,commandState:'submitted',own:[],ownRevision:null,allowed:null,max:8,posted:[]};
  const source={id:message,revisionId:revision,accountId:account,conversationId:chat,originalText:'A retained message with reactions',createdAt:'2026-11-09T12:00:00Z',sendState:'received',isOwn:false,historical:true,sender:{id:id(7),displayName:'Bob'}};
+ const older={...source,id:id(144),createdAt:'2026-11-08T12:00:00Z',originalText:'An older message'};
  const conversation={id:chat,revisionId:revision,accountId:account,kind:'direct',title:'Bob',address:'bob@fixture',lastMessage:source.originalText,updatedAt:source.createdAt,unreadCount:0,archived:false,favorite:false};
  const pending=()=>[...commands.values()].find(c=>['queued','dispatching','unknown'].includes(c.state));
- const snapshot=()=>({messageId:message,accountId:account,conversationId:chat,revisionId:state.ownRevision,ownRevisionId:state.ownRevision,ownEmojis:[...state.own],actors:[...(state.own.length?[{address:'alice@fixture',displayName:'Alice',own:true,emojis:[...state.own]}]:[]),...(state.baseReactions?[{address:state.peerOccupant||'bob@fixture',displayName:state.peerName,own:false,emojis:['👍'],...(state.peerOccupant?{}:{avatarHash})},{address:'carol@fixture',displayName:'Carol',own:false,emojis:['👍']}]:[])],items:[...new Set([...(state.baseReactions?['👍']:[]),...state.own])].sort().map(emoji=>({emoji,count:(state.baseReactions&&emoji==='👍'?2:0)+(state.own.includes(emoji)?1:0),own:state.own.includes(emoji)})),eligible:state.eligible,maxEmojis:state.max,...(state.allowed?{allowedEmojis:state.allowed}:{}),...(pending()?{pendingCommand:pending()}: {})});
+ const snapshot=(target=message)=>({messageId:target,accountId:account,conversationId:chat,revisionId:state.ownRevision,ownRevisionId:state.ownRevision,ownEmojis:[...state.own],actors:[...(state.own.length?[{address:'alice@fixture',displayName:'Alice',own:true,emojis:[...state.own]}]:[]),...(state.baseReactions?[{address:state.peerOccupant||'bob@fixture',displayName:state.peerName,own:false,emojis:['👍'],...(state.peerOccupant?{}:{avatarHash})},{address:state.roomPrivate?'occupant:'+('b'.repeat(64)):'carol@fixture',displayName:'Carol',own:false,emojis:['👍']}]:[])],items:[...new Set([...(state.baseReactions?['👍']:[]),...state.own])].sort().map(emoji=>({emoji,count:(state.baseReactions&&emoji==='👍'?2:0)+(state.own.includes(emoji)?1:0),own:state.own.includes(emoji)})),eligible:state.eligible,maxEmojis:state.max,...(state.allowed?{allowedEmojis:state.allowed}:{}),...(pending()?{pendingCommand:pending()}: {})});
  const emit=(event='message.updated')=>{state.seq++;for(const s of streams)s.write(`id: ${engine}:${state.seq}\nevent: ${event}\ndata: {}\n\n`)};
  const apply=c=>{c.state='submitted';state.own=[...c.emojis];state.ownRevision=c.revisionId;emit()};
  const api=http.createServer(async(req,res)=>{
@@ -27,9 +28,11 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   if(u.pathname==='/api/v1/conversations/'+chat+'/messages')return send(200,{items:[source]});
   if(u.pathname==='/api/v1/conversations/'+chat+'/messages/'+message+'/context')return send(200,{targetId:message,items:[source],hasOlder:false,hasNewer:false});
   if(u.pathname==='/api/v1/messages/'+message)return send(200,source);
+  if(u.pathname==='/api/v1/messages/'+older.id)return send(200,older);
+  if(u.pathname==='/api/v1/conversations/'+chat+'/messages/'+older.id+'/context')return send(200,{targetId:older.id,items:[source,older],hasOlder:false,hasNewer:false});
   if(u.pathname.endsWith('/message-stars'))return send(200,{items:u.searchParams.getAll('messageId').map(messageId=>({messageId,accountId:account,conversationId:chat,starred:false,revisionId:null,updatedAt:null}))});
   if(u.pathname==='/api/v1/conversations/'+chat+'/reactions'&&state.noBatch)return send(503,{code:'unavailable'});
-  if(u.pathname==='/api/v1/conversations/'+chat+'/reactions')return send(200,{items:u.searchParams.getAll('messageId').map(()=>snapshot())});
+  if(u.pathname==='/api/v1/conversations/'+chat+'/reactions')return send(200,{items:u.searchParams.getAll('messageId').map(target=>snapshot(target))});
   if(u.pathname==='/api/v1/messages/'+message+'/reactions'&&req.method==='GET'){state.reads++;const value=snapshot();if(state.prepareEligible!==null)value.eligible=state.prepareEligible;return state.delay?setTimeout(()=>send(200,value),state.delay):send(200,value)}
   if(u.pathname.startsWith('/api/v1/message-reaction-commands/')){const c=commands.get(u.pathname.split('/').at(-1));return c?send(200,c):send(404,{code:'not_found'})}
   if(u.pathname==='/api/v1/messages/'+message+'/reactions'&&req.method==='POST'){
@@ -198,8 +201,9 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   const roomState=page.locator('[data-room-state]'),roomSummary=region.locator('[data-reaction-summary]');
   const publicActor=region.locator('[data-reaction-actor="bob@fixture"]');
   await until(async()=>await roomState.getAttribute('data-room-state')==='joined','room joined');
-  await roomSummary.click();
+  await roomSummary.press('Enter');
   await publicActor.waitFor({state:'visible'});
+  await until(async()=>await region.locator('[data-reaction-details]').evaluate(node=>node.contains(document.activeElement)),'reaction details received keyboard focus');
   const privacyPosts=state.posts;
   state.eligible=false;state.noBatch=true;emit('conversation.room_session_changed');
   await until(async()=>await roomState.getAttribute('data-room-state')==='not_joined','leave during failed snapshot read');
@@ -208,6 +212,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   state.noBatch=false;state.baseReactions=false;emit('conversation.updated');
   await roomSummary.waitFor({state:'hidden'});
   await region.locator('[data-reaction-details]').waitFor({state:'hidden'});
+  await until(async()=>await page.locator('[data-message-menu-trigger="'+message+'"]').evaluate(node=>node===document.activeElement),'empty details restored focus to the message');
   state.eligible=true;state.baseReactions=true;emit('conversation.room_session_changed');
   await until(async()=>await roomState.getAttribute('data-room-state')==='joined','room rejoined');
   await publicActor.waitFor({state:'attached'});
@@ -222,6 +227,34 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   assert.equal(await publicActor.count(),0);
   assert(!(await region.getAttribute('data-reaction-state')).includes('bob@fixture'));
   assert.equal(state.posts,privacyPosts);
+  // A pre-change context may arrive after a fresh room snapshot without
+  // any presence change. Keep its messages and discard its public roster.
+  state.delay=0;state.eligible=true;state.baseReactions=true;emit('conversation.room_session_changed');
+  await until(async()=>await roomState.getAttribute('data-room-state')==='joined','room joined again');
+  await publicActor.waitFor({state:'attached'});
+  let captured=false,releaseContext;
+  const heldContext=new Promise(resolve=>{releaseContext=resolve});
+  await page.route('**/ui/timeline?*',async route=>{
+   if(new URL(route.request().url()).searchParams.get('mode')!=='context')return route.continue();
+   const response=await route.fetch(),body=await response.text();
+   assert(response.ok()&&body.includes('bob@fixture'));
+   captured=true;
+   await heldContext;
+   return route.fulfill({response,body});
+  });
+  const focusRequest=page.evaluate(id=>window.OieTimeline.focus(id,{focus:false}),older.id);
+  try{
+   await until(()=>captured,'captured an older public room snapshot');
+   state.peerOccupant='occupant:'+'a'.repeat(64);state.roomPrivate=true;emit('conversation.updated');
+   await region.locator('[data-reaction-actor="'+state.peerOccupant+'"]').waitFor({state:'attached'});
+  }finally{releaseContext()}
+  assert.equal(await focusRequest,true);
+  const olderRegion=page.locator('[data-reaction-source="'+older.id+'"]');
+  await olderRegion.waitFor({state:'attached'});
+  assert.equal(await page.locator('[data-reaction-actor="bob@fixture"]').count(),0);
+  assert(!(await olderRegion.getAttribute('data-reaction-state')).includes('bob@fixture'));
+  assert.equal(await roomState.getAttribute('data-room-state'),'joined');
+  await page.unroute('**/ui/timeline?*');
   findings.push('Room exit clears cached actor details on a failed snapshot read and discards a delayed preflight');
   assert.deepEqual(errors,[]);await fs.writeFile(path.join(__dirname,'artifacts/reactions-report.json'),JSON.stringify({findings,effects:state.effects,posts:state.posts,posted:state.posted,frames:frames.length,pageErrors:errors},null,2));console.log('PASS: scoped reactions, set/clear, bilingual picker, unknown receipt and same-key retry, no preflight shift, draft/keyboard preservation and responsive accessibility');
  }finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(r=>api.close(r))}

@@ -3,7 +3,8 @@ window.OieRuntime.register('reactions',life=>{
  const picker=document.querySelector('[data-reaction-picker]'),quick=document.getElementById('oie-reaction-quick'),catalog=document.getElementById('oie-reaction-picker');if(!picker||!quick||!catalog)return;
  const more=quick.querySelector('[data-reaction-more]'),choices=[...quick.querySelectorAll('[data-reaction-quick-emoji]')];
  const body=document.body,scope={engineId:body.dataset.engineId,accountId:body.dataset.accountId,conversationId:body.dataset.conversationId},labels=picker.dataset,csrf=document.querySelector('meta[name="oie-csrf"]')?.content||'';
- const room=!!document.getElementById('room-session-status'),roomRevisions=new Map();
+ const room=!!document.getElementById('room-session-status'),roomRevisions=new Map(),roomSnapshotTimes=new Map();
+ let latestRoomRefresh=0,withdrawnAt=0;
  const memory=window.OieRuntime.memory,key='reaction-journals:'+Object.values(scope).join(':'),journals=memory.get(key)||new Map();memory.set(key,journals);
  const filters=new Map(),snapshots=new Map(),busy=new Set(),polls=new Map(),stored=new Set(),prefix='oie.reaction.v1:'+Object.values(scope).join(':')+':';
  const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(v),sameSet=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every(e=>b.includes(e));
@@ -40,8 +41,12 @@ window.OieRuntime.register('reactions',life=>{
   if(live)live.dataset.reactionState=JSON.stringify(s??null);
   if(s)snapshots.set(id,s);
  }
- function read(root){
-  const withdrawn=room&&roomState()!=='joined';
+ function read(root,startedAt=performance.now(),liveRefresh=false){
+  if(room&&liveRefresh){
+   latestRoomRefresh=Math.max(latestRoomRefresh,startedAt);
+   if(withdrawnAt&&startedAt>=withdrawnAt&&roomState()==='joined')withdrawnAt=0;
+  }
+  const withdrawn=room&&(withdrawnAt!==0||roomState()!=='joined');
   if(withdrawn){
    for(const [id,previous] of snapshots){
     if(previous.eligible||publicActors(previous)){
@@ -59,8 +64,18 @@ window.OieRuntime.register('reactions',life=>{
    if(!room&&!valid)continue;
    let s=valid?incoming:previous;
    if(room){
-    if(s&&(!valid||withdrawn))s={...s,actors:!valid||publicActors(s)?undefined:s.actors,eligible:false};
-    publishRoomSnapshot(id,s,previous,valid);
+    const previousAt=roomSnapshotTimes.get(id)||0;
+    const visibilityAt=Math.max(latestRoomRefresh,withdrawnAt);
+    const superseded=startedAt<Math.max(visibilityAt,previousAt);
+    if(superseded){
+     // Late pages may mount messages, but their reaction rosters cannot
+     // replace fresher data or expose previously public profiles.
+     s=previous||s;
+     if(s&&previousAt<visibilityAt)s={...s,actors:publicActors(s)?undefined:s.actors,eligible:false};
+    }else if(valid)roomSnapshotTimes.set(id,startedAt);
+    const missing=!valid&&!superseded;
+    if(s&&(missing||withdrawn))s={...s,actors:missing||publicActors(s)?undefined:s.actors,eligible:false};
+    publishRoomSnapshot(id,s,previous,!missing);
    }else snapshots.set(id,s);
    if(!s)continue;
    restore(id);
@@ -100,8 +115,13 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
    details.querySelector('[data-reaction-open]').disabled=!s.eligible||!!pending||busy.has(id);
    const pendingSlot=region.querySelector('[data-reaction-pending]');pendingSlot.replaceChildren();
    if(pending){const button=picker.querySelector('[data-reaction-status-template]').content.firstElementChild.cloneNode(true),state=pending.command?.state,waiting=busy.has(id)||['queued','dispatching'].includes(state);button.dataset.reactionMessage=id;button.disabled=busy.has(id);const actionLabel=waiting?labels.pending:!pending.command&&pending.missingReceipt?labels.retry:labels.check;button.setAttribute('aria-label',actionLabel);button.title=actionLabel;button.setAttribute('aria-busy',String(waiting));button.querySelector('[data-reaction-check-icon]').hidden=waiting;button.querySelector('[data-reaction-status-spinner]').hidden=!waiting;pendingSlot.append(button)}
-   region.dataset.reactionRendered=signature;if(active&&!active.isConnected){const replacement=activeFilter!==undefined?[...filterRow.querySelectorAll('[data-reaction-filter]')].find(button=>button.dataset.reactionFilter===activeFilter):activeEmoji?[...rows.querySelectorAll('[data-reaction-emoji]')].find(button=>button.dataset.reactionEmoji===activeEmoji):pendingSlot.querySelector('[data-reaction-check]');(replacement||(!summary.hidden?summary:region.closest('[data-message-bubble]')?.querySelector('[data-message-menu-trigger]')))?.focus({preventScroll:true})}
-   if(closingEmpty&&active&&summary===document.activeElement)region.closest('[data-message-bubble]')?.querySelector('[data-message-menu-trigger]')?.focus({preventScroll:true});
+   region.dataset.reactionRendered=signature;
+   if(closingEmpty&&active){
+    region.closest('[data-message-bubble]')?.querySelector('[data-message-menu-trigger]')?.focus({preventScroll:true});
+   }else if(active&&!active.isConnected){
+    const replacement=activeFilter!==undefined?[...filterRow.querySelectorAll('[data-reaction-filter]')].find(button=>button.dataset.reactionFilter===activeFilter):activeEmoji?[...rows.querySelectorAll('[data-reaction-emoji]')].find(button=>button.dataset.reactionEmoji===activeEmoji):pendingSlot.querySelector('[data-reaction-check]');
+    (replacement||summary)?.focus({preventScroll:true});
+   }
   }
   for(const button of document.querySelectorAll('[data-reaction-open]')){const s=snapshots.get(button.dataset.reactionOpen),pending=journals.get(button.dataset.reactionOpen),slot=button.closest('[data-reaction-shortcut-slot]');if(slot)slot.hidden=!s||(!s.eligible&&!pending);if(slot)button.setAttribute('aria-busy',String(busy.has(button.dataset.reactionOpen)))}
   for(const button of document.querySelectorAll('[id^="react-message-"]')){const id=button.id.slice(14),s=snapshots.get(id),pending=journals.get(id);button.disabled=!s||(!s.eligible&&!pending)||busy.has(id);button.setAttribute('aria-label',pending?labels.check:labels.react);button.title=pending?labels.check:labels.react;let text=button.querySelector('[data-reaction-menu-label]');if(!text){text=document.createElement('span');text.dataset.reactionMenuLabel='';const icon=button.querySelector('svg');button.replaceChildren(...(icon?[icon]:[]),text)}text.textContent=pending?labels.check:labels.react}
@@ -303,7 +323,10 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
  life.on(document,'visibilitychange',()=>{if(document.hidden){cancelGesture();cancelPrimary();lastTap=null}});
  life.on(document,'keydown',event=>{if(event.key==='Escape'){cancelGesture();cancelPrimary();lastTap=null}});
  life.cleanup(()=>{cancelGesture();cancelPrimary();lastTap=null;suppressClick=null});
- life.on(document,'oie:timeline-content',event=>read(event.detail.page));life.on(document,'oie:shared-refresh',event=>read(event.detail));life.on(document,'oie:actions-refreshed',render);
+ life.on(document,'oie:timeline-content',event=>read(event.detail.page,event.detail.startedAt));
+ life.on(document,'oie:reaction-snapshots',event=>read(event.detail.page,event.detail.startedAt,true));
+ life.on(document,'oie:room-reaction-visibility-withdrawn',()=>{if(room){withdrawnAt=performance.now();read(document,withdrawnAt)}});
+ life.on(document,'oie:actions-refreshed',render);
  life.cleanup(()=>{cancelPreparation();for(const timer of polls.values())clearTimeout(timer)});
  read(document);for(const intent of journals.values())if(validIntent(intent,intent.messageId))life.timeout(()=>submit(intent,true),0);
 });
