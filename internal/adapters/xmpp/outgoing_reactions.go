@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
-	"io"
 	"net"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -233,27 +233,47 @@ func sendFrozenReaction(ctx context.Context, e *entry, session *mx.Session, raw 
 	if err != nil {
 		return application.Failed
 	}
-	var refused string
-	// Send reads its first token only after locking the stream writer. Admit
-	// and track the reaction there, before it can emit XML or receive an echo.
-	admit := xmlstream.ReaderFunc(func() (xml.Token, error) {
-		e.mu.Lock()
-		defer e.mu.Unlock()
-		switch {
-		case ctx.Err() != nil || e.session != session || e.raw != raw || e.state.State != "connected":
-			refused = application.NotSent
-		case !validFrozenReaction(e, a, out):
-			refused = application.Failed
-		default:
-			trackReactionCommand(e, out)
-			return nil, io.EOF
-		}
-		return nil, application.ErrProtocolUnavailable
+	// Keep the deadline and its cancellation callback within the ownership
+	// of the stream writer. Other stanzas use the same transport.
+	writer := session.TokenWriter()
+	defer func() { _ = writer.Close() }()
+	if ctx.Err() != nil {
+		return application.NotSent
+	}
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(10 * time.Second)
+	}
+	if err := raw.SetWriteDeadline(deadline); err != nil {
+		return application.NotSent
+	}
+	canceled := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		defer close(canceled)
+		_ = raw.SetWriteDeadline(time.Now())
 	})
+	defer func() {
+		if !stop() {
+			<-canceled
+		}
+		_ = raw.SetWriteDeadline(time.Time{})
+	}()
+
+	e.mu.Lock()
+	if ctx.Err() != nil || e.session != session || e.raw != raw || e.state.State != "connected" {
+		e.mu.Unlock()
+		return application.NotSent
+	}
+	if !validFrozenReaction(e, a, out) {
+		e.mu.Unlock()
+		return application.Failed
+	}
+	trackReactionCommand(e, out)
+	e.mu.Unlock()
+
 	decoder := xml.NewDecoder(bytes.NewReader(wire))
-	err = session.Send(ctx, xmlstream.MultiReader(admit, xmlstream.ReaderFunc(decoder.RawToken)))
-	if refused != "" {
-		return refused
+	if _, err = xmlstream.Copy(writer, xmlstream.ReaderFunc(decoder.RawToken)); err == nil {
+		err = writer.Flush()
 	}
 	if err != nil {
 		_ = raw.Close()

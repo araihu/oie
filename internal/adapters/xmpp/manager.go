@@ -521,15 +521,15 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	if ctx.Err() != nil {
 		return application.NotSent
 	}
+	if out.Reaction != nil {
+		return sendFrozenReaction(ctx, e, session, raw, a, out, payload)
+	}
 	deadline, ok := ctx.Deadline()
 	if !ok {
 		deadline = time.Now().Add(10 * time.Second)
 	}
 	_ = raw.SetWriteDeadline(deadline)
 	defer func() { _ = raw.SetWriteDeadline(time.Time{}) }()
-	if out.Reaction != nil {
-		return sendFrozenReaction(ctx, e, session, raw, a, out, payload)
-	}
 	e.mu.Lock()
 	trackCorrectionSource(e, a, out)
 	e.mu.Unlock()

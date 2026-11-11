@@ -4,17 +4,21 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
+	"mellium.im/xmlstream"
 	mx "mellium.im/xmpp"
 	"mellium.im/xmpp/disco"
 	"mellium.im/xmpp/jid"
@@ -345,13 +349,31 @@ func reactionWireSession(t *testing.T) (*mx.Session, net.Conn, net.Conn) {
 	t.Helper()
 	left, right := net.Pipe()
 	t.Cleanup(func() { _ = left.Close(); _ = right.Close() })
-	s, err := mx.NewSession(t.Context(), jid.MustParse("example.test"), jid.MustParse("alice@example.test/test"), left, mx.Ready, func(context.Context, *stream.Info, *stream.Info, *mx.Session, any) (mx.SessionState, io.ReadWriter, any, error) {
+	return reactionTestSession(t, left), left, right
+}
+
+func reactionTestSession(t *testing.T, conn net.Conn) *mx.Session {
+	t.Helper()
+	s, err := mx.NewSession(t.Context(), jid.MustParse("example.test"), jid.MustParse("alice@example.test/test"), conn, mx.Ready, func(_ context.Context, in, out *stream.Info, _ *mx.Session, _ any) (mx.SessionState, io.ReadWriter, any, error) {
+		in.XMLNS, out.XMLNS = stanza.NSClient, stanza.NSClient
 		return mx.Ready, nil, nil, nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return s, left, right
+	return s
+}
+
+type reactionDispatchContext struct {
+	context.Context
+	checked chan struct{}
+	once    sync.Once
+}
+
+func (c *reactionDispatchContext) Err() error {
+	err := c.Context.Err()
+	c.once.Do(func() { close(c.checked) })
+	return err
 }
 
 type reactionDeadlineConn struct {
@@ -423,9 +445,7 @@ func TestReactionSendIsUnsentWhenAccountDisconnectsBeforeWriting(t *testing.T) {
 	e.config = configuration{AccountID: e.account.ID, Enabled: true, Password: "fixture"}
 	c := slot.conversation
 	s, left, right := reactionWireSession(t)
-	started := make(chan struct{})
-	e.raw = &reactionDeadlineConn{Conn: left, onDeadline: func() { close(started) }}
-	e.session, slot.session = s, s
+	e.raw, e.session, slot.session = left, s, s
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	plan, err := m.PrepareReaction(ctx, e.account, c, reactionTarget(e, c))
@@ -435,10 +455,11 @@ func TestReactionSendIsUnsentWhenAccountDisconnectsBeforeWriting(t *testing.T) {
 	out := application.Outgoing{ID: "019a5df0-0000-7000-8000-000000000012", Kind: c.Kind, Address: c.Address, Reaction: &plan, ReactionEmojis: []string{"👍"}, RoomIntentRevisionID: plan.RoomIntentRevisionID}
 	writer := s.TokenWriter()
 	defer func() { _ = writer.Close() }()
+	dispatch := &reactionDispatchContext{Context: ctx, checked: make(chan struct{})}
 	outcome := make(chan string, 1)
-	go func() { outcome <- m.Send(ctx, e.account, out) }()
+	go func() { outcome <- m.Send(dispatch, e.account, out) }()
 	select {
-	case <-started:
+	case <-dispatch.checked:
 	case <-ctx.Done():
 		t.Fatal("reaction did not reach the occupied stream writer")
 	}
@@ -454,6 +475,120 @@ func TestReactionSendIsUnsentWhenAccountDisconnectsBeforeWriting(t *testing.T) {
 	_ = right.SetReadDeadline(time.Now().Add(time.Second))
 	if n, err := right.Read(make([]byte, 1)); n != 0 || err != io.EOF {
 		t.Fatal("expected the connection to close without a stanza", n, err)
+	}
+}
+
+type observedReactionWriteConn struct {
+	net.Conn
+	writing chan struct{}
+	once    sync.Once
+}
+
+func (c *observedReactionWriteConn) Write(data []byte) (int, error) {
+	c.once.Do(func() { close(c.writing) })
+	return c.Conn.Write(data)
+}
+
+func TestReactionSendDeadlineDoesNotInterruptAnIQWriter(t *testing.T) {
+	m, e, slot, _ := reactionRoomFixture(t)
+	c := slot.conversation
+	left, right := net.Pipe()
+	t.Cleanup(func() { _ = left.Close(); _ = right.Close() })
+	conn := &observedReactionWriteConn{Conn: left, writing: make(chan struct{})}
+	s := reactionTestSession(t, conn)
+	e.raw, e.session, slot.session = left, s, s
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	deadline, _ := ctx.Deadline()
+	_ = right.SetDeadline(deadline)
+	go func() { _ = s.Serve(nil) }()
+	iqResult := make(chan error, 1)
+	go func() {
+		reply, err := s.SendIQ(ctx, stanza.IQ{ID: "probe", Type: stanza.GetIQ}.Wrap(nil))
+		if err == nil {
+			_, err = xmlstream.Copy(xmlstream.Discard(), reply)
+			_ = reply.Close()
+		}
+		iqResult <- err
+	}()
+	select {
+	case <-conn.writing:
+	case <-ctx.Done():
+		t.Fatal("IQ did not acquire the stream writer")
+	}
+	plan, err := m.PrepareReaction(ctx, e.account, c, reactionTarget(e, c))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := application.Outgoing{ID: "019a5df0-0000-7000-8000-000000000012", Kind: c.Kind, Address: c.Address, Reaction: &plan, ReactionEmojis: []string{"👍"}, RoomIntentRevisionID: plan.RoomIntentRevisionID}
+	reactionCtx, cancelReaction := context.WithTimeout(ctx, 150*time.Millisecond)
+	defer cancelReaction()
+	dispatch := &reactionDispatchContext{Context: reactionCtx, checked: make(chan struct{})}
+	outcome := make(chan string, 1)
+	go func() { outcome <- m.Send(dispatch, e.account, out) }()
+	select {
+	case <-dispatch.checked:
+	case <-ctx.Done():
+		t.Fatal("reaction did not reach dispatch")
+	}
+	<-reactionCtx.Done()
+	decoder := xml.NewDecoder(right)
+	decoder.DefaultSpace = stanza.NSClient
+	var iq stanza.IQ
+	if err := decoder.Decode(&iq); err != nil || iq.ID != "probe" {
+		t.Fatal("queued reaction interrupted the IQ write", iq, err)
+	}
+	if _, err := io.WriteString(right, `<iq xmlns="jabber:client" type="result" id="probe"/>`); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-iqResult; err != nil {
+		t.Fatal("IQ did not receive its response", err)
+	}
+	if got := <-outcome; got != application.NotSent || len(e.reactionCommands) != 0 {
+		t.Fatal("expired reaction should remain unsent and untracked", got, e.reactionCommands)
+	}
+	_ = right.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
+	if n, err := right.Read(make([]byte, 1)); n != 0 || !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatal("expired reaction emitted bytes", n, err)
+	}
+}
+
+func TestReactionSendCancellationInterruptsActiveWrite(t *testing.T) {
+	m, e, slot, _ := reactionRoomFixture(t)
+	c := slot.conversation
+	left, right := net.Pipe()
+	t.Cleanup(func() { _ = left.Close(); _ = right.Close() })
+	conn := &observedReactionWriteConn{Conn: left, writing: make(chan struct{})}
+	s := reactionTestSession(t, conn)
+	e.raw, e.session, slot.session = left, s, s
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	watchdog, stopWatchdog := context.WithTimeout(t.Context(), 3*time.Second)
+	defer stopWatchdog()
+	plan, err := m.PrepareReaction(ctx, e.account, c, reactionTarget(e, c))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := application.Outgoing{ID: "019a5df0-0000-7000-8000-000000000012", Kind: c.Kind, Address: c.Address, Reaction: &plan, ReactionEmojis: []string{"👍"}, RoomIntentRevisionID: plan.RoomIntentRevisionID}
+	outcome := make(chan string, 1)
+	go func() { outcome <- m.Send(ctx, e.account, out) }()
+	select {
+	case <-conn.writing:
+	case <-watchdog.Done():
+		t.Fatal("reaction did not acquire the stream writer")
+	}
+	cancel()
+	select {
+	case got := <-outcome:
+		if got != application.Unknown || len(e.reactionCommands) != 1 {
+			t.Fatal("interrupted active write should remain unknown and tracked", got, e.reactionCommands)
+		}
+	case <-watchdog.Done():
+		t.Fatal("cancellation did not interrupt the active reaction write")
+	}
+	_ = right.SetReadDeadline(time.Now().Add(time.Second))
+	if n, err := right.Read(make([]byte, 1)); n != 0 || err != io.EOF {
+		t.Fatal("ambiguous write should close the stream", n, err)
 	}
 }
 
