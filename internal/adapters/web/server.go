@@ -432,7 +432,7 @@ type copy struct {
 	OpenNavigation, Close, Details, Participants, MediaEmpty                                                                                                             string
 	ExpandNavigation, CollapseNavigation                                                                                                                                 string
 	MediaBody, SelectChat, SelectChatBody, EngineState, AccountHelp                                                                                                      string
-	PreviewOnly, ThemeHelp, NoChats, NoChatsBody                                                                                                                         string
+	PreviewOnly, NoChats, NoChatsBody                                                                                                                                    string
 	AddAccount, AccountAddress, AccountLabel, AddressPlaceholder, LabelPlaceholder                                                                                       string
 	RegisterAccount, Password, PasswordHelp, Endpoint, EndpointHelp                                                                                                      string
 	Connect, Disconnect, Connected, Connecting, ConnectionError                                                                                                          string
