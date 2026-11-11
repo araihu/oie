@@ -40,6 +40,8 @@ func (r runner) desktop(ctx context.Context, source *dagger.Directory) error {
 		return err
 	}
 	checked := built.WithEnvVariable("LIBGL_ALWAYS_SOFTWARE", "1").
+		// A WebKit helper can still write Mesa's disk cache as the smoke removes its profile.
+		WithEnvVariable("MESA_SHADER_CACHE_DISABLE", "true").
 		WithEnvVariable("GDK_BACKEND", "x11").
 		// Test containers cannot provide WebKit's normal user-namespace sandbox.
 		// This override never enters the installed application's environment.
