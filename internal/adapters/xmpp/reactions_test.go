@@ -496,7 +496,9 @@ func TestReactionSendDeadlineDoesNotInterruptAnIQWriter(t *testing.T) {
 	t.Cleanup(func() { _ = left.Close(); _ = right.Close() })
 	conn := &observedReactionWriteConn{Conn: left, writing: make(chan struct{})}
 	s := reactionTestSession(t, conn)
-	e.raw, e.session, slot.session = left, s, s
+	deadlineTouched := make(chan struct{})
+	e.raw = &reactionDeadlineConn{Conn: left, onDeadline: func() { close(deadlineTouched) }}
+	e.session, slot.session = s, s
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	deadline, _ := ctx.Deadline()
@@ -547,6 +549,11 @@ func TestReactionSendDeadlineDoesNotInterruptAnIQWriter(t *testing.T) {
 	if got := <-outcome; got != application.NotSent || len(e.reactionCommands) != 0 {
 		t.Fatal("expired reaction should remain unsent and untracked", got, e.reactionCommands)
 	}
+	select {
+	case <-deadlineTouched:
+		t.Fatal("expired reaction touched the transport deadline")
+	default:
+	}
 	_ = right.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
 	if n, err := right.Read(make([]byte, 1)); n != 0 || !errors.Is(err, os.ErrDeadlineExceeded) {
 		t.Fatal("expired reaction emitted bytes", n, err)
@@ -589,6 +596,35 @@ func TestReactionSendCancellationInterruptsActiveWrite(t *testing.T) {
 	_ = right.SetReadDeadline(time.Now().Add(time.Second))
 	if n, err := right.Read(make([]byte, 1)); n != 0 || err != io.EOF {
 		t.Fatal("ambiguous write should close the stream", n, err)
+	}
+}
+
+func TestReactionSendIsUnsentWhenXMLOutputHasClosed(t *testing.T) {
+	m, e, slot, _ := reactionRoomFixture(t)
+	c := slot.conversation
+	s, left, right := reactionWireSession(t)
+	e.raw, e.session, slot.session = left, s, s
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	plan, err := m.PrepareReaction(ctx, e.account, c, reactionTarget(e, c))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := application.Outgoing{ID: "019a5df0-0000-7000-8000-000000000012", Kind: c.Kind, Address: c.Address, Reaction: &plan, ReactionEmojis: []string{"👍"}, RoomIntentRevisionID: plan.RoomIntentRevisionID}
+	wire := make(chan []byte, 1)
+	go func() {
+		_ = right.SetReadDeadline(time.Now().Add(2 * time.Second))
+		data, _ := io.ReadAll(right)
+		wire <- data
+	}()
+	// Mellium closes the XML stream before the account worker detaches it.
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	outcome := m.Send(ctx, e.account, out)
+	_ = left.Close()
+	if got := <-wire; bytes.Contains(got, []byte("<message")) || outcome != application.NotSent || len(e.reactionCommands) != 0 {
+		t.Fatal("closed XML stream should leave the reaction unsent and untracked", string(got), outcome, e.reactionCommands)
 	}
 }
 

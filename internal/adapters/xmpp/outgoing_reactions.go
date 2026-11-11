@@ -237,7 +237,7 @@ func sendFrozenReaction(ctx context.Context, e *entry, session *mx.Session, raw 
 	// of the stream writer. Other stanzas use the same transport.
 	writer := session.TokenWriter()
 	defer func() { _ = writer.Close() }()
-	if ctx.Err() != nil {
+	if ctx.Err() != nil || session.State()&mx.OutputStreamClosed != 0 {
 		return application.NotSent
 	}
 	deadline, ok := ctx.Deadline()
