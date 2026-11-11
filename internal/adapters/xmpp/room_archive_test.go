@@ -520,3 +520,37 @@ func TestDeferredRoomReactionReplayCarriesTieAnchorAcrossTextPage(t *testing.T) 
 		t.Fatal("reaction ordering evidence was lost across the text-only page", host.reactions, host.archive)
 	}
 }
+
+func TestIsolatedRoomArchiveDefersReactionAtAmbiguousPageBoundary(t *testing.T) {
+	at := time.Date(2026, 11, 10, 22, 0, 0, 0, time.UTC)
+	m, e, host := archiveFixture(t, func(iq testArchiveIQ, index int) string {
+		payload := `<occupant-id xmlns="urn:xmpp:occupant-id:0" id="peer"/><reactions xmlns="urn:xmpp:reactions:0" id="source">`
+		if index == 0 {
+			page := iq.page(false, testArchiveMessage{id: "newer-add", at: at})
+			return strings.Replace(page, "<body>Fixture message</body>", payload+"<reaction>❤</reaction></reactions>", 1)
+		}
+		page := iq.page(true, testArchiveMessage{id: "older-clear", at: at}, testArchiveMessage{id: "newer-add", at: at})
+		page = strings.Replace(page, "<body>Fixture message</body>", payload+"</reactions>", 1)
+		return strings.Replace(page, "<body>Fixture message</body>", payload+"<reaction>❤</reaction></reactions>", 1)
+	})
+	room := host.room.Address
+	e.semianonymousRooms = map[string]bool{room: true}
+	e.occupantScopes = map[string]bool{room: true}
+	slot := e.rooms[room]
+	slot.session, slot.snapshot.State, slot.ownOccupantID = e.session, "joined", "self"
+	anchor := &domain.Message{ArchiveScope: room, ArchiveID: "context", CreatedAt: at}
+	result := domain.RoomArchiveResult{Archive: host.archive}
+	if _, err := m.isolatedRoomPage(t.Context(), host, e, e.session, host.room, result, domain.RoomArchiveRequest{Action: "older", Anchor: anchor}); err != nil {
+		t.Fatal(err)
+	}
+	p := host.archive.RoomArchiveProgress
+	if len(host.reactions) != 0 || !p.DeferredReactions.Start.Equal(at) || !p.DeferredReactions.End.Equal(at) {
+		t.Fatal("isolated boundary should wait for chronological evidence", host.reactions, p.DeferredReactions)
+	}
+	if stored, err := m.recoverDeferredRoomReactions(t.Context(), host, e, e.session, host.room, &p, slot); err != nil || !stored {
+		t.Fatal("deferred tie was not stored", err)
+	}
+	if len(host.reactions) != 2 || len(host.reactions[0].Emojis) != 0 || !slices.Equal(host.reactions[1].ArchiveEarlier, []string{"older-clear"}) {
+		t.Fatal("unfiltered replay did not establish the newer set", host.reactions)
+	}
+}

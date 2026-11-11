@@ -881,7 +881,7 @@ func TestRoomReactionUpgradeRetiresMixedLegacyPeerSets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s2.Close()
+	defer func() { _ = s2.Close() }()
 	// Fresh authoritative discovery after joining.
 	if err = s2.SetRoomReactionPrivacy(ctx, add.AccountID, add.Address, public); err != nil {
 		t.Fatal(err)

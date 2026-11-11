@@ -226,6 +226,16 @@ func markRoomReactionReplay(e *entry, s *mx.Session, room string, slot *roomSlot
 	e.mu.Unlock()
 }
 
+func includeDeferredReaction(r *domain.DeferredRoomReactions, at time.Time) {
+	at = at.UTC()
+	if r.Start.IsZero() || at.Before(r.Start) {
+		r.Start = at
+	}
+	if at.After(r.End) {
+		r.End = at
+	}
+}
+
 func rememberDeferredRoomReactions(p *domain.RoomArchiveProgress, skipped domain.DeferredRoomReactions) bool {
 	if skipped.Start.IsZero() {
 		return false

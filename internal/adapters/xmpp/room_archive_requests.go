@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -58,7 +59,7 @@ func (m *Manager) isolatedRoomPage(ctx context.Context, host application.RoomArc
 	if err != nil {
 		return result, err
 	}
-	if err := m.ingestIsolatedRoomPage(ctx, host, c.ID, &result.Archive.RoomArchiveProgress, page); err != nil {
+	if err := m.ingestIsolatedRoomPage(ctx, host, c, &result.Archive.RoomArchiveProgress, page, req.Search != ""); err != nil {
 		return result, err
 	}
 	if request.Action == "context" {
@@ -75,7 +76,7 @@ func (m *Manager) isolatedRoomPage(ctx context.Context, host application.RoomArc
 		if err != nil {
 			return result, err
 		}
-		if err := m.ingestIsolatedRoomPage(ctx, host, c.ID, &result.Archive.RoomArchiveProgress, forward); err != nil {
+		if err := m.ingestIsolatedRoomPage(ctx, host, c, &result.Archive.RoomArchiveProgress, forward, false); err != nil {
 			return result, err
 		}
 		result.Outcome = "stored"
@@ -110,12 +111,26 @@ func (m *Manager) isolatedRoomPage(ctx context.Context, host application.RoomArc
 	return result, nil
 }
 
-func (m *Manager) ingestIsolatedRoomPage(ctx context.Context, host application.RoomArchiveHost, id domain.ID, p *domain.RoomArchiveProgress, page archivePage) error {
+func (m *Manager) ingestIsolatedRoomPage(ctx context.Context, host application.RoomArchiveHost, c domain.Conversation, p *domain.RoomArchiveProgress, page archivePage, filtered bool) error {
+	// The boundaries of an independent context can cut through a group of
+	// tied timestamps already read through another cursor. Resolve those
+	// groups from the room's contiguous, unfiltered archive.
+	page.Query.Messages = slices.DeleteFunc(page.Query.Messages, func(in application.Incoming) bool {
+		r := in.Reaction
+		if r == nil || (!filtered && !r.CreatedAt.Equal(page.Query.FirstAt) && !r.CreatedAt.Equal(page.Query.LastAt)) {
+			return false
+		}
+		includeDeferredReaction(&page.Query.Deferred, r.CreatedAt)
+		return true
+	})
 	if err := m.ingestArchivePage(ctx, page); err != nil {
 		return err
 	}
 	if rememberDeferredRoomReactions(p, page.Query.Deferred) {
-		return host.StoreRoomArchiveProgress(ctx, id, *p)
+		if err := host.StoreRoomArchiveProgress(ctx, c.ID, *p); err != nil {
+			return err
+		}
+		m.WakeRoomArchive(c.AccountID)
 	}
 	return nil
 }

@@ -1055,8 +1055,9 @@ reaction without its own stanza ID, the engine records that delivery under a
 local identifier after verifying the sender. The client-provided stanza ID can
 correlate the account's own command echo. Echoes and archive copies preserve the
 reaction's revision when they enrich the same observation. Equal archive
-timestamps use the server’s result order across contiguous pages, and later
-replays can repair older ordering. Unresolved original references can resolve
+timestamps use the server’s result order across contiguous pages. Independent
+context boundaries are replayed through an unfiltered archive query to recover
+that order, and replay can repair older ordering. Unresolved original references can resolve
 when the source is subsequently retained.
 
 Freeze the desired set, operation UUID, target and sending session. Revalidate

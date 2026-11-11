@@ -106,13 +106,7 @@ func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResul
 		return nil
 	}
 	if in.Reaction != nil && in.Reaction.Kind == "room" && q.OwnReactionActor == "" {
-		at = at.UTC()
-		if q.Deferred.Start.IsZero() || at.Before(q.Deferred.Start) {
-			q.Deferred.Start = at
-		}
-		if at.After(q.Deferred.End) {
-			q.Deferred.End = at
-		}
+		includeDeferredReaction(&q.Deferred, at)
 		return nil
 	}
 	q.Bytes += len(in.OriginalText)
