@@ -1,0 +1,75 @@
+.oie-schedule-workspace {
+  height: 100%;
+  overflow: auto;
+  padding: 1rem clamp(1rem, 4vw, 3rem);
+  color: var(--oie-text);
+}
+
+.oie-schedule-filter, .oie-schedule-actions, .oie-schedule-row-header,
+.oie-schedule-edit-bar, .oie-composer-attachments, .oie-message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem .75rem;
+}
+
+.oie-schedule-list { list-style: none; padding: 0; }
+.oie-schedule-row { padding: 1rem 0; border-bottom: 1px solid var(--oie-border); }
+.oie-schedule-row-header time { margin-inline-start: auto; }
+.oie-schedule-row p { white-space: pre-wrap; overflow-wrap: anywhere; margin-block: .4rem; }
+.oie-schedule-edit-bar { justify-content: space-between; padding: .25rem .75rem; }
+
+.oie-composer-attachments {
+  padding-inline: .75rem;
+  overflow: auto;
+  flex-wrap: nowrap;
+  max-height: 5rem;
+}
+.oie-composer-attachments[hidden], .oie-schedule-dialog [hidden] { display: none; }
+.oie-composer-attachments > span {
+  flex: 0 0 auto;
+  max-width: 15rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+}
+.oie-composer-attachments a { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.oie-message-attachments img {
+  display: block;
+  width: min(14rem, 55vw);
+  height: 8rem;
+  object-fit: contain;
+  border-radius: .5rem;
+}
+.oie-schedule-dialog {
+  width: min(29rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid var(--oie-border);
+  border-radius: .75rem;
+  color: var(--oie-text);
+  background: var(--oie-raised);
+}
+.oie-schedule-dialog::backdrop { background: rgb(0 0 0 / 40%); }
+.oie-schedule-dialog form { display: grid; gap: .55rem; }
+.oie-schedule-dialog footer { display: flex; justify-content: end; gap: .5rem; }
+.oie-schedule-dialog input, .oie-schedule-dialog select, .oie-schedule-filter select {
+  border: 1px solid var(--oie-border);
+  background: var(--oie-raised);
+  color: var(--oie-text);
+  padding: .45rem;
+  border-radius: .35rem;
+}
+.oie-schedule-preview { display: flex; justify-content: end; padding: .75rem; background: var(--oie-chat-bg, var(--oie-raised)); }
+.oie-schedule-preview .oie-bubble { max-width: 100%; }
+.oie-schedule-preview [data-schedule-preview-text] { white-space: pre-wrap; overflow-wrap: anywhere; }
+.oie-schedule-split { flex: 0 0 auto; }
+
+#send-message-form:has(.oie-schedule-retry) { position: relative; }
+.oie-schedule-retry {
+  position: absolute;
+  inset: auto 1rem calc(100% + .5rem) auto;
+  z-index: 2;
+  background: var(--oie-panel);
+}

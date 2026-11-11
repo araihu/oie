@@ -226,6 +226,8 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		result.Redirect = "/?chat=" + url.QueryEscape(c.Id) + "&account=" + url.QueryEscape(c.AccountId)
+	case "/ui/scheduling/update", "/ui/scheduling/send-now":
+		status, result = s.changeSchedule(ctx, r, text)
 	case "/ui/messages/send", "/ui/messages/reconcile":
 		status, result = s.send(ctx, r, text)
 	case "/ui/messages/cancel":
@@ -280,7 +282,8 @@ func (s *Server) reconcileMessage(ctx context.Context, key, kind string) (*engin
 }
 func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mutationResult) {
 	key, body, conversation, account, target := r.Form.Get("operationKey"), r.Form.Get("originalText"), r.Form.Get("conversationId"), r.Form.Get("accountId"), r.Form.Get("replyToMessageId")
-	if !validOperationKey(key) || !validOperationKey(conversation) || !validOperationKey(account) || strings.TrimSpace(body) == "" || len([]rune(body)) > 16384 || (target != "" && !validOperationKey(target)) {
+	attachments, at, valid := scheduleInput(r)
+	if !valid || !validOperationKey(key) || !validOperationKey(conversation) || !validOperationKey(account) || (strings.TrimSpace(body) == "" && len(attachments) == 0) || len([]rune(body)) > 16384 || (target != "" && !validOperationKey(target)) {
 		return 422, mutationResult{Message: text.InvalidMessage, Code: "invalid_request", Rejected: true}
 	}
 	mentions, mentionErr := parseMentionSelections(r.Form.Get("mentions"), body)
@@ -290,8 +293,23 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 	receipt, evidence := s.sendReceipt(ctx, key)
 	switch evidence {
 	case "found":
-		if matchingSend(*receipt, conversation, account, body, target, mentions) {
+		if matchingComposition(*receipt, conversation, account, body, target, mentions, attachments, at) {
 			return acceptedResult(text, *receipt)
+		}
+		if (at != nil || len(attachments) != 0) && receipt.AccountId == account && receipt.ConversationId == conversation {
+			if r.URL.Path == "/ui/messages/reconcile" {
+				return 404, mutationResult{Message: text.PendingAcceptance, Code: "not_found"}
+			}
+			// The current message can differ after an edit or Send now. The
+			// engine can still verify this exact key against its original input.
+			response, err := s.client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, sendInput(body, target, mentions, attachments, at))
+			if err != nil {
+				return 503, mutationResult{Message: text.PendingAcceptance}
+			}
+			if response.JSON200 != nil && matchingComposition(*response.JSON200, conversation, account, body, target, mentions, attachments, at) {
+				return acceptedResult(text, *response.JSON200)
+			}
+			return response.StatusCode(), problemResult(text, response.StatusCode(), response.Body)
 		}
 		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
 	case "conflict":
@@ -337,22 +355,16 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 			return 409, mutationResult{Message: text.ReplyUnavailable, Code: "unsupported", Rejected: true}
 		}
 	}
-	var targetID *string
 	if target != "" {
 		source, status := s.retainedReplySource(ctx, conversation, account, target)
 		if source == nil {
 			return status, mutationResult{Message: text.ReplyUnavailable, Code: "reply_unavailable", Rejected: status == 400 || status == 404}
 		}
-		targetID = &target
 	}
-	var selected *[]engineapi.MentionSelection
-	if len(mentions) > 0 {
-		selected = &mentions
-	}
-	response, err := s.client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, engineapi.SendMessage{OriginalText: body, ReplyToMessageId: targetID, Mentions: selected})
+	response, err := s.client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, sendInput(body, target, mentions, attachments, at))
 	if err != nil {
 		message, _ := s.sendReceipt(ctx, key)
-		if message != nil && matchingSend(*message, conversation, account, body, target, mentions) {
+		if message != nil && matchingComposition(*message, conversation, account, body, target, mentions, attachments, at) {
 			return acceptedResult(text, *message)
 		}
 		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
@@ -364,14 +376,18 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 	if message == nil {
 		return response.StatusCode(), problemResult(text, response.StatusCode(), response.Body)
 	}
-	if !matchingSend(*message, conversation, account, body, target, mentions) {
+	if !matchingComposition(*message, conversation, account, body, target, mentions, attachments, at) {
 		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
 	}
 	return acceptedResult(text, *message)
 }
 
 func acceptedResult(text copy, m engineapi.Message) (int, mutationResult) {
-	return 200, mutationResult{OK: true, Accepted: true, Message: text.MessageAccepted, MessageID: m.Id, State: string(m.SendState), NextKey: newOperationKey()}
+	message := text.MessageAccepted
+	if m.ScheduledAt != nil {
+		message = text.ScheduleSaved
+	}
+	return 200, mutationResult{OK: true, Accepted: true, Message: message, MessageID: m.Id, State: string(m.SendState), NextKey: newOperationKey()}
 }
 func (s *Server) cancelSend(ctx context.Context, r *http.Request, text copy) (int, mutationResult) {
 	key := r.Form.Get("operationKey")
@@ -452,7 +468,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 
 func isMutationPath(path string) bool {
 	switch path {
-	case "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
+	case "/ui/scheduling/update", "/ui/scheduling/send-now", "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
 		return true
 	}
 	return false

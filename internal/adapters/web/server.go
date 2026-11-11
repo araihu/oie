@@ -137,6 +137,12 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	SchedulePage                         *engineapi.ScheduledMessagePage
+	ScheduleEdit                         *engineapi.Message
+	ScheduleDestinations                 []engineapi.Conversation
+	ScheduleConversation, ScheduleCursor string
+	ScheduleUnavailable                  bool
+
 	InboxOnly        bool
 	Role             engineapi.EngineRole
 	CanResetData     bool
@@ -196,6 +202,8 @@ type view struct {
 }
 
 type copy struct {
+	Scheduled, Schedule, ScheduleFilter, Reschedule, ScheduleWhen, ScheduleEmpty, ScheduleUnavailable, ScheduleReview, ScheduleBack, ScheduleCancel, ScheduleEditMode, ScheduleSave, ScheduleSaved, SendNow, ScheduleTimeInvalid, ScheduleTimeAmbiguous, AttachmentFailed, AttachmentLimit, RemoveAttachment string
+
 	DeleteAllData, DeleteDataWarning, DeleteHostedDataWarning, DeleteDataConfirmation, DeleteDataCancel, DeleteDataFailed, DeleteDataPending, DeleteDataComplete string
 	Reactions, ReactMessage, ReactionUnavailable, ReactionPending, ReactionUnknown, ReactionFailed, ReactionCheck, ReactionRemove                                string
 
@@ -567,6 +575,10 @@ var liveScript []byte
 var roomArchiveScript []byte
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/ui/scheduling/stage" || r.URL.Path == "/ui/scheduling/file" {
+		s.serveStagedAttachment(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/engine/reset" {
 		s.resetData(w, r)
 		return
@@ -634,6 +646,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mime string
 		body []byte
 	}{
+		"/ui/scheduling.js":        {"text/javascript", schedulingScript},
+		"/ui/scheduling.css":       {"text/css", schedulingStylesheet},
 		"/ui/sidebar.js":           {"text/javascript", sidebarScript},
 		"/ui/presentation-time.js": {"text/javascript", presentationTimeScript},
 		"/ui/reset-data.js":        {"text/javascript", resetDataScript},
@@ -764,7 +778,7 @@ func (s *Server) baseView(r *http.Request) view {
 }
 func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	fragment := ""
-	if r.URL.Path == "/" && r.Header.Get("HX-Request") == "true" && v.Section != "media" {
+	if r.URL.Path == "/" && r.Header.Get("HX-Request") == "true" && v.Section != "media" && v.Section != "scheduled" && r.URL.Query().Get("editSchedule") == "" {
 		fragment = r.Header.Get("X-Oie-Fragment")
 	}
 	listOnly := fragment == "inbox"
@@ -813,6 +827,10 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	if !listOnly && !paneOnly {
 		s.loadCapabilities(ctx, v)
 	}
+	if v.Section == "scheduled" {
+		s.loadScheduled(ctx, v)
+		return
+	}
 	if v.Section == "media" {
 		s.loadSharedContent(ctx, v)
 		return
@@ -824,6 +842,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		return
 	}
 	s.loadConversation(ctx, r, v, paneOnly, editor)
+	s.loadScheduleEdit(ctx, v, r.URL.Query().Get("editSchedule"))
 }
 
 func (s *Server) loadAccountConnection(ctx context.Context, v *view, accountID string, editor engineapi.RequestEditorFn) {

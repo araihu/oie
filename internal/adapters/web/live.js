@@ -41,8 +41,15 @@ window.OieRuntime.register('live', life => {
   const composer = document.querySelector('#send-message-form');
   const input = document.querySelector('#message-composer');
   const submissionKey = composer?.elements.namedItem('operationKey');
-  const draftKey = body.dataset.engineId && body.dataset.conversationId && body.dataset.accountId
+  const composerSend = composer?.querySelector('[data-send-message], #composer-send');
+  if(composerSend) composerSend.dataset.sendMessage='';
+  const editingSchedule = composer?.hasAttribute('data-editing-schedule');
+  const scheduledSource = document.getElementById('schedule-edit-data');
+  const scheduleRetry = composer?.querySelector('[data-schedule-retry]');
+  const ordinaryDraftKey = body.dataset.engineId && body.dataset.conversationId && body.dataset.accountId
     ? ['oie.draft.v1', body.dataset.engineId, body.dataset.accountId, body.dataset.conversationId].join(':') : '';
+  const draftKey = editingSchedule ? ordinaryDraftKey + ':scheduled:' +
+    composer.elements.namedItem('messageId').value + ':' + composer.elements.namedItem('expectedRevisionId').value : ordinaryDraftKey;
   let journal,preparingReply=false,replyEpoch=0;
   const replyField=composer?.elements.namedItem('replyToMessageId');
   const mentionField=composer?.elements.namedItem('mentions');
@@ -53,7 +60,7 @@ window.OieRuntime.register('live', life => {
   // Sent corrections have a separate journal. They never overwrite the ordinary
   // message draft, its reply target, mention selections or original send key.
   const editBox=composer?.querySelector('[data-composer-edit]'),editFeedback=editBox?.querySelector('[data-edit-feedback]'),editRecovery=editBox?.querySelector('[data-edit-recovery]'),lastEditStatus=composer?.querySelector('[data-edit-last-status]');
-  const editKey=draftKey?draftKey.replace('oie.draft.v1','oie.correction.v1'):'';
+  const editKey=draftKey&&!editingSchedule?draftKey.replace('oie.draft.v1','oie.correction.v1'):'';
   const lastEditKey=editKey?editKey.replace('oie.correction.v1','oie.correction-receipt.v1'):'';
   const announceEdit=message=>{const region=composer?.querySelector('[data-edit-announcement]');if(region)region.textContent=message;};
   const editText=key=>editBox?.dataset['edit'+key[0].toUpperCase()+key.slice(1)]||'';
@@ -83,10 +90,10 @@ window.OieRuntime.register('live', life => {
     editBox.hidden=!editSession||editBusy||['queued','dispatching'].includes(editSession.command?.state)||!(editSession.error||editSession.submitted||editSession.rejected||editStorageDenied);
     composer.setAttribute('aria-busy',String(editPreparing||editBusy));
     if(editFeedback){const state=editSession?.command?.state;editFeedback.textContent=editPreparing?editText('preparing'):editSession?.error||(state?editText(state):editSession?.submitted?editText('acceptanceUnknown'):editStorageDenied?editText('storage'):'');}
-    const cancel=composer.querySelector('[data-edit-cancel]'),save=composer.querySelector('[data-send-message]'),check=editBox.querySelector('[data-edit-check]'),retry=editBox.querySelector('[data-edit-retry]');
+    const cancel=composer.querySelector('[data-edit-cancel]'),save=composerSend,check=editBox.querySelector('[data-edit-check]'),retry=editBox.querySelector('[data-edit-retry]');
     if(cancel){cancel.hidden=!editSession;cancel.disabled=editBusy||!!editSession?.submitted;}
     const dismiss=editBox.querySelector('[data-edit-dismiss]');if(dismiss){dismiss.hidden=!editSession?.command;dismiss.disabled=editBusy;}
-    if(save){save.toggleAttribute('data-edit-save',!!editSession);if(editSession){save.disabled=editBusy||editSession.submitted||editSession.rejected===true||!input.value.trim()||Array.from(input.value).length>16384;}save.setAttribute('aria-label',editSession?editText('saveLabel'):text('send'));save.title=editSession?editText('saveLabel'):text('send');}
+    if(save){save.toggleAttribute('data-edit-save',!!editSession);if(editSession){save.disabled=editBusy||editSession.submitted||editSession.rejected===true||!input.value.trim()||Array.from(input.value).length>16384;}save.setAttribute('aria-label',editSession?editText('saveLabel'):(editingSchedule?save.textContent.trim():text('send')));save.title=save.getAttribute('aria-label');}
     if(editRecovery)editRecovery.hidden=!editSession?.submitted||editBusy;
     if(check)check.disabled=editBusy;
     if(retry)retry.hidden=!!editSession?.command||editSession?.rejected===true;
@@ -174,11 +181,14 @@ window.OieRuntime.register('live', life => {
   function renderReply(){
     const reply=journal?.reply,locked=!!journal?.pending,editing=!!editSession||editPreparing;
     if(replyField)replyField.value=reply?.messageId||'';
-    if(replyBox){replyBox.hidden=!reply||locked||!!editSession;replyBox.querySelector('[data-composer-reply-sender]').textContent=typeof reply?.senderName==='string'?reply.senderName:'';replyBox.querySelector('[data-composer-reply-excerpt]').textContent=typeof reply?.excerpt==='string'?reply.excerpt:'';const cancel=replyBox.querySelector('[data-cancel-reply]');if(cancel)cancel.disabled=locked||preparingReply;}
+    if(replyBox){replyBox.hidden=!reply||(locked&&!journal?.scheduledAt&&!editingSchedule)||!!editSession;replyBox.querySelector('[data-composer-reply-sender]').textContent=typeof reply?.senderName==='string'?reply.senderName:'';replyBox.querySelector('[data-composer-reply-excerpt]').textContent=typeof reply?.excerpt==='string'?reply.excerpt:'';const cancel=replyBox.querySelector('[data-cancel-reply]');if(cancel)cancel.disabled=locked||preparingReply;}
     for(const button of document.querySelectorAll('[id^="reply-message-"]'))button.disabled=!composer||composer.dataset.replyAllowed!=='true'||locked||preparingReply||editing;
-    const send=composer?.querySelector('[data-send-message]');if(send)send.disabled=stopped||locked||preparingReply||editing||composer.dataset.busy==='true'||(composer.dataset.sendAllowed!=='true'&&!locked);
+    if(composerSend) composerSend.disabled=stopped||locked||preparingReply||editing||composer.dataset.busy==='true'||
+      composer.dataset.staging==='true'||(composer.dataset.sendAllowed!=='true'&&!editingSchedule&&!locked);
+    if(scheduleRetry){scheduleRetry.hidden=!locked||!journal.scheduledAt&&!editingSchedule;scheduleRetry.disabled=stopped||composer.dataset.busy==='true';}
+    composer?.dispatchEvent(new CustomEvent('oie:composer-attachments',{detail:{files:journal?.attachments||[],locked:locked||editing||preparingReply||stopped||composer.dataset.busy==='true'}}));
   }
-  function draftRecord(pending=false){return {text:input?.value||'',key:submissionKey?.value||'',pending,reply:journal?.reply||null,mentions:readMentions()};}
+  function draftRecord(pending=false){return {text:input?.value||'',key:submissionKey?.value||'',pending,reply:journal?.reply||null,mentions:readMentions(),attachments:journal?.attachments||[]};}
 
 
   function storageWarning() {
@@ -216,7 +226,7 @@ window.OieRuntime.register('live', life => {
     }
   }
   function renderPendingSend(state='sending'){
-    if(!journal?.pending)return;
+    if(!journal?.pending || journal.scheduledAt || editingSchedule)return;
     const timeline=document.querySelector('#message-timeline'),template=composer?.querySelector('[data-pending-send-template]');
     if(!timeline||!template)return;
     if(!pendingBubble){
@@ -265,9 +275,13 @@ window.OieRuntime.register('live', life => {
     event.preventDefault();composer.requestSubmit();
   });
   function feedback(form, message, error = false) {
+    if(form===composer&&(journal?.scheduledAt||editingSchedule)){
+      if(error)errorToast(message);
+      return;
+    }
     if(error&&form.matches('[data-cancel-message]')){errorToast(message);return;}
-    const region = form.querySelector('[data-form-feedback]');
-    if(form===composer&&journal?.pending){if(region)region.textContent='';renderPendingSend(error?'uncertain':'sending');announce(message,true);return;}
+    const region = (form.hidden?form.closest('[data-scheduled-row]')?.querySelector('[data-schedule-row-status]'):null) || form.querySelector('[data-form-feedback]');
+    if(form===composer&&journal?.pending&&!journal.scheduledAt&&!editingSchedule){if(region)region.textContent='';renderPendingSend(error?'uncertain':'sending');announce(message,true);return;}
     if (region) { region.textContent = message; region.dataset.error = String(error);region.setAttribute('role',error?'alert':'status'); if(error&&form.dataset.oieAction!=='send'){region.tabIndex=-1;region.focus({preventScroll:true});} }
     if (error && !region) errorToast(message);
     else announce(message);
@@ -276,16 +290,22 @@ window.OieRuntime.register('live', life => {
     if (!input || !composer) return;
     input.readOnly = locked;
     input.setAttribute('aria-readonly', String(locked));
-    const button = composer.querySelector('[data-send-message]');
+    const button = composerSend;
     if (button) {
       button.setAttribute('aria-label', text('send'));
       button.title = locked ? text('locked') : text('send');
     }
   }
   if (input && submissionKey && draftKey && !mock) {
-    const saved = readDraft();
+    let saved = readDraft();
+    if(!saved&&scheduledSource){
+      const m=JSON.parse(scheduledSource.textContent), composition=m.composition;
+      saved={key:submissionKey.value,text:composition.originalText,mentions:composition.mentions,attachments:m.attachments||[],
+        reply:composition.replyToMessageId?{messageId:composition.replyToMessageId,engineId:body.dataset.engineId,accountId:m.accountId,conversationId:m.conversationId,
+          senderName:m.reply?.senderName||'',excerpt:m.reply?.excerpt||''}:null};
+    }
     if (saved && typeof saved.text === 'string' && (canonicalID(saved.key)||(saved.key===''&&!saved.pending)) && (!saved.reply || (canonicalID(saved.reply.messageId) && saved.reply.engineId===body.dataset.engineId && saved.reply.accountId===body.dataset.accountId && saved.reply.conversationId===body.dataset.conversationId && typeof saved.reply.senderName==='string' && typeof saved.reply.excerpt==='string' && Array.from(saved.reply.excerpt).length<=512))) {
-      journal = {...saved,key:canonicalID(saved.key)?saved.key:submissionKey.value}; input.value = saved.pending?'':saved.text; submissionKey.value = journal.key; restoreMentions(saved.mentions);
+      journal = {...saved,key:canonicalID(saved.key)?saved.key:submissionKey.value}; input.value = saved.pending&&!saved.scheduledAt&&!editingSchedule?'':saved.text; submissionKey.value = journal.key; restoreMentions(saved.mentions);
       lockComposer(saved.pending === true);
       if (saved.pending) feedback(composer, text('pending'), true);
     }
@@ -436,15 +456,41 @@ window.OieRuntime.register('live', life => {
   life.on(document.querySelector('#message-timeline'),'scroll',()=>{if(nearBottom(document.querySelector('#message-timeline')))showJump(pinned());});
   localizeTimes();if(!body.dataset.focusMessage||!focusMessage(body.dataset.focusMessage))scrollLatest();else showJump(true);
 
+  life.on(scheduleRetry,'click',()=>composer.requestSubmit());
+  if(editingSchedule){
+    const cancelSchedule=composer.querySelector('[data-cancel-schedule-edit]');
+    life.on(cancelSchedule,'click',event=>{
+      if(journal?.pending){event.preventDefault();return;}
+      clearDraft(journal?.key);
+    });
+    life.on(input,'keydown',event=>{
+      if(event.key==='Escape'&&!event.defaultPrevented&&!editMenuOpen()){event.preventDefault();cancelSchedule.click();}
+    });
+  }
+  life.on(composer,'oie:attachments-change',event=>{
+    if(journal?.pending||editSession||editPreparing)return;
+    saveDraft({...draftRecord(false),attachments:event.detail});renderReply();
+  });
+  life.on(composer,'oie:attachment-staging',renderReply);
+  life.on(composer,'oie:schedule-snapshot',event=>{
+    Object.assign(event.detail,{text:input.value,reply:journal?.reply,files:journal?.attachments||[],
+      blocked:!!journal?.pending||!!editSession||editPreparing||preparingReply||stopped||composer.dataset.busy==='true'||composer.dataset.staging==='true'||
+        (composer.dataset.sendAllowed!=='true'&&!editingSchedule)});
+  });
   function completeSubmission(result){
     if(!result.accepted||!canonicalID(result.messageId)||!canonicalID(result.nextKey))return false;
     const key=journal?.key;if(!journal?.pending)return false;
-    acceptPendingSend(result.messageId);clearDraft(key);input.value='';restoreMentions([]);submissionKey.value=result.nextKey;lockComposer(false);forceBottom=true;renderReply();return true;
+    const scheduled=journal.scheduledAt||editingSchedule;
+    if(!scheduled)acceptPendingSend(result.messageId);
+    clearDraft(key);input.value='';restoreMentions([]);submissionKey.value=result.nextKey;lockComposer(false);forceBottom=!scheduled;renderReply();
+    if(scheduled&&result.message)window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',message:result.message}}));
+    if(editingSchedule&&result.redirect)location.assign(result.redirect);
+    return true;
   }
   async function reconcilePending(signal){
-    if(!journal?.pending||composer.dataset.busy==='true')return;
+    if(editingSchedule||!journal?.pending||composer.dataset.busy==='true')return;
     const key=journal.key,values=new URLSearchParams(new FormData(composer));
-    values.set('operationKey',key);values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');values.set('mentions',JSON.stringify(journal.mentions||[]));
+    values.set('operationKey',key);values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');values.set('mentions',JSON.stringify(journal.mentions||[]));setScheduledValues(values);
     try{
       const response=await life.fetch('/ui/messages/reconcile',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-Token':csrf},body:values,signal});
       if(response.ok){const result=await response.json();if(!life.signal.aborted&&journal?.key===key&&composer.dataset.busy!=='true'&&result.ok)completeSubmission(result);}
@@ -495,7 +541,7 @@ window.OieRuntime.register('live', life => {
       const regions = page.querySelector('#oie-live-regions');
       if (!regions || regions.dataset.unavailable === 'true') { announce(text('liveRetry')); return; }
       if (body.dataset.engineId && regions.dataset.engineId !== body.dataset.engineId) {
-        stopped = true; source?.close(); if (composer) composer.querySelector('[data-send-message]').disabled = true;
+        stopped = true; source?.close(); if (composer) composerSend.disabled = true;
         errorToast(text('engineChanged')); return;
       }
       body.dataset.contextNewer=regions.dataset.contextNewer||'false';body.dataset.contextMissing=regions.dataset.contextMissing||'false';
@@ -549,6 +595,10 @@ window.OieRuntime.register('live', life => {
             if(restoreFocus)(controls.querySelector('button[type="submit"]')||footer?.querySelector('button[type="submit"]')||existing.closest('#accounts-body')?.querySelector('[data-account-back]'))?.focus({preventScroll:true});
           }
         }
+      }
+      const schedules=document.getElementById('scheduled-results'),newSchedules=page.querySelector('#scheduled-results');
+      if(schedules&&newSchedules&&schedules.dataset.version!==newSchedules.dataset.version&&!schedules.contains(document.activeElement)&&!document.querySelector('[data-schedule-dialog][open]')){
+        mutateDOM(schedules,newSchedules.innerHTML);schedules.dataset.version=newSchedules.dataset.version;
       }
       const detailsRegion=page.querySelector('#live-conversation-details');
       if(detailsRegion?.dataset.detailsConversation===body.dataset.conversationId){
@@ -620,6 +670,11 @@ window.OieRuntime.register('live', life => {
   life.on(document,'oie:refresh-request',()=>scheduleRefresh());
   function scheduleRefresh() { if(stopped||life.signal.aborted)return;clearTimeout(refreshTimer); refreshTimer = life.timeout(refresh,100); }
 
+  function setScheduledValues(values) {
+    if(!composer.hasAttribute('data-schedule-composer'))return;
+    values.set('scheduledAt',journal.scheduledAt||'');
+    values.set('attachmentIds',JSON.stringify((journal.attachments||[]).map(file=>file.id)));
+  }
   life.on(document,'submit', async event => {
     const form = event.target.closest('form[data-oie-action]');
     if (!form || mock) return;
@@ -629,8 +684,9 @@ window.OieRuntime.register('live', life => {
     if(sending&&(editSession||editPreparing)){if(editSession&&!editSession.submitted)void submitEdit(false);return;}
     if (sending) {
       if(preparingReply){feedback(form,text('replyPreparing'));return}
-      if (form.dataset.sendAllowed !== 'true'&&!journal?.pending) return;
-      if(!journal?.pending&&journal?.reply){
+      if (composer.dataset.staging==='true'||(form.dataset.sendAllowed !== 'true'&&!editingSchedule&&!journal?.pending)) return;
+      const scheduledAt=journal?.pending?journal.scheduledAt:form.elements.namedItem('scheduledAt')?.value;
+      if(!journal?.pending&&journal?.reply&&!editingSchedule){
         const requested=journal.reply.messageId;preparingReply=true;renderReply();
         const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),12000);
         try{
@@ -643,17 +699,17 @@ window.OieRuntime.register('live', life => {
         finally{clearTimeout(timeout);if(!life.signal.aborted){preparingReply=false;renderReply()}}
       }
       const value = journal?.pending ? journal.text : input.value;
-      if (!value.trim() || Array.from(value).length > 16384) { feedback(form,text('invalidMessage'),true);input.focus();return; }
+      if ((!value.trim() && !journal?.attachments?.length) || Array.from(value).length > 16384) { feedback(form,text('invalidMessage'),true);input.focus();return; }
       if (journal?.pending) submissionKey.value=journal.key;
       const mentions=journal?.pending?(journal.mentions||[]):readMentions();
-      saveDraft({text:value,key:submissionKey.value,pending:true,reply:journal?.reply||null,mentions});input.value='';restoreMentions(mentions);lockComposer(true);renderReply();
+      saveDraft({text:value,key:submissionKey.value,pending:true,reply:journal?.reply||null,mentions,attachments:journal?.attachments||[],scheduledAt});if(!scheduledAt&&!editingSchedule)input.value='';restoreMentions(mentions);lockComposer(true);renderReply();
     }
     const values = new URLSearchParams(new FormData(form));
     const roomCommand=form.dataset.roomCommand;
     const roomMenuSubmit=roomCommand==='leave'&&form.dataset.roomMenuSubmit==='true';
     if(roomCommand){if(roomOperation){for(const key of ['operationKey','expectedRevisionId','nickname','conversationId','accountId'])values.set(key,roomOperation[key]||'')}else keepRoomOperation({command:roomCommand,operationKey:values.get('operationKey'),expectedRevisionId:values.get('expectedRevisionId'),nickname:values.get('nickname')||'',conversationId:values.get('conversationId'),accountId:values.get('accountId')})}
 
-    if(sending){values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');values.set('mentions',JSON.stringify(journal.mentions||[]));}
+    if(sending){values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');values.set('mentions',JSON.stringify(journal.mentions||[]));setScheduledValues(values);}
     const buttons = [...form.querySelectorAll('input:not([type=hidden]),textarea,select,button')];
     const disabled = buttons.map(button => button.disabled);
     form.dataset.busy = 'true'; form.setAttribute('aria-busy','true'); buttons.forEach(button => button.disabled = true);syncRoomLeave();
@@ -681,6 +737,8 @@ window.OieRuntime.register('live', life => {
         if (sending && result.accepted) {
           if(!completeSubmission(result))feedback(form,text('pending'),true);
           input.focus({preventScroll:true});renderReply();
+        } else if(form.dataset.oieAction==='schedule-row'){
+          location.assign(result.redirect||values.get('returnTo'));return;
         } else if (form.dataset.oieAction === 'register' || form.dataset.oieAction === 'open') {
           if (result.redirect) { if(window.OieNavigation)window.OieNavigation.go(result.redirect);else location.assign(result.redirect); return; }
         }
@@ -700,7 +758,7 @@ window.OieRuntime.register('live', life => {
         window.dispatchEvent(new CustomEvent('modal:open',{detail:{id:'room-session-dialog'}}));
         life.raf(()=>form.querySelector('[data-form-feedback]')?.focus({preventScroll:true}));
       }
-      if(stopped&&composer)composer.querySelector('[data-send-message]').disabled=true;
+      if(stopped&&composer)composerSend.disabled=true;
       if (refreshAgain) { refreshAgain=false;scheduleRefresh(); }
     }
   });

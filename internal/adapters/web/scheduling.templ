@@ -1,0 +1,192 @@
+package web
+
+import (
+	"time"
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/chatbubble"
+	"github.com/araihu/goshtoso/components/dropdown"
+	"github.com/araihu/goshtoso/components/link"
+	"github.com/araihu/goshtoso/components/splitbutton"
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+)
+
+templ scheduledWorkspace(v view) {
+	<section id="workspace" class="oie-schedule-workspace" aria-label={v.Text.Scheduled}>
+		<header class="oie-list-heading">
+			@navigationControl(v)
+			<h2>{v.Text.Scheduled}</h2>
+		</header>
+		if v.ScheduleUnavailable || v.Unavailable {
+			<p role="status">{v.Text.ScheduleUnavailable}</p>
+			@link.Link(v.scheduleHref(v.ScheduleConversation,"")) { {v.Text.Retry} }
+		} else if v.SchedulePage != nil {
+			<form method="get" action="/" class="oie-schedule-filter">
+				<input type="hidden" name="section" value="scheduled"/>
+				<label for="schedule-conversation">{v.Text.Conversations}</label>
+				<select id="schedule-conversation" name="scheduleConversation">
+					<option value="">{v.Text.SearchAllConversations}</option>
+					for _, c := range v.ScheduleDestinations {
+						<option value={c.Id} selected?={c.Id == v.ScheduleConversation}>{c.Title} · {v.accountLabel(c.AccountId)}</option>
+					}
+				</select>
+				@button.Button(button.WithType("submit"),button.WithSize(button.SizeSmall)) { {v.Text.ScheduleFilter} }
+			</form>
+			@scheduledResults(v)
+		}
+		@scheduleDialog(v)
+	</section>
+}
+
+templ scheduledResults(v view) {
+	<div id="scheduled-results" data-version={v.scheduleVersion()}>
+		if len(v.SchedulePage.Items) == 0 {
+			<p>{v.Text.ScheduleEmpty}</p>
+		} else {
+			<ul class="oie-schedule-list">
+				for _, item := range v.SchedulePage.Items {
+					@scheduledRow(v,item)
+				}
+			</ul>
+		}
+		if v.SchedulePage.NextCursor != nil {
+			@link.Link(v.scheduleHref(v.ScheduleConversation,*v.SchedulePage.NextCursor)) { {v.Text.SearchMore} }
+		}
+	</div>
+}
+
+templ scheduledRow(v view,item engineapi.ScheduledMessageItem) {
+	<li class="oie-schedule-row" data-scheduled-row>
+		<div class="oie-schedule-row-header">
+			@link.Link(v.scheduleConversationHref(item.Conversation,"")) { {item.Conversation.Title} }
+			<span>{v.accountLabel(item.Conversation.AccountId)}</span>
+			<time data-scheduled-date datetime={scheduleDate(item.Message.ScheduledAt)}>{scheduleDate(item.Message.ScheduledAt)}</time>
+		</div>
+		if item.Message.Composition != nil {
+			<p data-scheduled-text>{item.Message.Composition.OriginalText}</p>
+		}
+		if item.Message.Reply != nil {
+			<template data-scheduled-quote data-sender={scheduleQuoteSender(item.Message.Reply)}>{item.Message.Reply.Excerpt}</template>
+		}
+		@outgoingAttachments(v,item.Message)
+		if pendingSendMutable(item.Message) {
+		<div class="oie-schedule-actions">
+			@link.Link(v.scheduleConversationHref(item.Conversation,item.Message.Id)) { {v.Text.EditMessage} }
+			@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-reschedule":scheduleDate(item.Message.ScheduledAt)})) { {v.Text.Reschedule} }
+			@scheduleRowForm(v,item.Message,"/ui/scheduling/send-now",v.Text.SendNow)
+			@scheduleRowForm(v,item.Message,"/ui/messages/cancel",v.Text.ScheduleCancel)
+		</div>
+		@scheduleRowForm(v,item.Message,"/ui/scheduling/update","")
+		<div data-schedule-row-status role="status"></div>
+		} else {
+			<p>{v.stateLabel(item.Message.SendState)}</p>
+		}
+	</li>
+}
+
+templ scheduleRowForm(v view,m engineapi.Message,path,label string) {
+	<form action={templ.URL(path)} method="post" data-oie-action="schedule-row" data-schedule-update?={label==""} hidden?={label==""}>
+		@mutationFieldsAt(v,"scheduled-"+m.Id,newOperationKey(),v.scheduleHref(v.ScheduleConversation,""))
+		<input type="hidden" name="messageId" value={m.Id}/>
+		<input type="hidden" name="expectedRevisionId" value={m.RevisionId}/>
+		if label == "" {
+			<input type="hidden" name="scheduledAt"/>
+		} else {
+			@button.Button(button.WithType("submit"),button.WithAppearance(button.AppearancePlain)) { {label} }
+		}
+		<div data-form-feedback role="status"></div>
+	</form>
+}
+
+templ scheduleControl(v view) {
+	@splitbutton.SplitButton(splitbutton.Config{
+		ID:"composer-split", Primary:splitbutton.Action{ID:"composer-send",Label:schedulePrimaryLabel(v),OnClick:"$el.closest('form').requestSubmit()",Disabled:!v.sendAllowed() && v.ScheduleEdit==nil},
+		MenuLabel:v.Text.More, MenuAlign:dropdown.AlignEnd,
+		Sections:[]dropdown.Section{{Items:[]dropdown.Item{{Label:scheduleMenuLabel(v),OnClick:"$dispatch('oie:schedule-compose')",Disabled:!v.sendAllowed() && v.ScheduleEdit==nil}}}},
+		RootClass:"oie-schedule-split",
+	})
+}
+
+templ scheduleFields(v view) {
+	@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-schedule-retry"),button.WithAttrs(templ.Attributes{"data-schedule-retry":"","hidden":true})){ {v.Text.Retry} }
+	<input type="hidden" name="scheduledAt"/>
+	<input type="hidden" name="attachmentIds"/>
+	if v.ScheduleEdit != nil {
+		<input type="hidden" name="messageId" value={v.ScheduleEdit.Id}/>
+		<input type="hidden" name="expectedRevisionId" value={v.ScheduleEdit.RevisionId}/>
+		<input type="hidden" name="replaceComposition" value="1"/>
+		@templ.JSONScript("schedule-edit-data",v.ScheduleEdit)
+		<div class="oie-schedule-edit-bar" role="status">
+			<span>{v.Text.ScheduleEditMode}</span>
+			@link.Link(v.scheduleExitHref(),link.WithAttrs(templ.Attributes{"data-cancel-schedule-edit":""})) { {v.Text.CancelEdit} }
+		</div>
+	}
+	<input type="file" data-attachment-picker multiple hidden disabled?={!v.messagingImplemented("file_upload")}/>
+	<div data-composer-attachments class="oie-composer-attachments" hidden></div>
+}
+
+templ scheduleDialog(v view) {
+	<dialog class="oie-schedule-dialog" data-schedule-dialog aria-labelledby="schedule-dialog-title"
+		data-create={v.Text.Schedule} data-update={v.Text.Reschedule} data-time-invalid={v.Text.ScheduleTimeInvalid} data-time-ambiguous={v.Text.ScheduleTimeAmbiguous}
+		data-attachment-failed={v.Text.AttachmentFailed} data-attachment-limit={v.Text.AttachmentLimit} data-remove-attachment={v.Text.RemoveAttachment}>
+		<form method="dialog" data-schedule-confirm>
+			<h2 id="schedule-dialog-title">{v.Text.Schedule}</h2>
+			<section class="oie-schedule-preview" aria-label={v.Text.ScheduleReview}>
+				@chatbubble.ChatBubble(chatbubble.Config{Side:chatbubble.Sent,RootClass:"oie-bubble",MessageContent:schedulePreviewBody()})
+			</section>
+			<label for="schedule-local-time">{v.Text.ScheduleWhen}</label>
+			<input type="datetime-local" id="schedule-local-time" required step="60"/>
+			<small data-schedule-zone></small>
+			<select aria-label={v.Text.ScheduleWhen} data-schedule-offset hidden></select>
+			<p data-schedule-error role="alert" hidden></p>
+			<footer>
+				@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-schedule-close":""})) { {v.Text.ScheduleBack} }
+				@button.Button(button.WithType("submit"),button.WithAttrs(templ.Attributes{"data-schedule-submit":""})) { {v.Text.Schedule} }
+			</footer>
+		</form>
+	</dialog>
+}
+
+templ schedulePreviewBody() {
+	<div class="oie-message-body oie-message-body-compact">
+		<blockquote data-schedule-quote hidden></blockquote>
+		<div data-schedule-preview-text></div>
+		<div data-schedule-preview-files class="oie-message-attachments"></div>
+		<div class="oie-message-stamp"><time data-schedule-preview-time></time></div>
+	</div>
+}
+
+templ outgoingAttachments(v view,m engineapi.Message) {
+	if m.Attachments != nil && len(*m.Attachments)>0 {
+		<div class="oie-message-attachments" data-message-attachments>
+			for _, a := range *m.Attachments {
+				@link.Link(v.stagedAttachmentHref(m.ConversationId,a.Id,true),link.WithAttrs(templ.Attributes{"download":a.FileName})) {
+					if rasterAttachment(a.MediaType) {
+						<img src={templ.URL(v.stagedAttachmentHref(m.ConversationId,a.Id,false))} alt={a.FileName} width="224" height="128" loading="lazy"/>
+					}
+					<span>{a.FileName}</span>
+				}
+			}
+		</div>
+	}
+}
+
+func scheduleDate(at *time.Time) string {
+	if at == nil {
+		return ""
+	}
+	return at.Format(time.RFC3339Nano)
+}
+
+func schedulePrimaryLabel(v view) string {
+	if v.ScheduleEdit != nil {
+		return v.Text.ScheduleSave
+	}
+	return v.Text.Send
+}
+
+func scheduleMenuLabel(v view) string {
+	if v.ScheduleEdit != nil {
+		return v.Text.Reschedule
+	}
+	return v.Text.Schedule
+}

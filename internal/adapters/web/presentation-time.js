@@ -42,7 +42,7 @@
   const clock = {hour: '2-digit', minute: '2-digit'};
   const dateAndTime = {dateStyle: 'medium', timeStyle: 'short'};
   const editTime = {year: 'numeric', month: 'short', day: 'numeric', ...clock, second: '2-digit'};
-  const fullDates = '[data-viewer-date],[data-capability-date],[data-details-date],[data-shared-source-date],[data-message-search-time]';
+  const fullDates = '[data-viewer-date],[data-capability-date],[data-details-date],[data-shared-source-date],[data-message-search-time],[data-scheduled-date]';
 
   function localize(root) {
     for (const node of root.querySelectorAll('time[datetime]:not([data-day])')) {
@@ -65,7 +65,7 @@
     refreshTimes();
   }
 
-  window.OieTime = {format, dateKey, localize};
+  window.OieTime = {format, dateKey, localize, timeZone: () => timeZone || systemTimeZone};
   window.addEventListener('focus', () => {
     const nextSystemTimeZone = deviceTimeZone();
     if (nextSystemTimeZone === systemTimeZone) return;

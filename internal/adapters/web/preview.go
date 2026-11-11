@@ -24,7 +24,7 @@ func (v *view) configureWorkspace(r *http.Request) {
 	v.ManagedAccount = q.Get("managedAccount")
 	v.Section = q.Get("section")
 	switch v.Section {
-	case "favorites", "archived", "media":
+	case "favorites", "archived", "media", "scheduled":
 	default:
 		v.Section = "chats"
 	}
@@ -54,6 +54,8 @@ func (v *view) configureWorkspace(r *http.Request) {
 	default:
 		v.SharedType = "media"
 	}
+	v.ScheduleCursor = q.Get("scheduleCursor")
+	v.ScheduleConversation = q.Get("scheduleConversation")
 	v.SharedCursor = q.Get("contentCursor")
 	v.SharedConversation = q.Get("contentConversation")
 	v.Query = q.Get("q")
@@ -103,6 +105,14 @@ func (v view) href(pairs ...string) string {
 			q.Set("contentConversation", v.SharedConversation)
 		}
 	}
+	if v.Section == "scheduled" {
+		if v.ScheduleConversation != "" {
+			q.Set("scheduleConversation", v.ScheduleConversation)
+		}
+		if v.ScheduleCursor != "" {
+			q.Set("scheduleCursor", v.ScheduleCursor)
+		}
+	}
 	if v.GlobalMessageSearch && !v.NativeMessageSearch {
 		q.Set("searchMode", "messages")
 		q.Set("searchQuery", v.MessageSearch.Query)
@@ -120,7 +130,7 @@ func (v view) href(pairs ...string) string {
 		}
 	}
 	for i := 0; i+1 < len(pairs); i += 2 {
-		if pairs[i] == "section" && pairs[i+1] == "media" {
+		if pairs[i] == "section" && (pairs[i+1] == "media" || pairs[i+1] == "scheduled") {
 			for _, key := range []string{"searchMode", "searchQuery", "searchAccount", "searchEngine", "includeEditHistory", "chatSearch", "chatQuery", "chatIncludeHistory"} {
 				q.Del(key)
 			}
@@ -129,6 +139,10 @@ func (v view) href(pairs ...string) string {
 			q.Del("contentType")
 			q.Del("contentCursor")
 			q.Del("contentConversation")
+		}
+		if pairs[i] == "section" && pairs[i+1] != "scheduled" {
+			q.Del("scheduleConversation")
+			q.Del("scheduleCursor")
 		}
 		if pairs[i] == "account" && pairs[i+1] != v.AccountFilter {
 			q.Del("contentCursor")

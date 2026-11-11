@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const {chromium} = require('playwright');
+const {schedulingFlow} = require('./scheduling-flow.cjs');
 
 (async () => {
   const base = process.env.OIE_LIVE_URL || 'http://127.0.0.1:18087';
@@ -466,6 +467,8 @@ const {chromium} = require('playwright');
     assert.deepEqual(a11y.violations.map(v => ({id: v.id, targets: v.nodes.map(n => n.target)})), [], 'live mobile accessibility');
     await bobPage.screenshot({path: 'artifacts/' + prefix + '-bob-mobile-pt.png', fullPage: true});
     evidence.workflows.push('Actual chat usable at390px in Brazilian Portuguese with no checked WCAG A/AA violations');
+    await schedulingFlow({base, api, until, alicePage, bobPage, alice, bob, aliceConversation, bobConversation});
+    evidence.workflows.push('Review a scheduled composition with attachment, filter schedules across destinations, edit with draft recovery, send immediately via XMPP and cancel');
     for(let index=evidence.consoleErrors.length-1;index>=0;index--){
       const url=consoleLocations[index],remaining=preferenceConflictURLs.get(url)||0;
       if(remaining>0&&evidence.consoleErrors[index]==='Failed to load resource: the server responded with a status of 409 (Conflict)'){
