@@ -42,6 +42,9 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 tooling_dir=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
 [ -f "$source_dir/go.mod" ] && [ -f "$source_dir/cmd/oie-desktop/main.go" ] || fail 'source does not contain the Oie desktop application'
 [ -f "$source_dir/LICENSE" ] && [ -f "$source_dir/THIRD_PARTY_NOTICES.md" ] || fail 'source licensing files are missing'
+for art_dir in internal/adapters/desktop/assets internal/adapters/web/brand; do
+  [ -s "$source_dir/$art_dir/Apache-2.0.txt" ] || fail "source artwork license is missing: $art_dir/Apache-2.0.txt"
+done
 
 source_mode=archive-attested
 build_vcs=false
@@ -157,12 +160,6 @@ find "$source_dir/internal/adapters/web" "$source_dir/internal/adapters/desktop/
       mkdir -p "$doc_dir/licenses/$(dirname "$relative")"
       copy_file "$file" "$doc_dir/licenses/$relative" ;;
   esac
-done
-# The artwork notice names this Apache text even when a source archive omits
-# the duplicate file. It is the same license as the project's root LICENSE.
-for art_dir in internal/adapters/desktop/assets internal/adapters/web/brand; do
-  art_license="$doc_dir/licenses/$art_dir/Apache-2.0.txt"
-  [ -f "$art_license" ] || copy_file "$source_dir/LICENSE" "$art_license"
 done
 go_root=$(cd "$source_dir" && go env GOROOT)
 go_license="$go_root/LICENSE"
