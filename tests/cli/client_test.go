@@ -23,9 +23,15 @@ import (
 	"github.com/google/uuid"
 )
 
-func conflictDiagnostic(code string) string {
-	return "HTTP 409 Conflict (" + code + ")\n" +
-		"Documentation: https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md#" + code
+func assertConflictProblem(t *testing.T, stderr, code, title string) {
+	t.Helper()
+	var problem engineapi.Problem
+	link := "https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md#" + code
+	if err := json.Unmarshal([]byte(stderr), &problem); err != nil || problem.Type != "urn:oie:problem:"+code ||
+		problem.Title != title || problem.Status != 409 || string(problem.Code) != code ||
+		problem.Documentation == nil || *problem.Documentation != link {
+		t.Fatalf("unexpected JSON diagnostic: %q", stderr)
+	}
 }
 
 func TestGeneratedCLIExercisesRealContract(t *testing.T) {
@@ -109,10 +115,11 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err = cmd.Run()
-	if !errors.As(err, &exit) || exit.ExitCode() != 4 || stdout.Len() != 0 ||
-		stderr.String() != conflictDiagnostic("idempotency_conflict")+"\n" {
+	if !errors.As(err, &exit) || exit.ExitCode() != 4 || stdout.Len() != 0 {
 		t.Fatalf("CLI idempotency conflict: %v stdout=%q stderr=%q", err, stdout.String(), stderr.String())
 	}
+	assertConflictProblem(t, stderr.String(), "idempotency_conflict", "Idempotency key conflict")
+	t.Logf("oiectl stderr:\n%s", stderr.String())
 	_, seq, err := store.Snapshot(t.Context())
 	if err != nil || seq != 1 {
 		t.Fatal("generated CLI retries created extra state")

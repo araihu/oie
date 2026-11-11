@@ -398,6 +398,12 @@ HTTP 409 Conflict (idempotency_conflict)
 Documentation: https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md#idempotency_conflict
 ```
 
+With `--output json`, an HTTP failure writes one Problem Details object to
+stderr and leaves stdout empty. The exit code is still 4. The diagnostic
+includes the HTTP status and validated problem metadata. If the API response
+has no recognized Problem Details, the object uses `about:blank` and the HTTP
+status title.
+
 See [the engine API policy](engine-api-policy.md) and
 [CLI verification](engine-api-cli-verification.md) for scope and fixture commands.
 

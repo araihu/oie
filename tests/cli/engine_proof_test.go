@@ -321,9 +321,8 @@ func TestCLIDataOnlyXMPP(t *testing.T) {
 	if replay := p.call(nil, body, args...); !bytes.Equal(original, replay) {
 		t.Fatal("replay changed acceptance")
 	}
-	if got := p.failure(4, proofJSON(map[string]string{"originalText": "changed"}), args...); got != conflictDiagnostic("idempotency_conflict") {
-		t.Fatalf("idempotency conflict diagnostic: %q", got)
-	}
+	assertConflictProblem(t, p.failure(4, proofJSON(map[string]string{"originalText": "changed"}), args...),
+		"idempotency_conflict", "Idempotency key conflict")
 	var wg sync.WaitGroup
 	for range 4 {
 		wg.Go(func() {
@@ -419,9 +418,8 @@ func TestCLIDataOnlyXMPP(t *testing.T) {
 	queueBody := proofJSON(map[string]string{"originalText": marker + " cancelled"})
 	p.call(&queued, queueBody, "messages", "send", "--conversation-id", chat.Id, "--idempotency-key", queueKey, "--body-stdin")
 	cancelArgs := []string{"messages", "outbox", "cancel", "--message-id", queued.Id, "--idempotency-key", proofID(), "--body-stdin"}
-	if got := p.failure(4, proofJSON(map[string]string{"expectedRevisionId": proofID()}), cancelArgs...); got != conflictDiagnostic("state_conflict") {
-		t.Fatalf("state conflict diagnostic: %q", got)
-	}
+	assertConflictProblem(t, p.failure(4, proofJSON(map[string]string{"expectedRevisionId": proofID()}), cancelArgs...),
+		"state_conflict", "State conflict")
 	cancelArgs[len(cancelArgs)-2] = proofID()
 	p.call(&queued, proofJSON(map[string]string{"expectedRevisionId": queued.RevisionId}), cancelArgs...)
 	if queued.SendState != "cancelled" {
