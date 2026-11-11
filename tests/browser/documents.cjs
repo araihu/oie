@@ -7,7 +7,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const text=await fs.readFile(path.join(__dirname,'fixtures/tiny-document.txt')),pdfBytes=await fs.readFile(path.join(__dirname,'fixtures/tiny-document.pdf'));
  const markdownBytes=Buffer.from('# Release notes\n\n**Fixed** a bug.\n\n- First change\n- Second change\n\n> A quoted note\n\n```go\nfmt.Println("Olá")\n```\n\n[Documentation](https://docs.example.test/)\n');
  const engine=id(1),account=id(2),other=id(3),chat=id(4),revision=id(5),good=id(20),pdf=id(21),bad=id(22),held=id(23),oversize=id(24),foreign=id(25),streams=new Set();
- const state={seq:0,failure:true,hold:false,foreignEngine:false,reads:[],peakReaders:0,activeReaders:0,busyReaders:0,pending:[],aborted:[],writes:0};
+ const state={seq:0,failure:true,hold:false,foreignEngine:false,rangeCases:true,reads:[],peakReaders:0,activeReaders:0,busyReaders:0,pending:[],aborted:[],writes:0};
  const unsupported=id(35),sparse=id(36),budget=id(37),burst=id(38);
  // Unused stream data can be skipped with sparse ranges. A long comment before
  // required page content needs more bytes and must stop at the preview budget.
@@ -38,7 +38,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(u.pathname===`/api/v1/conversations/${chat}/messages`)return send(200,{items:items.filter(item=>item.message.accountId===account).map(item=>item.message).reverse()});
   if(u.pathname.match(new RegExp('^/api/v1/conversations/'+chat+'/messages/[^/]+/context$')))return send(200,{targetId:items[0].message.id,items:[items[0].message],hasOlder:false,hasNewer:false});
   if(u.pathname==='/api/v1/shared-content'){
-   let selected=['documents','document'].includes(u.searchParams.get('type'))?[...items]:[];if(u.searchParams.get('accountId'))selected=selected.filter(item=>item.message.accountId===u.searchParams.get('accountId'));if(u.searchParams.get('conversationId'))selected=selected.filter(item=>item.message.conversationId===u.searchParams.get('conversationId'));const ids=u.searchParams.getAll('messageId');if(ids.length)selected=selected.filter(item=>ids.includes(item.message.id));if(u.searchParams.get('q'))selected=selected.filter(item=>item.fileName.includes(u.searchParams.get('q')));selected.sort((a,b)=>Date.parse(b.message.createdAt)-Date.parse(a.message.createdAt)||b.id.localeCompare(a.id));return send(200,{items:selected,indexing:{state:'complete',indexedMessages:items.length,totalMessages:items.length}});
+   const catalog=state.rangeCases?items:items.filter(item=>![sparse,budget,burst].includes(item.id));
+   let selected=['documents','document'].includes(u.searchParams.get('type'))?[...catalog]:[];if(u.searchParams.get('accountId'))selected=selected.filter(item=>item.message.accountId===u.searchParams.get('accountId'));if(u.searchParams.get('conversationId'))selected=selected.filter(item=>item.message.conversationId===u.searchParams.get('conversationId'));const ids=u.searchParams.getAll('messageId');if(ids.length)selected=selected.filter(item=>ids.includes(item.message.id));if(u.searchParams.get('q'))selected=selected.filter(item=>item.fileName.includes(u.searchParams.get('q')));selected.sort((a,b)=>Date.parse(b.message.createdAt)-Date.parse(a.message.createdAt)||b.id.localeCompare(a.id));return send(200,{items:selected,indexing:{state:'complete',indexedMessages:catalog.length,totalMessages:catalog.length}});
   }
   const match=u.pathname.match(/^\/api\/v1\/shared-content\/([^/]+)\/content$/);
   if(match){assert.equal(u.search,'');const file=definitions.find(file=>file.id===match[1]);if(!file)return send(404,{status:404});state.reads.push({id:file.id,range:req.headers.range||''});
@@ -67,6 +68,9 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const pdfReady=async()=>{await card(page,pdf).scrollIntoViewIfNeeded();await until(async()=>await card(page,pdf).getAttribute('data-document-preview-state')==='ready','PDF card ready')};
   const cacheEntries=()=>page.evaluate(()=>new Promise((resolve,reject)=>{const request=indexedDB.open('oie.pdf-previews.v1',1);request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,tx=db.transaction('thumbnails','readonly'),get=tx.objectStore('thumbnails').getAll();get.onsuccess=()=>resolve(get.result.map(e=>({key:e.key,bytes:e.bytes,createdAt:e.createdAt,usedAt:e.usedAt})));tx.oncomplete=()=>db.close()}}));
   await pdfReady();await until(async()=>await card(page,pdf).getAttribute('data-document-preview-stored')==='true','persistent PDF thumbnail committed');const cachedRanges=pdfRanges();
+  // The range cases have finished. Repeated reloads below exercise the small
+  // cached PDF without also re-reading multi-megabyte synthetic fixtures.
+  state.rangeCases=false;
   await tab(page,'media');await tab(page,'documents');await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'hit');assert((await page.evaluate(()=>OieCache.stats())).entries>=1);assert.equal(pdfRanges(),cachedRanges,'fragment navigation must reuse the generated PNG without PDF reads');
   await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'hit');assert.equal(pdfRanges(),cachedRanges,'a reload must reuse IndexedDB without PDF range reads');
   const pdfItem=items.find(item=>item.id===pdf),previousRevision=pdfItem.revisionId;pdfItem.revisionId=id(777);await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>cachedRanges,'a new catalog revision must generate a new thumbnail');pdfItem.revisionId=previousRevision;
