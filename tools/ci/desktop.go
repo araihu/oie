@@ -23,6 +23,7 @@ func (r runner) desktop(ctx context.Context, source *dagger.Directory) error {
 		WithMountedCache("/go/pkg/mod", r.client.CacheVolume("oie-ci-go-mod-v1")).
 		WithMountedCache("/root/.cache/go-build", r.client.CacheVolume("oie-ci-desktop-go-build-amd64-v1")).
 		WithMountedCache("/root/.cache/golangci-lint", r.client.CacheVolume("oie-ci-desktop-lint-amd64-v1")).
+		WithFile("/usr/local/bin/golangci-lint", r.golangciLint("amd64"), dagger.ContainerWithFileOpts{Permissions: 0o755}).
 		WithEnvVariable("GOMAXPROCS", "4").WithEnvVariable("GOWORK", "off").
 		WithEnvVariable("GOFLAGS", "").WithEnvVariable("CGO_ENABLED", "1")
 	base, err := r.stage(ctx, "desktop-setup-amd64", base)
@@ -31,7 +32,7 @@ func (r runner) desktop(ctx context.Context, source *dagger.Directory) error {
 	}
 	built := base.WithDirectory("/src", source).WithWorkdir("/src").
 		WithExec([]string{"make", "build-desktop"}).
-		WithExec([]string{"go", "tool", "-modfile=tools/go.mod", "golangci-lint", "run", "--build-tags=production", "./internal/adapters/desktop/...", "./cmd/oie-desktop/..."}).
+		WithExec([]string{"golangci-lint", "run", "--build-tags=production", "./internal/adapters/desktop/...", "./cmd/oie-desktop/..."}).
 		WithExec([]string{"go", "vet", "-tags=production", "./internal/adapters/desktop", "./cmd/oie-desktop"}).
 		WithExec([]string{"go", "test", "-race", "./internal/adapters/desktop", "./internal/apphost"})
 	built, err = r.stage(ctx, "desktop-build-amd64", built)
@@ -39,6 +40,8 @@ func (r runner) desktop(ctx context.Context, source *dagger.Directory) error {
 		return err
 	}
 	checked := built.WithEnvVariable("LIBGL_ALWAYS_SOFTWARE", "1").
+		// A WebKit helper can still write Mesa's disk cache as the smoke removes its profile.
+		WithEnvVariable("MESA_SHADER_CACHE_DISABLE", "true").
 		WithEnvVariable("GDK_BACKEND", "x11").
 		// Test containers cannot provide WebKit's normal user-namespace sandbox.
 		// This override never enters the installed application's environment.
