@@ -308,6 +308,12 @@ type Revision struct {
 	CreatedAt string
 }
 
+type RoomArchive struct {
+	ConversationID string
+	Mode           string
+	Progress       string
+}
+
 type RoomIntent struct {
 	ConversationID         string
 	AccountID              string

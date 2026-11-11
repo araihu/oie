@@ -13,8 +13,9 @@ var previewLandscape []byte
 
 func (v *view) configureWorkspace(r *http.Request) {
 	q := r.URL.Query()
-	v.ChatOpen = q.Get("chat") != ""
 	v.ChatID = q.Get("chat")
+	v.InboxOnly = q.Get("inbox") == "1"
+	v.ChatOpen = v.ChatID != "" && !v.InboxOnly
 	v.FocusMessage = q.Get("message")
 	v.TimelineCursor = q.Get("timelineCursor")
 	v.TimelineDirection = q.Get("timelineDirection")
@@ -74,7 +75,10 @@ func (v view) href(pairs ...string) string {
 	if v.Query != "" {
 		q.Set("q", v.Query)
 	}
-	if v.ChatOpen && v.ChatID != "" {
+	if v.InboxOnly {
+		q.Set("inbox", "1")
+	}
+	if (v.ChatOpen || v.InboxOnly) && v.ChatID != "" {
 		q.Set("chat", v.ChatID)
 		if v.FocusMessage != "" {
 			q.Set("message", v.FocusMessage)
@@ -138,6 +142,9 @@ func (v view) href(pairs ...string) string {
 			}
 			q.Del("message")
 		}
+		if pairs[i] == "chat" {
+			q.Del("inbox")
+		}
 		if pairs[i+1] == "" {
 			q.Del(pairs[i])
 		} else {
@@ -148,6 +155,15 @@ func (v view) href(pairs ...string) string {
 		return "/"
 	}
 	return "/?" + q.Encode()
+}
+
+func (v view) filterHref(filter string) string {
+	inbox := ""
+	if !v.ChatOpen {
+		inbox = "1"
+	}
+	return v.href("filter", filter, "chat", v.ChatID, "inbox", inbox, "message", v.FocusMessage,
+		"timelineCursor", v.TimelineCursor, "timelineDirection", v.TimelineDirection, "lang", v.Locale, "theme", v.Theme)
 }
 func initials(name string) string {
 	parts := strings.Fields(name)

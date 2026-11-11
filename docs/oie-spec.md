@@ -21,7 +21,7 @@ The status labels have distinct meanings:
 
 Sections 2–13 describe **AGREED** behavior unless a paragraph carries a recommendation or open-decision label. Section 14 contains recommendations, not additional accepted scope. Acceptance scenarios distinguish agreed outcomes from proposed engineering details.
 
-The broader alpha target includes local standalone operation, hosted-engine operation, optional app/history sync, multi-account XMPP, reliable immediate and scheduled sends, retained searchable history, rooms, attachments, responsive web UI, PWA/offline behavior, and manual merge restore. The first release, v0.0.1, freezes the currently implemented functional scope and adds standalone desktop packaging as agreed in section 2.1.1. This does not claim that every broader alpha requirement is already implemented.
+The broader alpha target includes local standalone operation, hosted-engine operation, optional app/history sync, multi-account XMPP, reliable immediate and scheduled sends, retained searchable history, rooms, attachments, responsive web UI, PWA/offline behavior, and manual merge restore. The current source prerelease is v0.0.1-rc.0, with the implemented functional scope and ongoing standalone desktop packaging agreed in section 2.1.1. The first alpha, v0.0.1, additionally requires the initial-history usability improvement tracked as B25. This does not claim that every broader alpha requirement is already implemented.
 
 Alpha is single-user: one Oiê owner per instance. Multiple accounts and devices remain supported. Built-in application authentication, multi-user hosting, XMPP E2EE, calls, and other deferred features are listed in section 16. Protocol account credentials are still needed to connect existing XMPP accounts; this does not reopen the deferred application-login design.
 
@@ -47,13 +47,16 @@ Ordinary engine restart/reconnect resumes eligible pending sends automatically. 
 
 **OPEN O01:** Exact commands, configuration, role combinations, process supervision, and data-directory layout. **RECOMMENDED R01:** a modular monolith with explicit role configuration.
 
-### 2.1.1 First desktop alpha distribution · 2026-11-10
+### 2.1.1 First desktop release candidate and alpha distribution · 2026-11-10
 
-**AGREED:** v0.0.1 is the first alpha. Freeze the functional scope at the usable
-application integrated into main at `741e794`; desktop packaging and corrections
-needed for that packaging may follow before the release. The larger specification
+**AGREED:** the current source prerelease is **v0.0.1-rc.0**. The current
+functional baseline and desktop packaging work continue. The first alpha remains
+**v0.0.1** and must include B25, usable room history during initial recovery.
+The existing recovery experience is accepted for rc.0. This explicitly extends
+the earlier functional freeze at `741e794` for the alpha; it does not require
+implementing B25 during the current packaging work. The larger specification
 remains the product direction, not a claim that sync, schedules, outgoing media,
-PWA/offline queues or every other planned feature ships in this release.
+PWA/offline queues or every other planned feature ships in these versions.
 
 **AGREED:** use Wails as the native window host, retaining the Go engine, local
 SQLite/media storage, Goshtoso/templ BFF and HTMX interface. Initial validated
@@ -65,9 +68,7 @@ explicit Quit stops it.
 **AGREED:** initially distribute through both source installation with
 `go install` and one macOS/Linux shell installer. The installer downloads the
 matching prebuilt artifact from `araihu/oie` GitHub Releases after detecting OS
-and architecture. Package-manager distribution is deferred as B22. These are
-requirements under discussion, not implemented installation commands or a
-published v0.0.1 tag.
+and architecture. Package-manager distribution is deferred as B22.
 
 **RECOMMENDED:** pin Wails v3.1.0, the latest stable release verified on
 2026-11-10, consistently in app dependencies and the tools module. The Wails CLI
@@ -75,6 +76,17 @@ belongs in the tools module. Keep generated frontend assets available in source
 so `go install` does not depend on an implicit generation step. Source builds
 still require the native platform toolchain and libraries; `go install` does not
 produce a macOS application bundle by itself.
+
+**IMPLEMENTED:** `cmd/oie-desktop` uses Wails v3.1.0 with the existing embedded
+engine and HTMX BFF. The stable native origin preserves drafts across launches;
+the host adapts cookies, native file saving, external links, close-to-hide and
+explicit Quit. The browser/server command remains available. Build and scope
+details are in [desktop integration](desktop.md). The source tag v0.0.1-rc.0
+records this behavior; B25 is not implemented by that tag. The subsequent
+packaging increment publishes rc.0 archives and a per-user shell installer for
+macOS Apple Silicon and Ubuntu Linux x86_64. The original tag remains fixed;
+packaging-tooling provenance and validation scope are recorded separately in
+the release receipt. The v0.0.1 alpha has not been published.
 
 **AGREED:** default to installation for the current OS user. On Ubuntu, check
 for missing runtime dependencies and show the required installation commands;
@@ -99,13 +111,23 @@ should not silently remove quarantine attributes or disable Gatekeeper.
 
 **RECOMMENDED:** publish simple archives, with a macOS `.app` bundle and a Linux
 executable plus desktop resources. Verify release checksums and support selecting
-a pinned release. Exact archive layout and installer flags remain to be defined.
+a pinned release.
 
-**OPEN:** the minimum Ubuntu/macOS versions, exact installation paths and launch
-behavior, uninstall behavior and packaging CI/test coverage. The
+**IMPLEMENTED:** rc.0 uses a macOS `Oie.app` archive and a Linux `bin`/`share`
+archive. `install.sh --version VERSION --prefix DIR` verifies SHA-256 before
+installation. Defaults are `~/Applications/Oie.app` on macOS and `~/.local` on
+Linux. Updates preserve the separate data directory. The installer checks
+runtime dependencies without installing them and rejects unsafe archive paths.
+Native package checks cover installation, launch, engine initialization and
+reinstallation with retained data. See [installation](installation.md) for the
+exact assets, dependencies, removal procedure and tested environments.
+
+**OPEN:** the minimum Ubuntu/macOS versions beyond the tested environments. The
 available development environment reports Ubuntu 26.04; this does not establish
-the supported minimum version. Direct WebView routing and SSE/media compatibility
-still need a desktop proof before choosing the final local transport.
+the supported minimum version. Native routing, CSRF, SSE and partial media reads
+have desktop smoke coverage. Separate custom profiles on macOS still share
+Wails' default native website store; engine-specific drafts/cache do not establish
+complete native storage isolation.
 
 Reference evidence: [Wails v3.1.0 release](https://github.com/wailsapp/wails/releases/tag/v3.1.0),
 [native prerequisites](https://v3.wails.io/getting-started/installation/),
@@ -181,7 +203,7 @@ Older messages without such evidence remain undisclosed until verified archive
 re-observation; opening a profile does not force archive recovery. Published
 full names are optional and are not verified legal identities.
 
-Use a profile control at the bottom of the navigation for account switching, following the supplied X account-switcher reference. Its popover lists account names/addresses, marks the active account, shows available unread counts, and offers adding an existing account and managing connections. Account connection status appears on the avatar with a localized tooltip and accessible label, and updates without closing the switcher. Retain an All accounts inbox option. Switching the inbox account does not disconnect other protocol sessions, transfer drafts, or change pending-send ownership. Oiê uses Disconnect for an XMPP session; built-in application login/logout remains backlogged. Account management starts with a compact account list and opens only one account’s connection details at a time. The account detail avatar also carries connection status, replacing a separate status panel. Connected or connecting accounts offer Disconnect without the connection form; disconnected accounts and failed connections offer the connection form. Live refreshes update these actions while preserving unfinished connection fields when the state stays the same. Adding an existing account is a separate screen; server/port overrides live under advanced connection settings. In the account-list drawer, Add account remains at the bottom while the account list scrolls independently above it.
+Use a profile control at the bottom of the navigation for account switching, following the supplied X account-switcher reference. Its popover lists account names/addresses, marks the active account, shows available unread counts, and offers adding an existing account and managing connections. Account connection status appears on the avatar with a localized tooltip and accessible label, and updates without closing the switcher. Retain an All accounts inbox option. Switching the inbox account does not disconnect other protocol sessions, transfer drafts, or change pending-send ownership. Oiê uses Disconnect for an XMPP session; built-in application login/logout remains backlogged. Account management starts with a compact account list and opens only one account’s connection details at a time. The account detail avatar also carries connection status, replacing a separate status panel. Connected or connecting accounts offer Disconnect without the connection form; disconnected accounts and failed connections offer the connection form. Live refreshes update these actions while preserving unfinished connection fields when the state stays the same. Adding an existing account is a separate screen; server/port overrides live under advanced connection settings. In the account-list drawer, Add account remains at the bottom while the account list scrolls independently above it. On the account detail screen, Disconnect stays in the footer while the details scroll.
 
 An Oiê contact can group multiple protocol identities. Link identity and Unlink identity are manual, reversible operations. Each account/protocol conversation retains its own timeline; linking does not merge histories or retarget pending sends.
 
@@ -208,7 +230,7 @@ Support, subject to protocol support and permissions:
 - A room-details panel with name, topic, and the available participant list.
 - Name/topic editing where permitted.
 
-**BACKLOG B24:** open XMPP room invitation links from messages.
+**BACKLOG B33:** open XMPP room invitation links from messages.
 
 Do not imply that an available participant list is a complete persistent membership roster. Conversation details show available room metadata, visible occupants and connection/presence observations with their scope. The owning account connection is separate from room-session and participant presence. Missing observations remain unknown. Reading details does not automatically join a room or request presence subscriptions.
 
@@ -350,13 +372,47 @@ Needed public Margo API additions are authorized, provided existing behavior is 
 
 ## 7. History, search, and shared links
 
-Persist history independently of protocol-server retention. Automatically backfill **all available authorized history**, serially and without overwhelming the provider. Serve retained history without downloading the full archive again whenever a conversation opens.
+Persist history independently of protocol-server retention. By default,
+gradually backfill **all available authorized history** with paced, serial
+requests per server. Allow on-demand recovery per room. Both modes load the
+initial history target and retain new messages and retrieved pages. For XMPP,
+key the queue by the normalized domain of the archive address. Rooms on the
+same domain share its limits across accounts. Different domains can recover
+history in parallel. Serve retained history when reopening a conversation.
 
 Keep retrieved history until explicit user deletion, even after the provider expires it. Optional Oiê history sync also transfers records no longer available from the provider. Oiê cannot retrieve history that neither the provider nor a participating Oiê store still possesses.
 
 **RECOMMENDED R08:** a bounded, paced backfill queue with checkpoints, resumable pages, backoff, foreground/live-message priority, and explicit partial-history status. Scope serialization and limits deliberately rather than launching one unbounded worker per room.
 
+**AGREED RELEASE REQUIREMENT:** B25 is required before alpha v0.0.1, while
+rc.0 may retain the current initial-recovery behavior. Initial room recovery
+must let the user interact while older authorized history continues in the
+background. **AGREED INITIAL TARGET:** prioritize the last 48 hours for each
+room. Fix the window when recovery starts for that room, persist both bounds
+in UTC and reuse them when resuming. If that interval contains fewer than 128
+messages, include immediately preceding messages until reaching 128 or
+exhausting the available authorized archive. Start with the newest page of the
+open room when it needs recovery, then alternate pages among rooms on each
+server with preference for the open room. Show each page as it is stored. Fetch
+older history gradually in the default mode or as needed for navigation and
+search in on-demand mode. Advance the cursor after storing the entire page.
+If the cursor expires, resume from the inclusive timestamp at the last
+confirmed page boundary within the original window and deduplicate reread
+messages. Record page limits and turn frequency in
+[the initial-history discussion](history-bootstrap-discussion.md).
+
 Search across accounts/sources in the selected engine and within a direct/group conversation. Alpha indexes message text, captions, filenames, URLs, page titles/descriptions, and available media metadata. Document-body extraction, image OCR, and audio transcription are backlogged.
+
+**AGREED:** room text search queries SQLite and the room archive in parallel
+when remote text search is supported. Show local results as they become
+available and add authorized remote matches as they arrive. Dispatch remote
+search after a short typing pause and keep only the latest term queued for
+each active room search. Apply responses to the matching search. Retain those
+messages with canonical deduplication and track contiguous history coverage
+separately. After the current query finishes, give search and scroll requests
+the next available turn on that server. Space automatic backfill pages at
+least one second apart per server. Search and scroll requests can use that
+interval.
 
 **AGREED:** use the existing conversation-list search field as one unified global
 search. Remove the separate message-search navigation item and heading action.
@@ -501,7 +557,7 @@ Separate devices notify independently even if another device is active. Activity
 
 Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screenshots. On wide screens, use navigation, a searchable/filterable conversation list, and the active conversation workspace. Include account identity, message bubbles, composer, media/link cards, room/contact details, and settings.
 
-**AGREED:** general app settings have one entry in the main navigation footer beside the account switcher. On mobile, use that same footer inside the navigation menu. Do not repeat general settings in the conversation-list footer, chat actions, or Media and Links header. Account connection management remains available through the account switcher. The desktop navigation has no logo header. General settings include an About drawer with the Oiê logo, license, and third-party attributions.
+**AGREED:** general app settings have one entry in the main navigation footer beside the account switcher. On mobile, use that same footer inside the navigation menu. Do not repeat general settings in the conversation-list footer, chat actions, or Media and Links header. Account connection management remains available through the account switcher. The desktop navigation has no logo header. The settings drawer keeps About in its footer. About shows the Oiê logo, license, and third-party attributions.
 
 **AGREED:** the default conversation wallpaper uses subtle outline doodles of a hammer, sickle, GNU mascot, Brazil outline, Christ the Redeemer, football, mobile phone, paper plane, speech balloon, stars and Go gopher. Keep the repeating artwork readable in light and dark themes without competing with message content.
 
@@ -511,7 +567,7 @@ Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screen
 
 **AGREED:** show a reaction shortcut beside the message bubble on hover and keyboard focus, on the right of received messages and the left of sent messages. Existing reactions use a compact capsule slightly overlapping the bubble's bottom border. Opening its summary and filtering by emoji are read-only actions. Clicking the capsule lists verified actors with name, cached avatar or initials and their emoji set. Emoji filters narrow that list. Own emoji actions remove only the current account's reaction. Show participant identities only when the API provides authoritative identity data. On touch devices, double-tapping a message opens the reaction selector; holding opens the existing message actions. Scrolling, canceled touches and navigation must cancel pending gestures without affecting the composer or sending a reaction. Preserve native links and playback controls. See [reaction interactions](reaction-interactions.md).
 
-**AGREED:** ordinary in-app navigation and filtering should use HTMX fragment swaps rather than full-document reloads. Selecting a conversation within the same inbox replaces only the conversation region, preserving the navigation and conversation-list DOM, unfinished search input and list scroll. Preserve addressable URLs, browser Back/Forward, account/conversation isolation, drafts and meaningful focus/scroll. Keep native links/forms as a fallback. Dispose obsolete listeners, timers and live subscriptions when a fragment replaces their owning screen; stale responses must not overwrite a newer screen or repeat a mutation. Keep the inbox free of history status banners and visible navigation progress text. Use a dismissible notification when a view fails to open.
+**AGREED:** ordinary in-app navigation and filtering should use HTMX fragment swaps rather than full-document reloads. Changing an inbox filter updates only the filter controls and conversation list. Keep the open conversation, timeline position and draft even when the filtered list excludes that conversation. Selecting a different conversation within the same inbox replaces only the conversation region, preserving the navigation and conversation-list DOM, unfinished search input and list scroll. Show a conversation-shaped skeleton while a different conversation is loading. Skip the skeleton when the fragment arrives quickly and keep it static when reduced motion is enabled. Preserve addressable URLs, browser Back/Forward, account/conversation isolation, drafts and meaningful focus/scroll. Keep native links/forms as a fallback. Dispose obsolete listeners, timers and live subscriptions when a fragment replaces their owning screen; stale responses must not overwrite a newer screen or repeat a mutation. Keep the inbox free of history status banners and visible navigation progress text. Use a dismissible notification when a view fails to open.
 
 Alpha is responsive: on phones, show one primary panel at a time with access to the other views. The screenshots do not require native window controls or add stories, calls, AI, communities, or recording features.
 
@@ -603,6 +659,20 @@ Do not mutate a process-global locale for a hosted engine's devices. Full-page r
 
 Use UTC internally for timestamps and scheduling. Convert local input into an instant at the presentation boundary and format that instant locally. DST input ambiguity and exact wire precision are **OPEN O14**.
 
+### 11.6 Delete all Oiê data
+
+**AGREED:** Settings offers an installation-wide reset on engines that support
+it. The reset button uses the filled red danger style. The user must type the
+exact word `delete` to confirm. Delete the engine's accounts and credentials,
+retained history and indexes, queued operations, and managed media. Start an
+empty engine with a new identity so requests from the old installation cannot
+repeat the reset. Clear Oiê's settings, drafts and preview cache in the browser
+that initiated the reset. Show progress in the confirmation dialog. After
+success, return to the empty home screen and show a confirmation toast. Other
+browser profiles, exported files and protocol-server data are outside the
+operation. When an installation uses a shared hosted engine, this deletes the
+data held by that engine for all its clients.
+
 ## 12. Backup and merge restore
 
 Include manual engine-data backup and restore, with media files optionally included. Restore **merges into existing data** using stable entity/revision UUIDv7 IDs. Fresh-directory-only restore with merging deferred was explicitly rejected.
@@ -644,7 +714,7 @@ Everything in this section is **RECOMMENDED**, rather than a previously accepted
 | **R05** | Store logical entities and immutable revision payloads separately from mutable projections. Track parent links and per-field changes; derive current message heads. Use provider-scoped identity mappings and canonical aliases to converge independently observed copies. Do not derive causality from UUID order. |
 | **R06** | Separate replicated send visibility from executing ownership. Persist attempt/evidence state and reconcile uncertain acceptance before retransmission. Use a due/retry queue that does not let future schedules block eligible sends. On restore, import stale executable intents as review-required recovery records; preserve newer terminal evidence. |
 | **R07** | Add a public Margo chat profile and semantic projection for text/spans/blocks. Reuse its current parser and existing templ composition. Treat unsupported document constructs readably; keep raw HTML, frontmatter consumption, document runtime features, and Markdown image fetching from bypassing chat/media policy. |
-| **R08** | Use SQLite FTS5 and rebuildable projections. Start with one in-flight background history page per engine, paced across its accounts, with a fair queue, live/foreground priority, backoff, opaque scoped cursors, and checkpointed coverage/gaps. Keep provider archive cursors, read positions, and UI SSE cursors distinct. |
+| **R08** | Use SQLite FTS5 and rebuildable projections. Start with one in-flight archive request per server, paced across accounts using that server, with a fair queue, live/foreground priority, backoff, opaque scoped cursors, and checkpointed coverage/gaps. Keep provider archive cursors, read positions, and UI SSE cursors distinct. |
 | **R09** | Use IndexedDB for durable device records and pending submissions, plus versioned Cache Storage/BFF snapshots for offline presentation. Scope cache identity by selected engine, device, locale, and schema. Coordinate tab ownership and stale controls; local persistence failure must keep the draft and report failure rather than claim queued success. Exact browser rendering/storage fit needs a prototype. |
 | **R10** | Stream attachment bytes into durable staging, hash incrementally, compare supported expected digests, and finalize only when complete. Store algorithm/provenance/outcome, using SHA-256 for a computed-only baseline. Keep binary data separate from SQLite; retain shared-reference accounting. Use a bounded cached preview resolver with URL/redirect/content-size controls, without blocking message acceptance or history backfill. |
 | **R11** | Share a type-specific merge implementation between sync and backup import. Replicate missing revisions/records incrementally, process known scoped tombstones, and rebuild indexes. Keep per-device exclusions separate from shared content deletion. Use monotonic read progress plus an independently versioned manual-unread reminder rather than regressing receipt evidence. |
@@ -710,10 +780,15 @@ These are design tasks, not another mandatory interview checklist. They should b
 
 Manual link stars/export, separate threads, automatic protocol relaying, multi-engine UI aggregation, recurring schedules, and native mobile packaging have **not been selected**. Do not silently implement them as either confirmed alpha scope or explicitly approved backlog.
 
-## 16. Explicit backlog and later runtime options
+## 16. Backlog and later runtime options
 
-| ID | Deferred item |
+**First priority: B25.** Discuss and implement it after the current rc.0
+packaging work and before alpha v0.0.1. Unlike the other deferred items below,
+B25 is an alpha release requirement. IDs remain stable and do not imply order.
+
+| ID | Item |
 | --- | --- |
+| **B25** | Usable initial room-history recovery, required for alpha v0.0.1. Prioritize the last 48 hours per room, supplementing with immediately preceding messages until reaching 128 when needed and available. Start with the open room and alternate pages among rooms, making each page available as it is stored. Offer gradual background recovery by default and an on-demand mode per room. Room search combines SQLite and supported server search. Remaining decisions are tracked in [initial-history recovery](history-bootstrap-discussion.md). |
 | **B01** | Blocking/unblocking protocol identities. |
 | **B02** | Activity-based notification routing/suppression across devices. |
 | **B03** | Automatic idle/away detection and activity aggregation. |
@@ -737,15 +812,16 @@ Manual link stars/export, separate threads, automatic protocol relaying, multi-e
 | **B21** | Returning to Conversations from another navigation section restores the previously selected conversation in the same engine/account context, if it still exists and is accessible. |
 | **B22** | Package-manager distribution: Homebrew, MacPorts, APT packages/repositories and other popular Linux distribution package managers. Start with `go install` and the cross-platform GitHub Release installer; concrete additional managers and package formats remain to be selected. |
 | **B23** | Automatic in-app updates. The first alpha updates manually through the same release installer, or through `go install` for source installations, while preserving user data. |
-| **B24** | Recognize room invitation links such as `xmpp:room@example.org?join` in messages. Open the room-entry flow with the destination prefilled so the user can review the room, select the XMPP account, and confirm entry. |
+| **B24** | Native desktop icon variants, generated by `araihu/assets`: a macOS Dock/application icon with a platform-appropriate background, shape and optical margins, high-resolution and smaller exports, and a separate monochrome menu-bar icon. Retain the approved flat mascot and palette. Include the Finder icon when packaging the macOS `.app`. Background color and final composition remain recommendations to review. |
+| **B33** | Recognize room invitation links such as `xmpp:room@example.org?join` in messages. Open the room-entry flow with the destination prefilled so the user can review the room, select the XMPP account, and confirm entry. |
 
-A separate native daemon is an accepted future option. Wails desktop packaging is now selected for v0.0.1 under section 2.1.1. Matrix, IRC, and Nostr remain likely future protocol candidates; desktop packaging does not select a separate daemon or implement those protocols.
+A separate native daemon is an accepted future option. Wails desktop packaging is selected for the v0.0.1-rc.0/alpha sequence under section 2.1.1. Matrix, IRC, and Nostr remain likely future protocol candidates; desktop packaging does not select a separate daemon or implement those protocols.
 
 ### 16.1 Post-alpha priorities from the Gajim comparison
 
 | ID | Deferred item, in priority order |
 | --- | --- |
-| **B25** | Message search by sender, date range, and content type. Start with sender and date range in the current conversation. See O08 for search filter design. |
+| **B32** | Message search by sender, date range, and content type. Start with sender and date range in the current conversation. See O08 for search filter design. |
 | **B26** | A per-account **Note to self** shortcut for sending text and links to the account's own address. Verify that messages appear in both Oiê and Gajim when using the same XMPP account. |
 | **B27** | Activity for incoming mentions and reactions to the user's messages. Start by highlighting incoming mentions in rooms and marking the corresponding conversations. Then explore a reaction activity view that opens the source message and follows the existing active-conversation, mute, and Do Not Disturb policies. |
 | **B28** | Select multiple messages and export an individual conversation as a readable file. Start with copying selected messages. Bulk deletion depends on the deletion scopes and recovery behavior in section 9.1 and O10. |
@@ -782,7 +858,7 @@ These scenarios validate **AGREED** behavior; proposed mechanisms such as a part
 | Scheduling | Do not send before the UTC instant. A timezone display change does not move it. A missed schedule sends on next owning-engine availability unless cancelled. Backup-recovered schedules remain paused. |
 | Offline Send | Offline explicit Send persists a pending submission and later submits automatically. A saved draft does not. Lost acceptance responses do not create a second logical send; storage failure does not claim success or discard the draft. |
 | Ownership | Synced pending items are visible without another engine dispatching them. Alpha remote changes require owning-engine confirmation. Copying history or changing the selected engine does not silently take over sends. |
-| History | Import all available authorized history serially, resume after interruption, and retain it beyond provider expiry. Reopening a conversation does not trigger a complete redownload. Do not manufacture unavailable history. |
+| History | Gradually import available authorized history by default and fetch older pages as needed in on-demand rooms. Resume after interruption and retain imported messages beyond provider expiry. Reopening a conversation uses retained messages. |
 | Search | Global/per-conversation metadata search returns source context. Latest versions are default; historical/retracted matches require their independent filters. Offline results clearly cover only cached data. |
 | Retraction | Supported own retraction uses its separate action. Stored retracted originals display a placeholder/Reveal original and remain outside ordinary search/library views. No guarantee of erasing another client's copy is shown. |
 | Deletion | Device-local deletion leaves other device copies intact, including with a shared hosted engine. All-copy deletion propagates on sync. All revisions/derived entries disappear within scope, including under both Include filters; known deletion markers prevent revival. |

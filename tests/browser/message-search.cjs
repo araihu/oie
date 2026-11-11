@@ -32,6 +32,15 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   corpus[1].sendState = 'cancelled'; corpus[1].isOwn = true;
   corpus[2].conversationId=chat.id;corpus[2].originalText += ' Café 😀 <img src=x onerror="window.searchInjection=true">';
   const fillers = Array.from({length:465}, (_, n) => ({...corpus[0],id:id(4000+n),revisionId:id(5000+n),originalText:'Unrelated recent message '+n,createdAt:new Date(Date.UTC(2026,10,9,14,n)).toISOString()}));
+  const archiveRoom={...chat,id:id(13),title:'Archive fixture room',address:'room@archive.fixture',kind:'room'};
+  const savedMatch={...corpus[0],id:id(6010),revisionId:id(6110),conversationId:archiveRoom.id,originalText:'Archive keyword in saved history'};
+  const remoteMatch={...savedMatch,id:id(6011),revisionId:id(6111),originalText:'Archive keyword in server history',createdAt:'2026-11-02T12:00:00Z'};
+  const olderRoomMessage={...remoteMatch,id:id(6012),revisionId:id(6112),originalText:'Older room message',createdAt:'2026-11-01T12:00:00Z'};
+  const archive={conversationId:archiveRoom.id,mode:'on_demand',availability:'supported',textSearch:'supported',initialComplete:true,olderComplete:false};
+  const archiveRequests=[];
+  let releaseSearch, finishArchiveMode;
+  const archiveModes=[];
+  corpus.push(savedMatch);
   const all = [...corpus,...fillers];
   const chronological = c => all.filter(m => m.conversationId===c.id).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
   const fold = value => value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
@@ -39,6 +48,32 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     const u = new URL(req.url,'http://fixture');
     res.setHeader('Content-Type','application/json');
     const send = (status, body) => {res.statusCode=status;res.end(JSON.stringify(body))};
+    if (u.pathname==='/api/v1/conversations/'+archiveRoom.id+'/archive' && req.method==='PUT') {
+      let raw='';
+      for await (const chunk of req) raw+=chunk;
+      const {mode}=JSON.parse(raw);
+      archiveModes.push(mode);
+      const accepted=await new Promise(resolve=>finishArchiveMode=resolve);
+      if(!accepted)return send(503,{code:'unavailable'});
+      archive.mode=mode;
+      return send(200,archive);
+    }
+    if (u.pathname==='/api/v1/conversations/'+archiveRoom.id+'/archive/requests' && req.method==='POST') {
+      let raw='';
+      for await (const chunk of req) raw+=chunk;
+      const request=JSON.parse(raw);
+      archiveRequests.push(request);
+      if(request.action==='older'){
+        await new Promise(resolve=>setTimeout(resolve,300));
+        if(!all.includes(olderRoomMessage))all.push(olderRoomMessage);
+        return send(200,{archive:{...archive,olderComplete:true},outcome:'stored',items:[]});
+      }
+      if(request.action==='context')return send(200,{archive,outcome:'stored',items:[]});
+      if(request.query!=='Archive keyword')return send(200,{archive,outcome:'complete',items:[]});
+      await new Promise(resolve=>releaseSearch=resolve);
+      if(!all.includes(remoteMatch))all.push(remoteMatch);
+      return send(200,{archive,outcome:'stored',items:[savedMatch,remoteMatch]});
+    }
     if (req.method !== 'GET') {state.writes++;return send(405,{code:'unexpected_write'})}
     if (u.pathname === '/api/v1/engine') return send(200,{id:state.engine,role:'hosted',apiVersion:'0.21.0',eventCursor:state.engine+':0'});
     if (u.pathname === '/api/v1/accounts') return send(200,{items:accounts});
@@ -55,7 +90,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       let offset=0;
       if (u.searchParams.has('cursor')) {try {const cursor=JSON.parse(Buffer.from(u.searchParams.get('cursor'),'base64url'));if(cursor.scope!==fingerprint)throw Error('scope');offset=cursor.offset}catch{return send(400,{code:'invalid_cursor'})}}
       let hits=corpus.filter(m=>(!selectedAccount||m.accountId===selectedAccount)&&(!conversation||m.conversationId===conversation)).flatMap(m=>{
-        const c=chats.find(c=>c.id===m.conversationId),base={message:m,accountLabel:accounts.find(a=>a.id===m.accountId).label,conversationTitle:c.title,matchedAt:m.createdAt,matchKind:'text'};
+        const c=[...chats,archiveRoom].find(c=>c.id===m.conversationId),base={message:m,accountLabel:accounts.find(a=>a.id===m.accountId).label,conversationTitle:c.title,matchedAt:m.createdAt,matchKind:'text'};
         const rows=fold(m.originalText).includes(fold(q))?[{...base,matchedRevisionId:m===corpus[1]?id(9001):m.revisionId,historical:false,excerpt:m.originalText}]:[];
         if(history&&m===corpus[0]&&fold('Pineapple original').includes(fold(q)))rows.push(...[2,1].map(n=>({...base,matchedRevisionId:id(8000+n),matchedAt:`2026-11-09T12:00:0${n}Z`,historical:true,excerpt:'Pineapple prior version '+n})));
         return rows;
@@ -66,9 +101,10 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     if(u.pathname.endsWith('/contacts')){state.contactReads.push(Object.fromEntries(u.searchParams));return send(404,{code:'unsupported'})}
     if(u.pathname==='/api/v1/conversations'&&u.searchParams.get('q'))state.titleReads.push(Object.fromEntries(u.searchParams));
     if (u.pathname === '/api/v1/conversations') return send(200,{items:chats.filter(c=>(!u.searchParams.get('accountId')||c.accountId===u.searchParams.get('accountId'))&&c.archived===(u.searchParams.get('archived')==='true')&&(!u.searchParams.get('q')||fold(c.title).includes(fold(u.searchParams.get('q'))))).slice(0,Number(u.searchParams.get('limit')||100))});
-    for (const c of chats) {
+    for (const c of [...chats,archiveRoom]) {
       const prefix='/api/v1/conversations/'+c.id, messages=chronological(c),limit=Number(u.searchParams.get('limit')||50);
       if (u.pathname===prefix) return send(200,c);
+      if (c===archiveRoom&&u.pathname===prefix+'/archive')return send(200,archive);
       if (u.pathname===prefix+'/messages') {
         const cursor=u.searchParams.get('cursor'),index=cursor?messages.findIndex(m=>m.id===cursor):messages.length,direction=u.searchParams.get('direction')||'older';
         if(index<0)return send(404,{code:'not_found'});
@@ -233,6 +269,96 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       await variant.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const audit=await variant.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(audit.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);
       const screenshot='message-search-'+width+'-'+design+'-'+theme+'.png';await variant.screenshot({path:path.join(__dirname,'artifacts',screenshot),fullPage:true});screenshots.push({width,design,theme,lang,screenshot,axe:audit.violations.length});await variant.context().close();
     }
+    for(const width of [390,1440]){
+      const lang=width===390?'pt-BR':'en',roomPage=await fresh({viewport:{width,height:900},locale:lang,reducedMotion:'reduce'});
+      await roomPage.goto(base+'/?chat='+archiveRoom.id+'&account='+account+'&lang='+lang+'&theme=dark&chatSearch=1');
+      const roomSearch=roomPage.locator('[data-conversation-search]'),field=roomSearch.locator('#conversation-search-query');
+      await field.waitFor({state:'visible'});
+      await roomPage.waitForFunction(()=>window.OieRuntime?.generation>0);
+      releaseSearch=null;
+      await field.fill('Archive keyword');
+      await until(async()=>await roomSearch.getAttribute('data-search-selected')===savedMatch.id,'local room search before remote completion');
+      await until(()=>typeof releaseSearch==='function','debounced remote room search');
+      await roomPage.evaluate(()=>{
+        const timeline=document.getElementById('message-timeline'),composer=document.getElementById('send-message-form');
+        const measure=()=>[timeline,composer].filter(Boolean).flatMap(node=>{const r=node.getBoundingClientRect();return [r.top,r.height]});
+        window.archiveFrames={start:measure(),delta:0,active:true};
+        const frame=()=>{const sample=window.archiveFrames;if(!sample.active)return;sample.delta=Math.max(sample.delta,...measure().map((v,i)=>Math.abs(v-sample.start[i])));requestAnimationFrame(frame)};
+        requestAnimationFrame(frame);
+      });
+      releaseSearch();
+      await until(async()=>await roomSearch.getAttribute('data-search-loaded')==='2','remote merge deduplicates the existing local hit');
+      assert.equal(await roomSearch.getAttribute('data-search-selected'),savedMatch.id);
+      assert.equal(await field.evaluate(input=>document.activeElement===input),true);
+      await roomPage.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      const delta=await roomPage.evaluate(()=>{window.archiveFrames.active=false;return window.archiveFrames.delta});
+      assert(delta<=1,'late remote search response moves layout by '+delta+'px at '+width);
+      await roomSearch.locator('[data-conversation-search-older]').click();
+      await until(async()=>await roomSearch.getAttribute('data-search-selected')===remoteMatch.id,'remote result opens its context');
+      assert(archiveRequests.some(r=>r.action==='context'&&r.messageId===remoteMatch.id));
+      const previous=archiveRequests.length;
+      await field.fill('Discarded term 1');
+      await field.fill('Discarded term 2');
+      await field.fill('Latest room term');
+      await until(()=>archiveRequests.slice(previous).some(r=>r.query==='Latest room term'),'latest query reaches remote archive');
+      assert.deepEqual(archiveRequests.slice(previous).map(r=>r.query),['Latest room term']);
+      await roomPage.locator('[data-open-details]').click();
+      const toggle=roomPage.getByRole('switch',{name:lang==='en'?'Download older history automatically':'Baixar histórico antigo automaticamente'});
+      const help=roomPage.getByRole('button',{name:lang==='en'?'Older history':'Histórico antigo',exact:true});
+      const initial=archive.mode==='gradual',changes=archiveModes.length;
+      assert.equal(await toggle.isChecked(),initial);
+      await help.click();
+      const tip=roomPage.getByRole('tooltip').filter({hasText:lang==='en'?'older history downloads gradually':'o histórico antigo é baixado aos poucos'});
+      await tip.waitFor({state:'visible'});
+      const tipBounds=await tip.boundingBox();
+      assert(tipBounds&&tipBounds.x>=0&&tipBounds.x+tipBounds.width<=width+1,'archive help fits the viewport');
+      await help.click();
+      await tip.waitFor({state:'hidden'});
+      assert.equal(await toggle.isChecked(),initial);
+      assert.equal(archiveModes.length,changes);
+      await toggle.focus();
+      await roomPage.evaluate(()=>{
+        const row=document.querySelector('.oie-room-archive-setting');
+        const measure=()=>{const {x,y,width,height}=row.getBoundingClientRect();return [x,y,width,height]};
+        const before=measure(),sample=window.archiveModeFrames={delta:0};
+        const frame=()=>{sample.delta=Math.max(sample.delta,...measure().map((value,i)=>Math.abs(value-before[i])));sample.id=requestAnimationFrame(frame)};
+        sample.id=requestAnimationFrame(frame);
+      });
+      await toggle.press('Space');
+      await until(()=>archiveModes.length===changes+1&&typeof finishArchiveMode==='function','pending archive mode');
+      assert.equal(archiveModes.at(-1),initial?'on_demand':'gradual');
+      assert.equal(await toggle.getAttribute('aria-disabled'),'true');
+      await toggle.press('Space');
+      assert.equal(await toggle.isChecked(),!initial);
+      assert.equal(await toggle.evaluate(node=>node===document.activeElement),true);
+      assert.equal(archiveModes.length,changes+1);
+      finishArchiveMode(true);finishArchiveMode=null;
+      await until(async()=>await toggle.getAttribute('aria-disabled')===null,'archive mode confirmed');
+      await toggle.press('Space');
+      await until(()=>archiveModes.length===changes+2&&typeof finishArchiveMode==='function','pending archive mode refusal');
+      finishArchiveMode(false);finishArchiveMode=null;
+      await until(async()=>await toggle.getAttribute('aria-disabled')===null&&await toggle.isChecked()===!initial,'archive mode rolls back on refusal');
+      const toast=roomPage.locator('[data-toast-container]').getByText(lang==='en'?'Could not save the history preference. Try again.':'Não foi possível salvar a preferência de histórico. Tente novamente.',{exact:true});
+      await toast.waitFor({state:'visible'});
+      const switchShift=await roomPage.evaluate(()=>{cancelAnimationFrame(window.archiveModeFrames.id);return window.archiveModeFrames.delta});
+      assert(switchShift<=1,'archive switch moved by '+switchShift+'px at '+width);
+      const reopen=new URL(roomPage.url());reopen.searchParams.set('open','details');
+      await roomPage.goto(reopen.href);
+      await toggle.waitFor({state:'attached'});
+      assert.equal(await toggle.isChecked(),!initial);
+      await roomPage.context().close();
+    }
+    const historyPage=await fresh();
+    await historyPage.goto(base+'/?chat='+archiveRoom.id+'&account='+account+'&lang=en');
+    await historyPage.waitForFunction(()=>window.OieTimeline?.size>0);
+    const roomTimeline=historyPage.locator('#message-timeline');
+    await roomTimeline.evaluate(node=>{node.scrollTop=0;node.dispatchEvent(new WheelEvent('wheel',{deltaY:-80,bubbles:true}))});
+    await roomTimeline.locator('[data-message-id="'+olderRoomMessage.id+'"]').waitFor({state:'attached'});
+    assert(archiveRequests.some(r=>r.action==='older'&&r.messageId===remoteMatch.id));
+    assert((await roomTimeline.locator('[data-message-id]').count())<=200);
+    await historyPage.context().close();
+    findings.push('Room search returns local hits before an outstanding server request and merges matching sources without moving the timeline or composer');
+    findings.push('Room archive switch preserves focus and geometry, saves the selected mode and restores it on refusal. Its help opens independently');
     state.engine=id(99);await query(page).fill('switch');await until(async()=>await page.locator('#message-search-feedback').textContent().then(text=>text.includes('engine')||text.includes('Engine')),'engine change is visible');assert.equal(await hits(page).count(),0);assert.equal(await query(page).inputValue(),'switch','engine rejection preserves the latest typed search');assert.equal(new URL(page.url()).searchParams.get('searchQuery'),'switch');const readsBeforeRebind=state.searchReads.length;await page.locator('button[data-message-search-restart]:visible').click();await page.waitForURL(url=>url.pathname==='/search');await until(async()=>await form(page).locator('[name=engineId]').inputValue()===id(99),'explicit restart binds the replacement engine');assert.equal(await query(page).inputValue(),'switch');assert(state.searchReads.length>readsBeforeRebind,'only explicit recovery queries the replacement engine');state.engine=id(1);
     findings.push('Engine replacement clears old results and requires explicit restart before rebinding');
 

@@ -1,0 +1,27 @@
+Oiê artwork is adapted from Noto Emoji.
+Copyright 2013 Google LLC and Noto Emoji contributors.
+
+Upstream: https://github.com/googlefonts/noto-emoji
+Pinned commit: 99701e07d3d1fe1bdbcdb14964547f0fd592966f
+
+Source SVGs:
+- 2D/svg/emoji_u1f31a.svg
+- 2D/svg/emoji_u1f4ac.svg
+
+The unchanged upstream SVGs, their SHA-256 digests, URLs and upstream README
+are retained in source/brand/oie in the araihu/assets source repository.
+The derived identity reuses the official speech balloon and moon facial paths.
+The face is translated by (0,-13) in the original 128-unit coordinate system.
+The ellipsis, balloon outline, gradients, shading and cheek highlights were
+removed. Oiê lettering is independently drawn as vector paths, not a Noto font.
+Appearance variants change fills while preserving the source geometry.
+
+The pinned upstream README identifies tools and most image resources as Apache
+License 2.0, and font software as SIL Open Font License 1.1. This distribution
+adapts SVG image resources and includes no Noto font software. Apache-2.0.txt
+contains Apache 2.0. The original upstream top-level font license is also
+preserved as noto-emoji-upstream-OFL.txt. File locations within a distribution
+may differ; consumers must retain these notices and license texts.
+
+The result is an adapted work, not an unmodified Noto emoji or a Google-endorsed
+identity. Brand terms do not replace the original licenses of third-party art.

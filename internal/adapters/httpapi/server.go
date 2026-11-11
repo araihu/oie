@@ -18,15 +18,22 @@ import (
 	middleware "github.com/oapi-codegen/nethttp-middleware"
 )
 
-type Server struct{ engine *application.Engine }
+type Server struct {
+	engine *application.Engine
+	reset  func(domain.ID) error
+}
 
 func New(engine *application.Engine) (http.Handler, error) {
+	return NewResettable(engine, nil)
+}
+
+func NewResettable(engine *application.Engine, reset func(domain.ID) error) (http.Handler, error) {
 	schema, err := engineapi.GetSpec()
 	if err != nil {
 		return nil, err
 	}
 	schema.Servers = nil
-	s := &Server{engine: engine}
+	s := &Server{engine: engine, reset: reset}
 	handler := engineapi.HandlerWithOptions(engineapi.NewStrictHandlerWithOptions(s, nil, engineapi.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, _ error) {
 			WriteProblem(w, application.ErrInvalid)
@@ -168,10 +175,29 @@ func (s *Server) GetEngine(ctx context.Context, _ engineapi.GetEngineRequestObje
 	if err != nil {
 		return nil, err
 	}
+	supported := s.reset != nil
 	return engineapi.GetEngine200JSONResponse{
 		Id: string(state.ID), Role: engineapi.EngineRole(state.Role),
-		ApiVersion: "0.27.0", EventCursor: cursor(state.ID, state.Sequence),
+		ApiVersion: "0.29.0", EventCursor: cursor(state.ID, state.Sequence),
+		CanResetData: &supported,
 	}, nil
+}
+
+func (s *Server) ResetEngineData(_ context.Context, request engineapi.ResetEngineDataRequestObject) (engineapi.ResetEngineDataResponseObject, error) {
+	if request.Body == nil || !request.Body.Confirmation.Valid() {
+		return nil, application.ErrInvalid
+	}
+	id, err := domain.ParseID(request.Body.EngineId)
+	if err != nil {
+		return nil, application.ErrInvalid
+	}
+	if s.reset == nil {
+		return nil, application.ErrStateConflict
+	}
+	if err := s.reset(id); err != nil {
+		return nil, err
+	}
+	return engineapi.ResetEngineData204Response{}, nil
 }
 
 func account(a domain.Account) engineapi.Account {

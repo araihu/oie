@@ -1,0 +1,249 @@
+package xmpp
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/araihu/oie/internal/application"
+	"github.com/araihu/oie/internal/domain"
+	mx "mellium.im/xmpp"
+	"mellium.im/xmpp/stanza"
+)
+
+const roomBootstrapMessages = 128
+
+type roomArchiveCapability struct {
+	mam, textSearch bool
+}
+
+func (m *Manager) WakeRoomArchive(account domain.ID) {
+	m.mu.RLock()
+	e := m.entries[account]
+	m.mu.RUnlock()
+	if e == nil {
+		return
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	select {
+	case e.historyWake <- struct{}{}:
+	default:
+	}
+}
+
+func roomArchiveSupport(ctx context.Context, e *entry, s *mx.Session, address string) (roomArchiveCapability, error) {
+	e.historyMu.Lock()
+	capability, checked := e.archiveCapabilities[address]
+	e.historyMu.Unlock()
+	if checked {
+		return capability, nil
+	}
+	body, err := readArchiveIQ(ctx, e, s, address, stanza.GetIQ, discoInfoQuery)
+	if err != nil {
+		return capability, err
+	}
+	info, err := decodeDiscoInfo(e, s, address, body)
+	recordDiscovery(e, s, discovered("room", address, info, err))
+	if err != nil {
+		return capability, err
+	}
+	sid := false
+	for _, feature := range info.Features {
+		capability.mam = capability.mam || feature.Var == mamNS
+		capability.textSearch = capability.textSearch || feature.Var == "urn:xmpp:fulltext:0"
+		sid = sid || feature.Var == sidNS
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.session != s || ctx.Err() != nil {
+		return roomArchiveCapability{}, application.ErrProtocolUnavailable
+	}
+	e.historyMu.Lock()
+	defer e.historyMu.Unlock()
+	if e.archiveCapabilities == nil {
+		e.archiveCapabilities = make(map[string]roomArchiveCapability)
+	}
+	if e.sidScopes == nil {
+		e.sidScopes = make(map[string]bool)
+	}
+	e.archiveCapabilities[address], e.sidScopes[address] = capability, sid
+	return capability, nil
+}
+
+func (m *Manager) RequestRoomArchive(ctx context.Context, a domain.Account, c domain.Conversation, request domain.RoomArchiveRequest) (domain.RoomArchiveResult, error) {
+	host, ok := m.host.(application.RoomArchiveHost)
+	if !ok {
+		return domain.RoomArchiveResult{}, application.ErrProtocolUnavailable
+	}
+	m.mu.RLock()
+	e := m.entries[a.ID]
+	m.mu.RUnlock()
+	if e != nil {
+		e.mu.RLock()
+		s, sessionCtx := e.session, e.archiveSessionCtx
+		e.mu.RUnlock()
+		if s != nil && sessionCtx != nil && sessionCtx.Err() == nil {
+			result, err := m.roomArchiveTurn(ctx, sessionCtx, host, e, s, c, request, archiveInteractive, time.Now().UTC())
+			if err == nil || errors.Is(err, application.ErrInvalid) || ctx.Err() != nil {
+				return result, err
+			}
+		}
+	}
+	archive, err := host.RoomArchive(ctx, c.ID)
+	return domain.RoomArchiveResult{Archive: archive, Outcome: "unavailable"}, err
+}
+
+// Use the request context while queued. Once dispatched, keep the turn until
+// the session has finished collecting the page, even if the browser moves on.
+func (m *Manager) roomArchiveTurn(waitCtx, sessionCtx context.Context, host application.RoomArchiveHost, e *entry, s *mx.Session, c domain.Conversation, request domain.RoomArchiveRequest, priority archivePriority, cutoff time.Time) (domain.RoomArchiveResult, error) {
+	release, err := m.acquireArchive(waitCtx, c.Address, priority)
+	if err != nil {
+		return domain.RoomArchiveResult{}, err
+	}
+	defer release()
+	if err := sessionCtx.Err(); err != nil {
+		return domain.RoomArchiveResult{}, err
+	}
+	a, err := host.RoomArchive(sessionCtx, c.ID)
+	if err != nil {
+		return domain.RoomArchiveResult{}, err
+	}
+	result := domain.RoomArchiveResult{Archive: a, Outcome: "complete"}
+	if priority == archiveAutomatic && a.InitialComplete && (a.OlderComplete || a.Mode == "on_demand") && !a.CaughtUpThrough.Before(cutoff) {
+		return result, nil
+	}
+	capability, err := roomArchiveSupport(sessionCtx, e, s, c.Address)
+	p := &result.Archive.RoomArchiveProgress
+	availability, search := "supported", "unsupported"
+	switch {
+	case errors.Is(err, errDetailPermission):
+		availability = "unavailable"
+	case err != nil:
+		return result, err
+	case !capability.mam:
+		availability = "unsupported"
+	case capability.textSearch:
+		search = "supported"
+	}
+	if p.Availability != availability || p.TextSearch != search {
+		p.Availability, p.TextSearch = availability, search
+		if err := host.StoreRoomArchiveProgress(sessionCtx, c.ID, *p); err != nil {
+			return result, err
+		}
+	}
+	if availability != "supported" {
+		result.Outcome = availability
+		return result, nil
+	}
+	if request.Action == "search" || request.Action == "context" || request.Action == "older" && request.Anchor != nil &&
+		(p.Boundary.IsZero() || request.Anchor.CreatedAt.UnixMilli() < p.Boundary.UnixMilli()) {
+		return m.isolatedRoomPage(sessionCtx, host, e, s, c, result, request)
+	}
+	if p.WindowEnd.IsZero() {
+		p.WindowEnd = time.Now().UTC()
+		p.WindowStart = p.WindowEnd.Add(-48 * time.Hour)
+		p.CaughtUpThrough = p.WindowEnd
+		if err := host.StoreRoomArchiveProgress(sessionCtx, c.ID, *p); err != nil {
+			return result, err
+		}
+	}
+	switch {
+	case priority == archiveAutomatic && p.InitialComplete && p.CaughtUpThrough.Before(cutoff):
+		err = m.catchUpRoomArchive(sessionCtx, host, e, s, c, p, cutoff)
+	case request.Action == "focus" && p.InitialComplete:
+		return result, nil
+	case p.OlderComplete || priority == archiveAutomatic && p.InitialComplete && a.Mode == "on_demand":
+		return result, nil
+	default:
+		err = m.extendRoomArchive(sessionCtx, host, e, s, c, p)
+	}
+	if err == nil {
+		result.Outcome = "stored"
+	}
+	return result, err
+}
+
+func (m *Manager) extendRoomArchive(ctx context.Context, host application.RoomArchiveHost, e *entry, s *mx.Session, c domain.Conversation, p *domain.RoomArchiveProgress) error {
+	req := archivePageRequest{Backward: true, Before: p.Cursor, End: p.WindowStart}
+	if !p.RecentComplete {
+		req.Start, req.End = p.WindowStart, p.WindowEnd
+	} else if !p.InitialComplete {
+		count, err := host.CountRoomArchiveMessages(ctx, c.ID, p.Boundary, p.WindowEnd)
+		if err != nil {
+			return err
+		}
+		if count >= roomBootstrapMessages {
+			p.InitialComplete = true
+			return host.StoreRoomArchiveProgress(ctx, c.ID, *p)
+		}
+		req.Limit = min(archivePageSize, roomBootstrapMessages-count)
+	}
+	if !p.ResumeEnd.IsZero() {
+		req.End = p.ResumeEnd
+	}
+	page, err := m.readArchivePage(ctx, e, s, c.Address, req)
+	if errors.Is(err, errArchiveCursor) && req.Before != "" && !p.Boundary.IsZero() {
+		req.Before, req.End = "", p.Boundary
+		page, err = m.readArchivePage(ctx, e, s, c.Address, req)
+		if err == nil && !page.Complete && page.First == p.Cursor {
+			return errArchive
+		}
+		p.ResumeEnd = req.End
+	}
+	if err != nil {
+		return err
+	}
+	if err := m.ingestArchivePage(ctx, page); err != nil {
+		return err
+	}
+	if !page.Query.FirstAt.IsZero() {
+		p.Boundary, p.Cursor = page.Query.FirstAt, page.First
+	}
+	if page.Complete {
+		if p.RecentComplete {
+			p.OlderComplete, p.InitialComplete = true, true
+		} else {
+			p.RecentComplete = true
+			p.Boundary = p.WindowStart
+		}
+		p.Cursor, p.ResumeEnd = "", time.Time{}
+	}
+	if p.RecentComplete && !p.InitialComplete {
+		count, err := host.CountRoomArchiveMessages(ctx, c.ID, p.Boundary, p.WindowEnd)
+		if err != nil {
+			return err
+		}
+		p.InitialComplete = count >= roomBootstrapMessages
+	}
+	return host.StoreRoomArchiveProgress(ctx, c.ID, *p)
+}
+
+func (m *Manager) catchUpRoomArchive(ctx context.Context, host application.RoomArchiveHost, e *entry, s *mx.Session, c domain.Conversation, p *domain.RoomArchiveProgress, cutoff time.Time) error {
+	if p.CatchupEnd.IsZero() {
+		p.CatchupStart, p.CatchupEnd = p.CaughtUpThrough, cutoff
+	}
+	req := archivePageRequest{Start: p.CatchupStart, End: p.CatchupEnd, After: p.CatchupCursor}
+	page, err := m.readArchivePage(ctx, e, s, c.Address, req)
+	if errors.Is(err, errArchiveCursor) && req.After != "" && !p.CatchupBoundary.IsZero() {
+		req.After, req.Start = "", p.CatchupBoundary
+		page, err = m.readArchivePage(ctx, e, s, c.Address, req)
+		if err == nil && !page.Complete && page.Last == p.CatchupCursor {
+			return errArchive
+		}
+		p.CatchupStart = req.Start
+	}
+	if err != nil {
+		return err
+	}
+	if err := m.ingestArchivePage(ctx, page); err != nil {
+		return err
+	}
+	if page.Complete {
+		p.CaughtUpThrough = p.CatchupEnd
+		p.CatchupStart, p.CatchupEnd, p.CatchupBoundary, p.CatchupCursor = time.Time{}, time.Time{}, time.Time{}, ""
+	} else {
+		p.CatchupBoundary, p.CatchupCursor = page.Query.LastAt, page.Last
+	}
+	return host.StoreRoomArchiveProgress(ctx, c.ID, *p)
+}

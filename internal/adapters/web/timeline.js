@@ -5,6 +5,11 @@ window.OieRuntime.register('timeline',life=>{
  const rows=()=>[...root.querySelectorAll(':scope>[data-message-id][data-message-source]')];
  const identity={engine:document.body.dataset.engineId,account:document.body.dataset.accountId,conversation:document.body.dataset.conversationId};
  let disposed=false,busy=false,epoch=0,controller,observer,resizer,anchor,restoring=false,follow=false,failed='',retryDirection='',refreshAgain=false,refreshPage,liveAttached=false,older=false,newer=false,retryMode='page',retryTarget='',forceFollow=false,focusEpoch=0,focusPending=false;
+ let exhaustedArchiveEdge='';
+ const remoteOlder=()=>{
+  const first=rows()[0]?.dataset.messageId;
+  return !!first&&first!==exhaustedArchiveEdge&&window.OieRoomArchive?.older()===true;
+ };
  const edge=direction=>root.querySelector(`[data-timeline-edge="${direction}"]`),nearBottom=()=>root.scrollHeight-root.scrollTop-root.clientHeight<60;
  function parse(scope,limit=200){
   const envelope=scope.querySelector('template[data-timeline-page]');if(!envelope)return null;const data=envelope.dataset;
@@ -28,7 +33,7 @@ window.OieRuntime.register('timeline',life=>{
  function protectedRow(node){const viewport=root.getBoundingClientRect(),box=node.getBoundingClientRect();return box.bottom>viewport.top&&box.top<viewport.bottom||node.contains(document.activeElement)||interactionProtected(node)}
  function capacity(direction,count=50){const existing=current(),need=Math.max(0,existing.length+count-200),candidates=direction==='older'?existing.slice(-need).reverse():existing.slice(0,need);return !need||candidates.every(item=>!protectedRow(item.node))}
  function setFeedback(direction,state=''){
-  const control=edge(direction);if(!control)return;control.dataset.state=state;const status=control.querySelector('[data-timeline-status]'),button=control.querySelector('[data-timeline-load]');status.textContent=state==='loading'?control.dataset.loading:state==='failed'?control.dataset.failed:state==='paused'?control.dataset.paused:'';status.setAttribute('role',state==='failed'?'alert':'status');button.hidden=!(direction==='older'?older:newer)&&!state;button.setAttribute('aria-disabled',String(busy));const boundary=direction==='older'?current()[0]:current().at(-1);if(boundary){const href=new URL(button.href,location.href);if(href.origin===location.origin&&href.pathname==='/'){href.searchParams.set('timelineCursor',boundary.id);href.searchParams.set('timelineDirection',direction);button.href=href.pathname+href.search}}if(state==='failed'||state==='paused')button.textContent=control.dataset.retry;
+  const control=edge(direction);if(!control)return;control.dataset.state=state;const status=control.querySelector('[data-timeline-status]'),button=control.querySelector('[data-timeline-load]');status.textContent=state==='loading'?control.dataset.loading:state==='failed'?control.dataset.failed:state==='paused'?control.dataset.paused:'';status.setAttribute('role',state==='failed'?'alert':'status');button.hidden=!(direction==='older'?older||remoteOlder():newer)&&!state;button.setAttribute('aria-disabled',String(busy));const boundary=direction==='older'?current()[0]:current().at(-1);if(boundary){const href=new URL(button.href,location.href);if(href.origin===location.origin&&href.pathname==='/'){href.searchParams.set('timelineCursor',boundary.id);href.searchParams.set('timelineDirection',direction);button.href=href.pathname+href.search}}if(state==='failed'||state==='paused')button.textContent=control.dataset.retry;
  }
  function controls(){capture();setFeedback('older',failed&&retryDirection==='older'?failed:busy&&retryDirection==='older'?'loading':'');setFeedback('newer',failed&&retryDirection==='newer'?failed:busy&&retryDirection==='newer'?'loading':'');root.dataset.timelineBusy=String(busy);root.dataset.timelineOlder=String(older);root.dataset.timelineNewer=String(newer);const jump=document.querySelector('[data-jump-latest]');if(jump&&(newer||document.body.dataset.focusMessage))jump.hidden=false;correct()}
  function capture(){const viewport=root.getBoundingClientRect(),item=rows().find(row=>row.getBoundingClientRect().bottom>viewport.top);anchor=item?{id:item.dataset.messageId,top:item.getBoundingClientRect().top}:null;follow=liveAttached&&nearBottom()}
@@ -60,12 +65,21 @@ window.OieRuntime.register('timeline',life=>{
  function normalizedRows(before,plans){const items=new Map(before.map(item=>[item.id,item]));for(const plan of plans){if(!items.has(plan.previous))continue;items.delete(plan.previous);const existing=items.get(plan.record.id);if(existing&&existing.ms!==plan.record.ms)throw Error('alias_timestamp');if(!existing)items.set(plan.record.id,plan.record)}return [...items.values()].sort(tuple)}
  function endpoint(mode,direction='',cursor='',bounds){const url=new URL('/ui/timeline',location.origin);for(const [key,value]of Object.entries({engineId:identity.engine,accountId:identity.account,conversationId:identity.conversation,mode,direction,cursor,lang:document.documentElement.lang,theme:document.documentElement.dataset.mode||'system',...(bounds||{})}))if(value)url.searchParams.set(key,value);return url}
  async function request(mode,direction,manual=false,target='',focusOptions={}){let nextRequest;
-  if(disposed||busy||!manual&&failed)return;if(mode==='page'&&!(direction==='older'?older:newer))return;
+  if(disposed||busy||!manual&&failed)return;if(mode==='page'&&!(direction==='older'?older||remoteOlder():newer))return;
   retryMode=mode;
   if(mode==='page'&&!capacity(direction)){failed='paused';retryDirection=direction;controls();observe();return}
   const before=current();if(!before.length&&mode!=='context')return false;const bound=direction==='older'?before[0]:before.at(-1),bounds={oldest:before[0]?.id||'',newest:before.at(-1)?.id||''},url=mode==='window'?endpoint(mode,'','',bounds):mode==='context'?endpoint(mode,'',target):endpoint(mode,direction,bound.id),generation=++epoch,starGeneration=Number(document.body.dataset.starGeneration||0),wasBottom=nearBottom()||forceFollow;forceFollow=false;
-  busy=true;retryDirection=direction;retryMode=mode;retryTarget=target;failed='';controls();observe();controller=new AbortController();const timer=life.timeout(()=>controller.abort(),12000);
+  busy=true;retryDirection=direction;retryMode=mode;retryTarget=target;failed='';controls();observe();controller=new AbortController();
+  const oldestCovered=Number(root.dataset.archiveCovered||0);
+  const loadArchive=mode==='page'&&direction==='older'&&remoteOlder()&&(!older||oldestCovered>0&&bound.ms<=oldestCovered);
+  const timer=life.timeout(()=>controller.abort(),loadArchive?65000:12000);
   try{
+   if(loadArchive){
+    const result=await window.OieRoomArchive.request(life,{action:'older',messageId:bound.id},controller.signal);
+    if(disposed||generation!==epoch)return;
+    if(!older&&result?.outcome==='unavailable')throw Error('archive');
+    if(result?.outcome==='complete')exhaustedArchiveEdge=bound.id;
+   }
    const response=await life.fetch(url,{credentials:'same-origin',cache:'no-store',redirect:'error',signal:controller.signal});if(!response.ok||!response.headers.get('Content-Type')?.startsWith('text/html'))throw Error('response');const html=await response.text();if(html.length>12*1024*1024)throw Error('large');if(disposed||generation!==epoch)return;
    const pageDocument=new DOMParser().parseFromString(html,'text/html'),page=parse(pageDocument,mode==='window'?200:50);if(!page||page.data.mode!==mode||(mode==='page'||mode==='context')&&page.data.cursor!==(mode==='context'?target:bound.id)||mode==='page'&&page.data.direction!==direction||mode==='window'&&(page.data.requestOldest!==bounds.oldest||page.data.requestNewest!==bounds.newest))throw Error('request');
    const aliases=aliasPlans(pageDocument,mode==='page'?[bound.id]:mode==='context'?[target]:[bounds.oldest,bounds.newest]),normalized=normalizedRows(current(),aliases),lower=normalized[0],upper=normalized.at(-1),canonicalBound=mode==='page'?normalized.find(item=>item.id===(page.data.canonicalCursor||bound.id)):null;
@@ -123,7 +137,18 @@ window.OieRuntime.register('timeline',life=>{
  if(typeof IntersectionObserver==='function')observer=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){const direction=entry.target.dataset.timelineEdge;if(direction==='older'&&older||direction==='newer'&&newer){request('page',direction);break}}},{root,rootMargin:'70px 0px'});
  if(typeof ResizeObserver==='function')resizer=new ResizeObserver(()=>correct());
  life.on(document,'click',event=>{const button=event.target.closest('[data-timeline-load]');if(button&&root.contains(button)&&!event.defaultPrevented&&event.button===0&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey){event.preventDefault();event.stopPropagation();request(failed?retryMode:'page',button.dataset.timelineLoad,true,failed?retryTarget:'')}},true);
- life.on(root,'scroll',()=>{if(!restoring)capture()});
+ function loadArchiveAtTop(){
+  if(root.scrollTop<=70&&!older&&remoteOlder()&&current().length)request('page','older');
+ }
+ let lastTop=root.scrollTop;
+ life.on(root,'scroll',()=>{
+  const movedUp=root.scrollTop<lastTop;
+  lastTop=root.scrollTop;
+  if(!restoring){capture();if(movedUp)loadArchiveAtTop()}
+ });
+ life.on(root,'wheel',event=>{if(event.deltaY<0)loadArchiveAtTop()},{passive:true});
+ life.on(root,'touchend',loadArchiveAtTop,{passive:true});
+ life.on(root,'keydown',event=>{if(event.target===root&&['ArrowUp','PageUp','Home'].includes(event.key))loadArchiveAtTop()});
  life.on(document,'oie:timeline-snapshot',event=>refresh(event.detail.page));
  life.on(document,'oie:actions-refreshed',()=>{if(!busy&&!failed)observe()});
  life.on(document,'keydown',event=>{if(event.key==='Escape'&&failed==='paused')life.timeout(()=>{failed='';controls();observe()},200)});
