@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),http=require('node:http'),path=requir
 const {spawn}=require('node:child_process'),{once}=require('node:events'),{chromium}=require('playwright');
 const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 (async()=>{
- const engine=id(1),account=id(2),other=id(3),revision=id(4),streams=new Set(),reads=[],state={hold:false,fail:false,release:null,writes:0,seq:0};
+ const engine=id(1),account=id(2),other=id(3),revision=id(4),streams=new Set(),reads=[],state={fail:false,release:null,writes:0,seq:0};
  const accounts=[{id:account,address:'personal@fixture',label:'Personal'},{id:other,address:'work@fixture',label:'Work'}].map(value=>({...value,revisionId:revision,protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z'}));
  const chats=Array.from({length:24},(_,index)=>({id:id(100+index),revisionId:revision,accountId:index%2?other:account,address:'chat'+index+'@fixture',title:'Conversation '+index,kind:'direct',updatedAt:'2026-11-08T12:00:00Z',lastMessage:'Fixture',unreadCount:0,archived:false,favorite:false}));
  const [a,b,c]=[chats[0],chats[8],chats[9]];
@@ -28,7 +28,6 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    const prefix='/api/v1/conversations/'+chat.id;
    if(url.pathname===prefix)return send(state.fail&&chat===a?503:200,chat);
    if(url.pathname===prefix+'/messages'){
-    if(chat===a&&state.hold)await new Promise(resolve=>state.release=resolve);
     const all=chat===c?Array.from({length:60},(_,index)=>({...message(chat),id:id(2000+index),originalText:'Long conversation message '+index})):[message(chat)];
     const limit=Number(url.searchParams.get('limit')||50),direction=url.searchParams.get('direction')||'older',cursor=url.searchParams.get('cursor'),index=cursor?all.findIndex(item=>item.id===cursor):all.length;
     if(!Number.isInteger(limit)||limit<1||limit>100||!['older','newer'].includes(direction))return send(400,{status:400});
@@ -51,13 +50,22 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const ready=async(chat)=>{await until(async()=>await page.locator('#message-composer').count()===1&&await page.evaluate(()=>document.body.dataset.conversationId)===chat.id,'selected '+chat.title);await until(()=>streams.size===1,'one event stream');await layout()};
  const sampleOpening=async(row,selectors)=>{
   await row.scrollIntoViewIfNeeded();
+  const chat=await row.getAttribute('data-conversation-id');
+  // Pause the conversation fragment itself. The initial SSE refresh can read
+  // the same messages without being part of this navigation.
+  await page.route(url=>url.origin===base&&url.pathname==='/'&&url.searchParams.get('chat')===chat,async route=>{
+   assert.equal(route.request().headers()['x-oie-fragment'],'conversation');
+   const response=await route.fetch();
+   assert(response.ok());
+   await new Promise(resolve=>state.release=resolve);
+   await route.fulfill({response});
+  },{times:1});
   await page.evaluate(selectors=>{
    const measure=()=>selectors.map(selector=>{const node=document.querySelector(selector),rect=node.getBoundingClientRect();return [rect.x,rect.y,rect.width,rect.height,node.scrollTop]});
    const state={before:measure(),frames:[],id:0};
    const tick=()=>{state.frames.push(measure());state.id=requestAnimationFrame(tick)};
    window.openingGeometry=state;tick();
   },selectors);
-  state.hold=true;
   await row.click();
   await until(()=>!!state.release,'conversation request held');
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
@@ -90,7 +98,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await click(b);await page.locator('[data-sidebar-toggle]').click();await page.locator('.oie-list-account').waitFor();
   await sampleOpening(page.locator('#conversation-list a[data-conversation-id="'+a.id+'"]'),['#conversation-list','.oie-list-account','#message-timeline','.oie-composer']);
   assert.equal(await page.locator('#message-composer').inputValue(),'Draft B');
-  await click(c);const longLayout=await layout();assert(longLayout.timelineContent>longLayout.timelineHeight);await page.setViewportSize({width:1280,height:650});await layout();await page.setViewportSize({width:1440,height:950});state.hold=false;state.release();state.release=null;await new Promise(resolve=>setTimeout(resolve,200));assert.equal(await page.evaluate(()=>document.body.dataset.conversationId),c.id);
+  await click(c);const longLayout=await layout();assert(longLayout.timelineContent>longLayout.timelineHeight);await page.setViewportSize({width:1280,height:650});await layout();await page.setViewportSize({width:1440,height:950});state.release();state.release=null;await new Promise(resolve=>setTimeout(resolve,200));assert.equal(await page.evaluate(()=>document.body.dataset.conversationId),c.id);
   state.fail=true;await page.locator('#conversation-list a[data-conversation-id="'+a.id+'"]').click();await page.locator('[data-toast-container]').getByText('Could not open this view. Try again.',{exact:true}).waitFor();await new Promise(resolve=>setTimeout(resolve,100));assert.equal(await page.evaluate(()=>document.body.dataset.conversationId),c.id);assert(await page.evaluate(()=>window.savedList===document.getElementById('conversation-list')));state.fail=false;
   const liveTop=await page.locator('#conversation-list').evaluate(node=>node.scrollTop);chats[8].lastMessage='Updated live preview';state.seq++;for(const stream of streams)stream.write('id: '+engine+':'+state.seq+'\nevent: conversation.updated\ndata: {}\n\n');await until(async()=>await page.locator('#conversation-list').textContent().then(text=>text.includes('Updated live preview')),'changed inbox data updates');assert(await page.evaluate(()=>window.savedList===document.getElementById('conversation-list')));assert.equal(await page.locator('#conversation-list').evaluate(node=>node.scrollTop),liveTop);assert.equal(await page.evaluate(()=>window.documentToken),token);assert.equal(requests.filter(request=>request.kind==='document').length,startDocuments);assert(requests.some(request=>request.headers['x-oie-fragment']==='conversation'));
   await opened.context.close();await until(()=>streams.size===0,'desktop stream closed');
@@ -99,7 +107,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await page.goto(base+'/?lang=pt-BR&theme=dark');
   await page.waitForFunction(()=>window.OieRuntime?.generation>0);
   await sampleOpening(page.locator('#conversation-list a[data-conversation-id="'+a.id+'"]'),['#conversation-list','.oie-list-account']);
-  state.hold=false;state.release();state.release=null;
+  state.release();state.release=null;
   await page.locator("#message-composer").waitFor();await ready(a);await opened.context.close();
   opened=await fresh({javaScriptEnabled:false});page=opened.page;await page.goto(base+'/?chat='+a.id);await page.locator('#conversation-list a[data-conversation-id="'+b.id+'"]').click();assert.equal(new URL(page.url()).searchParams.get('chat'),b.id);assert.equal(await page.locator('#chat-header').textContent().then(text=>text.includes(b.title)),true);await opened.context.close();
   assert.deepEqual(errors,[]);assert.equal(state.writes,0);await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});await fs.writeFile(path.join(__dirname,'artifacts/conversation-navigation-report.json'),JSON.stringify({pageErrors:errors,mutations:state.writes,conversationFragmentRequests:requests.filter(request=>request.headers['x-oie-fragment']==='conversation').length},null,2));console.log('PASS: conversation-only swaps preserve inbox nodes/scroll/filter, isolated drafts/details, history, latest intent, one stream, mobile Back and native fallback');
