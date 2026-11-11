@@ -42,7 +42,7 @@ func TestVideoThumbnailBFFMaintainsCSRFEngineAndSourceBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	get := func(engine string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest("GET", "/api/v1/shared-content/"+testRevision+"/thumbnail", nil)
+		r := httptest.NewRequest("GET", "/ui/api/v1/shared-content/"+testRevision+"/thumbnail", nil)
 		r.Header.Set("X-Oie-Engine-ID", engine)
 		w := httptest.NewRecorder()
 		ui.ServeHTTP(w, r)

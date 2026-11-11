@@ -22,6 +22,7 @@ func main() {
 func run() error {
 	listen := flag.String("listen", "127.0.0.1:8080", "HTTP listen address")
 	role := flag.String("role", "local", "local, hosted, or bff")
+	dataOnly := flag.Bool("data-only", false, "serve the engine API without the web interface")
 	dataDir := flag.String("data-dir", "./data", "engine database and media directory")
 	engineURL := flag.String("engine-url", "", "engine base URL (required for bff role)")
 	ffmpeg := flag.String("ffmpeg", "ffmpeg", "FFmpeg executable for optional video thumbnails")
@@ -30,7 +31,7 @@ func run() error {
 	flag.Parse()
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-	server, err := apphost.Start(ctx, apphost.Config{Role: *role, Listen: *listen, DataDir: *dataDir, EngineURL: *engineURL, FFmpeg: *ffmpeg, DevReload: *devReload, XMPPCAFile: *xmppCA})
+	server, err := apphost.Start(ctx, apphost.Config{Role: *role, DataOnly: *dataOnly, Listen: *listen, DataDir: *dataDir, EngineURL: *engineURL, FFmpeg: *ffmpeg, DevReload: *devReload, XMPPCAFile: *xmppCA})
 	if err != nil {
 		return err
 	}

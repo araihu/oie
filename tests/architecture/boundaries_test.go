@@ -71,3 +71,15 @@ func TestGraphemeUtilityDoesNotImportAdapters(t *testing.T) {
 		}
 	}
 }
+
+func TestCLIBuildGraphDoesNotImportEngineOrPresentation(t *testing.T) {
+	output, err := exec.Command("go", "-C", "../../cli", "list", "-deps", "./cmd/oiectl").CombinedOutput()
+	if err != nil {
+		t.Fatalf("CLI dependency graph: %v\n%s", err, output)
+	}
+	for _, dependency := range strings.Fields(string(output)) {
+		if strings.HasPrefix(dependency, "github.com/araihu/oie/internal/") || strings.HasPrefix(dependency, "mellium.im/") || strings.HasPrefix(dependency, "github.com/wailsapp/") || strings.HasPrefix(dependency, "modernc.org/sqlite") {
+			t.Errorf("CLI imports server dependency %s", dependency)
+		}
+	}
+}
