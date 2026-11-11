@@ -44,9 +44,14 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const child=spawn(process.env.OIE_WEB_BINARY||path.resolve(__dirname,'../../bin/oie-edit-ui'),['--role','bff','--listen','127.0.0.1:'+port,'--engine-url','http://127.0.0.1:'+api.address().port],{stdio:['ignore','ignore','pipe']});let stderr='';child.stderr.on('data',c=>stderr+=c);
  const base='http://127.0.0.1:'+port,browser=await chromium.launch({headless:true}),errors=[],findings=[];
  const until=async(fn,label)=>{for(let n=0;n<180;n++){if(await fn())return;await new Promise(r=>setTimeout(r,50))}throw Error('Timed out '+label+' '+stderr.slice(-1200))};
+ const countEditPreparations=page=>{
+  let count=0;
+  page.on('request',request=>{if(new URL(request.url()).pathname==='/ui/message-edit-target')count++});
+  return ()=>count;
+ };
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'startup');
-  const context=await browser.newContext({viewport:{width:1440,height:960},locale:'en'}),page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));let preparationRequests=0;page.on('request',request=>{if(new URL(request.url()).pathname==='/ui/message-edit-target')preparationRequests++;});
+  const context=await browser.newContext({viewport:{width:1440,height:960},locale:'en'}),page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));const preparationRequests=countEditPreparations(page);
   const route=(params={})=>base+'/?'+new URLSearchParams({account,chat,lang:'en',theme:'dark',...params});
   const input=page.locator('#message-composer'),banner=page.locator('[data-composer-edit]'),editing=page.locator('[data-editing-message]'),save=page.locator('button[data-send-message]'),cancel=page.locator('[data-edit-cancel]');
   const assertPendingIcon=async p=>{
@@ -58,8 +63,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await page.goto(route());await until(async()=>await page.evaluate(()=>document.body.dataset.oieLiveReady==='true'),'runtime');
   await input.fill('Preserve the normal draft 😀');await menuEdit();assert.equal(await input.inputValue(),'Own **plain** message 😀');await input.fill('Unsubmitted edit');messages[1].sender.displayName='Alice refreshed';emit();await page.waitForTimeout(400);assert.equal(await editing.count(),1);assert.equal(await input.inputValue(),'Unsubmitted edit');assert(await banner.isHidden());await cancel.click();assert.equal(await editing.count(),0);assert.equal(await input.inputValue(),'Preserve the normal draft 😀');assert.equal(state.effects,0);
   await page.goto(route({message:incoming}));await until(async()=>await page.locator('#message-timeline [data-message-id="'+incoming+'"]').count()===1,'old bounded page');assert.equal(await page.locator('#message-timeline [data-message-id="'+own+'"]').count(),0);await input.fill('');const reads=state.latestReads;await input.press('ArrowUp');await until(async()=>await input.inputValue()===messages[1].originalText,'engine latest outside DOM');await editing.waitFor({state:'visible'});assert(state.latestReads>reads);assert(await banner.isHidden());await input.press('Escape');await banner.waitFor({state:'hidden'});assert.equal(await input.inputValue(),'');
-  await input.fill(' ');let count=preparationRequests;await input.press('ArrowUp');await page.waitForTimeout(150);assert.equal(preparationRequests,count);await input.fill('');await input.dispatchEvent('keydown',{key:'ArrowUp',isComposing:true,keyCode:229});await page.waitForTimeout(150);assert.equal(preparationRequests,count);
-  state.eligible=false;await input.press('ArrowUp');await until(()=>preparationRequests>count,'ineligible latest lookup');await page.waitForTimeout(150);assert(await banner.isHidden());assert.equal(state.effects,0);state.eligible=true;
+  await input.fill(' ');const count=preparationRequests();await input.press('ArrowUp');await page.waitForTimeout(150);assert.equal(preparationRequests(),count);await input.fill('');await input.dispatchEvent('keydown',{key:'ArrowUp',isComposing:true,keyCode:229});await page.waitForTimeout(150);assert.equal(preparationRequests(),count);
+  state.eligible=false;await input.press('ArrowUp');await until(()=>preparationRequests()>count,'ineligible latest lookup');await page.waitForTimeout(150);assert(await banner.isHidden());assert.equal(state.effects,0);state.eligible=true;
   findings.push('Menu edit preserves the normal draft; ArrowUp queries the engine latest own source outside the bounded DOM, with whitespace/IME and ineligible-latest guards');
   await page.goto(route());await input.fill('Draft survives successful correction');await menuEdit();await input.fill('Corrected literal @nickname 😀');state.submitDelay=1500;await input.press('Enter');await page.locator('[data-edit-pending=true]').waitFor();await assertPendingIcon(page);assert.equal(await page.locator('[data-edit-pending] [data-message-presentation]').evaluate(el=>getComputedStyle(el.closest('.oie-bubble')).opacity),'0.7');assert(await banner.isHidden());state.submitDelay=0;await until(async()=>await editing.count()===0,'accepted submitted edit');assert.equal(await input.inputValue(),'Draft survives successful correction');assert.equal(state.effects,1);assert.equal(state.posted[0].input.originalText,'Corrected literal @nickname 😀');assert.deepEqual(Object.keys(state.posted[0].input).sort(),['expectedRevisionId','originalText']);
   const last=[...commands.values()].at(-1);last.state='failed';last.lastErrorCode='forbidden';emit();await page.locator('[data-edit-last-status]').waitFor({state:'visible'});assert.equal(await input.inputValue(),'Draft survives successful correction');assert((await page.locator('[data-edit-last-copy]').textContent()).includes('could not'));last.state='submitted';emit();await page.locator('[data-edit-last-status]').waitFor({state:'hidden'});
@@ -94,14 +99,16 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   };
   const assertRepeatedArrowUpIgnored=async p=>{
    const field=p.locator('#message-composer'),original=await field.inputValue();
+   // Periodic live snapshots also read the latest edit target from the engine.
+   const preparations=countEditPreparations(p);
    for(const value of ['First line\nKeep this edited line','']){
     await field.fill(value);await field.evaluate(node=>node.setSelectionRange(Math.max(0,node.value.length-4),node.value.length));
     await p.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
     const snapshot=()=>field.evaluate(node=>({text:node.value,start:node.selectionStart,end:node.selectionEnd,focus:document.activeElement===node,target:document.querySelector('[data-editing-message]').closest('[data-message-id]').dataset.messageId,scroll:document.querySelector('#message-timeline').scrollTop}));
-    const before=await snapshot(),reads=state.reads,effects=state.effects;
+    const before=await snapshot(),reads=preparations(),effects=state.effects;
     await field.press('ArrowUp');await field.press('ArrowUp');await field.press('ArrowUp');await p.waitForTimeout(150);
     assert.deepEqual(await snapshot(),before,'ArrowUp during editing preserves text, selection, focus, target and scroll');
-    assert.equal(state.reads,reads,'ArrowUp during editing does not prepare another edit');assert.equal(state.effects,effects,'ArrowUp during editing does not submit');
+    assert.equal(preparations(),reads,'ArrowUp during editing does not prepare another edit');assert.equal(state.effects,effects,'ArrowUp during editing does not submit');
    }
    await field.fill(original);
   };
