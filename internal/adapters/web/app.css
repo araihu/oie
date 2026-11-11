@@ -405,6 +405,9 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 
 .oie-conversation-details-drawer{width:min(440px,100vw);max-width:100vw;background:var(--oie-panel);color:var(--oie-text)}
 .oie-conversation-details{display:flex;flex-direction:column;gap:18px;padding:18px 14px 28px}
+.oie-room-archive-setting{display:flex;align-items:center;gap:8px}
+.oie-room-archive-setting>label{flex:1;min-width:0}
+.oie-room-archive-help{width:24px;height:24px;min-width:24px;padding:3px;color:var(--oie-muted)}
 .oie-details-identity{display:flex;align-items:center;gap:14px}.oie-details-identity>div{min-width:0}.oie-details-identity h2{font-size:19px;font-weight:650;line-height:1.4;margin:0 0 4px;overflow-wrap:anywhere}.oie-details-identity p{font-size:12px;color:var(--oie-muted);overflow-wrap:anywhere;margin:0}
 .oie-details-refresh{font-size:12px;align-self:flex-start}.oie-details-panel{background:var(--oie-panel);border-color:var(--oie-border);color:var(--oie-text)}
 .oie-details-panel h3{font-size:14px;line-height:1.4;font-weight:650;margin:0}.oie-details-panel h4{font-size:12px;font-weight:650;margin:12px 0 7px}.oie-details-panel p{font-size:12px;line-height:1.6;margin:0 0 8px;overflow-wrap:anywhere}

@@ -5,10 +5,12 @@ import (
  "github.com/araihu/goshtoso/components/accordion"
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/badge"
+ "github.com/araihu/goshtoso/components/button"
  "github.com/araihu/goshtoso/components/drawer"
  "github.com/araihu/goshtoso/components/link"
  "github.com/araihu/goshtoso/components/panel"
- selectfield "github.com/araihu/goshtoso/components/select"
+ "github.com/araihu/goshtoso/components/toggle"
+ "github.com/araihu/goshtoso/components/tooltip"
  "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
  "strconv"
  "time"
@@ -47,14 +49,14 @@ default:
 @infoEntry(v,"stars",v.Text.InfoStarred,heroicons.Icon16SolidStar)
 </nav>
 if v.RoomArchive != nil {
-  @selectfield.Select(selectfield.Config{
-    ID:"room-archive-mode",Name:"archiveMode",Label:v.Text.RoomArchiveMode,
-    Options:[]selectfield.Option{
-      {Value:"gradual",Label:v.Text.RoomArchiveGradual,Selected:v.RoomArchive.Mode==engineapi.Gradual},
-      {Value:"on_demand",Label:v.Text.RoomArchiveOnDemand,Selected:v.RoomArchive.Mode==engineapi.OnDemand},
-    },
-    InputAttrs:templ.Attributes{"data-room-archive-mode":string(v.RoomArchive.Mode),"data-failed":v.Text.NavFailed},
+  <div class="oie-room-archive-setting">
+  @tooltip.Tooltip("room-archive-mode-help",v.Text.RoomArchiveMode,tooltip.WithDescription(v.Text.RoomArchiveModeHelp),tooltip.WithTrigger(roomArchiveHelp(v)),tooltip.WithActivation(tooltip.ActivationClick),tooltip.WithPosition(tooltip.PositionBottom),tooltip.WithPortal(true))
+  @toggle.Toggle(toggle.Config{
+    ID:"room-archive-mode",Label:v.Text.RoomArchiveAutomatic,
+    Checked:v.RoomArchive.Mode==engineapi.Gradual,RootClass:"oie-device-toggle",
+    InputAttrs:templ.Attributes{"data-room-archive-mode":string(v.RoomArchive.Mode),"data-failed":v.Text.RoomArchiveModeFailed},
   })
+  </div>
 }
 <div id="conversation-details-description" data-version={v.detailsVersion("description")}>@infoDescription(v)</div>
 <div id="conversation-details-participants" data-version={v.detailsVersion("participants")}>@detailsParticipants(v)</div>
@@ -62,6 +64,11 @@ if v.RoomArchive != nil {
 @link.Link(v.detailsHref(),link.WithAttrs(templ.Attributes{"data-details-refresh":"","data-info-nav":""}),link.WithRootClass("oie-details-refresh")){ {v.Text.DetailsRefresh} }
 <p class="oie-details-help">{v.Text.DetailsSnapshotHelp}</p>
 </div>
+}
+}
+templ roomArchiveHelp(v view){
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithRootClass("oie-room-archive-help"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.RoomArchiveMode})){
+@glyph(heroicons.Icon16SolidInformationCircle)
 }
 }
 templ detailsIdentity(v view){

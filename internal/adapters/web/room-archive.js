@@ -17,6 +17,7 @@
   const result = await response.json();
   const archive = method === 'PUT' ? result : result.archive;
   if (archive?.conversationId !== conversationId || life.signal.aborted || signal?.aborted || timeline !== current()) return null;
+  if (method === 'PUT' && !['gradual', 'on_demand'].includes(archive.mode)) throw Error('archive mode');
   timeline.roomArchive = archive.availability;
   timeline.archiveTextSearch = archive.textSearch;
   timeline.archiveInitial = String(archive.initialComplete);
@@ -45,24 +46,32 @@
    }).catch(() => {});
   }
   let saving = false;
+  life.on(document, 'click', event => {
+   if (saving && event.target.matches?.('[data-room-archive-mode]')) event.preventDefault();
+  }, true);
   life.on(document, 'change', async event => {
-   const select = event.target.closest?.('[data-room-archive-mode]');
-   if (!select || saving || !['gradual','on_demand'].includes(select.value)) return;
-   const trigger = document.getElementById('room-archive-mode-trigger');
+   const toggle = event.target.closest?.('[data-room-archive-mode]');
+   if (!toggle || saving) return;
+   const mode = toggle.checked ? 'gradual' : 'on_demand';
+   if (mode === toggle.dataset.roomArchiveMode) return;
    saving = true;
-   if(trigger)trigger.disabled=true;
+   toggle.setAttribute('aria-disabled', 'true');
+   let confirmed;
    try {
-    const archive = await request(life, {mode:select.value}, undefined, 'PUT');
-    if (archive) select.dataset.roomArchiveMode = archive.mode;
+    const archive = await request(life, {mode}, undefined, 'PUT');
+    confirmed = archive?.mode;
    } catch {
     if (!life.signal.aborted) {
-     window.dispatchEvent(new CustomEvent('notify', {detail:{kind:'toast',tone:'danger',message:select.dataset.failed}}));
-     select.value=select.dataset.roomArchiveMode;
-     select.dispatchEvent(new Event('input',{bubbles:true}));
+     window.dispatchEvent(new CustomEvent('notify', {detail:{kind:'toast',tone:'danger',message:toggle.dataset.failed}}));
     }
    } finally {
     saving = false;
-    if(trigger)trigger.disabled=false;
+    if (!life.signal.aborted) {
+     const currentToggle = document.getElementById(toggle.id) ?? toggle;
+     if (confirmed) currentToggle.dataset.roomArchiveMode = confirmed;
+     currentToggle.checked = currentToggle.dataset.roomArchiveMode === 'gradual';
+     currentToggle.removeAttribute('aria-disabled');
+    }
    }
   });
  });

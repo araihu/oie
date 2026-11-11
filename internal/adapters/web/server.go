@@ -216,7 +216,7 @@ type copy struct {
 	MessageStarred                                                                                                                                                                                           string
 	AutoVideoThumbnails, AutoVideoThumbnailsHelp, VideoThumbnailLoad, VideoThumbnailLoading, VideoThumbnailFailed                                                                                            string
 	ReadFailed                                                                                                                                                                                               string
-	RoomArchiveMode, RoomArchiveGradual, RoomArchiveOnDemand, RoomArchiveLocalResults                                                                                                                        string
+	RoomArchiveMode, RoomArchiveAutomatic, RoomArchiveModeHelp, RoomArchiveModeFailed, RoomArchiveLocalResults                                                                                               string
 	TimelineOlder, TimelineNewer, TimelineLoading, TimelineFailed, TimelinePaused                                                                                                                            string
 	SharedItemActions                                                                                                                                                                                        string
 	SharedCopyLink                                                                                                                                                                                           string
