@@ -32,6 +32,7 @@ window.OieRuntime.register('timeline',life=>{
  }
  function controls(){capture();setFeedback('older',failed&&retryDirection==='older'?failed:busy&&retryDirection==='older'?'loading':'');setFeedback('newer',failed&&retryDirection==='newer'?failed:busy&&retryDirection==='newer'?'loading':'');root.dataset.timelineBusy=String(busy);root.dataset.timelineOlder=String(older);root.dataset.timelineNewer=String(newer);const jump=document.querySelector('[data-jump-latest]');if(jump&&(newer||document.body.dataset.focusMessage))jump.hidden=false;correct()}
  function capture(){const viewport=root.getBoundingClientRect(),item=rows().find(row=>row.getBoundingClientRect().bottom>viewport.top);anchor=item?{id:item.dataset.messageId,top:item.getBoundingClientRect().top}:null;follow=liveAttached&&nearBottom()}
+ function scrollLatest(){root.scrollTop=root.scrollHeight;capture()}
  function correct(){if(disposed||!root.isConnected)return;restoring=true;if(follow)root.scrollTop=root.scrollHeight;else if(anchor){const node=rows().find(row=>row.dataset.messageId===anchor.id);if(node)root.scrollTop+=node.getBoundingClientRect().top-anchor.top}
   // A completed tail page can leave scrollTop unchanged. Clear its transient
   // notice here instead of waiting for a scroll event that may never fire.
@@ -119,7 +120,7 @@ window.OieRuntime.register('timeline',life=>{
   if(generation!==focusEpoch||disposed)return false;
   focusPending=false;controls();observe();return found;
  }
- const api={refresh,focus,cancelFocus,get hasNewer(){return newer},get liveAttached(){return liveAttached},get size(){return rows().length}};window.OieTimeline=api;
+ const api={refresh,focus,cancelFocus,scrollLatest,get hasNewer(){return newer},get liveAttached(){return liveAttached},get size(){return rows().length}};window.OieTimeline=api;
  if(typeof IntersectionObserver==='function')observer=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){const direction=entry.target.dataset.timelineEdge;if(direction==='older'&&older||direction==='newer'&&newer){request('page',direction);break}}},{root,rootMargin:'70px 0px'});
  if(typeof ResizeObserver==='function')resizer=new ResizeObserver(()=>correct());
  life.on(document,'click',event=>{const button=event.target.closest('[data-timeline-load]');if(button&&root.contains(button)&&!event.defaultPrevented&&event.button===0&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey){event.preventDefault();event.stopPropagation();request(failed?retryMode:'page',button.dataset.timelineLoad,true,failed?retryTarget:'')}},true);

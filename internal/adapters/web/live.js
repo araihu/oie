@@ -398,10 +398,11 @@ window.OieRuntime.register('live', life => {
   }
   function nearBottom(timeline) { return !timeline || timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 60; }
   let highlightedMessage='',highlightTimer;
-  function pinned(){return !!body.dataset.focusMessage||!!window.OieTimeline?.hasNewer;}
+  function pinned(){const timeline=window.OieTimeline;return !!body.dataset.focusMessage||!!(timeline?.hasNewer&&!timeline.liveAttached);}
   function showJump(show){const jump=document.querySelector('[data-jump-latest]');if(jump){jump.hidden=!show;jump.textContent=pinned()?text('latest'):text('newMessages');}}
   function scrollLatest() {
-    const timeline=document.querySelector('#message-timeline');if(timeline)timeline.scrollTop=timeline.scrollHeight;
+    if(window.OieTimeline)window.OieTimeline.scrollLatest();
+    else{const timeline=document.querySelector('#message-timeline');if(timeline)timeline.scrollTop=timeline.scrollHeight;}
     showJump(pinned());
   }
   function focusMessage(id,focus=true){
