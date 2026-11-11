@@ -274,6 +274,12 @@ Sync and backup merge use the same type-specific conflict/deletion policies. A m
 
 Use a **transactional outbox**: durably commit the outgoing message and send intent together in the accepting engine's database. Immediate sends become eligible immediately, with no artificial undo delay. Retry recoverable failures and resume after ordinary restart/reconnect.
 
+The engine wakes its dispatcher after committing a message, correction, or
+reaction. Room joins and leaves wake their own worker after committing the
+intent. The periodic scans also recover work that is due for retry. Committed
+outgoing changes wake the durable event stream. A matching message event can
+prompt the browser to read a pending reaction receipt before its polling timer.
+
 The guarantee is durable committed intent and eventual submission under recoverable failures while the owning engine runs and the provider is available, unless cancelled. This is not an unconditional guarantee of recipient delivery or exactly-once external delivery.
 
 Keep these milestones distinct:

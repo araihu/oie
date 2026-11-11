@@ -708,7 +708,16 @@ window.OieRuntime.register('live', life => {
     source = new EventSource('/ui/events?cursor='+encodeURIComponent(cursor || ''));
     source.onopen = () => { if(stopped)return;announce(text('liveReady'),true);scheduleRefresh();retryPending(); };
     source.onerror = () => {if(!stopped)announce(text('liveRetry'));};
-    for (const type of ['message.preview_changed','profile.avatar_changed','account.registered','account.connection_changed','account.history_changed','conversation.created','conversation.updated','message.created','message.updated']) life.on(source,type,scheduleRefresh);
+    for (const type of ['message.preview_changed','profile.avatar_changed','account.registered','account.connection_changed','account.history_changed','conversation.created','conversation.updated','message.created']) life.on(source,type,scheduleRefresh);
+    life.on(source,'message.updated',event=>{
+      try{
+        const message=JSON.parse(event.data).message;
+        if(message&&message.accountId===body.dataset.accountId&&message.conversationId===body.dataset.conversationId){
+          document.dispatchEvent(new CustomEvent('oie:message-updated',{detail:{id:message.id}}));
+        }
+      }catch{}
+      scheduleRefresh();
+    });
     life.on(source,'conversation.room_session_changed',event=>{
       try{
         const room=JSON.parse(event.data).roomSession;

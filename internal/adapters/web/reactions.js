@@ -7,6 +7,7 @@ window.OieRuntime.register('reactions',life=>{
  let latestRoomRefresh=0,withdrawnAt=0;
  const memory=window.OieRuntime.memory,key='reaction-journals:'+Object.values(scope).join(':'),journals=memory.get(key)||new Map();memory.set(key,journals);
  const filters=new Map(),snapshots=new Map(),busy=new Set(),polls=new Map(),stored=new Set(),prefix='oie.reaction.v1:'+Object.values(scope).join(':')+':';
+ const receiptUpdates=new Set();
  const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(v),sameSet=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every(e=>b.includes(e));
  let preparation=null,opener=null,openerID='',preparing=null;
  const activeSnapshot=()=>preparation&&snapshots.get(preparation.messageId);
@@ -27,7 +28,7 @@ window.OieRuntime.register('reactions',life=>{
  function validIntent(v,id){return v&&Object.entries(scope).every(([k,x])=>v[k]===x)&&v.messageId===id&&uuid(v.operationKey)&&(!v.expectedOwnRevisionId||uuid(v.expectedOwnRevisionId))&&Array.isArray(v.emojis)&&v.emojis.length<=8&&v.emojis.every(e=>typeof e==='string'&&e.length<=128)}
  function matches(c,intent){return c&&c.id===intent.operationKey&&c.messageId===intent.messageId&&c.accountId===intent.accountId&&c.conversationId===intent.conversationId&&(c.expectedOwnRevisionId||'')===(intent.expectedOwnRevisionId||'')&&sameSet(c.emojis,intent.emojis)&&uuid(c.revisionId)&&['queued','dispatching','submitted','unknown','failed'].includes(c.state)}
  function save(intent){journals.set(intent.messageId,intent);stored.add(intent.messageId);try{localStorage.setItem(prefix+intent.messageId,JSON.stringify(intent))}catch{}render()}
- function clear(id){journals.delete(id);clearTimeout(polls.get(id));polls.delete(id);try{localStorage.removeItem(prefix+id)}catch{}}
+ function clear(id){journals.delete(id);receiptUpdates.delete(id);clearTimeout(polls.get(id));polls.delete(id);try{localStorage.removeItem(prefix+id)}catch{}}
  function restore(id){if(stored.has(id))return;stored.add(id);try{const saved=JSON.parse(localStorage.getItem(prefix+id)||'null');if(validIntent(saved,id))journals.set(id,saved)}catch{}}
  function commandIntent(command){return {...scope,messageId:command.messageId,operationKey:command.id,expectedOwnRevisionId:command.expectedOwnRevisionId||'',emojis:command.emojis,command}}
  const roomState=()=>document.getElementById('room-session-status')?.dataset.roomState;
@@ -129,6 +130,15 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
  function refresh(){document.dispatchEvent(new CustomEvent('oie:refresh-request'))}
  function setCurrent(snapshot){snapshots.set(snapshot.messageId,snapshot);render()}
  function planPoll(intent){clearTimeout(polls.get(intent.messageId));if(['queued','dispatching'].includes(intent.command?.state))polls.set(intent.messageId,life.timeout(()=>submit(intent,true),1200))}
+ function checkUpdatedReceipt(id){
+  const intent=journals.get(id);
+  if(!intent)return;
+  if(busy.has(id)){receiptUpdates.add(id);return}
+  if(['queued','dispatching'].includes(intent.command?.state)){
+   clearTimeout(polls.get(id));polls.delete(id);
+   void submit(intent,true);
+  }
+ }
  function accept(result,intent){
   if(result.accepted&&matches(result.command,intent)){intent={...intent,command:result.command};if(['submitted','failed'].includes(result.command.state)){clear(intent.messageId);render();refresh();if(result.command.state==='failed')notify(labels.failed)}else{save(intent);planPoll(intent);if(result.command.state==='unknown')notify(labels.unknown)}return true}
   if(result.rejected===true){clear(intent.messageId);render();notify(result.message||labels.unavailable);refresh();return true}return false;
@@ -137,7 +147,13 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
   if(!validIntent(intent,intent.messageId)||busy.has(intent.messageId))return;save(intent);busy.add(intent.messageId);render();const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),12000);
   try{const values=new URLSearchParams({...scope,messageId:intent.messageId,operationKey:intent.operationKey,expectedOwnRevisionId:intent.expectedOwnRevisionId||'',emojis:JSON.stringify(intent.emojis),csrf,lang:document.documentElement.lang});const response=await life.fetch(receiptOnly?'/ui/messages/reaction-receipt':'/ui/messages/reactions',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-Token':csrf},body:values,signal:controller.signal}),result=await response.json();if(life.signal.aborted||journals.get(intent.messageId)?.operationKey!==intent.operationKey)return;if(!accept(result,intent)){save({...intent,unconfirmed:true,missingReceipt:receiptOnly&&response.status===404});notify(result.message||labels.unknown)}}
   catch{if(!life.signal.aborted&&journals.get(intent.messageId)?.operationKey===intent.operationKey){save({...intent,unconfirmed:true});notify(labels.unknown)}}
-  finally{clearTimeout(timeout);if(!life.signal.aborted){busy.delete(intent.messageId);render()}}
+  finally{
+   clearTimeout(timeout);
+   if(!life.signal.aborted){
+    busy.delete(intent.messageId);render();
+    if(receiptUpdates.delete(intent.messageId))checkUpdatedReceipt(intent.messageId);
+   }
+  }
  }
  async function prepare(id,element,emoji){
   if(!uuid(id)||busy.has(id)||body.dataset.mock==='true')return;if(journals.has(id)){void submit(journals.get(id),true);return}
@@ -325,6 +341,7 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
  life.cleanup(()=>{cancelGesture();cancelPrimary();lastTap=null;suppressClick=null});
  life.on(document,'oie:timeline-content',event=>read(event.detail.page,event.detail.startedAt));
  life.on(document,'oie:reaction-snapshots',event=>read(event.detail.page,event.detail.startedAt,true));
+ life.on(document,'oie:message-updated',event=>checkUpdatedReceipt(event.detail.id));
  life.on(document,'oie:room-reaction-visibility-withdrawn',()=>{if(room){withdrawnAt=performance.now();read(document,withdrawnAt)}});
  life.on(document,'oie:actions-refreshed',render);
  life.cleanup(()=>{cancelPreparation();for(const timer of polls.values())clearTimeout(timer)});

@@ -191,7 +191,8 @@ func (e *Engine) setRoomIntent(ctx context.Context, key, id domain.ID, nickname 
 		}
 		return result, err
 	}
-	e.wake()
+	e.wakeRooms()
+	e.outgoingWorkCommitted()
 	result.Session, err = e.RoomSession(ctx, id)
 	return result, err
 }
@@ -245,9 +246,17 @@ func (e *Engine) RoomSessionChanged(ctx context.Context, s domain.RoomSession) e
 			return err
 		}
 	}
-	e.wake()
+	e.outgoingWorkCommitted()
 	return nil
 }
+
+func (e *Engine) wakeRooms() {
+	select {
+	case e.roomWork <- struct{}{}:
+	default:
+	}
+}
+
 func (e *Engine) runRooms(ctx context.Context) error {
 	r := e.repo.(RoomIntentRepository)
 	p := e.protocols.(RoomProtocol)
@@ -317,6 +326,7 @@ func (e *Engine) runRooms(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return nil
+		case <-e.roomWork:
 		case <-ticker.C:
 		}
 	}

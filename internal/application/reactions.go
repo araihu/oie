@@ -227,7 +227,7 @@ func (e *Engine) SetMessageReactions(ctx context.Context, key, id, expected doma
 	command := domain.MessageReactionCommand{ID: key, RevisionID: revision, MessageID: candidate.Source.ID, AccountID: candidate.Source.AccountID, ConversationID: candidate.Source.ConversationID, ExpectedOwnRevisionID: expected, Emojis: emojis, State: "queued", CreatedAt: now, UpdatedAt: now}
 	result, err := r.AcceptMessageReaction(ctx, MessageReactionMutation{Pending: domain.PendingMessageReaction{Command: command, Plan: plan}, Fingerprint: digest})
 	if err == nil {
-		e.wake()
+		e.outgoingWorkCommitted()
 	}
 	return result, err
 }
@@ -285,7 +285,11 @@ func (e *Engine) ReceiveReaction(ctx context.Context, in IncomingReaction) error
 	if err != nil {
 		return err
 	}
-	return r.ObserveMessageReaction(ctx, MessageReactionObservation{Incoming: in, RevisionID: revision, ObservedAt: now})
+	if err := r.ObserveMessageReaction(ctx, MessageReactionObservation{Incoming: in, RevisionID: revision, ObservedAt: now}); err != nil {
+		return err
+	}
+	e.notifyEvents()
+	return nil
 }
 func (e *Engine) recoverMessageReactions(ctx context.Context) error {
 	r, err := e.reactionRepository()
@@ -350,6 +354,7 @@ func (e *Engine) dispatchMessageReactions(ctx context.Context) error {
 		}
 		claimed, err := r.ClaimMessageReaction(ctx, p.Command.ID, revision, e.now().UTC())
 		if errors.Is(err, ErrStateConflict) {
+			e.notifyEvents()
 			continue
 		}
 		if err != nil {
@@ -384,6 +389,7 @@ func (e *Engine) dispatchMessageReactions(ctx context.Context) error {
 		if err != nil && !errors.Is(err, ErrStateConflict) {
 			return err
 		}
+		e.notifyEvents()
 	}
 	return nil
 }

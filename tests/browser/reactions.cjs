@@ -12,8 +12,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
  const conversation={id:chat,revisionId:revision,accountId:account,kind:'direct',title:'Bob',address:'bob@fixture',lastMessage:source.originalText,updatedAt:source.createdAt,unreadCount:0,archived:false,favorite:false};
  const pending=()=>[...commands.values()].find(c=>['queued','dispatching','unknown'].includes(c.state));
  const snapshot=(target=message)=>({messageId:target,accountId:account,conversationId:chat,revisionId:state.ownRevision,ownRevisionId:state.ownRevision,ownEmojis:[...state.own],actors:[...(state.own.length?[{address:'alice@fixture',displayName:'Alice',own:true,emojis:[...state.own]}]:[]),...(state.baseReactions?[{address:state.peerOccupant||'bob@fixture',displayName:state.peerName,own:false,emojis:['👍'],...(state.peerOccupant?{}:{avatarHash})},{address:state.roomPrivate?'occupant:'+('b'.repeat(64)):'carol@fixture',displayName:'Carol',own:false,emojis:['👍']}]:[])],items:[...new Set([...(state.baseReactions?['👍']:[]),...state.own])].sort().map(emoji=>({emoji,count:(state.baseReactions&&emoji==='👍'?2:0)+(state.own.includes(emoji)?1:0),own:state.own.includes(emoji)})),eligible:state.eligible,maxEmojis:state.max,...(state.allowed?{allowedEmojis:state.allowed}:{}),...(pending()?{pendingCommand:pending()}: {})});
- const emit=(event='message.updated')=>{state.seq++;for(const s of streams)s.write(`id: ${engine}:${state.seq}\nevent: ${event}\ndata: {}\n\n`)};
- const apply=c=>{c.state='submitted';state.own=[...c.emojis];state.ownRevision=c.revisionId;emit()};
+ const emit=(event='message.updated',data={})=>{state.seq++;for(const s of streams)s.write(`id: ${engine}:${state.seq}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`)};
+ const apply=(c,data)=>{c.state='submitted';state.own=[...c.emojis];state.ownRevision=c.revisionId;emit('message.updated',data)};
  const api=http.createServer(async(req,res)=>{
   const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(code,value)=>{res.statusCode=code;res.end(JSON.stringify(value))};
   if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.27.0',eventCursor:engine+':'+state.seq});
@@ -133,7 +133,40 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   const effects=state.effects,csrf=await page.locator('meta[name="oie-csrf"]').getAttribute('content'),bad=new URLSearchParams({csrf,engineId:engine,accountId:id(999),conversationId:chat,messageId:message,operationKey:id(901),expectedOwnRevisionId:state.ownRevision||'',emojis:'[]',lang:'en'});
   const foreign=await context.request.post(base+'/ui/messages/reactions',{headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},data:bad.toString()});assert.equal(foreign.status(),404);bad.set('accountId',account);bad.set('csrf','wrong');const denied=await context.request.post(base+'/ui/messages/reactions',{headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},data:bad.toString()});assert.equal(denied.status(),403);assert.equal(state.effects,effects);
   state.max=1;state.allowed=['👍','😂','🙏','😮','😢','❤️','😀','😃','😄','😁','😆','😅'];emit();await react();await pick('😂');await own('😂',true);assert.deepEqual(state.own,['😂'],'single-selection restriction replaces previous own emoji');assert.equal(await region.locator('[data-reaction-emoji="🙏"]').count(),0);await removeReaction('😂');await until(()=>state.own.length===0,'single reaction clears');
-  state.commandState='queued';await react();await pick('😮');await region.locator('[data-reaction-check][aria-busy="true"]').waitFor({state:'visible'});assert.equal(await region.locator('[data-reaction-detail-emoji="😮"]').count(),0,'queued dispatch does not invent observed reaction count');const queued=[...commands.values()].at(-1);apply(queued);await own('😮',true);await until(async()=>await region.locator('[data-reaction-check]').count()===0,'queued receipt completes');state.commandState='submitted';
+  state.commandState='queued';await react();await pick('😮');await region.locator('[data-reaction-check][aria-busy="true"]').waitFor({state:'visible'});assert.equal(await region.locator('[data-reaction-detail-emoji="😮"]').count(),0,'queued dispatch does not invent observed reaction count');const queued=[...commands.values()].at(-1);apply(queued);await own('😮',true);await until(async()=>await region.locator('[data-reaction-check]').count()===0,'queued receipt completes using polling fallback');
+  state.commandState='submitted';await removeReaction('😮');await own('😮',false);
+  await until(async()=>await region.locator('[data-reaction-check]').count()===0,'reaction cleared before event fixture');
+  state.commandState='queued';
+  let heldResponse,releaseResponse;
+  const responseGate=new Promise(resolve=>{releaseResponse=resolve});
+  await page.route('**/ui/messages/reactions',async route=>{
+   const response=await route.fetch();heldResponse=true;
+   await responseGate;await route.fulfill({response});
+  });
+  await page.evaluate(id=>{
+   const original=window.setTimeout;
+   window.restoreReactionTimer=()=>{window.setTimeout=original};
+   window.setTimeout=(fn,ms,...args)=>original(fn,ms===1200?30000:ms,...args);
+   document.addEventListener('oie:message-updated',event=>{
+    if(event.detail.id===id)window.receivedReactionHint=true;
+   });
+  },message);
+  try{
+   const posts=state.posts;
+   await react();await pick('😮');
+   await until(()=>heldResponse,'accepted reaction response is held');
+   await region.locator('[data-reaction-check][aria-busy="true"]').waitFor({state:'visible'});
+   apply([...commands.values()].at(-1),{message:source});
+   await until(()=>page.evaluate(()=>window.receivedReactionHint===true),'matching SSE event arrives before the acceptance response');
+   releaseResponse();
+   await until(async()=>await region.locator('[data-reaction-check]').count()===0,'SSE reconciles receipt before the fallback');
+   await own('😮',true);
+   assert.equal(state.posts,posts+1,'SSE checks the receipt without resending');
+  }finally{
+   releaseResponse();await page.unroute('**/ui/messages/reactions');
+   await page.evaluate(()=>window.restoreReactionTimer());
+  }
+  state.commandState='submitted';
   const invalid=new URLSearchParams({csrf,engineId:engine,accountId:account,conversationId:chat,messageId:message,operationKey:id(902),expectedOwnRevisionId:state.ownRevision||'',emojis:'["plain"]',lang:'en'}),beforeInvalid=state.effects;const invalidResponse=await context.request.post(base+'/ui/messages/reactions',{headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},data:invalid.toString()});assert.equal(invalidResponse.status(),400);assert.equal((await invalidResponse.json()).rejected,true);assert.equal(state.effects,beforeInvalid);assert.equal(await page.locator('[data-form-feedback]').first().textContent(),'');state.allowed=null;state.max=8;emit();findings.push('An allowlist with more than eight choices is retained independently of maxEmojis1; choosing another replaces the existing reaction, same choice clears, and protocol refusal adds no composer banner');
   // The first pending reaction uses an overlay, before any observed count exists.
   await removeReaction('😮');await until(()=>state.own.length===0,'clear before empty summary');state.baseReactions=false;emit();await region.locator('[data-reaction-summary]').waitFor({state:'hidden'});state.commandState='unknown';await react();await modal.waitFor({state:'visible'});await page.evaluate(()=>{const read=()=>{const b=document.querySelector('[data-message-bubble]').getBoundingClientRect(),c=document.querySelector('#message-composer').getBoundingClientRect(),t=document.querySelector('#message-timeline');return{x:b.x,y:b.y,w:b.width,h:b.height,composer:c.y,scroll:t.scrollTop}};window.firstReactionGeometry={read,frames:[read()],active:true};const tick=()=>{if(!firstReactionGeometry.active)return;firstReactionGeometry.frames.push(read());requestAnimationFrame(tick)};requestAnimationFrame(tick)});await pick('😮');await region.locator('[data-reaction-check]').waitFor({state:'visible'});await wait(200);const pendingFrames=await page.evaluate(()=>{firstReactionGeometry.active=false;return firstReactionGeometry.frames});assert(pendingFrames.length>5);for(const f of pendingFrames)for(const k of ['x','y','w','h','composer','scroll'])assert(Math.abs(f[k]-pendingFrames[0][k])<=1,'first pending reaction shifted '+k);const firstPending=[...commands.values()].at(-1);apply(firstPending);await region.locator('[data-reaction-check]').click();await own('😮',true);await until(async()=>await region.locator('[data-reaction-check]').count()===0,'first pending receipt reconciled');state.commandState='submitted';state.baseReactions=true;emit();await region.locator('[data-reaction-detail-emoji="👍"]').first().waitFor({state:'attached'});findings.push('First reaction pending/recovery overlays the source without changing bubble, composer or timeline geometry in painted frames');
