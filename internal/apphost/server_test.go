@@ -463,29 +463,37 @@ func TestDataOnlyRolesExposeEngineWithoutPresentation(t *testing.T) {
 	for _, role := range []string{"local", "hosted"} {
 		t.Run(role, func(t *testing.T) {
 			s := testServer(t, Config{Role: role, DataOnly: true, Listen: "127.0.0.1:0", DataDir: t.TempDir()})
-			c := engineClient(t, s)
+			// Use one test-owned transport and finish each response before shutdown.
+			transport := http.DefaultTransport.(*http.Transport).Clone()
+			transport.DisableKeepAlives = true
+			client := &http.Client{Transport: transport, Timeout: 2 * time.Second}
+			c, err := engineapi.NewClientWithResponses(s.URL(), engineapi.WithHTTPClient(client))
+			if err != nil {
+				t.Fatal(err)
+			}
 			identity, err := c.GetEngineWithResponse(t.Context())
 			if err != nil || identity.JSON200 == nil || string(identity.JSON200.Role) != role {
 				t.Fatalf("engine identity: %v %#v", err, identity)
 			}
-			for _, path := range []string{"/", "/ui/events", "/assets/", "/ui/api/v1/previews/" + uuid.Must(uuid.NewV7()).String()} {
-				res, err := http.Get(s.URL() + path)
+			checkStatus := func(path string, status int) {
+				t.Helper()
+				res, err := client.Get(s.URL() + path)
 				if err != nil {
 					t.Fatal(err)
 				}
-				_ = res.Body.Close()
-				if res.StatusCode != 404 {
-					t.Fatalf("data-only served presentation %s: %d", path, res.StatusCode)
+				_, readErr := io.Copy(io.Discard, res.Body)
+				closeErr := res.Body.Close()
+				if err := errors.Join(readErr, closeErr); err != nil {
+					t.Fatal(err)
+				}
+				if res.StatusCode != status {
+					t.Fatalf("data-only %s: status %d, want %d", path, res.StatusCode, status)
 				}
 			}
-			res, err := http.Get(s.URL() + "/api/openapi.yaml")
-			if err != nil {
-				t.Fatal(err)
+			for _, path := range []string{"/", "/ui/events", "/assets/", "/ui/api/v1/previews/" + uuid.Must(uuid.NewV7()).String()} {
+				checkStatus(path, http.StatusNotFound)
 			}
-			_ = res.Body.Close()
-			if res.StatusCode != 200 {
-				t.Fatalf("contract status %d", res.StatusCode)
-			}
+			checkStatus("/api/openapi.yaml", http.StatusOK)
 			w := httptest.NewRecorder()
 			s.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/engine", nil))
 			if w.Code != 404 {
