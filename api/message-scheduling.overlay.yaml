@@ -1,0 +1,179 @@
+overlay: 1.0.0
+info:
+  title: Oiê message scheduling draft
+  version: 0.1.0
+extends: ./openapi.yaml
+# Review with vacuum apply-overlay before merging into openapi.yaml.
+actions:
+  - target: $.paths['/api/v1/conversations/{conversationId}/messages'].post
+    update:
+      summary: Accept an immediate or scheduled text message
+      description: >-
+        Atomically stores the message, operation receipt and outbox intent.
+        An omitted scheduledAt makes the message eligible immediately. A future
+        schedule never blocks another eligible send. A missed schedule becomes
+        eligible as soon as the owning engine is running and the destination is
+        reachable again. For rooms, the existing explicit join intent and
+        confirmed membership requirements apply.
+
+        The idempotency fingerprint includes the normalized scheduled instant.
+        A matching replay returns the original acceptance snapshot even after
+        the scheduled instant passes. Reusing the key with different input
+        returns idempotency_conflict. Read the message for its current revision
+        and send state. An ambiguous transmission remains unknown until reconciled.
+  - target: $.components.schemas.SendMessage.properties
+    update:
+      scheduledAt:
+        allOf:
+          - $ref: '#/components/schemas/ScheduledSendInstant'
+        description: >-
+          Optional earliest dispatch instant for a plain-text send. Requests
+          that also include a reply target or nonempty mentions are invalid.
+          Omission makes the send eligible immediately.
+  - target: $.components.schemas.Message.properties
+    update:
+      scheduledAt:
+        type: string
+        format: date-time
+        description: >-
+          The configured earliest dispatch instant in UTC, present for a
+          scheduled send even after it leaves the queue. A scheduled send
+          remains queued while it waits for that instant or for connectivity.
+          createdAt remains the time the message was originally accepted.
+        example: '2026-11-12T15:30:00Z'
+  - target: $.paths['/api/v1/operations/{operationId}'].get
+    update:
+      description: >-
+        A receipt proves the local mutation committed. Send receipts prove
+        durable engine acceptance. This route exposes the receipt kinds defined
+        by Operation. An ID without an exposed receipt returns 404. Recover the
+        result of updatePendingMessage by replaying its original PATCH.
+  - target: $.paths
+    update:
+      /api/v1/messages/{messageId}/pending:
+        parameters:
+          - $ref: '#/components/parameters/MessageID'
+        patch:
+          tags: [Messages]
+          operationId: updatePendingMessage
+          summary: Edit or reschedule a pending text message
+          description: >-
+            Updates text, schedule or both in one transaction at the owning
+            engine. The current revision must match expectedRevisionId and the
+            original send must be queued and known unsent. This operation
+            applies to own plain-text sends without replies or frozen mentions.
+            The message ID, destination and original creation time are retained.
+
+            The mutation and the dispatch claim share an atomic cutoff. A
+            stale revision, ineligible message or dispatch claim that wins the
+            race yields state_conflict with currentMessage. An unknown transmission
+            cannot be edited or rescheduled. If the mutation wins, any later
+            claim uses the new revision and rechecks the current eligibility time.
+
+            Use the same key and input to replay the original successful
+            mutation snapshot. The replay is evaluated before the current
+            revision, send state and time preconditions. Use this replay to
+            recover a lost response. Use getMessage for the latest state.
+          parameters:
+            - name: Idempotency-Key
+              in: header
+              required: true
+              description: Stable key for this mutation. Different input with the same key returns idempotency_conflict.
+              schema:
+                $ref: '#/components/schemas/ID'
+          requestBody:
+            required: true
+            description: Fields to change and the expected message revision.
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/UpdatePendingMessage'
+          responses:
+            '200':
+              description: Committed message revision or original successful replay
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Message'
+                  example:
+                    id: 019a5df0-0000-7000-8000-000000000001
+                    revisionId: 019a5df0-0000-7000-8000-000000000003
+                    accountId: 019a5df0-0000-7000-8000-000000000004
+                    conversationId: 019a5df0-0000-7000-8000-000000000005
+                    sender:
+                      id: 019a5df0-0000-7000-8000-000000000006
+                      displayName: alice@localhost
+                    originalText: See you tomorrow.
+                    createdAt: '2026-11-11T15:30:00Z'
+                    scheduledAt: '2026-11-12T15:30:00Z'
+                    isOwn: true
+                    sendState: queued
+            '400':
+              $ref: '#/components/responses/Invalid'
+            '404':
+              $ref: '#/components/responses/NotFound'
+            '409':
+              $ref: '#/components/responses/Conflict'
+            '413':
+              description: Request body exceeds the one MiB engine limit.
+              content:
+                application/problem+json:
+                  schema:
+                    $ref: '#/components/schemas/Problem'
+            '415':
+              description: Request media type is not supported.
+              content:
+                application/problem+json:
+                  schema:
+                    $ref: '#/components/schemas/Problem'
+            '503':
+              $ref: '#/components/responses/Unavailable'
+  - target: $.components.schemas
+    update:
+      ScheduledSendInstant:
+        type: string
+        format: date-time
+        pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2})$'
+        description: >-
+          An RFC 3339 instant strictly in the future when the owning engine
+          first accepts the mutation. Supply an explicit offset or Z, with up
+          to nine fractional second digits. The engine normalizes it to UTC
+          without changing the instant. Equivalent offsets identify the same
+          instant for idempotency.
+        example: '2026-11-12T12:30:00-03:00'
+      UpdatePendingMessage:
+        type: object
+        description: >-
+          Supply originalText, scheduledAt or both. Omitted fields retain their
+          current values. Null is invalid. Changing pending content creates a
+          new message revision without creating a sent-message correction.
+        additionalProperties: false
+        minProperties: 2
+        required: [expectedRevisionId]
+        properties:
+          expectedRevisionId:
+            $ref: '#/components/schemas/ID'
+          originalText:
+            type: string
+            description: Exact UTF-8 replacement text. Empty and whitespace-only values are invalid.
+            minLength: 1
+            maxLength: 16384
+          scheduledAt:
+            $ref: '#/components/schemas/ScheduledSendInstant'
+        example:
+          expectedRevisionId: 019a5df0-0000-7000-8000-000000000002
+          originalText: See you tomorrow.
+          scheduledAt: '2026-11-12T12:30:00-03:00'
+  - target: $.paths['/api/v1/messages/{messageId}/cancel'].post
+    update:
+      summary: Cancel a pending send
+      description: >-
+        Requires the current revision and a queued, known-unsent message at the
+        owning engine, including a future schedule. Cancellation and dispatch
+        claims share an atomic cutoff. A stale revision or ineligible state
+        yields state_conflict with currentMessage. Cancelled intents do not
+        resume on ordinary restart. A matching idempotent replay returns the
+        original cancellation snapshot.
+  - target: $.components.schemas.CancelMessage
+    update:
+      description: Cancel a queued, known-unsent message using its current revision. A state conflict returns currentMessage.
