@@ -171,16 +171,24 @@ func (s *Server) messageEditHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h := historyPageView{Page: page, EngineID: engine, Cursor: cursor, Locale: v.Locale}
-	renderCtx := presentationContext(ctx, v)
+	// The bounded engine read also limits optional formatting. Render the
+	// validated page under the request context so exhausted formatting time
+	// leaves exact plain-text versions available.
+	formatted := make(map[string]templ.Component, len(page.Items))
 	for _, item := range page.Items {
-		h.Items = append(h.Items, historyItemView{MessageEditHistoryItem: item, Formatted: formattedMessage(renderCtx, item.OriginalText)})
+		content, exists := formatted[item.OriginalText]
+		if !exists && ctx.Err() == nil {
+			content = formattedMessage(ctx, item.OriginalText)
+			formatted[item.OriginalText] = content
+		}
+		h.Items = append(h.Items, historyItemView{MessageEditHistoryItem: item, Formatted: content})
 	}
 	var out bytes.Buffer
 	component := messageHistoryPage(v, h)
 	if r.Header.Get("X-Oie-Fragment") != "message-history" {
 		component = messageHistoryDocument(v, h)
 	}
-	if err := component.Render(renderCtx, &out); err != nil {
+	if err := component.Render(presentationContext(r.Context(), v), &out); err != nil {
 		fail(503)
 		return
 	}

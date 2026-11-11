@@ -64,6 +64,10 @@ func TestMessageHistoryBodyAndMetadataBoundsAreIndependent(t *testing.T) {
 
 func TestMessageHistoryHandlerRendersFullPageOfMaximumRetainedSources(t *testing.T) {
 	page, source := historyBoundaryPage(messageHistoryPageSize, strings.Repeat("a", messageHistoryBodyBytes))
+	pageBody, err := json.Marshal(page)
+	if err != nil {
+		t.Fatal(err)
+	}
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("effectful history read: %s", r.Method)
@@ -78,7 +82,7 @@ func TestMessageHistoryHandlerRendersFullPageOfMaximumRetainedSources(t *testing
 			if r.URL.Query().Get("limit") != "20" {
 				t.Errorf("history page bound changed: %s", r.URL.Query().Get("limit"))
 			}
-			_ = json.NewEncoder(w).Encode(page)
+			_, _ = w.Write(pageBody)
 		default:
 			t.Errorf("history performed unrelated read: %s", r.URL)
 			w.WriteHeader(http.StatusNotFound)
