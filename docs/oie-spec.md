@@ -297,7 +297,7 @@ Missing optional delivery/read receipts must not trigger indefinite resending of
 
 ### 5.2 Mutation cutoff and races
 
-| State/evidence | Cancel, edit pending content, or reschedule |
+| State/evidence | Cancel, edit pending content, reschedule or send now |
 | --- | --- |
 | Scheduled, queued, or waiting for retry with known-unsent status, before dispatch | Allowed through an atomic engine-side guard. |
 | Dispatch has started or the original transmission is in flight | Reject the mutation and return actual status. |
@@ -337,9 +337,11 @@ scheduled messages across conversations. Each entry identifies its destination.
 Users can filter by conversation, open the destination, edit in that
 conversation's composer, reschedule, cancel or send now.
 
-The [OpenAPI draft](../api/message-scheduling.overlay.yaml) covers the earlier
-plain-text increment. Full composition and Send now need contract revisions,
-including attachment staging under O09 and a cross-conversation listing. The
+The [OpenAPI draft](../api/message-scheduling.overlay.yaml) proposes the
+contract for complete compositions, attachment staging, cross-conversation
+listing and Send now. It proposes a shared cutoff before the first provider
+attempt, including an attachment upload. Attachment limits, staging retention
+and transfer resume remain open under O09. The
 [scheduling prototype](prototypes/message-scheduling.html) demonstrates the
 agreed controls with local example data.
 

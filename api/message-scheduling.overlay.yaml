@@ -1,113 +1,152 @@
 overlay: 1.0.0
 info:
   title: Oiê message scheduling draft
-  version: 0.1.0
+  version: 0.2.0
 extends: ./openapi.yaml
-# Review with vacuum apply-overlay before merging into openapi.yaml.
+# Apply with vacuum to review the proposed engine contract.
 actions:
   - target: $.paths['/api/v1/conversations/{conversationId}/messages'].post
     update:
-      summary: Accept an immediate or scheduled text message
+      summary: Accept an immediate or scheduled message
       description: >-
-        Atomically stores the message, operation receipt and outbox intent.
-        An omitted scheduledAt makes the message eligible immediately. A future
-        schedule never blocks another eligible send. A missed schedule becomes
-        eligible as soon as the owning engine is running and the destination is
-        reachable again. For rooms, the existing explicit join intent and
-        confirmed membership requirements apply.
+        Atomically commits one logical message, operation receipt and outbox
+        intent for the complete composition, including the ordered references to
+        staged attachments. The engine checks the destination, reply, mentions,
+        attachment scope and effective send capabilities before acceptance.
+        Invalid or unavailable attachments reject the whole composition.
+        Attachment bytes are staged locally and any provider upload belongs
+        to dispatch. Room dispatch waits for confirmed membership under an
+        active explicit join intent.
 
-        The idempotency fingerprint includes the normalized scheduled instant.
-        A matching replay returns the original acceptance snapshot even after
-        the scheduled instant passes. Reusing the key with different input
-        returns idempotency_conflict. Read the message for its current revision
-        and send state. An ambiguous transmission remains unknown until reconciled.
-  - target: $.components.schemas.SendMessage.properties
+        Omitting scheduledAt makes the intent immediately eligible. A future
+        schedule never blocks another eligible send. A missed schedule dispatches
+        when the owning engine and destination become available again.
+        Idempotency includes the complete composition and normalized instant.
+        A matching replay returns the original acceptance snapshot even after the
+        scheduled time passes or attachment availability changes. Different
+        input with the same key yields idempotency_conflict. Read the message
+        for current state. Ambiguous transmission remains unknown.
+  - target: $.paths['/api/v1/conversations/{conversationId}/messages'].post.requestBody.content['application/json'].example
+    remove: true
+  - target: $.paths['/api/v1/conversations/{conversationId}/messages'].post.requestBody.content['application/json']
     update:
-      scheduledAt:
-        allOf:
-          - $ref: '#/components/schemas/ScheduledSendInstant'
-        description: >-
-          Optional earliest dispatch instant for a plain-text send. Requests
-          that also include a reply target or nonempty mentions are invalid.
-          Omission makes the send eligible immediately.
+      examples:
+        immediateText:
+          summary: Existing immediate text send
+          value:
+            originalText: Hello from Oie!
+        scheduledComposition:
+          summary: Scheduled text with a link and a staged file
+          value:
+            originalText: 'Studio entrance: https://example.org/studio'
+            attachmentIds: [019a5df0-0000-7000-8000-000000000006]
+            scheduledAt: '2026-11-12T12:30:00-03:00'
+  - target: $.components.schemas.SendMessage
+    update:
+      description: >-
+        Authored text and optional reply, mentions and ordered staged attachments.
+        Links are part of the authored text. Reply targets use canonical UUIDs
+        scoped to the destination. The engine freezes reply and mention
+        references before enqueueing. The resulting Message.originalText
+        follows the existing retained body format, including any reply
+        compatibility text. Message.composition contains the editable input
+        for pending sends.
+      not:
+        type: object
+        properties:
+          originalText: {type: string, maxLength: 0}
+        not:
+          type: object
+          required: [attachmentIds]
+      properties:
+        originalText:
+          minLength: 0
+          description: Exact authored UTF-8 text. Empty or whitespace-only text requires at least one attachment.
+        attachmentIds:
+          $ref: '#/components/schemas/StagedAttachmentIDs'
+        scheduledAt:
+          $ref: '#/components/schemas/ScheduledSendInstant'
   - target: $.components.schemas.Message.properties
     update:
       scheduledAt:
         type: string
         format: date-time
         description: >-
-          The configured earliest dispatch instant in UTC, present for a
-          scheduled send even after it leaves the queue. A scheduled send
-          remains queued while it waits for that instant or for connectivity.
-          createdAt remains the time the message was originally accepted.
+          Configured earliest dispatch instant in UTC, when retained. A scheduled
+          send remains queued while waiting for that instant or for connectivity.
+          Send now clears this field. createdAt is the original acceptance time.
         example: '2026-11-12T15:30:00Z'
+      composition:
+        allOf:
+          - $ref: '#/components/schemas/OutgoingComposition'
+        description: >-
+          Accepted authored input for an editable own pending message and its
+          acceptance or mutation snapshots. Reopen the editor from this input.
+          Reply rendering and attachment metadata are exposed on the same Message.
+      attachments:
+        type: array
+        minItems: 1
+        description: Ordered metadata for retained outgoing attachments.
+        items:
+          $ref: '#/components/schemas/StagedAttachment'
   - target: $.paths['/api/v1/operations/{operationId}'].get
     update:
       description: >-
         A receipt proves the local mutation committed. Send receipts prove
         durable engine acceptance. This route exposes the receipt kinds defined
         by Operation. An ID without an exposed receipt returns 404. Recover the
-        result of updatePendingMessage by replaying its original PATCH.
+        result of updatePendingMessage or sendScheduledMessageNow by replaying
+        the original request with the same key and input.
   - target: $.paths
     update:
-      /api/v1/messages/{messageId}/pending:
+      /api/v1/conversations/{conversationId}/staged-attachments/{attachmentId}:
         parameters:
-          - $ref: '#/components/parameters/MessageID'
-        patch:
+          - $ref: '#/components/parameters/ConversationID'
+          - $ref: '#/components/parameters/StagedAttachmentID'
+        put:
           tags: [Messages]
-          operationId: updatePendingMessage
-          summary: Edit or reschedule a pending text message
+          operationId: stageMessageAttachment
+          summary: Stage a file for an outgoing message
           description: >-
-            Updates text, schedule or both in one transaction at the owning
-            engine. The current revision must match expectedRevisionId and the
-            original send must be queued and known unsent. This operation
-            applies to own plain-text sends without replies or frozen mentions.
-            The message ID, destination and original creation time are retained.
-
-            The mutation and the dispatch claim share an atomic cutoff. A
-            stale revision, ineligible message or dispatch claim that wins the
-            race yields state_conflict with currentMessage. An unknown transmission
-            cannot be edited or rescheduled. If the mutation wins, any later
-            claim uses the new revision and rechecks the current eligibility time.
-
-            Use the same key and input to replay the original successful
-            mutation snapshot. The replay is evaluated before the current
-            revision, send state and time preconditions. Use this replay to
-            recover a lost response. Use getMessage for the latest state.
-          parameters:
-            - name: Idempotency-Key
-              in: header
-              required: true
-              description: Stable key for this mutation. Different input with the same key returns idempotency_conflict.
-              schema:
-                $ref: '#/components/schemas/ID'
+            Store one complete file durably on the owning engine, scoped to
+            this conversation and its account. The client assigns the ID once.
+            A matching repeat with the same file bytes and filename returns
+            the original receipt. Different input for that ID yields
+            idempotency_conflict. An incomplete request leaves no usable
+            attachment. Confirmed local staging performs no provider upload.
+            Send and pending edit accept only available attachments in the same
+            scope. The engine retains accepted references while their send
+            is unresolved, including through restart, rescheduling and Send now.
           requestBody:
             required: true
-            description: Fields to change and the expected message revision.
+            description: One file with its filename in the file part's Content-Disposition.
             content:
-              application/json:
+              multipart/form-data:
+                example:
+                  file: hello
                 schema:
-                  $ref: '#/components/schemas/UpdatePendingMessage'
+                  type: object
+                  additionalProperties: false
+                  required: [file]
+                  properties:
+                    file: {type: string, format: binary, example: hello}
           responses:
-            '200':
-              description: Committed message revision or original successful replay
+            '201':
+              description: File durably staged
+              headers:
+                Location:
+                  description: Scoped URL for the staged bytes.
+                  schema: {type: string, format: uri-reference}
               content:
                 application/json:
                   schema:
-                    $ref: '#/components/schemas/Message'
-                  example:
-                    id: 019a5df0-0000-7000-8000-000000000001
-                    revisionId: 019a5df0-0000-7000-8000-000000000003
-                    accountId: 019a5df0-0000-7000-8000-000000000004
-                    conversationId: 019a5df0-0000-7000-8000-000000000005
-                    sender:
-                      id: 019a5df0-0000-7000-8000-000000000006
-                      displayName: alice@localhost
-                    originalText: See you tomorrow.
-                    createdAt: '2026-11-11T15:30:00Z'
-                    scheduledAt: '2026-11-12T15:30:00Z'
-                    isOwn: true
-                    sendState: queued
+                    $ref: '#/components/schemas/StagedAttachment'
+            '200':
+              description: Matching staged attachment receipt replayed
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/StagedAttachment'
             '400':
               $ref: '#/components/responses/Invalid'
             '404':
@@ -115,19 +154,204 @@ actions:
             '409':
               $ref: '#/components/responses/Conflict'
             '413':
-              description: Request body exceeds the one MiB engine limit.
+              description: File exceeds the applicable staging or known destination size limit.
               content:
                 application/problem+json:
-                  schema:
-                    $ref: '#/components/schemas/Problem'
+                  schema: {$ref: '#/components/schemas/Problem'}
             '415':
-              description: Request media type is not supported.
+              description: Unsupported request media type or attachment format.
               content:
                 application/problem+json:
-                  schema:
-                    $ref: '#/components/schemas/Problem'
+                  schema: {$ref: '#/components/schemas/Problem'}
             '503':
               $ref: '#/components/responses/Unavailable'
+        get:
+          tags: [Messages]
+          operationId: getStagedMessageAttachment
+          summary: Read retained bytes of an outgoing attachment
+          description: >-
+            Reads local bytes in this conversation and account scope, for example
+            when reopening an existing scheduled composition. Returns 404 when
+            bytes are unavailable or the attachment is outside this scope.
+          responses:
+            '200':
+              description: Retained attachment bytes
+              content:
+                application/octet-stream:
+                  schema: {type: string, format: binary}
+            '400':
+              $ref: '#/components/responses/Invalid'
+            '404':
+              $ref: '#/components/responses/NotFound'
+            '503':
+              $ref: '#/components/responses/Unavailable'
+      /api/v1/scheduled-messages:
+        get:
+          tags: [Messages]
+          operationId: listScheduledMessages
+          summary: List scheduled messages across conversations
+          description: >-
+            Lists the selected engine's own queued, known-unsent messages with
+            a configured schedule, including overdue sends waiting for
+            connectivity. Results include their destination. Successful Send
+            now removes the item from this list even if connectivity delays
+            dispatch. Results sort by scheduledAt ascending, then message UUID
+            ascending. Pagination is over current data. Concurrent changes
+            can move items across the cursor boundary.
+          parameters:
+            - name: conversationId
+              in: query
+              description: Limit results to one conversation on this engine.
+              schema:
+                $ref: '#/components/schemas/ID'
+            - name: cursor
+              in: query
+              description: Opaque continuation bound to this engine and conversation filter.
+              schema: {type: string, minLength: 1, maxLength: 8192}
+            - name: limit
+              in: query
+              description: Maximum number of scheduled messages in this page.
+              schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+          responses:
+            '200':
+              description: One page of pending scheduled messages
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/ScheduledMessagePage'
+                  example:
+                    engineId: 019a5df0-0000-7000-8000-000000000001
+                    items: []
+            '400':
+              $ref: '#/components/responses/Invalid'
+            '404':
+              $ref: '#/components/responses/NotFound'
+            '503':
+              $ref: '#/components/responses/Unavailable'
+      /api/v1/messages/{messageId}/pending:
+        parameters:
+          - $ref: '#/components/parameters/MessageID'
+        patch:
+          tags: [Messages]
+          operationId: updatePendingMessage
+          summary: Edit or reschedule a pending message
+          description: >-
+            Replace the full composition, change the schedule, or do both in
+            one transaction at the owning engine. It must be an own queued,
+            known-unsent message with the expected revision. The message ID,
+            destination and creation time are retained. The engine validates new
+            or changed reply, mentions and attachment references, then commits
+            the updated composition and attachment references together. A
+            schedule-only update preserves the accepted composition.
+
+            The mutation and the dispatch claim share an atomic cutoff before
+            any external provider attempt for this intent, including attachment
+            upload. Stale revision, ineligible state or a winning dispatch claim
+            yields state_conflict with currentMessage. When the mutation wins,
+            a later claim uses the new revision and eligibility time. Matching
+            idempotent replay returns the original result before evaluating
+            current state, attachment availability or time preconditions.
+          parameters:
+            - $ref: '#/components/parameters/ScheduledMutationKey'
+          requestBody:
+            required: true
+            description: Expected revision and the fields to change.
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/UpdatePendingMessage'
+          responses:
+            '200':
+              $ref: '#/components/responses/PendingMessageUpdated'
+            '400':
+              $ref: '#/components/responses/Invalid'
+            '404':
+              $ref: '#/components/responses/NotFound'
+            '409':
+              $ref: '#/components/responses/Conflict'
+            '413':
+              $ref: '#/components/responses/SchedulingBodyTooLarge'
+            '415':
+              $ref: '#/components/responses/SchedulingUnsupportedMedia'
+            '503':
+              $ref: '#/components/responses/Unavailable'
+      /api/v1/messages/{messageId}/send-now:
+        parameters:
+          - $ref: '#/components/parameters/MessageID'
+        post:
+          tags: [Messages]
+          operationId: sendScheduledMessageNow
+          summary: Make a scheduled message eligible immediately
+          description: >-
+            With the current expected revision, atomically clears scheduledAt
+            on the same queued, known-unsent scheduled intent and makes it
+            eligible immediately. The message ID, destination, composition and
+            attachments remain attached to the same intent. Acceptance records
+            eligibility. Dispatch still requires the owning engine, connectivity
+            and any existing destination prerequisites. This operation and
+            dispatch share the same atomic cutoff as pending edit and cancel,
+            including before provider attachment upload. A stale revision,
+            ineligible state or winning dispatch claim yields state_conflict with
+            currentMessage. Repeating the same key and input returns the original
+            successful result even if dispatch has since started.
+          parameters:
+            - $ref: '#/components/parameters/ScheduledMutationKey'
+          requestBody:
+            required: true
+            description: Expected revision of the scheduled message to send now.
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/SendScheduledMessageNow'
+          responses:
+            '200':
+              $ref: '#/components/responses/PendingMessageUpdated'
+            '400':
+              $ref: '#/components/responses/Invalid'
+            '404':
+              $ref: '#/components/responses/NotFound'
+            '409':
+              $ref: '#/components/responses/Conflict'
+            '413':
+              $ref: '#/components/responses/SchedulingBodyTooLarge'
+            '415':
+              $ref: '#/components/responses/SchedulingUnsupportedMedia'
+            '503':
+              $ref: '#/components/responses/Unavailable'
+  - target: $.components.parameters
+    update:
+      StagedAttachmentID:
+        name: attachmentId
+        in: path
+        required: true
+        description: Client-assigned UUIDv7 of one staged attachment.
+        schema:
+          $ref: '#/components/schemas/ID'
+      ScheduledMutationKey:
+        name: Idempotency-Key
+        in: header
+        required: true
+        description: Stable mutation key. Different input with the same key yields idempotency_conflict.
+        schema:
+          $ref: '#/components/schemas/ID'
+  - target: $.components.responses
+    update:
+      PendingMessageUpdated:
+        description: Committed message revision or original successful replay
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Message'
+      SchedulingBodyTooLarge:
+        description: JSON mutation exceeds the one MiB engine request limit.
+        content:
+          application/problem+json:
+            schema: {$ref: '#/components/schemas/Problem'}
+      SchedulingUnsupportedMedia:
+        description: JSON mutation requires application/json.
+        content:
+          application/problem+json:
+            schema: {$ref: '#/components/schemas/Problem'}
   - target: $.components.schemas
     update:
       ScheduledSendInstant:
@@ -136,44 +360,157 @@ actions:
         pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2})$'
         description: >-
           An RFC 3339 instant strictly in the future when the owning engine
-          first accepts the mutation. Supply an explicit offset or Z, with up
-          to nine fractional second digits. The engine normalizes it to UTC
-          without changing the instant. Equivalent offsets identify the same
-          instant for idempotency.
+          first accepts it. Supply an explicit offset or Z, with up to nine
+          fractional second digits. The engine normalizes to UTC. Equivalent
+          offsets identify the same instant for idempotency.
         example: '2026-11-12T12:30:00-03:00'
+      StagedAttachmentIDs:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        description: Ordered unique IDs of available staged files in the same destination scope.
+        items:
+          $ref: '#/components/schemas/ID'
+      StagedAttachment:
+        type: object
+        description: Immutable metadata for locally staged attachment bytes.
+        additionalProperties: false
+        required: [id, fileName, mediaType, size, sha256]
+        properties:
+          id:
+            $ref: '#/components/schemas/ID'
+          fileName:
+            type: string
+            minLength: 1
+            description: Display filename with no storage path.
+            example: notes.txt
+          mediaType:
+            type: string
+            description: Effective content type for presentation.
+            example: text/plain
+          size:
+            type: integer
+            format: int64
+            minimum: 0
+            description: Exact number of staged bytes.
+            example: 5
+          sha256:
+            type: string
+            pattern: '^[0-9a-f]{64}$'
+            description: SHA-256 computed over the complete staged bytes.
+            example: 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+        example:
+          id: 019a5df0-0000-7000-8000-000000000006
+          fileName: notes.txt
+          mediaType: text/plain
+          size: 5
+          sha256: 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+      OutgoingComposition:
+        type: object
+        description: >-
+          Complete authored content in the same form used at initial acceptance.
+          Omit an optional field to clear it when replacing the composition.
+        additionalProperties: false
+        required: [originalText]
+        not:
+          type: object
+          properties:
+            originalText: {type: string, maxLength: 0}
+          not:
+            type: object
+            required: [attachmentIds]
+        properties:
+          originalText:
+            type: string
+            maxLength: 16384
+            description: Exact UTF-8 text, including links. Empty or whitespace-only text requires at least one attachment.
+          replyToMessageId:
+            $ref: '#/components/schemas/ID'
+          mentions:
+            type: array
+            maxItems: 32
+            items:
+              $ref: '#/components/schemas/MentionSelection'
+          attachmentIds:
+            $ref: '#/components/schemas/StagedAttachmentIDs'
+        example:
+          originalText: 'Studio entrance: https://example.org/studio'
+          attachmentIds: [019a5df0-0000-7000-8000-000000000006]
       UpdatePendingMessage:
         type: object
         description: >-
-          Supply originalText, scheduledAt or both. Omitted fields retain their
-          current values. Null is invalid. Changing pending content creates a
-          new message revision without creating a sent-message correction.
+          Supply composition, scheduledAt or both. Each omitted top-level field
+          retains its current value. Null is invalid. Replacing the composition
+          creates a pending revision without a sent-message correction. Use
+          sendScheduledMessageNow to make an existing schedule eligible now.
         additionalProperties: false
         minProperties: 2
         required: [expectedRevisionId]
         properties:
           expectedRevisionId:
             $ref: '#/components/schemas/ID'
-          originalText:
-            type: string
-            description: Exact UTF-8 replacement text. Empty and whitespace-only values are invalid.
-            minLength: 1
-            maxLength: 16384
+          composition:
+            $ref: '#/components/schemas/OutgoingComposition'
           scheduledAt:
             $ref: '#/components/schemas/ScheduledSendInstant'
         example:
           expectedRevisionId: 019a5df0-0000-7000-8000-000000000002
-          originalText: See you tomorrow.
+          composition:
+            originalText: ''
+            attachmentIds: [019a5df0-0000-7000-8000-000000000006]
           scheduledAt: '2026-11-12T12:30:00-03:00'
+      SendScheduledMessageNow:
+        type: object
+        description: Revision precondition for making a scheduled message eligible now.
+        additionalProperties: false
+        required: [expectedRevisionId]
+        properties:
+          expectedRevisionId:
+            $ref: '#/components/schemas/ID'
+      ScheduledMessagePage:
+        type: object
+        description: Scheduled messages and their destinations at the selected owning engine.
+        additionalProperties: false
+        required: [engineId, items]
+        properties:
+          engineId:
+            $ref: '#/components/schemas/ID'
+          items:
+            type: array
+            maxItems: 100
+            items:
+              $ref: '#/components/schemas/ScheduledMessageItem'
+            example: []
+          nextCursor:
+            type: string
+            minLength: 1
+            maxLength: 8192
+            description: Omitted at the end of the list.
+            example: opaque-schedule-cursor
+      ScheduledMessageItem:
+        type: object
+        description: The current queued message, including scheduledAt and composition, and its destination.
+        additionalProperties: false
+        required: [message, conversation]
+        properties:
+          message:
+            allOf:
+              - $ref: '#/components/schemas/Message'
+              - type: object
+                required: [scheduledAt, composition]
+          conversation:
+            $ref: '#/components/schemas/Conversation'
   - target: $.paths['/api/v1/messages/{messageId}/cancel'].post
     update:
       summary: Cancel a pending send
       description: >-
         Requires the current revision and a queued, known-unsent message at the
         owning engine, including a future schedule. Cancellation and dispatch
-        claims share an atomic cutoff. A stale revision or ineligible state
-        yields state_conflict with currentMessage. Cancelled intents do not
-        resume on ordinary restart. A matching idempotent replay returns the
-        original cancellation snapshot.
+        share an atomic cutoff before any external provider attempt for that
+        intent, including attachment upload. A stale revision or ineligible
+        state yields state_conflict with currentMessage. Cancellation retires
+        the send intent and preserves any independent retained references.
+        A matching idempotent replay returns the original cancellation snapshot.
   - target: $.components.schemas.CancelMessage
     update:
       description: Cancel a queued, known-unsent message using its current revision. A state conflict returns currentMessage.
