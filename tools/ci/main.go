@@ -167,10 +167,23 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 		return err
 	}
 	docker := client.Container().From(dockerImage)
+	// SQLite fixtures create and migrate databases in t.TempDir. Match the
+	// development Compose fixture by keeping that scratch I/O off the shared disk.
+	const goScratch = "/tmp/oie-go"
 	goContainer := base.WithDirectory("/src", source).WithWorkdir("/src").
 		WithFile("/usr/local/bin/docker", docker.File("/usr/local/bin/docker")).
-		WithDirectory("/usr/local/libexec/docker/cli-plugins", docker.Directory("/usr/local/libexec/docker/cli-plugins"))
-	checked, err := r.stage(ctx, "checks", goContainer.WithExec([]string{"make", "check", "test-race", "build", "build-cli"}))
+		WithDirectory("/usr/local/libexec/docker/cli-plugins", docker.Directory("/usr/local/libexec/docker/cli-plugins")).
+		WithMountedTemp(goScratch, dagger.ContainerWithMountedTempOpts{Size: 2 << 30}).
+		WithEnvVariable("TMPDIR", goScratch)
+	checked, err := r.stage(ctx, "checks", goContainer.WithExec([]string{"make", "check"}))
+	if err != nil {
+		return err
+	}
+	checked, err = r.stage(ctx, "race", checked.WithExec([]string{"make", "test-race"}))
+	if err != nil {
+		return err
+	}
+	checked, err = r.stage(ctx, "build", checked.WithExec([]string{"make", "build", "build-cli"}))
 	if err != nil {
 		return err
 	}
@@ -213,9 +226,12 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 	if err != nil {
 		return err
 	}
+	const browserScratch = "/tmp/oie-browser"
 	browser = browser.WithDirectory("/src", source).
 		WithFile("/src/bin/oie", checked.File("/src/bin/oie")).WithFile("/src/bin/oie-mock", checked.File("/src/bin/oie-mock")).
 		WithFile("/tmp/xmpp-ca.crt", ca).WithWorkdir("/src").WithServiceBinding("xmpp", xmpp).
+		WithMountedTemp(browserScratch, dagger.ContainerWithMountedTempOpts{Size: 2 << 30}).
+		WithEnvVariable("TMPDIR", browserScratch).
 		WithEnvVariable("OIE_XMPP_CA_FILE", "/tmp/xmpp-ca.crt").WithEnvVariable("OIE_XMPP_ENDPOINT", "xmpp:5222").
 		WithEnvVariable("OIE_CI_RUN_ID", runID).WithExec([]string{"sh", "-c", browserCommand}, dagger.ContainerWithExecOpts{Expect: dagger.ReturnTypeAny})
 	browser, err = r.stage(ctx, "browser", browser)

@@ -185,6 +185,15 @@ Go compilation, golangci-lint results, npm packages and Playwright browsers have
 persistent engine caches.
 The runner prints stage progress every 30 seconds and saves command output under
 `tests/browser/artifacts/ci`. Browser evidence is under its `browser` subdirectory.
+`checks`, `race` and `build` run as separate stages with their own logs.
+Go and browser stages use a bounded memory-backed `TMPDIR` for disposable
+SQLite databases, compiler scratch files and browser profiles. The binaries,
+logs and browser exit receipt live outside those temporary mounts.
+On the SSH runner, a probe with 12 fresh SQLite databases and 120 committed
+inserts took 6.58 seconds on the shared disk and 0.039 seconds in memory.
+The shell lifecycle tests took 38.04 seconds in the disk-backed baseline,
+where the shell-only termination test timed out, and 1.16 seconds in the
+memory-backed check stage.
 `OIE_CI_TIMEOUT` sets the overall execution deadline, defaulting to 30 minutes.
 Failure and interruption preserve a failing exit status and clean only the
 snapshot, runner process and optional SSH tunnel owned by that invocation.
