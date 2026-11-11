@@ -178,9 +178,11 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 		WithFile("/usr/local/bin/docker", docker.File("/usr/local/bin/docker")).
 		WithDirectory("/usr/local/libexec/docker/cli-plugins", docker.Directory("/usr/local/libexec/docker/cli-plugins"))
 	// SQLite tests create fresh databases and run migrations in temporary
-	// directories. Keep that scratch I/O off the shared runner disk.
+	// directories. Keep that scratch I/O off the shared runner disk and put
+	// compiler scratch on disk so a cold build cannot fill the test tmpfs.
 	checked, err := r.stage(ctx, "checks", goContainer.
 		WithMountedTemp("/tmp", dagger.ContainerWithMountedTempOpts{Size: 2 << 30}).
+		WithEnvVariable("GOTMPDIR", "/var/tmp").
 		WithExec([]string{"make", "check", "test-race", "build", "build-cli"}))
 	if err != nil {
 		return err
