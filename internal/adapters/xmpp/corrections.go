@@ -29,15 +29,12 @@ func decodeCorrectionMetadata(meta correctionMetadata, msg stanza.Message, room,
 	author := msg.From.Bare().String()
 	scope := "xmpp:correct:sender:" + author
 	if room {
-		if msg.From.Resourcepart() == "" || !occupantVerified || len(meta.Occupants) != 1 {
-			return nil
-		}
-		occupant := meta.Occupants[0]
-		if !usableID(occupant.ID) || utf8.RuneCountInString(occupant.ID) > 128 || occupant.Text != "" || occupant.By != "" || len(occupant.Children) != 0 {
+		occupant := verifiedOccupantID(meta.Occupants)
+		if msg.From.Resourcepart() == "" || !occupantVerified || occupant == "" {
 			return nil
 		}
 		author = msg.From.String()
-		sum := sha256.Sum256([]byte(author + "\x00" + occupant.ID))
+		sum := sha256.Sum256([]byte(author + "\x00" + occupant))
 		scope = "xmpp:correct:room:" + msg.From.Bare().String() + ":" + hex.EncodeToString(sum[:])
 	}
 	result := &domain.MessageCorrection{Scope: scope, Author: author, ID: msg.ID}
@@ -51,6 +48,17 @@ func decodeCorrectionMetadata(meta correctionMetadata, msg stanza.Message, room,
 	return result
 }
 
+func verifiedOccupantID(occupants []wireID) string {
+	if len(occupants) != 1 {
+		return ""
+	}
+	occupant := occupants[0]
+	if !usableID(occupant.ID) || utf8.RuneCountInString(occupant.ID) > 128 || occupant.Text != "" || occupant.By != "" || len(occupant.Children) != 0 {
+		return ""
+	}
+	return occupant.ID
+}
+
 // A matching tag is not proof: rooms must advertise XEP-0421, otherwise a
 // participant could inject a pseudonym and correct another occupant's text.
 func recordOccupantSupport(e *entry, s *mx.Session, address string, info disco.Info) {
@@ -58,12 +66,14 @@ func recordOccupantSupport(e *entry, s *mx.Session, address string, info disco.I
 	if err != nil || room.Localpart() == "" || room.Resourcepart() != "" || address == e.account.Address {
 		return
 	}
-	conference, advertised := false, false
+	conference, advertised, semianonymous, nonanonymous := false, false, false, false
 	for _, identity := range info.Identity {
 		conference = conference || (identity.Category == "conference" && identity.Type == "text")
 	}
 	for _, feature := range info.Features {
 		advertised = advertised || feature.Var == occupantIDNS
+		semianonymous = semianonymous || feature.Var == "muc_semianonymous"
+		nonanonymous = nonanonymous || feature.Var == "muc_nonanonymous"
 	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -79,4 +89,8 @@ func recordOccupantSupport(e *entry, s *mx.Session, address string, info disco.I
 		return
 	}
 	e.occupantScopes[address] = conference && advertised
+	if e.semianonymousRooms == nil {
+		e.semianonymousRooms = map[string]bool{}
+	}
+	e.semianonymousRooms[address] = conference && semianonymous && !nonanonymous
 }

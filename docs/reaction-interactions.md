@@ -17,11 +17,12 @@ API 0.27 extends the existing read snapshot with verified actor sets. The BFF
 read contract references that same snapshot; mutations keep the existing contract.
 
 The actor roster comes from the same canonical latest nonempty observations as
-emoji totals. It includes only verified protocol addresses. An active contact
-name takes precedence over the reaction's observed name, with the address as a
-fallback. Cached avatar hashes resolve only within the same account and exact
-verified address. Reading does not discover profiles, join rooms or infer a
-personal identity from a nickname. Missing images use Goshtoso Avatar initials.
+emoji totals. For verified addresses, an active contact name takes precedence
+over the reaction's observed name, with the address as a fallback. Cached avatar
+hashes resolve only within the same account and exact verified address.
+Semianonymous room participants appear by room nickname with initials.
+Their opaque actor keys identify rows without an address or profile lookup.
+Other actors without images also use initials.
 Names and addresses are text, never markup or executable expressions.
 
 The Popover lists each actor with avatar, name and emoji set. Filters retain only

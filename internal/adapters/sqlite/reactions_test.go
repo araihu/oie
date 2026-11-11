@@ -28,16 +28,22 @@ type reactionProtocol struct {
 	outboundProtocol
 	max       int
 	session   string
+	roomActor string
 	outcomes  []string
 	reactions []application.Outgoing
 }
 
-func (p *reactionProtocol) PrepareReaction(_ context.Context, a domain.Account, _ domain.Conversation, m domain.Message) (domain.OutgoingReaction, error) {
+func (p *reactionProtocol) PrepareReaction(_ context.Context, a domain.Account, c domain.Conversation, m domain.Message) (domain.OutgoingReaction, error) {
 	session := p.session
 	if session == "" {
 		session = "reaction-session"
 	}
-	return domain.OutgoingReaction{TargetMessageID: m.ID, Actor: a.Address, SessionID: session, MaxEmojis: p.max, Reference: domain.MessageReference{Scope: "sender:" + a.Address, Author: a.Address, ID: m.ProviderID}}, nil
+	plan := domain.OutgoingReaction{TargetMessageID: m.ID, Actor: a.Address, SessionID: session, MaxEmojis: p.max, Reference: domain.MessageReference{Scope: "sender:" + a.Address, Author: a.Address, ID: m.ProviderID}}
+	if c.Kind == "room" {
+		plan.Reference = m.References[0]
+		plan.RoomActor, plan.ActorName = p.roomActor, "My room nickname"
+	}
+	return plan, nil
 }
 func reactionSnapshot(t *testing.T, e *application.Engine, id domain.ID) domain.MessageReactions {
 	t.Helper()
@@ -400,5 +406,83 @@ func TestReactionActorsRetainVerifiedNamesAvatarsAndNonemptySets(t *testing.T) {
 	cleared := reactionSnapshot(t, e, m.ID)
 	if len(cleared.Actors) != 0 || len(cleared.Items) != 0 {
 		t.Fatal("empty actor remained", cleared)
+	}
+}
+
+func TestSemianonymousReactionProjectionAndCommandEcho(t *testing.T) {
+	s, e, base := outboxFixture(t)
+	own := domain.RoomReactionActorPrefix + strings.Repeat("a", 64)
+	peer := domain.RoomReactionActorPrefix + strings.Repeat("b", 64)
+	p := &reactionProtocol{max: 8, roomActor: own}
+	p.autoJoined = true
+	e.SetProtocols(p)
+	ctx := t.Context()
+	c := outboundRoom(t, s, base.AccountID, "room@rooms.localhost")
+	joined, err := e.JoinRoom(ctx, migrationID(), c.ID, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := e.Account(ctx, c.AccountID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = p.JoinRoom(ctx, a, c, "My room nickname", joined.Session.IntentRevisionID); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().UTC().Add(-time.Minute)
+	ref := domain.MessageReference{ID: "room-original", Scope: "room:" + c.Address, Author: c.Address + "/Bob"}
+	m := domain.Message{ID: migrationID(), RevisionID: migrationID(), AccountID: c.AccountID, OriginalText: "retained source", CreatedAt: at, Historical: true, ProviderID: "source-provider-id", References: []domain.MessageReference{ref}, SendState: "received"}
+	if err = s.ReceiveMessage(ctx, c, m, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.SaveAvatar(ctx, domain.Avatar{ID: migrationID(), RevisionID: migrationID(), AccountID: c.AccountID, Address: peer, ImageHash: strings.Repeat("c", 64), UpdatedAt: at}); err != nil {
+		t.Fatal(err)
+	}
+	ref.Author = ""
+	incoming := application.IncomingReaction{AccountID: c.AccountID, Address: c.Address, Kind: "room", ProviderID: "peer-first", CreatedAt: at, Actor: peer, ActorName: "Bob", Target: ref, Emojis: []string{"👍"}}
+	if err = e.ReceiveReaction(ctx, incoming); err != nil {
+		t.Fatal(err)
+	}
+	incoming.ProviderID, incoming.ActorName, incoming.CreatedAt = "peer-renamed", "Robert", at.Add(time.Second)
+	if err = e.ReceiveReaction(ctx, incoming); err != nil {
+		t.Fatal(err)
+	}
+	key := migrationID()
+	if _, err = e.SetMessageReactions(ctx, key, m.ID, "", []string{"👍"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.ClaimMessageReaction(ctx, key, migrationID(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.FinishMessageReaction(ctx, key, "submitted", migrationID(), time.Now(), time.Now(), ""); err != nil {
+		t.Fatal(err)
+	}
+	incoming.ProviderID, incoming.Actor, incoming.ActorName, incoming.IsOwn, incoming.CreatedAt = string(key), own, "My room nickname", true, time.Now()
+	if err = e.ReceiveReaction(ctx, incoming); err != nil {
+		t.Fatal(err)
+	}
+	got := reactionSnapshot(t, e, m.ID)
+	if len(got.Items) != 1 || got.Items[0].Count != 2 || !got.Items[0].Own || len(got.Actors) != 2 ||
+		got.Actors[0].Address != own || got.Actors[1].Address != peer || got.Actors[1].DisplayName != "Robert" || got.Actors[1].AvatarHash != "" {
+		t.Fatal("own echo duplicated the set, or room actor lost its verified name or privacy", got)
+	}
+	clear := migrationID()
+	if _, err = e.SetMessageReactions(ctx, clear, m.ID, got.OwnRevisionID, []string{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.ClaimMessageReaction(ctx, clear, migrationID(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	incoming.ProviderID, incoming.Emojis, incoming.CreatedAt = string(clear), []string{}, time.Now()
+	if err = e.ReceiveReaction(ctx, incoming); err != nil {
+		t.Fatal(err)
+	}
+	cmd, err := e.MessageReactionCommand(ctx, clear)
+	if err != nil || cmd.State != "submitted" {
+		t.Fatal("room echo did not reconcile clear", cmd, err)
+	}
+	got = reactionSnapshot(t, e, m.ID)
+	if len(got.OwnEmojis) != 0 || len(got.Actors) != 1 || got.Actors[0].Address != peer || len(got.Items) != 1 || got.Items[0].Count != 1 {
+		t.Fatal("clear affected a different room occupant", got)
 	}
 }

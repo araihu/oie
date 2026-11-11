@@ -2,7 +2,6 @@ package xmpp
 
 import (
 	"context"
-	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -111,25 +110,6 @@ func (m *Manager) PrepareReaction(ctx context.Context, a domain.Account, c domai
 	if e == nil {
 		return domain.OutgoingReaction{}, application.ErrProtocolUnavailable
 	}
-	if c.Kind == "room" {
-		e.mu.RLock()
-		slot := e.rooms[c.Address]
-		ownAddress := ""
-		if slot != nil {
-			ownAddress = c.Address + "/" + slot.snapshot.Nickname
-		}
-		e.mu.RUnlock()
-		from, err := jid.Parse(ownAddress)
-		if err != nil || liveRoomSenderAddress(e, from, "", "") != a.Address {
-			return domain.OutgoingReaction{}, application.ErrProtocolUnavailable
-		}
-		e.historyMu.Lock()
-		stable := e.sidScopes[c.Address]
-		e.historyMu.Unlock()
-		if !stable {
-			return domain.OutgoingReaction{}, application.ErrProtocolUnavailable
-		}
-	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	if e.session == nil || e.raw == nil || e.state.State != "connected" || e.correctionSession == "" {
@@ -138,13 +118,34 @@ func (m *Manager) PrepareReaction(ctx context.Context, a domain.Account, c domai
 	limit := currentReactionLimit(e, c.Address)
 	plan := domain.OutgoingReaction{TargetMessageID: target.ID, Reference: ref, Actor: a.Address, SessionID: e.correctionSession, MaxEmojis: limit.max, AllowedEmojis: slices.Clone(limit.allowed)}
 	if c.Kind == "room" {
-		slot := e.rooms[c.Address]
-		if slot == nil || slot.session != e.session || slot.snapshot.State != "joined" {
+		slot, actor := ownRoomReactionActor(e, c.Address)
+		if actor == "" {
 			return domain.OutgoingReaction{}, application.ErrProtocolUnavailable
+		}
+		if domain.IsRoomReactionActor(actor) {
+			plan.RoomActor, plan.ActorName = actor, slot.snapshot.Nickname
 		}
 		plan.RoomIntentRevisionID = slot.snapshot.IntentRevisionID
 	}
 	return plan, nil
+}
+
+func ownRoomReactionActor(e *entry, room string) (*roomSlot, string) {
+	slot, semianonymous, occupantVerified := roomReactionSupport(e, room)
+	if slot == nil {
+		return nil, ""
+	}
+	if semianonymous {
+		if !occupantVerified {
+			return nil, ""
+		}
+		return slot, roomReactionActor(e, room, slot.ownOccupantID)
+	}
+	from, err := jid.Parse(room + "/" + slot.snapshot.Nickname)
+	if err != nil || liveRoomSenderAddressLocked(e, from) != e.account.Address {
+		return nil, ""
+	}
+	return slot, e.account.Address
 }
 
 func validReactionPayload(a domain.Account, out application.Outgoing) bool {
@@ -167,6 +168,9 @@ func validReactionPayload(a domain.Account, out application.Outgoing) bool {
 		return false
 	}
 	if out.Kind == "room" {
+		if p.RoomActor != "" && (!domain.IsRoomReactionActor(p.RoomActor) || strings.TrimSpace(p.ActorName) == "") {
+			return false
+		}
 		if p.Reference.Author != "" {
 			author, err := jid.Parse(p.Reference.Author)
 			if err != nil || author.Bare().String() != out.Address {
@@ -179,7 +183,7 @@ func validReactionPayload(a domain.Account, out application.Outgoing) bool {
 		return false
 	}
 	author := strings.TrimPrefix(p.Reference.Scope, "sender:")
-	return (author == a.Address || author == out.Address) && p.Reference.Scope == "sender:"+author && (p.Reference.Author == "" || p.Reference.Author == author) && p.RoomIntentRevisionID == ""
+	return p.RoomActor == "" && (author == a.Address || author == out.Address) && p.Reference.Scope == "sender:"+author && (p.Reference.Author == "" || p.Reference.Author == author) && p.RoomIntentRevisionID == ""
 }
 
 func withinReactionLimit(emojis []string, limit reactionLimit) bool {
@@ -203,26 +207,14 @@ func validFrozenReaction(e *entry, a domain.Account, out application.Outgoing) b
 		return false
 	}
 	if out.Kind == "room" {
-		slot := e.rooms[out.Address]
-		if slot == nil || slot.session != e.session || slot.snapshot.State != "joined" || slot.snapshot.IntentRevisionID != out.Reaction.RoomIntentRevisionID {
+		slot, actor := ownRoomReactionActor(e, out.Address)
+		if actor == "" || slot.snapshot.IntentRevisionID != out.Reaction.RoomIntentRevisionID {
 			return false
 		}
-		public := false
-		for _, details := range e.details {
-			if details.conversation.Address == out.Address && details.conversation.Kind == "room" && (details.info.State == "known" || details.info.State == "partial") && !details.info.CheckedAt.IsZero() && details.info.CheckedAt.Compare(e.state.UpdatedAt) >= 0 {
-				public = slices.Contains(details.info.Features, "non_anonymous") && !slices.Contains(details.info.Features, "anonymous")
-				break
-			}
+		if out.Reaction.RoomActor != "" {
+			return actor == out.Reaction.RoomActor
 		}
-		observation := slot.mentionOccupants[out.Address+"/"+slot.snapshot.Nickname]
-		uri, validURI := mentionTargetURI(observation.uri, out.Address)
-		if !public || !observation.present || !validURI || uri != "xmpp:"+url.PathEscape(a.Address) {
-			return false
-		}
-		e.historyMu.Lock()
-		stable := e.sidScopes[out.Address]
-		e.historyMu.Unlock()
-		return stable
+		return actor == a.Address
 	}
 	return true
 }

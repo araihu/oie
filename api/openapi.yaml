@@ -3998,18 +3998,20 @@ components:
           type: string
           minLength: 1
           maxLength: 1023
-          description: Protocol-verified actor address, never inferred from a nickname.
+          description: >-
+            Protocol-verified actor address or an opaque occupant identifier prefixed with occupant:
+            in a semianonymous room.
           example: alice@example.test
         displayName:
           type: string
           minLength: 1
           maxLength: 1023
-          description: Active contact name, observed actor name, or address fallback.
+          description: Observed room nickname for opaque occupants. For other actors, the active contact name, observed name or address.
           example: Alice
         avatarHash:
           type: string
           pattern: ^[0-9a-f]{64}$
-          description: Cached avatar PNG SHA-256, resolved only for this verified address in the same account.
+          description: Cached avatar PNG SHA-256 for a verified address in the same account. Omitted for opaque occupants.
           example: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
         own:
           type: boolean

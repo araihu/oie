@@ -85,7 +85,7 @@ func directReaction(a domain.Account, msg stanza.Message, meta reactionMetadata,
 	return &application.IncomingReaction{AccountID: a.ID, Address: peer, Kind: "direct", ProviderID: msg.ID, CreatedAt: at.UTC(), IsOwn: own, Actor: actor, ActorName: actor, Target: domain.MessageReference{ID: target}, Emojis: emojis}, true
 }
 
-func (m *Manager) receiveReaction(ctx context.Context, e *entry, msg stanza.Message, meta reactionMetadata, stamp, delayFrom string) error {
+func (m *Manager) receiveReaction(ctx context.Context, e *entry, msg stanza.Message, meta reactionMetadata, occupants []wireID, stamp, delayFrom string) error {
 	at := time.Now().UTC()
 	if stamp != "" {
 		parsed, err := time.Parse(time.RFC3339Nano, stamp)
@@ -105,15 +105,15 @@ func (m *Manager) receiveReaction(ctx context.Context, e *entry, msg stanza.Mess
 		if msg.From.Localpart() == "" || msg.From.Resourcepart() == "" {
 			return nil
 		}
-		e.historyMu.Lock()
-		stable := e.sidScopes[room]
-		e.historyMu.Unlock()
-		actor := liveRoomSenderAddress(e, msg.From, stamp, delayFrom)
-		target, emojis, ok := reactionSet(meta)
-		if !stable || actor == "" || !ok {
+		if stamp != "" || delayFrom != "" {
 			return nil
 		}
-		in = &application.IncomingReaction{AccountID: e.account.ID, Address: room, Kind: "room", ProviderID: msg.ID, CreatedAt: at, Actor: actor, ActorName: msg.From.Resourcepart(), IsOwn: actor == e.account.Address, Target: domain.MessageReference{Scope: "room:" + room, ID: target}, Emojis: emojis}
+		actor, own := incomingRoomReactionActor(e, msg.From, occupants)
+		target, emojis, ok := reactionSet(meta)
+		if actor == "" || !ok {
+			return nil
+		}
+		in = &application.IncomingReaction{AccountID: e.account.ID, Address: room, Kind: "room", ProviderID: msg.ID, CreatedAt: at, Actor: actor, ActorName: msg.From.Resourcepart(), IsOwn: own, Target: domain.MessageReference{Scope: "room:" + room, ID: target}, Emojis: emojis}
 	} else {
 		var ok bool
 		in, ok = directReaction(e.account, msg, meta, at)
@@ -126,6 +126,49 @@ func (m *Manager) receiveReaction(ctx context.Context, e *entry, msg stanza.Mess
 		return nil
 	}
 	return err
+}
+
+// Hash room and account scope with the server-issued identifier. The result is
+// stable across nickname changes, and cannot be used as a contact address.
+func roomReactionActor(e *entry, room, occupant string) string {
+	if occupant == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(string(e.account.ID) + "\x00" + room + "\x00" + occupant))
+	return domain.RoomReactionActorPrefix + hex.EncodeToString(sum[:])
+}
+
+// The caller holds e.mu for a consistent room and connection snapshot.
+func roomReactionSupport(e *entry, room string) (slot *roomSlot, semianonymous, occupantVerified bool) {
+	slot = e.rooms[room]
+	if e.state.State != "connected" || e.session == nil || slot == nil || slot.session != e.session || slot.snapshot.State != "joined" || slot.leaving {
+		return nil, false, false
+	}
+	e.historyMu.Lock()
+	defer e.historyMu.Unlock()
+	if !e.sidScopes[room] {
+		return nil, false, false
+	}
+	return slot, e.semianonymousRooms[room], e.occupantScopes[room]
+}
+
+func incomingRoomReactionActor(e *entry, from jid.JID, occupants []wireID) (string, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	room := from.Bare().String()
+	slot, semianonymous, occupantVerified := roomReactionSupport(e, room)
+	if slot == nil {
+		return "", false
+	}
+	if !semianonymous {
+		actor := liveRoomSenderAddressLocked(e, from)
+		return actor, actor == e.account.Address
+	}
+	if !occupantVerified || slot.ownOccupantID == "" {
+		return "", false
+	}
+	occupant := verifiedOccupantID(occupants)
+	return roomReactionActor(e, room, occupant), occupant == slot.ownOccupantID
 }
 
 func archivedReaction(a domain.Account, scope string, r *archiveResult) (*application.IncomingReaction, bool, error) {

@@ -159,9 +159,15 @@ func readReactions(ctx context.Context, q *dbgen.Queries, id domain.ID) (applica
 		if target != m.ID && linked != m.ID {
 			continue
 		}
-		prior, known := heads[in.Actor]
+		key := in.Actor
+		if in.IsOwn {
+			// The account has one own set even when the room changes how it
+			// identifies participants.
+			key = ""
+		}
+		prior, known := heads[key]
 		if !known || in.CreatedAt.After(prior.in.CreatedAt) || in.CreatedAt.Equal(prior.in.CreatedAt) && (in.ProviderID > prior.in.ProviderID || in.ProviderID == prior.in.ProviderID && observation.Fingerprint > prior.fingerprint) {
-			heads[in.Actor] = chosen{observation.ID, observation.Ordinal, observation.Fingerprint, in}
+			heads[key] = chosen{observation.ID, observation.Ordinal, observation.Fingerprint, in}
 		}
 	}
 	counts := map[string]domain.ReactionItem{}
@@ -176,18 +182,11 @@ func readReactions(ctx context.Context, q *dbgen.Queries, id domain.ID) (applica
 			state.OwnEmojis = append([]string{}, head.in.Emojis...)
 		}
 		if len(head.in.Emojis) > 0 {
-			profile, err := q.ReactionActorProfile(ctx, dbgen.ReactionActorProfileParams{AccountID: string(m.AccountID), Address: head.in.Actor})
+			actor, err := reactionActor(ctx, q, m.AccountID, head.in)
 			if err != nil {
 				return out, err
 			}
-			name := strings.TrimSpace(profile.DisplayName)
-			if name == "" {
-				name = strings.TrimSpace(head.in.ActorName)
-			}
-			if name == "" || len(name) > 1023 || !utf8.ValidString(name) || strings.IndexFunc(name, unicode.IsControl) >= 0 {
-				name = head.in.Actor
-			}
-			state.Actors = append(state.Actors, domain.ReactionActor{Address: head.in.Actor, DisplayName: name, AvatarHash: profile.AvatarHash, Own: head.in.IsOwn, Emojis: append([]string{}, head.in.Emojis...)})
+			state.Actors = append(state.Actors, actor)
 		}
 		for _, emoji := range head.in.Emojis {
 			item := counts[emoji]
@@ -230,6 +229,28 @@ func readReactions(ctx context.Context, q *dbgen.Queries, id domain.ID) (applica
 	out.Snapshot = state
 	return out, nil
 }
+func reactionActor(ctx context.Context, q *dbgen.Queries, account domain.ID, in application.IncomingReaction) (domain.ReactionActor, error) {
+	actor := domain.ReactionActor{Address: in.Actor, DisplayName: strings.TrimSpace(in.ActorName), Own: in.IsOwn, Emojis: append([]string{}, in.Emojis...)}
+	opaque := domain.IsRoomReactionActor(in.Actor)
+	if !opaque {
+		profile, err := q.ReactionActorProfile(ctx, dbgen.ReactionActorProfileParams{AccountID: string(account), Address: in.Actor})
+		if err != nil {
+			return actor, err
+		}
+		if name := strings.TrimSpace(profile.DisplayName); name != "" {
+			actor.DisplayName = name
+		}
+		actor.AvatarHash = profile.AvatarHash
+	}
+	if actor.DisplayName == "" || len(actor.DisplayName) > 1023 || !utf8.ValidString(actor.DisplayName) || strings.IndexFunc(actor.DisplayName, unicode.IsControl) >= 0 {
+		actor.DisplayName = actor.Address
+		if opaque {
+			return actor, application.ErrInvalid
+		}
+	}
+	return actor, nil
+}
+
 func (s *Store) ReadMessageReactions(ctx context.Context, id domain.ID) (application.MessageReactionCandidate, error) {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
@@ -335,7 +356,7 @@ func (s *Store) AcceptMessageReaction(ctx context.Context, in application.Messag
 	if err = json.Unmarshal([]byte(account), &a); err != nil {
 		return application.MessageReactionResult{}, err
 	}
-	if p.Plan.Actor != a.Address {
+	if p.Plan.Actor != a.Address || p.Plan.RoomActor != "" && !domain.IsRoomReactionActor(p.Plan.RoomActor) {
 		return application.MessageReactionResult{}, application.ErrInvalid
 	}
 	if _, err = operation(ctx, q, application.Operation{ID: p.Command.ID, ResourceID: p.Command.ID, Kind: "set_message_reactions", CreatedAt: p.Command.CreatedAt}, in.Fingerprint, p.Command); err != nil {
@@ -473,7 +494,7 @@ func (s *Store) FinishMessageReaction(ctx context.Context, id domain.ID, state s
 			if err != nil {
 				return p.Command, err
 			}
-			_, err = insertReactionObservation(ctx, q, application.IncomingReaction{AccountID: p.Command.AccountID, Address: c.Address, Kind: c.Kind, ProviderID: string(p.Command.ID), CreatedAt: at, IsOwn: true, Actor: p.Plan.Actor, Target: p.Plan.Reference, Emojis: p.Command.Emojis}, revision, p.Command.ID)
+			_, err = insertReactionObservation(ctx, q, application.IncomingReaction{AccountID: p.Command.AccountID, Address: c.Address, Kind: c.Kind, ProviderID: string(p.Command.ID), CreatedAt: at, IsOwn: true, Actor: p.Plan.ObservationActor(), ActorName: p.Plan.ActorName, Target: p.Plan.Reference, Emojis: p.Command.Emojis}, revision, p.Command.ID)
 			if err != nil {
 				return p.Command, err
 			}
@@ -506,7 +527,9 @@ func (s *Store) ObserveMessageReaction(ctx context.Context, in application.Messa
 			if err != nil {
 				return err
 			}
-			if p.Command.AccountID == value.AccountID && p.Plan.Actor == value.Actor && p.Plan.Reference.ID == value.Target.ID && reflect.DeepEqual(p.Command.Emojis, value.Emojis) {
+			if p.Command.AccountID == value.AccountID && p.Plan.ObservationActor() == value.Actor &&
+				p.Plan.Reference.ID == value.Target.ID && (value.Kind != "room" || p.Plan.Reference.Scope == value.Target.Scope) &&
+				reflect.DeepEqual(p.Command.Emojis, value.Emojis) {
 				command = p.Command.ID
 				if p.Command.State == "queued" || p.Command.State == "dispatching" || p.Command.State == "unknown" {
 					p.Command.State = "submitted"

@@ -134,6 +134,68 @@ func TestLiveRoomReactionRequiresCurrentVerifiedRealActorAndStableTargetScope(t 
 	}
 }
 
+func TestSemianonymousRoomReactionsUseVerifiedOccupantIDs(t *testing.T) {
+	m, e, slot, host := reactionRoomFixture(t)
+	c := slot.conversation
+	slot.snapshot.State = "joining"
+	e.details[c.ID].info.Features = []string{"anonymous"}
+	discoXML := `<query xmlns="http://jabber.org/protocol/disco#info"><identity category="conference" type="text"/><feature var="muc_semianonymous"/><feature var="urn:xmpp:occupant-id:0"/></query>`
+	if _, err := decodeDiscoInfo(e, e.session, c.Address, discoXML); err != nil {
+		t.Fatal(err)
+	}
+	target := reactionTarget(e, c)
+	if _, err := m.PrepareReaction(t.Context(), e.account, c, target); err == nil {
+		t.Fatal("accepted before confirmed own occupant identity")
+	}
+	presence := `<presence xmlns="jabber:client" from="room@conference.example.test/Oie" id="join-request"><occupant-id xmlns="urn:xmpp:occupant-id:0" id="own-id"/><x xmlns="http://jabber.org/protocol/muc#user"><status code="110"/></x></presence>`
+	feedReaction(t, m, e, presence)
+	plan, err := m.PrepareReaction(t.Context(), e.account, c, target)
+	if err != nil || !domain.IsRoomReactionActor(plan.RoomActor) || plan.ActorName != "Oie" || plan.Reference != target.References[0] {
+		t.Fatal("verified own occupant could not prepare a reaction", plan, err)
+	}
+	out := application.Outgoing{ID: "019a5df0-0000-7000-8000-000000000012", Kind: c.Kind, Address: c.Address, Reaction: &plan, ReactionEmojis: []string{"👍"}, RoomIntentRevisionID: plan.RoomIntentRevisionID}
+	payload, err := buildOutgoing(e.account, out)
+	if err != nil || !validFrozenReaction(e, e.account, out) {
+		t.Fatal("valid semianonymous reaction rejected", err)
+	}
+	wire, err := xml.Marshal(payload)
+	if err != nil || bytes.Contains(wire, []byte(e.account.Address)) || bytes.Contains(wire, []byte("own-id")) || bytes.Contains(wire, []byte("<body")) {
+		t.Fatal("reaction sent private identity or message body", string(wire), err)
+	}
+	reaction := func(nickname, event, occupant string) {
+		feedReaction(t, m, e, `<message xmlns="jabber:client" from="`+c.Address+"/"+nickname+`" type="groupchat" id="`+event+`">`+occupant+`<reactions xmlns="urn:xmpp:reactions:0" id="room-assigned-original"><reaction>👍</reaction></reactions></message>`)
+	}
+	peer := `<occupant-id xmlns="urn:xmpp:occupant-id:0" id="peer-id"/>`
+	reaction("Bob", "add", peer)
+	reaction("Robert", "rename", peer)
+	reaction("Oie", "echo", `<occupant-id xmlns="urn:xmpp:occupant-id:0" id="own-id"/>`)
+	reaction("Bob", "new-occupant", `<occupant-id xmlns="urn:xmpp:occupant-id:0" id="other-id"/>`)
+	reaction("Bob", "missing", "")
+	reaction("Bob", "duplicate", peer+peer)
+	if len(host.received) != 4 {
+		t.Fatal("missing or ambiguous occupant identity accepted", host.received)
+	}
+	first, renamed, own, replacement := host.received[0].Reaction, host.received[1].Reaction, host.received[2].Reaction, host.received[3].Reaction
+	if !domain.IsRoomReactionActor(first.Actor) || first.Actor != renamed.Actor || renamed.ActorName != "Robert" ||
+		replacement.Actor == first.Actor || first.IsOwn || !own.IsOwn || own.Actor != plan.RoomActor {
+		t.Fatal("occupant aliases were not scoped by verified identity", first, renamed, own, replacement)
+	}
+	if first.Actor == roomReactionActor(e, "other@conference.example.test", "peer-id") {
+		t.Fatal("occupant identifier linked across rooms")
+	}
+	slot.ownOccupantID = "replacement-id"
+	if validFrozenReaction(e, e.account, out) {
+		t.Fatal("frozen command rebound to a different occupant")
+	}
+	if _, err = decodeDiscoInfo(e, e.session, c.Address, strings.Replace(discoXML, `<feature var="urn:xmpp:occupant-id:0"/>`, "", 1)); err != nil {
+		t.Fatal(err)
+	}
+	reaction("Bob", "unverified", peer)
+	if _, err = m.PrepareReaction(t.Context(), e.account, c, target); err == nil || len(host.received) != 4 {
+		t.Fatal("occupant IDs accepted without a matching room advertisement")
+	}
+}
+
 func reactionTarget(e *entry, c domain.Conversation) domain.Message {
 	ref := domain.MessageReference{Scope: "sender:bob@example.test", ID: "direct-original", Author: "bob@example.test"}
 	if c.Kind == "room" {

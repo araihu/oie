@@ -3,9 +3,12 @@ package application
 import (
 	"context"
 	"errors"
-	"github.com/araihu/oie/internal/domain"
 	"reflect"
+	"strings"
 	"time"
+	"unicode"
+
+	"github.com/araihu/oie/internal/domain"
 )
 
 type IncomingReaction struct {
@@ -102,6 +105,9 @@ func (e *Engine) prepareReaction(ctx context.Context, id domain.ID) (MessageReac
 	if err != nil || plan.TargetMessageID != candidate.Source.ID || plan.Reference.ID == "" || plan.Actor == "" || plan.Actor != a.Address || plan.SessionID == "" {
 		return deny("target_unavailable")
 	}
+	if plan.RoomActor != "" && (c.Kind != "room" || !domain.IsRoomReactionActor(plan.RoomActor) || !validRoomReactionName(plan.ActorName)) {
+		return deny("target_unavailable")
+	}
 	if plan.MaxEmojis <= 0 || plan.AllowedEmojis != nil && len(plan.AllowedEmojis) == 0 {
 		return deny("target_unavailable")
 	}
@@ -196,6 +202,11 @@ func (e *Engine) SetMessageReactions(ctx context.Context, key, id, expected doma
 	}
 	return result, err
 }
+func validRoomReactionName(name string) bool {
+	return len(name) <= 1023 && strings.TrimSpace(name) != "" && validText(name, 1023) &&
+		strings.IndexFunc(name, unicode.IsControl) < 0
+}
+
 func (e *Engine) ReceiveReaction(ctx context.Context, in IncomingReaction) error {
 	if !validID(in.AccountID) || !validText(in.Actor, 1023) || !validText(in.Target.ID, 4096) || in.Kind != "direct" && in.Kind != "room" || in.ProviderID == "" && in.ArchiveID == "" || len(in.ProviderID) > 4096 || len(in.ArchiveID) > 4096 || len(in.ArchiveScope) > 4096 || len(in.Target.Scope) > 4096 || len(in.Target.Author) > 4096 {
 		return ErrInvalid
@@ -213,12 +224,15 @@ func (e *Engine) ReceiveReaction(ctx context.Context, in IncomingReaction) error
 	if err != nil {
 		return err
 	}
-	actor, err := e.canonical(a.Protocol, in.Actor)
-	if err != nil || actor != in.Actor {
-		return ErrInvalid
-	}
-	if in.IsOwn != (actor == a.Address) {
-		return ErrInvalid
+	if domain.IsRoomReactionActor(in.Actor) {
+		if in.Kind != "room" || in.Target.Scope != "room:"+in.Address || !validRoomReactionName(in.ActorName) {
+			return ErrInvalid
+		}
+	} else {
+		actor, err := e.canonical(a.Protocol, in.Actor)
+		if err != nil || actor != in.Actor || in.IsOwn != (actor == a.Address) {
+			return ErrInvalid
+		}
 	}
 	now := e.now().UTC()
 	if in.CreatedAt.IsZero() {

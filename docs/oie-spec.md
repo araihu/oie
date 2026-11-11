@@ -1030,8 +1030,11 @@ content revisions, activity, unread state and original message outbox.
 
 XMPP follows XEP-0444. Direct targets use scoped original identifiers and verified
 correction aliases. Room targets require trusted room-issued stanza IDs. Room
-updates additionally require current, non-anonymous real actor identity. Uncertain
-anonymous or archived room associations are omitted. Bodyless reaction controls
+updates additionally require a verified live actor. Semianonymous rooms can
+supply XEP-0421 occupant IDs, including the account's own ID in verified
+self-presence. Those reactions are scoped to the account and room and projected
+with nicknames and opaque keys. Historical room reaction controls remain outside
+the current implementation. Bodyless reaction controls
 never become timeline messages. Retained observations deduplicate provider and
 archive identities, exclude conflicting identifiers and preserve newer actor sets
 when older history arrives. Unresolved original references can resolve when the

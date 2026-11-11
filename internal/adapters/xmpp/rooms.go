@@ -28,6 +28,7 @@ type roomSlot struct {
 	joinDeadline     time.Time
 	leaving          bool
 	mentionOccupants map[string]observedMention
+	ownOccupantID    string
 }
 type ownRoomMessage struct{ address, body string }
 type roomSessionHost interface {
@@ -398,6 +399,7 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 			e.mu.Unlock()
 			return true
 		}
+		slot.ownOccupantID = verifiedOccupantID(p.Occupants)
 		slot.snapshot = roomSnapshot(slot.conversation, "joined", slot.snapshot.Nickname, "", slot.snapshot.IntentRevisionID)
 	} else {
 		e.mu.Unlock()

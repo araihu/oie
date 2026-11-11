@@ -58,6 +58,7 @@ type entry struct {
 	archiveCapabilities map[string]roomArchiveCapability
 	sidScopes           map[string]bool
 	occupantScopes      map[string]bool
+	semianonymousRooms  map[string]bool
 	discovery           domain.CapabilityDiscovery
 	discoveryPartial    bool
 	detailsWake         chan struct{}
@@ -293,6 +294,7 @@ func (m *Manager) publish(ctx context.Context, e *entry, state, code string) err
 	e.state = domain.Connection{AccountID: e.account.ID, State: state, LastErrorCode: code, UpdatedAt: time.Now().UTC()}
 	e.historyMu.Lock()
 	e.occupantScopes = nil
+	e.semianonymousRooms = nil
 	e.historyMu.Unlock()
 	if state != "connected" {
 		e.discovery = domain.CapabilityDiscovery{State: "not_connected", Services: []domain.DiscoveredService{}}
@@ -637,7 +639,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			return m.host.Reject(ctx, application.Rejected{AccountID: e.account.ID, MessageID: msg.ID, Address: address, FromServer: fromServer, FromParticipant: msg.From.Resourcepart() != ""})
 		}
 		if len(msg.Reactions) != 0 {
-			return m.receiveReaction(ctx, e, msg.Message, msg.reactionMetadata, msg.Delay.Stamp, msg.Delay.From)
+			return m.receiveReaction(ctx, e, msg.Message, msg.reactionMetadata, msg.Occupants, msg.Delay.Stamp, msg.Delay.From)
 		}
 		if msg.Type == stanza.GroupChatMessage {
 			return m.receiveRoomMessage(ctx, e, msg.Message, msg.replyMetadata, msg.Body, msg.Delay.Stamp, msg.Delay.From, msg.fileSharingMetadata, msg.correctionMetadata)

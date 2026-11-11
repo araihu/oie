@@ -54,10 +54,14 @@ resolve to the same canonical source.
 
 The XMPP adapter uses XEP-0444. Direct messages use origin/message identifiers;
 room targets require room-issued stanza identifiers from a room advertising
-stable assignment. Room actor identity requires a verified real bare JID in a
-confirmed non-anonymous joined session. Anonymous-room and unverifiable room
-reactions remain outside this increment. No nickname guesses or synthetic target
-IDs authorize an update. Advertised restrictions constrain outgoing choices;
+stable assignment. In a joined non-anonymous room, live reactions use the
+verified real bare JID. In a joined semianonymous room advertising XEP-0421,
+live reactions use a validated occupant ID. The engine binds its own ID to the
+room's self-presence confirmation and scopes opaque actor keys to the account
+and room. The reaction list shows those participants by room nickname, without
+contact addresses or profile photos. A verified target can be a retained
+historical message. Historical room reaction controls and unverifiable live
+actors are skipped. Advertised restrictions constrain outgoing choices;
 an absent advertisement is distinct from a known zero or empty allowlist.
 
 Own and incoming sets are bounded to eight distinct Unicode emoji graphemes.
