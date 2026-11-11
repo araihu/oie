@@ -10,7 +10,6 @@ import (
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/link"
  "github.com/araihu/goshtoso/components/radio"
- "github.com/araihu/goshtoso/components/sidebar"
  "github.com/araihu/goshtoso/components/spinner"
  "github.com/araihu/goshtoso/components/textinput"
  "github.com/araihu/goshtoso/components/tooltip"
@@ -25,7 +24,7 @@ templ messageSearchSlot(v view){
 templ messageSearchWorkspace(v view){
 <section id="workspace" class="oie-message-search-workspace" aria-label={v.Text.SearchMessages}>
 <header class="oie-message-search-heading">
-<div class="oie-mobile-nav">@sidebar.Overlay(sidebar.OverlayConfig{ID:"mobile-navigation",Sidebar:navigation(v,"mobile-navigation"),TriggerLabel:v.Text.OpenNavigation,Trigger:glyph(heroicons.Icon16SolidBars3)})</div>
+@navigationControl(v)
 <h2>{v.Text.SearchMessages}</h2>
 @link.Link(v.href("section","chats","q","")){ {v.Text.Back} }
 </header>

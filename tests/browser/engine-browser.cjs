@@ -63,7 +63,7 @@ const {chromium} = require('playwright');
     assert.equal((await api('/api/v1/operations/'+operation)).kind,'send_message','real engine stores the accepted send receipt');
     assert.equal(await form.locator('#message-composer').inputValue(),'','composer is empty after engine acceptance');
   };
-  const pickAccount = async (page, label) => {
+  const pickAccount = async (page, label, {empty = false} = {}) => {
     await page.locator('[data-account-switcher]:visible').first().click();
     const choice=page.locator('[data-switch-account]:visible').filter({hasText:label});
     const account=await choice.getAttribute('data-switch-account');
@@ -71,15 +71,17 @@ const {chromium} = require('playwright');
     await choice.click();
     await page.waitForURL(url => (url.searchParams.get('account') || '') === account);
     assert.equal(await page.locator('[data-account-switcher]:visible').textContent().then(t=>t.includes(label)),true);
-    await until(async()=>page.evaluate(({expectedAccount,generation})=>{
-      if(document.readyState!=='complete'||document.body.dataset.accountId!==expectedAccount||window.OieRuntime.generation<=generation)return false;
+    await until(async()=>page.evaluate(({expectedAccount,generation,empty})=>{
+      if(document.readyState!=='complete'||window.OieRuntime.generation<=generation)return false;
       const pane=document.getElementById('conversation-pane');
-      if(!pane||pane.dataset.accountId!==expectedAccount||pane.dataset.engineId!==document.body.dataset.engineId||pane.dataset.conversationId!==document.body.dataset.conversationId)return false;
-      const input=document.querySelector('#message-composer');if(!input)return false;
+      if(!pane||pane.dataset.accountId!==document.body.dataset.accountId||pane.dataset.engineId!==document.body.dataset.engineId||pane.dataset.conversationId!==document.body.dataset.conversationId)return false;
+      const input=document.querySelector('#message-composer');
+      if(empty)return !pane.dataset.accountId&&!pane.dataset.conversationId&&!input;
+      if(pane.dataset.accountId!==expectedAccount||!pane.dataset.conversationId||!input)return false;
       const key=['oie.draft.v1',document.body.dataset.engineId,expectedAccount,document.body.dataset.conversationId].join(':');
       const raw=localStorage.getItem(key),saved=raw?JSON.parse(raw):null;
       return input.value===(saved?.text||'');
-    },{expectedAccount:account,generation}),'initialized account-scoped device draft for '+label);
+    },{expectedAccount:account,generation,empty}), (empty?'empty account view for ':'initialized account-scoped device draft for ')+label);
 
   };
   try {
@@ -119,7 +121,7 @@ const {chromium} = require('playwright');
     await connect(alicePage, bob, 'bob-local-only');
     evidence.workflows.push('Register and connect both development accounts through rendered forms; actual TLS states and cleared passwords');
     await closeAccounts(alicePage);
-    await pickAccount(alicePage, 'Alice development');
+    await pickAccount(alicePage, 'Alice development', {empty: true});
     await alicePage.locator('[data-new-conversation]:visible').first().click();
     const newChat = alicePage.locator('#new-conversation-form');
     await newChat.waitFor({state: 'visible'});
