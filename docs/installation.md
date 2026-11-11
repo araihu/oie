@@ -390,8 +390,13 @@ bin/oiectl events stream --timeout 10m --last-event-id ENGINE_UUID:SEQUENCE
 
 HTTP failures exit with code 4 and print to stderr. When the API returns a
 Problem Details code declared in the contract, the CLI includes it in the
-diagnostic, for example `HTTP 409 Conflict (idempotency_conflict)` or
-`HTTP 409 Conflict (state_conflict)`.
+diagnostic. When the response includes a documentation link, the CLI prints
+it on the next stderr line.
+
+```text
+HTTP 409 Conflict (idempotency_conflict)
+Documentation: https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md#idempotency_conflict
+```
 
 See [the engine API policy](engine-api-policy.md) and
 [CLI verification](engine-api-cli-verification.md) for scope and fixture commands.

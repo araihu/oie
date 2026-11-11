@@ -321,7 +321,7 @@ func TestCLIDataOnlyXMPP(t *testing.T) {
 	if replay := p.call(nil, body, args...); !bytes.Equal(original, replay) {
 		t.Fatal("replay changed acceptance")
 	}
-	if got := p.failure(4, proofJSON(map[string]string{"originalText": "changed"}), args...); got != "HTTP 409 Conflict (idempotency_conflict)" {
+	if got := p.failure(4, proofJSON(map[string]string{"originalText": "changed"}), args...); got != conflictDiagnostic("idempotency_conflict") {
 		t.Fatalf("idempotency conflict diagnostic: %q", got)
 	}
 	var wg sync.WaitGroup
@@ -419,7 +419,7 @@ func TestCLIDataOnlyXMPP(t *testing.T) {
 	queueBody := proofJSON(map[string]string{"originalText": marker + " cancelled"})
 	p.call(&queued, queueBody, "messages", "send", "--conversation-id", chat.Id, "--idempotency-key", queueKey, "--body-stdin")
 	cancelArgs := []string{"messages", "outbox", "cancel", "--message-id", queued.Id, "--idempotency-key", proofID(), "--body-stdin"}
-	if got := p.failure(4, proofJSON(map[string]string{"expectedRevisionId": proofID()}), cancelArgs...); got != "HTTP 409 Conflict (state_conflict)" {
+	if got := p.failure(4, proofJSON(map[string]string{"expectedRevisionId": proofID()}), cancelArgs...); got != conflictDiagnostic("state_conflict") {
 		t.Fatalf("state conflict diagnostic: %q", got)
 	}
 	cancelArgs[len(cancelArgs)-2] = proofID()

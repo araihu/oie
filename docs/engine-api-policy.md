@@ -75,8 +75,8 @@ For example, a 409 response with type
 `urn:oie:problem:idempotency_conflict` means the idempotency key was already
 used with different input. A 409 with type `urn:oie:problem:state_conflict`
 can include the current resource in a documented extension so the caller can
-refresh its state. The CLI prints the short code on stderr when it is declared
-by the response contract.
+refresh its state. The CLI prints the declared short code on stderr and
+includes the documentation link when available.
 
 ## Standards used in the review
 

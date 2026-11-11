@@ -23,6 +23,11 @@ import (
 	"github.com/google/uuid"
 )
 
+func conflictDiagnostic(code string) string {
+	return "HTTP 409 Conflict (" + code + ")\n" +
+		"Documentation: https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md#" + code
+}
+
 func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	binary := filepath.Join(t.TempDir(), "oiectl")
 	build := exec.Command("go", "-C", "../../cli", "build", "-o", binary, "./cmd/oiectl")
@@ -97,10 +102,16 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 	if err != nil || !bytes.Contains(output, []byte(account.Id)) {
 		t.Fatalf("CLI reconciliation: %v %s", err, output)
 	}
-	output, err = run(`{"protocol":"xmpp","address":"alice@localhost","label":"Changed"}`,
+	cmd := exec.CommandContext(t.Context(), binary, "--server", server.URL, "--output", "json",
 		"accounts", "register", "--idempotency-key", string(key), "--body-stdin")
-	if !errors.As(err, &exit) || exit.ExitCode() != 4 || string(output) != "HTTP 409 Conflict (idempotency_conflict)\n" {
-		t.Fatalf("CLI idempotency conflict: %v %s", err, output)
+	cmd.Stdin = bytes.NewBufferString(`{"protocol":"xmpp","address":"alice@localhost","label":"Changed"}`)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+	if !errors.As(err, &exit) || exit.ExitCode() != 4 || stdout.Len() != 0 ||
+		stderr.String() != conflictDiagnostic("idempotency_conflict")+"\n" {
+		t.Fatalf("CLI idempotency conflict: %v stdout=%q stderr=%q", err, stdout.String(), stderr.String())
 	}
 	_, seq, err := store.Snapshot(t.Context())
 	if err != nil || seq != 1 {

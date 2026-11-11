@@ -10,6 +10,6 @@
     "internal/cliruntime/auth.gen.go": "e589043dd2051b4eec3c76dc0584856ccb9360c890ba8330b883993ff039dfa6",
     "internal/cliruntime/input.gen.go": "4528e1275074e36e4242e51579574ca5ffdf45c0ada69658d66aec4c0b981c34",
     "internal/cliruntime/output.gen.go": "c11d0bf4006e10b4219462d94eaa234206fba7756202b8af9c1142411f58d21c",
-    "internal/cliruntime/runtime.gen.go": "d31ecf4add7701e893b171556d8c7e444cae5de8e68b7872a9ce96234a9a776a"
+    "internal/cliruntime/runtime.gen.go": "7d56340d2a30ff6e18b281bdf7dc09730a973be7608321af8365f612f1be2ef7"
   }
 }
