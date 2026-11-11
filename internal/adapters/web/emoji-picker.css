@@ -3,6 +3,7 @@
 .oie-emoji-scroll{flex:1;overflow-y:auto;min-height:0;scrollbar-width:thin;overscroll-behavior:contain}
 .oie-emoji-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:2px}
 .oie-emoji-cell{font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;font-size:25px;line-height:1;width:100%;height:37px;min-width:0;padding:0;border-radius:var(--radius-radius)}
+.oie-emoji-glyph{display:block;pointer-events:none}
 .oie-emoji-status{margin:0;color:var(--oie-muted);font-size:12px}.oie-emoji-status:empty{display:none}
 [data-emoji-retry][hidden]{display:none}
 
