@@ -50,9 +50,9 @@ jobs:
           make build
           go build -o bin/oie-mock ./cmd/oie-mock
       - &ubuntu_archive
-        name: Use the primary Ubuntu package archive
+        name: Use the Princeton Ubuntu mirror
         run: |
-          sudo sed -Ei 's@mirror[+]file:/etc/apt/apt-mirrors\.txt|https?://azure\.archive\.ubuntu\.com/ubuntu/?@https://archive.ubuntu.com/ubuntu/@g' /etc/apt/sources.list.d/ubuntu.sources
+          sudo sed -Ei 's@mirror[+]file:/etc/apt/apt-mirrors\.txt|https?://(azure\.)?archive\.ubuntu\.com/ubuntu/?@https://mirror.math.princeton.edu/pub/ubuntu/@g' /etc/apt/sources.list.d/ubuntu.sources
           grep '^URIs:' /etc/apt/sources.list.d/ubuntu.sources
       - working-directory: tests/browser
         run: |
