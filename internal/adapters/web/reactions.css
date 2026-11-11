@@ -42,9 +42,9 @@
 .oie-reaction-chip[aria-pressed=true]{background:var(--oie-accent-soft);border-color:var(--oie-accent-text)}
 .oie-reaction-chip[aria-busy=true]{opacity:.7}.oie-reaction-chip:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:2px}.oie-reaction-chip:hover{text-decoration:none;background:var(--oie-selected)}
 .oie-reaction-chip .oie-icon,.oie-reaction-spinner{width:12px;height:12px}.oie-reaction-chip [hidden]{display:none!important}
-#oie-reaction-quick{position:fixed;inset:auto;margin:0;padding:3px 4px;width:max-content;max-width:calc(100vw - 16px);overflow:visible;z-index:50;border:1px solid var(--oie-border);border-radius:999px;color:var(--oie-text);background:var(--oie-panel);box-shadow:0 3px 12px #0003}
+#oie-reaction-quick{position:fixed;inset:auto;margin:0;padding:3px 4px;width:max-content;max-width:var(--oie-reaction-available-width,calc(100vw - 16px));box-sizing:border-box;overflow:visible;z-index:50;border:1px solid var(--oie-border);border-radius:999px;color:var(--oie-text);background:var(--oie-panel);box-shadow:0 3px 12px #0003}
 #oie-reaction-quick[hidden],.oie-reaction-quick-button[hidden]{display:none}
-.oie-reaction-quick-row{display:flex;align-items:center;gap:1px}
+.oie-reaction-quick-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:1px}
 .oie-reaction-quick-button{display:inline-flex;align-items:center;justify-content:center;width:clamp(27px,calc((100vw - 36px)/8),34px);height:34px;min-width:0;min-height:0;padding:0;border-radius:50%;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;font-size:21px;line-height:1}
 .oie-reaction-quick-button:hover{background:var(--oie-raised);text-decoration:none}
 .oie-reaction-quick-button:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:-2px}

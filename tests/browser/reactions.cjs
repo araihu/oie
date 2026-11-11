@@ -76,7 +76,13 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   assert.equal(await quick.getByRole('button',{name:'Red heart'}).evaluate(n=>n===document.activeElement),true);
   await quick.getByRole('button',{name:'Thumbs up'}).click();
   await own('👍',true);assert.equal(await region.locator('[data-reaction-summary-count]').textContent(),'3');assert.equal(await region.locator('[data-reaction-actor="bob@fixture"] [data-reaction-actor-name]').textContent(),'Bob');assert.equal(await region.locator('[data-reaction-actor="bob@fixture"] [data-reaction-emoji]').count(),0,'peer reactions are read-only');assert.equal(state.effects,1);assert.equal(await input.inputValue(),'Keep this unsent draft 😀');
-  await removeReaction('👍');await own('👍',false);assert.equal(await region.locator('[data-reaction-summary-count]').textContent(),'2');assert.equal(state.effects,2);assert.equal(source.revisionId,revision);assert.equal(conversation.lastMessage,source.originalText);findings.push('Scoped full-set commands add/remove own emoji, counts remain canonical, bilingual catalog selection does not touch source content or draft');
+  state.delay=450;
+  const removalRead=state.reads;
+  await removeReaction('👍');
+  await until(()=>state.reads>removalRead,'delayed own removal');
+  await input.click();
+  await own('👍',false);
+  state.delay=0;assert.equal(await region.locator('[data-reaction-summary-count]').textContent(),'2');assert.equal(state.effects,2);assert.equal(source.revisionId,revision);assert.equal(conversation.lastMessage,source.originalText);findings.push('Scoped full-set commands add/remove own emoji, counts remain canonical, bilingual catalog selection does not touch source content or draft');
   state.own=['😂'];state.ownRevision=id(699);emit();await own('😂',true);await region.locator('[data-reaction-summary]').click();await chip('😂').waitFor({state:'visible'});const beforeStaleRemove=state.effects;state.own=[];state.ownRevision=id(700);await chip('😂').click();await until(async()=>await chip('😂').count()===0,'stale own removal refreshed');assert.equal(state.effects,beforeStaleRemove,'stale removal never becomes an add');
   state.peerName='<img src=x onerror=alert(1)>';emit();await until(async()=>await region.locator('[data-reaction-actor="bob@fixture"] [data-reaction-actor-name]').textContent()===state.peerName,'actor names remain literal text');assert.equal(await region.locator('[data-reaction-actor="bob@fixture"] [data-reaction-actor-name] img').count(),0);state.peerName='Bob';emit();
   state.peerOccupant='occupant:'+'a'.repeat(64);
@@ -92,6 +98,23 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   emit();
   // A rejected delayed preparation must never flash the picker or shift layout.
   state.delay=450;state.prepareEligible=false;await page.evaluate(()=>{const read=()=>{const i=document.querySelector('#message-composer').getBoundingClientRect(),t=document.querySelector('#message-timeline');return{x:i.x,y:i.y,w:i.width,h:i.height,scroll:t.scrollTop,picker:!document.querySelector('#oie-reaction-quick').hidden}};window.reactionGeometry={read,frames:[read()],active:true};const tick=()=>{if(!reactionGeometry.active)return;reactionGeometry.frames.push(read());requestAnimationFrame(tick)};requestAnimationFrame(tick)});const beforeEffects=state.effects,beforeReads=state.reads;await openReact();await until(()=>state.reads>beforeReads,'delayed preflight');await wait(700);const frames=await page.evaluate(()=>{reactionGeometry.active=false;return reactionGeometry.frames});assert(frames.length>10);for(const f of frames){assert(!f.picker);for(const k of ['x','y','w','h','scroll'])assert(Math.abs(f[k]-frames[0][k])<=1,k+' shifted')};assert.equal(state.effects,beforeEffects);assert.equal(await input.inputValue(),'Keep this unsent draft 😀');state.delay=0;state.prepareEligible=null;state.eligible=true;emit();await until(async()=>await page.locator('#react-message-'+message).isEnabled(),'eligibility refreshed');
+  const keyboardBubble=page.locator('[data-message-bubble="'+message+'"]');
+  await keyboardBubble.evaluate(node=>node.closest('.oie-message').style.marginTop='500px');
+  await react();
+  const reactionSearch=modal.locator('#reaction-emoji-search');
+  await reactionSearch.focus();
+  await page.evaluate(()=>{
+   const viewport=window.visualViewport;
+   Object.defineProperty(viewport,'height',{configurable:true,value:400});
+   viewport.dispatchEvent(new Event('resize'));
+  });
+  await until(async()=>await reactionSearch.evaluate(node=>{
+   const viewport=window.visualViewport,source=document.querySelector('[data-message-bubble]').getBoundingClientRect();
+   return source.top>=viewport.height&&node===document.activeElement&&node.getBoundingClientRect().bottom<=viewport.height;
+  }),'catalog search remains focused with the message behind the keyboard');
+  await page.evaluate(()=>{delete window.visualViewport.height;window.visualViewport.dispatchEvent(new Event('resize'))});
+  await dismissCatalog();
+  await keyboardBubble.evaluate(node=>node.closest('.oie-message').style.removeProperty('margin-top'));
   // Missing acceptance can retry only the exact same command after a receipt GET.
   let abort=true;await page.route('**/ui/messages/reactions',r=>{if(abort){abort=false;return r.abort('connectionreset')}return r.continue()});await react();await pick('😂');await region.locator('[data-reaction-check]').waitFor({state:'visible'});assert.equal(state.effects,2);await region.locator('[data-reaction-check]').click();await until(async()=>await region.locator('[data-reaction-check]').getAttribute('aria-label')==='Try again','missing receipt exposes Retry');await region.locator('[data-reaction-check]').click();await own('😂',true);assert.equal(state.effects,3);await page.unroute('**/ui/messages/reactions');
   // Lost reply after acceptance must reconcile without another engine POST.
@@ -139,6 +162,22 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   await phone.keyboard.press('Escape');await phoneDialog.waitFor({state:'hidden'});
   const cdp=await touch.newCDPSession(phone),r=await text.boundingBox(),point={x:r.x+Math.min(30,r.width/2),y:r.y+r.height/2};await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});await phone.waitForTimeout(620);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await until(async()=>await trigger.getAttribute('aria-expanded')==='true','long press opens message actions');await phone.locator('#copy-message-'+message).waitFor({state:'visible'});assert.equal(await phoneDialog.isVisible(),false);assert.equal(state.effects,noWrites,'long press performs no reaction mutation');await phone.keyboard.press('Escape');await phone.locator('#copy-message-'+message).waitFor({state:'hidden'});
   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:point.x,y:point.y-35}]});await phone.waitForTimeout(620);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});assert.equal(await trigger.getAttribute('aria-expanded'),'false','drag cancels long press');assert.equal(await phoneDialog.isVisible(),false);assert.equal(await phone.locator('#message-composer').inputValue(),'Rascunho móvel');assert.equal(state.effects,noWrites);
+  await text.tap();await text.tap();
+  await phoneDialog.waitFor({state:'visible'});
+  await cdp.send('Emulation.setPageScaleFactor',{pageScaleFactor:2});
+  const plus=phoneDialog.locator('[data-reaction-more]');
+  await until(async()=>await plus.evaluate(button=>{
+   const viewport=window.visualViewport;
+   const strip=button.closest('#oie-reaction-quick').getBoundingClientRect(),box=button.getBoundingClientRect();
+   return viewport.scale===2&&strip.width>0&&strip.left>=viewport.offsetLeft&&
+    strip.right<=viewport.offsetLeft+viewport.width&&box.left>=strip.left&&box.right<=strip.right&&
+    box.top>=viewport.offsetTop&&box.bottom<=viewport.offsetTop+viewport.height;
+  }),'quick choices and plus fit at 2x zoom');
+  await plus.tap();
+  await phoneCatalog.waitFor({state:'visible'});
+  await phone.keyboard.press('Escape');await phoneCatalog.waitFor({state:'hidden'});
+  await phone.keyboard.press('Escape');await phoneDialog.waitFor({state:'hidden'});
+  await cdp.send('Emulation.setPageScaleFactor',{pageScaleFactor:1});
   await phone.evaluate(id=>{const body=document.querySelector('[data-message-bubble="'+id+'"]'),button=document.querySelector('[data-reaction-filter-template]').content.firstElementChild.cloneNode(true);button.removeAttribute('data-reaction-filter');button.dataset.previewExpand='';button.dataset.gestureImage='';button.style.cssText='display:block;width:120px;height:70px';button.textContent='Photo';window.gestureImageOpens=0;button.addEventListener('click',()=>gestureImageOpens++);body.append(button)},message);const image=phone.locator('[data-gesture-image]');await image.tap();await until(async()=>await phone.evaluate(()=>gestureImageOpens)===1,'single image tap retains primary action');await image.tap();await image.tap();await phoneDialog.waitFor({state:'visible'});assert.equal(await phone.evaluate(()=>gestureImageOpens),1,'double image tap suppresses viewer opening');await phone.keyboard.press('Escape');await phoneDialog.waitFor({state:'hidden'});assert.equal(state.effects,noWrites);
   await touch.close();findings.push('Touch double tap opens scoped picker without sending; hold opens the existing public Dropdown; dragging cancels both gestures and drafts survive');
   // Both entry points mount the same categorized selector and share device recents.
