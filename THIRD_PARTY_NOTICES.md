@@ -1,7 +1,7 @@
 # Bundled browser assets
 
-Oie is licensed under Apache License 2.0. Bundled third-party files retain their
-own notices and licenses.
+Oiê is licensed under the [GNU General Public License, version 3](LICENSE)
+(`GPL-3.0-only`). Bundled third-party files retain their own notices and licenses.
 
 The document viewer uses the display API and worker from Mozilla PDF.js
 6.5.438, distributed as `pdfjs-dist` under Apache License 2.0. The pinned

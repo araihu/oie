@@ -227,4 +227,6 @@ Screenshots and a report are written to the ignored `tests/browser/artifacts`.
 
 ## License
 
-[Apache License 2.0](LICENSE).
+Oiê is licensed under the [GNU General Public License, version 3](LICENSE)
+(`GPL-3.0-only`). See [third-party notices](THIRD_PARTY_NOTICES.md) for bundled
+assets and their licenses.

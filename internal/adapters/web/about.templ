@@ -1,0 +1,61 @@
+package web
+
+import (
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/drawer"
+	"github.com/araihu/goshtoso/components/icon/heroicons"
+	"github.com/araihu/goshtoso/components/link"
+)
+
+templ aboutEntry(v view) {
+	@button.Button(
+		button.WithType("button"),
+		button.WithAppearance(button.AppearancePlain),
+		button.WithRootClass("oie-about-entry"),
+		button.WithAttrs(templ.Attributes{"aria-haspopup": "dialog"}),
+		button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:close', {id: 'settings'}); $nextTick(() => $dispatch('drawer:open', {id: 'about'}))"}),
+	) {
+		<span>{ v.Text.About }</span>
+		@glyph(heroicons.Icon16SolidChevronRight)
+	}
+}
+
+templ about(v view) {
+	@drawer.Drawer(drawer.Config{ID: "about", Title: v.Text.About}) {
+		<div class="oie-about">
+			@button.Button(
+				button.WithType("button"),
+				button.WithAppearance(button.AppearancePlain),
+				button.WithRootClass("oie-about-back"),
+				button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:close', {id: 'about'}); $nextTick(() => $dispatch('drawer:open', {id: 'settings'}))"}),
+			) {
+				@glyph(heroicons.Icon16SolidChevronLeft)
+				<span>{ v.Text.BackToSettings }</span>
+			}
+			<div class="oie-about-brand">
+				@brand(v)
+			</div>
+			<section aria-labelledby="about-license">
+				<h3 id="about-license">{ v.Text.License }</h3>
+				@aboutLink(brandURL("GPL-3.0.txt"), "GNU GPLv3")
+			</section>
+			<section aria-labelledby="about-attributions">
+				<h3 id="about-attributions">{ v.Text.Attributions }</h3>
+				<ul>
+					<li>@aboutLink(brandURL("NOTICE.txt"), v.Text.LogoAttribution)</li>
+					<li>@aboutLink(brandURL("Apache-2.0.txt"), "Noto Emoji (Apache 2.0)")</li>
+					<li>@aboutLink("https://github.com/araihu/goshtoso/blob/83aed4efdc31/LICENSE", "Goshtoso")</li>
+					<li>@aboutLink("/ui/pdfjs/LICENSE", "PDF.js")</li>
+					<li>@aboutLink("/ui/cache/LICENSE.md", "lru-cache")</li>
+					<li>@aboutLink("/ui/emoji/LICENSE.txt", v.Text.EmojiData)</li>
+				</ul>
+			</section>
+		</div>
+	}
+}
+
+templ aboutLink(href string, label string) {
+	@link.Link(href, link.WithRootClass("oie-about-link"), link.WithAttrs(templ.Attributes{"target": "_blank", "rel": "noopener"})) {
+		<span>{ label }</span>
+	}
+}
