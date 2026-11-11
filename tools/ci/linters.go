@@ -11,7 +11,7 @@ import (
 // Keep the release binaries in sync with tools/go.mod and tools/vacuum/go.mod.
 const (
 	vacuumVersion       = "0.39.3"
-	golangciLintVersion = "2.13.1"
+	golangciLintVersion = "2.15.0"
 )
 
 func (r runner) withLinters(ctx context.Context, base *dagger.Container) (*dagger.Container, error) {
@@ -42,8 +42,8 @@ func (r runner) withLinters(ctx context.Context, base *dagger.Container) (*dagge
 
 func (r runner) golangciLint(arch string) *dagger.File {
 	digests := map[string]string{
-		"amd64": "b17bfbc9d4aaa48be7f4f1ce3240bc3d8200c870c072bacf15c26219e2cfb9cc",
-		"arm64": "908317c23db18448f924e853b3d8a659fd919614cd438f224810a4053daa2607",
+		"amd64": "9b7fe6a6bf6334b98decf8d86b11415ea7889afdabdd1959fdce23af2a9ebcea",
+		"arm64": "b4d8f17068b35ee6060cc2f69a16fb48740d706fbba81661c318649c114a6998",
 	}
 	release := fmt.Sprintf("golangci-lint-%s-linux-%s", golangciLintVersion, arch)
 	url := fmt.Sprintf("https://github.com/golangci/golangci-lint/releases/download/v%s/%s.tar.gz", golangciLintVersion, release)
