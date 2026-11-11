@@ -174,7 +174,13 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     await inline.locator('[data-navigation-settings]:visible').click();
     await settings.getByRole('tab',{name:'Composition',exact:true}).click();
   };
-  const closeSettings=()=>settings.getByRole('button',{name:'Close',exact:true}).click();
+  const closeSettings=async()=>{
+    await settings.getByRole('button',{name:'Close',exact:true}).click();
+    await settings.waitFor({state:'hidden'});
+    const trigger=inline.locator('[data-navigation-settings]:visible');
+    await until(()=>trigger.evaluate(node=>document.activeElement===node),'settings restores its trigger focus');
+    await field.click();
+  };
   await openSettings();
   const languages=settings.getByRole('tabpanel',{name:'Composition'});
   const languageTrigger=languages.getByRole('combobox',{name:'Emoji shortcut languages'});
