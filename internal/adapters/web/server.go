@@ -296,7 +296,6 @@ type copy struct {
 	RoomJoinRequested                                                                                                                                                                                        string
 	RoomLeaveRequested                                                                                                                                                                                       string
 	RoomQueueHint                                                                                                                                                                                            string
-	NavLoading                                                                                                                                                                                               string
 	NavFailed                                                                                                                                                                                                string
 	InfoSharedContent                                                                                                                                                                                        string
 	InfoStarred                                                                                                                                                                                              string
@@ -461,6 +460,7 @@ type copy struct {
 	Preview, PreviewNote, Message, Send, Attach                                                                                                                          string
 	SendingUnavailable, Back, Today, Navigation, Active                                                                                                                  string
 	OpenNavigation, Close, Details, Participants, MediaEmpty                                                                                                             string
+	ExpandNavigation, CollapseNavigation                                                                                                                                 string
 	MediaBody, SelectChat, SelectChatBody, EngineState, AccountHelp                                                                                                      string
 	PreviewOnly, ThemeHelp, LanguageHelp, NoChats, NoChatsBody                                                                                                           string
 	AddAccount, AccountAddress, AccountLabel, AddressPlaceholder, LabelPlaceholder                                                                                       string
@@ -483,6 +483,7 @@ type copy struct {
 	ImageInfo, ImageSource, ImageFilename, ImageType, ImageSize, ImageNotDownloaded                                                                                      string
 	RenderMarkdown, RenderMarkdownHelp, CopyOriginal, MessageCopied, CopyFailed                                                                                          string
 	DevicePreferences, AutoImageDownloads, AutoImageDownloadsHelp, DevicePreferenceUnavailable                                                                           string
+	About, BackToSettings, License, Attributions, LogoAttribution, EmojiData                                                                                             string
 	ValidationFailed, Edit, Done                                                                                                                                         string
 }
 
@@ -527,6 +528,9 @@ var sharedActionsStylesheet []byte
 
 //go:embed read-state.js
 var readStateScript []byte
+
+//go:embed sidebar.js
+var sidebarScript []byte
 
 //go:embed navigation.js
 var navigationScript []byte
@@ -616,6 +620,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mime string
 		body []byte
 	}{
+		"/ui/sidebar.js":  {"text/javascript", sidebarScript},
 		"/ui/mentions.js": {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
 		"/ui/room-archive.js": {"text/javascript", roomArchiveScript},
 		"/ui/timeline.js":     {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
@@ -772,7 +777,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	v.AccountUnread = s.accountUnread(ctx)
 	for _, a := range v.Accounts {
 		s.loadAvatars(ctx, v, a.Id)
-		if !v.Preview {
+		if !v.Preview && v.accountScreen() == "detail" && a.Id == v.managedAccountID() {
 			h, err := s.client.GetAccountHistoryWithResponse(ctx, a.Id, editor)
 			if err == nil && h.JSON200 != nil {
 				v.Histories[a.Id] = *h.JSON200
