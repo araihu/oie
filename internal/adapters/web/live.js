@@ -377,13 +377,13 @@ window.OieRuntime.register('live', life => {
       }
     }
   }
-  function localizeTimes() {
+  function localizeTimes(root=document) {
     const locale=document.documentElement.lang || undefined;
     const clock=new Intl.DateTimeFormat(locale,{hour:'2-digit',minute:'2-digit'});
-    for (const time of document.querySelectorAll('time[datetime]:not([data-day]):not([data-history-date])')) {
+    for (const time of root.querySelectorAll('time[datetime]:not([data-day]):not([data-history-date])')) {
       const date=new Date(time.dateTime);if(!Number.isNaN(date.getTime()))time.textContent=time.matches('[data-viewer-date],[data-capability-date],[data-details-date],[data-shared-source-date]')?new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(date):clock.format(date);
     }
-    const timeline=document.querySelector('#message-timeline');if(!timeline)return;
+    const timeline=root.querySelector('#message-timeline');if(!timeline)return;
     for(const divider of timeline.querySelectorAll('.oie-day-divider'))divider.remove();
     const key=date=>[date.getFullYear(),date.getMonth(),date.getDate()].join('-');
     const today=key(new Date());let previous='';
@@ -471,10 +471,15 @@ window.OieRuntime.register('live', life => {
     const starGeneration=Number(body.dataset.starGeneration||0);
     const preferenceGeneration=Number(body.dataset.conversationPreferenceGeneration||0);
     const requestedSearch=location.search;
+    const refreshQuery=new URLSearchParams(requestedSearch);
+    if(!refreshQuery.has('chat')&&document.querySelector('#conversation-pane[data-open-chat="false"]')){
+      if(body.dataset.conversationId)refreshQuery.set('chat',body.dataset.conversationId);
+      refreshQuery.set('inbox','1');
+    }
     const controller = new AbortController(); const timeout = life.timeout(() => controller.abort(), 12000);
     try {
       await reconcilePending(controller.signal);
-      const response = await life.fetch('/ui/refresh'+requestedSearch, {credentials:'same-origin',cache:'no-store',signal:controller.signal});
+      const response = await life.fetch('/ui/refresh?'+refreshQuery, {credentials:'same-origin',cache:'no-store',signal:controller.signal});
       if(life.signal.aborted)return;
       if (!response.ok) throw new Error('refresh unavailable');
       const page = new DOMParser().parseFromString(await response.text(), 'text/html');
@@ -602,6 +607,7 @@ window.OieRuntime.register('live', life => {
   life.on(document,'oie:timeline-focus',event=>{focusMessage(event.detail.id,event.detail.focus!==false);showJump(true);});
   life.on(document,'oie:timeline-alias',event=>{if(highlightedMessage===event.detail.requested)highlightedMessage=event.detail.canonical;});
   life.on(document,'oie:info-content',()=>{applyAvatars();localizeTimes();});
+  life.on(document,'oie:inbox-filtered',event=>localizeTimes(event.detail.root));
   life.on(document,'oie:shared-append',event=>{if(event.detail?.page)readAvatars(event.detail.page);applyAvatars();localizeTimes();});
   for(const name of ['oie:shared-search-settled','oie:info-shared-search-settled'])life.on(document,name,event=>{if(event.detail?.page)readAvatars(event.detail.page);applyAvatars();localizeTimes();});
   life.on(document,'oie:refresh-request',()=>scheduleRefresh());

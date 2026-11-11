@@ -6,7 +6,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const engine=id(1),account=id(2),other=id(3),revision=id(4),streams=new Set(),reads=[],state={hold:null,fail:false,release:null,writes:0,seq:0};
  const accounts=[{id:account,address:'personal@fixture',label:'Personal'},{id:other,address:'work@fixture',label:'Work'}].map(value=>({...value,revisionId:revision,protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z'}));
  const chats=Array.from({length:24},(_,index)=>({id:id(100+index),revisionId:revision,accountId:index%2?other:account,address:'chat'+index+'@fixture',title:'Conversation '+index,kind:'direct',updatedAt:'2026-11-08T12:00:00Z',lastMessage:'Fixture',unreadCount:0,archived:false,favorite:false}));
- const [a,b,c]=[chats[0],chats[8],chats[9]];
+ const [a,b,c,room]=[chats[0],chats[8],chats[9],chats[23]];
+ room.kind='room';c.favorite=true;
  const message=chat=>({id:id(1000+chats.indexOf(chat)),revisionId:revision,conversationId:chat.id,accountId:chat.accountId,sender:{id:id(5),displayName:'Peer'},originalText:'Text for '+chat.title,createdAt:'2026-11-08T12:00:00Z',isOwn:false,sendState:'received'});
  const api=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://fixture');reads.push(url.pathname+url.search);res.setHeader('Content-Type','application/json');const send=(status,value)=>{res.statusCode=status;res.end(JSON.stringify(value))};
@@ -23,7 +24,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    const cursor=url.searchParams.get('cursor'),start=cursor?matched.findIndex(value=>value.id===cursor)+1:0;if(cursor&&start===0)return send(400,{status:400,code:'invalid_cursor'});
    return send(200,{query:q,accountId:accountId||undefined,conversationId:conversationId||undefined,includeEditHistory,items:matched.slice(start,start+limit).map(value=>({message:value,accountLabel:accounts.find(a=>a.id===value.accountId).label,conversationTitle:chats.find(c=>c.id===value.conversationId).title,matchedRevisionId:value.revisionId,matchedAt:value.createdAt,historical:false,matchKind:'text',excerpt:value.originalText})),nextCursor:matched.length>start+limit?matched[start+limit-1].id:undefined,metadataIndexing:{state:'complete',indexedMessages:24,totalMessages:24}});
   }
-  if(url.pathname==='/api/v1/conversations'){const filtered=chats.filter(chat=>(!url.searchParams.get('accountId')||chat.accountId===url.searchParams.get('accountId'))&&chat.archived===(url.searchParams.get('archived')==='true')&&chat.title.toLowerCase().includes((url.searchParams.get('q')||'').toLowerCase()));const limit=Number(url.searchParams.get('limit')||100);return send(200,{items:filtered.slice(0,limit),nextCursor:filtered.length>limit?filtered[limit-1].id:undefined});}
+  if(url.pathname==='/api/v1/conversations'){const filtered=chats.filter(chat=>(!url.searchParams.get('accountId')||chat.accountId===url.searchParams.get('accountId'))&&chat.archived===(url.searchParams.get('archived')==='true')&&chat.title.toLowerCase().includes((url.searchParams.get('q')||'').toLowerCase())&&(!url.searchParams.has('kind')||chat.kind===url.searchParams.get('kind'))&&(!url.searchParams.has('favoritesOnly')||chat.favorite)&&(!url.searchParams.has('unreadOnly')||chat.unreadCount>0));const limit=Number(url.searchParams.get('limit')||100);return send(200,{items:filtered.slice(0,limit),nextCursor:filtered.length>limit?filtered[limit-1].id:undefined});}
   for(const chat of chats){
    const prefix='/api/v1/conversations/'+chat.id;
    if(url.pathname===prefix)return send(state.fail&&chat===a?503:200,chat);
@@ -107,7 +108,79 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await sampleOpening(b,['#conversation-list','.oie-list-account']);
   state.hold=null;state.release();state.release=null;
   await page.locator('#message-composer').waitFor();await ready(b);await opened.context.close();
-  opened=await fresh({javaScriptEnabled:false});page=opened.page;await page.goto(base+'/?chat='+a.id);await page.locator('#conversation-list a[data-conversation-id="'+b.id+'"]').click();assert.equal(new URL(page.url()).searchParams.get('chat'),b.id);assert.equal(await page.locator('#chat-header').textContent().then(text=>text.includes(b.title)),true);await opened.context.close();
+  opened=await fresh();page=opened.page;
+  await page.goto(base+'/?chat='+c.id+'&lang=en&theme=dark');
+  await ready(c);await page.waitForFunction(()=>window.OieRuntime?.generation>0);
+  const filter=name=>page.locator('a[data-filter="'+name+'"]');
+  const activeFilter=async name=>await until(async()=>await filter(name).getAttribute('aria-current')==='true','active filter '+name);
+  await page.locator('#message-composer').fill('Draft kept by filters');
+  await page.evaluate(()=>{
+   window.keptSelectors=['#oie-app','.oie-sidebar','.oie-list-heading','#conversation-search','.oie-list-account','#conversation-pane','#message-timeline','#message-composer'];
+   window.keptNodes=window.keptSelectors.map(selector=>document.querySelector(selector));
+   const timeline=document.getElementById('message-timeline');timeline.scrollTop=150;
+   window.keptScroll=timeline.scrollTop;window.keptGeneration=window.OieRuntime.generation;
+  });
+  const verifyKept=async()=>{
+   assert(await page.evaluate(()=>window.keptNodes.every((node,index)=>node===document.querySelector(window.keptSelectors[index]))&&window.keptGeneration===window.OieRuntime.generation&&window.keptScroll===document.getElementById('message-timeline').scrollTop));
+   assert.equal(await page.locator('#message-composer').inputValue(),'Draft kept by filters');
+   assert.equal(new URL(page.url()).searchParams.get('chat'),c.id);
+   assert.equal(await page.locator('#conversation-pane.oie-conversation-enter').count(),0);
+  };
+
+  await filter('favorites').click();await activeFilter('favorites');await verifyKept();
+  assert.equal(await page.locator('#conversation-list [aria-current="true"]').getAttribute('data-conversation-id'),c.id);
+  let releaseFilter,requestFilter;
+  const filterGate=new Promise(resolve=>releaseFilter=resolve);
+  const filterStarted=new Promise(resolve=>requestFilter=resolve);
+  await page.route(url=>url.searchParams.get('filter')==='groups',async route=>{
+   requestFilter();
+   await filterGate;
+   await route.continue();
+  },{times:1});
+  try{
+   await filter('groups').focus();await filter('groups').press('Enter');await filterStarted;
+   await activeFilter('favorites');await verifyKept();
+  }finally{releaseFilter();}
+  await activeFilter('groups');await verifyKept();
+  assert.equal(await page.locator('#conversation-list [data-conversation-id="'+c.id+'"]').count(),0);
+  assert.equal(await page.locator('#conversation-list [data-conversation-id="'+room.id+'"]').count(),1);
+  assert(await filter('groups').evaluate(node=>node===document.activeElement));
+  assert.equal(await page.locator('#conversation-filter-form input[name=filter]').inputValue(),'groups');
+  await filter('all').click();await activeFilter('all');await verifyKept();
+  await page.goBack();await activeFilter('groups');await verifyKept();
+  await page.goForward();await activeFilter('all');await verifyKept();
+  await page.route(url=>url.searchParams.get('filter')==='groups',route=>route.fulfill({status:503,body:'unavailable'}),{times:1});
+  await filter('groups').click();
+  await page.locator('[data-toast-container]').getByText('Could not open this view. Try again.',{exact:true}).waitFor();
+  await activeFilter('all');await verifyKept();
+  const beforeSelection=await page.evaluate(()=>{
+   window.conversationAnimations=0;
+   document.addEventListener('animationstart',event=>{if(event.animationName==='oie-conversation-enter')window.conversationAnimations++;});
+   return window.OieRuntime.generation;
+  });
+  await page.locator('#conversation-list a[data-conversation-id="'+b.id+'"]').click();await ready(b);
+  await page.waitForFunction(()=>window.conversationAnimations===1);
+  assert.equal(await page.evaluate(()=>window.OieRuntime.generation),beforeSelection+1);
+  await page.locator('#conversation-list a[data-conversation-id="'+b.id+'"]').click();
+  assert.equal(await page.evaluate(()=>window.OieRuntime.generation),beforeSelection+1);
+  assert(requests.some(request=>request.headers['x-oie-fragment']==='inbox'));
+  await opened.context.close();await until(()=>streams.size===0,'filter stream closed');
+
+  opened=await fresh({viewport:{width:390,height:844},locale:'pt-BR',reducedMotion:'reduce'});page=opened.page;
+  await page.goto(base+'/?lang=pt-BR&theme=dark');
+  await page.waitForFunction(()=>window.OieRuntime?.generation>0);
+  await filter('groups').click();await activeFilter('groups');
+  assert(await page.locator('#conversation-list').isVisible());
+  assert.equal(await page.evaluate(()=>document.body.dataset.conversationId),a.id);
+  assert.equal(new URL(page.url()).searchParams.get('inbox'),'1');
+  await page.reload();await activeFilter('groups');
+  assert(await page.locator('#conversation-list').isVisible());
+  assert.equal(await page.evaluate(()=>document.body.dataset.conversationId),a.id);
+  await filter('all').click();await activeFilter('all');
+  await page.locator('#conversation-list a[data-conversation-id="'+b.id+'"]').click();await ready(b);
+  assert.equal(await page.locator('#conversation-pane.oie-conversation-enter').count(),0);
+  await opened.context.close();
+  opened=await fresh({javaScriptEnabled:false});page=opened.page;await page.goto(base+'/?chat='+a.id);await filter('groups').click();assert.equal(new URL(page.url()).searchParams.get('chat'),a.id);assert.equal(await page.locator('#chat-header').textContent().then(text=>text.includes(a.title)),true);await filter('all').click();await page.locator('#conversation-list a[data-conversation-id="'+b.id+'"]').click();assert.equal(new URL(page.url()).searchParams.get('chat'),b.id);assert.equal(await page.locator('#chat-header').textContent().then(text=>text.includes(b.title)),true);await opened.context.close();
   assert.deepEqual(errors,[]);assert.equal(state.writes,0);await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});await fs.writeFile(path.join(__dirname,'artifacts/conversation-navigation-report.json'),JSON.stringify({pageErrors:errors,mutations:state.writes,conversationFragmentRequests:requests.filter(request=>request.headers['x-oie-fragment']==='conversation').length},null,2));console.log('PASS: conversation-only swaps preserve inbox nodes/scroll/filter, isolated drafts/details, history, latest intent, one stream, mobile Back and native fallback');
  }catch(error){if(page&&!page.isClosed())console.error(JSON.stringify(await page.evaluate(()=>({url:location.href,body:{...document.body.dataset},pane:document.querySelector('#conversation-pane')?.outerHTML.slice(0,1000),links:[...document.querySelectorAll('#conversation-list a')].slice(0,2).map(node=>({href:node.href,target:node.getAttribute('hx-target')}))})).catch(()=>({}))));throw error}finally{state.release?.();await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(resolve=>api.close(resolve))}
 })().catch(error=>{console.error(error);process.exitCode=1});

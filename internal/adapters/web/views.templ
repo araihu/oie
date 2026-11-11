@@ -275,17 +275,7 @@ if v.NativeMessageSearch {
 				@textinput.TextInput(textinput.Config{ID: "conversation-search", Name: "q", Value: v.Query, Type: textinput.TypeSearch, Placeholder: v.Text.SearchEverything, InputAttrs: templ.Attributes{"aria-label":v.Text.SearchEverything,"style": "padding-left:2.5rem;border-radius:1.4rem;background:var(--oie-raised);border-color:var(--oie-border);color:var(--oie-text)"}})
 			</form>
 @messageSearchSlot(v)
-<div id="conversation-list-default" class="oie-list-default" hidden?={v.GlobalMessageSearch}>
-			<nav class="oie-filters" aria-label={ v.Text.Chats }>
-				@filterLink(v, "all", v.Text.All)
-				@filterLink(v, "unread", v.Text.Unread)
-				@filterLink(v, "favorites", v.Text.Favorites)
-				@filterLink(v, "groups", v.Text.Groups)
-			</nav>
-<div class="oie-conversation-scroll" id="conversation-list" data-version={v.conversationListVersion()}>
-@conversationList(v)
-</div>
-</div>
+@inboxList(v)
 			<div class="oie-list-account" x-data="{}">
 @profile(v,"compact")
 
@@ -302,15 +292,29 @@ templ menuTrigger(label string) {
 	}
 }
 
+templ inboxList(v view) {
+<div id="conversation-list-default" class="oie-list-default" data-inbox-scope={v.conversationScope()} data-inbox-filter={v.Filter} hidden?={v.GlobalMessageSearch}>
+			<nav class="oie-filters" aria-label={ v.Text.Chats }>
+				@filterLink(v, "all", v.Text.All)
+				@filterLink(v, "unread", v.Text.Unread)
+				@filterLink(v, "favorites", v.Text.Favorites)
+				@filterLink(v, "groups", v.Text.Groups)
+			</nav>
+<div class="oie-conversation-scroll" id="conversation-list" data-version={v.conversationListVersion()}>
+@conversationList(v)
+</div>
+</div>
+}
+
 templ filterLink(v view, key, label string) {
-	@link.Link(v.href("filter", key, "chat", ""), link.WithRootClass("oie-filter"), link.WithAttrs(templ.Attributes{"aria-current": strconv.FormatBool(v.Filter == key), "data-filter": key})) {
+	@link.Link(v.filterHref(key), link.WithRootClass("oie-filter"), link.WithAttrs(templ.Attributes{"aria-current": strconv.FormatBool(v.Filter == key), "data-filter": key})) {
 		{ label }
 	}
 }
 
 templ conversationRow(v view, c engineapi.Conversation) {
 	<li data-conversation-row={c.Id} data-version={v.conversationRowVersion(c)}>
-		@link.Link(v.href("chat", c.Id,"message","","infoView","","infoType","","infoCursor","","infoQuery","","infoFocus","","lang",v.Locale,"theme",v.Theme), link.WithRootClass("oie-chat-link"), link.WithAttrs(templ.Attributes{"data-conversation-id": c.Id, "aria-current": strconv.FormatBool(v.Selected != nil && v.Selected.Id == c.Id)})) {
+		@link.Link(v.href("chat", c.Id,"message","","infoView","","infoType","","infoCursor","","infoQuery","","infoFocus","","lang",v.Locale,"theme",v.Theme), link.WithRootClass("oie-chat-link"), link.WithAttrs(templ.Attributes{"data-conversation-id": c.Id, "aria-current": strconv.FormatBool(v.ChatID == c.Id)})) {
 			@profileAvatar(v,c.AccountId,c.Address,avatar.Config{Name: c.Title, Initials: chatInitials(c), Size: avatar.SizeSM, RootClass: "oie-chat-avatar"})
 			<div class="oie-row-content">
 				<div class="oie-row-top"><strong>{ c.Title }</strong><time datetime={ c.UpdatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ c.UpdatedAt.Format("15:04") }</time></div>

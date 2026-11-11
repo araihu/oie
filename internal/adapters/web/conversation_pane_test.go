@@ -48,11 +48,11 @@ func TestConversationFragmentOwnsItsStateAndDetailsWithoutTheInbox(t *testing.T)
 	}
 }
 
-func TestConversationFragmentScopeExcludesOnlyConversationState(t *testing.T) {
+func TestConversationFragmentScopeExcludesConversationAndInboxFilter(t *testing.T) {
 	v := view{EngineID: testEngine, AccountFilter: testAccount, Locale: "en", Theme: "dark", Section: "chats", Filter: "all"}
 	scope := v.conversationScope()
 	next := v
-	next.ChatID, next.FocusMessage, next.InfoQuery, next.InfoView = testChat, testMessage, "room search", "shared"
+	next.ChatID, next.FocusMessage, next.InfoQuery, next.InfoView, next.Filter = testChat, testMessage, "room search", "shared", "unread"
 	if next.conversationScope() != scope {
 		t.Fatal("conversation selection unnecessarily invalidates the inbox")
 	}
@@ -60,7 +60,6 @@ func TestConversationFragmentScopeExcludesOnlyConversationState(t *testing.T) {
 		func(v *view) { v.EngineID = testRevision },
 		func(v *view) { v.AccountFilter = "" },
 		func(v *view) { v.Section = "archived" },
-		func(v *view) { v.Filter = "unread" },
 		func(v *view) { v.Query = "search" },
 		func(v *view) { v.Locale = "pt-BR" },
 		func(v *view) { v.Theme = "light" },

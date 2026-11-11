@@ -92,6 +92,10 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-list-footer>span:nth-child(2){flex:1}.oie-status-dot{height:6px;width:6px;border-radius:50%;background:var(--oie-accent)}.oie-status-error{background:#e76e6e}
 .oie-conversation-pane{display:flex;flex-direction:column;min-width:0;min-height:0}
 .oie-conversation-pane>.oie-chat-pane{flex:1}
+@media(prefers-reduced-motion:no-preference){
+ .oie-conversation-enter>.oie-chat-pane{animation:oie-conversation-enter 160ms ease-out}
+ @keyframes oie-conversation-enter{from{opacity:.78}to{opacity:1}}
+}
 .oie-chat-pane{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--oie-chat)}
 .oie-chat-header{height:65px;min-height:65px;display:flex;align-items:center;gap:11px;padding:10px 20px;background:var(--oie-panel);border-bottom:1px solid var(--oie-border)}
 .oie-chat-identity{flex:1;min-width:0}.oie-chat-identity h2{font-weight:650;font-size:14px;margin:0 0 3px}.oie-chat-identity p{font-size:11px;color:var(--oie-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0}

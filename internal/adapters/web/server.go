@@ -134,6 +134,7 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	InboxOnly        bool
 	Role             engineapi.EngineRole
 	CanResetData     bool
 	LatestEditTarget *engineapi.MessageEditTarget
@@ -755,6 +756,7 @@ func (s *Server) baseView(r *http.Request) view {
 	return v
 }
 func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
+	listOnly := r.URL.Path == "/" && r.Header.Get("HX-Request") == "true" && r.Header.Get("X-Oie-Fragment") == "inbox" && v.Section != "media"
 	editor := func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept-Language", v.Locale)
 		return nil
@@ -780,9 +782,14 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		s.loadMessageSearch(ctx, v)
 		return
 	}
-	v.AccountUnread = s.accountUnread(ctx)
+	if !listOnly {
+		v.AccountUnread = s.accountUnread(ctx)
+	}
 	for _, a := range v.Accounts {
 		s.loadAvatars(ctx, v, a.Id)
+		if listOnly {
+			continue
+		}
 		if !v.Preview && v.accountScreen() == "detail" && a.Id == v.managedAccountID() {
 			h, err := s.client.GetAccountHistoryWithResponse(ctx, a.Id, editor)
 			if err == nil && h.JSON200 != nil {
@@ -794,7 +801,9 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 			v.Connections[a.Id] = connectionView{Known: true, Value: *connection.JSON200}
 		}
 	}
-	s.loadCapabilities(ctx, v)
+	if !listOnly {
+		s.loadCapabilities(ctx, v)
+	}
 	if v.Section == "media" {
 		s.loadSharedContent(ctx, v)
 		return
@@ -832,8 +841,11 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		return
 	}
 	v.Chats = chats.JSON200.Items
+	if listOnly {
+		return
+	}
 	selected := v.ChatID
-	if selected == "" && len(v.Chats) > 0 {
+	if selected == "" && !v.InboxOnly && len(v.Chats) > 0 {
 		selected = v.Chats[0].Id
 	}
 	if selected == "" || v.Section == "media" {
@@ -1021,6 +1033,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	component := page(v)
 	if r.Header.Get("HX-Request") == "true" {
 		component = appFragment(v)
+		if r.URL.Path == "/" && r.Header.Get("X-Oie-Fragment") == "inbox" && v.Section != "media" {
+			component = inboxList(v)
+		}
 		if r.Header.Get("X-Oie-Fragment") == "conversation" && v.Section != "media" {
 			component = conversationPane(v)
 		}
