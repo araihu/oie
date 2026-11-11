@@ -174,7 +174,9 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 		WithFile("/usr/local/bin/docker", docker.File("/usr/local/bin/docker")).
 		WithDirectory("/usr/local/libexec/docker/cli-plugins", docker.Directory("/usr/local/libexec/docker/cli-plugins")).
 		WithMountedTemp(goScratch, dagger.ContainerWithMountedTempOpts{Size: 2 << 30}).
-		WithEnvVariable("TMPDIR", goScratch)
+		WithEnvVariable("TMPDIR", goScratch).
+		// A cold toolchain build can exceed the test scratch mount capacity.
+		WithEnvVariable("GOTMPDIR", "/tmp")
 	checked, err := r.stage(ctx, "checks", goContainer.WithExec([]string{"make", "check"}))
 	if err != nil {
 		return err

@@ -189,8 +189,10 @@ The runner prints stage progress every 30 seconds and saves command output under
 The Go XMPP integration and the real-engine browser workflow use separate
 Prosody instances so browser accounts start with an empty message archive.
 Go and browser stages use a bounded memory-backed `TMPDIR` for disposable
-SQLite databases, compiler scratch files and browser profiles. The binaries,
-logs and browser exit receipt live outside those temporary mounts.
+SQLite databases and browser profiles. Go keeps its compiler scratch files in
+disk-backed `GOTMPDIR` because a cold tool build can exceed the memory mount's
+capacity. The binaries, logs and browser exit receipt also live outside those
+temporary mounts.
 On the SSH runner, a probe with 12 fresh SQLite databases and 120 committed
 inserts took 6.58 seconds on the shared disk and 0.039 seconds in memory.
 The shell lifecycle tests took 38.04 seconds in the disk-backed baseline,
