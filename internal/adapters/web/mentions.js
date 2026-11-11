@@ -7,15 +7,18 @@ window.OieRuntime.register('mentions',life=>{
  const scope={engineId:root.dataset.engineId,accountId:root.dataset.accountId,conversationId:root.dataset.conversationId};
  const nicknameOrder=new Intl.Collator(document.documentElement.lang,{sensitivity:'base'});
  const fold=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase(document.documentElement.lang),points=value=>Array.from(value),writable=()=>input.isConnected&&!input.disabled&&!input.readOnly&&form.dataset.busy!=='true'&&form.dataset.editing!=='true'&&form.dataset.composeAllowed==='true';
- let previous=input.value,tokens=[],catalog=null,loadedAt=0,loading=false,failed=false,epoch=0,controller=null,visible=[],active=-1,renderedQuery='',composing=false,dismissed='',geometryFrame=false;
+ let previous=input.value,tokens=[],catalog=null,loadedAt=0,loading=false,failed=false,epoch=0,controller=null,visible=[],active=-1,renderedQuery='',composing=false,choosing=false,dismissed='',geometryFrame=false;
  function sync(){field.value=JSON.stringify(tokens.map(({participantId,begin,end})=>({participantId,begin,end})));}
+ function mentionBoundary(text,begin,end){
+  return !/[\p{L}\p{M}/'-]/u.test(text[begin-1]||'')&&!/[\p{L}\p{M}]/u.test(text[end]||'');
+ }
  function restore(){
   let value=[];try{value=JSON.parse(field.value||'[]')}catch{}
   const text=points(input.value);tokens=[];
   if(Array.isArray(value)&&value.length<=32){
    for(const item of value){
     if(!item||typeof item.participantId!=='string'||!item.participantId||item.participantId.length>1024||!Number.isInteger(item.begin)||!Number.isInteger(item.end)||item.begin<0||item.end<=item.begin||item.end>text.length||tokens.some(token=>item.begin<token.end&&item.end>token.begin))continue;
-    const word=text.slice(item.begin,item.end).join('');if(/[\r\n\u0000]/u.test(word))continue;
+    const word=text.slice(item.begin,item.end).join('');if(/[\r\n\u0000]/u.test(word)||!mentionBoundary(text,item.begin,item.end))continue;
     tokens.push({participantId:item.participantId,begin:item.begin,end:item.end,text:word});
    }
   }
@@ -30,11 +33,11 @@ window.OieRuntime.register('mentions',life=>{
    if(token.end<=start)return[token];
    if(token.begin>=end)return[{...token,begin:token.begin+shift,end:token.end+shift}];
    return[];
-  }).filter(token=>after.slice(token.begin,token.end).join('')===token.text);
+  }).filter(token=>after.slice(token.begin,token.end).join('')===token.text&&mentionBoundary(after,token.begin,token.end));
   previous=input.value;sync();
  }
  function trigger(){
-  if(!writable()||composing||tokens.length>=32||input.selectionStart!==input.selectionEnd||(document.activeElement!==input&&!root.contains(document.activeElement)))return null;
+  if(!writable()||composing||choosing||tokens.length>=32||input.selectionStart!==input.selectionEnd||(document.activeElement!==input&&!root.contains(document.activeElement)))return null;
   const caret=input.selectionStart,prefix=input.value.slice(0,caret),start=prefix.lastIndexOf('@');
   if(start<0||(start>0&&!/[\s([{]/u.test(prefix[start-1])))return null;
   const query=prefix.slice(start+1),begin=points(prefix.slice(0,start)).length;
@@ -100,7 +103,7 @@ window.OieRuntime.register('mentions',life=>{
    ids.add(item.id);items.push({...item,nickname,foldedNickname:fold(nickname),match:fold(item.displayName+' '+item.insertText)});
   }
   if(['unavailable','not_connected'].includes(data.state))throw Error('unavailable_candidates');
-  return{state:data.state,truncated:data.truncated,items};
+  return{state:data.state,truncated:data.truncated,bareNicknameSpans:data.bareNicknameSpans===true,items};
  }
  async function load(force=false){
   if(loading||!trigger())return;
@@ -121,20 +124,33 @@ window.OieRuntime.register('mentions',life=>{
  }
  function choose(index){
   const item=visible[index],current=trigger();if(!item||!current||!writable()||tokens.length>=32)return;
-  const following=input.value.slice(current.end);
+  let end=current.end;
+  const typedNickname=points(input.value.slice(current.start+1)).slice(0,points(item.nickname).length).join('');
+  const typedEnd=current.start+1+typedNickname.length;
+  if(fold(typedNickname)===item.foldedNickname&&!/^[\p{L}\p{M}\p{N}_'-]/u.test(input.value.slice(typedEnd)))end=Math.max(end,typedEnd);
+  const following=input.value.slice(end);
   const hasPunctuation=/^[.,;:!?)\]}]/u.test(following);
   const comma=current.start===0&&!hasPunctuation?',':'';
   const space=hasPunctuation||/^\s/u.test(following)?'':' ';
-  input.setRangeText(item.nickname+comma+space,current.start,current.end,'end');track();
+  input.setRangeText(item.nickname+comma+space,current.start,end,'end');track();
   const mention={participantId:item.id,begin:current.begin,end:current.begin+points(item.nickname).length,text:item.nickname};
-  tokens=tokens.filter(token=>mention.begin>=token.end||mention.end<=token.begin);tokens.push(mention);tokens.sort((a,b)=>a.begin-b.begin);sync();previous=input.value;dismissed='';hide();
+  if(catalog.bareNicknameSpans&&mentionBoundary(points(input.value),mention.begin,mention.end)){
+   tokens=tokens.filter(token=>mention.begin>=token.end||mention.end<=token.begin);tokens.push(mention);tokens.sort((a,b)=>a.begin-b.begin);
+  }
+  sync();dismissed='';hide();
+  choosing=true;
   input.focus({preventScroll:true});input.dispatchEvent(new Event('input',{bubbles:true}));
+  choosing=false;
  }
  restore();input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-controls',list.id);input.setAttribute('aria-haspopup','listbox');
  life.on(input,'input',event=>{dismissed='';track();composing=event.isComposing===true;update();},{capture:true});
  life.on(input,'compositionstart',()=>{composing=true;hide()});life.on(input,'compositionend',()=>{composing=false;update()});
  life.on(input,'keydown',event=>{
   if(event.isComposing||event.keyCode===229||composing||root.hidden)return;
+  if(event.key==='Enter'&&(active<0||event.shiftKey||event.ctrlKey||event.altKey||event.metaKey)){
+   hide();
+   return;
+  }
   if(event.key==='Tab'){
    if(event.shiftKey||event.altKey||event.ctrlKey||event.metaKey||active<0||!trigger()?.query.trim()){
     hide();
@@ -159,6 +175,7 @@ window.OieRuntime.register('mentions',life=>{
  life.on(retry,'click',()=>{input.focus({preventScroll:true});void load(true)});
  life.on(document,'pointerdown',event=>{if(event.target!==input&&!root.contains(event.target))dismiss()},{capture:true});
  life.on(form,'oie:mentions-restore',()=>{restore();hide()});
+ life.on(form,'oie:mentions-invalidated',()=>{catalog=null;failed=false;epoch++;controller?.abort();loading=false;hide()});
  life.on(input,'blur',event=>{if(!root.contains(event.relatedTarget))hide()});
  life.on(window,'resize',schedulePosition);life.on(window,'scroll',schedulePosition,{capture:true,passive:true});
  if(window.visualViewport){life.on(window.visualViewport,'resize',schedulePosition);life.on(window.visualViewport,'scroll',schedulePosition)}

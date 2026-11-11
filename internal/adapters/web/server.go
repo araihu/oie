@@ -178,7 +178,7 @@ type copy struct {
 	RetryConversationPreference, ConversationPreferenceUpdated, ConversationPreferenceConflict, ConversationPreferenceUncertain, ConversationPreferenceUnavailable, ConversationPreferenceStorageUnavailable string
 	CapabilityMentions                                                                                                                                                                                       string
 	MentionUsers, MentionLoading, MentionEmpty, MentionFailed, MentionPartial                                                                                                                                string
-	MentionedYou, UnreadMention                                                                                                                                                                              string
+	MentionedYou, UnreadMention, MentionChanged                                                                                                                                                              string
 	MessageStarred                                                                                                                                                                                           string
 	AutoVideoThumbnails, AutoVideoThumbnailsHelp, VideoThumbnailLoad, VideoThumbnailLoading, VideoThumbnailFailed                                                                                            string
 	ReadFailed                                                                                                                                                                                               string

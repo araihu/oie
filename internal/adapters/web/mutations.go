@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/google/uuid"
@@ -280,7 +281,7 @@ func (s *Server) reconcileMessage(ctx context.Context, key, kind string) (*engin
 }
 func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mutationResult) {
 	key, body, conversation, account, target := r.Form.Get("operationKey"), r.Form.Get("originalText"), r.Form.Get("conversationId"), r.Form.Get("accountId"), r.Form.Get("replyToMessageId")
-	if !validOperationKey(key) || !validOperationKey(conversation) || !validOperationKey(account) || strings.TrimSpace(body) == "" || len([]rune(body)) > 16384 || (target != "" && !validOperationKey(target)) {
+	if !validOperationKey(key) || !validOperationKey(conversation) || !validOperationKey(account) || !utf8.ValidString(body) || strings.ContainsRune(body, 0) || strings.TrimSpace(body) == "" || utf8.RuneCountInString(body) > 16384 || (target != "" && !validOperationKey(target)) {
 		return 422, mutationResult{Message: text.InvalidMessage, Code: "invalid_request", Rejected: true}
 	}
 	mentions, mentionErr := parseMentionSelections(r.Form.Get("mentions"), body)
@@ -362,7 +363,11 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 		message = response.JSON200
 	}
 	if message == nil {
-		return response.StatusCode(), problemResult(text, response.StatusCode(), response.Body)
+		result := problemResult(text, response.StatusCode(), response.Body)
+		if len(mentions) > 0 && response.StatusCode() == 400 && result.Code == "invalid_request" {
+			result.Code, result.Message = "mention_unavailable", text.MentionChanged
+		}
+		return response.StatusCode(), result
 	}
 	if !matchingSend(*message, conversation, account, body, target, mentions) {
 		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}

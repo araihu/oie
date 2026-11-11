@@ -6688,7 +6688,7 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 16384,
-            "description": "Exclusive Unicode code-point offset. The span must match the candidate's nickname or its at-prefixed insertText. Composer-added punctuation and spacing are outside the span."
+            "description": "Exclusive Unicode code-point offset. The span must match the candidate's nickname at word boundaries or its original at-prefixed insertText. Composer-added punctuation and spacing are outside the span."
           }
         }
       },
@@ -6771,6 +6771,11 @@
           "truncated"
         ],
         "properties": {
+          "bareNicknameSpans": {
+            "type": "boolean",
+            "description": "The engine accepts a selected span containing just the nickname. Omission means only the original at-prefixed span is supported.",
+            "example": true
+          },
           "conversationId": {
             "$ref": "#/components/schemas/ID"
           },

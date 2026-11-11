@@ -26,11 +26,12 @@ type outboundFallbackRange struct {
 	End   int `xml:"end,attr"`
 }
 type outboundMentionElement struct {
-	XMLName xml.Name `xml:"urn:xmpp:reference:0 reference"`
-	Type    string   `xml:"type,attr"`
-	URI     string   `xml:"uri,attr"`
-	Begin   int      `xml:"begin,attr"`
-	End     int      `xml:"end,attr"`
+	XMLName       xml.Name `xml:"urn:xmpp:reference:0 reference"`
+	Type          string   `xml:"type,attr"`
+	URI           string   `xml:"uri,attr"`
+	Begin         int      `xml:"begin,attr"`
+	End           int      `xml:"end,attr"`
+	ParticipantID string   `xml:"-"`
 }
 type outboundMessage struct {
 	stanza.Message
@@ -143,7 +144,7 @@ func buildOutgoing(a domain.Account, out application.Outgoing) (outboundMessage,
 			if !ok {
 				return outboundMessage{}, application.ErrInvalid
 			}
-			payload.Mentions = append(payload.Mentions, outboundMentionElement{Type: "mention", URI: uri, Begin: mention.Begin, End: mention.End})
+			payload.Mentions = append(payload.Mentions, outboundMentionElement{Type: "mention", URI: uri, Begin: mention.Begin, End: mention.End, ParticipantID: mention.ParticipantID})
 		}
 	}
 	ref := out.Reply

@@ -50,11 +50,27 @@ func TestMentionCandidatesPreserveAnonymousRoomPrivacyAndDepartures(t *testing.T
 	if got.Items[0].URI != "xmpp:juliet@example.test" || got.Items[0].ReferenceMode != "structured" {
 		t.Fatal(got)
 	}
+	selected := got.Items[0]
+	if selected.ID == address+"/Juliet" || selected.LegacyID != address+"/Juliet" || selected.DisplayName != "Room alias" {
+		t.Fatal("structured selection did not bind the observation or keep its display name", selected)
+	}
+	captureRoomMentionPresence(e, presence)
+	if got = read(); got.Items[0].ID != selected.ID {
+		t.Fatal("unchanged identity invalidated a selection", got)
+	}
 	presence.Type = stanza.UnavailablePresence
 	captureRoomMentionPresence(e, presence)
 	if got = read(); len(got.Items) != 0 {
 		t.Fatal("departed occupant restored from stale discovery", got)
 	}
+	presence.Type = ""
+	presence.MUC.Item.JID = "another@example.test/device"
+	captureRoomMentionPresence(e, presence)
+	if got = read(); len(got.Items) != 1 || got.Items[0].ID == selected.ID || got.Items[0].URI == selected.URI {
+		t.Fatal("a replacement occupant reused the previous selection", got)
+	}
+	presence.Type = stanza.UnavailablePresence
+	captureRoomMentionPresence(e, presence)
 	presence.Type = ""
 	presence.From, _ = jid.Parse(address + "/Other")
 	presence.MUC = nil
@@ -67,6 +83,22 @@ func TestMentionCandidatesPreserveAnonymousRoomPrivacyAndDepartures(t *testing.T
 		t.Fatal(got)
 	}
 }
+func TestQueuedMentionReferencesRequireCurrentOccupant(t *testing.T) {
+	slot := &roomSlot{mentionOccupants: map[string]observedMention{
+		"room/Juliet": {present: true, id: "current", uri: "xmpp:juliet@example.test"},
+		"room/Romeo":  {id: "departed", uri: "xmpp:romeo@example.test"},
+	}}
+	refs := []outboundMentionElement{
+		{ParticipantID: "previous", URI: "xmpp:juliet@example.test"},
+		{ParticipantID: "current", URI: "xmpp:someone-else@example.test"},
+		{ParticipantID: "current", URI: "xmpp:juliet@example.test"},
+		{ParticipantID: "departed", URI: "xmpp:romeo@example.test"},
+	}
+	if got := roomMentionReferences(slot, refs); len(got) != 1 || got[0].ParticipantID != "current" || got[0].URI != "xmpp:juliet@example.test" {
+		t.Fatal("queued references outlived their verified observation", got)
+	}
+}
+
 func TestOutgoingMentionsUnicodeRangesAndReadableFallback(t *testing.T) {
 	account := domain.Account{Address: "alice@example.test"}
 	body := "> Original 😀\n\nOlá 😀 @Juliet e @Romeo"

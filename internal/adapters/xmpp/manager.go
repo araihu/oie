@@ -467,6 +467,9 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	if err != nil {
 		return application.Failed
 	}
+	if len(payload.Mentions) > 0 && !m.roomAllowsMentionReferences(ctx, e, session, out) {
+		payload.Mentions = nil
+	}
 	e.sendMu.Lock()
 	defer e.sendMu.Unlock()
 	e.mu.Lock()
@@ -493,6 +496,7 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 			}
 			return application.NotSent
 		}
+		payload.Mentions = roomMentionReferences(slot, payload.Mentions)
 		if out.Reaction == nil && e.ownRoomMessages == nil {
 			e.ownRoomMessages = map[string]ownRoomMessage{}
 		}

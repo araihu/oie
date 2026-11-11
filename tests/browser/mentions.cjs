@@ -13,7 +13,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   {id:'occupant/lia',displayName:'Lia Braga',insertText:'@lia',referenceMode:'text'},
   {id:'occupant/radar',displayName:'Radar @Norte',insertText:'@Radar @Norte',referenceMode:'text'}
  );
- const state={reads:0,posts:0,effects:0,fail:false,delay:0,partial:false};
+ const state={reads:0,posts:0,effects:0,fail:false,delay:0,partial:false,legacy:false,rejectMention:false};
  const api=http.createServer(async(req,res)=>{
   const u=new URL(req.url,'http://fixture'),parts=u.pathname.split('/');res.setHeader('Content-Type','application/json');const send=(code,data)=>{res.statusCode=code;res.end(JSON.stringify(data))};
   if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.19.0',eventCursor:engine+':0'});
@@ -27,10 +27,12 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(u.pathname.startsWith('/api/v1/messages/')){const message=messages.find(m=>m.id===parts[4]);return message?send(200,message):send(404,{status:404})}
   const chat=chats.find(c=>c.id===parts[4]);
   if(chat&&parts.length===5)return send(200,chat);
-  if(chat&&parts[5]==='mention-candidates'){state.reads++;if(state.delay)await new Promise(r=>setTimeout(r,state.delay));return state.fail?send(503,{status:503}):send(200,{conversationId:chat.id,accountId:account,state:state.partial?'partial':'known',truncated:state.partial,items:candidates})}
+  if(chat&&parts[5]==='mention-candidates'){state.reads++;if(state.delay)await new Promise(r=>setTimeout(r,state.delay));return state.fail?send(503,{status:503}):send(200,{conversationId:chat.id,accountId:account,state:state.partial?'partial':'known',truncated:state.partial,bareNicknameSpans:state.legacy?undefined:true,items:candidates})}
   if(chat&&parts[5]==='room-session')return send(200,{conversationId:chat.id,accountId:account,state:'joined',nickname:'me',active:true,intentId:id(8),intentRevisionId:id(9),updatedAt:'2026-11-09T12:00:00Z'});
   if(chat&&parts[5]==='messages'){
    if(req.method==='POST'){state.posts++;let raw='';for await(const b of req)raw+=b;const body=JSON.parse(raw),key=req.headers['idempotency-key'];if(receipts.has(key)){assert.deepEqual(body,receipts.get(key).body);return send(200,receipts.get(key).message)}
+    if(state.legacy&&body.mentions?.some(m=>!Array.from(body.originalText).slice(m.begin,m.end).join('').startsWith('@')))return send(400,{status:400,code:'invalid_request'});
+    if(state.rejectMention&&body.mentions?.length)return send(400,{status:400,code:'invalid_request'});
     state.effects++;const message={id:id(100+state.effects),revisionId:revision,conversationId:chat.id,accountId:account,sender:{id:account,displayName:'Me'},originalText:body.originalText,mentions:body.mentions?.map(m=>({...m,referenceMode:candidates.find(c=>c.id===m.participantId)?.referenceMode||'text'})),createdAt:'2026-11-09T12:00:00Z',isOwn:true,sendState:'queued'};messages.push(message);receipts.set(key,{body,message});return send(202,message)}
    return send(200,{items:messages.filter(m=>m.conversationId===chat.id).slice().reverse()});
   }
@@ -58,7 +60,19 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await input.fill('@an depois');await input.evaluate(e=>{e.setSelectionRange(3,3);e.dispatchEvent(new Event('select'));});await until(async()=>await options.count()===1&&await menu.isVisible(),'opening completion before existing space');await input.press('Enter');assert.equal(await input.inputValue(),'ana, depois','opening completion adds a comma and reuses the space');
   await input.fill('😀 @zoë tail');await input.evaluate(e=>{e.setSelectionRange(6,6);e.dispatchEvent(new Event('select'));});await until(async()=>await options.count()===1&&await menu.isVisible(),'Unicode middle completion');await input.press('Enter');assert.equal(await input.inputValue(),'😀 zoë tail');assert.deepEqual(await metadata(),[{participantId:'occupant/zoe',begin:2,end:5}]);
   await input.fill('Oi\n@an!');await input.evaluate(e=>{e.setSelectionRange(6,6);e.dispatchEvent(new Event('select'));});await until(async()=>await options.count()===1&&await menu.isVisible(),'completion on the second line');await input.press('Enter');assert.equal(await input.inputValue(),'Oi\nana!','completion after a line break preserves punctuation');
-  await input.fill('@rad');await until(async()=>await options.count()===1&&await menu.isVisible(),'nickname containing an at sign');await input.press('Enter');assert.equal(await input.inputValue(),'Radar @Norte, ');assert(await menu.isHidden(),'at sign inside a selected nickname does not reopen suggestions');
+  await input.fill('@Radar @Norte');await input.evaluate(e=>{e.setSelectionRange(5,5);e.dispatchEvent(new Event('select'));});
+  await until(async()=>await options.count()===1&&await menu.isVisible(),'caret inside a nickname containing spaces and at sign');
+  await input.press('Enter');assert.equal(await input.inputValue(),'Radar @Norte, ');assert(await menu.isHidden(),'completion replaces the full nickname');
+  await input.fill('@Radar @Norteza');await input.evaluate(e=>{e.setSelectionRange(5,5);e.dispatchEvent(new Event('select'));});
+  await until(async()=>await options.count()===1&&await menu.isVisible(),'nickname before a different adjacent word');
+  await input.press('Enter');assert.equal(await input.inputValue(),'Radar @Norte, @Norteza','completion preserves the adjacent word');
+  for(const [caret,added,expected] of [[0,'Ban','Banana, '],[3,'bela','anabela, ']]){
+   await input.fill('@an');await until(async()=>await options.count()===1,'editable mention');await input.press('Enter');
+   await input.evaluate((e,at)=>e.setSelectionRange(at,at),caret);await input.pressSequentially(added);
+   assert.equal(await input.inputValue(),expected);assert.deepEqual(await metadata(),[]);
+  }
+  await input.fill('@an');await until(async()=>await options.count()===1,'mention before line break');
+  await input.press('Shift+Enter');assert.equal(await input.inputValue(),'@an\n');assert.deepEqual(await metadata(),[]);
   const emailReads=state.reads;await input.fill('email@example.org');assert(await menu.isHidden());assert.equal(state.reads,emailReads);
   await input.fill('😀 @an');await menu.waitFor({state:'visible'});await until(async()=>await options.count()===1,'accent-folded match');assert.match(await options.first().textContent(),/Ána/);
   await input.press('Enter');assert.equal(await input.inputValue(),'😀 ana ');assert(await menu.isHidden());assert.deepEqual(await metadata(),[{participantId:'occupant/ana',begin:2,end:5}]);assert.equal(state.effects,0);assert(await input.evaluate(e=>document.activeElement===e));
@@ -88,7 +102,9 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   let dropped=false;await page.route('**/ui/messages/send',async route=>{if(!dropped){dropped=true;await route.fetch();await route.abort('connectionreset')}else await route.continue()});
   await page.locator('[data-send-message]').click();await until(()=>state.effects===2,'accepted message with lost response');await until(async()=>await page.locator('#send-message-form').getAttribute('data-busy')==='false','uncertain response remains retryable');assert(await input.evaluate(e=>e.readOnly));assert.equal(await input.inputValue(),'');
   const pending=await page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('oie.draft.v1')).map(k=>JSON.parse(localStorage.getItem(k))).find(v=>v.pending));assert(pending.pending);assert.equal(pending.text,'ana, ');assert.deepEqual(pending.mentions,[{participantId:'occupant/ana',begin:0,end:3}]);
-  await page.locator('input[name=mentions]').evaluate(e=>e.value='[{"participantId":"forged","begin":0,"end":1}]');const readsBeforeRetry=state.reads;state.fail=true;await page.locator('[data-pending-send-retry]').click();await until(async()=>!await input.evaluate(e=>e.readOnly),'immutable accepted receipt recovers pending send');state.fail=false;assert.equal(state.effects,2);assert.equal(state.posts,2);assert.equal(state.reads,readsBeforeRetry);await page.unroute('**/ui/messages/send');
+  await page.locator('input[name=mentions]').evaluate(e=>e.value='[{"participantId":"forged","begin":0,"end":1}]');const readsBeforeRetry=state.reads;state.fail=true;
+  const retry=page.locator(`[data-pending-send][data-operation-key="${pending.key}"] [data-pending-send-retry]:visible`);
+  await retry.click();await until(async()=>!await input.evaluate(e=>e.readOnly),'immutable accepted receipt recovers pending send');state.fail=false;assert.equal(state.effects,2);assert.equal(state.posts,2);assert.equal(state.reads,readsBeforeRetry);await page.unroute('**/ui/messages/send');
   findings.push('A lost acceptance response retains immutable mention metadata; retry uses the same receipt without participant reads or a duplicate send');
 
   await page.goto(url(direct));await input.fill('@ana');assert.equal(await menu.count(),0);assert.equal(state.effects,2);await input.fill('');
@@ -119,7 +135,28 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    if(width===390&&lang==='pt-BR'&&theme==='dark'){await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});await page.screenshot({path:path.join(__dirname,'artifacts/mentions-mobile.png')})}
    await ctx.close();
   }
-  assert.deepEqual(errors,[]);assert.equal(state.effects,2);await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});await fs.writeFile(path.join(__dirname,'artifacts/mentions-report.json'),JSON.stringify({findings,errors,reads:state.reads,effects:state.effects},null,2));console.log('PASS: room mention completion, filtering, Unicode ranges, safe drafts, scoped loading/retry, explicit send and EN/PT mobile/desktop accessibility');
+  state.legacy=true;
+  const legacy=await browser.newContext({viewport:{width:390,height:900},hasTouch:true,isMobile:true,locale:'pt-BR'});page=await legacy.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(url(room,'pt-BR'));
+  const legacyInput=page.locator('#message-composer');await legacyInput.fill('@zo');await page.locator('[data-mention-option]').tap();
+  assert.equal(await legacyInput.inputValue(),'zoë, ');assert.deepEqual(await page.locator('input[name=mentions]').inputValue().then(JSON.parse),[]);
+  await page.locator('[data-send-message]').tap();await until(()=>state.effects===3,'older engine accepts the readable nickname');
+  assert.equal(messages[2].originalText,'zoë, ');assert.equal(messages[2].mentions,undefined);
+  await legacy.close();
+  findings.push('Older engines receive readable nickname text, including when chosen by touch');
+  state.legacy=false;state.rejectMention=true;
+  const stale=await browser.newContext({viewport:{width:1440,height:900}});page=await stale.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(url());
+  const staleInput=page.locator('#message-composer');
+  await staleInput.fill('@zo');await page.locator('[data-mention-option]').click();
+  const operation=page.locator('#send-message-form input[name=operationKey]'),operationKey=await operation.inputValue();
+  await page.locator('[data-send-message]').click();
+  await until(async()=>await staleInput.inputValue()==='zoë, '&&!await staleInput.evaluate(e=>e.readOnly),'definitive rejection restores the readable draft');
+  assert.equal(state.effects,3);assert.equal(await operation.inputValue(),operationKey);
+  assert.deepEqual(await page.locator('input[name=mentions]').inputValue().then(JSON.parse),[]);
+  await page.locator('[data-send-message]').click();await until(()=>state.effects===4,'explicit retry sends the restored draft as text');
+  assert.equal(messages[3].originalText,'zoë, ');assert.equal(messages[3].mentions,undefined);
+  await stale.close();
+  findings.push('Definitive stale-mention rejection preserves the body and operation key and allows an explicit text send');
+  assert.deepEqual(errors,[]);assert.equal(state.effects,4);await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});await fs.writeFile(path.join(__dirname,'artifacts/mentions-report.json'),JSON.stringify({findings,errors,reads:state.reads,effects:state.effects},null,2));console.log('PASS: room mention completion, filtering, Unicode ranges, safe drafts, older-engine fallback and EN/PT mobile/desktop accessibility');
  }catch(error){if(page&&!page.isClosed())console.error('Mention evidence',await page.evaluate(()=>({text:document.querySelector('#message-composer')?.value,metadata:document.querySelector('[name=mentions]')?.value,menu:document.querySelector('#oie-mention-picker')?.outerHTML.slice(0,1500)})));throw error}
  finally{await browser.close();child.kill('SIGTERM');for(const s of streams)s.end();api.closeAllConnections();await new Promise(r=>api.close(r))}
 })().catch(e=>{console.error(e);process.exitCode=1});

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/araihu/oie/internal/domain"
@@ -14,30 +13,11 @@ func incomingRoomMention(in Incoming) bool {
 	if in.Kind != "room" || in.IsOwn || in.OwnRoomNickname == "" {
 		return false
 	}
-	body := in.OriginalText
+	var fallback []domain.TextRange
 	if in.Reply != nil {
-		body, _ = domain.ReplyBody(body, in.Reply.Fallback)
+		fallback = in.Reply.Fallback
 	}
-	body = strings.ToLower(body)
-	nickname := strings.ToLower(in.OwnRoomNickname)
-	_, firstSize := utf8.DecodeRuneInString(nickname)
-	for offset := 0; offset < len(body); {
-		index := strings.Index(body[offset:], nickname)
-		if index < 0 {
-			return false
-		}
-		start := offset + index
-		before, _ := utf8.DecodeLastRuneInString(body[:start])
-		after, _ := utf8.DecodeRuneInString(body[start+len(nickname):])
-		// Gajim skips nickname substrings inside words and after common
-		// command, URL and contraction delimiters.
-		if !unicode.IsLetter(before) && !unicode.IsMark(before) && !strings.ContainsRune("/-'", before) &&
-			!unicode.IsLetter(after) && !unicode.IsMark(after) {
-			return true
-		}
-		offset = start + firstSize
-	}
-	return false
+	return domain.RoomNicknameMention(in.OwnRoomNickname, in.OriginalText, fallback)
 }
 
 // MentionProvider supplies only observed, room-scoped participants. Protocol
@@ -107,13 +87,20 @@ func (e *Engine) freezeMentions(ctx context.Context, a domain.Account, c domain.
 	byID := map[string]domain.MentionCandidate{}
 	for _, candidate := range candidates.Items {
 		byID[candidate.ID] = candidate
+		if candidate.LegacyID != "" {
+			candidate.ReferenceMode, candidate.URI = "text", ""
+			byID[candidate.LegacyID] = candidate
+		}
 	}
-	body := []rune(text)
+	// Sentinel boundaries let spans at either edge use the same check.
+	body := []rune("\x00" + text + "\x00")
 	mentions := make([]domain.MessageMention, 0, len(selections))
 	for _, selection := range selections {
 		candidate, ok := byID[selection.ParticipantID]
-		selected := string(body[selection.Begin:selection.End])
-		if !ok || (selected != strings.TrimPrefix(candidate.InsertText, "@") && selected != candidate.InsertText) {
+		selected := string(body[selection.Begin+1 : selection.End+1])
+		bare := selected == strings.TrimPrefix(candidate.InsertText, "@") &&
+			domain.MentionBoundary(body[selection.Begin], body[selection.End+1])
+		if !ok || (!bare && selected != candidate.InsertText) {
 			return nil, ErrInvalid
 		}
 		mode, uri := "text", ""

@@ -5,11 +5,13 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
+	mx "mellium.im/xmpp"
 	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/stanza"
 )
@@ -19,6 +21,7 @@ const mentionNS = "urn:xmpp:reference:0"
 type observedMention struct {
 	present bool
 	uri     string
+	id      string
 }
 
 // Only room-origin MUC presence from a room session already requested by this
@@ -44,6 +47,12 @@ func captureRoomMentionPresence(e *entry, p incomingPresence) {
 	if value.present && p.MUC.Item.JID != "" {
 		if target, err := jid.Parse(p.MUC.Item.JID); err == nil && target.Localpart() != "" && !target.Bare().Equal(p.From.Bare()) {
 			value.uri = "xmpp:" + url.PathEscape(target.Bare().String())
+			previous := slot.mentionOccupants[key]
+			if previous.present && previous.uri == value.uri && previous.id != "" {
+				value.id = previous.id
+			} else if id := randomQueryID(); id != "" {
+				value.id = "mention:" + id
+			}
 		}
 	}
 	slot.mentionOccupants[key] = value
@@ -64,7 +73,8 @@ func candidateFromOccupant(room, key, name string, observation *observedMention)
 		name = nick
 	}
 	out := domain.MentionCandidate{ID: key, DisplayName: cleanEvidence(name, 300), InsertText: "@" + nick, ReferenceMode: "text"}
-	if observation != nil && observation.uri != "" {
+	if observation != nil && observation.uri != "" && observation.id != "" {
+		out.ID, out.LegacyID = observation.id, key
 		out.ReferenceMode, out.URI = "structured", observation.uri
 	}
 	return out, true
@@ -99,7 +109,7 @@ func (m *Manager) MentionCandidates(ctx context.Context, a domain.Account, c dom
 		out.State = "not_connected"
 		return out, nil
 	}
-	publicIdentities := slices.Contains(info.Features, "non_anonymous") && !slices.Contains(info.Features, "anonymous")
+	publicIdentities := roomHasPublicIdentities(info.Features)
 	observed := map[string]observedMention{}
 	if slot := e.rooms[c.Address]; slot != nil && slot.session == e.session && (slot.snapshot.State == "joined" || slot.snapshot.State == "joining") {
 		for key, value := range slot.mentionOccupants {
@@ -120,6 +130,9 @@ func (m *Manager) MentionCandidates(ctx context.Context, a domain.Account, c dom
 		}
 	}
 	for key, value := range observed {
+		if _, exists := byID[key]; exists {
+			continue
+		}
 		if candidate, ok := candidateFromOccupant(c.Address, key, "", &value); ok {
 			byID[key] = candidate
 		}
@@ -127,7 +140,7 @@ func (m *Manager) MentionCandidates(ctx context.Context, a domain.Account, c dom
 	for _, candidate := range byID {
 		out.Items = append(out.Items, candidate)
 	}
-	slices.SortFunc(out.Items, func(a, b domain.MentionCandidate) int { return strings.Compare(a.ID, b.ID) })
+	slices.SortFunc(out.Items, func(a, b domain.MentionCandidate) int { return strings.Compare(a.InsertText, b.InsertText) })
 	if len(out.Items) > 200 {
 		out.Items = out.Items[:200]
 		out.Truncated = true
@@ -139,6 +152,42 @@ func (m *Manager) MentionCandidates(ctx context.Context, a domain.Account, c dom
 		out.State = "partial"
 	}
 	return out, nil
+}
+
+func roomHasPublicIdentities(features []string) bool {
+	return slices.Contains(features, "non_anonymous") && !slices.Contains(features, "anonymous")
+}
+
+// Recheck disclosure before a structured reference leaves the engine. A
+// slow or unavailable room can still receive the readable message body.
+func (m *Manager) roomAllowsMentionReferences(ctx context.Context, e *entry, session *mx.Session, out application.Outgoing) bool {
+	e.mu.RLock()
+	slot := e.rooms[out.Address]
+	joined := slot != nil && slot.session == session && slot.snapshot.State == "joined" && slot.snapshot.IntentRevisionID == out.RoomIntentRevisionID
+	e.mu.RUnlock()
+	if !joined {
+		return false
+	}
+	check, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	info, err := m.queryInfo(check, e, session, out.Address)
+	return err == nil && roomHasPublicIdentities(parseRoomInfo(info).Features)
+}
+
+// Call under the entry lock after validating the current room session.
+func roomMentionReferences(slot *roomSlot, references []outboundMentionElement) []outboundMentionElement {
+	if len(references) == 0 {
+		return references
+	}
+	targets := make(map[string]string, len(slot.mentionOccupants))
+	for _, observation := range slot.mentionOccupants {
+		if observation.present && observation.id != "" && observation.uri != "" {
+			targets[observation.id] = observation.uri
+		}
+	}
+	return slices.DeleteFunc(references, func(ref outboundMentionElement) bool {
+		return targets[ref.ParticipantID] != ref.URI
+	})
 }
 
 // Defensively validate the frozen adapter URI again at the wire boundary.

@@ -655,7 +655,9 @@ window.OieRuntime.register('live', life => {
         if(result.code==='engine_changed'){stopped=true;source?.close();}
         if (sending && result.rejected) {
           window.Alpine?.destroyTree(pendingBubble);pendingBubble?.remove();pendingBubble=null;
-          input.value=journal.text;restoreMentions(journal.mentions);saveDraft({...journal,pending:false});lockComposer(false);feedback(form,result.message||text('invalidMessage'),true);
+          const mentions=result.code==='mention_unavailable'?[]:journal.mentions;
+          if(result.code==='mention_unavailable')form.dispatchEvent(new Event('oie:mentions-invalidated'));
+          input.value=journal.text;restoreMentions(mentions);saveDraft({...journal,mentions,pending:false});lockComposer(false);feedback(form,result.message||text('invalidMessage'),true);
         }
         if (sending) input.focus({preventScroll:true});
         if(roomCommand&&result.rejected){keepRoomOperation(null);for(const field of form.querySelectorAll('input:not([type=hidden])'))field.readOnly=false;}

@@ -85,6 +85,11 @@ func TestUnreadRoomMentionsFollowCanonicalContentAndReadEvidence(t *testing.T) {
 		t.Helper()
 		at = at.Add(time.Second)
 		in := application.Incoming{AccountID: room.AccountID, Kind: "room", Address: room.Address, OwnRoomNickname: "Ána", ProviderID: id, OriginalText: body, IsOwn: own, Historical: historical, CreatedAt: at}
+		if historical {
+			in.OwnRoomNickname = ""
+		} else if id == "renamed" {
+			in.OwnRoomNickname = "Bia"
+		}
 		if !own {
 			in.Correction = &domain.MessageCorrection{Scope: "room:" + room.Address, Author: "bob", ID: id, TargetID: target}
 		}
@@ -117,17 +122,50 @@ func TestUnreadRoomMentionsFollowCanonicalContentAndReadEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	expectUnread(2, true)
-	receive("remove", "Olá", "two", false, false)
+	receive("renamed", "Bia, oi!", "two", false, false)
+	receive("retain", "Ainda falando com Bia.", "renamed", false, true)
+	expectUnread(2, true)
+	receive("remove", "Olá", "retain", false, true)
 	expectUnread(2, false)
-	receive("restore", "Ána!", "remove", false, false)
+	receive("restore", "Bia!", "remove", false, true)
 	expectUnread(2, true)
 	if _, err := e.MarkMessagesRead(ctx, migrationID(), room.ID, []domain.ID{second.ID}); err != nil {
 		t.Fatal(err)
 	}
 	expectUnread(1, false)
 	message, err := e.Message(ctx, second.ID)
-	if err != nil || !message.MentionsYou || message.OriginalText != "Ána!" {
+	if err != nil || !message.MentionsYou || message.OriginalText != "Bia!" {
 		t.Fatal("reading cleared the message highlight", message, err)
+	}
+}
+
+func TestReplyEnrichmentReclassifiesRoomMention(t *testing.T) {
+	s, e, c := outboxFixture(t)
+	e.SetProtocols(&outboundProtocol{})
+	room := outboundRoom(t, s, c.AccountID, "room@rooms.localhost")
+	ctx := t.Context()
+	quote := "> Ana, oi\n"
+	in := application.Incoming{AccountID: room.AccountID, Kind: "room", Address: room.Address, OwnRoomNickname: "Ana", ProviderID: "reply", OriginalText: quote + "Oi Bob!", CreatedAt: time.Now().UTC()}
+	if err := e.Receive(ctx, in); err != nil {
+		t.Fatal(err)
+	}
+	before := correctionMessages(t, e, room)[0]
+	if !before.MentionsYou {
+		t.Fatal("unmarked source should initially match")
+	}
+	in.OwnRoomNickname = ""
+	in.Historical = true
+	in.Reply = &domain.ReplyReference{Target: domain.MessageReference{ID: "earlier"}, Fallback: []domain.TextRange{{Start: 0, End: len(quote)}}}
+	if err := e.Receive(ctx, in); err != nil {
+		t.Fatal(err)
+	}
+	after, err := e.Message(ctx, before.ID)
+	if err != nil || after.MentionsYou || after.Reply == nil || after.Reply.BodyText != "Oi Bob!" || after.RevisionID != before.RevisionID {
+		t.Fatal("quote enrichment changed the content revision or kept its mention", after, err)
+	}
+	chat, err := e.Conversation(ctx, room.ID)
+	if err != nil || chat.UnreadMention || chat.UnreadCount != 1 {
+		t.Fatal("quote enrichment should clear only the mention mark", chat, err)
 	}
 }
 func TestConcurrentReadBatchesMergeAndPreserveIncoming(t *testing.T) {

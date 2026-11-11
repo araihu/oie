@@ -35,6 +35,13 @@ The engine validates the current room, freezes the delivery plan in the durable
 send intent, and owns protocol translation. The frontend has no XMPP client.
 The selection spans the nickname only. The engine also accepts the original
 `@nickname` form for existing drafts and API clients.
+Clients send a selected nickname span when the engine advertises support in
+the candidate response. With an older engine, the composer sends the same
+readable nickname as ordinary text. A structured selection binds the
+observed occupant. Earlier nickname-only identifiers can resolve as text.
+A rejected selection restores the draft as editable text. At dispatch the
+adapter confirms current room disclosure and occupant identity before
+including the personal address.
 
 ## Gajim interoperability
 
@@ -61,8 +68,10 @@ Matching ignores case and recognizes both `Ana` and `@Ana`. It checks the
 surrounding characters and skips protocol-marked reply quotes. The timeline
 highlights the message, and the conversation shows `@` until its last unread
 mention is read. Reading leaves the highlight on the message. Corrections
-reflect the current text. Previously retained messages and archive imports
-without a confirmed room nickname have no mention classification.
+reflect the current text. An archived correction can use the most recent
+confirmed nickname in its ancestry, and newly verified reply quotes update
+the classification. Archive-only messages without nickname evidence have
+no mention classification.
 
 ## State and action invariants
 

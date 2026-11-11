@@ -51,6 +51,8 @@ type Message struct {
 	References                                []MessageReference `json:"-"`
 	ReplyReference                            *ReplyReference    `json:"-"`
 	Reply                                     *MessageReply      `json:"-"`
+	// ObservedRoomNickname is internal evidence for classifying later edits.
+	ObservedRoomNickname string `json:",omitempty"`
 }
 
 type HistoryStatus struct {

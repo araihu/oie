@@ -439,6 +439,7 @@
   "TimelineFailed": "Messages could not be loaded. Try again.",
   "TimelinePaused": "Pause playback or move away from the other edge, then try again.",
   "MentionUsers": "Mention a participant",
+  "MentionChanged": "A mention is unavailable. Select it again or send as text.",
   "MentionedYou": "You were mentioned",
   "UnreadMention": "Unread mention",
   "MentionLoading": "Loading participants…",
