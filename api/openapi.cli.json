@@ -3733,7 +3733,8 @@
                   "type": "urn:oie:problem:history_changed",
                   "title": "History changed",
                   "status": 409,
-                  "code": "history_changed"
+                  "code": "history_changed",
+                  "documentation": "https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md#history_changed"
                 }
               }
             }
@@ -3999,7 +4000,8 @@
               "type": "urn:oie:problem:invalid_request",
               "title": "Invalid request",
               "status": 400,
-              "code": "invalid_request"
+              "code": "invalid_request",
+              "documentation": "https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md#invalid_request"
             }
           }
         }
@@ -4015,7 +4017,8 @@
               "type": "urn:oie:problem:not_found",
               "title": "Not Found",
               "status": 404,
-              "code": "not_found"
+              "code": "not_found",
+              "documentation": "https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md#not_found"
             }
           }
         }
@@ -4031,7 +4034,8 @@
               "type": "urn:oie:problem:idempotency_conflict",
               "title": "Idempotency key conflict",
               "status": 409,
-              "code": "idempotency_conflict"
+              "code": "idempotency_conflict",
+              "documentation": "https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md#idempotency_conflict"
             }
           }
         }
@@ -4047,7 +4051,8 @@
               "type": "urn:oie:problem:unavailable",
               "title": "Service Unavailable",
               "status": 503,
-              "code": "unavailable"
+              "code": "unavailable",
+              "documentation": "https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md#unavailable"
             }
           }
         }
@@ -4912,10 +4917,11 @@
           "type": "urn:oie:problem:unavailable",
           "title": "Service Unavailable",
           "status": 503,
-          "code": "unavailable"
+          "code": "unavailable",
+          "documentation": "https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md#unavailable"
         },
         "additionalProperties": false,
-        "description": "RFC 9457 Problem Details served as application/problem+json. The type URI identifies the problem. The code extension is a stable short identifier for display and localization. Responses exclude raw storage errors and credentials.",
+        "description": "RFC 9457 Problem Details served as application/problem+json. The type URI identifies the problem. The code extension is a stable short identifier for display and localization. The optional documentation extension links to guidance for the problem type. Responses exclude raw storage errors and credentials.",
         "externalDocs": {
           "description": "RFC 9457 Problem Details for HTTP APIs",
           "url": "https://www.rfc-editor.org/rfc/rfc9457.html"
@@ -4960,6 +4966,11 @@
               "media_busy",
               "media_timeout"
             ]
+          },
+          "documentation": {
+            "type": "string",
+            "format": "uri",
+            "description": "Absolute HTTPS link to human-readable guidance for this problem type. The URL may change independently of the type URI and code."
           },
           "currentConversation": {
             "$ref": "#/components/schemas/Conversation"

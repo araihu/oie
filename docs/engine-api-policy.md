@@ -65,8 +65,11 @@ The engine returns `application/problem+json` as defined by
 URI is the primary identifier, in the form `urn:oie:problem:<code>`. The
 `title` summarizes the type and stays consistent across occurrences. The
 `status` matches the HTTP response. The `code` extension gives clients a
-short label for diagnostics and localized messages. The OpenAPI responses
-document the HTTP statuses and the Problem schema enumerates the codes.
+short label for diagnostics and localized messages. The optional `documentation`
+extension is an HTTPS link to guidance for the problem type. Its destination
+can change independently of the URN and code. See the
+[engine API error catalog](engine-api-problems.md) for the meaning and recovery
+steps for each code.
 
 For example, a 409 response with type
 `urn:oie:problem:idempotency_conflict` means the idempotency key was already

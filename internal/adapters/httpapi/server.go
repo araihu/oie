@@ -182,11 +182,19 @@ var problemTitles = map[string]string{
 	"media_timeout":         "Media request timed out",
 }
 
+const problemDocumentationURL = "https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md"
+
 func newProblem(status int, code string) engineapi.Problem {
-	return engineapi.Problem{
-		Type: "urn:oie:problem:" + code, Title: problemTitles[code],
+	title, documented := problemTitles[code]
+	problem := engineapi.Problem{
+		Type: "urn:oie:problem:" + code, Title: title,
 		Status: status, Code: engineapi.ProblemCode(code),
 	}
+	if documented {
+		documentation := problemDocumentationURL + "#" + code
+		problem.Documentation = &documentation
+	}
+	return problem
 }
 
 func writeProblem(w http.ResponseWriter, status int, code string) {

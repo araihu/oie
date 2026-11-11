@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -75,6 +77,23 @@ func TestResponseValidatorRejectsRuntimeSchemaDrift(t *testing.T) {
 	}
 }
 
+func TestProblemDocumentationCoversContractCodes(t *testing.T) {
+	spec, err := engineapi.GetSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile("../../../docs/engine-api-problems.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	codes := spec.Components.Schemas["Problem"].Value.Properties["code"].Value.Enum
+	for _, code := range codes {
+		if !bytes.Contains(data, []byte(fmt.Sprintf("\n## %s\n", code))) {
+			t.Errorf("problem documentation is missing the heading for %s", code)
+		}
+	}
+}
+
 func TestHTTPBoundaryProblemsAndAllow(t *testing.T) {
 	server, store := start(t, t.TempDir())
 	for _, tc := range []struct {
@@ -108,6 +127,10 @@ func TestHTTPBoundaryProblemsAndAllow(t *testing.T) {
 				problem.Type != "urn:oie:problem:invalid_request" || problem.Title != "Invalid request" ||
 				problem.Code != "invalid_request" || strings.Contains(string(data), "secret") {
 				t.Fatalf("problem status/leak: %s", data)
+			}
+			const documentation = "https://github.com/araihu/oie/blob/docs/engine-api-problems/docs/engine-api-problems.md#invalid_request"
+			if problem.Documentation == nil || *problem.Documentation != documentation {
+				t.Fatalf("missing problem documentation link: %s", data)
 			}
 			validateResponseContract(t, req, res, data)
 		})
