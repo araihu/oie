@@ -285,6 +285,8 @@ Each full Dagger run starts one disposable Prosody service and shares its TLS
 certificate across the protocol smoke check, Go integration tests and live
 browser workflow. The smoke check and Go integration tests run in sequence
 while Playwright setup runs in parallel.
+The browser evidence records the number of Prosody starts for that run. CI
+fails if the count differs from one.
 
 Dagger sets `OIE_XMPP_BROWSER_FIXTURES=1` for Prosody and the live browser
 workflow. This provisions separate `browser-alice@localhost` and

@@ -205,6 +205,9 @@ func (r runner) integration(ctx context.Context, source *dagger.Directory, goCon
 	}
 	client := r.client
 	const browserFixtures = "OIE_XMPP_BROWSER_FIXTURES"
+	const startsDir = "/run/oie-ci-prosody"
+	starts := client.CacheVolume("oie-ci-prosody-starts-v1")
+	startsFile := filepath.Join(startsDir, runID)
 	prosody := client.Container().From(xmppImage).WithoutEntrypoint().
 		WithFile("/etc/prosody/prosody.cfg.lua", source.File("dev/xmpp/prosody.cfg.lua")).
 		WithFile("/opt/oie/start.sh", source.File("dev/xmpp/start.sh")).
@@ -215,7 +218,13 @@ func (r runner) integration(ctx context.Context, source *dagger.Directory, goCon
 	for _, port := range []int{80, 443, 5269, 5280, 5281, 5347} {
 		prosody = prosody.WithoutExposedPort(port)
 	}
-	xmpp := prosody.WithExposedPort(5222).AsService(dagger.ContainerAsServiceOpts{Args: []string{"sh", "/opt/oie/start.sh"}})
+	// The receipt lives outside the service filesystem so a restart is counted.
+	xmpp := prosody.WithExposedPort(5222).
+		WithMountedCache(startsDir, starts).WithEnvVariable("OIE_CI_PROSODY_STARTS_FILE", startsFile).
+		AsService(dagger.ContainerAsServiceOpts{Args: []string{"sh", "-ec", `
+printf 'started\n' >> "$OIE_CI_PROSODY_STARTS_FILE"
+exec sh /opt/oie/start.sh
+`}})
 	// Hold a service reference across the Go and browser stages. A binding
 	// alone can stop Prosody while Playwright is being prepared.
 	xmpp, err = xmpp.Start(ctx)
@@ -255,6 +264,7 @@ exec go test -race -count=1 -p 1 -v ./tests/xmpp ./tests/cli
 	browser = browser.WithDirectory("/src", source).
 		WithFile("/src/bin/oie", checked.File("/src/bin/oie")).WithFile("/src/bin/oie-mock", checked.File("/src/bin/oie-mock")).
 		WithFile("/tmp/xmpp-ca.crt", ca).WithWorkdir("/src").WithServiceBinding("xmpp", xmpp).
+		WithMountedCache(startsDir, starts).WithEnvVariable("OIE_CI_PROSODY_STARTS_FILE", startsFile).
 		WithEnvVariable("OIE_XMPP_CA_FILE", "/tmp/xmpp-ca.crt").WithEnvVariable("OIE_XMPP_ENDPOINT", "xmpp:5222").
 		WithEnvVariable(browserFixtures, "1").
 		WithEnvVariable("OIE_CI_RUN_ID", runID).WithExec([]string{"sh", "-c", browserCommand}, dagger.ContainerWithExecOpts{Expect: dagger.ReturnTypeAny})
@@ -274,7 +284,22 @@ exec go test -race -count=1 -p 1 -v ./tests/xmpp ./tests/cli
 	return browserOutcome(code)
 }
 
-const browserCommand = "mkdir -p tests/browser/artifacts; sh tools/ci/browser.sh > tests/browser/artifacts/ci.log 2>&1; result=$?; printf '%s\\n' \"$result\" > /tmp/oie-browser-exit; cat tests/browser/artifacts/ci.log; exit \"$result\""
+const browserCommand = `
+mkdir -p tests/browser/artifacts
+log=tests/browser/artifacts/ci.log
+sh tools/ci/browser.sh > "$log" 2>&1
+result=$?
+starts=0
+if [ -f "$OIE_CI_PROSODY_STARTS_FILE" ]; then
+  starts=$(wc -l < "$OIE_CI_PROSODY_STARTS_FILE")
+fi
+printf 'Prosody starts: %s (expected 1)\n' "$starts" >> "$log"
+rm -f "$OIE_CI_PROSODY_STARTS_FILE"
+if [ "$starts" != 1 ] && [ "$result" = 0 ]; then result=1; fi
+printf '%s\n' "$result" > /tmp/oie-browser-exit
+cat "$log"
+exit "$result"
+`
 
 func browserOutcome(code string) error {
 	if strings.TrimSpace(code) != "0" {
