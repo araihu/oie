@@ -448,7 +448,7 @@ Optional sync is independent of provider-native multi-client features and indepe
 | Pending/scheduled send visibility | Shared visibility; execution and initial mutations remain owner-controlled. |
 | Full media files | Separate optional sync, off by default. |
 | Drafts and UI pending submissions | Device-specific; a draft never becomes a send merely through sync. |
-| Theme, language override, sounds, notification permission | Device-specific. |
+| Theme, language override, emoji shortcut languages, sounds, notification permission | Device-specific. |
 | Media download/retention preferences | Device-specific. |
 | Offline cache limit and Keep available offline | Device-specific, distinct from shared conversation pins. |
 | Enter-to-send preference | Device-specific. |
@@ -520,6 +520,11 @@ Theme follows the system by default with per-device Light/Dark overrides.
 Desktop composer defaults: Enter sends, Shift+Enter inserts a newline, with a per-device Enter-to-send setting. On mobile, Enter inserts a newline and the Send button sends. Preserve IME composition.
 
 **AGREED:** the composer has an emoji selector with search. Emoji selection inserts Unicode text into the current draft and does not send it. Search matches names, keywords and aliases in all supported app languages regardless of the interface language, including equivalent results for `thumbs up` and `joinha`. Accessible names follow the interface language. Group skin-tone variants under a compact, rounded horizontal subpicker preferably above the originating emoji, with a pointer and no visible title. Use a rounded background on emoji hover, without underlining. The reference guides shape and interaction; preserve the active theme colors, radius, borders and shadows. Browse one continuous list with category headers. Footer category icons navigate to those headers rather than filter the list; search always covers the complete catalog. Keep the selector at the same responsive size across categories, including empty Recent lists and empty search results. Stickers and GIF discovery/sending are deferred.
+
+**AGREED:** typing an emoji name after `:` at a word boundary opens composer
+suggestions. Selecting one replaces the shortcode in the draft with Unicode text.
+Composition settings select the shortcut languages independently of the interface
+language. See [emoji shortcuts](emoji-picker.md#composer-shortcuts).
 
 **AGREED:** typing `@` at a word boundary in a room opens a filtered list of available participants. Selection inserts readable `@nickname` text without sending. Keep keyboard/touch access and IME input, and preserve selections in device drafts and pending-send intents. The engine validates scoped participant selections and freezes protocol references alongside the message. XMPP structured mentions follow XEP-0372 only with an observed real bare JID in a confirmed non-anonymous room; otherwise use readable plain text. Do not discover or expose hidden identities, infer JIDs from nicknames, claim a complete membership roster, or promise recipient notifications. See [room mentions](mentions.md).
 

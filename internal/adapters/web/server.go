@@ -208,6 +208,7 @@ type copy struct {
 	EmojiVariants                                                                                                                                                                                            string
 	EmojiVariantsFor                                                                                                                                                                                         string
 	EmojiPicker                                                                                                                                                                                              string
+	Composition, EmojiShortcutLanguages, EmojiSuggestions                                                                                                                                                    string
 	EmojiSearch                                                                                                                                                                                              string
 	EmojiCategories                                                                                                                                                                                          string
 	EmojiAll                                                                                                                                                                                                 string
