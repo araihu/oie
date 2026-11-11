@@ -6,7 +6,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/araihu/oie/internal/domain"
-	mx "mellium.im/xmpp"
 	"mellium.im/xmpp/disco"
 	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/stanza"
@@ -61,7 +60,8 @@ func verifiedOccupantID(occupants []wireID) string {
 
 // A matching tag is not proof: rooms must advertise XEP-0421, otherwise a
 // participant could inject a pseudonym and correct another occupant's text.
-func recordOccupantSupport(e *entry, s *mx.Session, address string, info disco.Info) {
+// The caller holds e.mu and e.historyMu.
+func recordRoomIdentity(e *entry, address string, info disco.Info) {
 	room, err := jid.Parse(address)
 	if err != nil || room.Localpart() == "" || room.Resourcepart() != "" || address == e.account.Address {
 		return
@@ -75,13 +75,6 @@ func recordOccupantSupport(e *entry, s *mx.Session, address string, info disco.I
 		semianonymous = semianonymous || feature.Var == "muc_semianonymous"
 		nonanonymous = nonanonymous || feature.Var == "muc_nonanonymous"
 	}
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	if e.session != s || e.state.State != "connected" {
-		return
-	}
-	e.historyMu.Lock()
-	defer e.historyMu.Unlock()
 	if e.occupantScopes == nil {
 		e.occupantScopes = map[string]bool{}
 	}

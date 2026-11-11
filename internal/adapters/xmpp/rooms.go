@@ -410,7 +410,7 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 	session := slot.session
 	e.mu.Unlock()
 	m.notifyRoom(ctx, e, slot, snapshot)
-	if snapshot.State == "joined" && pendingRoomReactionReplay(e, session, address) != nil {
+	if snapshot.State == "joined" && pendingRoomReactionReplay(e, session, address, true) != nil {
 		m.WakeRoomArchive(e.account.ID)
 	}
 	return true

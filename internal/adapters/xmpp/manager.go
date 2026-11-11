@@ -59,6 +59,7 @@ type entry struct {
 	sidScopes           map[string]bool
 	occupantScopes      map[string]bool
 	semianonymousRooms  map[string]bool
+	roomConfigurations  map[string]roomConfiguration
 	discovery           domain.CapabilityDiscovery
 	discoveryPartial    bool
 	detailsWake         chan struct{}
@@ -295,6 +296,7 @@ func (m *Manager) publish(ctx context.Context, e *entry, state, code string) err
 	e.historyMu.Lock()
 	e.occupantScopes = nil
 	e.semianonymousRooms = nil
+	e.roomConfigurations = nil
 	e.historyMu.Unlock()
 	if state != "connected" {
 		e.discovery = domain.CapabilityDiscovery{State: "not_connected", Services: []domain.DiscoveredService{}}
@@ -588,6 +590,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 					Node string `xml:"node,attr"`
 				} `xml:"items"`
 			} `xml:"http://jabber.org/protocol/pubsub#event event"`
+			MUC   *mucUser `xml:"http://jabber.org/protocol/muc#user x"`
 			Delay struct {
 				From  string `xml:"from,attr"`
 				Stamp string `xml:"stamp,attr"`
@@ -607,6 +610,9 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		}
 		if msg.Archive != nil {
 			return m.captureArchive(e, msg.Message, msg.Archive)
+		}
+		if msg.MUC != nil && msg.Delay.Stamp == "" && msg.Delay.From == "" {
+			m.invalidateRoomConfiguration(e, msg.Message, msg.MUC)
 		}
 		if msg.Type == stanza.ErrorMessage {
 			if handled, err := m.rejectReaction(ctx, e, msg.Message); handled {

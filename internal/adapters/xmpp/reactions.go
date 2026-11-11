@@ -146,7 +146,7 @@ func roomReactionSupport(e *entry, room string) (slot *roomSlot, semianonymous, 
 	}
 	e.historyMu.Lock()
 	defer e.historyMu.Unlock()
-	if !e.sidScopes[room] {
+	if !e.sidScopes[room] || e.roomConfigurations[room].pending {
 		return nil, false, false
 	}
 	return slot, e.semianonymousRooms[room], e.occupantScopes[room]
@@ -185,7 +185,7 @@ func archivedReaction(a domain.Account, scope string, r *archiveResult, trust ar
 		return nil, false, nil
 	}
 	group := msg.Type == stanza.GroupChatMessage
-	if group && (!trust.SIDVerified || !trust.OccupantVerified || trust.OwnReactionActor == "") || !group && scope != a.Address {
+	if group && (!trust.SIDVerified || !trust.OccupantVerified || !trust.Semianonymous) || !group && scope != a.Address {
 		return nil, false, nil
 	}
 	if !usableID(r.ID) {

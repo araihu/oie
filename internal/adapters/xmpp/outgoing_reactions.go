@@ -77,6 +77,10 @@ func recordReactionRestrictions(e *entry, session *mx.Session, address string, i
 	if e.session != session || e.state.State != "connected" {
 		return
 	}
+	recordReactionRestrictionsLocked(e, address, info)
+}
+
+func recordReactionRestrictionsLocked(e *entry, address string, info disco.Info) {
 	if e.reactionLimits == nil {
 		e.reactionLimits = map[string]reactionLimit{}
 	}

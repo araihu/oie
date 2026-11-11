@@ -58,7 +58,7 @@ func (m *Manager) isolatedRoomPage(ctx context.Context, host application.RoomArc
 	if err != nil {
 		return result, err
 	}
-	if err := m.ingestArchivePage(ctx, page); err != nil {
+	if err := m.ingestIsolatedRoomPage(ctx, host, c.ID, &result.Archive.RoomArchiveProgress, page); err != nil {
 		return result, err
 	}
 	if request.Action == "context" {
@@ -74,7 +74,7 @@ func (m *Manager) isolatedRoomPage(ctx context.Context, host application.RoomArc
 		if err != nil {
 			return result, err
 		}
-		if err := m.ingestArchivePage(ctx, forward); err != nil {
+		if err := m.ingestIsolatedRoomPage(ctx, host, c.ID, &result.Archive.RoomArchiveProgress, forward); err != nil {
 			return result, err
 		}
 		result.Outcome = "stored"
@@ -107,4 +107,14 @@ func (m *Manager) isolatedRoomPage(ctx context.Context, host application.RoomArc
 		}
 	}
 	return result, nil
+}
+
+func (m *Manager) ingestIsolatedRoomPage(ctx context.Context, host application.RoomArchiveHost, id domain.ID, p *domain.RoomArchiveProgress, page archivePage) error {
+	if err := m.ingestArchivePage(ctx, page); err != nil {
+		return err
+	}
+	if rememberDeferredRoomReactions(p, page.Query.Deferred) {
+		return host.StoreRoomArchiveProgress(ctx, id, *p)
+	}
+	return nil
 }

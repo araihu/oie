@@ -10,7 +10,13 @@ type RoomArchive struct {
 
 // RoomArchiveProgress describes one contiguous backward recovery. Search
 // hits and isolated timeline context do not change these checkpoints.
+type DeferredRoomReactions struct {
+	Start, End, Boundary time.Time
+	Cursor               string
+}
+
 type RoomArchiveProgress struct {
+	DeferredReactions                              DeferredRoomReactions
 	WindowStart, WindowEnd                         time.Time
 	Boundary, CaughtUpThrough                      time.Time
 	Cursor                                         string

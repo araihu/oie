@@ -363,3 +363,60 @@ func TestSemianonymousRoomRecoversRecentArchivedReactionsAfterJoin(t *testing.T)
 		t.Fatal("archive lost identity, timestamp, target or clear semantics", peer, own)
 	}
 }
+
+func TestDeferredRoomReactionsSurviveCatchupBeforeJoin(t *testing.T) {
+	at := time.Date(2026, 11, 10, 22, 0, 0, 0, time.UTC)
+	cutoff := at.Add(time.Minute)
+	recent := make([]testArchiveMessage, 50)
+	for i := range recent {
+		recent[i] = testArchiveMessage{id: fmt.Sprintf("text-%d", i), at: at.Add(time.Duration(i+1) * time.Second)}
+	}
+	m, e, host := archiveFixture(t, func(iq testArchiveIQ, index int) string {
+		if index == 0 || index == 2 {
+			messages := []testArchiveMessage{{id: "reaction", at: at}}
+			if index == 0 {
+				messages = append(messages, recent[:49]...)
+			} else if iq.field("start") != at.Format(time.RFC3339Nano) || iq.field("end") != at.Format(time.RFC3339Nano) || iq.Query.Set.Max != archivePageSize {
+				t.Error("expected bounded replay of the persisted skipped range")
+			}
+			page := iq.page(index == 2, messages...)
+			payload := `<occupant-id xmlns="urn:xmpp:occupant-id:0" id="peer"/><reactions xmlns="urn:xmpp:reactions:0" id="source"><reaction>❤</reaction></reactions>`
+			return strings.Replace(page, `id="reaction" type="groupchat"><body>Fixture message</body>`, `id="reaction" type="groupchat">`+payload, 1)
+		}
+		if index == 1 {
+			return iq.page(true, recent[49:]...)
+		}
+		return iq.page(true)
+	})
+	room := host.room.Address
+	e.archiveCapabilities = map[string]roomArchiveCapability{room: {mam: true}}
+	e.semianonymousRooms = map[string]bool{room: true}
+	e.occupantScopes = map[string]bool{room: true}
+	slot := e.rooms[room]
+	slot.session = e.session
+	p := &host.archive.RoomArchiveProgress
+	*p = domain.RoomArchiveProgress{WindowStart: at.Add(-time.Hour), WindowEnd: at.Add(-time.Second), CaughtUpThrough: at.Add(-time.Second), RecentComplete: true, InitialComplete: true, OlderComplete: true, Availability: "supported", TextSearch: "unsupported"}
+	for i := 0; i < 2; i++ {
+		if err := m.catchUpRoomArchive(t.Context(), host, e, e.session, host.room, p, cutoff); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !p.CaughtUpThrough.Equal(cutoff) || len(host.messages) != 50 {
+		t.Fatalf("unexpected fixture coverage %v messages=%d", p.CaughtUpThrough, len(host.messages))
+	}
+	if !p.DeferredReactions.Start.Equal(at) || !p.DeferredReactions.End.Equal(at) || len(host.reactions) != 0 {
+		t.Fatalf("expected persisted deferred range without reactions before join, got %+v", p.DeferredReactions)
+	}
+	e.mu.Lock()
+	slot.snapshot.State, slot.ownOccupantID = "joined", "self"
+	e.mu.Unlock()
+	if _, err := m.roomArchiveTurn(t.Context(), t.Context(), host, e, e.session, host.room, domain.RoomArchiveRequest{}, archiveAutomatic, cutoff); err != nil {
+		t.Fatal(err)
+	}
+	if !host.archive.DeferredReactions.Start.IsZero() {
+		t.Fatal("completed replay left a checkpoint")
+	}
+	if len(host.reactions) != 1 {
+		t.Fatalf("text caught up through %v but replay recovered %d reactions", p.CaughtUpThrough, len(host.reactions))
+	}
+}

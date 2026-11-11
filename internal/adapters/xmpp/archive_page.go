@@ -68,8 +68,9 @@ func (m *Manager) readArchivePage(ctx context.Context, e *entry, s *mx.Session, 
 	e.mu.RLock()
 	e.historyMu.Lock()
 	q.SIDVerified = e.sidScopes[scope]
-	q.OccupantVerified = e.occupantScopes[scope]
-	if q.SIDVerified && q.OccupantVerified && e.semianonymousRooms[scope] {
+	q.OccupantVerified = e.occupantScopes[scope] && !e.roomConfigurations[scope].pending
+	q.Semianonymous = e.semianonymousRooms[scope]
+	if q.SIDVerified && q.OccupantVerified && q.Semianonymous {
 		slot := e.rooms[scope]
 		if e.session == s && slot != nil && slot.session == s && slot.snapshot.State == "joined" && !slot.leaving {
 			q.OwnReactionActor = roomReactionActor(e.account.ID, scope, slot.ownOccupantID)

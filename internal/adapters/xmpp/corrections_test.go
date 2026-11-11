@@ -96,19 +96,19 @@ func TestOccupantEvidenceIsBoundToDiscoveredRoomAndCurrentSession(t *testing.T) 
 	e := &entry{account: domain.Account{Address: "alice@example.test"}, session: current, state: domain.Connection{State: "connected"}}
 	supported := disco.Info{Identity: []info.Identity{{Category: "conference", Type: "text"}}, Features: []info.Feature{{Var: occupantIDNS}}}
 	room := "room@conference.example.test"
-	recordOccupantSupport(e, old, room, supported)
+	recordDiscoInfo(e, old, room, 0, supported)
 	if e.occupantScopes[room] {
 		t.Fatal("old session advertised current authority")
 	}
-	recordOccupantSupport(e, current, room, supported)
+	recordDiscoInfo(e, current, room, 0, supported)
 	if !e.occupantScopes[room] {
 		t.Fatal("room support not retained")
 	}
-	recordOccupantSupport(e, current, room, disco.Info{Identity: supported.Identity})
+	recordDiscoInfo(e, current, room, 0, disco.Info{Identity: supported.Identity})
 	if e.occupantScopes[room] {
 		t.Fatal("removed feature remained trusted")
 	}
-	recordOccupantSupport(e, current, room, disco.Info{Features: supported.Features})
+	recordDiscoInfo(e, current, room, 0, disco.Info{Features: supported.Features})
 	if e.occupantScopes[room] {
 		t.Fatal("client feature advertised room authority")
 	}

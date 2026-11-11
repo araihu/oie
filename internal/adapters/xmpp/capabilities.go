@@ -115,16 +115,17 @@ func recordDiscovery(e *entry, s *mx.Session, service domain.DiscoveredService) 
 	}
 }
 func (m *Manager) queryInfo(ctx context.Context, e *entry, s *mx.Session, address string) (disco.Info, error) {
+	configuration := currentRoomConfiguration(e, address)
 	body, err := m.readHistoryIQ(ctx, e, s, address, stanza.GetIQ, discoInfoQuery)
 	if err != nil {
 		return disco.Info{}, err
 	}
-	return decodeDiscoInfo(e, s, address, body)
+	return decodeDiscoInfo(e, s, address, body, configuration.revision)
 }
 
 const discoInfoQuery = `<query xmlns="http://jabber.org/protocol/disco#info"/>`
 
-func decodeDiscoInfo(e *entry, s *mx.Session, address, body string) (disco.Info, error) {
+func decodeDiscoInfo(e *entry, s *mx.Session, address, body string, revision uint64) (disco.Info, error) {
 	var result struct {
 		Query *disco.Info `xml:"http://jabber.org/protocol/disco#info query"`
 	}
@@ -134,8 +135,9 @@ func decodeDiscoInfo(e *entry, s *mx.Session, address, body string) (disco.Info,
 	if result.Query == nil {
 		return disco.Info{}, errArchive
 	}
-	recordOccupantSupport(e, s, address, *result.Query)
-	recordReactionRestrictions(e, s, address, *result.Query)
+	if !recordDiscoInfo(e, s, address, revision, *result.Query) {
+		return disco.Info{}, errArchive
+	}
 	return *result.Query, nil
 }
 

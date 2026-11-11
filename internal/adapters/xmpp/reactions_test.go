@@ -140,7 +140,7 @@ func TestSemianonymousRoomReactionsUseVerifiedOccupantIDs(t *testing.T) {
 	slot.snapshot.State = "joining"
 	e.details[c.ID].info.Features = []string{"anonymous"}
 	discoXML := `<query xmlns="http://jabber.org/protocol/disco#info"><identity category="conference" type="text"/><feature var="muc_semianonymous"/><feature var="urn:xmpp:occupant-id:0"/></query>`
-	if _, err := decodeDiscoInfo(e, e.session, c.Address, discoXML); err != nil {
+	if _, err := decodeDiscoInfo(e, e.session, c.Address, discoXML, 0); err != nil {
 		t.Fatal(err)
 	}
 	target := reactionTarget(e, c)
@@ -187,12 +187,47 @@ func TestSemianonymousRoomReactionsUseVerifiedOccupantIDs(t *testing.T) {
 	if validFrozenReaction(e, e.account, out) {
 		t.Fatal("frozen command rebound to a different occupant")
 	}
-	if _, err = decodeDiscoInfo(e, e.session, c.Address, strings.Replace(discoXML, `<feature var="urn:xmpp:occupant-id:0"/>`, "", 1)); err != nil {
+	if _, err = decodeDiscoInfo(e, e.session, c.Address, strings.Replace(discoXML, `<feature var="urn:xmpp:occupant-id:0"/>`, "", 1), 0); err != nil {
 		t.Fatal(err)
 	}
 	reaction("Bob", "unverified", peer)
 	if _, err = m.PrepareReaction(t.Context(), e.account, c, target); err == nil || len(host.received) != 4 {
 		t.Fatal("occupant IDs accepted without a matching room advertisement")
+	}
+}
+
+func TestRoomConfigurationInvalidatesReactionTrust(t *testing.T) {
+	m, e, slot, host := reactionRoomFixture(t)
+	room := slot.conversation.Address
+	slot.ownOccupantID = "own-id"
+	disco := `<query xmlns="http://jabber.org/protocol/disco#info"><identity category="conference" type="text"/><feature var="muc_semianonymous"/><feature var="urn:xmpp:occupant-id:0"/><feature var="urn:xmpp:sid:0"/></query>`
+	if _, err := decodeDiscoInfo(e, e.session, room, disco, 0); err != nil {
+		t.Fatal(err)
+	}
+	inFlight := &archiveQuery{Scope: room}
+	e.archives = map[string]*archiveQuery{"before-change": inFlight}
+	notification := `<message xmlns="jabber:client" from="` + room + `" type="groupchat"><x xmlns="http://jabber.org/protocol/muc#user"><status code="104"/></x></message>`
+	feedReaction(t, m, e, strings.Replace(notification, room, room+"/Bob", 1))
+	if currentRoomConfiguration(e, room).pending {
+		t.Fatal("participant changed the room configuration")
+	}
+	feedReaction(t, m, e, notification)
+	if !currentRoomConfiguration(e, room).pending || inFlight.Err == nil {
+		t.Fatal("room configuration failed to revoke cached and in-flight proof")
+	}
+	if _, err := decodeDiscoInfo(e, e.session, room, disco, 0); err == nil {
+		t.Fatal("accepted a discovery result from before the room change")
+	}
+	feedReaction(t, m, e, `<message xmlns="jabber:client" from="`+room+`/Bob" type="groupchat" id="client"><occupant-id xmlns="urn:xmpp:occupant-id:0" id="own-id"/><reactions xmlns="urn:xmpp:reactions:0" id="source"><reaction>👍</reaction></reactions></message>`)
+	if len(host.received) != 0 {
+		t.Fatal("accepted an occupant ID using revoked proof")
+	}
+	fresh := strings.Replace(disco, `<feature var="urn:xmpp:occupant-id:0"/>`, "", 1)
+	if _, err := decodeDiscoInfo(e, e.session, room, fresh, 1); err != nil {
+		t.Fatal(err)
+	}
+	if currentRoomConfiguration(e, room).pending || e.occupantScopes[room] {
+		t.Fatal("failed to apply the fresh room capabilities")
 	}
 }
 

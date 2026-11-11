@@ -50,6 +50,7 @@ type archiveResult struct {
 type archiveTrust struct {
 	SIDVerified, OccupantVerified bool
 	OwnReactionActor              string
+	Semianonymous                 bool
 }
 
 type archiveQuery struct {
@@ -59,6 +60,7 @@ type archiveQuery struct {
 	Messages        []application.Incoming
 	FirstAt, LastAt time.Time
 	Start, End      time.Time
+	Deferred        domain.DeferredRoomReactions
 	Bytes, Seen     int
 	Err             error
 }
@@ -101,6 +103,16 @@ func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResul
 		return nil
 	}
 	if !ok {
+		return nil
+	}
+	if in.Reaction != nil && in.Reaction.Kind == "room" && q.OwnReactionActor == "" {
+		at = at.UTC()
+		if q.Deferred.Start.IsZero() || at.Before(q.Deferred.Start) {
+			q.Deferred.Start = at
+		}
+		if at.After(q.Deferred.End) {
+			q.Deferred.End = at
+		}
 		return nil
 	}
 	q.Bytes += len(in.OriginalText)
