@@ -3,6 +3,7 @@
  const runtime=window.OieRuntime;
  let booted=false,epoch=0,currentURL=location.href,infoReturnScroll=0,infoRequestGeneration=0,inboxScroll=0;
  let restoreFilterFocus=false,filterScroll=0;
+ let pendingConversation;
  const positions=new Map(),app=()=>document.getElementById('oie-app');
  const scrollIDs=['conversation-list','message-timeline','shared-content-scroll','details-body','accounts-body','account-detail-scroll'];
  const routeFields=['openDrawer','engineId','eventCursor','conversationId','accountId','focusMessage','contextNewer','contextMissing','mock'];
@@ -10,6 +11,39 @@
  const kinds=['oie-app','chat-info-content','conversation-pane','shared-content-scroll',inboxID];
  const chatQueryKeys=['message','timelineCursor','timelineDirection','chatSearch','chatQuery','chatIncludeHistory'];
  const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+ function stopConversationLoading(){
+  if(!pendingConversation)return;
+  const {timer,overlay,covered,focus}=pendingConversation;
+  pendingConversation=null;
+  clearTimeout(timer);
+  if(covered)covered.inert=false;
+  const restoreFocus=focus?.isConnected&&(document.activeElement===document.body||overlay.contains(document.activeElement));
+  overlay.hidden=true;
+  if(restoreFocus)focus.focus({preventScroll:true});
+ }
+ function startConversationLoading(ctx){
+  const pane=ctx.target,overlay=pane.querySelector('[data-conversation-loading]');
+  if(!overlay)return;
+  const pending={ctx,overlay};
+  pendingConversation=pending;
+  pending.timer=setTimeout(()=>{
+   if(!overlay.isConnected||ctx.oieEpoch!==epoch)return;
+   const chat=pane.querySelector('.oie-chat-pane');
+   const covered=chat.getClientRects().length?chat:document.querySelector('#workspace > .oie-list-pane');
+   pending.covered=covered;
+   if(covered?.contains(document.activeElement))pending.focus=document.activeElement;
+   if(covered)covered.inert=true;
+   overlay.hidden=false;
+   if(pending.focus)overlay.querySelector('[data-cancel-conversation-loading]').focus({preventScroll:true});
+  },120);
+ }
+ function cancelConversationLoading(){
+  if(!pendingConversation)return;
+  const {ctx}=pendingConversation;
+  epoch++;
+  stopConversationLoading();
+  ctx.request.abort();
+ }
  function remember(){const state={};for(const id of scrollIDs){const node=document.getElementById(id);if(node){state[id]=node.scrollTop;if(id==='conversation-list'&&node.clientHeight>0)inboxScroll=node.scrollTop}}positions.set(currentURL,state);if(positions.size>100)positions.delete(positions.keys().next().value)}
  function routeState(pane){
   const root=app();if(!root)return;
@@ -116,26 +150,42 @@
  document.addEventListener('click',event=>{
   if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
   const row=event.target.closest?.('#conversation-list a[data-conversation-id]');
+  if(event.target.closest?.('[data-cancel-conversation-loading]')){
+   cancelConversationLoading();return;
+  }
   const activeFilter=event.target.closest?.('#'+inboxID+' a[data-filter][aria-current="true"]');
   const pane=document.getElementById('conversation-pane');
   if(activeFilter||row&&pane?.dataset.openChat==='true'&&pane.dataset.conversationId===row.dataset.conversationId){
+   if(row)cancelConversationLoading();
    event.preventDefault();event.stopImmediatePropagation();return;
   }
   if(booted||!window.htmx)return;
   const link=event.target.closest?.('.oie-navigation a[hx-boost="true"]');
   if(link)window.htmx.process(link);
  },true);
+ document.addEventListener('keydown',event=>{
+  if(event.key!=='Escape'||!pendingConversation||pendingConversation.overlay.hidden)return;
+  event.preventDefault();event.stopImmediatePropagation();
+  cancelConversationLoading();
+ },true);
  function infoReady(starGeneration){const root=document.getElementById('chat-info-content');if(!root)return;upgrade(root);document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root,generation:starGeneration}}));const body=document.getElementById('details-body');if(root.dataset.infoView){if(body)body.scrollTop=0;root.querySelector('[data-info-heading]')?.focus({preventScroll:true})}else{if(body)body.scrollTop=infoReturnScroll;const kind=new URL(location.href).searchParams.get('infoFocus');root.querySelector(`[data-info-entry="${CSS.escape(kind||'media')}"]`)?.focus({preventScroll:true})}}
  function closeOverlays(){for(const id of ['oie-image-viewer','oie-document-viewer']){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id}}));const dialog=document.getElementById(id);if(dialog?.open)dialog.close()}for(const id of ['details','accounts','settings','about','newchat','sender','message-history'])window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id}}));}
  document.addEventListener('htmx:before:request',event=>{
-  const ctx=event.detail.ctx;if(ctx?.target?.id==='shared-search-results'){epoch++;document.getElementById('shared-content-scroll')?.removeAttribute('aria-busy')}if(!ctx||!kinds.includes(ctx.target?.id))return;
+  const ctx=event.detail.ctx;if(ctx?.target?.id==='shared-search-results'){stopConversationLoading();epoch++;document.getElementById('shared-content-scroll')?.removeAttribute('aria-busy')}if(!ctx||!kinds.includes(ctx.target?.id))return;
+  stopConversationLoading();
   ctx.oieEpoch=++epoch;ctx.oieKind=ctx.target.id;
   if(ctx.oieKind==='shared-content-scroll'){ctx.oieSharedFields=sharedFields();ctx.target.setAttribute('aria-busy','true')}ctx.oieStarGeneration=Number(document.body.dataset.starGeneration||0);
-  if(ctx.oieKind==='conversation-pane'){ctx.oieScope=document.getElementById('conversation-pane')?.dataset.conversationScope;const url=new URL(ctx.request.action,location.href);ctx.oieChat=url.searchParams.get('chat')||'';}
+  if(ctx.oieKind==='conversation-pane'){
+   ctx.oieScope=ctx.target.dataset.conversationScope;
+   const url=new URL(ctx.request.action,location.href);
+   ctx.oieChat=url.searchParams.get('chat')||'';
+   if(ctx.oieChat&&(ctx.oieChat!==ctx.target.dataset.conversationId||!ctx.target.getClientRects().length))startConversationLoading(ctx);
+  }
   if(ctx.oieKind==='chat-info-content'&&!document.getElementById('chat-info-content')?.dataset.infoView)infoReturnScroll=document.getElementById('details-body')?.scrollTop||0;
  });
  document.addEventListener('htmx:after:request',event=>{
   const ctx=event.detail.ctx;if(!ctx?.oieKind)return;if(ctx.oieEpoch!==epoch){event.preventDefault();return}
+  if(pendingConversation?.ctx===ctx)clearTimeout(pendingConversation.timer);
   const parsed=new DOMParser().parseFromString(ctx.text||'','text/html'),next=parsed.querySelector('#'+ctx.oieKind);
   let valid=!!next;
   if(ctx.oieKind==='shared-content-scroll'){valid=valid&&ctx.response?.status>=200&&ctx.response.status<300&&parsed.querySelector('#oie-app')?.dataset.engineId===document.body.dataset.engineId&&sharedFields()===ctx.oieSharedFields;ctx.oieSharedPage=parsed}
@@ -146,6 +196,9 @@
    valid=valid&&ctx.response?.status===200&&next.dataset.inboxScope===ctx.target.dataset.inboxScope&&next.dataset.inboxFilter===(url.searchParams.get('filter')||'all');
   }
   if(!valid){event.preventDefault();ctx.target?.removeAttribute('aria-busy');showError(ctx);}
+ });
+ document.addEventListener('htmx:finally:request',event=>{
+  if(pendingConversation?.ctx===event.detail.ctx)stopConversationLoading();
  });
  document.addEventListener('htmx:before:swap',event=>{
   const ctx=event.detail.ctx;if(!ctx?.oieKind)return;
@@ -183,15 +236,8 @@
   }
   else if(root.id==='chat-info-content')infoReady(infoRequestGeneration);
   else{
-   const previousChat=document.body.dataset.conversationId;
+   if(pendingConversation&&!pendingConversation.overlay.isConnected)stopConversationLoading();
    if(root.id==='oie-app')inboxScroll=0;routeState(root.id==='conversation-pane'?root:null);syncFilterLinks();upgrade(app());if(booted)runtime.start();const saved=positions.get(location.href);
-   if(root.id==='conversation-pane'&&root.dataset.conversationId&&root.dataset.conversationId!==previousChat&&!reducedMotion.matches){
-    const chat=root.querySelector('.oie-chat-pane');
-    const finish=event=>{if(event.animationName==='oie-conversation-enter')root.classList.remove('oie-conversation-enter')};
-    chat?.addEventListener('animationend',finish,{once:true});
-    chat?.addEventListener('animationcancel',finish,{once:true});
-    root.classList.add('oie-conversation-enter');
-   }
    requestAnimationFrame(()=>{if(!root.isConnected||root!==document.getElementById(root.id))return;if(saved)for(const [id,top]of Object.entries(saved)){if(root.id==='conversation-pane'&&id!=='message-timeline')continue;if(id==='message-timeline'&&new URL(location.href).searchParams.has('message'))continue;const node=document.getElementById(id);if(node)node.scrollTop=top}const info=document.getElementById('chat-info-content');if(info)document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root:info,generation:Number(document.body.dataset.starGeneration||0)}}));});
   }
  });

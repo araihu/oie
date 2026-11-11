@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),http=require('node:http'),path=requir
 const {spawn}=require('node:child_process'),{once}=require('node:events'),{chromium}=require('playwright');
 const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 (async()=>{
- const engine=id(1),account=id(2),other=id(3),revision=id(4),streams=new Set(),reads=[],state={hold:null,fail:false,release:null,writes:0,seq:0};
+ const engine=id(1),account=id(2),other=id(3),revision=id(4),streams=new Set(),reads=[],state={hold:null,release:null,writes:0,seq:0};
  const accounts=[{id:account,address:'personal@fixture',label:'Personal'},{id:other,address:'work@fixture',label:'Work'}].map(value=>({...value,revisionId:revision,protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z'}));
  const chats=Array.from({length:24},(_,index)=>({id:id(100+index),revisionId:revision,accountId:index%2?other:account,address:'chat'+index+'@fixture',title:'Conversation '+index,kind:'direct',updatedAt:'2026-11-08T12:00:00Z',lastMessage:'Fixture',unreadCount:0,archived:false,favorite:false}));
  const [a,b,c,room]=[chats[0],chats[8],chats[9],chats[23]];
@@ -27,7 +27,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(url.pathname==='/api/v1/conversations'){const filtered=chats.filter(chat=>(!url.searchParams.get('accountId')||chat.accountId===url.searchParams.get('accountId'))&&chat.archived===(url.searchParams.get('archived')==='true')&&chat.title.toLowerCase().includes((url.searchParams.get('q')||'').toLowerCase())&&(!url.searchParams.has('kind')||chat.kind===url.searchParams.get('kind'))&&(!url.searchParams.has('favoritesOnly')||chat.favorite)&&(!url.searchParams.has('unreadOnly')||chat.unreadCount>0));const limit=Number(url.searchParams.get('limit')||100);return send(200,{items:filtered.slice(0,limit),nextCursor:filtered.length>limit?filtered[limit-1].id:undefined});}
   for(const chat of chats){
    const prefix='/api/v1/conversations/'+chat.id;
-   if(url.pathname===prefix)return send(state.fail&&chat===a?503:200,chat);
+   if(url.pathname===prefix)return send(200,chat);
    if(url.pathname===prefix+'/messages'){
     if(state.hold?.chat===chat){
      state.hold.requested=true;
@@ -53,6 +53,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const fresh=async(options={})=>{const context=await browser.newContext({viewport:{width:1440,height:950},locale:'en',...options});await context.addInitScript(()=>{window.documentToken=Math.random();localStorage.setItem('oie.device.auto-image-downloads.v1','false')});const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>requests.push({kind:request.resourceType(),headers:request.headers(),url:request.url()}));return{context,page}};
  const layout=async()=>{const size=await page.evaluate(()=>{const rect=selector=>{const r=document.querySelector(selector).getBoundingClientRect();return{top:r.top,bottom:r.bottom}};const timeline=document.querySelector('#message-timeline');return{viewport:innerHeight,workspace:rect('#workspace'),pane:rect('.oie-chat-pane'),composer:rect('.oie-composer'),footer:document.querySelector('.oie-list-account').getBoundingClientRect().height?rect('.oie-list-account'):null,pageHeight:document.documentElement.scrollHeight,timelineHeight:timeline.clientHeight,timelineContent:timeline.scrollHeight}});assert(Math.abs(size.workspace.bottom-size.viewport)<1,JSON.stringify(size));assert(Math.abs(size.pane.bottom-size.workspace.bottom)<1,JSON.stringify(size));assert(Math.abs(size.composer.bottom-size.workspace.bottom)<1,JSON.stringify(size));if(size.footer)assert(Math.abs(size.footer.bottom-size.workspace.bottom)<1,JSON.stringify(size));assert(size.timelineHeight>0&&size.pageHeight<=size.viewport+1,JSON.stringify(size));return size};
  const ready=async(chat)=>{await until(async()=>await page.locator('#message-composer').count()===1&&await page.evaluate(()=>document.body.dataset.conversationId)===chat.id,'selected '+chat.title);await until(()=>streams.size===1,'one event stream');await layout()};
+ const skeleton=()=>page.locator('[data-conversation-loading]');
  const sampleOpening=async(chat,selectors)=>{
   const row=page.locator('#conversation-list a[data-conversation-id="'+chat.id+'"]');
   await row.scrollIntoViewIfNeeded();
@@ -66,6 +67,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   state.hold={chat,gate,requested:false};
   await row.click();
   await until(()=>state.hold.requested,'conversation request held');
+  await skeleton().waitFor({state:'visible'});
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   const {maxShift,frames}=await page.evaluate(()=>{
    const {before,frames,id}=window.openingGeometry;cancelAnimationFrame(id);
@@ -74,6 +76,11 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   });
   assert(frames>=2);
   assert(maxShift<=1,'opening a conversation shifted the current view by '+maxShift+'px');
+  const alignment=await skeleton().evaluate(node=>{
+   const rect=node.getBoundingClientRect(),pane=node.parentElement.getBoundingClientRect();
+   return [Math.abs(rect.top-pane.top),Math.abs(rect.bottom-pane.bottom),Math.abs(rect.left-pane.left),Math.abs(rect.right-pane.right)];
+  });
+  assert(Math.max(...alignment)<=1,JSON.stringify(alignment));
   assert.equal(await page.locator('#history-status,[data-navigation-status]').count(),0);
   assert.equal(await page.locator('[data-toast-container]').getByText(/Opening…|Abrindo…/).count(),0);
  };
@@ -96,8 +103,21 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await click(b);await page.locator('[data-sidebar-toggle]').click();await page.locator('.oie-list-account').waitFor();
   await sampleOpening(a,['#conversation-list','.oie-list-account','#message-timeline','.oie-composer']);
   assert.equal(await page.locator('#message-composer').inputValue(),'Draft B');
-  await click(c);const longLayout=await layout();assert(longLayout.timelineContent>longLayout.timelineHeight);await page.setViewportSize({width:1280,height:650});await layout();await page.setViewportSize({width:1440,height:950});state.hold=null;state.release();state.release=null;await new Promise(resolve=>setTimeout(resolve,200));assert.equal(await page.evaluate(()=>document.body.dataset.conversationId),c.id);
-  state.fail=true;await page.locator('#conversation-list a[data-conversation-id="'+a.id+'"]').click();await page.locator('[data-toast-container]').getByText('Could not open this view. Try again.',{exact:true}).waitFor();await new Promise(resolve=>setTimeout(resolve,100));assert.equal(await page.evaluate(()=>document.body.dataset.conversationId),c.id);assert(await page.evaluate(()=>window.savedList===document.getElementById('conversation-list')));state.fail=false;
+  await click(c);await skeleton().waitFor({state:'hidden'});const longLayout=await layout();assert(longLayout.timelineContent>longLayout.timelineHeight);await page.setViewportSize({width:1280,height:650});await layout();await page.setViewportSize({width:1440,height:950});state.hold=null;state.release();state.release=null;await new Promise(resolve=>setTimeout(resolve,200));assert.equal(await page.evaluate(()=>document.body.dataset.conversationId),c.id);
+  const failureURL=url=>url.searchParams.get('chat')===a.id;
+  let releaseFailure;
+  const failureGate=new Promise(resolve=>releaseFailure=resolve);
+  await page.route(failureURL,async route=>{
+   await failureGate;
+   await route.fulfill({status:503,body:'unavailable'});
+  },{times:1});
+  const beforeFailure=await page.evaluate(()=>{window.failedOpenPane=document.getElementById('conversation-pane');return location.href});
+  await page.locator('#conversation-list a[data-conversation-id="'+a.id+'"]').click();
+  try{await skeleton().waitFor({state:'visible'});assert(await page.locator('.oie-chat-pane').evaluate(node=>node.inert));}finally{releaseFailure();}
+  await page.locator('[data-toast-container]').getByText('Could not open this view. Try again.',{exact:true}).waitFor();
+  await skeleton().waitFor({state:'hidden'});
+  assert(await page.evaluate(()=>window.failedOpenPane===document.getElementById('conversation-pane')&&window.savedList===document.getElementById('conversation-list')&&!document.querySelector('.oie-chat-pane').inert));
+  assert.equal(page.url(),beforeFailure);
   const liveTop=await page.locator('#conversation-list').evaluate(node=>node.scrollTop);chats[8].lastMessage='Updated live preview';state.seq++;for(const stream of streams)stream.write('id: '+engine+':'+state.seq+'\nevent: conversation.updated\ndata: {}\n\n');await until(async()=>await page.locator('#conversation-list').textContent().then(text=>text.includes('Updated live preview')),'changed inbox data updates');assert(await page.evaluate(()=>window.savedList===document.getElementById('conversation-list')));assert.equal(await page.locator('#conversation-list').evaluate(node=>node.scrollTop),liveTop);assert.equal(await page.evaluate(()=>window.documentToken),token);assert.equal(requests.filter(request=>request.kind==='document').length,startDocuments);assert(requests.some(request=>request.headers['x-oie-fragment']==='conversation'));
   await opened.context.close();await until(()=>streams.size===0,'desktop stream closed');
   opened=await fresh({viewport:{width:390,height:844}});page=opened.page;await page.goto(base+'/?lang=en&theme=dark');await until(async()=>await page.locator('#conversation-list').isVisible(),'mobile inbox');await page.evaluate(()=>{window.savedList=document.getElementById('conversation-list');window.savedApp=document.getElementById('oie-app');window.savedSidebar=document.querySelector('.oie-sidebar')});const mobileTop=await click(b);assert.equal(await page.locator('.oie-list-pane').isVisible(),false);await page.locator('.oie-back-button').click();await until(async()=>await page.locator('#conversation-list').isVisible(),'mobile back');assert.equal(await page.locator('#conversation-list').evaluate(node=>node.scrollTop),mobileTop);assert(await page.evaluate(()=>window.savedList===document.getElementById('conversation-list')));await opened.context.close();await until(()=>streams.size===0,'mobile stream closed');
@@ -124,7 +144,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    assert(await page.evaluate(()=>window.keptNodes.every((node,index)=>node===document.querySelector(window.keptSelectors[index]))&&window.keptGeneration===window.OieRuntime.generation&&window.keptScroll===document.getElementById('message-timeline').scrollTop));
    assert.equal(await page.locator('#message-composer').inputValue(),'Draft kept by filters');
    assert.equal(new URL(page.url()).searchParams.get('chat'),c.id);
-   assert.equal(await page.locator('#conversation-pane.oie-conversation-enter').count(),0);
+   assert(await skeleton().isHidden());
   };
 
   await filter('favorites').click();await activeFilter('favorites');await verifyKept();
@@ -153,13 +173,9 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await filter('groups').click();
   await page.locator('[data-toast-container]').getByText('Could not open this view. Try again.',{exact:true}).waitFor();
   await activeFilter('all');await verifyKept();
-  const beforeSelection=await page.evaluate(()=>{
-   window.conversationAnimations=0;
-   document.addEventListener('animationstart',event=>{if(event.animationName==='oie-conversation-enter')window.conversationAnimations++;});
-   return window.OieRuntime.generation;
-  });
+  const beforeSelection=await page.evaluate(()=>window.OieRuntime.generation);
   await page.locator('#conversation-list a[data-conversation-id="'+b.id+'"]').click();await ready(b);
-  await page.waitForFunction(()=>window.conversationAnimations===1);
+  assert(await skeleton().isHidden());
   assert.equal(await page.evaluate(()=>window.OieRuntime.generation),beforeSelection+1);
   await page.locator('#conversation-list a[data-conversation-id="'+b.id+'"]').click();
   assert.equal(await page.evaluate(()=>window.OieRuntime.generation),beforeSelection+1);
@@ -177,8 +193,19 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   assert(await page.locator('#conversation-list').isVisible());
   assert.equal(await page.evaluate(()=>document.body.dataset.conversationId),a.id);
   await filter('all').click();await activeFilter('all');
-  await page.locator('#conversation-list a[data-conversation-id="'+b.id+'"]').click();await ready(b);
-  assert.equal(await page.locator('#conversation-pane.oie-conversation-enter').count(),0);
+  await sampleOpening(b,['#conversation-list','.oie-list-account']);
+  assert.equal(await skeleton().getByRole('status').textContent(),'Carregando mensagens…');
+  assert(await skeleton().locator('[data-skeleton-item]').evaluateAll(nodes=>nodes.length>0&&nodes.every(node=>getComputedStyle(node).animationName==='none')));
+  await skeleton().getByRole('button',{name:'Voltar'}).click();
+  await skeleton().waitFor({state:'hidden'});
+  assert(await page.locator('#conversation-list').isVisible());
+  assert.equal(await page.evaluate(()=>document.body.dataset.conversationId),a.id);
+  assert.equal(new URL(page.url()).searchParams.get('inbox'),'1');
+  const row=page.locator('#conversation-list a[data-conversation-id="'+b.id+'"]');
+  assert(await row.evaluate(node=>node===document.activeElement));
+  state.hold=null;state.release();state.release=null;
+  await row.click();await ready(b);
+  assert(await skeleton().isHidden());
   await opened.context.close();
   opened=await fresh({javaScriptEnabled:false});page=opened.page;await page.goto(base+'/?chat='+a.id);await filter('groups').click();assert.equal(new URL(page.url()).searchParams.get('chat'),a.id);assert.equal(await page.locator('#chat-header').textContent().then(text=>text.includes(a.title)),true);await filter('all').click();await page.locator('#conversation-list a[data-conversation-id="'+b.id+'"]').click();assert.equal(new URL(page.url()).searchParams.get('chat'),b.id);assert.equal(await page.locator('#chat-header').textContent().then(text=>text.includes(b.title)),true);await opened.context.close();
   assert.deepEqual(errors,[]);assert.equal(state.writes,0);await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});await fs.writeFile(path.join(__dirname,'artifacts/conversation-navigation-report.json'),JSON.stringify({pageErrors:errors,mutations:state.writes,conversationFragmentRequests:requests.filter(request=>request.headers['x-oie-fragment']==='conversation').length},null,2));console.log('PASS: conversation-only swaps preserve inbox nodes/scroll/filter, isolated drafts/details, history, latest intent, one stream, mobile Back and native fallback');
