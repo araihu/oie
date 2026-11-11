@@ -21,7 +21,7 @@ import (
 const (
 	daggerVersion = "v0.21.9"
 	daggerImage   = "registry.dagger.io/engine:v0.21.9@sha256:3c4e0cedaea400d7e30155e050f94910ea5f381b6f5942dd2172382657628cb4"
-	goImage       = "golang:1.27.3-bookworm@sha256:dc0963f32053e4bc451d24d87e3892d42d01021b61f093e98eb95c0352bb84b0"
+	goImage       = "golang:1.27.4-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea"
 	dockerImage   = "docker:28-cli@sha256:625d9431a9f54c5a2bc90f24f0e1c3d55b1349fd857dd85035f98c2c9acbdd4d"
 	xmppImage     = "prosodyim/prosody:13.0@sha256:c54842dec520463e3557a2d26df3312338003feb4cc943afa92d287a30c02b58"
 	nodeImage     = "node:24.19.0-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03"

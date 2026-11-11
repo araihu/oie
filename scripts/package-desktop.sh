@@ -65,7 +65,7 @@ case "$(uname -s):$(uname -m)" in
   Linux:x86_64) target_os=linux; target_arch=amd64 ;;
   *) fail 'build natively on macOS Apple Silicon or Ubuntu 24.04 x86_64' ;;
 esac
-command -v go >/dev/null 2>&1 || fail 'Go 1.27.3 or newer is required'
+command -v go >/dev/null 2>&1 || fail 'Go 1.27.4 or newer is required'
 export GOFLAGS= GOWORK=off CGO_ENABLED=1 GOOS=$target_os GOARCH=$target_arch
 host_os=$(go env GOHOSTOS)
 host_arch=$(go env GOHOSTARCH)
@@ -74,10 +74,10 @@ go_version=$(cd "$source_dir" && go env GOVERSION)
 printf '%s\n' "$go_version" | LC_ALL=C awk '
   /^go[0-9]+\.[0-9]+\.[0-9]+$/ {
     sub(/^go/, ""); split($0, v, ".")
-    if (v[1] > 1 || (v[1] == 1 && (v[2] > 27 || (v[2] == 27 && v[3] >= 3)))) ok=1
+    if (v[1] > 1 || (v[1] == 1 && (v[2] > 27 || (v[2] == 27 && v[3] >= 4)))) ok=1
   }
   END { exit !ok }
-' || fail "Go 1.27.3 or newer is required, found $go_version"
+' || fail "Go 1.27.4 or newer is required, found $go_version"
 
 build_os= build_sdk= deployment_target=
 if [ "$target_os" = darwin ]; then

@@ -111,7 +111,7 @@ toolchain. Setting `GOOS` or `GOARCH` alone is insufficient for this CGO build.
 
 | Dependency | Needed to compile/install from source | Needed to run an already built executable |
 | --- | --- | --- |
-| Go 1.27.3 or newer | Yes, as declared in `go.mod`. Install from the [official Go instructions](https://go.dev/doc/install). | No. |
+| Go 1.27.4 or newer | Yes, as declared in `go.mod`. Install from the [official Go instructions](https://go.dev/doc/install). | No. |
 | Git | Yes for checkout installation and the direct GitHub download used below. | No. |
 | C compiler and native SDK/headers | Yes. CGO must be enabled. | No compiler or headers required; system runtime libraries remain necessary. |
 | Xcode Command Line Tools | Yes on macOS. | No. Cocoa and WebKit come with macOS. |
@@ -128,7 +128,7 @@ development/test workflows, documented in [local CI](local-ci.md).
 
 ## Build from source on Ubuntu 24.04 x86_64
 
-Install Go 1.27.3 or newer first, then install the native build dependencies:
+Install Go 1.27.4 or newer first, then install the native build dependencies:
 
 ```sh
 sudo apt update
@@ -185,7 +185,7 @@ the platform WebView and available codecs.
 ## Build from source on macOS Apple Silicon
 
 Run these commands in Terminal on the Mac, rather than inside a Linux VM.
-Install Go 1.27.3 or newer and the Xcode Command Line Tools. If the command-line
+Install Go 1.27.4 or newer and the Xcode Command Line Tools. If the command-line
 tools are not installed:
 
 ```sh

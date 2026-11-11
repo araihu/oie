@@ -82,7 +82,7 @@ and [reaction controls](docs/reactions.md).
 
 ## Run
 
-Requirements: Go 1.27.3+, Make, and Docker Compose v2 for the development server.
+Requirements: Go 1.27.4+, Make, and Docker Compose v2 for the development server.
 Browser checks additionally use Node 24+.
 
 ```sh

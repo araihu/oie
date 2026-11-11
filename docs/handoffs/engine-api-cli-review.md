@@ -5,8 +5,8 @@ Issued 2026-11-10. Updated 2026-11-11.
 The independent engine and CLI milestone is implemented in
 `codex/engine-api-cli`. The independently reviewed Oiê revision is `4ef445c`.
 The current tools pin is `v0.0.0-20261111033254-90684aaa8e38`, from the
-generator's `main`. Integration with Oiê `main` is pending. The original brief follows this
-status update.
+generator's `main`. The engine build now uses Go 1.27.4. Integration with Oiê
+`main` is pending. The original brief follows this status update.
 
 ## Final independent reviews
 
@@ -33,6 +33,28 @@ complete Dagger graph, including desktop and browser coverage, was verified
 at `1927d5b`. See the [verification record](../engine-api-cli-verification.md)
 for the fixture, evidence, and limits of those runs.
 
+## Engine toolchain
+
+The root Go module and desktop packaging script require Go 1.27.4 or newer.
+GitHub Actions reads the version from the root module. Dagger pins the official
+`golang:1.27.4-bookworm` image by its multi-platform digest for the engine
+checks, Linux desktop CI, and Linux release packaging. Go 1.27.4 includes the
+standard-library fix for `http.MaxBytesReader` used by the engine HTTP adapter.
+[Go advisory GO-2026-6859](https://vuln.go.dev/ID/GO-2026-6859.json)
+
+Native `make check` and `make build` passed on Linux arm64. `go version -m bin/oie`
+reports `go1.27.4`. The native `make test-cli-xmpp` passed with a disposable
+Prosody fixture. The packaging script rejected Go 1.27.3 and advanced past the
+version check with Go 1.27.4 and 1.27.5 in a simulated environment.
+
+The complete Dagger `make ci` passed, including Go race tests, the Linux amd64
+desktop build and WebView smoke, isolated Prosody and CLI integration, and the
+browser suites. The first run received SIGTERM during checks. The next run hit
+the FFmpeg thumbnail deadline under `test-race`. The focused native race test
+and the final Dagger run passed with the existing five-second deadline. The
+final logs are in `tests/browser/artifacts/oie-go-1-27-4-ci-final/`. Native macOS
+packaging and release archive smoke checks remain for the release workflow.
+
 ## Integration into main
 
 ### Generator PRs
@@ -47,7 +69,6 @@ flagged a Go standard-library issue with the runner's Go 1.27.3. The generator
 now selects Go 1.27.4 for development and CI. Its module and generated CLI
 still target Go 1.27.3 as the minimum version. The merged implementation
 matches the independently reviewed generator code.
-[Go advisory GO-2026-6859](https://vuln.go.dev/ID/GO-2026-6859.json)
 
 The Oiê tools module now pins the merged commit `90684aa`. Regeneration
 preserved the committed CLI files byte for byte, and the CLI was rebuilt
@@ -81,18 +102,15 @@ each case and reconcile the IDs and references.
    engine HTTP adapter, plus conflicts in generated output. If that line
    lands first, reconcile the source contracts and regenerate the bindings
    and CLI from the combined source.
-3. Carry the merged generator pin into the integration candidate and
-   regenerate from its resolved source contracts. Run `make check` and the complete Dagger graph
-   (`make ci`) for the combined CLI/XMPP, desktop, and browser regressions.
+3. Carry the merged generator pin and the Go 1.27.4 toolchain update into the
+   integration candidate. Regenerate from its resolved source contracts. Run
+   `make check` and the complete Dagger graph (`make ci`) for the combined
+   CLI/XMPP, desktop, and browser regressions.
    The passing checks above cover the current feature branch.
 4. Follow the existing Oiê PR policy in [AGENTS.md](../../AGENTS.md).
    A new Oiê PR remains tied to readiness for alpha `v0.0.1`, including
    usable initial room history. The generator PRs and preparation of the
    local integration candidate are separate from alpha publication.
-
-The Oiê Dagger image currently selects Go 1.27.3, and the engine HTTP adapter
-uses `http.MaxBytesReader`, which is listed in GO-2026-6859. Review the engine
-and packaging toolchains separately before release.
 
 ## User direction and scope
 

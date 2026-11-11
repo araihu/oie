@@ -236,7 +236,7 @@ The fragment-navigation increment on 2026-11-08 passes native checks and all hos
 Keep Oie increments as local commits. Open a pull request when there is a version
 ready for alpha v0.0.1. Existing draft requests remain historical review points.
 
-Use Go 1.27.3, Make, Git, Python 3 and Docker on the host. The runner pins Dagger
+Use Go 1.27.4 or newer, Make, Git, Python 3 and Docker on the host. The runner pins Dagger
 v0.21.9. It honors `_EXPERIMENTAL_DAGGER_RUNNER_HOST`; without an override it
 provisions the pinned engine image through Dagger's container driver:
 
