@@ -236,7 +236,7 @@ The fragment-navigation increment on 2026-11-08 passes native checks and all hos
 Keep Oie increments as local commits. Open a pull request when there is a version
 ready for alpha v0.0.1. Existing draft requests remain historical review points.
 
-Use Go 1.27.3, Make, Git, Python 3 and Docker on the host. The runner pins Dagger
+Use Go 1.27.4 or newer, Make, Git, Python 3 and Docker on the host. The runner pins Dagger
 v0.21.9. It honors `_EXPERIMENTAL_DAGGER_RUNNER_HOST`; without an override it
 provisions the pinned engine image through Dagger's container driver:
 
@@ -293,6 +293,21 @@ This uses the configured SSH alias and `/run/dagger/engine.sock` on that host.
 It does not restart the engine or a shared tunnel. Override `OIE_CI_SSH_SOCKET`
 when the engine uses another remote Unix socket. Without this option, Dagger uses
 its ordinary configured runner connection.
+
+## Engine API and CLI lane
+
+`make check` now includes `make check-api-compatibility`, using the frozen
+engine 0.27 baseline and pinned oasdiff with positive/negative controls.
+Existing HTTP tests validate actual JSON responses against generated schemas.
+The isolated XMPP stage also runs `tests/cli` with `OIE_XMPP_INTEGRATION=1`,
+including generated raw SSE/media commands, committed-response loss and restart.
+The two packages run with `-p 1` because their development Alice/Bob accounts
+share one isolated Prosody service. This serializes packages, not production
+requests; the CLI fixture still exercises concurrent replay.
+
+Use `OIE_CI_ARTIFACTS=tests/browser/artifacts/ci-engine-api-cli make ci` (plus the
+usual runner configuration) for this milestone. See
+[the verification record](engine-api-cli-verification.md) for source and limits.
 
 ## Validation on 2026-11-08
 

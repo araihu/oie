@@ -111,7 +111,7 @@ toolchain. Setting `GOOS` or `GOARCH` alone is insufficient for this CGO build.
 
 | Dependency | Needed to compile/install from source | Needed to run an already built executable |
 | --- | --- | --- |
-| Go 1.27.3 or newer | Yes, as declared in `go.mod`. Install from the [official Go instructions](https://go.dev/doc/install). | No. |
+| Go 1.27.4 or newer | Yes, as declared in `go.mod`. Install from the [official Go instructions](https://go.dev/doc/install). | No. |
 | Git | Yes for checkout installation and the direct GitHub download used below. | No. |
 | C compiler and native SDK/headers | Yes. CGO must be enabled. | No compiler or headers required; system runtime libraries remain necessary. |
 | Xcode Command Line Tools | Yes on macOS. | No. Cocoa and WebKit come with macOS. |
@@ -128,7 +128,7 @@ development/test workflows, documented in [local CI](local-ci.md).
 
 ## Build from source on Ubuntu 24.04 x86_64
 
-Install Go 1.27.3 or newer first, then install the native build dependencies:
+Install Go 1.27.4 or newer first, then install the native build dependencies:
 
 ```sh
 sudo apt update
@@ -185,7 +185,7 @@ the platform WebView and available codecs.
 ## Build from source on macOS Apple Silicon
 
 Run these commands in Terminal on the Mac, rather than inside a Linux VM.
-Install Go 1.27.3 or newer and the Xcode Command Line Tools. If the command-line
+Install Go 1.27.4 or newer and the Xcode Command Line Tools. If the command-line
 tools are not installed:
 
 ```sh
@@ -360,3 +360,118 @@ its limits. Keep this guide current as installation testing continues.
 Platform dependency references are [Wails installation](https://v3.wails.io/getting-started/installation/),
 the Ubuntu package pages linked above and the
 [Go module environment reference](https://go.dev/ref/mod#environment-variables).
+
+## Operating the engine without a web interface
+
+For automation against a loopback data API, build the server and generated CLI:
+
+```sh
+make build build-cli
+bin/oie -role local -data-only -listen 127.0.0.1:18090 -data-dir ./data-cli
+bin/oiectl --server http://127.0.0.1:18090 --output json system engine
+bin/oiectl --server http://127.0.0.1:18090 --output json system health
+```
+
+Run the two CLI commands in another terminal while the engine is running.
+`-data-only` is supported by `local` and `hosted`; the default still serves the
+web interface. The CLI's API base URL can also come from `OIECTL_SERVER`.
+Credentials belong in `--body-stdin` or a private `--body-file`, not shell
+arguments. Use `--output raw` for binary downloads.
+`events stream` writes SSE frames as they arrive. The request timeout defaults
+to one minute. Set `--timeout` and `--max-output-bytes` for longer or larger streams.
+Transport failure, timeout or cancellation returns exit 3, including after
+partial output. Keep only fully consumed/applied SSE IDs and explicitly resume
+with `--last-event-id`. Reconnect by running the command again.
+
+```sh
+bin/oiectl events stream
+bin/oiectl events stream --timeout 10m --last-event-id ENGINE_UUID:SEQUENCE
+```
+
+HTTP failures exit with code 4 and print to stderr. When the API returns a
+Problem Details code declared in the contract, the CLI includes it in the
+diagnostic. The CLI prints its matching catalog link on the next stderr line.
+
+```text
+HTTP 409 Conflict (idempotency_conflict)
+Documentation: https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#idempotency_conflict
+```
+
+With `--output json`, an HTTP failure writes one Problem Details object to
+stderr and leaves stdout empty. The exit code is still 4. The diagnostic
+includes the HTTP status and validated problem metadata. If the API response
+has no recognized Problem Details, the object uses `about:blank` and the HTTP
+status title.
+
+Usage and transport failures emit a Problem Details object on stderr and
+leave stdout empty. The object has `type`, `title`, `detail`, `code`,
+`exitCode`, and `documentation`. HTTP `status` is omitted for these local
+failures.
+
+| Type URN | Title | Code | Exit code |
+| --- | --- | --- | --- |
+| [`urn:cli:oiectl:problem:usage_error`](engine-api-problems.md#usage_error) | Invalid command usage | `usage_error` | 2 |
+| [`urn:cli:oiectl:problem:transport_error`](engine-api-problems.md#transport_error) | Transport error | `transport_error` | 3 |
+
+Transport failures include timeouts, cancellations, truncated problem
+response bodies, and a requested `--response-header` missing from a
+successful response.
+
+See [the engine API policy](engine-api-policy.md) and
+[CLI verification](engine-api-cli-verification.md) for scope and fixture commands.
+
+### oiectl commands
+
+Append `--help` to a group to see its commands. Run
+`oiectl messages send --help` or `oiectl accounts avatars download --help`
+for flags and examples.
+Some reads end with the resource name, as in `system engine`. Subgroups
+with related actions include `accounts avatars` and `conversations rooms`.
+Commands that change state identify the action, as in `conversations
+preferences set` or `messages outbox cancel`.
+Update scripts that use earlier command names to the names below.
+
+| Group | Commands |
+| --- | --- |
+| `accounts` | `capabilities`, `connect`, `connection`, `contacts`, `disconnect`, `get`, `history`, `list`, `register` |
+| `accounts avatars` | `download`, `list` |
+| `conversations` | `details`, `get`, `list`, `mentions`, `open` |
+| `conversations preferences` | `set` |
+| `conversations reads` | `get`, `mark` |
+| `conversations rooms` | `join`, `leave`, `status` |
+| `conversations rooms archive` | `request`, `set`, `status` |
+| `events` | `stream` |
+| `messages` | `author`, `context`, `get`, `list`, `revisions`, `search`, `send` |
+| `messages edits` | `get`, `submit` |
+| `messages edits targets` | `get`, `latest` |
+| `messages outbox` | `cancel` |
+| `messages reactions` | `command`, `get`, `list`, `set` |
+| `messages stars` | `get`, `list`, `set`, `states` |
+| `operations` | `get` |
+| `previews` | `get`, `list`, `refresh` |
+| `previews images` | `download`, `request` |
+| `previews thumbnails` | `get`, `request` |
+| `shared content` | `download`, `list` |
+| `system` | `engine`, `health`, `reset` |
+
+List avatar metadata by account and use the returned `imageHash` to download
+the PNG.
+
+```sh
+bin/oiectl accounts avatars list --account-id ACCOUNT_UUID --output json
+bin/oiectl accounts avatars download --hash IMAGE_HASH --output raw > avatar.png
+```
+
+`messages stars states` checks the star state of selected message IDs.
+`messages stars list` returns the starred messages themselves.
+
+`conversations rooms archive status` reads recovery settings and progress.
+Use `set` to change the recovery mode and `request` for a bounded archive read.
+`system reset` permanently deletes the selected engine's data. It requires a
+JSON body containing the current `engineId` and `"confirmation": "delete"`.
+
+Use `--output raw` for `accounts avatars download`, `previews images download`
+and `shared content download`. Use
+`previews images request` to request retention of an original image on
+the engine. The response contains the download state. The CLI also
+provides `help` and `completion`.

@@ -193,7 +193,7 @@ window.OieRuntime.register('previews', life => {
           const saved=await saveFile(file+'?download='+encodeURIComponent(name),name);notify(saved?'saved':'cancelled');return;
         }
         if(current.dataset.previewDownload==='failed')throw Error('download_failed');
-        const response=await life.fetch('/api/v1/previews/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store',headers:{'X-Oie-Engine-ID':request.engineId},signal:controller.signal});
+        const response=await life.fetch('/ui/api/v1/previews/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store',headers:{'X-Oie-Engine-ID':request.engineId},signal:controller.signal});
         const preview=await response.json();if(!active())return;
         if(!response.ok||!matches(preview))throw Error('invalid_preview');
         for(const matching of findAll(id))apply(matching,{previewFile:preview.downloadState==='ready'?source(preview.fileHash):'',previewImage:source(preview.imageHash),previewDownload:preview.downloadState,previewRevision:preview.revisionId});

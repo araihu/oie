@@ -68,6 +68,7 @@ func request(t *testing.T, server, method, path, key, body string) (int, []byte)
 	if res.StatusCode >= 400 && res.Header.Get("Content-Type") != "application/problem+json" {
 		t.Fatalf("non-contract error response: %s %s", res.Header.Get("Content-Type"), data)
 	}
+	validateResponseContract(t, req, res, data)
 	return res.StatusCode, data
 }
 

@@ -52,7 +52,8 @@ func (s *Server) EditMessage(ctx context.Context, r engineapi.EditMessageRequest
 	if result.Replayed {
 		return engineapi.EditMessage200JSONResponse(editCommand(result.Command)), nil
 	}
-	return engineapi.EditMessage202JSONResponse(editCommand(result.Command)), nil
+	location := "/api/v1/message-edits/" + string(result.Command.ID)
+	return engineapi.EditMessage202JSONResponse{Body: editCommand(result.Command), Headers: engineapi.EditMessage202ResponseHeaders{Location: &location}}, nil
 }
 
 func (s *Server) GetMessageEdit(ctx context.Context, r engineapi.GetMessageEditRequestObject) (engineapi.GetMessageEditResponseObject, error) {

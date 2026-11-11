@@ -4,7 +4,7 @@ window.OieRuntime.register('read-state',life=>{
  const engine=root?.dataset.engineId,account=root?.dataset.accountId,conversation=root?.dataset.conversationId;
  const uuid=value=>/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value||'');
  if(!timeline||root.dataset.mock==='true'||![engine,account,conversation].every(uuid))return;
- const path='/api/v1/conversations/'+conversation+'/read-state',csrf=document.querySelector('meta[name="oie-csrf"]')?.content||'';
+ const path='/ui/api/v1/conversations/'+conversation+'/read-state',csrf=document.querySelector('meta[name="oie-csrf"]')?.content||'';
  const headers={'X-Oie-Engine-ID':engine,'X-Oie-Account-ID':account};
  const seen=new Map(),acknowledged=new Set();let supported=false,busy=false,pending=null,nextKey='',retryAt=0,delay=1000;
  const status=root.querySelector('[data-read-status]');

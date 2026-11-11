@@ -50,7 +50,11 @@ function image(){
     assert.equal(await marker.count(),1);
     let geometry;await until(async()=>{geometry=await marker.evaluate(root=>{
      const avatar=root.querySelector('[data-avatar-account]'),box=avatar?.getBoundingClientRect();
-     const dots=[...root.querySelectorAll('span[aria-hidden="true"]')].map(node=>({node,rect:node.getBoundingClientRect(),style:getComputedStyle(node)})).filter(({rect,style})=>rect.width>0&&rect.width<Math.max(20,(box?.width||0)/2)&&rect.height>0&&rect.height<Math.max(20,(box?.height||0)/2)&&style.position==='absolute'&&style.backgroundColor!=='rgba(0, 0, 0, 0)'&&style.visibility!=='hidden'&&style.display!=='none');
+     // The photo layer stays mounted while its image loads or fails.
+     const dots=[...root.querySelectorAll('span[aria-hidden="true"]')]
+      .filter(node=>node.checkVisibility({opacityProperty:true,visibilityProperty:true}))
+      .map(node=>({rect:node.getBoundingClientRect(),style:getComputedStyle(node)}))
+      .filter(({rect,style})=>rect.width>0&&rect.width<Math.max(20,(box?.width||0)/2)&&rect.height>0&&rect.height<Math.max(20,(box?.height||0)/2)&&style.position==='absolute'&&style.backgroundColor!=='rgba(0, 0, 0, 0)');
      return{avatar:box?{left:box.left,right:box.right,top:box.top,bottom:box.bottom}:null,dots:dots.map(({rect,style})=>({left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom,color:style.backgroundColor}))};
     });return geometry.dots.length===1},'avatar indicator mounted '+config.width+' '+theme+' '+account);
     assert(geometry.avatar,'connection status must wrap the account avatar');

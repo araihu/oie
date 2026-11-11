@@ -46,7 +46,7 @@ func TestPreviewStatusReadsCanonicalMetadataWithoutDownload(t *testing.T) {
 		ui.ServeHTTP(w, r)
 		return w
 	}
-	path := "/api/v1/previews/" + testRevision
+	path := "/ui/api/v1/previews/" + testRevision
 	for _, engine := range []string{"", testEngine} {
 		w := get(path, engine)
 		var got engineapi.MessagePreview
@@ -61,7 +61,7 @@ func TestPreviewStatusReadsCanonicalMetadataWithoutDownload(t *testing.T) {
 	for _, tc := range []struct {
 		path, engine string
 		want         int
-	}{{"/api/v1/previews/not-a-uuid", "", 400}, {path, "not-a-uuid", 400}, {path, testAccount, 409}} {
+	}{{"/ui/api/v1/previews/not-a-uuid", "", 400}, {path, "not-a-uuid", 400}, {path, testAccount, 409}} {
 		if w := get(tc.path, tc.engine); w.Code != tc.want {
 			t.Fatalf("guard status %d want %d", w.Code, tc.want)
 		}

@@ -106,7 +106,8 @@ func (s *Server) SetMessageReactions(ctx context.Context, r engineapi.SetMessage
 	if result.Replayed {
 		return engineapi.SetMessageReactions200JSONResponse(reactionCommand(result.Command)), nil
 	}
-	return engineapi.SetMessageReactions202JSONResponse(reactionCommand(result.Command)), nil
+	location := "/api/v1/message-reaction-commands/" + string(result.Command.ID)
+	return engineapi.SetMessageReactions202JSONResponse{Body: reactionCommand(result.Command), Headers: engineapi.SetMessageReactions202ResponseHeaders{Location: &location}}, nil
 }
 
 func (s *Server) GetMessageReactionCommand(ctx context.Context, r engineapi.GetMessageReactionCommandRequestObject) (engineapi.GetMessageReactionCommandResponseObject, error) {
