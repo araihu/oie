@@ -74,12 +74,10 @@ func (s *pausedPendingReplayStore) ReplayMessageMutation(ctx context.Context, ke
 }
 
 func TestConcurrentPendingCompositionReplayReturnsSameRevision(t *testing.T) {
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
 	engine, store, _ := newMessagingEngine(t, t.TempDir(), &protocolStub{})
 	conversation := openTestConversation(t, engine, "alice@localhost")
 	at := time.Now().Add(time.Hour).UTC()
-	initial, err := engine.SendComposition(ctx, id(), conversation.ID, domain.OutgoingComposition{OriginalText: "Initial"}, &at)
+	initial, err := engine.SendComposition(t.Context(), id(), conversation.ID, domain.OutgoingComposition{OriginalText: "Initial"}, &at)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,6 +93,8 @@ func TestConcurrentPendingCompositionReplayReturnsSameRevision(t *testing.T) {
 		err    error
 	}
 	firstDone := make(chan response, 1)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
 	go func() {
 		result, err := engine.UpdatePendingMessage(ctx, key, initial.Message.ID, initial.Message.RevisionID, input, nil, false)
 		firstDone <- response{result, err}

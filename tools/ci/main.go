@@ -187,7 +187,10 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 		WithMountedTemp(goScratch, dagger.ContainerWithMountedTempOpts{Size: 2 << 30}).
 		WithEnvVariable("TMPDIR", goScratch).
 		// A cold toolchain build can exceed the test scratch mount capacity.
-		WithEnvVariable("GOTMPDIR", "/var/tmp")
+		WithEnvVariable("GOTMPDIR", "/var/tmp").
+		// Go 1.27's t.TempDir honors GOTMPDIR. Remove it from test executables
+		// so their fixtures use TMPDIR while the compiler still uses disk.
+		WithEnvVariable("OIE_GO_TEST_EXEC", "env -u GOTMPDIR")
 	checked, err := r.stage(ctx, "checks", goContainer.WithExec([]string{"make", "check"}))
 	if err != nil {
 		return err
@@ -259,7 +262,7 @@ exec sh /opt/oie/start.sh
 		WithEnvVariable("OIE_XMPP_ENDPOINT", "xmpp:5222").WithEnvVariable("OIE_CI_RUN_ID", runID).
 		WithExec([]string{"sh", "-ec", `
 python3 scripts/test-xmpp.py --host xmpp --ca-file "$OIE_XMPP_CA_FILE"
-exec go test -race -count=1 -p 1 -v ./tests/xmpp ./tests/cli
+exec go test -exec "$OIE_GO_TEST_EXEC" -race -count=1 -p 1 -v ./tests/xmpp ./tests/cli
 `})
 	browser := client.Container().From(nodeImage).
 		WithMountedCache("/root/.npm", client.CacheVolume("oie-ci-npm-v1")).
