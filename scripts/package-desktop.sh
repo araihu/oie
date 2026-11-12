@@ -155,7 +155,7 @@ mkdir -p "$doc_dir/licenses"
 # Retain the embedded browser/artwork notices in a browsable relative tree.
 find "$source_dir/internal/adapters/web" "$source_dir/internal/adapters/desktop/assets" -type f | while IFS= read -r file; do
   case "$(basename "$file")" in
-    LICENSE*|LICENCE*|COPYING*|NOTICE*|Apache-2.0.txt)
+    LICENSE*|LICENCE*|COPYING*|NOTICE*|Apache-2.0.txt|GPL-3.0.txt|Noto-upstream-OFL.txt)
       relative=${file#"$source_dir/"}
       mkdir -p "$doc_dir/licenses/$(dirname "$relative")"
       copy_file "$file" "$doc_dir/licenses/$relative" ;;

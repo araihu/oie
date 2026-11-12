@@ -21,7 +21,7 @@ The status labels have distinct meanings:
 
 Sections 2–13 describe **AGREED** behavior unless a paragraph carries a recommendation or open-decision label. Section 14 contains recommendations, not additional accepted scope. Acceptance scenarios distinguish agreed outcomes from proposed engineering details.
 
-The broader alpha target includes local standalone operation, hosted-engine operation, optional app/history sync, multi-account XMPP, reliable immediate and scheduled sends, retained searchable history, rooms, attachments, responsive web UI, PWA/offline behavior, and manual merge restore. The current source prerelease is v0.0.1-rc.0, with the implemented functional scope and ongoing standalone desktop packaging agreed in section 2.1.1. The first alpha, v0.0.1, additionally requires the initial-history usability improvement tracked as B25. This does not claim that every broader alpha requirement is already implemented.
+The broader alpha target includes local standalone operation, hosted-engine operation, optional app/history sync, multi-account XMPP, reliable immediate and scheduled sends, retained searchable history, rooms, attachments, responsive web UI, PWA/offline behavior, and manual merge restore. The current source prerelease is v0.0.1-rc.1. It includes the initial room-history recovery changes tracked as B25 and the standalone desktop packages described in section 2.1.1.
 
 Alpha is single-user: one Oiê owner per instance. Multiple accounts and devices remain supported. Built-in application authentication, multi-user hosting, XMPP E2EE, calls, and other deferred features are listed in section 16. Protocol account credentials are still needed to connect existing XMPP accounts; this does not reopen the deferred application-login design.
 
@@ -49,8 +49,7 @@ Ordinary engine restart/reconnect resumes eligible pending sends automatically. 
 
 ### 2.1.1 First desktop release candidate and alpha distribution · 2026-11-10
 
-**AGREED:** the current source prerelease is **v0.0.1-rc.0**. The current
-functional baseline and desktop packaging work continue. The first alpha remains
+**AGREED:** the first source prerelease was **v0.0.1-rc.0**. The first alpha remains
 **v0.0.1** and must include B25, usable room history during initial recovery.
 The existing recovery experience is accepted for rc.0. This explicitly extends
 the earlier functional freeze at `741e794` for the alpha; it does not require
@@ -86,7 +85,8 @@ records this behavior; B25 is not implemented by that tag. The subsequent
 packaging increment publishes rc.0 archives and a per-user shell installer for
 macOS Apple Silicon and Ubuntu Linux x86_64. The original tag remains fixed;
 packaging-tooling provenance and validation scope are recorded separately in
-the release receipt. The v0.0.1 alpha has not been published.
+the release receipt. [v0.0.1-rc.1](releases/v0.0.1-rc.1.md) includes the room
+recovery changes described in [B25](history-bootstrap-discussion.md).
 
 **AGREED:** default to installation for the current OS user. On Ubuntu, check
 for missing runtime dependencies and show the required installation commands;
@@ -805,9 +805,8 @@ Manual link stars/export, separate threads, automatic protocol relaying, multi-e
 
 ## 16. Backlog and later runtime options
 
-**First priority: B25.** Discuss and implement it after the current rc.0
-packaging work and before alpha v0.0.1. Unlike the other deferred items below,
-B25 is an alpha release requirement. IDs remain stable and do not imply order.
+**Alpha release requirement: B25.** The initial room recovery implementation is
+included in v0.0.1-rc.1. IDs remain stable and do not imply order.
 
 | ID | Item |
 | --- | --- |

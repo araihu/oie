@@ -9,13 +9,12 @@ provenance are documented in [Branding](docs/branding.md).
 The alpha targets one owner with multiple protocol accounts. Device sync remains
 planned.
 
-The current release candidate is **v0.0.1-rc.0**. The first alpha, **v0.0.1**,
-requires improved initial room-history recovery. That is the first backlog
-priority, tracked as [B25](docs/history-bootstrap-discussion.md); the current
-recovery behavior is accepted in rc.0. macOS Apple Silicon and Ubuntu Linux
-x86_64 release packages and the per-user installer are available on
-[GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.0). See the
-[release notes](docs/releases/v0.0.1-rc.0.md).
+The current release candidate is **v0.0.1-rc.1**. It includes the
+[initial room-history recovery improvements](docs/history-bootstrap-discussion.md)
+for the first alpha. macOS Apple Silicon and Ubuntu Linux x86_64 packages and
+the per-user installer are available on
+[GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.1).
+See the [release notes](docs/releases/v0.0.1-rc.1.md).
 
 - [Desktop installation on macOS and Linux](docs/installation.md)
 - [Live browser setup and development accounts](docs/live-preview.md)
