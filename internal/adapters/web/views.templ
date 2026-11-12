@@ -370,7 +370,8 @@ if v.Selected.Kind=="room" {
 }
 
 templ message(v view,m messageView,grouped,groupEnd bool){
-<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-mentioned",m.mentionsYou()),templ.KV("oie-message-grouped",grouped),templ.KV("oie-message-group-end",groupEnd)} tabindex="-1" data-message-id={m.Id} data-read-eligible={strconv.FormatBool(!m.IsOwn&&(m.Historical==nil||!*m.Historical))} data-starred={strconv.FormatBool(v.StarsKnown&&v.Stars[m.Id].Starred)} data-send-state={string(m.SendState)} data-created-at={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-created-ms={strconv.FormatInt(m.CreatedAt.UnixMilli(),10)} data-message-revision={m.RevisionId} data-message-previews-known={strconv.FormatBool(m.PresentationKnown&&m.VideosKnown)} data-message-account={m.AccountId} data-message-conversation={m.ConversationId} data-message-sender={m.Sender.Id} data-message-sender-name={m.Sender.DisplayName} data-message-groupable={strconv.FormatBool(m.Attachment==nil)} data-message-version={v.messageVersion(m)} data-message-source={originalMessageJSON(m.OriginalText)}>
+{{ position := messageTimelineTime(m.Message) }}
+<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-mentioned",m.mentionsYou()),templ.KV("oie-message-grouped",grouped),templ.KV("oie-message-group-end",groupEnd)} tabindex="-1" data-message-id={m.Id} data-read-eligible={strconv.FormatBool(!m.IsOwn&&(m.Historical==nil||!*m.Historical))} data-starred={strconv.FormatBool(v.StarsKnown&&v.Stars[m.Id].Starred)} data-send-state={string(m.SendState)} data-created-at={position.Format("2006-01-02T15:04:05Z07:00")} data-created-ms={strconv.FormatInt(position.UnixMilli(),10)} data-timeline-release?={m.TimelineAt!=nil} data-message-revision={m.RevisionId} data-message-previews-known={strconv.FormatBool(m.PresentationKnown&&m.VideosKnown)} data-message-account={m.AccountId} data-message-conversation={m.ConversationId} data-message-sender={m.Sender.Id} data-message-sender-name={m.Sender.DisplayName} data-message-groupable={strconv.FormatBool(m.Attachment==nil)} data-message-version={v.messageVersion(m)} data-message-source={originalMessageJSON(m.OriginalText)}>
 @viewerSource(v,m)
 if m.Attachment!=nil {
 <div class="oie-media-message">@card.Card(card.Config{Image:m.Attachment.PreviewUrl,ImageAlt:m.Attachment.Title,Title:m.Attachment.Title,Description:m.Attachment.Description,Density:card.DensityCompact,RootClass:"oie-media-card"})</div>
@@ -386,7 +387,7 @@ if !m.IsOwn {
 if m.IsOwn {
 <div class="oie-message-meta">
 if m.Attachment!=nil {
-<time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
+<time datetime={position.Format("2006-01-02T15:04:05Z07:00")}>{position.Format("15:04")}</time>
 }
 if pendingSendMutable(m.Message) && !v.Preview {
 @form.Form(form.Config{ID:"cancel-"+m.Id,Action:"/ui/messages/cancel",Method:"post",RootClass:"oie-cancel-form",RootAttrs:templ.Attributes{"data-oie-action":"cancel","data-cancel-message":""}}){
@@ -764,7 +765,8 @@ if !m.IsOwn && v.Selected!=nil && v.Selected.Kind=="room" {
 @messageEditIndicator(v,m)
 @messageSendIndicator(v,m)
 @messageStarIndicator(v,m.Id)
-<time data-message-time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
+{{ position := messageTimelineTime(m.Message) }}
+<time data-message-time datetime={position.Format("2006-01-02T15:04:05Z07:00")}>{position.Format("15:04")}</time>
 </div>
 @messageReactions(v,m)
 </div>
@@ -868,10 +870,11 @@ templ messageMenuTrigger(v view,id string){
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-menu-chevron"),button.WithAttrs(templ.Attributes{"data-message-menu-trigger":id,"aria-label":v.Text.MessageActions,"title":v.Text.MessageActions})){@glyph(heroicons.Icon16SolidChevronDown)}
 }
 templ viewerSource(v view,m messageView){
+{{ position := messageTimelineTime(m.Message) }}
 <template data-viewer-source={m.Id}>
 <div class="oie-viewer-source" data-viewer-source-id={m.Id}>
 @profileAvatar(v,m.AccountId,v.messageAvatarAddress(m),avatar.Config{Name:m.Sender.DisplayName,Initials:initials(m.Sender.DisplayName),Size:avatar.SizeXS,Border:true,BorderColor:v.messageAvatarBorder(m)})
-<div class="oie-viewer-sender"><strong title={m.Sender.DisplayName}>{m.Sender.DisplayName}</strong><time data-viewer-date datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("2006-01-02 15:04")}</time></div>
+<div class="oie-viewer-sender"><strong title={m.Sender.DisplayName}>{m.Sender.DisplayName}</strong><time data-viewer-date datetime={position.Format("2006-01-02T15:04:05Z07:00")}>{position.Format("2006-01-02 15:04")}</time></div>
 </div>
 </template>
 }

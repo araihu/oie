@@ -128,7 +128,7 @@
         ],
         "operationId": "searchMessages",
         "summary": "Search retained message text and available metadata",
-        "description": "Search the complete retained engine history before pagination, without network retrieval, enrichment or read-state changes. Matching follows shared-content accent/case folding, word prefixes and bounded typing-error tolerance. Current canonical message content is searched by default. Include edit history adds separately labelled verified earlier content revisions, never transport-state revisions or independent correction aliases. Current associated URLs, filenames and cached page titles/descriptions are searched only while their catalog source is current. Metadata coverage can lag immediate message-text coverage. Order is newest original message timestamp at UTC millisecond precision and UUID first, current hit before earlier content revisions, then newest revision timestamp and UUID. New arrivals or corrections can change subsequent results; pages are not a frozen snapshot.",
+        "description": "Search the complete retained engine history before pagination, without network retrieval, enrichment or read-state changes. Matching follows shared-content accent/case folding, word prefixes and bounded typing-error tolerance. Current canonical message content is searched by default. Include edit history adds separately labelled verified earlier content revisions, never transport-state revisions or independent correction aliases. Current associated URLs, filenames and cached page titles/descriptions are searched only while their catalog source is current. Metadata coverage can lag immediate message-text coverage. Unreleased schedules and scheduled sends cancelled before dispatch are excluded. Order is newest message position (`timelineAt`, falling back to `createdAt`) at UTC millisecond precision and UUID first, current hit before earlier content revisions, then newest revision timestamp and UUID. New arrivals or corrections can change subsequent results; pages are not a frozen snapshot.",
         "parameters": [
           {
             "name": "q",
@@ -219,7 +219,7 @@
         ],
         "operationId": "listSharedContent",
         "summary": "Browse shared content across retained conversations",
-        "description": "Browse the local derived catalog, newest original message time first with item UUID ties at millisecond precision. Account/conversation filters apply before pagination. Metadata search covers URL, filename, visible caption, cached preview title/description, sender, conversation and account label. A background worker indexes all retained and incoming messages. Listing registers preview enrichment only for the returned image/link references; originals still follow device preferences and explicit download operations. Document/audio entries remain URL references. Video bytes are available only through the explicit content operation; listing does not fetch video metadata or bytes. Backfill or new arrivals may insert items before the current cursor; reload to include them. A conversation filter with another account is invalid.",
+        "description": "Browse the local derived catalog, newest message position (`timelineAt`, falling back to `createdAt`) first with item UUID ties at millisecond precision. Unreleased schedules and scheduled sends cancelled before dispatch are excluded. Account/conversation filters apply before pagination. Metadata search covers URL, filename, visible caption, cached preview title/description, sender, conversation and account label. A background worker indexes visible retained and incoming messages. Listing registers preview enrichment only for the returned image/link references; originals still follow device preferences and explicit download operations. Document/audio entries remain URL references. Video bytes are available only through the explicit content operation; listing does not fetch video metadata or bytes. Backfill or new arrivals may insert items before the current cursor; reload to include them. A conversation filter with another account is invalid.",
         "parameters": [
           {
             "name": "type",
@@ -776,7 +776,7 @@
           "Messages"
         ],
         "summary": "Read a bounded timeline around a retained message",
-        "description": "Reads the target and nearest retained neighbors from the same conversation, newest first by original UTC timestamp at millisecond precision and UUID tie-break. Includes the target even with limit 1. Only local retained data is read; no provider archive queries or read receipts are triggered. Foreign or unavailable source messages return not_found. Clients should offer return to latest when hasNewer is true. A retained correction-source alias resolves to the original logical targetId with requestedTargetId identifying the requested alias. All returned items remain scoped to this conversation.",
+        "description": "Reads the target and nearest visible retained neighbors from the same conversation, newest first by timelineAt or createdAt at UTC millisecond precision and UUID tie-break. Includes the target even with limit 1. Only local retained data is read; no provider archive queries or read receipts are triggered. Foreign or unavailable source messages return not_found, including unreleased schedules and scheduled sends cancelled before dispatch. Clients should offer return to latest when hasNewer is true. A retained correction-source alias resolves to the original logical targetId with requestedTargetId identifying the requested alias. All returned items remain scoped to this conversation.",
         "parameters": [
           {
             "name": "limit",
@@ -2134,7 +2134,7 @@
         ],
         "operationId": "getOperation",
         "summary": "Reconcile a mutation after an ambiguous response",
-        "description": "A receipt proves the local mutation committed. Send receipts prove durable engine acceptance. This route exposes the receipt kinds defined by Operation. An ID without an exposed receipt returns 404. Recover the result of updatePendingMessage or sendScheduledMessageNow by replaying the original request with the same key and input.",
+        "description": "A receipt proves the local mutation committed. Send receipts prove durable engine acceptance. Request includeAcceptedMessage to read the immutable send acceptance snapshot, including the original composition and scheduled instant. This route exposes the receipt kinds defined by Operation. An ID without an exposed receipt returns 404. Recover the result of updatePendingMessage or sendScheduledMessageNow by replaying the original request with the same key and input.",
         "parameters": [
           {
             "name": "operationId",
@@ -2143,6 +2143,15 @@
             "description": "The original Idempotency-Key.",
             "schema": {
               "$ref": "#/components/schemas/ID"
+            }
+          },
+          {
+            "name": "includeAcceptedMessage",
+            "in": "query",
+            "description": "Include the original acceptance snapshot for a send_message receipt. Other receipt kinds never include a message.",
+            "schema": {
+              "type": "boolean",
+              "default": false
             }
           }
         ],
@@ -3262,7 +3271,7 @@
           "Messages"
         ],
         "summary": "Read retained messages",
-        "description": "Returns a bounded page of retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages. The default direction is older; without a cursor it reads the latest page. Newer requires a cursor and reads the nearest messages after that retained conversation-scoped anchor, without skipping to the latest page. Both directions return newest-first. nextCursor continues in the requested direction. Reads never fetch provider history or mark messages as read.",
+        "description": "Returns a bounded page of retained messages newest-first by timelineAt when present and createdAt otherwise, at UTC millisecond precision with a UUID tie-break. Includes serially recovered archive messages. Pending scheduled messages are omitted until release. The default direction is older; without a cursor it reads the latest page. Newer requires a cursor and reads the nearest messages after that retained conversation-scoped anchor, without skipping to the latest page. Both directions return newest-first. nextCursor continues in the requested direction. Reads never fetch provider history or mark messages as read.",
         "responses": {
           "200": {
             "description": "Current resource",
@@ -3291,7 +3300,7 @@
           {
             "name": "cursor",
             "in": "query",
-            "description": "Retained message UUID anchoring this conversation-scoped page. Excludes the anchor. Use the oldest returned item for older and the newest returned item for newer. Required for newer.",
+            "description": "Retained message UUID anchoring this conversation-scoped page at its current position. A schedule can move to a new position at release. Excludes the anchor. Use the oldest returned item for older and the newest returned item for newer. Required for newer.",
             "schema": {
               "$ref": "#/components/schemas/ID"
             }
@@ -3329,10 +3338,10 @@
           "Messages"
         ],
         "summary": "Accept an immediate or scheduled message",
-        "description": "Atomically commits one logical message, operation receipt and outbox intent for the complete composition, including the ordered references to staged attachments. The engine checks the destination, reply, mentions, attachment scope and effective send capabilities before acceptance. Invalid or unavailable attachments reject the whole composition. Attachment bytes are staged locally and any provider upload belongs to dispatch. Room dispatch waits for confirmed membership under an active explicit join intent.\nOmitting scheduledAt makes the intent immediately eligible. A future schedule never blocks another eligible send. A missed schedule dispatches when the owning engine and destination become available again. Idempotency includes the complete composition and normalized instant. A matching replay returns the original acceptance snapshot even after the scheduled time passes or attachment availability changes. Different input with the same key yields idempotency_conflict. Read the message for current state. Ambiguous transmission remains unknown.",
+        "description": "Atomically commits one logical message, operation receipt and outbox intent for the complete composition, including the ordered references to staged attachments. The engine checks the destination, reply, mentions, attachment scope and effective send capabilities before acceptance. Invalid or unavailable attachments reject the whole composition. Attachment bytes are staged locally and any provider upload belongs to dispatch. Room dispatch waits for confirmed membership under an active explicit join intent.\nOmitting scheduledAt makes the intent immediately eligible. A future schedule never blocks another eligible send. A missed schedule dispatches when the owning engine and destination become available again. Optional expectedReplyRevisionId and expectedReplyExcerptSha256 bind a new scheduled reply to the reviewed source and excerpt. A changed source rejects acceptance with state_conflict and replySourceChanged set to true. Idempotency includes the complete composition, normalized instant and any reply preconditions. A matching replay returns the original acceptance snapshot even after the scheduled time passes, attachment availability changes or the source is corrected. Different input with the same key yields idempotency_conflict. Read the message for current state. Ambiguous transmission remains unknown.",
         "responses": {
           "413": {
-            "description": "Request body exceeds the one MiB engine limit.",
+            "description": "The request body exceeds the one MiB engine limit or an attachment exceeds the known provider upload limit.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4328,7 +4337,7 @@
             "$ref": "#/components/responses/Conflict"
           },
           "413": {
-            "description": "File exceeds the applicable staging or known destination size limit.",
+            "description": "File exceeds the engine's attachment staging limit.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4662,7 +4671,7 @@
         }
       },
       "Conflict": {
-        "description": "Idempotency conflict, duplicate address, invalid stream cursor, or message state conflict",
+        "description": "Idempotency conflict, duplicate address, invalid stream cursor, or a message or reply source conflict",
         "content": {
           "application/problem+json": {
             "schema": {
@@ -4706,7 +4715,7 @@
         }
       },
       "SchedulingBodyTooLarge": {
-        "description": "JSON mutation exceeds the one MiB engine request limit.",
+        "description": "JSON mutation exceeds the one MiB engine request limit or a pending composition edit includes an attachment exceeding the known provider upload limit.",
         "content": {
           "application/problem+json": {
             "schema": {
@@ -5508,6 +5517,14 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "acceptedMessage": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Message"
+              }
+            ],
+            "description": "Immutable original message acceptance, available only when requested for a send_message receipt. Read the message resource separately for its current state."
           }
         }
       },
@@ -5660,6 +5677,10 @@
           },
           "currentRoomSession": {
             "$ref": "#/components/schemas/RoomSession"
+          },
+          "replySourceChanged": {
+            "type": "boolean",
+            "description": "True on a state conflict caused by an unavailable or changed reply source or excerpt when the request included expectedReplyRevisionId."
           }
         },
         "x-cli-problem-catalog": {
@@ -7907,6 +7928,17 @@
             ],
             "description": "Canonical target UUID frozen in an outgoing reply intent, including a text-only fallback. It does not imply the original is still available. Reply bodyText preserves the authored response for receipt reconciliation."
           },
+          "expectedReplyRevisionId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ID"
+              }
+            ],
+            "description": "Source revision explicitly required when the reply was scheduled or the current quote was replaced. Omitted when the caller supplied no review precondition for the current quote."
+          },
+          "expectedReplyExcerptSha256": {
+            "$ref": "#/components/schemas/ReplyExcerptSHA256"
+          },
           "originalText": {
             "type": "string",
             "description": "Exact text of the current retained content revision. Validated incoming corrections retain the logical message UUID and original creation time; prior source bodies remain retained. Copying returns this text without removing formatting or compatibility quoting."
@@ -7915,6 +7947,11 @@
             "type": "string",
             "format": "date-time",
             "description": "UTC timestamp."
+          },
+          "timelineAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC position of a released scheduled message in the conversation. Use createdAt when omitted. The original createdAt is preserved."
           },
           "isOwn": {
             "type": "boolean"
@@ -7991,7 +8028,7 @@
       },
       "MessagePage": {
         "type": "object",
-        "description": "Logical messages newest first by original UTC creation time and UUID tie-break. Validated correction sources are retained as revisions rather than additional timeline items. Use nextCursor for records in the requested direction; render each page in reverse for a chronological timeline. For newer pages, nextCursor is the newest returned UUID, while older pages use the oldest returned UUID.",
+        "description": "Visible logical messages newest first by timelineAt or createdAt at UTC millisecond precision and UUID tie-break. Unreleased schedules and scheduled sends cancelled before dispatch are excluded. Validated correction sources are retained as revisions rather than additional timeline items. Use nextCursor for records in the requested direction; render each page in reverse for a chronological timeline. For newer pages, nextCursor is the newest returned UUID, while older pages use the oldest returned UUID.",
         "additionalProperties": false,
         "required": [
           "items"
@@ -8300,6 +8337,17 @@
             ],
             "description": "Retained source UUID in this conversation. Omitted for an ordinary message. Part of the immutable send intent and operation fingerprint."
           },
+          "expectedReplyRevisionId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ID"
+              }
+            ],
+            "description": "Reviewed revision of the retained reply source. Requires replyToMessageId and scheduledAt. A changed or unavailable source rejects the new scheduled send before acceptance."
+          },
+          "expectedReplyExcerptSha256": {
+            "$ref": "#/components/schemas/ReplyExcerptSHA256"
+          },
           "attachmentIds": {
             "$ref": "#/components/schemas/StagedAttachmentIDs"
           },
@@ -8325,6 +8373,12 @@
             ]
           }
         }
+      },
+      "ReplyExcerptSHA256": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$",
+        "description": "SHA-256 of the exact UTF-8 quote excerpt, at most the first 512 Unicode code points of the displayed source body. Optional on reviewed reply mutations and requires expectedReplyRevisionId. The engine preserves it in the original acceptance when supplied.",
+        "example": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
       },
       "CancelMessage": {
         "type": "object",
@@ -8458,7 +8512,7 @@
       },
       "UpdatePendingMessage": {
         "type": "object",
-        "description": "Supply composition, scheduledAt or both. Each omitted top-level field retains its current value. Null is invalid. Replacing the composition creates a pending revision without a sent-message correction. Use sendScheduledMessageNow to make an existing schedule eligible now.",
+        "description": "Supply composition, scheduledAt or both. Each omitted top-level field retains its current value. Null is invalid. Replacing the composition creates a pending revision without a sent-message correction. The frozen reply is preserved when the target is unchanged and no reply precondition is supplied. Use sendScheduledMessageNow to make an existing schedule eligible now.",
         "additionalProperties": false,
         "minProperties": 2,
         "required": [
@@ -8470,6 +8524,17 @@
           },
           "composition": {
             "$ref": "#/components/schemas/OutgoingComposition"
+          },
+          "expectedReplyRevisionId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ID"
+              }
+            ],
+            "description": "Requires a replacement composition with a reply target. Freezes the selected source at this reviewed revision, including when the target UUID is unchanged. A changed or unavailable source rejects the edit with state_conflict and replySourceChanged set to true."
+          },
+          "expectedReplyExcerptSha256": {
+            "$ref": "#/components/schemas/ReplyExcerptSHA256"
           },
           "scheduledAt": {
             "$ref": "#/components/schemas/ScheduledSendInstant"

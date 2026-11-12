@@ -47,6 +47,7 @@ type Message struct {
 	ProjectionSourceID                        ID                   `json:"-"`
 	Correction                                *MessageCorrection   `json:"-"`
 	CreatedAt                                 time.Time
+	TimelineAt                                *time.Time `json:",omitempty"`
 	IsOwn                                     bool
 	SendState                                 string
 	ProviderID                                string
@@ -65,6 +66,13 @@ type OutgoingComposition struct {
 	ReplyTo       ID                 `json:",omitempty"`
 	Mentions      []MentionSelection `json:",omitempty"`
 	AttachmentIDs []ID               `json:",omitempty"`
+}
+
+func (m Message) TimelineTime() time.Time {
+	if m.TimelineAt != nil {
+		return *m.TimelineAt
+	}
+	return m.CreatedAt
 }
 
 type StagedAttachment struct {

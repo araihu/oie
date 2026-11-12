@@ -220,49 +220,5 @@ func (s *Store) ReplayMessageMutation(ctx context.Context, id domain.ID, kind, f
 // transaction. A concurrent leave either precedes this claim or observes work
 // already dispatching; it cannot silently reopen a queued send.
 func (s *Store) ClaimRoomMessage(ctx context.Context, id, intentRevision, revision domain.ID, at time.Time) (domain.Message, error) {
-	tx, q, err := begin(ctx, s)
-	if err != nil {
-		return domain.Message{}, err
-	}
-	defer func() { _ = tx.Rollback() }()
-	if err = q.AcquireWriteLock(ctx); err != nil {
-		return domain.Message{}, err
-	}
-	row, err := q.GetMessage(ctx, string(id))
-	if err != nil {
-		return domain.Message{}, notFound(err)
-	}
-	m, err := decodeMessage(row)
-	if err != nil {
-		return m, err
-	}
-	if !m.IsOwn || m.SendState != "queued" {
-		return m, application.StateConflict{Current: m}
-	}
-	c, err := q.GetConversation(ctx, string(m.ConversationID))
-	if err != nil {
-		return m, notFound(err)
-	}
-	conversation, err := decodeConversation(c)
-	if err != nil {
-		return m, err
-	}
-	if conversation.Kind != "room" || conversation.AccountID != m.AccountID {
-		return m, application.ErrInvalid
-	}
-	intent, err := q.GetRoomIntent(ctx, string(m.ConversationID))
-	if errors.Is(err, sql.ErrNoRows) {
-		return m, application.StateConflict{Current: m}
-	}
-	if err != nil {
-		return m, err
-	}
-	if intent.Active != 1 || intent.RevisionID != string(intentRevision) {
-		return m, application.StateConflict{Current: m}
-	}
-	m, err = updateMessage(ctx, q, m, "dispatching", revision, at, at)
-	if err != nil {
-		return m, err
-	}
-	return m, tx.Commit()
+	return s.claimDispatchMessage(ctx, id, "", intentRevision, revision, at, true, false)
 }

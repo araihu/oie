@@ -133,7 +133,7 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 		status, code = http.StatusConflict, "idempotency_conflict"
 	case errors.Is(err, application.ErrAccountExists):
 		status, code = http.StatusConflict, "account_exists"
-	case errors.Is(err, application.ErrStateConflict), errors.Is(err, application.ErrRoomNotJoined):
+	case errors.Is(err, application.ErrStateConflict), errors.Is(err, application.ErrRoomNotJoined), errors.Is(err, application.ErrReplySourceChanged):
 		status, code = http.StatusConflict, "state_conflict"
 	case errors.Is(err, application.ErrProtocolUnavailable):
 		status, code = http.StatusServiceUnavailable, "protocol_unavailable"
@@ -171,6 +171,9 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 	var starConflict application.StarConflict
 	var conflict application.StateConflict
 	switch {
+	case errors.Is(err, application.ErrReplySourceChanged):
+		changed := true
+		problem.ReplySourceChanged = &changed
 	case errors.As(err, &roomConflict):
 		current := roomSession(roomConflict.Current)
 		problem.CurrentRoomSession = &current
@@ -369,10 +372,19 @@ func (s *Server) GetOperation(ctx context.Context, r engineapi.GetOperationReque
 	if op.Kind == "update_pending_message" || op.Kind == "send_scheduled_message_now" {
 		return nil, application.ErrNotFound
 	}
-	return engineapi.GetOperation200JSONResponse{
+	receipt := engineapi.GetOperation200JSONResponse{
 		Id: string(op.ID), ResourceId: string(op.ResourceID), CreatedAt: op.CreatedAt,
 		Kind: engineapi.OperationKind(op.Kind), Status: "succeeded",
-	}, nil
+	}
+	if op.Kind == "send_message" && r.Params.IncludeAcceptedMessage != nil && *r.Params.IncludeAcceptedMessage {
+		accepted, err := s.engine.AcceptedSendMessage(ctx, op.ID)
+		if err != nil {
+			return nil, err
+		}
+		snapshot := message(accepted)
+		receipt.AcceptedMessage = &snapshot
+	}
+	return receipt, nil
 }
 
 func (s *Server) StreamEvents(ctx context.Context, r engineapi.StreamEventsRequestObject) (engineapi.StreamEventsResponseObject, error) {

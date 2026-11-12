@@ -269,6 +269,7 @@ templ scheduleFields(v view) {
 templ scheduleDialog(v view) {
 	<dialog class="oie-schedule-dialog" data-schedule-dialog aria-labelledby="schedule-dialog-title"
 		data-create={v.Text.Schedule} data-update={v.Text.Reschedule} data-time-invalid={v.Text.ScheduleTimeInvalid} data-time-ambiguous={v.Text.ScheduleTimeAmbiguous}
+		data-review-changed={v.Text.ScheduleReviewChanged} data-unavailable={v.Text.ScheduleUnavailable}
 		data-attachment-failed={v.Text.AttachmentFailed} data-attachment-limit={v.Text.AttachmentLimit} data-remove-attachment={v.Text.RemoveAttachment}>
 		<form method="dialog" data-schedule-confirm>
 			<h2 id="schedule-dialog-title">{v.Text.Schedule}</h2>

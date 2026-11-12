@@ -126,9 +126,10 @@ if next:=v.messageSearchNext();next!="" {
 </div>
 }
 templ messageSearchHit(v view,hit engineapi.MessageSearchHit){
+{{ position := messageTimelineTime(hit.Message) }}
 <article data-message-search-hit={hit.Message.Id+":"+hit.MatchedRevisionId} data-search-message={hit.Message.Id} data-search-revision={hit.MatchedRevisionId} data-search-historical={strconv.FormatBool(hit.Historical)} data-search-match-kind={string(hit.MatchKind)}>
 @link.Link(v.messageSearchSourceHref(hit.Message),link.WithRootClass("oie-message-search-hit"),link.WithAttrs(templ.Attributes{"data-message-search-source":""})){
-<div class="oie-message-search-hit-heading"><strong>{hit.ConversationTitle}</strong><time data-message-search-time datetime={hit.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{hit.Message.CreatedAt.Format("2006-01-02 15:04")}</time></div>
+<div class="oie-message-search-hit-heading"><strong>{hit.ConversationTitle}</strong><time data-message-search-time datetime={position.Format("2006-01-02T15:04:05Z07:00")}>{position.Format("2006-01-02 15:04")}</time></div>
 <small>{hit.AccountLabel} · {hit.Message.Sender.DisplayName}</small>
 if hit.Historical {
 @badge.Badge(badge.Config{Label:v.Text.SearchPriorVersion,Size:badge.SizeSM,Appearance:badge.AppearanceSoft})

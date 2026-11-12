@@ -630,12 +630,58 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConversationPreferenceResult'
+  /ui/reply-source:
+    get:
+      operationId: prepareBrowserReply
+      tags: [Messages]
+      summary: Read the retained source for a reply preview
+      description: Returns the canonical source and revision to bind a reviewed scheduled reply to the displayed excerpt.
+      parameters:
+      - in: query
+        name: engineId
+        required: true
+        description: Engine whose retained source is displayed.
+        schema: {$ref: './openapi.yaml#/components/schemas/ID'}
+      - in: query
+        name: accountId
+        required: true
+        description: Account that owns the retained source.
+        schema: {$ref: './openapi.yaml#/components/schemas/ID'}
+      - in: query
+        name: conversationId
+        required: true
+        description: Conversation containing the source for the quote.
+        schema: {$ref: './openapi.yaml#/components/schemas/ID'}
+      - in: query
+        name: messageId
+        required: true
+        description: Retained message or known canonical alias in the selected conversation.
+        schema: {$ref: './openapi.yaml#/components/schemas/ID'}
+      - in: query
+        name: lang
+        description: Preferred presentation language.
+        schema: {type: string, enum: [en, pt-BR]}
+      responses:
+        '200':
+          description: Source, revision and plain-text preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplySource'
+        '400':
+          description: Invalid message or conversation identifiers
+        '404':
+          description: Source unavailable within the selected conversation
+        '409':
+          description: Engine changed or source preparation is unavailable in demo mode
+        '503':
+          description: Source or engine temporarily unavailable
   /ui/messages/reconcile:
     post:
       operationId: reconcileBrowserSubmission
       tags: [Messages]
       summary: Check acceptance of an immutable pending submission
-      description: Read-only lookup of an existing engine operation and message. Never creates or dispatches a message. Requires the same CSRF token, engine, account, conversation, operation key, text, reply target and mention selections as the original send. Returns acceptance only when the complete intent matches. A missing receipt does not prove that the original request cannot still arrive.
+      description: Read-only lookup of the original engine acceptance snapshot. Never creates or dispatches a message. Requires the same CSRF token, engine, account, conversation, operation key, text, reply target and any reviewed revision and excerpt hash, mention selections, ordered attachment IDs and scheduled instant as the original send. Returns acceptance only when the complete intent matches. A missing receipt does not prove that the original request cannot still arrive.
       requestBody:
         required: true
         description: Frozen original submission, scoped to its engine and conversation.
@@ -880,6 +926,41 @@ components:
           format: uuid
           description: New key for a distinct explicit action after resolution.
           example: 019a5df0-0000-7000-8000-000000000006
+    ReplySource:
+      type: object
+      description: Scoped source revision and exact bounded text displayed for a reply preview.
+      additionalProperties: false
+      required: [engineId, accountId, conversationId, messageId, requestedMessageId, revisionId, senderName, excerpt, excerptSha256]
+      properties:
+        engineId:
+          $ref: './openapi.yaml#/components/schemas/ID'
+        accountId:
+          $ref: './openapi.yaml#/components/schemas/ID'
+        conversationId:
+          $ref: './openapi.yaml#/components/schemas/ID'
+        messageId:
+          $ref: './openapi.yaml#/components/schemas/ID'
+        requestedMessageId:
+          $ref: './openapi.yaml#/components/schemas/ID'
+        revisionId:
+          $ref: './openapi.yaml#/components/schemas/ID'
+        senderName:
+          type: string
+        excerpt:
+          type: string
+          maxLength: 512
+        excerptSha256:
+          $ref: './openapi.yaml#/components/schemas/ReplyExcerptSHA256'
+      example:
+        engineId: 019a5df0-0000-7000-8000-000000000001
+        accountId: 019a5df0-0000-7000-8000-000000000002
+        conversationId: 019a5df0-0000-7000-8000-000000000003
+        messageId: 019a5df0-0000-7000-8000-000000000004
+        requestedMessageId: 019a5df0-0000-7000-8000-000000000004
+        revisionId: 019a5df0-0000-7000-8000-000000000005
+        senderName: Juliet
+        excerpt: hello
+        excerptSha256: 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
     PendingSubmission:
       example:
         csrf: browser-csrf-token
@@ -920,17 +1001,32 @@ components:
         originalText:
           example: Hello
           type: string
-          minLength: 1
+          minLength: 0
           maxLength: 16384
-          description: Exact authored body before any protocol reply fallback.
+          description: Exact authored body before any protocol reply fallback. May be empty when the original submission includes attachments.
         replyToMessageId:
           example: 019a5df0-0000-7000-8000-000000000008
           type: string
           description: Original reply target UUID, or empty for no reply.
+        expectedReplyRevisionId:
+          example: 019a5df0-0000-7000-8000-000000000009
+          type: string
+          format: uuid
+          description: Original reviewed source revision when scheduling a reply.
+        expectedReplyExcerptSha256:
+          $ref: './openapi.yaml#/components/schemas/ReplyExcerptSHA256'
         mentions:
           example: '[]'
           type: string
           description: JSON-encoded original mention selections.
+        attachmentIds:
+          example: '[]'
+          type: string
+          description: JSON-encoded original ordered attachment IDs.
+        scheduledAt:
+          example: '2026-11-07T12:00:00Z'
+          type: string
+          description: Original scheduled RFC 3339 instant, or empty for immediate submission.
         lang:
           example: en
           type: string

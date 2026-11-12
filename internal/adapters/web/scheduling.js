@@ -17,6 +17,7 @@ window.OieRuntime.register('scheduling', life => {
       if (!results || selectionKey(values) === selectionKey(committed)) {
         request = null;
         results?.removeAttribute('aria-busy');
+        if (results) results.inert = false;
         return;
       }
       const controller = new AbortController();
@@ -26,6 +27,7 @@ window.OieRuntime.register('scheduling', life => {
       url.searchParams.delete(name);
       for (const value of values) url.searchParams.append(name, value);
       results.setAttribute('aria-busy', 'true');
+      results.inert = true;
       const timeout = life.timeout(() => controller.abort(), 10000);
       try {
         const response = await life.fetch('/ui/refresh' + url.search, {cache: 'no-store', signal: controller.signal});
@@ -53,7 +55,10 @@ window.OieRuntime.register('scheduling', life => {
       } finally {
         clearTimeout(timeout);
         if (request === controller) request = null;
-        if (!request) results.removeAttribute('aria-busy');
+        if (!request) {
+          results.removeAttribute('aria-busy');
+          results.inert = false;
+        }
       }
     });
   }
@@ -67,52 +72,79 @@ window.OieRuntime.register('scheduling', life => {
     const status = drawer.querySelector('[data-conversation-schedules-status]');
     const retry = drawer.querySelector('[data-conversation-schedules-retry]');
     const more = drawer.querySelector('[data-conversation-schedules-more]');
-    let request, open = false, nextCursor = '', failedCursor = '';
+    let request, open = false, nextCursor = '', failedCursor = '', loadedPages = 0, retryRefresh = false;
+    let drawerGeneration = 0;
     const stop = () => {
       request?.abort();
       request = null;
       results.removeAttribute('aria-busy');
     };
     life.cleanup(stop);
-    async function loadConversationSchedules(cursor = '', restore) {
+    async function fetchConversationSchedules(cursor, signal) {
+      const query = new URLSearchParams({engineId, conversationId, lang: document.documentElement.lang});
+      if (cursor) query.set('cursor', cursor);
+      const response = await life.fetch('/ui/scheduling/conversation?' + query, {signal});
+      if (!response.ok) throw Error('conversation schedules');
+      const html = new DOMParser().parseFromString(await response.text(), 'text/html');
+      const page = html.querySelector('[data-conversation-schedule-page]');
+      if (page?.dataset.engineId !== engineId || page.dataset.conversationId !== conversationId) throw Error('conversation scope');
+      for (const link of page.querySelectorAll('[data-conversation-schedule-edit]')) {
+        const url = new URL(location.href);
+        url.searchParams.set('chat', conversationId);
+        url.searchParams.set('editSchedule', link.dataset.conversationScheduleEdit);
+        url.searchParams.delete('inbox');
+        url.searchParams.delete('open');
+        link.href = url.pathname + url.search;
+      }
+      return page;
+    }
+    function appendScheduleRows(list, page) {
+      const nextList = page.querySelector('[data-schedule-agenda]');
+      if (!list || !nextList) return;
+      const seen = new Set([...list.children].map(row => row.dataset.scheduledRow));
+      for (const row of [...nextList.children]) {
+        if (seen.has(row.dataset.scheduledRow)) continue;
+        list.append(row);
+        seen.add(row.dataset.scheduledRow);
+      }
+    }
+    async function loadConversationSchedules(cursor = '', refresh = false) {
       if (request) return;
       const controller = new AbortController();
       request = controller;
-      const query = new URLSearchParams({engineId, conversationId, lang: document.documentElement.lang});
-      if (cursor) query.set('cursor', cursor);
       results.setAttribute('aria-busy', 'true');
       status.textContent = drawer.dataset.loading;
-      status.hidden = !!restore;
+      status.hidden = refresh;
       try {
-        const response = await life.fetch('/ui/scheduling/conversation?' + query, {signal: controller.signal});
-        if (!response.ok) throw Error('conversation schedules');
-        const html = new DOMParser().parseFromString(await response.text(), 'text/html');
-        const page = html.querySelector('[data-conversation-schedule-page]');
-        if (request !== controller || life.signal.aborted) return;
-        if (page?.dataset.engineId !== engineId || page.dataset.conversationId !== conversationId) throw Error('conversation scope');
-        for (const link of page.querySelectorAll('[data-conversation-schedule-edit]')) {
-          const url = new URL(location.href);
-          url.searchParams.set('chat', conversationId);
-          url.searchParams.set('editSchedule', link.dataset.conversationScheduleEdit);
-          url.searchParams.delete('inbox');
-          url.searchParams.delete('open');
-          link.href = url.pathname + url.search;
+        const first = await fetchConversationSchedules(cursor, controller.signal);
+        const pages = [first];
+        while (refresh && pages.length < loadedPages && pages.at(-1).dataset.nextCursor) {
+          pages.push(await fetchConversationSchedules(pages.at(-1).dataset.nextCursor, controller.signal));
         }
-        const restoreFocus = restore?.button === document.activeElement;
+        if (request !== controller || life.signal.aborted) return;
+        const focused = document.activeElement;
+        const focusedRow = focused?.closest('[data-scheduled-row]');
+        const rowIndex = [...results.querySelectorAll('[data-scheduled-row]')].indexOf(focusedRow);
         if (cursor) {
-          const list = results.querySelector('[data-schedule-agenda]');
-          const nextList = page.querySelector('[data-schedule-agenda]');
-          if (nextList) list.append(...nextList.children);
+          appendScheduleRows(results.querySelector('[data-schedule-agenda]'), first);
+          loadedPages++;
         } else {
-          results.replaceChildren(...page.children);
+          const list = first.querySelector('[data-schedule-agenda]');
+          for (const page of pages.slice(1)) appendScheduleRows(list, page);
+          results.replaceChildren(...first.children);
+          loadedPages = pages.length;
         }
         window.OieTime.localize(results);
         document.dispatchEvent(new Event('oie:navigation-upgrade'));
-        nextCursor = page.dataset.nextCursor || '';
-        if (restoreFocus) {
-          const row = results.querySelector(`[data-scheduled-row="${CSS.escape(restore.id)}"]`);
-          const action = row?.querySelector(`[data-conversation-schedule-command="${CSS.escape(restore.command)}"]`);
-          (action || results.querySelector('[data-conversation-schedule-edit]') || drawer.querySelector('a')).focus({preventScroll: true});
+        nextCursor = pages.at(-1).dataset.nextCursor || '';
+        if (rowIndex >= 0 && !focused.isConnected) {
+          const rows = [...results.querySelectorAll('[data-scheduled-row]')];
+          const same = rows.find(row => row.dataset.scheduledRow === focusedRow.dataset.scheduledRow);
+          const nearby = rows[Math.min(rowIndex, rows.length - 1)];
+          const command = focused.dataset.conversationScheduleCommand;
+          const selector = command ? `[data-conversation-schedule-command="${CSS.escape(command)}"]` :
+            `a[href="${CSS.escape(focused.getAttribute('href') || '')}"]`;
+          (same?.querySelector(selector) || (same || nearby)?.querySelector('[data-conversation-schedule-edit]') || drawer.querySelector('a')).focus({preventScroll: true});
         } else if ((!nextCursor && document.activeElement === more) || document.activeElement === retry) {
           results.tabIndex = -1;
           results.focus({preventScroll: true});
@@ -123,7 +155,9 @@ window.OieRuntime.register('scheduling', life => {
       } catch {
         if (request !== controller || life.signal.aborted) return;
         failedCursor = cursor;
+        retryRefresh = refresh;
         status.textContent = drawer.dataset.unavailable;
+        status.hidden = false;
         more.hidden = true;
         retry.hidden = false;
         if (document.activeElement === document.body) retry.focus({preventScroll: true});
@@ -133,9 +167,12 @@ window.OieRuntime.register('scheduling', life => {
     }
     life.on(window, 'drawer:open', event => {
       if (event.detail?.id !== drawerID) return;
+      drawerGeneration++;
       open = true;
       stop();
+      drawerEditRequest?.request.abort();
       results.replaceChildren();
+      loadedPages = 0;
       retry.hidden = true;
       more.hidden = true;
       loadConversationSchedules();
@@ -143,25 +180,23 @@ window.OieRuntime.register('scheduling', life => {
     for (const name of ['drawer:close', 'drawer:close-request']) {
       life.on(window, name, event => {
         if (event.detail?.id !== drawerID) return;
+        const closingGeneration = drawerGeneration;
         const closingRequest = request;
         const closingEdit = drawerEditRequest;
         life.raf(() => {
-          if (event.defaultPrevented) return;
+          if (event.defaultPrevented || closingGeneration !== drawerGeneration) return;
           open = false;
           if (request === closingRequest) stop();
           if (closingEdit && drawerEditRequest === closingEdit) closingEdit.request.abort();
         });
       });
     }
-    life.on(retry, 'click', () => loadConversationSchedules(failedCursor));
+    life.on(retry, 'click', () => loadConversationSchedules(failedCursor, retryRefresh));
     life.on(more, 'click', () => { if (nextCursor) loadConversationSchedules(nextCursor); });
-    life.on(drawer, 'oie:schedule-saved', ({detail: form}) => {
+    life.on(drawer, 'oie:schedule-refresh', () => {
       if (!open) return;
-      const id = form.elements.namedItem('messageId').value;
-      const command = form.dataset.scheduleCommand;
-      const row = results.querySelector(`[data-scheduled-row="${CSS.escape(id)}"]`);
       stop();
-      loadConversationSchedules('', {id, command, button: row?.querySelector(`[data-conversation-schedule-command="${command}"]`)});
+      loadConversationSchedules('', true);
     });
     life.on(document, 'htmx:before:request', event => {
       const ctx = event.detail.ctx;
@@ -211,13 +246,12 @@ window.OieRuntime.register('scheduling', life => {
   const previewFiles = dialog.querySelector('[data-schedule-preview-files]');
   const quote = dialog.querySelector('[data-schedule-quote]');
   const submit = dialog.querySelector('[data-schedule-submit]');
-  let activeForm, agendaReturnFocus, files = [], locked = false;
-  const zone = () => window.OieTime.timeZone();
+  let activeForm, reviewedComposition, reviewZone, agendaReturnFocus, files = [], locked = false;
   const data = document.body.dataset;
 
   function wallTime(date) {
     const formatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: zone(), hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+      timeZone: reviewZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit',
     });
     const values = Object.fromEntries(formatter.formatToParts(date).map(part => [part.type, part.value]));
@@ -248,13 +282,13 @@ window.OieRuntime.register('scheduling', life => {
       offsets.add(new Option(dialog.dataset.timeAmbiguous, ''));
       for (const instant of candidates) {
         const date = new Date(instant);
-        const label = window.OieTime.format(date, {hour: 'numeric', minute: 'numeric', timeZoneName: 'shortOffset'});
+        const label = window.OieTime.format(date, {hour: 'numeric', minute: 'numeric', timeZone: reviewZone, timeZoneName: 'shortOffset'});
         offsets.add(new Option(label, String(instant)));
       }
       offsets.value = candidates.includes(Number(previous)) ? previous : '';
     }
     const selected = candidates.length === 1 ? candidates[0] : Number(offsets.value);
-    previewTime.textContent = selected ? window.OieTime.format(new Date(selected), {hour: 'numeric', minute: '2-digit'}) : '';
+    previewTime.textContent = selected ? window.OieTime.format(new Date(selected), {hour: 'numeric', minute: '2-digit', timeZone: reviewZone}) : '';
     return selected;
   }
 
@@ -371,6 +405,7 @@ window.OieRuntime.register('scheduling', life => {
 
   function open(form, initial, text, reply, links, reschedule) {
     activeForm = form;
+    reviewZone = window.OieTime.timeZone();
     title.textContent = submit.textContent = reschedule ? dialog.dataset.update : dialog.dataset.create;
     error.hidden = true;
     offsets.value = '';
@@ -392,7 +427,7 @@ window.OieRuntime.register('scheduling', life => {
     previewFiles.replaceChildren(...links);
     const requested = Date.parse(initial);
     localTime.value = wallTime(new Date(requested > Date.now() + 60000 ? requested : Date.now() + 3600000));
-    dialog.querySelector('[data-schedule-zone]').textContent = zone().replaceAll('_', ' ');
+    dialog.querySelector('[data-schedule-zone]').textContent = reviewZone.replaceAll('_', ' ');
     updateTime();
     dialog.showModal();
     localTime.focus();
@@ -401,14 +436,16 @@ window.OieRuntime.register('scheduling', life => {
   life.on(document, 'oie:schedule-compose', () => {
     const current = snapshot();
     if (current.blocked || (!current.text.trim() && !current.files.length)) return;
+    reviewedComposition = current.review;
     const editing = composer.hasAttribute('data-editing-schedule');
     const original = document.getElementById('schedule-edit-data');
     open(composer, original ? JSON.parse(original.textContent).scheduledAt : '', current.text, current.reply, current.files.map(file => fileLink(file, true)), editing);
   });
   function runScheduleAction(row, command, trigger) {
     if (!row.isConnected || dialog.open) return;
-    const scope = row.closest('[data-conversation-schedules-results]') || row;
-    if (scope.getAttribute('aria-busy') === 'true' || scope.querySelector('form[data-busy="true"]') || drawerEditRequest) return;
+    const drawerResults = row.closest('[data-conversation-schedules-results]');
+    const results = drawerResults || row.closest('#scheduled-results');
+    if (results?.getAttribute('aria-busy') === 'true' || (drawerResults || row).querySelector('form[data-busy="true"]') || drawerEditRequest) return;
     const form = row.querySelector(`form[data-schedule-command="${CSS.escape(command)}"]`);
     if (!form) return;
     trigger.focus({preventScroll: true});
@@ -455,13 +492,26 @@ window.OieRuntime.register('scheduling', life => {
   life.on(offsets, 'change', () => { error.hidden = true; updateTime(); });
   life.on(dialog.querySelector('[data-schedule-confirm]'), 'submit', event => {
     event.preventDefault();
+    if (!activeForm?.isConnected) {
+      dialog.close();
+      errorToast(dialog.dataset.unavailable);
+      return;
+    }
     const instant = updateTime();
     if (!instant) {
       error.textContent = offsets.hidden ? dialog.dataset.timeInvalid : dialog.dataset.timeAmbiguous;
       error.hidden = false;
       return;
     }
-    if (activeForm === composer && snapshot().blocked) return;
+    if (activeForm === composer) {
+      const current = snapshot();
+      if (current.blocked) return;
+      if (current.review !== reviewedComposition) {
+        dialog.close();
+        errorToast(dialog.dataset.reviewChanged);
+        return;
+      }
+    }
     const input = activeForm.elements.namedItem('scheduledAt');
     input.value = new Date(instant).toISOString();
     dialog.close();

@@ -332,7 +332,8 @@ This reachability restriction is temporary. Full centralized sync should eventua
 **AGREED:** The composer uses Goshtoso Split Button for Send and Schedule.
 Scheduling captures the full composition, including text, links, images and
 other supported attachments and message content. The scheduling dialog previews
-the outgoing message bubble for final review. Edit opens that composition
+the outgoing message bubble for final review. A changed quote requires a fresh
+review. Edit opens that composition
 in the same composer and restores any prior draft when the user saves or
 discards the edit. Scheduled items offer Send now, which makes the same intent
 eligible immediately and uses the same atomic cutoff as edit, reschedule and
@@ -355,8 +356,13 @@ claim, before the first provider attempt. The engine stores staged bytes and
 their SHA-256 in its data directory and keeps the dispatch instant in UTC.
 This increment accepts up to 16 files per message, each at most 20 MiB.
 An advertised provider limit can be lower. XMPP dispatch uploads the files
-and sends their ordered HTTPS links in the outgoing message body. Staging
-retention and resumable transfer remain open under O09. The
+and sends their ordered HTTPS links in the outgoing message body. After a
+restart, a claimed send can retry when the engine knows that no stanza write
+began. It keeps the original mutation cutoff. If a write may have begun, the
+outcome stays unknown. Staging retention and resumable transfer remain open
+under O09. Pending schedules stay out of conversation history, search and shared
+content until release. `timelineAt` records when a scheduled message enters
+history. `createdAt` still records its original acceptance. The
 [scheduling prototype](prototypes/message-scheduling.html) demonstrates the
 agreed controls with example data.
 

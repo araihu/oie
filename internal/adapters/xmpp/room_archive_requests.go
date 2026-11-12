@@ -24,6 +24,7 @@ func archiveSearchKey(c domain.Conversation, query string) string {
 func (m *Manager) isolatedRoomPage(ctx context.Context, host application.RoomArchiveHost, e *entry, s *mx.Session, c domain.Conversation, result domain.RoomArchiveResult, request domain.RoomArchiveRequest) (domain.RoomArchiveResult, error) {
 	req := archivePageRequest{Backward: true, Prepend: true}
 	var searchKey string
+	var anchorTime time.Time
 	if request.Action == "search" {
 		if result.Archive.TextSearch != "supported" {
 			result.Outcome = "unsupported"
@@ -41,11 +42,12 @@ func (m *Manager) isolatedRoomPage(ctx context.Context, host application.RoomArc
 		}
 	} else {
 		anchor := request.Anchor
+		anchorTime = anchor.TimelineTime().UTC()
 		if anchor.ArchiveScope == c.Address {
 			req.Before = anchor.ArchiveID
 		}
 		if req.Before == "" {
-			req.End = anchor.CreatedAt.UTC()
+			req.End = anchorTime
 		}
 		if request.Action == "context" {
 			req.Limit = archivePageSize / 2
@@ -53,7 +55,7 @@ func (m *Manager) isolatedRoomPage(ctx context.Context, host application.RoomArc
 	}
 	page, err := m.readArchivePage(ctx, e, s, c.Address, req)
 	if errors.Is(err, errArchiveCursor) && request.Anchor != nil && req.Before != "" {
-		req.Before, req.End = "", request.Anchor.CreatedAt.UTC()
+		req.Before, req.End = "", anchorTime
 		page, err = m.readArchivePage(ctx, e, s, c.Address, req)
 	}
 	if err != nil {
@@ -63,14 +65,14 @@ func (m *Manager) isolatedRoomPage(ctx context.Context, host application.RoomArc
 		return result, err
 	}
 	if request.Action == "context" {
-		next := archivePageRequest{Limit: req.Limit, Start: request.Anchor.CreatedAt.UTC()}
+		next := archivePageRequest{Limit: req.Limit, Start: anchorTime}
 		if req.Before != "" {
 			next.After, next.Start = req.Before, time.Time{}
 			next.ReactionAnchor = page.nextReactionAnchor(false)
 		}
 		forward, err := m.readArchivePage(ctx, e, s, c.Address, next)
 		if errors.Is(err, errArchiveCursor) && next.After != "" {
-			next.After, next.Start, next.ReactionAnchor = "", request.Anchor.CreatedAt.UTC(), domain.ArchiveReactionAnchor{}
+			next.After, next.Start, next.ReactionAnchor = "", anchorTime, domain.ArchiveReactionAnchor{}
 			forward, err = m.readArchivePage(ctx, e, s, c.Address, next)
 		}
 		if err != nil {

@@ -251,6 +251,11 @@ func (m *Manager) CapabilityEvidence(_ context.Context, a domain.Account) (domai
 func hasFeature(service domain.DiscoveredService, feature string) bool {
 	return slices.Contains(service.Features, feature)
 }
+
+func serverServiceSupports(service domain.DiscoveredService, feature string) bool {
+	return (service.Scope == "server" || service.Scope == "service") && service.State == "known" && hasFeature(service, feature)
+}
+
 func featureEvidence(d domain.CapabilityDiscovery, scope, feature string) string {
 	known := false
 	for _, v := range d.Services {
@@ -268,7 +273,7 @@ func featureEvidence(d domain.CapabilityDiscovery, scope, feature string) string
 }
 func serviceEvidence(d domain.CapabilityDiscovery, feature string) string {
 	for _, v := range d.Services {
-		if (v.Scope == "server" || v.Scope == "service") && v.State == "known" && hasFeature(v, feature) {
+		if serverServiceSupports(v, feature) {
 			return "supported"
 		}
 	}

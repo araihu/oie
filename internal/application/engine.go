@@ -94,6 +94,7 @@ type Engine struct {
 	previewWork       chan struct{}
 	draftPreviewSlots chan struct{}
 	work              chan struct{}
+	attachmentWork    chan struct{}
 	roomWork          chan struct{}
 	eventMu           sync.Mutex
 	eventWake         chan struct{}
@@ -105,7 +106,7 @@ func New(repo Repository, role string, ids NewID, now func() time.Time) (*Engine
 	}
 	return &Engine{
 		repo: repo, role: role, newID: ids, now: now,
-		work: make(chan struct{}, 1), roomWork: make(chan struct{}, 1),
+		work: make(chan struct{}, 1), attachmentWork: make(chan struct{}, 1), roomWork: make(chan struct{}, 1),
 		previewWork: make(chan struct{}, 1), draftPreviewSlots: make(chan struct{}, 2), eventWake: make(chan struct{}),
 	}, nil
 }

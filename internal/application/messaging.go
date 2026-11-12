@@ -58,7 +58,7 @@ type Outgoing struct {
 	Mentions              []domain.MessageMention
 	Correction            *domain.OutgoingCorrection
 	Attachments           []OutgoingAttachment
-	RecordWireText        func(context.Context, string) error
+	RecordWireAttempt     func(context.Context, string) error
 }
 
 // Outcomes distinguish definitely unsent failures from ambiguous external effects.
@@ -81,6 +81,12 @@ type Protocols interface {
 	Disconnect(context.Context, domain.Account) (domain.Connection, error)
 	Connection(context.Context, domain.Account) (domain.Connection, error)
 	Send(context.Context, domain.Account, Outgoing) string
+}
+
+// OriginalWireAttemptProtocol identifies adapters that require a supplied
+// RecordWireAttempt callback to succeed before writing the original message.
+type OriginalWireAttemptProtocol interface {
+	RequiresOriginalWireAttempt(domain.Account) bool
 }
 type ConversationQuery struct {
 	Cursor                              int64
@@ -127,6 +133,17 @@ type MessagingRepository interface {
 	InterruptedMessages(context.Context) ([]domain.Message, error)
 	TransitionMessage(context.Context, domain.ID, string, string, domain.ID, time.Time, time.Time) (domain.Message, error)
 	RecordConnection(context.Context, domain.Connection) error
+}
+
+type PendingMessageCursor struct {
+	NextAttemptAt time.Time
+	MessageID     domain.ID
+}
+
+type attachmentOutboxRepository interface {
+	PendingMessagesByAttachments(context.Context, time.Time, bool, PendingMessageCursor) ([]domain.Message, PendingMessageCursor, error)
+	ClaimDispatchMessage(ctx context.Context, id, expected, roomIntent, revision domain.ID, at time.Time, guardWire bool) (domain.Message, error)
+	RecoverInterruptedMessage(ctx context.Context, id, expected, revision domain.ID, at time.Time) error
 }
 
 // Physical sources retain the body addressed by a client wire identity. A
@@ -273,11 +290,22 @@ func (e *Engine) SendMessageWithMentions(ctx context.Context, key, conversationI
 }
 
 func (e *Engine) SendComposition(ctx context.Context, key, conversationID domain.ID, in domain.OutgoingComposition, at *time.Time) (MessageResult, error) {
+	return e.SendCompositionWithReplyReview(ctx, key, conversationID, in, at, ReplyReview{})
+}
+
+func (e *Engine) SendCompositionWithReplyReview(ctx context.Context, key, conversationID domain.ID, in domain.OutgoingComposition, at *time.Time, review ReplyReview) (result MessageResult, err error) {
 	if !validID(key) || !validID(conversationID) {
 		return MessageResult{}, ErrInvalid
 	}
 	if err := validateComposition(in); err != nil {
 		return MessageResult{}, err
+	}
+	at, err = normalizeScheduledAt(at)
+	if err != nil {
+		return MessageResult{}, err
+	}
+	if !review.valid() || (review.RevisionID != "" && (in.ReplyTo == "" || at == nil)) {
+		return MessageResult{}, ErrInvalid
 	}
 	parts := []string{string(conversationID), in.OriginalText}
 	if in.ReplyTo != "" {
@@ -285,15 +313,12 @@ func (e *Engine) SendComposition(ctx context.Context, key, conversationID domain
 	}
 	requestFingerprint := fingerprint("send_message", mentionFingerprint(parts, in.Mentions))
 	if at != nil || len(in.AttachmentIDs) != 0 {
-		if at != nil {
-			utc := at.UTC()
-			at = &utc
-		}
 		requestFingerprint = fingerprint("send_composition", struct {
 			Destination domain.ID
 			Composition domain.OutgoingComposition
 			At          *time.Time
-		}{conversationID, in, at})
+			ReplyReview
+		}{conversationID, in, at, review})
 	}
 	repo, err := e.messaging()
 	if err != nil {
@@ -307,6 +332,18 @@ func (e *Engine) SendComposition(ctx context.Context, key, conversationID domain
 		if m != nil {
 			return MessageResult{Message: *m, Replayed: true}, nil
 		}
+		defer func() {
+			// Another request may have committed before the source changed.
+			if !errors.Is(err, ErrReplySourceChanged) || ctx.Err() != nil {
+				return
+			}
+			m, replayErr := replay.ReplayAcceptedMessage(ctx, key, requestFingerprint)
+			if replayErr != nil {
+				err = replayErr
+			} else if m != nil {
+				result, err = MessageResult{Message: *m, Replayed: true}, nil
+			}
+		}()
 	}
 	c, err := e.Conversation(ctx, conversationID)
 	if err != nil {
@@ -348,11 +385,11 @@ func (e *Engine) SendComposition(ctx context.Context, key, conversationID domain
 		return MessageResult{}, ErrInvalid
 	}
 	m := domain.Message{ID: id, RevisionID: rev, AccountID: c.AccountID, ConversationID: c.ID, Sender: domain.Sender{ID: a.ID, DisplayName: a.Address}, CreatedAt: now, IsOwn: true, SendState: "queued", ProviderID: string(id), ScheduledAt: at}
-	m, err = e.prepareComposition(ctx, a, c, m, in)
+	m, err = e.prepareComposition(ctx, a, c, m, in, review)
 	if err != nil {
 		return MessageResult{}, err
 	}
-	result, err := repo.AcceptMessage(ctx, MessageMutation{Operation: Operation{ID: key, ResourceID: id, CreatedAt: now, Kind: "send_message"}, Fingerprint: requestFingerprint, Message: m, ConversationRevisionID: cr})
+	result, err = repo.AcceptMessage(ctx, MessageMutation{Operation: Operation{ID: key, ResourceID: id, CreatedAt: now, Kind: "send_message"}, Fingerprint: requestFingerprint, Message: m, ConversationRevisionID: cr})
 	if err == nil {
 		e.outgoingWorkCommitted()
 	}
@@ -528,16 +565,21 @@ func (e *Engine) outgoingWorkCommitted() {
 	case e.work <- struct{}{}:
 	default:
 	}
+	select {
+	case e.attachmentWork <- struct{}{}:
+	default:
+	}
 	e.notifyEvents()
 }
 
-// Run owns one serial dispatcher. Network I/O happens only after an atomic SQL
-// claim; no transaction spans a network write. Interrupted claims become unknown.
+// Recover interrupted claims before either lane can dispatch. Network I/O
+// starts after an atomic claim and never spans a repository transaction.
 func (e *Engine) runOutbox(ctx context.Context) error {
 	r, err := e.messaging()
 	if err != nil {
 		return err
 	}
+	split, _ := e.repo.(attachmentOutboxRepository)
 	interrupted, err := r.InterruptedMessages(ctx)
 	if err != nil {
 		return err
@@ -548,9 +590,17 @@ func (e *Engine) runOutbox(ctx context.Context) error {
 			return err
 		}
 		now := e.now().UTC()
-		if _, err = r.TransitionMessage(ctx, m.ID, "dispatching", "unknown", rev, now, now); err != nil {
+		if split != nil {
+			err = split.RecoverInterruptedMessage(ctx, m.ID, m.RevisionID, rev, now)
+		} else {
+			_, err = r.TransitionMessage(ctx, m.ID, "dispatching", Unknown, rev, now, now)
+		}
+		if err != nil && !errors.Is(err, ErrStateConflict) {
 			return err
 		}
+	}
+	if len(interrupted) != 0 {
+		e.notifyEvents()
 	}
 	if err := e.recoverMessageReactions(ctx); err != nil {
 		return err
@@ -558,96 +608,73 @@ func (e *Engine) runOutbox(ctx context.Context) error {
 	if err := e.recoverMessageEdits(ctx); err != nil {
 		return err
 	}
+	if split == nil {
+		return e.dispatchOutbox(ctx, r, nil, false)
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	attachmentsDone := make(chan error, 1)
+	go func() {
+		attachmentsDone <- e.dispatchOutbox(ctx, r, split, true)
+		cancel()
+	}()
+	err = e.dispatchOutbox(ctx, r, split, false)
+	cancel()
+	attachmentsErr := <-attachmentsDone
+	if errors.Is(err, context.Canceled) {
+		err = nil
+	}
+	if errors.Is(attachmentsErr, context.Canceled) {
+		attachmentsErr = nil
+	}
+	return errors.Join(err, attachmentsErr)
+}
+
+func (e *Engine) dispatchOutbox(ctx context.Context, r MessagingRepository, split attachmentOutboxRepository, withAttachments bool) error {
+	wake := e.work
+	if withAttachments {
+		wake = e.attachmentWork
+	}
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		if e.protocols != nil {
-			pending, err := r.PendingMessages(ctx, e.now().UTC())
-			if err != nil {
-				if ctx.Err() != nil {
-					return nil
-				}
+			if err := e.dispatchDueMessages(ctx, r, split, withAttachments, e.now().UTC()); err != nil {
 				return err
 			}
-			for _, m := range pending {
-				a, err := e.Account(ctx, m.AccountID)
-				if err != nil {
-					return err
-				}
-				state, err := e.protocols.Connection(ctx, a)
-				if err != nil || state.State != "connected" {
-					continue
-				}
-				c, err := e.Conversation(ctx, m.ConversationID)
-				if err != nil {
-					return err
-				}
-				var roomRevision domain.ID
-				if c.Kind == "room" {
-					session, err := e.RoomSession(ctx, c.ID)
-					if err != nil {
-						return err
-					}
-					if !session.Active || session.State != "joined" {
-						continue
-					}
-					roomRevision = session.IntentRevisionID
-				}
-				rev, err := e.newID()
-				if err != nil {
-					return err
-				}
-				now := e.now().UTC()
-				var claimed domain.Message
-				if c.Kind == "room" {
-					claimer, ok := e.repo.(RoomMessageClaimer)
-					if !ok {
-						return ErrProtocolUnavailable
-					}
-					claimed, err = claimer.ClaimRoomMessage(ctx, m.ID, roomRevision, rev, now)
-				} else {
-					claimed, err = r.TransitionMessage(ctx, m.ID, "queued", "dispatching", rev, now, now)
-				}
-				if errors.Is(err, ErrStateConflict) {
-					continue
-				}
-				if err != nil {
-					return err
-				}
-				timeout := 10 * time.Second
-				if len(claimed.Attachments) != 0 {
-					timeout = 3 * time.Minute
-				}
-				sendCtx, cancel := context.WithTimeout(ctx, timeout)
-				outgoing := outgoingMessage(claimed, c)
-				outgoing.RoomIntentRevisionID = roomRevision
-				outcome := Failed
-				if err := e.attachOutgoingFiles(&outgoing, claimed); err == nil {
-					outcome = e.protocols.Send(sendCtx, a, outgoing)
-				}
-				cancel()
-				stateName := outcome
-				if outcome == NotSent {
-					stateName = "queued"
-				}
-				if stateName != "queued" && stateName != Submitted && stateName != Unknown && stateName != Failed {
-					stateName = Unknown
-				}
-				rev, err = e.newID()
-				if err != nil {
-					return err
-				}
-				now = e.now().UTC()
-				finishCtx, finishCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-				_, err = r.TransitionMessage(finishCtx, m.ID, "dispatching", stateName, rev, now, now.Add(time.Second))
-				finishCancel()
-				if err != nil && !errors.Is(err, ErrStateConflict) {
-					return err
-				}
-				e.notifyEvents()
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-wake:
+		case <-ticker.C:
+		}
+	}
+}
+
+func (e *Engine) dispatchDueMessages(ctx context.Context, r MessagingRepository, split attachmentOutboxRepository, withAttachments bool, now time.Time) error {
+	var after PendingMessageCursor
+	for ctx.Err() == nil {
+		var pending []domain.Message
+		var next PendingMessageCursor
+		var err error
+		if split != nil {
+			pending, next, err = split.PendingMessagesByAttachments(ctx, now, withAttachments, after)
+		} else {
+			pending, err = r.PendingMessages(ctx, now)
+		}
+		if err != nil {
+			return err
+		}
+		for _, message := range pending {
+			if ctx.Err() != nil {
+				return nil
+			}
+			if err = e.dispatchMessage(ctx, r, split, message); err != nil {
+				return err
 			}
 		}
-		if e.protocols != nil {
+		if !withAttachments {
 			if err := e.dispatchMessageReactions(ctx); err != nil {
 				return err
 			}
@@ -655,13 +682,105 @@ func (e *Engine) runOutbox(ctx context.Context) error {
 				return err
 			}
 		}
-		select {
-		case <-ctx.Done():
+		if next.MessageID == "" {
 			return nil
-		case <-e.work:
-		case <-ticker.C:
 		}
+		// Skipped claims remain pending. Keep scanning past them within this
+		// pass so disconnected accounts or unjoined rooms cannot hold others.
+		after = next
 	}
+	return nil
+}
+
+func (e *Engine) dispatchMessage(ctx context.Context, r MessagingRepository, split attachmentOutboxRepository, m domain.Message) error {
+	a, err := e.Account(ctx, m.AccountID)
+	if err != nil {
+		return err
+	}
+	state, err := e.protocols.Connection(ctx, a)
+	if err != nil || state.State != "connected" {
+		return nil
+	}
+	c, err := e.Conversation(ctx, m.ConversationID)
+	if err != nil {
+		return err
+	}
+	var roomRevision domain.ID
+	if c.Kind == "room" {
+		session, err := e.RoomSession(ctx, c.ID)
+		if err != nil {
+			return err
+		}
+		if !session.Active || session.State != "joined" {
+			return nil
+		}
+		roomRevision = session.IntentRevisionID
+	}
+	rev, err := e.newID()
+	if err != nil {
+		return err
+	}
+	now := e.now().UTC()
+	var claimed domain.Message
+	switch {
+	case split != nil:
+		guardWire := false
+		if protocol, ok := e.protocols.(OriginalWireAttemptProtocol); ok {
+			_, canRecord := e.repo.(SchedulingRepository)
+			guardWire = canRecord && protocol.RequiresOriginalWireAttempt(a)
+		}
+		// An edit can move a message to the other lane before the claim.
+		claimed, err = split.ClaimDispatchMessage(ctx, m.ID, m.RevisionID, roomRevision, rev, now, guardWire)
+	case c.Kind == "room":
+		claimer, ok := e.repo.(RoomMessageClaimer)
+		if !ok {
+			return ErrProtocolUnavailable
+		}
+		claimed, err = claimer.ClaimRoomMessage(ctx, m.ID, roomRevision, rev, now)
+	default:
+		claimed, err = r.TransitionMessage(ctx, m.ID, "queued", "dispatching", rev, now, now)
+	}
+	if errors.Is(err, ErrStateConflict) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	// The protocol bounds each upload independently. A single fixed deadline
+	// for the composition can starve the later files of a valid upload.
+	sendCtx := ctx
+	if len(claimed.Attachments) == 0 {
+		var cancel context.CancelFunc
+		sendCtx, cancel = context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+	}
+	outgoing := outgoingMessage(claimed, c)
+	outgoing.RoomIntentRevisionID = roomRevision
+	outcome := Failed
+	if err = e.attachOutgoingFiles(&outgoing, claimed); err == nil {
+		outcome = e.protocols.Send(sendCtx, a, outgoing)
+	}
+	stateName := outcome
+	switch outcome {
+	case NotSent:
+		stateName = "queued"
+	case Submitted, Unknown, Failed:
+	default:
+		stateName = Unknown
+	}
+	rev, err = e.newID()
+	if err != nil {
+		return err
+	}
+	now = e.now().UTC()
+	finishCtx, finishCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer finishCancel()
+	_, err = r.TransitionMessage(finishCtx, m.ID, "dispatching", stateName, rev, now, now.Add(time.Second))
+	if err != nil && !errors.Is(err, ErrStateConflict) {
+		return err
+	}
+	e.notifyEvents()
+	return nil
 }
 
 // Reject accepts protocol error evidence only for this account and its intended

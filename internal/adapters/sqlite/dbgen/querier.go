@@ -35,6 +35,7 @@ type Querier interface {
 	GetContactSource(ctx context.Context, accountID string) (ContactSource, error)
 	GetContentHead(ctx context.Context, canonicalID string) (MessageContentHead, error)
 	GetConversation(ctx context.Context, id string) (Conversation, error)
+	GetConversationOpenedAt(ctx context.Context, entityID string) (string, error)
 	GetConversationReadHead(ctx context.Context, conversationID string) (GetConversationReadHeadRow, error)
 	GetCorrectionFacts(ctx context.Context, messageID string) ([]MessageCorrectionFact, error)
 	GetHistoryCounts(ctx context.Context, ownerID string) (GetHistoryCountsRow, error)
@@ -54,6 +55,7 @@ type Querier interface {
 	GetRoomReactionPrivacy(ctx context.Context, arg GetRoomReactionPrivacyParams) (GetRoomReactionPrivacyRow, error)
 	GetSharedContentItem(ctx context.Context, arg GetSharedContentItemParams) (GetSharedContentItemRow, error)
 	GetStagedAttachment(ctx context.Context, id string) (StagedAttachment, error)
+	GetTimelineMessage(ctx context.Context, id string) (Message, error)
 	HasMessageRead(ctx context.Context, canonicalID string) (bool, error)
 	InsertAccount(ctx context.Context, arg InsertAccountParams) error
 	InsertAccountRevision(ctx context.Context, arg InsertAccountRevisionParams) error
@@ -109,6 +111,7 @@ type Querier interface {
 	ListScheduledMessages(ctx context.Context, arg ListScheduledMessagesParams) ([]ListScheduledMessagesRow, error)
 	ListSharedContent(ctx context.Context, arg ListSharedContentParams) ([]ListSharedContentRow, error)
 	ListStarredMessages(ctx context.Context, arg ListStarredMessagesParams) ([]ListStarredMessagesRow, error)
+	MarkOutboxWireStarted(ctx context.Context, messageID string) error
 	MarkSharedContentIndexed(ctx context.Context, arg MarkSharedContentIndexedParams) error
 	MessagesAfterTarget(ctx context.Context, arg MessagesAfterTargetParams) ([]Message, error)
 	MessagesAtOrBeforeTarget(ctx context.Context, arg MessagesAtOrBeforeTargetParams) ([]Message, error)
@@ -116,6 +119,7 @@ type Querier interface {
 	PendingMessageEditCommands(ctx context.Context, nextAttemptAt string) ([]MessageEditCommand, error)
 	PendingMessageReactionCommands(ctx context.Context, nextAttemptAt string) ([]MessageReactionCommand, error)
 	PendingMessages(ctx context.Context, nextAttemptAt string) ([]Message, error)
+	PendingMessagesByAttachments(ctx context.Context, arg PendingMessagesByAttachmentsParams) ([]PendingMessagesByAttachmentsRow, error)
 	PreviewJobs(ctx context.Context, arg PreviewJobsParams) ([]MessagePreview, error)
 	PutArchiveCheckpoint(ctx context.Context, arg PutArchiveCheckpointParams) error
 	PutCanonicalAlias(ctx context.Context, arg PutCanonicalAliasParams) error
@@ -139,6 +143,7 @@ type Querier interface {
 	ResolveMessageAlias(ctx context.Context, aliasID string) (string, error)
 	SearchContacts(ctx context.Context, arg SearchContactsParams) ([]SearchContactsRow, error)
 	SearchMessages(ctx context.Context, arg SearchMessagesParams) ([]SearchMessagesRow, error)
+	SetMessageTimelineAt(ctx context.Context, arg SetMessageTimelineAtParams) error
 	SetOperationResult(ctx context.Context, arg SetOperationResultParams) error
 	SetRoomObservation(ctx context.Context, arg SetRoomObservationParams) error
 	SetRoomReactionPrivacy(ctx context.Context, arg SetRoomReactionPrivacyParams) (int64, error)

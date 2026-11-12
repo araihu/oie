@@ -279,9 +279,18 @@ func scheduleInput(r *http.Request) (ids []string, at *time.Time, valid bool) {
 	return ids, at, true
 }
 
-func matchingComposition(m engineapi.Message, conversation, account, text, target string, mentions []engineapi.MentionSelection, attachments []string, at *time.Time) bool {
+func matchingComposition(m engineapi.Message, conversation, account string, in engineapi.SendMessage) bool {
+	at := in.ScheduledAt
 	if (m.ScheduledAt == nil) != (at == nil) || (at != nil && !m.ScheduledAt.Equal(*at)) {
 		return false
+	}
+	if !sameOptionalText(m.ExpectedReplyRevisionId, in.ExpectedReplyRevisionId) ||
+		!sameOptionalText(m.ExpectedReplyExcerptSha256, in.ExpectedReplyExcerptSha256) {
+		return false
+	}
+	var attachments []string
+	if in.AttachmentIds != nil {
+		attachments = *in.AttachmentIds
 	}
 	if m.Composition != nil && m.Composition.AttachmentIds != nil {
 		if !slices.Equal(*m.Composition.AttachmentIds, attachments) {
@@ -290,19 +299,36 @@ func matchingComposition(m engineapi.Message, conversation, account, text, targe
 	} else if len(attachments) != 0 {
 		return false
 	}
-	return matchingSend(m, conversation, account, text, target, mentions)
+	var target string
+	if in.ReplyToMessageId != nil {
+		target = *in.ReplyToMessageId
+	}
+	var mentions []engineapi.MentionSelection
+	if in.Mentions != nil {
+		mentions = *in.Mentions
+	}
+	return matchingSend(m, conversation, account, in.OriginalText, target, mentions)
+}
+
+func sameOptionalText(a, b *string) bool {
+	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
 }
 
 func (s *Server) changeSchedule(ctx context.Context, r *http.Request, text copy) (int, mutationResult) {
 	key, id, revision := r.Form.Get("operationKey"), r.Form.Get("messageId"), r.Form.Get("expectedRevisionId")
+	replyRevision, replyExcerptSHA256 := r.Form.Get("expectedReplyRevisionId"), r.Form.Get("expectedReplyExcerptSha256")
 	invalid := mutationResult{Message: text.InvalidForm, Rejected: true}
-	if !validOperationKey(key) || !validOperationKey(id) || !validOperationKey(revision) {
+	if !validOperationKey(key) || !validOperationKey(id) || !validOperationKey(revision) ||
+		(replyExcerptSHA256 != "" && (replyRevision == "" || !validReplyExcerptSHA256(replyExcerptSHA256))) {
 		return 422, invalid
 	}
 	var message *engineapi.Message
 	var status int
 	var responseBody []byte
 	if r.URL.Path == "/ui/scheduling/send-now" {
+		if replyRevision != "" {
+			return 422, invalid
+		}
 		response, err := s.client.SendScheduledMessageNowWithResponse(ctx, id, &engineapi.SendScheduledMessageNowParams{IdempotencyKey: key}, engineapi.SendScheduledMessageNow{ExpectedRevisionId: revision})
 		if err != nil {
 			return 503, mutationResult{Message: text.PendingAcceptance}
@@ -310,7 +336,7 @@ func (s *Server) changeSchedule(ctx context.Context, r *http.Request, text copy)
 		message, status, responseBody = response.JSON200, response.StatusCode(), response.Body
 	} else {
 		ids, at, valid := scheduleInput(r)
-		if !valid {
+		if !valid || (replyRevision != "" && (r.Form.Get("replaceComposition") != "1" || !validOperationKey(replyRevision))) {
 			return 422, invalid
 		}
 		body := engineapi.UpdatePendingMessage{ExpectedRevisionId: revision, ScheduledAt: at}
@@ -330,6 +356,15 @@ func (s *Server) changeSchedule(ctx context.Context, r *http.Request, text copy)
 			if target != "" {
 				body.Composition.ReplyToMessageId = &target
 			}
+			if replyRevision != "" {
+				if target == "" {
+					return 422, invalid
+				}
+				body.ExpectedReplyRevisionId = &replyRevision
+				if replyExcerptSHA256 != "" {
+					body.ExpectedReplyExcerptSha256 = &replyExcerptSHA256
+				}
+			}
 		}
 		if at == nil && body.Composition == nil {
 			return 422, invalid
@@ -348,6 +383,12 @@ func (s *Server) changeSchedule(ctx context.Context, r *http.Request, text copy)
 		return status, result
 	}
 	if r.Form.Get("replaceComposition") == "1" {
+		if replyRevision != "" && (message.ExpectedReplyRevisionId == nil || *message.ExpectedReplyRevisionId != replyRevision) {
+			return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
+		}
+		if replyExcerptSHA256 != "" && (message.ExpectedReplyExcerptSha256 == nil || *message.ExpectedReplyExcerptSha256 != replyExcerptSHA256) {
+			return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
+		}
 		status, result := acceptedResult(text, *message)
 		result.Redirect = safeReturn(r.Form.Get("returnTo"))
 		return status, result
@@ -388,10 +429,16 @@ func (v view) scheduleVersion() string {
 	return version.String()
 }
 
-func sendInput(body, target string, mentions []engineapi.MentionSelection, attachments []string, at *time.Time) engineapi.SendMessage {
+func sendInput(body, target, replyRevision, replyExcerptSHA256 string, mentions []engineapi.MentionSelection, attachments []string, at *time.Time) engineapi.SendMessage {
 	payload := engineapi.SendMessage{OriginalText: body, ScheduledAt: at}
 	if target != "" {
 		payload.ReplyToMessageId = &target
+	}
+	if replyRevision != "" {
+		payload.ExpectedReplyRevisionId = &replyRevision
+	}
+	if replyExcerptSHA256 != "" {
+		payload.ExpectedReplyExcerptSha256 = &replyExcerptSHA256
 	}
 	if len(mentions) != 0 {
 		payload.Mentions = &mentions

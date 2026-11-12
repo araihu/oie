@@ -21,7 +21,7 @@
   function formatter(locale, options) {
     const key = JSON.stringify([locale, options]);
     if (!formatters.has(key)) {
-      formatters.set(key, new Intl.DateTimeFormat(locale, {...options, timeZone: timeZone || undefined}));
+      formatters.set(key, new Intl.DateTimeFormat(locale, {timeZone: timeZone || undefined, ...options}));
     }
     return formatters.get(key);
   }

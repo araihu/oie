@@ -17,15 +17,17 @@ LIMIT 129;
 
 -- name: MessagesAtOrBeforeTarget :many
 SELECT m.* FROM messages m WHERE m.conversation_id=sqlc.arg(conversation_id)
+AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
-AND (m.created_at_ms,m.id)<=(SELECT t.created_at_ms,t.id FROM messages t WHERE t.id=sqlc.arg(target_id) AND t.conversation_id=sqlc.arg(conversation_id))
-ORDER BY m.created_at_ms DESC,m.id DESC LIMIT sqlc.arg(page_limit);
+AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)<=(SELECT COALESCE(t.timeline_at_ms,t.created_at_ms),t.id FROM messages t WHERE t.id=sqlc.arg(target_id) AND t.conversation_id=sqlc.arg(conversation_id))
+ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT sqlc.arg(page_limit);
 
 -- name: MessagesAfterTarget :many
 SELECT m.* FROM messages m WHERE m.conversation_id=sqlc.arg(conversation_id)
+AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
-AND (m.created_at_ms,m.id)>(SELECT t.created_at_ms,t.id FROM messages t WHERE t.id=sqlc.arg(target_id) AND t.conversation_id=sqlc.arg(conversation_id))
-ORDER BY m.created_at_ms,m.id LIMIT sqlc.arg(page_limit);
+AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)>(SELECT COALESCE(t.timeline_at_ms,t.created_at_ms),t.id FROM messages t WHERE t.id=sqlc.arg(target_id) AND t.conversation_id=sqlc.arg(conversation_id))
+ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms),m.id LIMIT sqlc.arg(page_limit);
 
 -- name: GetMessageReferences :many
 SELECT r.scope,r.remote_id,r.author FROM message_references r JOIN messages source ON source.id=r.message_id

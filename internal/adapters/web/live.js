@@ -45,7 +45,9 @@ window.OieRuntime.register('live', life => {
   if(composerSend) composerSend.dataset.sendMessage='';
   const editingSchedule = composer?.hasAttribute('data-editing-schedule');
   const scheduledSource = document.getElementById('schedule-edit-data');
+  const scheduledMessage = scheduledSource ? JSON.parse(scheduledSource.textContent) : null;
   const scheduleRetry = composer?.querySelector('[data-schedule-retry]');
+  const scheduleReviewChanged = document.querySelector('[data-schedule-dialog]')?.dataset.reviewChanged;
   const ordinaryDraftKey = body.dataset.engineId && body.dataset.conversationId && body.dataset.accountId
     ? ['oie.draft.v1', body.dataset.engineId, body.dataset.accountId, body.dataset.conversationId].join(':') : '';
   const draftKey = editingSchedule ? ordinaryDraftKey + ':scheduled:' +
@@ -191,6 +193,10 @@ window.OieRuntime.register('live', life => {
   }
   function draftRecord(pending=false){return {text:input?.value||'',key:submissionKey?.value||'',pending,reply:journal?.reply||null,mentions:readMentions(),attachments:journal?.attachments||[]};}
 
+  function scheduleReview(draft) {
+    const {text, reply, mentions, attachments} = draft;
+    return JSON.stringify([text, reply?.messageId, reply?.senderName, reply?.excerpt, mentions, attachments.map(file => file.id)]);
+  }
 
   function storageWarning() {
     if (!storageDenied && composer) { const note=document.createElement('p');note.className='oie-storage-warning';note.role='status';note.textContent=text('storageUnavailable');composer.append(note); }
@@ -300,8 +306,8 @@ window.OieRuntime.register('live', life => {
   }
   if (input && submissionKey && draftKey && !mock) {
     let saved = readDraft();
-    if(!saved&&scheduledSource){
-      const m=JSON.parse(scheduledSource.textContent), composition=m.composition;
+    if(!saved&&scheduledMessage){
+      const m=scheduledMessage, composition=m.composition;
       saved={key:submissionKey.value,text:composition.originalText,mentions:composition.mentions,attachments:m.attachments||[],
         reply:composition.replyToMessageId?{messageId:composition.replyToMessageId,engineId:body.dataset.engineId,accountId:m.accountId,conversationId:m.conversationId,
           senderName:m.reply?.senderName||'',excerpt:m.reply?.excerpt||''}:null};
@@ -333,6 +339,42 @@ window.OieRuntime.register('live', life => {
   renderReply();renderEdit();
   if(editSession&&!editMessageBody(editSession.messageId)){const sourceID=editSession.messageId;life.timeout(async()=>{if(editSession?.messageId!==sourceID)return;await window.OieTimeline?.focus(sourceID,{focus:false});if(!life.signal.aborted)renderEditMarkers();},0);}
   life.on(document,'oie:actions-refreshed',()=>{renderReply();renderEdit();});
+  const validExcerptDigest = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+  async function fetchReplySource(messageId, requireReview = false) {
+    const controller = new AbortController(), timeout = life.timeout(() => controller.abort(), 12000);
+    try {
+      const query = new URLSearchParams({engineId:body.dataset.engineId, conversationId:body.dataset.conversationId, accountId:body.dataset.accountId, messageId});
+      const response = await life.fetch('/ui/reply-source?' + query, {credentials:'same-origin', cache:'no-store', signal:controller.signal});
+      const reply = await response.json();
+      if (!response.ok || reply.engineId !== body.dataset.engineId || reply.accountId !== body.dataset.accountId ||
+          reply.conversationId !== body.dataset.conversationId || reply.requestedMessageId !== messageId || !canonicalID(reply.messageId) ||
+          typeof reply.senderName !== 'string' || typeof reply.excerpt !== 'string' || Array.from(reply.excerpt).length > 512 ||
+          (requireReview && (!canonicalID(reply.revisionId) || !validExcerptDigest(reply.excerptSha256)))) throw Error('reply_unavailable');
+      return reply;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  function finishReplyPreparation(epoch) {
+    if (life.signal.aborted || epoch !== replyEpoch) return;
+    preparingReply = false;
+    renderReply();
+  }
+  async function refreshRejectedQuote() {
+    const messageId = journal?.reply?.messageId;
+    if (!messageId) return;
+    const epoch = ++replyEpoch;
+    preparingReply = true;
+    renderReply();
+    try {
+      const reply = await fetchReplySource(messageId, true);
+      if (!life.signal.aborted && epoch === replyEpoch) saveDraft({...draftRecord(), reply});
+    } catch {
+      // Keep the draft available if the quote cannot be refreshed yet.
+    } finally {
+      finishReplyPreparation(epoch);
+    }
+  }
   life.on(document,'click',async event=>{
     const cancel=event.target.closest('[data-cancel-reply]');
     if(cancel){event.preventDefault();if(editSession||editPreparing)return;if(journal?.pending){feedback(composer,text('replyLocked'),true);return}replyEpoch++;preparingReply=false;saveDraft({...draftRecord(false),reply:null});renderReply();input?.focus({preventScroll:true});return;}
@@ -340,15 +382,12 @@ window.OieRuntime.register('live', life => {
     event.preventDefault();if(editSession||editPreparing)return;if(journal?.pending){feedback(composer,text('replyLocked'),true);return}if(composer.dataset.replyAllowed!=='true')return;
     const messageId=action.id.slice(14);if(!canonicalID(messageId))return;
     const epoch=++replyEpoch;preparingReply=true;renderReply();feedback(composer,text('replyPreparing'));
-    const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),12000);
     try{
-      const query=new URLSearchParams({engineId:body.dataset.engineId,conversationId:body.dataset.conversationId,accountId:body.dataset.accountId,messageId});
-      const response=await life.fetch('/ui/reply-source?'+query,{credentials:'same-origin',cache:'no-store',signal:controller.signal}),reply=await response.json();
+      const reply = await fetchReplySource(messageId);
       if(life.signal.aborted||epoch!==replyEpoch)return;
-      if(!response.ok||reply.engineId!==body.dataset.engineId||reply.accountId!==body.dataset.accountId||reply.conversationId!==body.dataset.conversationId||reply.requestedMessageId!==messageId||!canonicalID(reply.messageId)||typeof reply.senderName!=='string'||typeof reply.excerpt!=='string'||Array.from(reply.excerpt).length>512)throw Error('reply_unavailable');
       saveDraft({...draftRecord(false),reply});feedback(composer,'');input?.focus({preventScroll:true});
     }catch{if(!life.signal.aborted&&epoch===replyEpoch)feedback(composer,text('replyUnavailable'),true)}
-    finally{clearTimeout(timeout);if(!life.signal.aborted&&epoch===replyEpoch){preparingReply=false;renderReply()}}
+    finally{finishReplyPreparation(epoch)}
   });
 
   const roomDraftKey=draftKey?draftKey.replace('oie.draft.v1','oie.room-operation.v1'):'';
@@ -494,8 +533,9 @@ window.OieRuntime.register('live', life => {
   });
   life.on(composer,'oie:attachment-staging',renderReply);
   life.on(composer,'oie:schedule-snapshot',event=>{
+    const draft = draftRecord();
     const editBlocked=!!journal?.pending||!!editSession||editPreparing||preparingReply||stopped||composer.dataset.busy==='true'||composer.dataset.staging==='true';
-    Object.assign(event.detail,{text:input.value,reply:journal?.reply,files:journal?.attachments||[],
+    Object.assign(event.detail,{text:draft.text,reply:draft.reply,files:draft.attachments,review:scheduleReview(draft),
       editBlocked:editBlocked||!composer.hasAttribute('data-schedule-composer'),
       blocked:editBlocked||(composer.dataset.sendAllowed!=='true'&&!editingSchedule)});
   });
@@ -620,7 +660,7 @@ window.OieRuntime.register('live', life => {
         }
       }
       const schedules=document.getElementById('scheduled-results'),newSchedules=page.querySelector('#scheduled-results');
-      if(schedules&&newSchedules&&schedules.dataset.version!==newSchedules.dataset.version&&!schedules.contains(document.activeElement)&&!document.querySelector('[data-schedule-dialog][open]')){
+      if(schedules&&newSchedules&&!schedules.inert&&schedules.dataset.version!==newSchedules.dataset.version&&!schedules.contains(document.activeElement)&&!document.querySelector('[data-schedule-dialog][open]')){
         mutateDOM(schedules,newSchedules.innerHTML);schedules.dataset.version=newSchedules.dataset.version;
       }
       const detailsRegion=page.querySelector('#live-conversation-details');
@@ -693,10 +733,17 @@ window.OieRuntime.register('live', life => {
   life.on(document,'oie:refresh-request',()=>scheduleRefresh());
   function scheduleRefresh() { if(stopped||life.signal.aborted)return;clearTimeout(refreshTimer); refreshTimer = life.timeout(refresh,100); }
 
+  function needsReplyRefresh(reply) {
+    return reply && (!editingSchedule || reply.messageId !== scheduledMessage?.composition?.replyToMessageId || canonicalID(reply.revisionId));
+  }
   function setScheduledValues(values) {
     if(!composer.hasAttribute('data-schedule-composer'))return;
     values.set('scheduledAt',journal.scheduledAt||'');
     values.set('attachmentIds',JSON.stringify((journal.attachments||[]).map(file=>file.id)));
+    if ((journal.scheduledAt || editingSchedule) && needsReplyRefresh(journal.reply) && canonicalID(journal.reply.revisionId)) {
+      values.set('expectedReplyRevisionId', journal.reply.revisionId);
+      if (validExcerptDigest(journal.reply.excerptSha256)) values.set('expectedReplyExcerptSha256', journal.reply.excerptSha256);
+    }
   }
   life.on(document,'submit', async event => {
     const form = event.target.closest('form[data-oie-action]');
@@ -710,17 +757,33 @@ window.OieRuntime.register('live', life => {
       if(preparingReply){feedback(form,text('replyPreparing'));return}
       if (composer.dataset.staging==='true'||(form.dataset.sendAllowed !== 'true'&&!editingSchedule&&!journal?.pending)) return;
       const scheduledAt=journal?.pending?journal.scheduledAt:form.elements.namedItem('scheduledAt')?.value;
-      if(!journal?.pending&&journal?.reply&&!editingSchedule){
-        const requested=journal.reply.messageId;preparingReply=true;renderReply();
-        const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),12000);
+      if(!journal?.pending&&needsReplyRefresh(journal?.reply)){
+        const reviewed = scheduledAt || editingSchedule ? scheduleReview(draftRecord()) : '';
+        const requested = journal.reply.messageId, epoch = ++replyEpoch;
+        preparingReply = true;
+        renderReply();
         try{
-          const query=new URLSearchParams({engineId:body.dataset.engineId,conversationId:body.dataset.conversationId,accountId:body.dataset.accountId,messageId:requested});
-          const response=await life.fetch('/ui/reply-source?'+query,{credentials:'same-origin',cache:'no-store',signal:controller.signal}),reply=await response.json();
-          if(life.signal.aborted)return;
-          if(!response.ok||reply.engineId!==body.dataset.engineId||reply.accountId!==body.dataset.accountId||reply.conversationId!==body.dataset.conversationId||reply.requestedMessageId!==requested||!canonicalID(reply.messageId)||typeof reply.senderName!=='string'||typeof reply.excerpt!=='string'||Array.from(reply.excerpt).length>512)throw Error('reply_unavailable');
-          saveDraft({...draftRecord(false),reply});
-        }catch{if(!life.signal.aborted)feedback(form,text('replyUnavailable'),true);return}
-        finally{clearTimeout(timeout);if(!life.signal.aborted){preparingReply=false;renderReply()}}
+          const reply = await fetchReplySource(requested, Boolean(reviewed));
+          if (life.signal.aborted || epoch !== replyEpoch) return;
+          const current = draftRecord();
+          if (reviewed && reviewed !== scheduleReview(current)) {
+            errorToast(scheduleReviewChanged);
+            return;
+          }
+          const refreshed = {...current, reply};
+          saveDraft(refreshed);
+          if (reviewed && reviewed !== scheduleReview(refreshed)) {
+            errorToast(scheduleReviewChanged);
+            return;
+          }
+        } catch {
+          if (!life.signal.aborted && epoch === replyEpoch) {
+            if (reviewed) errorToast(text('replyUnavailable'));
+            else feedback(form, text('replyUnavailable'), true);
+          }
+          return;
+        }
+        finally{finishReplyPreparation(epoch)}
       }
       const value = journal?.pending ? journal.text : input.value;
       if ((!value.trim() && !journal?.attachments?.length) || Array.from(value).length > 16384) { feedback(form,text('invalidMessage'),true);input.focus();return; }
@@ -746,16 +809,28 @@ window.OieRuntime.register('live', life => {
       const result = await response.json();
       if(life.signal.aborted)return;
       if (!result.ok) {
-        feedback(form,result.message || text('pending'),true);
         if(result.code==='engine_changed'){stopped=true;source?.close();}
         if (sending && result.rejected) {
-          window.Alpine?.destroyTree(pendingBubble);pendingBubble?.remove();pendingBubble=null;
+          if (pendingBubble) {
+            window.Alpine?.destroyTree(pendingBubble);
+            pendingBubble.remove();
+            pendingBubble = null;
+          }
           const mentions=result.code==='mention_unavailable'?[]:journal.mentions;
           if(result.code==='mention_unavailable')form.dispatchEvent(new Event('oie:mentions-invalidated'));
-          input.value=journal.text;restoreMentions(mentions);saveDraft({...journal,mentions,pending:false});lockComposer(false);feedback(form,result.message||text('invalidMessage'),true);
+          input.value=journal.text;restoreMentions(mentions);saveDraft({...journal,mentions,pending:false});lockComposer(false);
+          const message = result.code === 'reply_source_changed' ? scheduleReviewChanged : result.message || text('invalidMessage');
+          if (['media_too_large','reply_source_changed'].includes(result.code)) errorToast(message);
+          else feedback(form, message, true);
+          if (result.code === 'reply_source_changed') void refreshRejectedQuote();
+        } else {
+          feedback(form, result.message || text('pending'), true);
         }
         if (sending) input.focus({preventScroll:true});
         if(roomCommand&&result.rejected){keepRoomOperation(null);for(const field of form.querySelectorAll('input:not([type=hidden])'))field.readOnly=false;}
+        if(scheduleDrawer&&['state_conflict','revision_conflict','not_found'].includes(result.code)){
+          scheduleDrawer.dispatchEvent(new Event('oie:schedule-refresh'));
+        }
         if(!sending)scheduleRefresh();
       } else {
         if(roomCommand){
@@ -768,7 +843,7 @@ window.OieRuntime.register('live', life => {
           input.focus({preventScroll:true});renderReply();
         } else if(form.dataset.oieAction==='schedule-row'){
           if(!scheduleDrawer){location.assign(result.redirect||values.get('returnTo'));return;}
-          scheduleDrawer.dispatchEvent(new CustomEvent('oie:schedule-saved',{detail:form}));
+          scheduleDrawer.dispatchEvent(new Event('oie:schedule-refresh'));
         } else if (form.dataset.oieAction === 'register' || form.dataset.oieAction === 'open') {
           if (result.redirect) { if(window.OieNavigation)window.OieNavigation.go(result.redirect);else location.assign(result.redirect); return; }
         }
@@ -804,6 +879,10 @@ window.OieRuntime.register('live', life => {
       try{
         const message=JSON.parse(event.data).message;
         if(message&&message.accountId===body.dataset.accountId&&message.conversationId===body.dataset.conversationId){
+          const hiddenSchedule = message.scheduledAt && !message.timelineAt && ['queued','dispatching','cancelled'].includes(message.sendState);
+          if (hiddenSchedule || (message.timelineAt && message.sendState === 'cancelled')) {
+            window.OieTimeline?.hideScheduled?.(message.id);
+          }
           document.dispatchEvent(new CustomEvent('oie:message-updated',{detail:{id:message.id}}));
         }
       }catch{}

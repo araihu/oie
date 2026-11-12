@@ -19,7 +19,7 @@ func (q *Queries) DeletePendingReplyMetadata(ctx context.Context, messageID stri
 }
 
 const getOutbox = `-- name: GetOutbox :one
-SELECT message_id, state, attempt_count, next_attempt_at, scheduled_at FROM outbox WHERE message_id = ?
+SELECT message_id, state, attempt_count, next_attempt_at, scheduled_at, wire_stage FROM outbox WHERE message_id = ?
 `
 
 func (q *Queries) GetOutbox(ctx context.Context, messageID string) (Outbox, error) {
@@ -31,6 +31,7 @@ func (q *Queries) GetOutbox(ctx context.Context, messageID string) (Outbox, erro
 		&i.AttemptCount,
 		&i.NextAttemptAt,
 		&i.ScheduledAt,
+		&i.WireStage,
 	)
 	return i, err
 }
@@ -80,7 +81,7 @@ func (q *Queries) InsertStagedAttachment(ctx context.Context, arg InsertStagedAt
 }
 
 const listScheduledMessages = `-- name: ListScheduledMessages :many
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, c.id, c.revision_id, c.account_id, c.address, c.peer_id, c.payload, c.activity_sequence, c.unread_count, c.archived, c.favorite
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms, c.id, c.revision_id, c.account_id, c.address, c.peer_id, c.payload, c.activity_sequence, c.unread_count, c.archived, c.favorite
 FROM outbox AS o
 JOIN messages AS m ON m.id = o.message_id
 JOIN conversations AS c ON c.id = m.conversation_id
@@ -126,6 +127,7 @@ func (q *Queries) ListScheduledMessages(ctx context.Context, arg ListScheduledMe
 			&i.Message.State,
 			&i.Message.Payload,
 			&i.Message.CreatedAtMs,
+			&i.Message.TimelineAtMs,
 			&i.Conversation.ID,
 			&i.Conversation.RevisionID,
 			&i.Conversation.AccountID,

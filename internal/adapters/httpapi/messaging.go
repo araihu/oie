@@ -26,7 +26,7 @@ func conversation(c domain.Conversation) engineapi.Conversation {
 	return out
 }
 func message(m domain.Message) engineapi.Message {
-	out := engineapi.Message{Id: string(m.ID), RevisionId: string(m.RevisionID), AccountId: string(m.AccountID), ConversationId: string(m.ConversationID), Sender: engineapi.Sender{Id: string(m.Sender.ID), DisplayName: m.Sender.DisplayName}, OriginalText: m.OriginalText, CreatedAt: m.CreatedAt, IsOwn: m.IsOwn, SendState: engineapi.MessageSendState(m.SendState)}
+	out := engineapi.Message{Id: string(m.ID), RevisionId: string(m.RevisionID), AccountId: string(m.AccountID), ConversationId: string(m.ConversationID), Sender: engineapi.Sender{Id: string(m.Sender.ID), DisplayName: m.Sender.DisplayName}, OriginalText: m.OriginalText, CreatedAt: m.CreatedAt, TimelineAt: m.TimelineAt, IsOwn: m.IsOwn, SendState: engineapi.MessageSendState(m.SendState)}
 	if m.MentionsYou && !m.IsOwn {
 		out.MentionsYou = &m.MentionsYou
 	}
@@ -40,6 +40,13 @@ func message(m domain.Message) engineapi.Message {
 	if m.OutboundReply != nil {
 		target := string(m.OutboundReply.TargetID)
 		out.ReplyToMessageId = &target
+		if m.OutboundReply.Reviewed {
+			revision := string(m.OutboundReply.TargetRevisionID)
+			out.ExpectedReplyRevisionId = &revision
+		}
+		if m.OutboundReply.ExpectedExcerptSHA256 != "" {
+			out.ExpectedReplyExcerptSha256 = &m.OutboundReply.ExpectedExcerptSHA256
+		}
 		if m.Reply == nil {
 			out.Reply = &engineapi.MessageReply{Available: false, Excerpt: m.OutboundReply.Excerpt, BodyText: m.OutboundReply.BodyText}
 		}
@@ -178,7 +185,8 @@ func (s *Server) SendMessage(ctx context.Context, r engineapi.SendMessageRequest
 		return nil, application.ErrInvalid
 	}
 	input := compositionInput(r.Body.OriginalText, r.Body.ReplyToMessageId, r.Body.Mentions, r.Body.AttachmentIds)
-	result, err := s.engine.SendComposition(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.ConversationId), input, r.Body.ScheduledAt)
+	review := replyReviewInput(r.Body.ExpectedReplyRevisionId, r.Body.ExpectedReplyExcerptSha256)
+	result, err := s.engine.SendCompositionWithReplyReview(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.ConversationId), input, r.Body.ScheduledAt, review)
 	if errors.Is(err, application.ErrRoomNotJoined) {
 		if current, readErr := s.engine.RoomSession(ctx, domain.ID(r.ConversationId)); readErr == nil {
 			return nil, application.RoomStateConflict{Current: current}
@@ -192,6 +200,17 @@ func (s *Server) SendMessage(ctx context.Context, r engineapi.SendMessageRequest
 	}
 	location := "/api/v1/messages/" + string(result.Message.ID)
 	return engineapi.SendMessage202JSONResponse{Body: message(result.Message), Headers: engineapi.SendMessage202ResponseHeaders{Location: &location}}, nil
+}
+
+func replyReviewInput(revision, excerptSHA256 *string) application.ReplyReview {
+	var review application.ReplyReview
+	if revision != nil {
+		review.RevisionID = domain.ID(*revision)
+	}
+	if excerptSHA256 != nil {
+		review.ExcerptSHA256 = *excerptSHA256
+	}
+	return review
 }
 func (s *Server) GetMessage(ctx context.Context, r engineapi.GetMessageRequestObject) (engineapi.GetMessageResponseObject, error) {
 	m, err := s.engine.Message(ctx, domain.ID(r.MessageId))

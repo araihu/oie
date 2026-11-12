@@ -168,31 +168,7 @@ func TestSenderIdentityMigrationPreservesVersionTwelveSources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	editDown, err := migrations.ReadFile("migrations/000015_message_edit_commands.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.db.Exec(string(editDown)); err != nil {
-		t.Fatal(err)
-	}
-	indexDown, err := migrations.ReadFile("migrations/000014_message_revision_index.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.db.Exec(string(indexDown)); err != nil {
-		t.Fatal(err)
-	}
-	downReactionMigration(t, s)
-	down, err := migrations.ReadFile("migrations/000013_sender_identities.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.db.Exec(string(down)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.db.Exec("UPDATE schema_migrations SET version=12,dirty=0"); err != nil {
-		t.Fatal(err)
-	}
+	migrateFixtureToVersion(t, s, 12)
 	var databaseIndex int
 	var databaseName, path string
 	if err = s.db.QueryRow("PRAGMA database_list").Scan(&databaseIndex, &databaseName, &path); err != nil {

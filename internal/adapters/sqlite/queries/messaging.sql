@@ -6,6 +6,8 @@ SELECT * FROM conversations WHERE account_id=? AND address=?;
 INSERT INTO conversations(id,revision_id,account_id,address,peer_id,payload,activity_sequence) VALUES(?,?,?,?,?,?,?);
 -- name: InsertConversationRevision :exec
 INSERT INTO conversation_revisions(id,entity_id,parents,payload,created_at) VALUES(?,?,?,?,?);
+-- name: GetConversationOpenedAt :one
+SELECT created_at FROM conversation_revisions WHERE entity_id=? AND parents='[]' ORDER BY created_at,id LIMIT 1;
 -- name: UpdateConversation :exec
 UPDATE conversations SET revision_id=?,payload=?,activity_sequence=?,unread_count=? WHERE id=?;
 -- name: ListConversations :many
@@ -24,20 +26,26 @@ INSERT INTO messages(id,revision_id,account_id,conversation_id,provider_id,is_ow
 INSERT INTO message_revisions(id,entity_id,parents,payload,created_at) VALUES(?,?,?,?,?);
 -- name: GetMessage :one
 SELECT * FROM messages WHERE id=?;
+-- name: GetTimelineMessage :one
+SELECT m.* FROM messages AS m WHERE m.id=?
+AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id);
 -- name: FindProviderMessage :one
 SELECT * FROM messages WHERE account_id=? AND conversation_id=? AND provider_id=? AND is_own=?;
 -- name: ListMessages :many
-SELECT m.* FROM messages AS m WHERE m.conversation_id=sqlc.arg(page_conversation_id) AND NOT EXISTS(SELECT 1 FROM outbox o WHERE o.message_id=m.id AND o.scheduled_at<>'' AND o.state IN ('queued','cancelled')) AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id) AND (
+SELECT m.* FROM messages AS m WHERE m.conversation_id=sqlc.arg(page_conversation_id)
+AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
+AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id) AND (
 CAST(sqlc.arg(page_cursor) AS TEXT)='' OR
-m.created_at_ms<(SELECT x.created_at_ms FROM messages AS x WHERE x.id=CAST(sqlc.arg(page_cursor) AS TEXT) AND x.conversation_id=sqlc.arg(page_conversation_id)) OR
-(m.created_at_ms=(SELECT x.created_at_ms FROM messages AS x WHERE x.id=CAST(sqlc.arg(page_cursor) AS TEXT) AND x.conversation_id=sqlc.arg(page_conversation_id)) AND m.id<CAST(sqlc.arg(page_cursor) AS TEXT))
-) ORDER BY m.created_at_ms DESC,m.id DESC LIMIT sqlc.arg(page_limit);
+(COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)<(SELECT COALESCE(x.timeline_at_ms,x.created_at_ms),x.id FROM messages AS x WHERE x.id=CAST(sqlc.arg(page_cursor) AS TEXT) AND x.conversation_id=sqlc.arg(page_conversation_id))
+) ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT sqlc.arg(page_limit);
 -- name: UpdateMessage :exec
 UPDATE messages SET revision_id=?,state=?,payload=? WHERE id=?;
+-- name: SetMessageTimelineAt :exec
+UPDATE messages SET timeline_at_ms=? WHERE id=?;
 -- name: InsertOutbox :exec
 INSERT INTO outbox(message_id,state,next_attempt_at,scheduled_at) VALUES(?,'queued',?,?);
 -- name: UpdateOutbox :exec
-UPDATE outbox SET state=sqlc.arg(state),next_attempt_at=sqlc.arg(next_attempt_at),scheduled_at=sqlc.arg(scheduled_at),attempt_count=attempt_count+sqlc.arg(attempt_increment) WHERE message_id=sqlc.arg(message_id);
+UPDATE outbox SET state=sqlc.arg(state),next_attempt_at=sqlc.arg(next_attempt_at),scheduled_at=sqlc.arg(scheduled_at),attempt_count=attempt_count+sqlc.arg(attempt_increment),wire_stage=sqlc.arg(wire_stage) WHERE message_id=sqlc.arg(message_id);
 -- name: PendingMessages :many
 SELECT m.* FROM outbox o JOIN messages m ON o.message_id=m.id WHERE o.state='queued' AND o.next_attempt_at<=? ORDER BY o.next_attempt_at,m.id LIMIT 100;
 -- name: InterruptedMessages :many
@@ -52,10 +60,10 @@ UPDATE messages SET revision_id=?,is_own=1,state='submitted',payload=? WHERE id=
 SELECT m.* FROM messages AS m
 JOIN messages AS anchor ON anchor.id=sqlc.arg(cursor_id) AND anchor.conversation_id=sqlc.arg(conversation_id)
 WHERE m.conversation_id=sqlc.arg(conversation_id)
-AND (m.created_at_ms,m.id)>(anchor.created_at_ms,anchor.id)
-AND NOT EXISTS (SELECT 1 FROM outbox o WHERE o.message_id=m.id AND o.scheduled_at<>'' AND o.state IN ('queued','cancelled'))
+AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)>(COALESCE(anchor.timeline_at_ms,anchor.created_at_ms),anchor.id)
+AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
-ORDER BY m.created_at_ms ASC,m.id ASC LIMIT sqlc.arg(page_limit);
+ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) ASC,m.id ASC LIMIT sqlc.arg(page_limit);
 
 -- name: UpdateConversationPreferences :execrows
 UPDATE conversations

@@ -2,8 +2,10 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
@@ -42,7 +44,10 @@ func (s *Store) IndexSharedContent(ctx context.Context, batch []domain.SharedCon
 	}
 	defer func() { _ = tx.Rollback() }()
 	for _, in := range batch {
-		row, err := q.GetMessage(ctx, string(in.Message.ID))
+		row, err := q.GetTimelineMessage(ctx, string(in.Message.ID))
+		if errors.Is(err, sql.ErrNoRows) {
+			return application.ErrStateConflict
+		}
 		if err != nil {
 			return notFound(err)
 		}
@@ -100,6 +105,7 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 		if err = json.Unmarshal([]byte(row.MessagePayload), &item.Message); err != nil {
 			return page, err
 		}
+		setTimelineTime(&item.Message, row.TimelineAtMs)
 		if err = json.Unmarshal([]byte(row.ConversationPayload), &conversation); err != nil {
 			return page, err
 		}
@@ -121,7 +127,7 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 	}
 	if more {
 		last := page.Items[len(page.Items)-1]
-		page.NextCursor = application.SharedContentCursor(last.Message.CreatedAt.UnixMilli(), last.ID)
+		page.NextCursor = application.SharedContentCursor(last.Message.TimelineTime().UnixMilli(), last.ID)
 	}
 	status, err := queries.SharedContentIndexStatus(ctx, dbgen.SharedContentIndexStatusParams{ParserVersion: application.SharedContentVersion, MessageIds: jsonText(nonNilIDs(query.MessageIDs)), AccountID: string(query.AccountID), ConversationID: string(query.ConversationID)})
 	if err != nil {
@@ -150,6 +156,7 @@ func (s *Store) SharedContentItem(ctx context.Context, id domain.ID) (domain.Sha
 	if err = json.Unmarshal([]byte(row.MessagePayload), &item.Message); err != nil {
 		return item, err
 	}
+	setTimelineTime(&item.Message, row.TimelineAtMs)
 	if err = hydrateMessageProjection(ctx, s.queries, &item.Message); err != nil {
 		return item, err
 	}

@@ -206,7 +206,8 @@ func (s *Server) UpdatePendingMessage(ctx context.Context, r engineapi.UpdatePen
 		in := compositionInput(c.OriginalText, c.ReplyToMessageId, c.Mentions, c.AttachmentIds)
 		content = &in
 	}
-	out, err := s.engine.UpdatePendingMessage(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.MessageId), domain.ID(r.Body.ExpectedRevisionId), content, r.Body.ScheduledAt, false)
+	review := replyReviewInput(r.Body.ExpectedReplyRevisionId, r.Body.ExpectedReplyExcerptSha256)
+	out, err := s.engine.UpdatePendingMessageWithReplyReview(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.MessageId), domain.ID(r.Body.ExpectedRevisionId), content, r.Body.ScheduledAt, false, review)
 	if err != nil {
 		return nil, err
 	}

@@ -192,6 +192,24 @@ func (e SearchBrowserMessagesParamsLang) Valid() bool {
 	}
 }
 
+// Defines values for PrepareBrowserReplyParamsLang.
+const (
+	PrepareBrowserReplyParamsLangEn   PrepareBrowserReplyParamsLang = "en"
+	PrepareBrowserReplyParamsLangPtBR PrepareBrowserReplyParamsLang = "pt-BR"
+)
+
+// Valid indicates whether the value is a known member of the PrepareBrowserReplyParamsLang enum.
+func (e PrepareBrowserReplyParamsLang) Valid() bool {
+	switch e {
+	case PrepareBrowserReplyParamsLangEn:
+		return true
+	case PrepareBrowserReplyParamsLangPtBR:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GetBrowserMessageSenderParamsLang.
 const (
 	GetBrowserMessageSenderParamsLangEn   GetBrowserMessageSenderParamsLang = "en"
@@ -507,6 +525,11 @@ type PendingSubmission struct {
 	// Example: 019a5df0-0000-7000-8000-000000000002
 	AccountId openapi_types.UUID `json:"accountId"`
 
+	// AttachmentIds JSON-encoded original ordered attachment IDs.
+	//
+	// Example: []
+	AttachmentIds *string `json:"attachmentIds,omitempty"`
+
 	// ConversationId Sending conversation identity.
 	//
 	// Example: 019a5df0-0000-7000-8000-000000000003
@@ -521,6 +544,16 @@ type PendingSubmission struct {
 	//
 	// Example: 019a5df0-0000-7000-8000-000000000001
 	EngineId openapi_types.UUID `json:"engineId"`
+
+	// ExpectedReplyExcerptSha256 SHA-256 of the exact UTF-8 quote excerpt, at most the first 512 Unicode code points of the displayed source body. Optional on reviewed reply mutations and requires expectedReplyRevisionId. The engine preserves it in the original acceptance when supplied.
+	//
+	// Example: 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+	ExpectedReplyExcerptSha256 *externalRef0.ReplyExcerptSHA256 `json:"expectedReplyExcerptSha256,omitempty"`
+
+	// ExpectedReplyRevisionId Original reviewed source revision when scheduling a reply.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000009
+	ExpectedReplyRevisionId *openapi_types.UUID `json:"expectedReplyRevisionId,omitempty"`
 
 	// Lang UI response locale.
 	//
@@ -537,7 +570,7 @@ type PendingSubmission struct {
 	// Example: 019a5df0-0000-7000-8000-000000000006
 	OperationKey openapi_types.UUID `json:"operationKey"`
 
-	// OriginalText Exact authored body before any protocol reply fallback.
+	// OriginalText Exact authored body before any protocol reply fallback. May be empty when the original submission includes attachments.
 	//
 	// Example: Hello
 	OriginalText string `json:"originalText"`
@@ -546,6 +579,11 @@ type PendingSubmission struct {
 	//
 	// Example: 019a5df0-0000-7000-8000-000000000008
 	ReplyToMessageId *string `json:"replyToMessageId,omitempty"`
+
+	// ScheduledAt Original scheduled RFC 3339 instant, or empty for immediate submission.
+	//
+	// Example: 2026-11-07T12:00:00Z
+	ScheduledAt *string `json:"scheduledAt,omitempty"`
 
 	// Theme Retained composer theme.
 	//
@@ -562,6 +600,48 @@ type PendingSubmissionLang string
 //
 // Example: dark
 type PendingSubmissionTheme string
+
+// ReplySource Scoped source revision and exact bounded text displayed for a reply preview.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","engineId":"019a5df0-0000-7000-8000-000000000001","excerpt":"hello","excerptSha256":"2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824","messageId":"019a5df0-0000-7000-8000-000000000004","requestedMessageId":"019a5df0-0000-7000-8000-000000000004","revisionId":"019a5df0-0000-7000-8000-000000000005","senderName":"Juliet"}
+type ReplySource struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	AccountId externalRef0.ID `json:"accountId"`
+
+	// ConversationId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	ConversationId externalRef0.ID `json:"conversationId"`
+
+	// EngineId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	EngineId externalRef0.ID `json:"engineId"`
+	Excerpt  string          `json:"excerpt"`
+
+	// ExcerptSha256 SHA-256 of the exact UTF-8 quote excerpt, at most the first 512 Unicode code points of the displayed source body. Optional on reviewed reply mutations and requires expectedReplyRevisionId. The engine preserves it in the original acceptance when supplied.
+	//
+	// Example: 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+	ExcerptSha256 externalRef0.ReplyExcerptSHA256 `json:"excerptSha256"`
+
+	// MessageId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	MessageId externalRef0.ID `json:"messageId"`
+
+	// RequestedMessageId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	RequestedMessageId externalRef0.ID `json:"requestedMessageId"`
+
+	// RevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	RevisionId externalRef0.ID `json:"revisionId"`
+	SenderName string          `json:"senderName"`
+}
 
 // SubmissionReceipt Verified acceptance of the same immutable operation.
 //
@@ -752,6 +832,27 @@ type SearchBrowserMessagesParams struct {
 
 // SearchBrowserMessagesParamsLang defines parameters for SearchBrowserMessages.
 type SearchBrowserMessagesParamsLang string
+
+// PrepareBrowserReplyParams defines parameters for PrepareBrowserReply.
+type PrepareBrowserReplyParams struct {
+	// EngineId Engine whose retained source is displayed.
+	EngineId externalRef0.ID `form:"engineId" json:"engineId"`
+
+	// AccountId Account that owns the retained source.
+	AccountId externalRef0.ID `form:"accountId" json:"accountId"`
+
+	// ConversationId Conversation containing the source for the quote.
+	ConversationId externalRef0.ID `form:"conversationId" json:"conversationId"`
+
+	// MessageId Retained message or known canonical alias in the selected conversation.
+	MessageId externalRef0.ID `form:"messageId" json:"messageId"`
+
+	// Lang Preferred presentation language.
+	Lang *PrepareBrowserReplyParamsLang `form:"lang,omitempty" json:"lang,omitempty"`
+}
+
+// PrepareBrowserReplyParamsLang defines parameters for PrepareBrowserReply.
+type PrepareBrowserReplyParamsLang string
 
 // RequestBrowserRoomArchiveParams defines parameters for RequestBrowserRoomArchive.
 type RequestBrowserRoomArchiveParams struct {

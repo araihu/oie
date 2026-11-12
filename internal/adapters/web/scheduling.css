@@ -88,6 +88,7 @@
 }
 .oie-agenda-destination small, .oie-agenda-state { color: var(--oie-muted); font-size: .75rem; overflow-wrap: anywhere; }
 .oie-agenda-actions, .oie-agenda-state { grid-area: actions; }
+#scheduled-results[inert] .oie-agenda-actions { opacity: .55; }
 .oie-agenda-actions .oie-agenda-menu-button { inline-size: 2.25rem; block-size: 2.25rem; color: var(--oie-muted); }
 .oie-agenda-actions .oie-agenda-menu-button[aria-expanded=true] { background: var(--oie-raised); color: var(--oie-text); }
 

@@ -27,7 +27,7 @@ func boundedReplyText(text string, n int) string {
 }
 func outboundReply(a domain.Account, c domain.Conversation, target domain.Message, text string, protocols Protocols) *domain.OutboundReply {
 	sum := sha256.Sum256([]byte(target.OriginalText))
-	plan := &domain.OutboundReply{TargetRevisionID: target.RevisionID, TargetBodyHash: hex.EncodeToString(sum[:]), TargetID: target.ID, SenderName: boundedReplyText(target.Sender.DisplayName, 300), Excerpt: boundedReplyText(domain.DisplayBody(target), 512), BodyText: text}
+	plan := &domain.OutboundReply{TargetRevisionID: target.RevisionID, TargetBodyHash: hex.EncodeToString(sum[:]), TargetID: target.ID, SenderName: boundedReplyText(target.Sender.DisplayName, 300), Excerpt: domain.ReplyExcerpt(domain.DisplayBody(target)), BodyText: text}
 	if provider, ok := protocols.(OutgoingReplyProvider); ok {
 		if ref, ok := provider.SelectReplyReference(a, c, target); ok {
 			plan.Reference = &ref

@@ -117,6 +117,10 @@ type EngineIdentity struct {
 	ID        string
 }
 
+type HiddenScheduledMessage struct {
+	MessageID string
+}
+
 type HistoryStatus struct {
 	AccountID string
 	Payload   string
@@ -139,6 +143,7 @@ type Message struct {
 	State          string
 	Payload        string
 	CreatedAtMs    int64
+	TimelineAtMs   *int64
 }
 
 type MessageCanonicalAlias struct {
@@ -293,6 +298,7 @@ type Outbox struct {
 	AttemptCount  int64
 	NextAttemptAt string
 	ScheduledAt   string
+	WireStage     string
 }
 
 type PreviewRevision struct {

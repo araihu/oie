@@ -242,6 +242,9 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 func problemResult(text copy, status int, body []byte) mutationResult {
 	var p engineapi.Problem
 	_ = json.Unmarshal(body, &p)
+	if status == http.StatusConflict && p.Code == "state_conflict" && p.ReplySourceChanged != nil && *p.ReplySourceChanged {
+		return mutationResult{Code: "reply_source_changed", Message: text.ScheduleReviewChanged, Rejected: true}
+	}
 	result := mutationResult{Code: string(p.Code), Rejected: status == 400 || status == 404 || status == 422, Message: text.InvalidForm}
 	switch p.Code {
 	case "idempotency_conflict":
@@ -251,6 +254,11 @@ func problemResult(text copy, status int, body []byte) mutationResult {
 		result.Message = text.AccountExists
 	case "not_found":
 		result.Message = text.MessageUnavailable
+	case "media_too_large":
+		if status == http.StatusRequestEntityTooLarge {
+			result.Message = text.AttachmentTooLarge
+			result.Rejected = true
+		}
 	case "unavailable", "protocol_unavailable":
 		result.Message = text.UnavailableBody
 	case "state_conflict":
@@ -268,7 +276,7 @@ func problemResult(text copy, status int, body []byte) mutationResult {
 	return result
 }
 func (s *Server) reconcileMessage(ctx context.Context, key, kind string) (*engineapi.Message, bool) {
-	receipt, err := s.client.GetOperationWithResponse(ctx, key)
+	receipt, err := s.client.GetOperationWithResponse(ctx, key, nil)
 	if err != nil || receipt.JSON200 == nil {
 		return nil, false
 	}
@@ -283,36 +291,42 @@ func (s *Server) reconcileMessage(ctx context.Context, key, kind string) (*engin
 }
 func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mutationResult) {
 	key, body, conversation, account, target := r.Form.Get("operationKey"), r.Form.Get("originalText"), r.Form.Get("conversationId"), r.Form.Get("accountId"), r.Form.Get("replyToMessageId")
+	replyRevision, replyExcerptSHA256 := r.Form.Get("expectedReplyRevisionId"), r.Form.Get("expectedReplyExcerptSha256")
 	attachments, at, valid := scheduleInput(r)
-	if !valid || !validOperationKey(key) || !validOperationKey(conversation) || !validOperationKey(account) || !utf8.ValidString(body) || strings.ContainsRune(body, 0) || (strings.TrimSpace(body) == "" && len(attachments) == 0) || utf8.RuneCountInString(body) > 16384 || (target != "" && !validOperationKey(target)) {
+	if !valid || !validOperationKey(key) || !validOperationKey(conversation) || !validOperationKey(account) || !utf8.ValidString(body) || strings.ContainsRune(body, 0) || (strings.TrimSpace(body) == "" && len(attachments) == 0) || utf8.RuneCountInString(body) > 16384 || (target != "" && !validOperationKey(target)) ||
+		(replyRevision != "" && (!validOperationKey(replyRevision) || target == "" || at == nil)) ||
+		(replyExcerptSHA256 != "" && (replyRevision == "" || !validReplyExcerptSHA256(replyExcerptSHA256))) {
 		return 422, mutationResult{Message: text.InvalidMessage, Code: "invalid_request", Rejected: true}
 	}
 	mentions, mentionErr := parseMentionSelections(r.Form.Get("mentions"), body)
 	if mentionErr != nil {
 		return 422, mutationResult{Message: text.InvalidMessage, Code: "invalid_request", Rejected: true}
 	}
+	payload := sendInput(body, target, replyRevision, replyExcerptSHA256, mentions, attachments, at)
 	receipt, evidence := s.sendReceipt(ctx, key)
 	switch evidence {
 	case "found":
-		if matchingComposition(*receipt, conversation, account, body, target, mentions, attachments, at) {
+		if matchingComposition(*receipt, conversation, account, payload) {
 			return acceptedResult(text, *receipt)
 		}
-		if (at != nil || len(attachments) != 0) && receipt.AccountId == account && receipt.ConversationId == conversation {
-			if r.URL.Path == "/ui/messages/reconcile" {
-				return 404, mutationResult{Message: text.PendingAcceptance, Code: "not_found"}
-			}
-			// The current message can differ after an edit or Send now. The
-			// engine can still verify this exact key against its original input.
-			response, err := s.client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, sendInput(body, target, mentions, attachments, at))
-			if err != nil {
-				return 503, mutationResult{Message: text.PendingAcceptance}
-			}
-			if response.JSON200 != nil && matchingComposition(*response.JSON200, conversation, account, body, target, mentions, attachments, at) {
-				return acceptedResult(text, *response.JSON200)
-			}
+		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
+	case "legacy":
+		if r.URL.Path == "/ui/messages/reconcile" {
+			return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
+		}
+		// Older engines expose only metadata here. An explicit retry can ask
+		// them to verify the request against the already committed operation.
+		response, err := s.client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, payload)
+		if err != nil {
+			return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
+		}
+		if response.JSON200 != nil && matchingComposition(*response.JSON200, conversation, account, payload) {
+			return acceptedResult(text, *response.JSON200)
+		}
+		if response.StatusCode() == http.StatusConflict {
 			return response.StatusCode(), problemResult(text, response.StatusCode(), response.Body)
 		}
-		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
+		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
 	case "conflict":
 		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
 	case "unknown":
@@ -356,16 +370,16 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 			return 409, mutationResult{Message: text.ReplyUnavailable, Code: "unsupported", Rejected: true}
 		}
 	}
-	if target != "" {
+	if target != "" && replyRevision == "" {
 		source, status := s.retainedReplySource(ctx, conversation, account, target)
 		if source == nil {
 			return status, mutationResult{Message: text.ReplyUnavailable, Code: "reply_unavailable", Rejected: status == 400 || status == 404}
 		}
 	}
-	response, err := s.client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, sendInput(body, target, mentions, attachments, at))
+	response, err := s.client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, payload)
 	if err != nil {
 		message, _ := s.sendReceipt(ctx, key)
-		if message != nil && matchingComposition(*message, conversation, account, body, target, mentions, attachments, at) {
+		if message != nil && matchingComposition(*message, conversation, account, payload) {
 			return acceptedResult(text, *message)
 		}
 		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
@@ -381,7 +395,7 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 		}
 		return response.StatusCode(), result
 	}
-	if !matchingComposition(*message, conversation, account, body, target, mentions, attachments, at) {
+	if !matchingComposition(*message, conversation, account, payload) {
 		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
 	}
 	return acceptedResult(text, *message)

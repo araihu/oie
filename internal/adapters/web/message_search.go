@@ -200,7 +200,7 @@ func validMessageSearchPage(page engineapi.MessageSearchPage, request messageSea
 		seen[key] = true
 		if i > 0 {
 			previous := page.Items[i-1]
-			if previous.Message.CreatedAt.Truncate(time.Millisecond).Before(m.CreatedAt.Truncate(time.Millisecond)) || previous.Message.CreatedAt.Truncate(time.Millisecond).Equal(m.CreatedAt.Truncate(time.Millisecond)) && previous.Message.Id < m.Id || previous.Message.Id == m.Id && previous.Historical && !hit.Historical {
+			if messageCompare(previous.Message, m) < 0 || previous.Message.Id == m.Id && previous.Historical && !hit.Historical {
 				return false
 			}
 		}

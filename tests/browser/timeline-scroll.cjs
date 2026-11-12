@@ -10,8 +10,10 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
  messages.forEach((message,n)=>message.originalText='Retained chronological message '+n);
  const imageIndex=1490,videoIndex=2997,imageURL='https://files.example.test/retained.png',videoURL='https://files.example.test/tiny-video.webm';messages[imageIndex].originalText+='\n'+imageURL;messages[videoIndex].originalText+='\n'+videoURL;
  const others=Array.from({length:50},(_,n)=>({...messages[n],id:id(8000000+n),accountId:otherAccount,conversationId:otherChat,originalText:'Other conversation '+n}));
- const state={seq:0,mode:'normal',hold:false,pending:[],aborted:[],reads:[],contexts:[],gets:[],writes:0,imageReady:false,videoReads:0,edits:new Map(),starred:new Set(),externalReplyOwner:null,aliases:new Map()};
- const logical=()=>messages.filter(message=>!state.aliases.has(message.id));
+ const state={seq:0,mode:'normal',hold:false,pending:[],aborted:[],reads:[],contexts:[],gets:[],writes:0,imageReady:false,videoReads:0,edits:new Map(),starred:new Set(),externalReplyOwner:null,aliases:new Map(),hidden:new Set()};
+ const positionTime=message=>Date.parse(state.edits.get(message.id)?.timelineAt||message.createdAt);
+ const compare=(a,b)=>positionTime(a)-positionTime(b)||a.id.localeCompare(b.id);
+ const logical=()=>messages.filter(message=>!state.aliases.has(message.id)&&!state.hidden.has(message.id)).sort(compare);
  const positions=new Map(messages.map((message,n)=>[message.id,n])),messageAt=n=>messages[n],locate=messageID=>messages.find(message=>message.id===messageID)||others.find(message=>message.id===messageID);
  const accounts=[{id:account,label:'Personal',address:'alice@fixture'},{id:otherAccount,label:'Work',address:'work@fixture'}].map(value=>({...value,revisionId:revision,protocol:'xmpp',connectionState:'connected',createdAt:new Date(baseTime).toISOString()}));
  const conversations=[{id:chat,accountId:account,title:'Family',address:'family@fixture'},{id:otherChat,accountId:otherAccount,title:'Work',address:'work@fixture'}].map(value=>({...value,revisionId:revision,kind:'direct',lastMessage:'Retained history',updatedAt:new Date(baseTime).toISOString(),unreadCount:0,archived:false,favorite:false}));
@@ -33,7 +35,14 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
    if(url.pathname===`/api/v1/conversations/${conversation.id}/message-stars`){const ids=url.searchParams.getAll('messageId');assert(ids.length<=100);return send(200,{items:ids.map(locate).filter(Boolean).map(star)})}
    if(url.pathname===`/api/v1/conversations/${conversation.id}/previews`){const ids=url.searchParams.getAll('messageId');assert(ids.length<=100);return send(200,{items:state.imageReady&&ids.includes(messageAt(imageIndex).id)?[{id:id(7000001),revisionId:id(7000002),accountId:account,conversationId:chat,messageId:messageAt(imageIndex).id,url:imageURL,kind:'image',state:'ready',downloadState:'ready',imageHash,fileHash:imageHash,fileMimeType:'image/png',fileSize:image.length,updatedAt:new Date(baseTime+900).toISOString()}]:[]})}
    if(url.pathname===`/api/v1/conversations/${conversation.id}/messages`){
-    const collection=conversation.id===chat?logical():others,limit=Number(url.searchParams.get('limit')||50),cursor=url.searchParams.get('cursor')||'',direction=url.searchParams.get('direction')||'older',index=cursor?collection.findIndex(message=>message.id===cursor):collection.length;
+    const collection=conversation.id===chat?logical():others,limit=Number(url.searchParams.get('limit')||50),cursor=url.searchParams.get('cursor')||'',direction=url.searchParams.get('direction')||'older';
+    let index=cursor?collection.findIndex(message=>message.id===cursor):collection.length;
+    if(index<0&&state.hidden.has(cursor)){
+     const anchor=locate(cursor);
+     index=collection.findIndex(message=>compare(message,anchor)>0);
+     if(index<0)index=collection.length;
+     if(direction==='newer')index--;
+    }
     assert(limit>0&&limit<=100);state.reads.push({chat:conversation.id,limit,cursor,direction});if(cursor&&index<0)return send(400,{status:400,code:'invalid_cursor'});
     const start=direction==='newer'?index+1:Math.max(0,index-limit),end=direction==='newer'?Math.min(collection.length,start+limit):index;let page=collection.slice(start,end).map(project).reverse(),nextCursor=direction==='newer'?(end<collection.length?page[0]?.id:undefined):(start>0?page.at(-1)?.id:undefined);
     const respond=()=>{if(conversation.id===chat&&cursor&&direction==='older'&&limit===50){if(state.mode==='failure')return send(503,{status:503,code:'unavailable'});if(state.mode==='foreign')page=page.map((message,n)=>n?message:{...message,accountId:otherAccount,conversationId:otherChat});if(state.mode==='duplicate'){page=[project(collection[index])];nextCursor=cursor}if(state.mode==='nonadvancing')nextCursor=cursor;if(state.mode==='unordered')page=[...page].reverse();if(state.mode==='empty'){page=[];nextCursor=collection[Math.max(0,index-limit)].id}}send(200,{items:page,nextCursor})};
@@ -54,7 +63,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
  const until=async(check,label)=>{for(let n=0;n<240;n++){if(await check())return;await sleep(50)}throw Error('Timed out: '+label+'\n'+log)};
  const open=async(params={},config={})=>{const context=await browser.newContext({viewport:{width:config.width||1280,height:900},locale:config.locale||'en',hasTouch:!!config.touch,isMobile:!!config.touch,reducedMotion:'reduce'});await context.addInitScript(()=>{localStorage.setItem('oie.device.auto-image-downloads.v1','false');window.timelineToken=Math.random()});await context.route('**/*',route=>{const url=new URL(route.request().url());if(['http:','https:'].includes(url.protocol)&&url.origin!==base){external.push(url.href);route.abort()}else route.continue()});const page=await context.newPage(),reads=[];let documents=0;page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.resourceType()==='document')documents++;const url=new URL(request.url());if(url.pathname==='/ui/timeline')reads.push(Object.fromEntries(url.searchParams))});debugPage=page;await page.goto(base+'/?'+new URLSearchParams({chat,lang:config.locale||'en',theme:config.theme||'dark',...params}));await until(async()=>await page.locator('#message-timeline > [data-message-id]').count()===50,'initial bounded50');return{context,page,reads,documents:()=>documents,token:await page.evaluate(()=>window.timelineToken)}};
  const rows=page=>page.locator('#message-timeline > [data-message-id]'),timeline=page=>page.locator('#message-timeline'),edge=(page,direction)=>page.locator(`[data-timeline-edge="${direction}"]`);
- const snapshot=async page=>{const actual=await rows(page).evaluateAll(nodes=>nodes.map(node=>({id:node.dataset.messageId,ms:Number(node.dataset.createdMs),account:node.dataset.messageAccount,conversation:node.dataset.messageConversation}))),order=new Map(logical().map((message,index)=>[message.id,index])),indices=actual.map(row=>order.get(row.id));assert(actual.length<=200,'timeline exceeded200 rows');assert.equal(new Set(actual.map(row=>row.id)).size,actual.length);for(let n=0;n<actual.length;n++){assert.notEqual(indices[n],undefined);assert.equal(actual[n].ms,Date.parse(locate(actual[n].id).createdAt));assert.equal(actual[n].account,account);assert.equal(actual[n].conversation,chat);if(n)assert.equal(indices[n],indices[n-1]+1,'timeline has an ordering gap')}return{ids:actual.map(row=>row.id),indices,min:indices[0],max:indices.at(-1),count:actual.length}};
+ const snapshot=async page=>{const actual=await rows(page).evaluateAll(nodes=>nodes.map(node=>({id:node.dataset.messageId,ms:Number(node.dataset.createdMs),account:node.dataset.messageAccount,conversation:node.dataset.messageConversation}))),order=new Map(logical().map((message,index)=>[message.id,index])),indices=actual.map(row=>order.get(row.id));assert(actual.length<=200,'timeline exceeded200 rows');assert.equal(new Set(actual.map(row=>row.id)).size,actual.length);for(let n=0;n<actual.length;n++){assert.notEqual(indices[n],undefined);assert.equal(actual[n].ms,positionTime(locate(actual[n].id)));assert.equal(actual[n].account,account);assert.equal(actual[n].conversation,chat);if(n)assert.equal(indices[n],indices[n-1]+1,'timeline has an ordering gap')}return{ids:actual.map(row=>row.id),indices,min:indices[0],max:indices.at(-1),count:actual.length}};
  const anchor=page=>timeline(page).evaluate(root=>{const bounds=root.getBoundingClientRect(),row=[...root.querySelectorAll(':scope > [data-message-id]')].find(row=>row.getBoundingClientRect().bottom>bounds.top+2);return{id:row.dataset.messageId,y:row.getBoundingClientRect().top}});
  const boundary=(page,direction)=>timeline(page).evaluate((root,direction)=>{root.scrollTop=direction==='older'?0:root.scrollHeight;const bounds=root.getBoundingClientRect(),row=[...root.querySelectorAll(':scope > [data-message-id]')].find(row=>row.getBoundingClientRect().bottom>bounds.top+2),position={id:row.dataset.messageId,y:row.getBoundingClientRect().top};root.dispatchEvent(new Event('scroll'));return position},direction);
  const pageOnce=async(page,direction)=>{await until(async()=>await timeline(page).getAttribute('data-timeline-busy')==='false','settled previous timeline request');await timeline(page).evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const before=await snapshot(page),history=await page.evaluate(()=>history.length),url=page.url(),position=await boundary(page,direction);await until(async()=>{const ids=await rows(page).evaluateAll(nodes=>nodes.map(node=>node.dataset.messageId));return direction==='older'?ids[0]!==before.ids[0]:ids.at(-1)!==before.ids.at(-1)},direction+' page');const after=await snapshot(page);assert.equal(after.count,Math.min(200,before.count+50));assert.equal(direction==='older'?after.min:after.max,direction==='older'?before.min-50:before.max+50);assert.equal(page.url(),url);assert.equal(await page.evaluate(()=>history.length),history);try{await until(async()=>Math.abs((await page.locator(`[data-message-id="${position.id}"]`).boundingBox()).y-position.y)<3,'stable '+direction+' anchor')}catch(error){console.error('Anchor delta',JSON.stringify({direction,before:{min:before.min,max:before.max,count:before.count},after:{min:after.min,max:after.max,count:after.count},expected:position,actual:await page.locator(`[data-message-id="${position.id}"]`).boundingBox(),scroll:await timeline(page).evaluate(root=>({top:root.scrollTop,height:root.scrollHeight,client:root.clientHeight}))}));throw error}return after};
@@ -101,6 +110,36 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
    await context.close();state.aliases.clear();
   }
   findings.push('A distant after-mount correction alias never joins disconnected ranges: an unfocused edge retires and retries from its surviving neighbor; focused aliases reset to50 canonical context rows without navigation or history changes');
+  app=await open();({page,context}=app);
+  const staleEdge=messages.at(-1),staleWindow=await snapshot(page),staleItems=messages.slice(-2);
+  assert.equal(staleWindow.ids.at(-1),staleEdge.id);
+  for(const item of staleItems){
+   state.hidden.add(item.id);
+   state.edits.set(item.id,{revisionId:id(9000099),sendState:'queued',scheduledAt:new Date(baseTime+3600000).toISOString()});
+  }
+  emit('conversation.updated');
+  await until(async()=>await page.locator(`[data-message-id="${staleEdge.id}"]`).count()===0,'refresh retires the hidden latest boundary without a message event');
+  assert.deepEqual((await snapshot(page)).ids,staleWindow.ids.slice(0,-staleItems.length));
+  assert(app.reads.some(read=>read.mode==='window'&&read.newest===staleEdge.id));
+  assert.equal(app.documents(),1);
+  await context.close();state.hidden.clear();for(const item of staleItems)state.edits.delete(item.id);
+  findings.push('A refresh window removes multiple rescheduled boundary rows even when their message events were missed.');
+  const queuedEdge=messages.at(-50),releaseTime=positionTime(messages.at(-1))+100;
+  state.edits.set(queuedEdge.id,{isOwn:true,sendState:'queued'});
+  app=await open();({page,context}=app);
+  await sleep(250);
+  const queuedWindow=await snapshot(page);
+  assert.equal(queuedWindow.ids[0],queuedEdge.id);
+  state.edits.set(queuedEdge.id,{isOwn:true,sendState:'submitted',revisionId:id(9000100),timelineAt:new Date(releaseTime).toISOString()});
+  await boundary(page,'older');
+  await until(async()=>await rows(page).count()>=99,'older paging retries from the stable neighbor of a released anchor');
+  const afterRelease=await snapshot(page);
+  assert.equal(afterRelease.min,queuedWindow.min-50);
+  assert(app.reads.some(read=>read.direction==='older'&&read.cursor===queuedEdge.id));
+  assert(app.reads.some(read=>read.direction==='older'&&read.cursor===queuedWindow.ids[1]));
+  assert.equal(await edge(page,'older').getAttribute('data-state'),'');
+  await context.close();state.edits.delete(queuedEdge.id);
+  findings.push('Older paging recovers from an already released cursor without introducing a gap or remounting the conversation.');
   state.mode='normal';app=await open();({page,context}=app);state.hold=true;state.pending=[];state.aborted=[];await boundary(page,'older');await until(()=>state.pending.length===1,'held page before conversation switch');await page.locator(`a[data-conversation-id="${otherChat}"]`).click();await until(async()=>await page.locator('body').getAttribute('data-conversation-id')===otherChat&&await rows(page).count()===50,'new conversation replaces timeline');await until(()=>state.aborted.length===1,'conversation route aborts old page');release();await sleep(150);assert((await rows(page).evaluateAll(nodes=>nodes.map(node=>node.dataset.messageId))).every(messageID=>others.some(message=>message.id===messageID)));assert.equal(app.documents(),1);await context.close();findings.push('Foreign/unordered/duplicate/nonadvancing/empty/failing pages preserve the current scope and need explicit retry; conversation replacement aborts old reads and rejects late rows');
   for(const width of [1280,390]){
    app=await open({}, {width,touch:width===390});({page,context}=app);

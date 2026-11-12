@@ -11,6 +11,9 @@ import (
 
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
+	"github.com/golang-migrate/migrate/v4"
+	migratesqlite "github.com/golang-migrate/migrate/v4/database/sqlite"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/google/uuid"
 )
 
@@ -20,6 +23,26 @@ func migrationID() domain.ID {
 		panic(err)
 	}
 	return domain.ID(value.String())
+}
+
+func migrateFixtureToVersion(t *testing.T, store *Store, version uint) {
+	t.Helper()
+	driver, err := migratesqlite.WithInstance(store.db, &migratesqlite.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := iofs.New(migrations, "migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = source.Close() }()
+	runner, err := migrate.NewWithInstance("iofs", source, "sqlite", driver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = runner.Migrate(version); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestSchedulingPreviewMigratesWithoutDiscardingData(t *testing.T) {
@@ -38,7 +61,7 @@ func TestSchedulingPreviewMigratesWithoutDiscardingData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
+	for _, name := range []string{"000023_dispatch_wire_stage", "000022_scheduled_timeline", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
 		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
 		if err != nil {
 			t.Fatal(err)

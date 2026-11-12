@@ -227,24 +227,7 @@ func TestEditHistoryMigration13To14PreservesSourceIdentityAndPendingSends(t *tes
 	if err = s.db.QueryRow("SELECT payload FROM messages WHERE id=?", source.ID).Scan(&sourcePayload); err != nil {
 		t.Fatal(err)
 	}
-	editDown, err := migrations.ReadFile("migrations/000015_message_edit_commands.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.db.Exec(string(editDown)); err != nil {
-		t.Fatal(err)
-	}
-	downReactionMigration(t, s)
-	down, err := migrations.ReadFile("migrations/000014_message_revision_index.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.db.Exec(string(down)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.db.Exec("UPDATE schema_migrations SET version=13,dirty=0"); err != nil {
-		t.Fatal(err)
-	}
+	migrateFixtureToVersion(t, s, 13)
 	var databaseIndex int
 	var databaseName, path string
 	if err = s.db.QueryRow("PRAGMA database_list").Scan(&databaseIndex, &databaseName, &path); err != nil {

@@ -116,7 +116,7 @@ func (q *Queries) ListConversationMessageStars(ctx context.Context, arg ListConv
 }
 
 const listStarredMessages = `-- name: ListStarredMessages :many
-SELECT CAST(COALESCE(h.payload,m.payload) AS TEXT) AS message_payload,c.payload AS conversation_payload,s.payload AS star_payload
+SELECT CAST(COALESCE(h.payload,m.payload) AS TEXT) AS message_payload,m.timeline_at_ms,c.payload AS conversation_payload,s.payload AS star_payload
 FROM messages AS m JOIN conversations AS c ON c.id=m.conversation_id
 LEFT JOIN message_content_heads AS h ON h.canonical_id=m.id
 JOIN message_stars AS s ON s.message_id=(
@@ -127,11 +127,12 @@ JOIN message_stars AS s ON s.message_id=(
 )
 WHERE s.starred=1
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
+AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id)
 AND (CAST(?1 AS TEXT)='' OR m.account_id=CAST(?1 AS TEXT))
 AND (CAST(?2 AS TEXT)='' OR m.conversation_id=CAST(?2 AS TEXT))
 AND (CAST(?3 AS TEXT)='' OR
- (m.created_at_ms,m.id)<(SELECT x.created_at_ms,x.id FROM messages AS x WHERE x.id=CAST(?3 AS TEXT)))
-ORDER BY m.created_at_ms DESC,m.id DESC LIMIT ?4
+ (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)<(SELECT COALESCE(x.timeline_at_ms,x.created_at_ms),x.id FROM messages AS x WHERE x.id=CAST(?3 AS TEXT)))
+ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT ?4
 `
 
 type ListStarredMessagesParams struct {
@@ -143,6 +144,7 @@ type ListStarredMessagesParams struct {
 
 type ListStarredMessagesRow struct {
 	MessagePayload      string
+	TimelineAtMs        *int64
 	ConversationPayload string
 	StarPayload         string
 }
@@ -161,7 +163,12 @@ func (q *Queries) ListStarredMessages(ctx context.Context, arg ListStarredMessag
 	items := []ListStarredMessagesRow{}
 	for rows.Next() {
 		var i ListStarredMessagesRow
-		if err := rows.Scan(&i.MessagePayload, &i.ConversationPayload, &i.StarPayload); err != nil {
+		if err := rows.Scan(
+			&i.MessagePayload,
+			&i.TimelineAtMs,
+			&i.ConversationPayload,
+			&i.StarPayload,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

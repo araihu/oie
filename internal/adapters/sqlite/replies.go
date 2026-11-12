@@ -188,11 +188,15 @@ func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) erro
 }
 
 func (s *Store) hydrateReplies(ctx context.Context, items []domain.Message) ([]domain.Message, error) {
+	return hydrateMessageRows(ctx, s.queries, items)
+}
+
+func hydrateMessageRows(ctx context.Context, q *dbgen.Queries, items []domain.Message) ([]domain.Message, error) {
 	for i := range items {
-		if err := hydrateMessageProjection(ctx, s.queries, &items[i]); err != nil {
+		if err := hydrateMessageProjection(ctx, q, &items[i]); err != nil {
 			return nil, err
 		}
-		if err := hydrateReply(ctx, s.queries, &items[i]); err != nil {
+		if err := hydrateReply(ctx, q, &items[i]); err != nil {
 			return nil, err
 		}
 	}
@@ -200,7 +204,12 @@ func (s *Store) hydrateReplies(ctx context.Context, items []domain.Message) ([]d
 }
 
 func (s *Store) MessageContext(ctx context.Context, conversation, target domain.ID, limit int) (domain.MessageContext, error) {
-	canonical, err := resolveMessageAlias(ctx, s.queries, target)
+	tx, q, err := begin(ctx, s)
+	if err != nil {
+		return domain.MessageContext{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	canonical, err := resolveMessageAlias(ctx, q, target)
 	if err != nil {
 		return domain.MessageContext{}, err
 	}
@@ -209,7 +218,7 @@ func (s *Store) MessageContext(ctx context.Context, conversation, target domain.
 		window.RequestedTargetID = target
 	}
 	target = canonical
-	row, err := s.queries.GetMessage(ctx, string(target))
+	row, err := q.GetTimelineMessage(ctx, string(target))
 	if err != nil {
 		return window, notFound(err)
 	}
@@ -218,11 +227,11 @@ func (s *Store) MessageContext(ctx context.Context, conversation, target domain.
 	}
 	olderLimit := (limit-1)/2 + 1
 	newerLimit := limit - olderLimit
-	before, err := s.queries.MessagesAtOrBeforeTarget(ctx, dbgen.MessagesAtOrBeforeTargetParams{ConversationID: string(conversation), TargetID: string(target), PageLimit: int64(olderLimit + 1)})
+	before, err := q.MessagesAtOrBeforeTarget(ctx, dbgen.MessagesAtOrBeforeTargetParams{ConversationID: string(conversation), TargetID: string(target), PageLimit: int64(olderLimit + 1)})
 	if err != nil {
 		return window, err
 	}
-	after, err := s.queries.MessagesAfterTarget(ctx, dbgen.MessagesAfterTargetParams{ConversationID: string(conversation), TargetID: string(target), PageLimit: int64(newerLimit + 1)})
+	after, err := q.MessagesAfterTarget(ctx, dbgen.MessagesAfterTargetParams{ConversationID: string(conversation), TargetID: string(target), PageLimit: int64(newerLimit + 1)})
 	if err != nil {
 		return window, err
 	}
@@ -240,8 +249,11 @@ func (s *Store) MessageContext(ctx context.Context, conversation, target domain.
 	if err != nil {
 		return window, err
 	}
-	window.Items, err = s.hydrateReplies(ctx, window.Items)
-	return window, err
+	window.Items, err = hydrateMessageRows(ctx, q, window.Items)
+	if err != nil {
+		return window, err
+	}
+	return window, tx.Commit()
 }
 
 func hydrateReferences(ctx context.Context, q *dbgen.Queries, m *domain.Message) error {

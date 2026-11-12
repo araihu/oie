@@ -609,7 +609,11 @@ func build55(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("path", "operationId", &path0); err != nil {
 		return nil, err
 	}
-	return api.NewGetOperationRequest(server, path0)
+	var params api.GetOperationParams
+	if err := input.Decode("query", "includeAcceptedMessage", &params.IncludeAcceptedMessage); err != nil {
+		return nil, err
+	}
+	return api.NewGetOperationRequest(server, path0, &params)
 }
 func build56(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID

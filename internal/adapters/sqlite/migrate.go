@@ -15,7 +15,8 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-const latestMigration = 21
+const schedulingMigration = 21
+const latestMigration = 23
 
 func migrateDatabase(ctx context.Context, db *sql.DB) error {
 	// Catalog introspection is bootstrap housekeeping, not application queries.
@@ -63,7 +64,7 @@ func migrateDatabase(ctx context.Context, db *sql.DB) error {
 	} else if errors.Is(err, migrate.ErrNilVersion) && legacy != 0 {
 		return errors.New("untracked non-legacy database; refusing migration baseline")
 	}
-	if version >= 18 && version < latestMigration {
+	if version >= 18 && version < schedulingMigration {
 		if err := adoptSchedulingPreview(ctx, db, runner, version, legacy); err != nil {
 			return err
 		}
@@ -113,5 +114,5 @@ func adoptSchedulingPreview(ctx context.Context, db *sql.DB, runner *migrate.Mig
 	}
 	// All reaction migrations have run and the preview had already applied the
 	// exact scheduling schema now registered as version 21.
-	return runner.Force(latestMigration)
+	return runner.Force(schedulingMigration)
 }

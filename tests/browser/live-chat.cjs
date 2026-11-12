@@ -33,11 +33,11 @@ const engine=id(1),account=id(2),chat=id(3);
     return write(200,{items:state.messages.filter(m=>!cursor||(newer?compare(m,cursor)>0:compare(m,cursor)<0)).sort((a,b)=>compare(b,a))});
    }
    state.posts=(state.posts||0)+1;const key=req.headers['idempotency-key'];const known=state.operations.get(key);
-   if(known){const message=state.messages.find(m=>m.id===known.resourceId);return message.originalText===input.originalText?write(200,message):problem(409,'idempotency_conflict')}
+   if(known){const message=known.acceptedMessage;return message.originalText===input.originalText?write(200,message):problem(409,'idempotency_conflict')}
    const message={id:id(100+state.effects),revisionId:id(200+state.effects),accountId:account,conversationId:chat,sender:{id:account,displayName:'Alice'},originalText:input.originalText,createdAt:new Date().toISOString(),isOwn:true,sendState:'queued'};
-   state.effects++;state.messages.push(message);state.operations.set(key,{id:key,kind:'send_message',resourceId:message.id,status:'succeeded',createdAt:message.createdAt});emit('message.created',message);return write(202,message);
+   state.effects++;state.messages.push(message);state.operations.set(key,{id:key,kind:'send_message',resourceId:message.id,status:'succeeded',createdAt:message.createdAt,acceptedMessage:structuredClone(message)});emit('message.created',message);return write(202,message);
   }
-  if(u.pathname.startsWith('/api/v1/operations/')){const operation=state.operations.get(u.pathname.split('/').at(-1));return operation?write(200,operation):problem(404,'not_found')}
+  if(u.pathname.startsWith('/api/v1/operations/')){const operation=state.operations.get(u.pathname.split('/').at(-1));if(!operation)return problem(404,'not_found');const {acceptedMessage,...metadata}=operation;return write(200,u.searchParams.get('includeAcceptedMessage')==='true'?{...metadata,acceptedMessage}:metadata)}
   if(u.pathname.startsWith('/api/v1/messages/')){
    const message=state.messages.find(m=>m.id===u.pathname.split('/')[4]);if(!message)return problem(404,'not_found');
    if(req.method==='POST'){

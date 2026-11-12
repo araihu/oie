@@ -105,14 +105,18 @@ func (s *Store) UpdatePendingMessage(ctx context.Context, in application.Pending
 		return application.MessageResult{}, application.StateConflict{Current: m}
 	}
 	next := in.Operation.CreatedAt
+	hideFromTimeline := in.ScheduledAt != nil && m.ScheduledAt == nil
 	switch {
 	case in.SendNow:
 		m.ScheduledAt = nil
-		if err = publishScheduledSend(ctx, q, m, in.RevisionID, next); err != nil {
-			return application.MessageResult{}, err
-		}
 	case in.ScheduledAt != nil:
 		m.ScheduledAt = in.ScheduledAt
+		if m.TimelineAt != nil {
+			if err = q.SetMessageTimelineAt(ctx, dbgen.SetMessageTimelineAtParams{ID: id}); err != nil {
+				return application.MessageResult{}, err
+			}
+			m.TimelineAt = nil
+		}
 	default:
 		next, err = time.Parse(time.RFC3339Nano, outbox.NextAttemptAt)
 		if err != nil {
@@ -120,7 +124,7 @@ func (s *Store) UpdatePendingMessage(ctx context.Context, in application.Pending
 		}
 	}
 	if changed := in.Composition; changed != nil {
-		if changed.OutboundReply != nil && (m.OutboundReply == nil || m.OutboundReply.TargetID != changed.OutboundReply.TargetID) {
+		if changed.OutboundReply != nil && (in.ExpectedReplyRevisionID != "" || m.OutboundReply == nil || m.OutboundReply.TargetID != changed.OutboundReply.TargetID) {
 			if err = checkPendingReplyTarget(ctx, q, changed); err != nil {
 				return application.MessageResult{}, err
 			}
@@ -136,9 +140,19 @@ func (s *Store) UpdatePendingMessage(ctx context.Context, in application.Pending
 			return application.MessageResult{}, err
 		}
 	}
-	m, err = updateMessage(ctx, q, m, "queued", in.RevisionID, in.Operation.CreatedAt, next)
+	if in.SendNow {
+		if err = publishScheduledSend(ctx, q, &m, in.RevisionID, next); err != nil {
+			return application.MessageResult{}, err
+		}
+	}
+	m, err = updateMessage(ctx, q, m, "queued", in.RevisionID, in.Operation.CreatedAt, next, false)
 	if err != nil {
 		return application.MessageResult{}, err
+	}
+	if hideFromTimeline {
+		if err = refreshConversationSummary(ctx, q, m.ConversationID, in.Operation.CreatedAt); err != nil {
+			return application.MessageResult{}, err
+		}
 	}
 	if in.Composition != nil {
 		if err = recordReplyMetadata(ctx, q, id, m, false); err != nil {
@@ -154,7 +168,7 @@ func (s *Store) UpdatePendingMessage(ctx context.Context, in application.Pending
 	return application.MessageResult{Message: m}, tx.Commit()
 }
 
-func (s *Store) RecordAttachmentWireText(ctx context.Context, id, revision domain.ID, body string) error {
+func (s *Store) RecordOriginalWireAttempt(ctx context.Context, id, revision domain.ID, attachmentBody string) error {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
 		return err
@@ -174,8 +188,23 @@ func (s *Store) RecordAttachmentWireText(ctx context.Context, id, revision domai
 	if m.RevisionID != revision || m.SendState != "dispatching" {
 		return application.StateConflict{Current: m}
 	}
-	m.AttachmentWireText = body
-	if err = q.UpdateMessage(ctx, dbgen.UpdateMessageParams{ID: string(id), RevisionID: string(revision), State: m.SendState, Payload: jsonText(m)}); err != nil {
+	if attachmentBody != "" {
+		m.AttachmentWireText = attachmentBody
+		if err = q.UpdateMessage(ctx, dbgen.UpdateMessageParams{ID: string(id), RevisionID: string(revision), State: m.SendState, Payload: jsonText(m)}); err != nil {
+			return err
+		}
+	}
+	// Upload claims can precede a text send that reaches the wire first.
+	latest, err := q.LatestOwnMessage(ctx, string(m.ConversationID))
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if latest.ID != string(id) {
+		if err = q.RecordOriginalTransmission(ctx, string(id)); err != nil {
+			return err
+		}
+	}
+	if err = q.MarkOutboxWireStarted(ctx, string(id)); err != nil {
 		return err
 	}
 	return tx.Commit()

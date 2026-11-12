@@ -8,12 +8,16 @@ templ timelineFragment(v view){
 @avatarData(v)
 <div id="live-timeline">@timeline(v)</div>
 for requested,m:=range v.TimelineAliases {
+if requested==m.Id {
+<template data-timeline-release-boundary={requested} data-canonical={m.Id}>@message(v,m,false,true)</template>
+} else {
 <template data-timeline-alias={requested} data-canonical={m.Id}>@message(v,m,false,true)</template>
+}
 }
 }
 
 templ timelineEnvelope(v view){
-<template data-timeline-page data-engine={v.EngineID} data-account={selectedAccountID(v)} data-conversation={v.ChatID} data-mode={v.TimelineMode} data-direction={v.TimelineDirection} data-cursor={v.TimelineCursor} data-canonical-cursor={v.TimelineCanonicalCursor} data-request-oldest={v.TimelineRequestOldest} data-request-newest={v.TimelineRequestNewest} data-oldest={v.timelineEdge("older")} data-newest={v.timelineEdge("newer")} data-oldest-ms={v.timelineEdgeMS("older")} data-newest-ms={v.timelineEdgeMS("newer")} data-has-older={strconv.FormatBool(v.TimelineOlder)} data-has-newer={strconv.FormatBool(v.TimelineNewer)} data-complete={strconv.FormatBool(v.TimelineComplete)} data-state="ready"></template>
+<template data-timeline-page data-engine={v.EngineID} data-account={selectedAccountID(v)} data-conversation={v.ChatID} data-mode={v.TimelineMode} data-direction={v.TimelineDirection} data-cursor={v.TimelineCursor} data-canonical-cursor={v.TimelineCanonicalCursor} data-request-oldest={v.TimelineRequestOldest} data-request-newest={v.TimelineRequestNewest} data-hidden-oldest={strconv.FormatBool(v.TimelineHiddenOldest)} data-hidden-newest={strconv.FormatBool(v.TimelineHiddenNewest)} data-oldest={v.timelineEdge("older")} data-newest={v.timelineEdge("newer")} data-oldest-ms={v.timelineEdgeMS("older")} data-newest-ms={v.timelineEdgeMS("newer")} data-has-older={strconv.FormatBool(v.TimelineOlder)} data-has-newer={strconv.FormatBool(v.TimelineNewer)} data-complete={strconv.FormatBool(v.TimelineComplete)} data-state="ready"></template>
 }
 templ timelineControl(v view,direction string,available bool){
 <div class="oie-timeline-edge" data-timeline-edge={direction} data-loading={v.Text.TimelineLoading} data-failed={v.Text.TimelineFailed} data-paused={v.Text.TimelinePaused} data-retry={v.Text.Retry}>

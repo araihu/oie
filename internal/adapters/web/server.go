@@ -185,6 +185,7 @@ type view struct {
 	FocusMessage                                                                                  string
 	ContextHasNewer, ContextHasOlder, ContextMissing                                              bool
 	TimelineOlder, TimelineNewer, TimelineComplete                                                bool
+	TimelineHiddenOldest, TimelineHiddenNewest                                                    bool
 	TimelineMode, TimelineDirection, TimelineCursor, TimelineRequestOldest, TimelineRequestNewest string
 	TimelineCanonicalCursor                                                                       string
 	TimelineAliases                                                                               map[string]messageView
@@ -205,6 +206,7 @@ type view struct {
 type copy struct {
 	ScheduleSelectedConversations                           string
 	ScheduleLoading, ScheduleViewAgenda, ScheduleCancelSend string
+	ScheduleReviewChanged, AttachmentTooLarge               string
 	DismissLinkPreview                                      string
 
 	Scheduled, Schedule, Reschedule, ScheduleWhen, ScheduleEmpty, ScheduleUnavailable, ScheduleReview, ScheduleBack, ScheduleCancel, ScheduleEditMode, ScheduleSave, ScheduleSaved, SendNow, ScheduleTimeInvalid, ScheduleTimeAmbiguous, AttachmentFailed, AttachmentLimit, RemoveAttachment string
