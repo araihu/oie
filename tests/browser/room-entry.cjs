@@ -21,7 +21,7 @@ const accounts = [
   {id: bob, revisionId: revision, label: 'Bob', address: 'bob@fixture', protocol: 'xmpp', createdAt: at}
 ];
 const previews = [], commands = [], streams = new Set();
-let held, destination, roomState = 'joining', cursor = 0, conflict = false, trustedService = true;
+let destination, roomState = 'joining', cursor = 0, conflict = false, trustedService = true;
 
 async function apiHandler(req, res) {
   const u = new URL(req.url, 'http://fixture');
@@ -47,7 +47,6 @@ async function apiHandler(req, res) {
     const scoped = u.searchParams.get('discoveredServiceOnly') === 'true';
     if (scoped && !trustedService) return send(200, {address, state: 'unavailable'});
     previews.push({account: u.pathname.split('/')[4], address: u.searchParams.get('address'), scoped});
-    if (held) await held;
     if (u.searchParams.get('address') === 'missing@fixture') return send(200, {address: 'missing@fixture', state: 'not_found'});
     return send(200, {address, state: 'known', name: 'Saberes <script>', description: 'Bem-vindos!', topic: 'Encontro', occupantCount: 17, avatarHash});
   }
@@ -105,7 +104,12 @@ async function waitFor(predicate) {
     await waitFor(async () => { try { return (await fetch(base)).ok; } catch { return false; } });
     const page = await browser.newPage({viewport: {width: 1440, height: 950}, locale: 'pt-BR'});
     page.on('pageerror', error => errors.push(error.message));
-    held = new Promise(resolve => { release = resolve; });
+    const heldCard = new Promise(resolve => { release = resolve; });
+    await page.route('**/ui/rooms/preview', async route => {
+      const response = await route.fetch();
+      await heldCard;
+      await route.fulfill({response});
+    }, {times: 1});
     await page.goto(base + '/?' + new URLSearchParams({chat, account: alice, lang: 'pt-BR'}));
     const draft = page.locator('#message-composer');
     await draft.fill('Meu rascunho');
@@ -119,9 +123,6 @@ async function waitFor(predicate) {
     assert.equal(previews[0].address, address);
     assert.equal(previews[0].scoped, true);
     assert.equal(commands.length, 0);
-    const foreign = await page.request.post(base + '/ui/rooms/preview', {form: {accountId: alice, address}});
-    assert.equal(foreign.status(), 403);
-
     await page.evaluate(() => {
       const elements = ['#send-message-form', '.oie-timeline-frame', '#message-timeline', '[data-room-bubble]', '.oie-room-invitation-action'].map(s => document.querySelector(s));
       const sample = () => elements.map(el => {
@@ -138,13 +139,19 @@ async function waitFor(predicate) {
       requestAnimationFrame(frame);
     });
     release();
-    held = undefined;
     await card.getByText('Saberes <script>', {exact: true}).waitFor();
     await card.getByText('Bem-vindos!', {exact: true}).waitFor();
     await waitFor(() => card.locator('img').evaluate(img => img.complete && img.naturalWidth > 0));
     assert.equal(await card.locator('script').count(), 0);
+    const foreign = await page.request.post(base + '/ui/rooms/preview', {form: {accountId: alice, address}});
+    assert.equal(foreign.status(), 403);
     previews.length = 0;
-    held = new Promise(resolve => { release = resolve; });
+    const heldPreview = new Promise(resolve => { release = resolve; });
+    await page.route('**/ui/rooms/preview', async route => {
+      const response = await route.fetch();
+      await heldPreview;
+      await route.fulfill({response}).catch(() => {});
+    }, {times: 2});
     await link.focus();
     await page.keyboard.press('Enter');
     const form = page.locator('#join-room-form');
@@ -161,7 +168,6 @@ async function waitFor(predicate) {
     assert.deepEqual(previews.map(value => value.account), [alice, bob]);
     assert(previews.every(value => !value.scoped));
     release();
-    held = undefined;
     await preview.getByText('Saberes <script>', {exact: true}).waitFor();
     assert.equal(await preview.locator('script').count(), 0);
     await waitFor(() => preview.locator('img').evaluate(img => img.complete && img.naturalWidth > 0));
