@@ -38,7 +38,7 @@ receive live updates. Device drafts and unresolved acceptance keys survive refre
 The independent read-only mock remains available for presentation tests.
 Existing account text archives now recover serially with durable checkpoints,
 original timestamps, replay deduplication and progress through the API/UI. Saved
-rooms support explicit entry/leave, basic text and replies while joined.
+rooms support creation, explicit entry/leave, basic text and replies while joined. [XMPP room links](docs/room-entry.md) open a preview and let you choose an account before joining.
 Attachment uploads, schedules, sync, PWA/offline and backup/restore remain later
 work.
 See [history recovery scope](docs/milestone-three-history.md). See [engine milestone notes](docs/milestone-two-engine.md) and

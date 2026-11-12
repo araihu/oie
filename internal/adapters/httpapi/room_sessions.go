@@ -25,6 +25,10 @@ func roomSession(value domain.RoomSession) engineapi.RoomSession {
 		code := value.LastErrorCode
 		switch code {
 		case "not_connected", "forbidden", "not_authorized", "nickname_conflict", "registration_required", "room_unavailable", "removed", "timeout", "unsupported", "unknown":
+		case "room_exists", "creation_failed":
+			creationError := engineapi.RoomSessionCreationError(code)
+			out.CreationError = &creationError
+			code = "room_unavailable"
 		default:
 			code = "unknown"
 		}

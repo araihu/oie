@@ -78,6 +78,15 @@ func (s *Store) OpenConversation(ctx context.Context, in application.Conversatio
 	if err != nil {
 		return application.ConversationResult{}, err
 	}
+	if in.RoomEntry != nil {
+		if c.Kind != "room" {
+			return application.ConversationResult{}, application.ErrStateConflict
+		}
+		if err := openRoomIntent(ctx, q, c.ID, *in.RoomEntry); err != nil {
+			return application.ConversationResult{}, err
+		}
+	}
+
 	if err = q.SetOperationResult(ctx, dbgen.SetOperationResultParams{ResourceID: string(c.ID), Result: jsonText(c), ID: string(in.Operation.ID)}); err != nil {
 		return application.ConversationResult{}, err
 	}

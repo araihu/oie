@@ -27,6 +27,8 @@ type roomSlot struct {
 	requestID                string
 	joinDeadline             time.Time
 	leaving                  bool
+	creationName             *string
+	configuring              bool
 	mentionOccupants         map[string]observedMention
 	ownOccupantID            string
 	pendingOwnOccupantID     string
@@ -96,6 +98,14 @@ func (m *Manager) notifyRoom(ctx context.Context, e *entry, slot *roomSlot, snap
 	}
 }
 func (m *Manager) JoinRoom(ctx context.Context, a domain.Account, c domain.Conversation, nickname string, intentRevision domain.ID) (domain.RoomSession, error) {
+	return m.joinRoom(ctx, a, c, nickname, intentRevision, nil)
+}
+
+func (m *Manager) CreateRoom(ctx context.Context, a domain.Account, c domain.Conversation, nickname, name string, intentRevision domain.ID) (domain.RoomSession, error) {
+	return m.joinRoom(ctx, a, c, nickname, intentRevision, &name)
+}
+
+func (m *Manager) joinRoom(ctx context.Context, a domain.Account, c domain.Conversation, nickname string, intentRevision domain.ID, creationName *string) (domain.RoomSession, error) {
 	e, room, err := m.roomEntry(a, c)
 	if err != nil {
 		return domain.RoomSession{}, err
@@ -118,7 +128,12 @@ func (m *Manager) JoinRoom(ctx context.Context, a domain.Account, c domain.Conve
 	existing := e.rooms[c.Address]
 	session := e.session
 	connected := e.state.State == "connected"
-	if connected && session != nil && existing != nil && existing.snapshot.Nickname == nickname && existing.session == session && (existing.snapshot.State == "joining" || existing.snapshot.State == "joined") {
+	if connected && session != nil && existing != nil && existing.session == session && existing.configuring {
+		snapshot := existing.snapshot
+		e.mu.Unlock()
+		return snapshot, nil
+	}
+	if connected && session != nil && existing != nil && existing.snapshot.Nickname == nickname && existing.session == session && sameRoomEntry(existing, creationName, intentRevision) && (existing.snapshot.State == "joining" || existing.snapshot.State == "joined") {
 		existing.snapshot.IntentRevisionID = intentRevision
 		existing.snapshot.UpdatedAt = time.Now().UTC()
 		snapshot := existing.snapshot
@@ -130,20 +145,8 @@ func (m *Manager) JoinRoom(ctx context.Context, a domain.Account, c domain.Conve
 	if session == nil || !connected {
 		return roomSnapshot(c, "not_joined", nickname, "not_connected", intentRevision), nil
 	}
-	// Discovery prevents a join request from accidentally creating an unknown room.
-	info, discoErr := m.queryInfo(ctx, e, session, c.Address)
-	roomSupported := false
-	for _, identity := range info.Identity {
-		roomSupported = roomSupported || (identity.Category == "conference" && identity.Type == "text")
-	}
-	if discoErr != nil || !roomSupported {
-		code := "room_unavailable"
-		if errors.Is(discoErr, errDetailPermission) {
-			code = "forbidden"
-		}
-		if discoErr == nil {
-			code = "unsupported"
-		}
+	code := m.roomEntryAvailability(ctx, e, session, room, creationName != nil)
+	if code != "" {
 		e.roomNotifyMu.Lock()
 		defer e.roomNotifyMu.Unlock()
 		e.mu.Lock()
@@ -158,8 +161,13 @@ func (m *Manager) JoinRoom(ctx context.Context, a domain.Account, c domain.Conve
 			e.mu.Unlock()
 			return domain.RoomSession{}, application.ErrProtocolUnavailable
 		}
+		if old := e.rooms[c.Address]; old != nil && old.session == session && old.configuring {
+			snapshot := old.snapshot
+			e.mu.Unlock()
+			return snapshot, nil
+		}
 		snapshot := roomSnapshot(c, "failed", nickname, code, intentRevision)
-		snapshot.Revoked = code == "forbidden"
+		snapshot.Revoked = code == "forbidden" || creationName != nil
 		slot := &roomSlot{conversation: c, snapshot: snapshot, session: session}
 		if old := e.rooms[c.Address]; old != nil && old.snapshot.State == "joined" {
 			advanceRoomPresenceLocked(e, c.Address)
@@ -177,7 +185,7 @@ func (m *Manager) JoinRoom(ctx context.Context, a domain.Account, c domain.Conve
 	defer e.roomNotifyMu.Unlock()
 	e.mu.Lock()
 	s, raw := e.session, e.raw
-	if s == nil || raw == nil || e.state.State != "connected" {
+	if s != session || raw == nil || e.state.State != "connected" {
 		e.mu.Unlock()
 		return roomSnapshot(c, "not_joined", nickname, "not_connected", intentRevision), nil
 	}
@@ -189,7 +197,12 @@ func (m *Manager) JoinRoom(ctx context.Context, a domain.Account, c domain.Conve
 		e.mu.Unlock()
 		return domain.RoomSession{}, application.ErrInvalid
 	}
-	if old != nil && old.session == s && old.snapshot.Nickname == nickname && (old.snapshot.State == "joining" || old.snapshot.State == "joined") {
+	if old != nil && old.session == s && old.configuring {
+		snapshot := old.snapshot
+		e.mu.Unlock()
+		return snapshot, nil
+	}
+	if old != nil && old.session == s && old.snapshot.Nickname == nickname && sameRoomEntry(old, creationName, intentRevision) && (old.snapshot.State == "joining" || old.snapshot.State == "joined") {
 		old.snapshot.IntentRevisionID = intentRevision
 		old.snapshot.UpdatedAt = time.Now().UTC()
 		snapshot := old.snapshot
@@ -208,7 +221,7 @@ func (m *Manager) JoinRoom(ctx context.Context, a domain.Account, c domain.Conve
 			return domain.RoomSession{}, err
 		}
 	}
-	slot := &roomSlot{conversation: c, snapshot: roomSnapshot(c, "joining", nickname, "", intentRevision), session: s, requestID: randomQueryID(), joinDeadline: time.Now().Add(10 * time.Second)}
+	slot := &roomSlot{conversation: c, snapshot: roomSnapshot(c, "joining", nickname, "", intentRevision), session: s, requestID: randomQueryID(), joinDeadline: time.Now().Add(10 * time.Second), creationName: creationName}
 	e.rooms[c.Address] = slot
 	e.mu.Unlock()
 	e.sendMu.Lock()
@@ -225,6 +238,7 @@ func (m *Manager) JoinRoom(ctx context.Context, a domain.Account, c domain.Conve
 		e.mu.Lock()
 		if e.rooms[c.Address] == slot {
 			slot.snapshot = roomSnapshot(c, "failed", nickname, "unknown", intentRevision)
+			slot.snapshot.Revoked = creationName != nil
 		}
 		snapshot := slot.snapshot
 		e.mu.Unlock()
@@ -303,8 +317,12 @@ func (m *Manager) RoomSession(ctx context.Context, a domain.Account, c domain.Co
 	e.mu.Lock()
 	slot := e.rooms[c.Address]
 	if slot == nil {
+		code := ""
+		if e.session == nil || e.state.State != "connected" {
+			code = "not_connected"
+		}
 		e.mu.Unlock()
-		return roomSnapshot(c, "not_joined", "", ""), nil
+		return roomSnapshot(c, "not_joined", "", code), nil
 	}
 	if slot.conversation.ID != c.ID {
 		e.mu.Unlock()
@@ -318,6 +336,7 @@ func (m *Manager) RoomSession(ctx context.Context, a domain.Account, c domain.Co
 	timedout := slot.snapshot.State == "joining" && time.Now().After(slot.joinDeadline)
 	if timedout {
 		slot.snapshot = roomSnapshot(c, "failed", slot.snapshot.Nickname, "timeout", slot.snapshot.IntentRevisionID)
+		slot.snapshot.Revoked = slot.creationName != nil
 	}
 	snapshot := slot.snapshot
 	e.mu.Unlock()
@@ -338,10 +357,12 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 	}
 	self := false
 	renamed := false
+	created := false
 	if p.MUC != nil {
 		for _, status := range p.MUC.Status {
 			self = self || status.Code == 110
 			renamed = renamed || status.Code == 210
+			created = created || status.Code == 201
 		}
 	}
 	if p.From.Resourcepart() != slot.snapshot.Nickname {
@@ -383,7 +404,7 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 			}
 		}
 		slot.snapshot = roomSnapshot(slot.conversation, "failed", slot.snapshot.Nickname, code, slot.snapshot.IntentRevisionID)
-		slot.snapshot.Revoked = code == "forbidden" || code == "not_authorized" || code == "registration_required"
+		slot.snapshot.Revoked = slot.creationName != nil || code == "forbidden" || code == "not_authorized" || code == "registration_required"
 	} else if self && p.Type == stanza.UnavailablePresence {
 		code := ""
 		if p.MUC != nil {
@@ -415,6 +436,15 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 		slot.leaving = false
 	} else if self && p.Type == "" && slot.snapshot.State == "joining" && !slot.leaving {
 		if p.ID != "" && slot.requestID != "" && p.ID != slot.requestID {
+			e.mu.Unlock()
+			return true, nil
+		}
+		if created || slot.creationName != nil {
+			if !slot.configuring {
+				slot.configuring = true
+				slot.joinDeadline = time.Now().Add(15 * time.Second)
+				go m.finishRoomEntry(ctx, e, slot, p, created && p.MUC.Item.Affiliation == "owner")
+			}
 			e.mu.Unlock()
 			return true, nil
 		}

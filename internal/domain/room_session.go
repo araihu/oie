@@ -8,7 +8,8 @@ import "time"
 type RoomSession struct {
 	AccountID, ConversationID, IntentID, IntentRevisionID ID
 	Active                                                bool
-	Revoked                                               bool `json:"-"`
+	CreationName                                          *string `json:"-"`
+	Revoked                                               bool    `json:"-"`
 	State, Nickname, LastErrorCode                        string
 	UpdatedAt                                             time.Time
 }

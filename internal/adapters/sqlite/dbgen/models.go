@@ -333,6 +333,7 @@ type RoomIntent struct {
 	LastErrorCode          string
 	ObservationFingerprint string
 	UpdatedAt              string
+	CreationName           *string
 }
 
 type RoomReactionPrivacy struct {

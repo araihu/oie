@@ -619,6 +619,7 @@ window.OieRuntime.register('live', life => {
           const previousFocus=room.contains(document.activeElement),previousFeedback=room.querySelector('[data-form-feedback]'),previousCommand=room.querySelector('[data-room-command]')?.dataset.roomCommand;
           const savedFeedback=previousFeedback?.textContent,savedError=previousFeedback?.dataset.error;
           mutateDOM(room,nextRoom.innerHTML);room.dataset.version=nextRoom.dataset.version;room.dataset.roomState=nextRoom.dataset.roomState;room.dataset.roomActive=nextRoom.dataset.roomActive;for(const key of ['sendAllowed','composeAllowed','replyAllowed'])room.dataset[key]=nextRoom.dataset[key];
+          document.dispatchEvent(new CustomEvent('oie:room-status-updated'));
           const currentFeedback=room.querySelector('[data-form-feedback]');if(savedFeedback&&currentFeedback&&previousCommand===room.querySelector('[data-room-command]')?.dataset.roomCommand){currentFeedback.textContent=savedFeedback;currentFeedback.dataset.error=savedError||'false';}
           if(previousFocus){const target=currentFeedback?.textContent?currentFeedback:room.querySelector('[data-room-status-label]');if(target){target.tabIndex=-1;target.focus({preventScroll:true})}}
         }

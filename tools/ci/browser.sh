@@ -55,6 +55,7 @@ consumer() (
   run_case capabilities
   run_case account-drawer
   run_case conversation-details
+  run_case room-entry
   run_case shared-content
   run_case presentation-time
 )

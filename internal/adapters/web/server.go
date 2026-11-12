@@ -38,6 +38,9 @@ var conversationPreferencesScript []byte
 //go:embed stars.js
 var starsScript []byte
 
+//go:embed room-entry.js
+var roomEntryScript []byte
+
 //go:embed formatting.js
 var formattingScript []byte
 
@@ -483,6 +486,8 @@ type copy struct {
 	SwitchAccount, ManageAccounts                                                                                                                                        string
 	BackToAccounts, AdvancedConnection, AccountMissing, AddAccountHelp                                                                                                   string
 	Settings, You, All, Unread, Groups                                                                                                                                   string
+	CreateRoom, PreviewRoom, RoomAddress, RoomAddressPlaceholder, RoomOccupants, RoomName                                                                                string
+	RoomPreviewLoading, RoomPreviewUnavailable, RoomAddressInvalid, RoomNotFound, RoomExists, RoomCreationFailed                                                         string
 	SearchChats, NoResults, NoResultsBody, NewChat, More                                                                                                                 string
 	Preview, PreviewNote, Message, Send, Attach                                                                                                                          string
 	SendingUnavailable, Back, Today, Navigation, Active                                                                                                                  string
@@ -584,6 +589,10 @@ var liveScript []byte
 var roomArchiveScript []byte
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/ui/rooms/preview" {
+		s.roomPreview(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/scheduling/conversation" {
 		s.conversationSchedules(w, r)
 		return
@@ -670,6 +679,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/presentation-time.js": {"text/javascript", presentationTimeScript},
 		"/ui/reset-data.js":        {"text/javascript", resetDataScript},
 		"/ui/mentions.js":          {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
+		"/ui/room-entry.js":   {"text/javascript", roomEntryScript},
 		"/ui/room-archive.js": {"text/javascript", roomArchiveScript},
 		"/ui/timeline.js":     {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/cache.js": {"text/javascript", cacheScript}, "/ui/cache/LICENSE.md": {"text/plain; charset=utf-8", cacheLibraryLicense}, "/ui/cache/lru-cache.min.mjs": {"text/javascript", cacheLibrary}, "/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
@@ -783,6 +793,7 @@ func (s *Server) baseView(r *http.Request) view {
 	v.Text = s.catalogs[v.Locale]
 	v.configureWorkspace(r)
 	v.Values["address"] = r.URL.Query().Get("newChatAddress")
+	v.Values["inviteRoom"] = roomFormAddress(r.URL.Query().Get("room"))
 	v.NativeMessageSearch = r.URL.Path == "/search"
 	if v.NativeMessageSearch {
 		v.Section = "search"

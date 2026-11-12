@@ -2393,6 +2393,136 @@
         "x-cli-name": "disconnect"
       }
     },
+    "/api/v1/accounts/{accountId}/room-preview": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AccountID"
+        }
+      ],
+      "get": {
+        "operationId": "previewRoom",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Read a room preview using the selected account",
+        "description": "Reads published room information and an available vCard from the bare room address. Does not save the conversation or enter the room.",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "query",
+            "required": true,
+            "description": "Bare XMPP room address.",
+            "schema": {
+              "type": "string",
+              "maxLength": 2047,
+              "minLength": 3
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Available public room information or its lookup state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{accountId}/rooms": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AccountID"
+        }
+      ],
+      "post": {
+        "operationId": "openRoom",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Open and request entry to an XMPP room",
+        "description": "Atomically saves the room and its entry intent. Creation requires explicit selection and is confirmed separately through the room session. Repeating the same key cannot reactivate a later leave. Creation uses the service defaults with persistence enabled and an optional room name.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Stable operation UUID for this request.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Destination and requested room action.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenRoom"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Saved conversation with an accepted or replayed entry request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conversation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "description": "Request body exceeds the one MiB engine limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request media type is not supported.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/conversations": {
       "get": {
         "operationId": "listConversations",
@@ -8048,6 +8178,91 @@
           "items": []
         }
       },
+      "RoomPreview": {
+        "description": "Published room information available to the selected XMPP account before entry.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "address",
+          "state"
+        ],
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Canonical bare room address."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "known",
+              "not_found",
+              "not_connected",
+              "unavailable"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "occupantCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "avatarHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "Content hash for a validated PNG thumbnail available through the avatar resource."
+          }
+        },
+        "example": {
+          "address": "garden@rooms.example.org",
+          "state": "known",
+          "name": "Garden"
+        }
+      },
+      "OpenRoom": {
+        "description": "Explicit request to enter an existing room or create a new room at the given address.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "address",
+          "action"
+        ],
+        "properties": {
+          "address": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 2047,
+            "description": "Bare XMPP room address."
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "join",
+              "create"
+            ]
+          },
+          "nickname": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Optional room nickname. Defaults to the account nickname."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Optional published name for a newly created room."
+          }
+        },
+        "example": {
+          "address": "garden@rooms.example.org",
+          "action": "join"
+        }
+      },
       "RoomSession": {
         "type": "object",
         "additionalProperties": false,
@@ -8104,6 +8319,14 @@
               "unsupported",
               "unknown"
             ]
+          },
+          "creationError": {
+            "type": "string",
+            "enum": [
+              "room_exists",
+              "creation_failed"
+            ],
+            "description": "More specific reason when the requested creation could not be confirmed."
           },
           "updatedAt": {
             "type": "string",

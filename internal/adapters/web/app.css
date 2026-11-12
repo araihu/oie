@@ -519,3 +519,15 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-about section{font-size:14px;line-height:1.55}
 .oie-about ul{display:grid;gap:8px}
 .oie-about .oie-about-link{color:var(--oie-accent-text);text-decoration:underline}
+
+.oie-room-entry{padding:16px}
+.oie-room-entry form{display:grid;gap:12px}
+.oie-room-entry form>button{justify-self:start}
+.oie-room-entry-links{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}
+.oie-room-entry-links a{display:inline-flex;align-items:center;gap:6px}
+.oie-room-preview{padding:12px;border:1px solid var(--oie-border);border-radius:10px;overflow-wrap:anywhere}
+.oie-room-preview-heading{display:flex;align-items:center;gap:10px}
+.oie-room-preview-heading small{display:block;color:var(--oie-muted)}
+.oie-room-preview p{margin:6px 0 0;white-space:pre-wrap}
+.oie-room-preview>p:first-child{margin-top:0}
+.oie-original-message a[data-room-invitation],.oie-plain-fallback a[data-room-invitation]{color:inherit;text-decoration:underline;text-underline-offset:2px}

@@ -1,13 +1,15 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"io"
 	"strings"
 
 	"github.com/a-h/templ"
 	"github.com/araihu/margo"
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
 func formattedMessage(ctx context.Context, original string) templ.Component {
@@ -15,7 +17,16 @@ func formattedMessage(ctx context.Context, original string) templ.Component {
 	if err != nil {
 		return nil
 	}
-	return content
+	if !strings.Contains(strings.ToLower(original), "xmpp:") {
+		return content
+	}
+	return templ.ComponentFunc(func(ctx context.Context, w io.Writer) error {
+		var rendered bytes.Buffer
+		if err := content.Render(ctx, &rendered); err != nil {
+			return err
+		}
+		return linkRenderedInvitations(rendered.Bytes(), w)
+	})
 }
 func originalMessageJSON(original string) string {
 	data, _ := json.Marshal(original)

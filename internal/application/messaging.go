@@ -99,6 +99,7 @@ type ConversationMutation struct {
 	Operation    Operation
 	Fingerprint  string
 	Conversation domain.Conversation
+	RoomEntry    *domain.RoomSession
 }
 type MessageMutation struct {
 	Operation              Operation

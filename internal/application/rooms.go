@@ -5,8 +5,6 @@ import (
 	"errors"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/araihu/oie/internal/domain"
 )
@@ -141,7 +139,7 @@ func (e *Engine) setRoomIntent(ctx context.Context, key, id domain.ID, nickname 
 		return RoomIntentResult{}, ErrInvalid
 	}
 	nickname = strings.TrimSpace(nickname)
-	if active && (!utf8.ValidString(nickname) || utf8.RuneCountInString(nickname) > 100 || (strings.ContainsAny(nickname, "\x00\r\n/") || strings.IndexFunc(nickname, unicode.IsControl) >= 0)) {
+	if active && !validRoomNickname(nickname) {
 		return RoomIntentResult{}, ErrInvalid
 	}
 	repo, ok := e.repo.(RoomIntentRepository)
@@ -304,6 +302,12 @@ func (e *Engine) runRooms(ctx context.Context) error {
 				}
 				continue
 			}
+			if intent.CreationName != nil && s.IntentRevisionID == intent.IntentRevisionID && s.State == "joined" {
+				if err := e.RoomSessionChanged(ctx, s); err != nil && ctx.Err() == nil {
+					return err
+				}
+			}
+
 			if s.IntentRevisionID == intent.IntentRevisionID && (s.State == "joined" || s.State == "joining" || s.LastErrorCode == "nickname_conflict" || s.LastErrorCode == "unsupported") {
 				continue
 			}
@@ -320,7 +324,13 @@ func (e *Engine) runRooms(ctx context.Context) error {
 			}
 			next[c.ID] = e.now().Add(10 * time.Second)
 			call, cancel := context.WithTimeout(ctx, 10*time.Second)
-			_, _ = p.JoinRoom(call, a, c, intent.Nickname, intent.IntentRevisionID)
+			if intent.CreationName != nil {
+				if creator, ok := p.(RoomCreator); ok {
+					_, _ = creator.CreateRoom(call, a, c, intent.Nickname, *intent.CreationName, intent.IntentRevisionID)
+				}
+			} else {
+				_, _ = p.JoinRoom(call, a, c, intent.Nickname, intent.IntentRevisionID)
+			}
 			cancel()
 		}
 		select {

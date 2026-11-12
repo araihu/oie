@@ -96,6 +96,7 @@ templ page(v view) {
 <script src="/ui/theme.js"></script>
 <script src="/ui/sidebar.js"></script>
 <script src="/ui/formatting.js"></script>
+<script src="/ui/room-entry.js"></script>
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href="/ui/app.css"/>
 <link rel="stylesheet" href={templ.URL(messageSearchStylesheetURL())}/>
@@ -171,6 +172,10 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 			@about(v)
 			@accounts(v)
 @newConversation(v)
+if !v.Preview {
+@roomEntryDrawer(v,false)
+@roomEntryDrawer(v,true)
+}
 @imageViewer(v)
 @documentViewer(v)
 @reactionPicker(v)
@@ -594,6 +599,9 @@ if len(v.Accounts)==0 {
 @button.Button(button.WithType("submit")){ {v.Text.StartConversation} }
 <div data-form-feedback role="status" aria-live="polite"></div>
 }
+if !v.Preview {
+@roomEntryLinks(v)
+}
 }
 </div>
 }
@@ -834,10 +842,10 @@ templ messageBody(v view,m messageView){
 if m.Formatted!=nil {
 @m.Formatted
 }else{
-<div class="oie-plain-fallback">{m.presentationText()}</div>
+<div class="oie-plain-fallback">@plainRoomLinks(m.presentationText())</div>
 }
 </div>
-<div class="oie-original-message" data-original-message>{m.presentationText()}</div>
+<div class="oie-original-message" data-original-message>@plainRoomLinks(m.presentationText())</div>
 </div>
 <div class="oie-message-previews" data-message-previews={m.Id}>
 for _,p:=range v.MessagePreviews[m.Id] {

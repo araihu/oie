@@ -90,7 +90,7 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 		s.mutationResponse(w, r, 400, mutationResult{Message: text.InvalidForm, Code: "invalid_request", Rejected: true})
 		return
 	}
-	if r.URL.Path == "/ui/conversations/preferences" {
+	if r.URL.Path == "/ui/conversations/preferences" || r.URL.Path == "/ui/rooms/open" {
 		if localized, ok := s.catalogs[r.Form.Get("lang")]; ok {
 			text = localized
 		}
@@ -128,6 +128,8 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 	result := mutationResult{OK: true, NextKey: newOperationKey()}
 	status := 200
 	switch r.URL.Path {
+	case "/ui/rooms/open":
+		status, result = s.openRoom(ctx, r, text)
 	case "/ui/rooms/join":
 		status, result = s.changeRoom(ctx, r, text, false)
 	case "/ui/rooms/leave":
@@ -468,7 +470,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 	v.ErrorMessage = result.Message
 	v.PreferenceRecovery = r.URL.Path == "/ui/conversations/preferences" && result.PreferencesPending
 	v.FormTarget = r.Form.Get("formTarget")
-	for _, key := range []string{"address", "label", "endpoint", "accountId", "conversationId", "originalText", "operationKey", "expectedRevisionId", "archived", "favorite", "lang"} {
+	for _, key := range []string{"address", "nickname", "name", "label", "endpoint", "accountId", "conversationId", "originalText", "operationKey", "expectedRevisionId", "archived", "favorite", "lang"} {
 		v.Values[key] = r.Form.Get(key)
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -487,7 +489,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 
 func isMutationPath(path string) bool {
 	switch path {
-	case "/ui/scheduling/update", "/ui/scheduling/send-now", "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
+	case "/ui/scheduling/update", "/ui/scheduling/send-now", "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/open", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
 		return true
 	}
 	return false

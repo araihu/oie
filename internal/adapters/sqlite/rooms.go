@@ -20,7 +20,7 @@ func decodeRoomIntent(row dbgen.RoomIntent) (domain.RoomSession, error) {
 	if row.LastErrorCode != "" {
 		state = "failed"
 	}
-	return domain.RoomSession{AccountID: domain.ID(row.AccountID), ConversationID: domain.ID(row.ConversationID), IntentID: domain.ID(row.ID), IntentRevisionID: domain.ID(row.RevisionID), Active: row.Active == 1, Nickname: row.Nickname, LastErrorCode: row.LastErrorCode, UpdatedAt: at, State: state}, err
+	return domain.RoomSession{AccountID: domain.ID(row.AccountID), ConversationID: domain.ID(row.ConversationID), IntentID: domain.ID(row.ID), IntentRevisionID: domain.ID(row.RevisionID), Active: row.Active == 1, Nickname: row.Nickname, CreationName: row.CreationName, LastErrorCode: row.LastErrorCode, UpdatedAt: at, State: state}, err
 }
 func (s *Store) RoomIntent(ctx context.Context, id domain.ID) (domain.RoomSession, error) {
 	row, err := s.queries.GetRoomIntent(ctx, string(id))
@@ -93,7 +93,7 @@ func (s *Store) SetRoomIntent(ctx context.Context, in application.RoomIntentMuta
 		if err != nil {
 			return application.RoomIntentResult{}, err
 		}
-		if current.IntentRevisionID != in.ExpectedRevisionID {
+		if current.IntentRevisionID != in.ExpectedRevisionID || (in.Session.Active && current.CreationName != nil) {
 			return application.RoomIntentResult{}, application.RoomStateConflict{Current: current}
 		}
 		in.Session.IntentID = current.IntentID
@@ -125,7 +125,7 @@ func (s *Store) SetRoomIntent(ctx context.Context, in application.RoomIntentMuta
 	return application.RoomIntentResult{Session: in.Session}, nil
 }
 func putRoomIntent(ctx context.Context, q *dbgen.Queries, s domain.RoomSession) error {
-	return q.PutRoomIntent(ctx, dbgen.PutRoomIntentParams{ConversationID: string(s.ConversationID), AccountID: string(s.AccountID), ID: string(s.IntentID), RevisionID: string(s.IntentRevisionID), Nickname: s.Nickname, Active: number(s.Active), LastErrorCode: s.LastErrorCode, UpdatedAt: stamp(s.UpdatedAt)})
+	return q.PutRoomIntent(ctx, dbgen.PutRoomIntentParams{ConversationID: string(s.ConversationID), AccountID: string(s.AccountID), ID: string(s.IntentID), RevisionID: string(s.IntentRevisionID), Nickname: s.Nickname, CreationName: s.CreationName, Active: number(s.Active), LastErrorCode: s.LastErrorCode, UpdatedAt: stamp(s.UpdatedAt)})
 }
 func (s *Store) RevokeRoomIntent(ctx context.Context, id, expected, revision domain.ID, code string, at time.Time) (domain.RoomSession, error) {
 	tx, q, err := begin(ctx, s)
@@ -145,6 +145,7 @@ func (s *Store) RevokeRoomIntent(ctx context.Context, id, expected, revision dom
 		return current, application.RoomStateConflict{Current: current}
 	}
 	current.Active = false
+	current.CreationName = nil
 	current.IntentRevisionID = revision
 	current.LastErrorCode = code
 	current.State = "failed"
@@ -182,7 +183,7 @@ func (s *Store) RecordRoomSession(ctx context.Context, state domain.RoomSession)
 	if digest == current.ObservationFingerprint {
 		return nil
 	}
-	if err = q.SetRoomObservation(ctx, dbgen.SetRoomObservationParams{ObservationFingerprint: digest, ConversationID: string(state.ConversationID), RevisionID: string(state.IntentRevisionID)}); err != nil {
+	if err = q.SetRoomObservation(ctx, dbgen.SetRoomObservationParams{ObservationFingerprint: digest, Joined: number(state.State == "joined"), ConversationID: string(state.ConversationID), RevisionID: string(state.IntentRevisionID)}); err != nil {
 		return err
 	}
 	if _, err = change(ctx, q, "conversation.room_session_changed", state, state.UpdatedAt); err != nil {
@@ -221,4 +222,28 @@ func (s *Store) ReplayMessageMutation(ctx context.Context, id domain.ID, kind, f
 // already dispatching; it cannot silently reopen a queued send.
 func (s *Store) ClaimRoomMessage(ctx context.Context, id, intentRevision, revision domain.ID, at time.Time) (domain.Message, error) {
 	return s.claimDispatchMessage(ctx, id, "", intentRevision, revision, at, true, false)
+}
+
+// The conversation, operation receipt and first room intent share the same transaction.
+func openRoomIntent(ctx context.Context, q *dbgen.Queries, id domain.ID, intent domain.RoomSession) error {
+	intent.ConversationID = id
+	old, err := q.GetRoomIntent(ctx, string(id))
+	if err == nil {
+		if old.Active == 1 {
+			if intent.CreationName != nil || old.CreationName != nil {
+				return application.ErrStateConflict
+			}
+			if intent.Nickname == "" || intent.Nickname == old.Nickname {
+				return nil
+			}
+		}
+		intent.IntentID = domain.ID(old.ID)
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if err := putRoomIntent(ctx, q, intent); err != nil {
+		return err
+	}
+	_, err = change(ctx, q, "conversation.room_session_changed", intent, intent.UpdatedAt)
+	return err
 }
