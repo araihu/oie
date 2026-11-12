@@ -212,9 +212,6 @@ if conversationDomain != "" {
 if hit.Historical {
 @badge.Badge(badge.Config{Label:v.Text.SearchPriorVersion,Size:badge.SizeSM,Appearance:badge.AppearanceSoft})
 }
-if hit.MatchKind=="metadata" {
-@badge.Badge(badge.Config{Label:v.Text.SearchMetadata,Size:badge.SizeSM,Appearance:badge.AppearanceSoft})
-}
 <p class="oie-message-search-excerpt">{hit.Excerpt}</p>
 </div>
 if hit.Preview != nil && !hit.Historical {
