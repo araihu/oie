@@ -61,7 +61,7 @@ templ conversationPane(v view){
 				@composer(v)
 			} else {
 				<div class="oie-chat-empty">
-					<div class="oie-empty-mark" aria-hidden="true">o</div>
+					<img src={templ.URL(brandURL("icon-192.png"))} alt="" width="90" height="90"/>
 					@emptystate.EmptyState(emptystate.Config{Title: v.Text.SelectChat, Description: v.Text.SelectChatBody})
 				</div>
 			}
