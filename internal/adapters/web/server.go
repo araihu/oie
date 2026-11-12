@@ -753,7 +753,7 @@ func (s *Server) baseView(r *http.Request) view {
 		v.Section = "search"
 	}
 	v.configureMessageSearch(r)
-	v.GlobalMessageSearch = r.URL.Query().Get("searchMode") == "messages"
+	v.GlobalMessageSearch = r.URL.Query().Get("searchMode") == "messages" && v.MessageSearch.Query != ""
 	v.ConversationSearchOpen = r.URL.Query().Get("chatSearch") == "1"
 	v.ConversationSearchQuery = strings.TrimSpace(r.URL.Query().Get("chatQuery"))
 	v.ConversationSearchHistory = r.URL.Query().Get("chatIncludeHistory") == "true"

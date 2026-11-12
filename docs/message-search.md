@@ -31,7 +31,7 @@ bounded result pagination.
 
 | State | Action | Response and preserved context | Effect count |
 |---|---|---|---|
-| Blank query | Open or clear search | Local empty state; no search operation or enrichment; workspace/draft stay mounted | 0 |
+| Blank query | Focus or clear the global field | Show the conversation list; workspace and draft stay mounted | 0 |
 | Valid query | Type, submit or change scope | Scoped retained results; initiating input/caret and one live stream remain | 0 |
 | History off | Search a corrected message | Only current retained content matches | 0 |
 | History on | Search a retained earlier version | Prior-version label and matched excerpt; link opens canonical message UUID | 0 |
@@ -86,7 +86,9 @@ The coordinator records whole-pipeline Dagger evidence separately.
 
 ## Unified global field and conversation toolbar
 
-The existing `conversation-search` field opens global search on focus or typing.
+The existing `conversation-search` field opens global search when the user enters
+a non-blank query. Focusing the field keeps the conversation list visible.
+Clearing the query returns to the list and cancels pending search requests.
 It uses the native unified `/search` GET page as its fallback. Global mode
 shows categories for the existing media, links and documents catalog, matching
 saved roster contacts, bounded conversation-title matches and saved messages.
