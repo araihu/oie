@@ -722,14 +722,7 @@ if !m.IsOwn && !grouped {
 }
 @messageBody(v,m)
 <div class="oie-message-stamp">
-if !m.IsOwn && v.Selected!=nil && v.Selected.Kind=="room" {
-	<span class="oie-message-mention-slot">
-		if m.mentionsYou() {
-			<span data-message-mention role="img" aria-label={v.Text.MentionedYou} title={v.Text.MentionedYou}>{ "@" }</span>
-		}
-	</span>
-}
-@messageEditIndicator(v,m)
+@messageLeadingIndicators(v,m)
 @messageSendIndicator(v,m)
 @messageStarIndicator(v,m.Id)
 <time data-message-time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
@@ -738,20 +731,28 @@ if !m.IsOwn && v.Selected!=nil && v.Selected.Kind=="room" {
 </div>
 }
 
-templ messageEditIndicator(v view,m messageView){
-<div class="oie-message-edit-indicator">
+templ messageLeadingIndicators(v view,m messageView){
+{{ mentioned := !m.IsOwn && v.Selected!=nil && v.Selected.Kind=="room" && m.mentionsYou() }}
+if mentioned || m.IsOwn || messageEdited(m) {
+<div class="oie-message-leading-indicators">
+if mentioned {
+<span class="oie-message-mention" data-message-mention role="img" aria-label={v.Text.MentionedYou} title={v.Text.MentionedYou}>{ "@" }</span>
+}
+if m.IsOwn {
 <span class="oie-message-edit-state" data-edit-state="editing">
 @tooltip.Tooltip("message-editing-tip-"+m.Id,v.Text.EditMode,tooltip.WithTrigger(messageEditStateIcon(v.Text.EditMode,false)),tooltip.WithPortal(true))
 </span>
 <span class="oie-message-edit-state" data-edit-state="pending">
 @tooltip.Tooltip("message-edit-pending-tip-"+m.Id,v.Text.EditPending,tooltip.WithTrigger(messageEditStateIcon(v.Text.EditPending,true)),tooltip.WithPortal(true))
 </span>
+}
 if messageEdited(m) {
 <span class="oie-message-edit-history">
 @tooltip.Tooltip("message-edited-tip-"+m.Id,v.Text.Edited+" · "+v.Text.ViewEditHistory,tooltip.WithTrigger(messageEditedIcon(v,m)),tooltip.WithPortal(true))
 </span>
 }
 </div>
+}
 }
 
 templ messageSendIndicator(v view,m messageView){
