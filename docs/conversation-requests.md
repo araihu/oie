@@ -1,6 +1,6 @@
 # Conversation requests
 
-A person reviewing an unexpected conversation needs the sender or room identity and a decision before seeing messages. The existing conversation list and header provide context. A compact Goshtoso panel with native buttons replaces the message area while the request is pending. The layout follows the current themes and uses no animation. The current conversation URL identifies the selected request.
+A person reviewing an unexpected conversation needs the sender or room identity and a decision before seeing messages. The existing conversation list and header provide context. A persistent Goshtoso Banner appears below the conversation header, followed by native form actions while the request is pending. The layout follows the current themes and uses no animation. The current conversation URL identifies the selected request.
 
 | State | Action | Result | Context and effect |
 | --- | --- | --- | --- |

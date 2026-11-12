@@ -3,30 +3,30 @@ package web
 import (
  "strconv"
  "github.com/araihu/goshtoso/components/button"
- "github.com/araihu/goshtoso/components/panel"
+ "github.com/araihu/goshtoso/components/banner"
  "github.com/araihu/goshtoso/components/textinput"
  "github.com/araihu/goshtoso/components/link"
 )
 
 templ conversationRequest(v view) {
-<div class="oie-chat-empty oie-request" data-conversation-request-panel>
- @panel.Panel(panel.Config{Density:panel.DensityCompact,Body:conversationRequestBody(v),RootAttrs:templ.Attributes{"aria-labelledby":"conversation-request-title"},RootClass:"oie-request-panel"})
-</div>
-}
-
-templ conversationRequestBody(v view) {
-<h3 id="conversation-request-title" tabindex="-1">{v.requestLabel(*v.Selected)}</h3>
+<section class="oie-conversation-request" data-conversation-request-panel aria-labelledby="conversation-request-title">
+ {{ title := v.requestLabel(*v.Selected) }}
+ <h3 id="conversation-request-title" class="sr-only" tabindex="-1">{title}</h3>
+ <div aria-hidden="true">
+  @banner.Banner(banner.Config{Description:title,Tone:banner.ToneInfo,Persistent:true,RootClass:"oie-request-banner"})
+ </div>
  <div class="oie-request-actions" data-request-preferences>
- if v.requestKind()=="room_invitation" {
-  @roomSessionStatus(v)
- } else {
-  @conversationRequestPreference(v,"acceptRequest",v.Text.AcceptMessageRequest)
- }
- if !v.Selected.Archived {
-  @conversationRequestPreference(v,"archived",v.Text.ArchiveConversation)
- }
+  if v.requestKind()=="room_invitation" {
+   @roomSessionStatus(v)
+  } else {
+   @conversationRequestPreference(v,"acceptRequest",v.Text.AcceptMessageRequest)
+  }
+  if !v.Selected.Archived {
+   @conversationRequestPreference(v,"archived",v.Text.ArchiveConversation)
+  }
  </div>
  @conversationPreferenceFeedback(v)
+</section>
 }
 
 templ conversationRequestPreference(v view,field,label string) {

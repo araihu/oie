@@ -520,9 +520,10 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-about ul{display:grid;gap:8px}
 .oie-about .oie-about-link{color:var(--oie-accent-text);text-decoration:underline}
 
-.oie-request-panel{position:relative;width:min(100%,28rem);padding-block-end:2rem;text-align:start}
-.oie-request-panel h3{margin:0 0 .75rem;font-size:1rem}
-.oie-request-actions{display:flex;flex-wrap:wrap;align-items:flex-start;gap:.5rem}
+.oie-conversation-request{position:relative;flex-shrink:0;padding-block-end:2rem}
+/* The persistent status banner has no Alpine-controlled actions. */
+.oie-request-banner[x-cloak]{display:flex!important}
+.oie-request-actions{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:.5rem;padding:1rem 1rem 0}
 .oie-request-room form[hidden],.oie-request-actions form[hidden]{display:none}
-.oie-request-panel [role="status"]:empty{display:none}
-.oie-request-panel [data-form-feedback],.oie-request-panel #conversation-preference-status{position:absolute;inset-inline:1rem;bottom:.5rem;margin:0}
+.oie-conversation-request [role="status"]:empty{display:none}
+.oie-conversation-request [data-form-feedback],.oie-conversation-request #conversation-preference-status{position:absolute;inset-inline:1rem;bottom:.5rem;margin:0;text-align:center}
