@@ -284,4 +284,9 @@ func TestStarredMessagePagingAndBatchScope(t *testing.T) {
 	if err != nil || batch.StatusCode() != 400 {
 		t.Fatal("cross-conversation batch accepted", batch, err)
 	}
+	ids = []engineapi.ID{string(all[0].ID), "019a5df0-0000-7000-8000-000000000001"}
+	batch, err = client.ListConversationMessageStarsWithResponse(t.Context(), string(a.ID), &engineapi.ListConversationMessageStarsParams{MessageId: ids})
+	if err != nil || batch.StatusCode() != 400 {
+		t.Fatal("batch with a missing message accepted", batch, err)
+	}
 }

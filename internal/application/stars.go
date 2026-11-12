@@ -28,6 +28,7 @@ type StarQuery struct {
 
 type StarRepository interface {
 	MessageStar(context.Context, domain.ID) (domain.MessageStar, error)
+	// MessageStars resolves aliases, deduplicates canonical IDs and rejects missing or foreign messages.
 	MessageStars(context.Context, domain.ID, []domain.ID) ([]domain.MessageStar, error)
 	SetMessageStar(context.Context, StarMutation) (StarResult, error)
 	StarredMessages(context.Context, StarQuery) ([]domain.StarredMessage, error)
@@ -64,40 +65,16 @@ func (e *Engine) MessageStars(ctx context.Context, conversation domain.ID, ids [
 	if _, err := e.Conversation(ctx, conversation); err != nil {
 		return nil, err
 	}
-	unique := make([]domain.ID, 0, len(ids))
-	seen := make(map[domain.ID]bool, len(ids))
 	for _, id := range ids {
 		if !validID(id) {
 			return nil, ErrInvalid
-		}
-		m, err := e.Message(ctx, id)
-		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvalid) {
-			return nil, ErrInvalid
-		}
-		if err != nil {
-			return nil, err
-		}
-		if m.ConversationID != conversation {
-			return nil, ErrInvalid
-		}
-		id = m.ID
-		if !seen[id] {
-			unique = append(unique, id)
-			seen[id] = true
 		}
 	}
 	r, err := e.starRepo()
 	if err != nil {
 		return nil, err
 	}
-	states, err := r.MessageStars(ctx, conversation, unique)
-	if err != nil {
-		return nil, err
-	}
-	if len(states) != len(unique) {
-		return nil, ErrInvalid
-	}
-	return states, nil
+	return r.MessageStars(ctx, conversation, ids)
 }
 
 func (e *Engine) SetMessageStar(ctx context.Context, key, id, expected domain.ID, starred bool) (StarResult, error) {

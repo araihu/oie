@@ -63,16 +63,22 @@ func (q *Queries) InsertMessageStarRevision(ctx context.Context, arg InsertMessa
 }
 
 const listConversationMessageStars = `-- name: ListConversationMessageStars :many
-SELECT m.id,m.account_id,m.conversation_id,s.payload FROM messages AS m
+WITH requested AS (
+ SELECT DISTINCT COALESCE(a.canonical_id,CAST(j.value AS TEXT)) AS id
+ FROM json_each(CAST(?2 AS TEXT)) AS j
+ LEFT JOIN message_canonical_aliases AS a ON a.alias_id=j.value
+)
+SELECT CAST(COALESCE(m.id,'') AS TEXT) AS id,
+ CAST(COALESCE(m.account_id,'') AS TEXT) AS account_id,
+ CAST(COALESCE(m.conversation_id,'') AS TEXT) AS conversation_id,s.payload
+FROM requested
+LEFT JOIN messages AS m ON m.id=requested.id AND m.conversation_id=?1
 LEFT JOIN message_stars AS s ON s.message_id=(
  SELECT candidate.message_id FROM message_stars AS candidate
  WHERE candidate.message_id=m.id OR candidate.message_id IN (
   SELECT linked.alias_id FROM message_canonical_aliases AS linked WHERE linked.canonical_id=m.id
  ) ORDER BY candidate.updated_at DESC,candidate.revision_id DESC LIMIT 1
 )
-WHERE m.conversation_id=?1
-AND m.id IN (SELECT COALESCE(a.canonical_id,j.value) FROM json_each(CAST(?2 AS TEXT)) AS j
-LEFT JOIN message_canonical_aliases AS a ON a.alias_id=j.value)
 `
 
 type ListConversationMessageStarsParams struct {

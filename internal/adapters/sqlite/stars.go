@@ -40,6 +40,9 @@ func (s *Store) MessageStars(ctx context.Context, conversation domain.ID, ids []
 	}
 	out := make([]domain.MessageStar, 0, len(rows))
 	for _, row := range rows {
+		if row.ID == "" {
+			return nil, application.ErrInvalid
+		}
 		state, err := decodeStar(row.ID, row.AccountID, row.ConversationID, row.Payload)
 		if err != nil {
 			return nil, err
