@@ -212,7 +212,13 @@ if conversationDomain != "" {
 if hit.Historical {
 @badge.Badge(badge.Config{Label:v.Text.SearchPriorVersion,Size:badge.SizeSM,Appearance:badge.AppearanceSoft})
 }
-<p class="oie-message-search-excerpt">{hit.Excerpt}</p>
+{{ excerpt, sharedURL := searchResultText(hit) }}
+if excerpt!="" {
+<p class="oie-message-search-excerpt">{excerpt}</p>
+}
+if sharedURL!="" {
+<p class="oie-message-search-url">{sharedURL}</p>
+}
 </div>
 if hit.Preview != nil && !hit.Historical {
 @messageSearchPreview(*hit.Preview)

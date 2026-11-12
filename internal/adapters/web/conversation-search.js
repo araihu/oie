@@ -51,7 +51,7 @@ window.OieRuntime.register('conversation-search',life=>{
    const found=await window.OieTimeline?.focus?.(hit.id,{focus:false});if(!valid()||!opened||generation!==epoch||selection!==selectionEpoch)return;
    busy=false;if(!found){failure='focus';status(root.dataset.searchMissing);controls();return}
    selected=hit.id;const url=new URL(location.href);url.searchParams.set('message',hit.id);url.searchParams.delete('timelineCursor');url.searchParams.delete('timelineDirection');window.OieNavigation?.addressSearch(url);status(root.dataset.searchResultLabel+' '+(index+1)+(complete?' / '+hits.length:''));
-   excerpt.hidden=!hit.historical&&hit.kind!=='metadata';excerpt.textContent=excerpt.hidden?'':(hit.historical?root.dataset.searchHistoricalLabel:root.dataset.searchMetadataLabel)+': '+hit.excerpt;
+   excerpt.hidden=!hit.historical;excerpt.textContent=hit.historical?root.dataset.searchHistoricalLabel+': '+hit.excerpt:'';
    highlight();controls();document.dispatchEvent(new CustomEvent('oie:conversation-search-selected',{detail:{id:hit.id,index}}));
   }catch{if(valid()&&generation===epoch&&selection===selectionEpoch){busy=false;failure='focus';status(root.dataset.searchFailed);controls()}}
  }

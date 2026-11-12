@@ -32,6 +32,7 @@
 .oie-message-search-hit time,.oie-message-search-hit small{font-size:.75rem;color:var(--oie-muted)}
 .oie-message-search-hit time{align-self:flex-end}
 .oie-message-search-excerpt{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--oie-text);font-weight:400}
+.oie-message-search-url{margin:0;max-inline-size:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--oie-muted);font-weight:400}
 .oie-message-search-feedback{display:flex;align-items:center;gap:.5rem;font-size:.85rem;margin:0}
 .oie-message-search [hidden]{display:none!important}
 .oie-message-search-workspace{height:100%;min-height:0;display:flex;flex-direction:column;flex:1;padding:1rem;gap:1rem;min-width:0}

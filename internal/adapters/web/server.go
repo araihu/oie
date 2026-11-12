@@ -212,7 +212,7 @@ type copy struct {
 	SearchEverything, SearchCancel, SearchConversations, SearchMessagesGroup, SearchConversationsLimited, SearchAllResults, SearchResultCategories, SearchConversationsEmpty, SearchResultsLoading, SearchResultsFailed string
 	ConversationSearchOlder, ConversationSearchNewer, ConversationSearchClose, ConversationSearchResult, ConversationSearchMissing                                                                                      string
 
-	SearchMessages, SearchSavedMessages, SearchQuery, IncludeEditHistory, SearchHistoryHelp, SearchPriorVersion, SearchMetadata, SearchBlankTitle, SearchBlankBody, SearchEmptyTitle, SearchEmptyBody, SearchLoading, SearchFailed, SearchInvalid, SearchMissing, SearchRestart, SearchScope, SearchAllConversations, SearchMetadataPending, SearchMore string
+	SearchMessages, SearchSavedMessages, SearchQuery, IncludeEditHistory, SearchHistoryHelp, SearchPriorVersion, SearchBlankTitle, SearchBlankBody, SearchEmptyTitle, SearchEmptyBody, SearchLoading, SearchFailed, SearchInvalid, SearchMissing, SearchRestart, SearchScope, SearchAllConversations, SearchMetadataPending, SearchMore string
 
 	ArchiveConversation, UnarchiveConversation, FavoriteConversation, UnfavoriteConversation                                                                                                                 string
 	RetryConversationPreference, ConversationPreferenceUpdated, ConversationPreferenceConflict, ConversationPreferenceUncertain, ConversationPreferenceUnavailable, ConversationPreferenceStorageUnavailable string

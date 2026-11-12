@@ -486,7 +486,6 @@
   "IncludeEditHistory": "Include edit history",
   "SearchHistoryHelp": "Also search retained earlier versions of edited messages.",
   "SearchPriorVersion": "Prior version",
-  "SearchMetadata": "Metadata",
   "SearchBlankTitle": "Find a saved message",
   "SearchBlankBody": "Type a word or phrase to search saved history.",
   "SearchEmptyTitle": "No matching messages",

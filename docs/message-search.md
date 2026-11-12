@@ -101,6 +101,9 @@ open account picker or help tooltip handles Escape first when it has focus.
 Within a conversation, Down and Up jump to older and newer matches, just as
 Enter and Shift+Enter do.
 
+When link or file details match, the result shows a snippet of the original
+message, including the link and any accompanying text in the snippet.
+
 Each current message result can show one compact preview of indexed shared
 content. Link results show cached page artwork when available, then the cached
 favicon fitted inside the tile, then the generic link icon. Search reads

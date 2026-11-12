@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,37 @@ import (
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	nethtml "golang.org/x/net/html"
 )
+
+func TestMessageSearchRendersTheMessageForMetadataMatches(t *testing.T) {
+	const address = "https://example.test/notice"
+	const metadata = "Example site title and description"
+	for _, tc := range []struct {
+		name, body, excerpt string
+	}{
+		{"caption and link", "Read this notice\n" + address, "Read this notice"},
+		{"only the link", address, ""},
+		{"long caption", strings.Repeat("a", 550) + "\n" + address, strings.Repeat("a", 511) + "…"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			hit := searchTestPage().Items[0]
+			hit.MatchKind = "metadata"
+			hit.Excerpt = metadata
+			hit.Message.OriginalText = tc.body
+			hit.Preview = &engineapi.MessageSearchPreview{Kind: "link"}
+			v := view{Locale: "pt-BR", EngineID: testEngine}
+			var rendered bytes.Buffer
+			if err := messageSearchHit(v, hit).Render(t.Context(), &rendered); err != nil {
+				t.Fatal(err)
+			}
+			html := rendered.String()
+			if strings.Contains(html, metadata) || (tc.excerpt != "" && !strings.Contains(html, ">"+tc.excerpt+"</p>")) ||
+				(tc.excerpt == "" && strings.Contains(html, `class="oie-message-search-excerpt"`)) ||
+				strings.Count(html, address) != 1 || !strings.Contains(html, `data-search-preview="link"`) {
+				t.Fatal(html)
+			}
+		})
+	}
+}
 
 func searchTestPage() engineapi.MessageSearchPage {
 	at := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)

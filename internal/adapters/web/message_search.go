@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -26,6 +27,41 @@ var messageSearchStylesheet []byte
 
 const searchConversationsOnly = "conversations"
 const searchMessagesOnly = "messages"
+
+var searchResultLinks = regexp.MustCompile(`https?://[^\s<>"\x00-\x1f]+`)
+
+func searchResultText(hit engineapi.MessageSearchHit) (excerpt, sharedURL string) {
+	if hit.Historical || hit.MatchKind != "metadata" {
+		return hit.Excerpt, ""
+	}
+	body := strings.TrimSpace(messageView{Message: hit.Message}.displayBody())
+	const limit = 512
+	for _, candidate := range searchResultLinks.FindAllString(body, 32) {
+		candidate = strings.TrimRight(candidate, ".,;!)]}")
+		if sharedURL == "" {
+			sharedURL = candidate
+		}
+		if strings.Contains(hit.Excerpt, candidate) {
+			sharedURL = candidate
+			break
+		}
+	}
+	if sharedURL != "" {
+		body = strings.TrimSpace(strings.Replace(body, sharedURL, "", 1))
+	}
+	return shortenSearchExcerpt(body, limit), shortenSearchExcerpt(sharedURL, limit)
+}
+
+func shortenSearchExcerpt(text string, limit int) string {
+	if len(text) <= limit {
+		return text
+	}
+	runes := []rune(text)
+	if len(runes) <= limit {
+		return text
+	}
+	return strings.TrimSpace(string(runes[:limit-1])) + "…"
+}
 
 func messageSearchStylesheetURL() string {
 	digest := sha256.Sum256(messageSearchStylesheet)
