@@ -761,7 +761,12 @@ func scheduleControl(v view) templ.Component {
 		templ_7745c5c3_Err = splitbutton.SplitButton(splitbutton.Config{
 			ID: "composer-split", Primary: schedulePrimaryAction(v),
 			MenuLabel: v.Text.More, MenuAlign: dropdown.AlignEnd,
-			Sections:  []dropdown.Section{{Items: []dropdown.Item{{Label: scheduleMenuLabel(v), OnClick: "$dispatch('oie:schedule-compose')", Disabled: !v.sendAllowed() && v.ScheduleEdit == nil}}}},
+			Sections: []dropdown.Section{{Items: []dropdown.Item{{
+				Label:    scheduleMenuLabel(v),
+				Icon:     glyph(heroicons.Icon16SolidClock),
+				OnClick:  "$dispatch('oie:schedule-compose')",
+				Disabled: !v.sendAllowed() && v.ScheduleEdit == nil,
+			}}}},
 			RootClass: "oie-schedule-split",
 		}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
@@ -803,7 +808,7 @@ func scheduleFields(v view) templ.Component {
 			var templ_7745c5c3_Var42 string
 			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.Retry)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 111, Col: 221}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 116, Col: 221}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 			if templ_7745c5c3_Err != nil {
@@ -827,7 +832,7 @@ func scheduleFields(v view) templ.Component {
 			var templ_7745c5c3_Var43 string
 			templ_7745c5c3_Var43, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.ScheduleEdit.Id).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 115, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 120, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
 			if templ_7745c5c3_Err != nil {
@@ -840,7 +845,7 @@ func scheduleFields(v view) templ.Component {
 			var templ_7745c5c3_Var44 string
 			templ_7745c5c3_Var44, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.ScheduleEdit.RevisionId).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 116, Col: 81}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 121, Col: 81}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var44)
 			if templ_7745c5c3_Err != nil {
@@ -861,7 +866,7 @@ func scheduleFields(v view) templ.Component {
 			var templ_7745c5c3_Var45 string
 			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.ScheduleEditMode)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 120, Col: 33}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 125, Col: 33}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 			if templ_7745c5c3_Err != nil {
@@ -886,7 +891,7 @@ func scheduleFields(v view) templ.Component {
 				var templ_7745c5c3_Var47 string
 				templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.CancelEdit)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 121, Col: 121}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 126, Col: 121}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 				if templ_7745c5c3_Err != nil {
@@ -945,7 +950,7 @@ func scheduleDialog(v view) templ.Component {
 		var templ_7745c5c3_Var49 string
 		templ_7745c5c3_Var49, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.Schedule).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 130, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 135, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var49)
 		if templ_7745c5c3_Err != nil {
@@ -958,7 +963,7 @@ func scheduleDialog(v view) templ.Component {
 		var templ_7745c5c3_Var50 string
 		templ_7745c5c3_Var50, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.Reschedule).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 130, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 135, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var50)
 		if templ_7745c5c3_Err != nil {
@@ -971,7 +976,7 @@ func scheduleDialog(v view) templ.Component {
 		var templ_7745c5c3_Var51 string
 		templ_7745c5c3_Var51, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.ScheduleTimeInvalid).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 130, Col: 109}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 135, Col: 109}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var51)
 		if templ_7745c5c3_Err != nil {
@@ -984,7 +989,7 @@ func scheduleDialog(v view) templ.Component {
 		var templ_7745c5c3_Var52 string
 		templ_7745c5c3_Var52, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.ScheduleTimeAmbiguous).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 130, Col: 160}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 135, Col: 160}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var52)
 		if templ_7745c5c3_Err != nil {
@@ -997,7 +1002,7 @@ func scheduleDialog(v view) templ.Component {
 		var templ_7745c5c3_Var53 string
 		templ_7745c5c3_Var53, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.AttachmentFailed).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 131, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 136, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var53)
 		if templ_7745c5c3_Err != nil {
@@ -1010,7 +1015,7 @@ func scheduleDialog(v view) templ.Component {
 		var templ_7745c5c3_Var54 string
 		templ_7745c5c3_Var54, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.AttachmentLimit).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 131, Col: 96}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 136, Col: 96}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var54)
 		if templ_7745c5c3_Err != nil {
@@ -1023,7 +1028,7 @@ func scheduleDialog(v view) templ.Component {
 		var templ_7745c5c3_Var55 string
 		templ_7745c5c3_Var55, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.RemoveAttachment).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 131, Col: 145}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 136, Col: 145}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var55)
 		if templ_7745c5c3_Err != nil {
@@ -1036,7 +1041,7 @@ func scheduleDialog(v view) templ.Component {
 		var templ_7745c5c3_Var56 string
 		templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.Schedule)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 133, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 138, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 		if templ_7745c5c3_Err != nil {
@@ -1049,7 +1054,7 @@ func scheduleDialog(v view) templ.Component {
 		var templ_7745c5c3_Var57 string
 		templ_7745c5c3_Var57, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.ScheduleReview).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 134, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 139, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var57)
 		if templ_7745c5c3_Err != nil {
@@ -1070,7 +1075,7 @@ func scheduleDialog(v view) templ.Component {
 		var templ_7745c5c3_Var58 string
 		templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.ScheduleWhen)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 137, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 142, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 		if templ_7745c5c3_Err != nil {
@@ -1083,7 +1088,7 @@ func scheduleDialog(v view) templ.Component {
 		var templ_7745c5c3_Var59 string
 		templ_7745c5c3_Var59, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.ScheduleWhen).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 140, Col: 42}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 145, Col: 42}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var59)
 		if templ_7745c5c3_Err != nil {
@@ -1108,7 +1113,7 @@ func scheduleDialog(v view) templ.Component {
 			var templ_7745c5c3_Var61 string
 			templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.ScheduleBack)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 143, Col: 175}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 148, Col: 175}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 			if templ_7745c5c3_Err != nil {
@@ -1135,7 +1140,7 @@ func scheduleDialog(v view) templ.Component {
 			var templ_7745c5c3_Var63 string
 			templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.Schedule)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 144, Col: 126}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 149, Col: 126}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var63))
 			if templ_7745c5c3_Err != nil {
@@ -1223,7 +1228,7 @@ func outgoingAttachments(v view, m engineapi.Message) templ.Component {
 						var templ_7745c5c3_Var67 string
 						templ_7745c5c3_Var67, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(v.stagedAttachmentHref(m.ConversationId, a.Id, false))).ResolveURL(ctx)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 165, Col: 78}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 170, Col: 78}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var67)
 						if templ_7745c5c3_Err != nil {
@@ -1236,7 +1241,7 @@ func outgoingAttachments(v view, m engineapi.Message) templ.Component {
 						var templ_7745c5c3_Var68 string
 						templ_7745c5c3_Var68, templ_7745c5c3_Err = templruntime.NewAttributeExpression(a.FileName).Resolve(ctx)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 165, Col: 95}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 170, Col: 95}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var68)
 						if templ_7745c5c3_Err != nil {
@@ -1254,7 +1259,7 @@ func outgoingAttachments(v view, m engineapi.Message) templ.Component {
 					var templ_7745c5c3_Var69 string
 					templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.JoinStringErrs(a.FileName)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 167, Col: 22}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/scheduling.templ`, Line: 172, Col: 22}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var69))
 					if templ_7745c5c3_Err != nil {

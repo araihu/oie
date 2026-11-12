@@ -102,7 +102,12 @@ templ scheduleControl(v view) {
 	@splitbutton.SplitButton(splitbutton.Config{
 		ID:"composer-split", Primary:schedulePrimaryAction(v),
 		MenuLabel:v.Text.More, MenuAlign:dropdown.AlignEnd,
-		Sections:[]dropdown.Section{{Items:[]dropdown.Item{{Label:scheduleMenuLabel(v),OnClick:"$dispatch('oie:schedule-compose')",Disabled:!v.sendAllowed() && v.ScheduleEdit==nil}}}},
+		Sections:[]dropdown.Section{{Items:[]dropdown.Item{{
+			Label:scheduleMenuLabel(v),
+			Icon:glyph(heroicons.Icon16SolidClock),
+			OnClick:"$dispatch('oie:schedule-compose')",
+			Disabled:!v.sendAllowed() && v.ScheduleEdit==nil,
+		}}}},
 		RootClass:"oie-schedule-split",
 	})
 }
