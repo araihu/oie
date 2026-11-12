@@ -8,9 +8,14 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const owner={id:account,revisionId:revision,protocol:'xmpp',label:'Fixture account',address:'alice@fixture',createdAt:'2026-11-09T12:00:00Z'};
  const chats=[{id:direct,kind:'direct',address:'bob@fixture',title:'Bob'},{id:room,kind:'room',address:'room@fixture',title:'Saved room'}].map(c=>({...c,revisionId:revision,accountId:account,lastMessage:'Retained text',updatedAt:'2026-11-09T12:19:00Z',unreadCount:0,archived:false,favorite:false}));
  const baseNumber=c=>c.id===room?200:100,targetID=c=>id(baseNumber(c)+18),revisionID=(c,n)=>id((c.id===room?4000:3000)+n);
+ const queuedRoomMessage=id(baseNumber(chats[1])+16);
+ const starredRoomMessages=new Set([queuedRoomMessage,targetID(chats[1])]);
  const currentNumber=()=>state.generation?26+state.generation:25;
  const sourceText=(c,n)=>n===0?'Original **literal** <script>alert(1)</script>\nCafé 🧑🏽‍💻':n===25?'Current **saved** message\nSecond line':n===26?'Alternative authored later than the selected current head':n===27?'Newest verified correction':n===28?'Newest verified correction after live refresh':n===22||n===23?'Repeated authored text':'Observed content version '+n;
- const messages=c=>Array.from({length:20},(_,n)=>({id:id(baseNumber(c)+n),revisionId:n===18?revisionID(c,currentNumber()+state.transport*10000):n===17?revisionID(c,currentNumber()+100):revision,accountId:account,conversationId:c.id,sender:{id:id(8),displayName:'Bob'},originalText:n===18?sourceText(c,currentNumber()):n===17?'Other logical source version '+currentNumber():'Retained message '+n,createdAt:new Date(Date.UTC(2026,10,9,12,n)).toISOString(),isOwn:false,historical:true,sendState:'received',edited:n===18||n===17,editedAt:n===18||n===17?new Date(Date.UTC(2026,10,9,13,currentNumber())).toISOString():undefined}));
+ const messages=c=>Array.from({length:20},(_,n)=>{
+  const messageId=id(baseNumber(c)+n),queued=messageId===queuedRoomMessage;
+  return {id:messageId,revisionId:n===18?revisionID(c,currentNumber()+state.transport*10000):n===17?revisionID(c,currentNumber()+100):revision,accountId:account,conversationId:c.id,sender:queued?{id:account,displayName:'Alice'}:{id:id(8),displayName:'Bob'},originalText:n===18?sourceText(c,currentNumber()):n===17?'Other logical source version '+currentNumber():'Retained message '+n,createdAt:new Date(Date.UTC(2026,10,9,12,n)).toISOString(),isOwn:queued,historical:true,sendState:queued?'queued':'received',edited:n===18||n===17,editedAt:n===18||n===17?new Date(Date.UTC(2026,10,9,13,currentNumber())).toISOString():undefined};
+ });
  const versions=(c,canonical=targetID(c))=>Array.from({length:27+state.generation},(_,n)=>({revisionId:revisionID(c,n+(canonical===targetID(c)?0:100)),sourceMessageId:n===0?canonical:id((c.id===room?6000:5000)+n+(canonical===targetID(c)?0:100)),createdAt:new Date(Date.UTC(2026,10,9,13,n)).toISOString(),originalText:canonical===targetID(c)?sourceText(c,n):'Other logical source version '+n,sender:{id:id(8),displayName:'Bob'},isCurrent:n===currentNumber(),isOriginal:n===0,parentRevisionIds:n===0?[]:[revisionID(c,(n===26?24:n-1)+(canonical===targetID(c)?0:100))]})).reverse();
  const api=http.createServer((req,res)=>{
   const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(code,value)=>{res.statusCode=code;res.end(JSON.stringify(value))};
@@ -34,7 +39,10 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(u.pathname.endsWith('/avatars')||u.pathname.endsWith('/previews'))return send(200,{items:[]});
   if(u.pathname.endsWith('/capabilities'))return send(200,{accountId:account,state:'known',directText:true,features:['room_messaging','send_replies'].map(id=>({id,appSupport:'supported',protocolSupport:'supported',serverSupport:'scope_dependent',scope:'room'})),discovery:{state:'complete',services:[]}});
   if(u.pathname.endsWith('/room-session'))return send(200,{conversationId:room,accountId:account,state:'joined',active:true,updatedAt:'2026-11-09T12:00:00Z'});
-  if(u.pathname.endsWith('/message-stars'))return send(200,{items:u.searchParams.getAll('messageId').map(messageId=>({messageId,accountId:account,conversationId:chats.find(c=>u.pathname.includes(c.id))?.id||direct,starred:false,revisionId:null,updatedAt:null}))});
+  if(u.pathname.endsWith('/message-stars'))return send(200,{items:u.searchParams.getAll('messageId').map(messageId=>{
+   const starred=starredRoomMessages.has(messageId);
+   return {messageId,accountId:account,conversationId:chats.find(c=>u.pathname.includes(c.id))?.id||direct,starred,revisionId:starred?id(6):null,updatedAt:starred?owner.createdAt:null};
+  })});
   if(u.pathname==='/api/v1/conversations')return send(200,{items:chats});
   for(const c of chats){if(u.pathname===`/api/v1/conversations/${c.id}`)return send(200,c);if(u.pathname===`/api/v1/conversations/${c.id}/messages`)return send(200,{items:messages(c).reverse()});}
   const retained=u.pathname.match(/^\/api\/v1\/messages\/([^/]+)$/);if(retained){const m=chats.flatMap(messages).find(m=>m.id===(retained[1]===id(900)?targetID(chats[0]):retained[1]));return m?send(200,m):send(404,{status:404,code:'not_found'})}
@@ -102,11 +110,25 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const nativeContext=await browser.newContext({viewport:{width:900,height:800},locale:'en'});await nativeContext.route('**/*',r=>{if(new URL(r.request().url()).origin!==base){external.push(r.request().url());return r.abort()}return r.continue()});await nativeContext.addInitScript(()=>localStorage.setItem('oie.device.render-markdown.v1','false'));const nativePage=await nativeContext.newPage();nativePage.on('pageerror',e=>errors.push(e.message));const readsBeforeNative=state.otherReads.length;await nativePage.goto(native.url());await until(()=>nativePage.locator('html').getAttribute('data-message-markdown').then(value=>value==='false'),'native Markdown preference');assert.equal(await nativePage.locator('[data-message-history-native]').count(),1);assert.equal(await nativePage.locator('.oie-original-message:visible').count(),20);assert.equal(await nativePage.locator('.oie-rendered-message:visible').count(),0);assert.equal(await nativePage.locator('[data-history-is-current="true"] .oie-original-message').textContent(),sourceText(chats[0],currentNumber()));assert.equal(await nativePage.evaluate(()=>Boolean(window.OieRuntime)),false);assert(!state.otherReads.slice(readsBeforeNative).includes('/api/v1/events'));await nativeContext.close();
   const unedited=page.locator('[data-message-id="'+id(baseNumber(chats[1])+19)+'"]');assert.equal(await unedited.locator('[data-open-message-history]').count(),0);
   assert.deepEqual(await unedited.locator('.oie-message-stamp > :visible').evaluateAll(items=>items.map(item=>item.tagName)),['TIME'],'an unedited room message with no mention has only a timestamp');
+  const assertStampAlignment=async(p,messageId,firstSymbol)=>{
+   const stamp=p.locator('[data-message-id="'+messageId+'"] .oie-message-stamp');
+   const {timeCenter,icons}=await stamp.evaluate(node=>{
+    const time=node.querySelector('time').getBoundingClientRect();
+    return {timeCenter:time.y+time.height/2,icons:[...node.querySelectorAll('svg')].filter(icon=>icon.getClientRects().length).map(icon=>{
+     const rect=icon.getBoundingClientRect();
+     return {symbol:icon.querySelector('use').getAttribute('href').split('#')[1],width:rect.width,height:rect.height,center:rect.y+rect.height/2};
+    })};
+   });
+   assert.deepEqual(icons.map(icon=>icon.symbol),[firstSymbol,'hi-16-solid-star']);
+   assert(icons.every(icon=>icon.width===12&&icon.height===12&&Math.abs(icon.center-timeCenter)<=0.1),JSON.stringify({timeCenter,icons}));
+  };
   const artifacts=path.join(__dirname,'artifacts');
   for(const width of [390,1440])for(const locale of ['en','pt-BR'])for(const theme of ['light','dark']){
    const p=await context.newPage();p.on('pageerror',e=>errors.push(e.message));await p.setViewportSize({width,height:960});await p.goto(route(chats[1],locale,theme));const historyAction=p.locator('[data-message-id="'+targetID(chats[1])+'"] [data-message-edited][data-open-message-history]');
    const inset=await historyAction.evaluate(link=>link.getBoundingClientRect().left-link.closest('.oie-message-stamp').getBoundingClientRect().left);
    assert(Math.abs(inset)<=1,'the edit icon starts at the footer edge when the room message has no mention');
+   await assertStampAlignment(p,targetID(chats[1]),'hi-16-solid-pencil-square');
+   await assertStampAlignment(p,queuedRoomMessage,'hi-16-solid-clock');
    const historyTooltip=await observeHistoryTooltip(p,historyAction);await historyAction.click();const title=locale==='en'?'Edit history':'Histórico de edições';const d=p.getByRole('dialog',{name:title,exact:true});await d.waitFor({state:'visible'});await p.locator('[data-message-history-page]').waitFor();await p.waitForTimeout(230);await assertHistoryTooltipDismissed(p,historyTooltip);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const box=await d.boundingBox();assert(box.x>=-1&&box.x+box.width<=width+1);await p.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],`${width} ${locale} ${theme}`);await fs.mkdir(artifacts,{recursive:true});if(theme==='dark')await p.screenshot({path:path.join(artifacts,`message-history-${width}-${locale}.png`)});await p.close();findings.push({width,locale,theme,axe:0});
   }
   assert.deepEqual(state.writes,[]);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);findings.push('Native aliased read resolves canonical history, unedited messages have no history action and all 8 responsive localized theme variants pass accessibility with zero writes or external requests');
