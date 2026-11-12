@@ -1,5 +1,6 @@
 window.OieRuntime.register('scheduling', life => {
   'use strict';
+  const errorToast = message => window.dispatchEvent(new CustomEvent('notify', {detail: {kind: 'toast', tone: 'danger', message}}));
   const filter = document.querySelector('[data-schedule-filter]');
   if (filter) {
     const id = 'schedule-conversation';
@@ -57,6 +58,8 @@ window.OieRuntime.register('scheduling', life => {
     });
   }
   const drawer = document.querySelector('[data-conversation-schedules]');
+  const drawerID = 'conversation-schedules';
+  let drawerEditRequest;
   if (drawer) {
     const conversationId = drawer.dataset.conversationSchedules;
     const engineId = document.body.dataset.engineId;
@@ -64,14 +67,14 @@ window.OieRuntime.register('scheduling', life => {
     const status = drawer.querySelector('[data-conversation-schedules-status]');
     const retry = drawer.querySelector('[data-conversation-schedules-retry]');
     const more = drawer.querySelector('[data-conversation-schedules-more]');
-    let request, nextCursor = '', failedCursor = '';
+    let request, open = false, nextCursor = '', failedCursor = '';
     const stop = () => {
       request?.abort();
       request = null;
       results.removeAttribute('aria-busy');
     };
     life.cleanup(stop);
-    async function loadConversationSchedules(cursor = '') {
+    async function loadConversationSchedules(cursor = '', restore) {
       if (request) return;
       const controller = new AbortController();
       request = controller;
@@ -79,7 +82,7 @@ window.OieRuntime.register('scheduling', life => {
       if (cursor) query.set('cursor', cursor);
       results.setAttribute('aria-busy', 'true');
       status.textContent = drawer.dataset.loading;
-      status.hidden = false;
+      status.hidden = !!restore;
       try {
         const response = await life.fetch('/ui/scheduling/conversation?' + query, {signal: controller.signal});
         if (!response.ok) throw Error('conversation schedules');
@@ -87,6 +90,15 @@ window.OieRuntime.register('scheduling', life => {
         const page = html.querySelector('[data-conversation-schedule-page]');
         if (request !== controller || life.signal.aborted) return;
         if (page?.dataset.engineId !== engineId || page.dataset.conversationId !== conversationId) throw Error('conversation scope');
+        for (const link of page.querySelectorAll('[data-conversation-schedule-edit]')) {
+          const url = new URL(location.href);
+          url.searchParams.set('chat', conversationId);
+          url.searchParams.set('editSchedule', link.dataset.conversationScheduleEdit);
+          url.searchParams.delete('inbox');
+          url.searchParams.delete('open');
+          link.href = url.pathname + url.search;
+        }
+        const restoreFocus = restore?.button === document.activeElement;
         if (cursor) {
           const list = results.querySelector('[data-schedule-agenda]');
           const nextList = page.querySelector('[data-schedule-agenda]');
@@ -95,8 +107,13 @@ window.OieRuntime.register('scheduling', life => {
           results.replaceChildren(...page.children);
         }
         window.OieTime.localize(results);
+        document.dispatchEvent(new Event('oie:navigation-upgrade'));
         nextCursor = page.dataset.nextCursor || '';
-        if ((!nextCursor && document.activeElement === more) || document.activeElement === retry) {
+        if (restoreFocus) {
+          const row = results.querySelector(`[data-scheduled-row="${CSS.escape(restore.id)}"]`);
+          const action = row?.querySelector(`[data-conversation-schedule-command="${CSS.escape(restore.command)}"]`);
+          (action || results.querySelector('[data-conversation-schedule-edit]') || drawer.querySelector('a')).focus({preventScroll: true});
+        } else if ((!nextCursor && document.activeElement === more) || document.activeElement === retry) {
           results.tabIndex = -1;
           results.focus({preventScroll: true});
         }
@@ -115,7 +132,8 @@ window.OieRuntime.register('scheduling', life => {
       }
     }
     life.on(window, 'drawer:open', event => {
-      if (event.detail?.id !== 'conversation-schedules') return;
+      if (event.detail?.id !== drawerID) return;
+      open = true;
       stop();
       results.replaceChildren();
       retry.hidden = true;
@@ -124,13 +142,58 @@ window.OieRuntime.register('scheduling', life => {
     });
     for (const name of ['drawer:close', 'drawer:close-request']) {
       life.on(window, name, event => {
-        if (event.detail?.id !== 'conversation-schedules') return;
+        if (event.detail?.id !== drawerID) return;
         const closingRequest = request;
-        life.raf(() => { if (!event.defaultPrevented && request === closingRequest) stop(); });
+        const closingEdit = drawerEditRequest;
+        life.raf(() => {
+          if (event.defaultPrevented) return;
+          open = false;
+          if (request === closingRequest) stop();
+          if (closingEdit && drawerEditRequest === closingEdit) closingEdit.request.abort();
+        });
       });
     }
     life.on(retry, 'click', () => loadConversationSchedules(failedCursor));
     life.on(more, 'click', () => { if (nextCursor) loadConversationSchedules(nextCursor); });
+    life.on(drawer, 'oie:schedule-saved', ({detail: form}) => {
+      if (!open) return;
+      const id = form.elements.namedItem('messageId').value;
+      const command = form.dataset.scheduleCommand;
+      const row = results.querySelector(`[data-scheduled-row="${CSS.escape(id)}"]`);
+      stop();
+      loadConversationSchedules('', {id, command, button: row?.querySelector(`[data-conversation-schedule-command="${command}"]`)});
+    });
+    life.on(document, 'htmx:before:request', event => {
+      const ctx = event.detail.ctx;
+      const link = ctx.sourceElement?.closest('[data-conversation-schedule-edit]');
+      if (!drawer.contains(link)) return;
+      const editBlocked = snapshot().editBlocked !== false;
+      if (!open || request || drawerEditRequest || results.querySelector('form[data-busy="true"]') || editBlocked) {
+        event.preventDefault();
+        if (editBlocked) errorToast(drawer.dataset.editUnavailable);
+        return;
+      }
+      drawerEditRequest = ctx;
+      link.setAttribute('aria-busy', 'true');
+    }, {capture: true});
+    life.on(document, 'htmx:after:request', event => {
+      const ctx = event.detail.ctx;
+      if (ctx !== drawerEditRequest) return;
+      if (!open) { event.preventDefault(); return; }
+      const page = new DOMParser().parseFromString(ctx.text || '', 'text/html');
+      const root = page.getElementById('oie-app');
+      const editor = root?.querySelector('[data-editing-schedule] input[name="messageId"]');
+      if (ctx.response?.status !== 200 || root?.dataset.engineId !== engineId || root.dataset.conversationId !== conversationId ||
+          editor?.value !== ctx.sourceElement.dataset.conversationScheduleEdit || snapshot().editBlocked !== false) {
+        event.preventDefault();
+        errorToast(drawer.dataset.editUnavailable);
+      }
+    }, {capture: true});
+    life.on(document, 'htmx:finally:request', ({detail: {ctx}}) => {
+      if (ctx !== drawerEditRequest) return;
+      ctx.sourceElement.removeAttribute('aria-busy');
+      drawerEditRequest = null;
+    }, {capture: true});
   }
   const dialog = document.querySelector('[data-schedule-dialog]');
   if (!dialog) return;
@@ -251,10 +314,6 @@ window.OieRuntime.register('scheduling', life => {
     return [raw.slice(0, 8), raw.slice(8, 12), raw.slice(12, 16), raw.slice(16, 20), raw.slice(20)].join('-');
   }
 
-  function attachmentError(message) {
-    window.dispatchEvent(new CustomEvent('notify', {detail: {kind: 'toast', tone: 'danger', message}}));
-  }
-
   life.on(composer, 'oie:composer-attachments', event => {
     const changed = locked !== event.detail.locked || JSON.stringify(files) !== JSON.stringify(event.detail.files);
     files = event.detail.files;
@@ -274,7 +333,7 @@ window.OieRuntime.register('scheduling', life => {
     picker.value = '';
     if (!picked.length || locked || composer.dataset.staging === 'true') return;
     if (files.length + picked.length > 16 || picked.some(file => file.size > 20 * 1024 * 1024)) {
-      attachmentError(dialog.dataset.attachmentLimit);
+      errorToast(dialog.dataset.attachmentLimit);
       return;
     }
     composer.dataset.staging = 'true';
@@ -294,7 +353,7 @@ window.OieRuntime.register('scheduling', life => {
         next.push(metadata);
       }
     } catch {
-      if (!life.signal.aborted) attachmentError(dialog.dataset.attachmentFailed);
+      if (!life.signal.aborted) errorToast(dialog.dataset.attachmentFailed);
     } finally {
       if (!life.signal.aborted) {
         composer.dataset.staging = 'false';
@@ -340,26 +399,34 @@ window.OieRuntime.register('scheduling', life => {
     const original = document.getElementById('schedule-edit-data');
     open(composer, original ? JSON.parse(original.textContent).scheduledAt : '', current.text, current.reply, current.files, editing);
   });
+  function runScheduleAction(row, command, trigger) {
+    if (!row.isConnected || dialog.open) return;
+    const scope = row.closest('[data-conversation-schedules-results]') || row;
+    if (scope.getAttribute('aria-busy') === 'true' || scope.querySelector('form[data-busy="true"]') || drawerEditRequest) return;
+    const form = row.querySelector(`form[data-schedule-command="${CSS.escape(command)}"]`);
+    if (!form) return;
+    trigger.focus({preventScroll: true});
+    if (command !== 'reschedule') {
+      form.requestSubmit();
+      return;
+    }
+    agendaReturnFocus = trigger;
+    const source = row.querySelector('[data-scheduled-quote]');
+    const reply = source ? {senderName: source.dataset.sender, excerpt: source.content.textContent} : null;
+    const scheduledAt = row.querySelector('[data-scheduled-date]').dateTime;
+    open(form, form.elements.namedItem('scheduledAt').value || scheduledAt, row.querySelector('[data-scheduled-text]')?.textContent || '', reply, [], true);
+    const links = Array.from(row.querySelectorAll('[data-message-attachments] a')).map(link => link.cloneNode(true));
+    previewFiles.replaceChildren(...links);
+  }
+  life.on(drawer, 'click', event => {
+    const trigger = event.target.closest('[data-conversation-schedule-command]');
+    if (trigger) runScheduleAction(trigger.closest('[data-scheduled-row]'), trigger.dataset.conversationScheduleCommand, trigger);
+  });
   life.on(document, 'oie:schedule-action', ({target, detail: command}) => {
     const row = target.closest('[data-scheduled-row]');
-    const form = Array.from(row?.querySelectorAll('form[data-schedule-command]') || []).find(item => item.dataset.scheduleCommand === command);
-    if (!form) return;
-    const trigger = row.querySelector('[data-schedule-actions-trigger]');
-    const run = () => life.raf(() => {
-      if (!row.isConnected || dialog.open || row.querySelector('form[data-busy="true"]')) return;
-      trigger.focus({preventScroll: true});
-      if (command !== 'reschedule') {
-        form.requestSubmit();
-        return;
-      }
-      agendaReturnFocus = trigger;
-      const source = row.querySelector('[data-scheduled-quote]');
-      const reply = source ? {senderName: source.dataset.sender, excerpt: source.content.textContent} : null;
-      const scheduledAt = row.querySelector('[data-scheduled-date]').dateTime;
-      open(form, form.elements.namedItem('scheduledAt').value || scheduledAt, row.querySelector('[data-scheduled-text]')?.textContent || '', reply, [], true);
-      const links = Array.from(row.querySelectorAll('[data-message-attachments] a')).map(link => link.cloneNode(true));
-      previewFiles.replaceChildren(...links);
-    });
+    const trigger = row?.querySelector('[data-schedule-actions-trigger]');
+    if (!trigger) return;
+    const run = () => life.raf(() => runScheduleAction(row, command, trigger));
     const menu = target.closest('[role="menu"]');
     // Let the menu release keyboard focus before the modal claims it.
     if (typeof menu?.hidePopover === 'function' && menu.matches(':popover-open')) {
@@ -369,6 +436,10 @@ window.OieRuntime.register('scheduling', life => {
       if (trigger.getAttribute('aria-expanded') === 'true') trigger.click();
       run();
     }
+  });
+  life.on(dialog, 'keydown', event => {
+    if (event.key !== 'Escape' || !drawer?.contains(agendaReturnFocus)) return;
+    event.stopPropagation();
   });
   life.on(dialog, 'close', () => {
     agendaReturnFocus?.focus({preventScroll: true});

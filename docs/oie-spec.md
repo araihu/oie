@@ -344,7 +344,9 @@ Users can filter by one or more conversations using the searchable selector,
 open the destination, edit in that
 conversation's composer, reschedule, cancel or send now.
 The conversation menu also opens a drawer with that conversation's scheduled
-messages and a link to manage them in the filtered agenda.
+messages. Each eligible message can be edited, rescheduled, sent now or
+cancelled from the drawer. Editing closes the drawer and loads the full
+composition in the conversation's composer.
 
 The [engine OpenAPI contract](../api/openapi.yaml) defines complete
 compositions, attachment staging, cross-conversation listing and Send now.

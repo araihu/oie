@@ -85,7 +85,7 @@ templ scheduledResults(v view) {
 templ conversationSchedulesDrawer(v view) {
 	@drawer.Drawer(drawer.Config{ID:"conversation-schedules",Title:v.Text.Scheduled,PanelClass:"oie-conversation-details-drawer"}) {
 		<section class="oie-conversation-schedules" data-conversation-schedules={v.Selected.Id}
-			data-loading={v.Text.ScheduleLoading} data-unavailable={v.Text.ScheduleUnavailable}>
+			data-loading={v.Text.ScheduleLoading} data-unavailable={v.Text.ScheduleUnavailable} data-edit-unavailable={v.Text.MessageUnavailable}>
 			<div class="oie-conversation-schedules-heading">
 				<strong>{v.Selected.Title}</strong>
 				@link.Link(v.conversationScheduleAgendaHref()) { {v.Text.ScheduleViewAgenda} }
@@ -127,7 +127,7 @@ templ scheduledAgenda(v view, inDrawer bool) {
 }
 
 templ scheduledRow(v view,item engineapi.ScheduledMessageItem, sameDay,inDrawer bool) {
-	<li class="oie-schedule-row" data-scheduled-row>
+	<li class="oie-schedule-row" data-scheduled-row={item.Message.Id}>
 		<h2 class="oie-agenda-day" hidden?={sameDay}>
 			<time data-scheduled-day datetime={scheduleDate(item.Message.ScheduledAt)}>{agendaDate(item.Message.ScheduledAt,"2006-01-02")}</time>
 		</h2>
@@ -138,26 +138,43 @@ templ scheduledRow(v view,item engineapi.ScheduledMessageItem, sameDay,inDrawer 
 					@link.Link(v.scheduleConversationHref(item.Conversation,""),link.WithRootClass("oie-agenda-chat")) { {item.Conversation.Title} }
 					<small>{v.accountLabel(item.Conversation.AccountId)}</small>
 				</div>
-				if pendingSendMutable(item.Message) {
-					@scheduledMenu(v,item)
-					@scheduleRowForm(v,item.Message,"/ui/scheduling/send-now","send-now")
-					@scheduleRowForm(v,item.Message,"/ui/messages/cancel","cancel")
-					@scheduleRowForm(v,item.Message,"/ui/scheduling/update","reschedule")
-				} else {
-					<span class="oie-agenda-state">{v.stateLabel(item.Message.SendState)}</span>
-				}
 			}
 			<div class="oie-agenda-composition">
 				if item.Message.Composition != nil && item.Message.Composition.OriginalText != "" {
 					<p data-scheduled-text>{item.Message.Composition.OriginalText}</p>
 				}
-				if !inDrawer && item.Message.Reply != nil {
+				if item.Message.Reply != nil {
 					<template data-scheduled-quote data-sender={scheduleQuoteSender(item.Message.Reply)}>{item.Message.Reply.Excerpt}</template>
 				}
 				@agendaAttachments(v,item.Message)
 			</div>
+			if pendingSendMutable(item.Message) {
+				if inDrawer {
+					@conversationScheduleActions(v,item)
+				} else {
+					@scheduledMenu(v,item)
+				}
+				@scheduleRowForm(v,item,"/ui/scheduling/send-now","send-now",inDrawer)
+				@scheduleRowForm(v,item,"/ui/messages/cancel","cancel",inDrawer)
+				@scheduleRowForm(v,item,"/ui/scheduling/update","reschedule",inDrawer)
+			} else {
+				<span class="oie-agenda-state">{v.stateLabel(item.Message.SendState)}</span>
+			}
 		</article>
 	</li>
+}
+
+templ conversationScheduleActions(v view,item engineapi.ScheduledMessageItem) {
+	<div class="oie-conversation-schedule-actions">
+		@link.Link(v.scheduleConversationHref(item.Conversation,item.Message.Id),link.WithAppearance(link.AppearanceButton),link.WithSize(link.SizeSmall),link.WithAttrs(templ.Attributes{"data-conversation-schedule-edit":item.Message.Id})) { {v.Text.EditMessage} }
+		@conversationScheduleButton(v.Text.Reschedule,"reschedule",button.TonePrimary)
+		@conversationScheduleButton(v.Text.SendNow,"send-now",button.TonePrimary)
+		@conversationScheduleButton(v.Text.ScheduleCancel,"cancel",button.ToneDanger)
+	</div>
+}
+
+templ conversationScheduleButton(label, command string, tone button.Tone) {
+	@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithTone(tone),button.WithAttrs(templ.Attributes{"data-conversation-schedule-command":command})) { {label} }
 }
 
 templ scheduledMenu(v view,item engineapi.ScheduledMessageItem) {
@@ -198,9 +215,14 @@ templ agendaAttachments(v view,m engineapi.Message) {
 	}
 }
 
-templ scheduleRowForm(v view,m engineapi.Message,path,command string) {
+templ scheduleRowForm(v view,item engineapi.ScheduledMessageItem,path,command string,inDrawer bool) {
+	{{ m := item.Message }}
 	<form action={templ.URL(path)} method="post" data-oie-action="schedule-row" data-schedule-command={command} hidden>
-		@mutationFieldsAt(v,"scheduled-"+m.Id,newOperationKey(),v.scheduleHref(""))
+		if inDrawer {
+			@mutationFieldsAt(v,"scheduled-"+m.Id,newOperationKey(),v.scheduleConversationHref(item.Conversation,""))
+		} else {
+			@mutationFieldsAt(v,"scheduled-"+m.Id,newOperationKey(),v.scheduleHref(""))
+		}
 		<input type="hidden" name="messageId" value={m.Id}/>
 		<input type="hidden" name="expectedRevisionId" value={m.RevisionId}/>
 		if command == "reschedule" {

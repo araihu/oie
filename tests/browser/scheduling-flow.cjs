@@ -25,6 +25,15 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
     await row.locator('[data-schedule-actions-trigger]').click();
     await row.getByRole('menuitem', {name: label, exact: true}).click();
   };
+  const openDrawer = async (page, label) => {
+    const trigger = page.locator('#chat-options [aria-controls="chat-options-panel"]');
+    await trigger.click();
+    await page.locator('#chat-options-panel').getByRole('menuitem', {name: label, exact: true}).click();
+    const drawer = page.getByRole('dialog', {name: label, exact: true});
+    await drawer.waitFor({state:'visible'});
+    assert.equal(await trigger.getAttribute('aria-expanded'), 'false');
+    return drawer;
+  };
   const sample = page => page.evaluate(() => {
     const selectors = ['#message-composer', '#message-timeline', '#composer-split'];
     const sampleRects = () => selectors.map(selector => {
@@ -119,12 +128,7 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
     [bobPage, bobConversation, 'Agendadas', 'Mensagem agendada em outro destino', content],
   ]) {
     const before = page.url();
-    const trigger = page.locator('#chat-options [aria-controls="chat-options-panel"]');
-    await trigger.click();
-    await page.locator('#chat-options-panel').getByRole('menuitem', {name: label, exact: true}).click();
-    const drawer = page.getByRole('dialog', {name: label, exact: true});
-    await drawer.waitFor({state:'visible'});
-    assert.equal(await trigger.getAttribute('aria-expanded'), 'false');
+    const drawer = await openDrawer(page, label);
     const row = drawer.locator('[data-scheduled-row]');
     await row.getByText(message, {exact:true}).waitFor();
     assert.equal(await row.count(), 1);
@@ -166,8 +170,6 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   await alicePage.waitForURL(url => url.searchParams.getAll('scheduleConversation').length === 1);
   await alicePage.keyboard.press('Escape');
   const row = alicePage.locator('[data-scheduled-row]').filter({hasText: content});
-  const scheduledTime = row.locator('[data-scheduled-date]');
-  const previous = await scheduledTime.getAttribute('datetime');
   const menuTrigger = row.locator('[data-schedule-actions-trigger]');
   await menuTrigger.press('Enter');
   await row.getByRole('menuitem', {name: 'Reschedule', exact: true}).waitFor();
@@ -178,8 +180,17 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   await reschedule.waitFor({state:'visible'});
   await reschedule.getByRole('button', {name:'Back',exact:true}).click();
   await until(() => menuTrigger.evaluate(node => node === document.activeElement), 'agenda restores focus after closing the scheduling dialog');
-  await agendaAction(row, 'Reschedule');
+
+  await alicePage.goto(path(aliceConversation, alice, 'en'));
+  const aliceDrawer = await openDrawer(alicePage, 'Scheduled');
+  const drawerRow = aliceDrawer.locator('[data-scheduled-row]').filter({hasText:content});
+  const scheduledTime = drawerRow.locator('[data-scheduled-date]');
+  const previous = await scheduledTime.getAttribute('datetime');
+  const chatURL = alicePage.url();
+  const rescheduleButton = drawerRow.getByRole('button', {name:'Reschedule',exact:true});
+  await rescheduleButton.click();
   await reschedule.waitFor({state:'visible'});
+  await reschedule.getByRole('link', {name:attachment.name,exact:true}).waitFor();
   const field = reschedule.locator('input[type="datetime-local"]');
   const [date, time] = (await field.inputValue()).split('T');
   const utc = new Date(date+'T'+time+'Z');
@@ -187,13 +198,44 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   await field.fill(utc.toISOString().slice(0,16));
   const updated = alicePage.waitForResponse(response => response.url().endsWith('/ui/scheduling/update') && response.request().method() === 'POST');
   await reschedule.getByRole('button', {name:'Reschedule',exact:true}).click();
-  assert.equal((await updated).ok(), true);
+  assert.equal((await (await updated).json()).ok, true);
   await until(async () => {
     const current = await scheduledTime.getAttribute('datetime').catch(() => '');
     return current && current !== previous;
-  }, 'new date appears on the same scheduled message');
-  await agendaAction(row, 'Edit message');
+  }, 'new date appears in the same drawer');
+  await until(() => rescheduleButton.evaluate(node => node === document.activeElement), 'drawer restores focus after rescheduling');
+  assert.equal(alicePage.url(), chatURL);
+
+  const editLink = drawerRow.getByRole('link', {name:'Edit message',exact:true});
+  const editRequest = url => url.pathname === '/' && url.searchParams.has('editSchedule');
+  await alicePage.route(editRequest, async route => {
+    const noEdit = new URL(route.request().url());
+    noEdit.searchParams.delete('editSchedule');
+    await new Promise(resolve => setTimeout(resolve, 450));
+    await route.fulfill({response: await route.fetch({url:noEdit.href})});
+  }, {times:1});
+  await editLink.click();
+  const beforeRefusal = await sample(alicePage);
+  await alicePage.getByText('This message or conversation is no longer available. Your draft is kept.', {exact:true}).waitFor();
+  await stable(alicePage, beforeRefusal);
+  assert(await aliceDrawer.isVisible());
+  assert.equal(await alicePage.locator('[data-editing-schedule]').count(), 0);
+  assert.equal(await alicePage.locator(source).inputValue(), 'Existing independent draft');
+  assert(await editLink.evaluate(node => node === document.activeElement));
+  assert.equal(alicePage.url(), chatURL);
+
+  await alicePage.route(editRequest, async route => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    await route.continue();
+  }, {times:1});
+  await editLink.click();
+  const beforeEdit = await sample(alicePage);
+  await new Promise(resolve => setTimeout(resolve, 330));
+  assert(await aliceDrawer.isVisible());
+  await stable(alicePage, beforeEdit);
   await alicePage.locator('[data-editing-schedule]').waitFor();
+  await aliceDrawer.waitFor({state:'hidden'});
+  await until(() => alicePage.locator(source).evaluate(node => node === document.activeElement), 'editing focuses the composer');
   assert.equal(await alicePage.locator(source).inputValue(), content);
   assert.equal(await alicePage.locator('[data-composer-attachments] a').textContent(), attachment.name);
   const edit = content + ' updated';
@@ -202,16 +244,29 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   await alicePage.waitForURL(url => url.searchParams.get('chat') === aliceConversation.id && !url.searchParams.has('editSchedule'));
   await until(async () => await alicePage.locator(source).inputValue() === 'Existing independent draft', 'restored pre-existing draft');
 
-  await alicePage.locator('#desktop-navigation').getByRole('link', {name: 'Scheduled', exact: true}).click();
-  const edited = alicePage.locator('[data-scheduled-row]').filter({hasText: edit});
-  await agendaAction(edited, 'Send now');
+  await openDrawer(alicePage, 'Scheduled');
+  const edited = aliceDrawer.locator('[data-scheduled-row]').filter({hasText: edit});
+  await edited.getByRole('button', {name:'Send now',exact:true}).click();
   await until(async () => {
     const page = await api('/api/v1/conversations/' + bobConversation.id + '/messages?limit=50');
     return page.items.some(message => message.originalText.startsWith(edit + '\nhttps://'));
   }, 'same scheduled composition delivered through XMPP after Send now');
   await until(async () => (await api('/api/v1/scheduled-messages')).items.length === 1, 'Send now clears exactly one row');
-  await agendaAction(alicePage.locator('[data-scheduled-row]').filter({hasText: 'Mensagem agendada em outro destino'}), 'Cancel scheduled message');
+  await edited.waitFor({state:'hidden'});
+  assert(await aliceDrawer.isVisible());
+
+  const bobDrawer = await openDrawer(bobPage, 'Agendadas');
+  const bobRow = bobDrawer.locator('[data-scheduled-row]');
+  const bobReschedule = bobRow.getByRole('button', {name:'Reagendar',exact:true});
+  await bobReschedule.click();
+  await bobPage.locator(preview).waitFor({state:'visible'});
+  await bobPage.keyboard.press('Escape');
+  await bobPage.locator(preview).waitFor({state:'hidden'});
+  await until(() => bobReschedule.evaluate(node => node === document.activeElement), 'mobile returns focus to the drawer after Escape');
+  await bobRow.getByRole('button', {name:'Cancelar mensagem agendada',exact:true}).click();
   await until(async () => (await api('/api/v1/scheduled-messages')).items.length === 0, 'second schedule cancelled');
+  await bobRow.waitFor({state:'hidden'});
+  assert(await bobDrawer.isVisible());
 }
 
 module.exports = {schedulingFlow};

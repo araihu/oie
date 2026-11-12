@@ -63,6 +63,7 @@ func (s *Server) conversationSchedules(w http.ResponseWriter, r *http.Request) {
 	}
 	v := s.baseView(r)
 	v.EngineID, v.SchedulePage = engineID, result.JSON200
+	v.CSRF = csrfToken(w, r)
 	var fragment bytes.Buffer
 	if err := conversationSchedulePage(v, conversationID).Render(presentationContext(ctx, v), &fragment); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -156,7 +157,7 @@ func (v view) scheduleConversationHref(c engineapi.Conversation, edit string) st
 }
 
 func (v view) scheduleExitHref() string {
-	return v.scheduleConversationHref(*v.Selected, "")
+	return v.href("chat", v.Selected.Id, "lang", v.Locale, "theme", v.Theme)
 }
 
 func (v view) stagedAttachmentHref(conversation, id string, download bool) string {

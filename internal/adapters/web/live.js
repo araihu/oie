@@ -494,9 +494,10 @@ window.OieRuntime.register('live', life => {
   });
   life.on(composer,'oie:attachment-staging',renderReply);
   life.on(composer,'oie:schedule-snapshot',event=>{
+    const editBlocked=!!journal?.pending||!!editSession||editPreparing||preparingReply||stopped||composer.dataset.busy==='true'||composer.dataset.staging==='true';
     Object.assign(event.detail,{text:input.value,reply:journal?.reply,files:journal?.attachments||[],
-      blocked:!!journal?.pending||!!editSession||editPreparing||preparingReply||stopped||composer.dataset.busy==='true'||composer.dataset.staging==='true'||
-        (composer.dataset.sendAllowed!=='true'&&!editingSchedule)});
+      editBlocked:editBlocked||!composer.hasAttribute('data-schedule-composer'),
+      blocked:editBlocked||(composer.dataset.sendAllowed!=='true'&&!editingSchedule)});
   });
   function completeSubmission(result){
     if(!result.accepted||!canonicalID(result.messageId)||!canonicalID(result.nextKey))return false;
@@ -703,6 +704,7 @@ window.OieRuntime.register('live', life => {
     event.preventDefault();
     if (form.dataset.busy === 'true' || stopped) return;
     const sending = form.dataset.oieAction === 'send';
+    const scheduleDrawer = form.dataset.oieAction === 'schedule-row' && form.closest('[data-conversation-schedules]');
     if(sending&&(editSession||editPreparing)){if(editSession&&!editSession.submitted)void submitEdit(false);return;}
     if (sending) {
       if(preparingReply){feedback(form,text('replyPreparing'));return}
@@ -765,7 +767,8 @@ window.OieRuntime.register('live', life => {
           if(!completeSubmission(result))feedback(form,text('pending'),true);
           input.focus({preventScroll:true});renderReply();
         } else if(form.dataset.oieAction==='schedule-row'){
-          location.assign(result.redirect||values.get('returnTo'));return;
+          if(!scheduleDrawer){location.assign(result.redirect||values.get('returnTo'));return;}
+          scheduleDrawer.dispatchEvent(new CustomEvent('oie:schedule-saved',{detail:form}));
         } else if (form.dataset.oieAction === 'register' || form.dataset.oieAction === 'open') {
           if (result.redirect) { if(window.OieNavigation)window.OieNavigation.go(result.redirect);else location.assign(result.redirect); return; }
         }
