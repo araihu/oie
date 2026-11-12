@@ -25,8 +25,11 @@ window.OieRuntime.register('message-search',life=>{
  const valid=()=>!life.signal.aborted&&root.isConnected&&document.body.dataset.engineId===engine;
  function abort(){observer?.disconnect();epoch++;if(timer)clearTimeout(timer);timer=0;active?.request?.abort?.();active=null;busy=false;loading.hidden=true;results.removeAttribute('aria-busy');}
  function status(text,restart=false){feedback.textContent=text||'';feedback.hidden=!text;for(const node of root.querySelectorAll('button[data-message-search-retry]'))node.hidden=!text||restart;for(const node of root.querySelectorAll('button[data-message-search-restart]'))node.hidden=!text||!restart;}
- function applyURL(url,state){
+ function clearSearchParams(url){
   for(const name of searchKeys)url.searchParams.delete(name);
+ }
+ function applyURL(url,state){
+  clearSearchParams(url);
   url.searchParams.set('searchMode','messages');
   for(const [name,val]of [['searchQuery',state.q],['searchEngine',state.engineId],['searchType',state.searchType],['includeEditHistory',state.includeEditHistory==='true'?'true':'']])if(val)url.searchParams.set(name,val);
   for(const id of state.accounts)url.searchParams.append('searchAccount',id);
@@ -104,8 +107,17 @@ window.OieRuntime.register('message-search',life=>{
  function restoreTitleQuery(){query.value=originalQuery;form.elements.q.value=originalQuery;categories();}
  function clearAddress(){
   const url=new URL(location.href);
-  for(const name of searchKeys)url.searchParams.delete(name);
+  clearSearchParams(url);
   window.OieNavigation?.addressSearch(url);
+  // The mounted inbox and workspace can have links rendered with the search
+  // that was active when their fragment loaded.
+  for(const node of document.querySelectorAll('#oie-app a[href^="/?"][href*="searchMode="],#oie-app input[name="returnTo"][value^="/?"][value*="searchMode="]')){
+   const attr=node.tagName==='A'?'href':'value';
+   const target=new URL(node.getAttribute(attr),url);
+   if(target.searchParams.get('searchMode')!=='messages')continue;
+   clearSearchParams(target);
+   node.setAttribute(attr,target.pathname+target.search+target.hash);
+  }
  }
  function dismissHistoryHelp(){if(historyHelp?.getAttribute('aria-expanded')==='true')historyHelp.click();}
  // Some app actions consume the click before the tooltip's outside listener.

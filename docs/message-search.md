@@ -90,6 +90,8 @@ The existing `conversation-search` field opens global search when the user enter
 a non-blank query. Focusing the field keeps the conversation list visible.
 The X at the right of the field cancels the search and returns focus to the field.
 Clearing the query also returns to the list and cancels pending search requests.
+Closing clears the search from the current URL and the mounted workspace links
+so selecting another conversation or inbox filter keeps search closed.
 The edit-history help closes on outside interaction or Escape without changing
 the query or the checkbox.
 The searchable account picker filters conversation, contact, and message matches

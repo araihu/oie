@@ -406,8 +406,10 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     await page.route('**/ui/message-search?**',async route=>{const url=new URL(route.request().url());if(url.searchParams.get('q')==='Telescope'&&url.searchParams.get('conversationId')===chat.id){const response=await route.fetch();chatHeld=true;await new Promise(resolve=>chatRelease=resolve);await route.fulfill({response}).catch(()=>{});chatReleased();return}await route.continue()});
     const sourceBeforeStale=await page.locator('body').getAttribute('data-focus-message');await chatQuery.fill('Telescope');await until(()=>chatHeld,'held old chat-search query');await chatQuery.fill('No matching source');await until(async()=>await chatSearch.getAttribute('data-search-complete')==='true'&&await chatSearch.getAttribute('data-search-loaded')==='0','new empty chat query');chatRelease();await chatStaleResponse;await page.unroute('**/ui/message-search?**');assert.equal(await chatQuery.inputValue(),'No matching source');assert.equal(await chatSearch.getAttribute('data-search-loaded'),'0');assert.equal(await page.locator('body').getAttribute('data-focus-message'),sourceBeforeStale,'old chat query cannot refocus its source');
     state.mode='unavailable';await chatQuery.fill('Chat transport failure');await chatSearch.locator('[data-conversation-search-retry]').waitFor({state:'visible'});assert.equal(await query(page).inputValue(),globalSearchNodes.query);state.mode='normal';await chatSearch.locator('[data-conversation-search-retry]').click();await until(async()=>await chatSearch.getAttribute('data-search-complete')==='true'&&await chatSearch.getAttribute('data-search-loaded')==='0','chat search retry recovers without a synthetic match');
+    const generationBeforeChatSearchClose=await page.evaluate(()=>window.OieRuntime.generation);
     await chatSearch.locator('[data-conversation-search-close]').click();await chatSearch.waitFor({state:'hidden'});
     await until(async()=>await query(page).inputValue()===globalSearchNodes.query&&await hits(page).count()===1,'closing chat search restores the independently scoped global results');
+    assert.equal(await page.evaluate(()=>window.OieRuntime.generation),generationBeforeChatSearchClose,'closing chat search does not navigate the workspace');
     assert.equal(await page.locator('body').getAttribute('data-focus-message'),corpus[0].id,'closing chat search keeps its selected source');
     findings.push('Global and per-chat queries coexist independently; next/previous traverse scoped pages without wrapping, preserve draft/global DOM/focus, highlight only current literal content and keep timeline bounded to200 rows');
 
@@ -572,6 +574,53 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     }
     findings.push('Conversation and message filters preserve the query and accounts, request only the selected type, and restore all results');
     findings.push('Search results separate address names from domains, lead with the author, and show local Today or the date before the time');
+
+    for(const width of [390,1440]){
+      const mobile=width===390,lang=mobile?'pt-BR':'en';
+      const navigation=await fresh({viewport:{width,height:900},locale:lang,hasTouch:mobile});
+      const params=new URLSearchParams({
+        account,chat:chat.id,lang,theme:'dark',searchMode:'messages',
+        searchQuery:'Telescope',searchEngine:state.engine,searchAccount:account,
+        searchType:'messages',includeEditHistory:'true',
+      });
+      if(mobile)params.set('inbox','1');
+      await navigation.goto(base+'/?'+params);
+      await navigation.waitForFunction(()=>window.OieRuntime?.generation>0);
+      await hits(navigation).first().waitFor({state:'visible'});
+      const inbox=navigation.locator('#conversation-list-default');
+      const field=navigation.locator('#conversation-search');
+      const row=inbox.locator('a[data-conversation-id="'+chats[2].id+'"]');
+      const groups=inbox.locator('a[data-filter="groups"]');
+      const cancel=navigation.getByRole('button',{name:mobile?'Cancelar pesquisa':'Cancel search',exact:true});
+      if(mobile)await cancel.tap();
+      else await field.press('Escape');
+      await inbox.waitFor({state:'visible'});
+      const searchKeys=['searchMode','searchQuery','searchEngine','searchAccount','searchType','searchConversation','searchCursor','includeEditHistory'];
+      const assertClosedURL=href=>{
+        const url=new URL(href,base);
+        for(const key of searchKeys)assert(!url.searchParams.has(key),key+' survived cancellation in '+url.pathname);
+      };
+      assertClosedURL(navigation.url());
+      assertClosedURL(await row.getAttribute('href'));
+      assertClosedURL(await groups.getAttribute('href'));
+      const generation=await navigation.evaluate(()=>window.OieRuntime.generation);
+      if(mobile)await row.tap();
+      else await row.click();
+      await navigation.waitForFunction(({id,generation})=>document.body.dataset.conversationId===id&&window.OieRuntime.generation>generation,{id:chats[2].id,generation});
+      assertClosedURL(navigation.url());
+      assert.equal(await field.inputValue(),'');
+      assert.equal(await navigation.locator('#message-search-slot').getAttribute('hidden'),'');
+      await navigation.goBack();
+      await inbox.waitFor({state:'visible'});
+      await navigation.waitForFunction(id=>document.body.dataset.conversationId===id,chat.id);
+      assertClosedURL(navigation.url());
+      await groups.click();
+      await navigation.waitForURL(url=>url.searchParams.get('filter')==='groups');
+      assertClosedURL(navigation.url());
+      assert.equal(await field.inputValue(),'');
+      await navigation.context().close();
+    }
+    findings.push('After closing a server-rendered search, conversation links, Back and inbox filters stay outside search on desktop and mobile');
 
     await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});
     for(const width of [390,1440])for(const design of ['goshtoso','minimal'])for(const theme of ['light','dark']){
