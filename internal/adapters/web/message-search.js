@@ -11,14 +11,11 @@ function searchResponseMatches(response,state,cursor){
  return data&&data.searchEngine===state.engineId&&data.searchQuery===state.q&&data.searchAccount===state.accounts.join(',')&&data.searchConversation===state.conversationId&&data.searchHistory===state.includeEditHistory&&data.searchType===state.searchType&&data.searchCursor===cursor;
 }
 
-function searchResultKeys(life,input,scroll,enabled,escape){
+function searchResultKeys(life,input,scroll,enabled){
  life.on(document,'keydown',event=>{
   if(!enabled()||event.defaultPrevented||event.isComposing||event.keyCode===229||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)return;
   const link=event.target.closest?.(resultSelector+','+moreSelector),fromInput=event.target===input;
   if(!fromInput&&!scroll.contains(link))return;
-  if(event.key==='Escape'&&escape){
-   event.preventDefault();event.stopImmediatePropagation();escape();return;
-  }
   if(event.key==='Enter'&&fromInput){
    const first=scroll.querySelector(resultSelector);
    if(first){event.preventDefault();first.click();}
@@ -47,6 +44,7 @@ window.OieRuntime.register('message-search',life=>{
  const historyField=form.elements.includeEditHistory,conversation=form.elements.conversationId,category=form.elements.searchType;
  const categoryNav=root.querySelector('[data-message-search-categories]');
  const historyHelp=form.querySelector('.oie-search-history-info'),historyTip=form.querySelector('#message-search-history-help');
+ const accountPicker=form.querySelector('#message-search-account'),accountTrigger=accountPicker?.querySelector('[role="combobox"]');
  const results=root.querySelector('#message-search-results'),pagination=root.querySelector('#message-search-pagination'),buffer=root.querySelector('#message-search-page-buffer'),scroll=root.querySelector('#message-search-scroll'),feedback=root.querySelector('#message-search-feedback'),loading=root.querySelector('[data-message-search-loading]');
  const initial=results.querySelector('[data-message-search-response]');
  const engine=form.elements.engineId.value,memory=window.OieRuntime.memory;
@@ -169,7 +167,15 @@ window.OieRuntime.register('message-search',life=>{
   if(memory.get('message-search-source-pending')===engine)memory.set('message-search-pending-open',{engine,state:null});
   query.focus({preventScroll:true});
  }
- searchResultKeys(life,query,scroll,()=>opened&&!document.querySelector('dialog[open]'),native?null:exit);
+ const sidebarSearchActive=()=>opened&&!document.querySelector('dialog[open]');
+ life.on(document,'keydown',event=>{
+  if(native||event.key!=='Escape'||event.defaultPrevented||event.isComposing||event.keyCode===229||!sidebarSearchActive())return;
+  if(!filterForm?.contains(event.target)&&!root.contains(event.target))return;
+  if(accountPicker?.contains(event.target)&&accountTrigger?.getAttribute('aria-expanded')==='true')return;
+  if(historyHelp?.contains(event.target)&&historyHelp.getAttribute('aria-expanded')==='true')return;
+  event.preventDefault();event.stopImmediatePropagation();exit();
+ },true);
+ searchResultKeys(life,query,scroll,sidebarSearchActive);
  life.on(document,'click',event=>{const node=event.target.closest?.('[data-message-search-close],[data-message-search-filter],[data-message-search-source],[data-message-search-conversation],[data-message-search-contact],[data-message-search-next],[data-message-search-retry],[data-message-search-restart],[data-message-search-clear-scope]');if(!node||!root.contains(node)&&node!==close||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();event.stopImmediatePropagation();if(node===close){exit();return}dismissHistoryHelp();
   if(node.hasAttribute('data-message-search-filter')){
    const selected=node.dataset.messageSearchFilter;
