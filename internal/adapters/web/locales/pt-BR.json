@@ -477,6 +477,7 @@
   "ConversationPreferenceUnavailable": "Não foi possível atualizar esta conversa.",
   "ConversationPreferenceStorageUnavailable": "Não é possível salvar alterações neste dispositivo. Mantenha esta página aberta para repetir uma alteração não confirmada.",
   "SearchMessages": "Pesquisar mensagens",
+  "SearchCancel": "Cancelar pesquisa",
   "SearchSavedMessages": "Pesquise nas suas mensagens salvas.",
   "SearchQuery": "Pesquisar mensagens guardadas",
   "IncludeEditHistory": "Incluir histórico de edições",

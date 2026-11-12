@@ -205,7 +205,7 @@ type copy struct {
 	SenderInfo, OpenSenderInfo, SenderInfoLoading, SenderInfoUnavailable, SenderConversation, SenderAccount                                                                                                         string
 	SearchContactsCoverage, SearchContacts, SearchContactsPartial, SearchContactsLimited                                                                                                                            string
 
-	SearchEverything, SearchConversations, SearchMessagesGroup, SearchConversationsLimited                                         string
+	SearchEverything, SearchCancel, SearchConversations, SearchMessagesGroup, SearchConversationsLimited                           string
 	ConversationSearchOlder, ConversationSearchNewer, ConversationSearchClose, ConversationSearchResult, ConversationSearchMissing string
 
 	SearchMessages, SearchSavedMessages, SearchQuery, IncludeEditHistory, SearchHistoryHelp, SearchPriorVersion, SearchMetadata, SearchBlankTitle, SearchBlankBody, SearchEmptyTitle, SearchEmptyBody, SearchLoading, SearchFailed, SearchInvalid, SearchMissing, SearchRestart, SearchScope, SearchAllConversations, SearchMetadataPending, SearchMore string

@@ -18,11 +18,15 @@
 .oie-message-search-slot[hidden],.oie-list-default[hidden]{display:none!important}
 .oie-list-default{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
 .oie-message-search-slot>.oie-message-search{padding:0;width:100%;min-width:0}
-.oie-global-search-active{margin-inline:16px}
+.oie-search[data-global-search-form]{margin-inline:16px}
 .oie-message-search-slot .oie-message-search-help{font-size:.75rem}
 .oie-message-search-slot .oie-message-search-hit{padding:.7rem .25rem}
-.oie-global-search-back{position:absolute;z-index:2;left:4px;top:3px;background:var(--oie-raised)}
-.oie-global-search-back[hidden]{display:none!important}
+.oie-icon-button.oie-global-search-cancel{
+ position:absolute;z-index:2;inset-inline-end:4px;inset-block:0;margin-block:auto;
+ inline-size:28px;block-size:28px;min-inline-size:28px;min-block-size:28px;
+}
+.oie-global-search-cancel[hidden]{display:none!important}
+.oie-global-search-active #conversation-search::-webkit-search-cancel-button{display:none}
 .oie-search-conversations h3,.oie-search-messages-heading{font-size:.8rem;font-weight:600;color:var(--oie-muted);padding:.75rem .25rem .25rem}
 .oie-search-conversation{display:flex!important;flex-direction:column;align-items:stretch!important;padding:.7rem .25rem;gap:.25rem;border-bottom:1px solid var(--oie-border);min-width:0}
 .oie-search-conversation strong,.oie-search-conversation small{overflow-wrap:anywhere}
