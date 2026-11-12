@@ -137,11 +137,12 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
-	SchedulePage                         *engineapi.ScheduledMessagePage
-	ScheduleEdit                         *engineapi.Message
-	ScheduleDestinations                 []engineapi.Conversation
-	ScheduleConversation, ScheduleCursor string
-	ScheduleUnavailable                  bool
+	SchedulePage          *engineapi.ScheduledMessagePage
+	ScheduleEdit          *engineapi.Message
+	ScheduleDestinations  []engineapi.Conversation
+	ScheduleConversations []string
+	ScheduleCursor        string
+	ScheduleUnavailable   bool
 
 	InboxOnly        bool
 	Role             engineapi.EngineRole
@@ -202,7 +203,8 @@ type view struct {
 }
 
 type copy struct {
-	DismissLinkPreview string
+	ScheduleSelectedConversations string
+	DismissLinkPreview            string
 
 	Scheduled, Schedule, Reschedule, ScheduleWhen, ScheduleEmpty, ScheduleUnavailable, ScheduleReview, ScheduleBack, ScheduleCancel, ScheduleEditMode, ScheduleSave, ScheduleSaved, SendNow, ScheduleTimeInvalid, ScheduleTimeAmbiguous, AttachmentFailed, AttachmentLimit, RemoveAttachment string
 

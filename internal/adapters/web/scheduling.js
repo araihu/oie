@@ -3,21 +3,56 @@ window.OieRuntime.register('scheduling', life => {
   const filter = document.querySelector('[data-schedule-filter]');
   if (filter) {
     const id = 'schedule-conversation';
-    const committed = filter.dataset.scheduleFilter;
+    const name = 'scheduleConversation';
+    const selectionKey = values => JSON.stringify([...values].sort());
+    let committed = new FormData(filter).getAll(name);
     let request;
-    life.on(filter, 'combobox:change', ({detail}) => {
-      if (detail?.id !== id || (!request && detail.values[0] === committed)) return;
-      filter.querySelector('[role="combobox"]').focus({preventScroll: true});
-      filter.requestSubmit();
-    });
-    life.on(filter, 'htmx:before:request', ({detail}) => {
-      if (detail.ctx.sourceElement === filter) request = detail.ctx;
-    });
-    life.on(filter, 'htmx:finally:request', ({detail}) => {
-      if (detail.ctx !== request) return;
-      request = null;
-      if (filter.isConnected) {
-        document.dispatchEvent(new CustomEvent('combobox:load', {detail: {id, values: [committed]}}));
+    life.cleanup(() => request?.abort());
+    life.on(filter, 'combobox:change', async ({detail}) => {
+      if (detail?.id !== id) return;
+      const values = [...detail.values].sort();
+      request?.abort();
+      const results = document.getElementById('scheduled-results');
+      if (!results || selectionKey(values) === selectionKey(committed)) {
+        request = null;
+        results?.removeAttribute('aria-busy');
+        return;
+      }
+      const controller = new AbortController();
+      request = controller;
+      const url = new URL(location.href);
+      url.searchParams.delete('scheduleCursor');
+      url.searchParams.delete(name);
+      for (const value of values) url.searchParams.append(name, value);
+      results.setAttribute('aria-busy', 'true');
+      const timeout = life.timeout(() => controller.abort(), 10000);
+      try {
+        const response = await life.fetch('/ui/refresh' + url.search, {cache: 'no-store', signal: controller.signal});
+        if (!response.ok) throw Error('schedule filter');
+        const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+        const next = page.getElementById('scheduled-results');
+        if (request !== controller || life.signal.aborted) return;
+        if (!next || page.getElementById('oie-live-regions')?.dataset.engineId !== document.body.dataset.engineId) throw Error('schedule scope');
+        const replacement = document.importNode(next, true);
+        window.OieTime.localize(replacement);
+        const replace = () => {
+          window.Alpine?.destroyTree(results);
+          results.replaceWith(replacement);
+          window.Alpine?.initTree(replacement);
+        };
+        if (window.Alpine?.mutateDom) window.Alpine.mutateDom(replace); else replace();
+        committed = values;
+        window.OieNavigation.addressSearch(url, true);
+        document.dispatchEvent(new Event('oie:navigation-upgrade'));
+      } catch {
+        if (request !== controller || life.signal.aborted) return;
+        request = null;
+        document.dispatchEvent(new CustomEvent('combobox:load', {detail: {id, values: committed}}));
+        window.dispatchEvent(new CustomEvent('notify', {detail: {kind: 'toast', tone: 'danger', message: filter.dataset.filterUnavailable}}));
+      } finally {
+        clearTimeout(timeout);
+        if (request === controller) request = null;
+        if (!request) results.removeAttribute('aria-busy');
       }
     });
   }

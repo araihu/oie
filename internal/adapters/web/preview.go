@@ -5,6 +5,7 @@ import (
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 )
 
@@ -55,7 +56,9 @@ func (v *view) configureWorkspace(r *http.Request) {
 		v.SharedType = "media"
 	}
 	v.ScheduleCursor = q.Get("scheduleCursor")
-	v.ScheduleConversation = q.Get("scheduleConversation")
+	v.ScheduleConversations = slices.DeleteFunc(q["scheduleConversation"], func(id string) bool { return id == "" })
+	slices.Sort(v.ScheduleConversations)
+	v.ScheduleConversations = slices.Compact(v.ScheduleConversations)
 	v.SharedCursor = q.Get("contentCursor")
 	v.SharedConversation = q.Get("contentConversation")
 	v.Query = q.Get("q")
@@ -106,8 +109,8 @@ func (v view) href(pairs ...string) string {
 		}
 	}
 	if v.Section == "scheduled" {
-		if v.ScheduleConversation != "" {
-			q.Set("scheduleConversation", v.ScheduleConversation)
+		if len(v.ScheduleConversations) > 0 {
+			q["scheduleConversation"] = v.ScheduleConversations
 		}
 		if v.ScheduleCursor != "" {
 			q.Set("scheduleCursor", v.ScheduleCursor)

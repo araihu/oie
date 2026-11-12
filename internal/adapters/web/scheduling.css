@@ -33,7 +33,6 @@
   --color-primary-dark: var(--oie-accent);
 }
 .oie-schedule-filter [data-agenda-filter-control] { border-color: var(--oie-border); background: var(--oie-panel); }
-.oie-schedule-filter [role="option"][aria-selected="false"] .oie-schedule-filter-check { visibility: hidden; }
 
 .oie-schedule-list { list-style: none; margin: 0; padding: 0; }
 .oie-schedule-row + .oie-schedule-row { margin-block-start: .625rem; }

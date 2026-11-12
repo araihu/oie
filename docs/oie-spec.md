@@ -340,7 +340,8 @@ cancel. Delivery still depends on the owning engine and provider connectivity.
 
 **AGREED:** Scheduled appears in the main navigation and lists pending
 scheduled messages across conversations. Each entry identifies its destination.
-Users can filter by conversation, open the destination, edit in that
+Users can filter by one or more conversations using the searchable selector,
+open the destination, edit in that
 conversation's composer, reschedule, cancel or send now.
 
 The [engine OpenAPI contract](../api/openapi.yaml) defines complete

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"time"
 	"github.com/araihu/goshtoso/components/button"
 	"github.com/araihu/goshtoso/components/chatbubble"
@@ -22,7 +23,7 @@ templ scheduledWorkspace(v view) {
 					<h1>{v.Text.Scheduled}</h1>
 				</div>
 				if v.SchedulePage != nil && !v.ScheduleUnavailable && !v.Unavailable {
-					<form method="get" action="/" class="oie-schedule-filter" data-schedule-filter={v.ScheduleConversation} hx-sync="this:replace">
+					<form method="get" action="/" class="oie-schedule-filter" data-schedule-filter data-filter-unavailable={v.Text.ScheduleUnavailable}>
 						<input type="hidden" name="section" value="scheduled"/>
 						<input type="hidden" name="lang" value={v.Locale}/>
 						<input type="hidden" name="theme" value={v.Theme}/>
@@ -33,7 +34,7 @@ templ scheduledWorkspace(v view) {
 			if v.ScheduleUnavailable || v.Unavailable {
 				<div class="oie-agenda-empty">
 					<p role="status">{v.Text.ScheduleUnavailable}</p>
-					@link.Link(v.scheduleHref(v.ScheduleConversation,""),link.WithAppearance(link.AppearanceButton)) { {v.Text.Retry} }
+					@link.Link(v.scheduleHref(""),link.WithAppearance(link.AppearanceButton)) { {v.Text.Retry} }
 				</div>
 			} else if v.SchedulePage != nil {
 				@scheduledResults(v)
@@ -48,27 +49,25 @@ templ scheduleConversationFilter(v view) {
 	@combobox.Combobox(config, config.InitialState()).WithExpressions(expressions.Combobox{
 		SearchPlaceholder: v.Text.SearchChats,
 		EmptyText: v.Text.NoResults,
+		ClearLabel: v.Text.SearchAllConversations,
+		SelectedLabel: func(count int) string { return fmt.Sprintf(v.Text.ScheduleSelectedConversations, count) },
 	})
 }
 
 func scheduleConversationCombobox(v view) combobox.Config {
-	check := scheduleFilterCheck()
-	options := []combobox.Option{{Value: "", Label: v.Text.SearchAllConversations, Trailing: check}}
+	options := make([]combobox.Option, 0, len(v.ScheduleDestinations))
 	for _, c := range v.ScheduleDestinations {
 		options = append(options, combobox.Option{
-			Value: c.Id, Label: c.Title + " · " + v.accountLabel(c.AccountId), Trailing: check,
+			Value: c.Id, Label: c.Title + " · " + v.accountLabel(c.AccountId),
 		})
 	}
 	return combobox.Config{
 		ID: "schedule-conversation", Name: "scheduleConversation", Label: v.Text.SearchConversations,
-		Mode: combobox.ModeSingle, EnableSearch: true, DisablePersistence: true,
-		Source: combobox.Source{Static: options}, Selected: []string{v.ScheduleConversation},
+		Mode: combobox.ModeMultiple, EnableSearch: true, EnableClearAll: true, DisablePersistence: true,
+		Placeholder: v.Text.SearchAllConversations,
+		Source: combobox.Source{Static: options}, Selected: v.ScheduleConversations,
 		TriggerAttrs: templ.Attributes{"data-agenda-filter-control": ""},
 	}
-}
-
-templ scheduleFilterCheck() {
-	<span class="oie-schedule-filter-check">@glyph(heroicons.Icon16SolidCheck)</span>
 }
 
 templ scheduledResults(v view) {
@@ -90,7 +89,7 @@ templ scheduledResults(v view) {
 		}
 		if v.SchedulePage.NextCursor != nil {
 			<div class="oie-agenda-more">
-				@link.Link(v.scheduleHref(v.ScheduleConversation,*v.SchedulePage.NextCursor),link.WithAppearance(link.AppearanceButton)) { {v.Text.SearchMore} }
+				@link.Link(v.scheduleHref(*v.SchedulePage.NextCursor),link.WithAppearance(link.AppearanceButton)) { {v.Text.SearchMore} }
 			</div>
 		}
 	</div>
@@ -168,7 +167,7 @@ templ agendaAttachments(v view,m engineapi.Message) {
 
 templ scheduleRowForm(v view,m engineapi.Message,path,command string) {
 	<form action={templ.URL(path)} method="post" data-oie-action="schedule-row" data-schedule-command={command} hidden>
-		@mutationFieldsAt(v,"scheduled-"+m.Id,newOperationKey(),v.scheduleHref(v.ScheduleConversation,""))
+		@mutationFieldsAt(v,"scheduled-"+m.Id,newOperationKey(),v.scheduleHref(""))
 		<input type="hidden" name="messageId" value={m.Id}/>
 		<input type="hidden" name="expectedRevisionId" value={m.RevisionId}/>
 		if command == "reschedule" {

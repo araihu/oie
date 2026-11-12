@@ -49,7 +49,7 @@ func navigation(v view, id string) sidebar.Config {
 		},
 	}
 	if !v.Preview {
-		cfg.Items = append(cfg.Items, sidebar.Item{ID: "scheduled", Label: v.Text.Scheduled, Href: v.scheduleHref("", ""), Icon: glyph(heroicons.Icon16SolidClock), Active: v.Section == "scheduled", LinkAttrs: sidebarNavigationAttrs()})
+		cfg.Items = append(cfg.Items, sidebar.Item{ID: "scheduled", Label: v.Text.Scheduled, Href: v.scheduleHref(""), Icon: glyph(heroicons.Icon16SolidClock), Active: v.Section == "scheduled", LinkAttrs: sidebarNavigationAttrs()})
 	}
 	if id == "mobile-navigation" {
 		cfg.Logo = brand(v)

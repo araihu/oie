@@ -26,10 +26,13 @@ func (s *Server) loadScheduled(ctx context.Context, v *view) {
 	if v.Preview {
 		return
 	}
-	filter := v.ScheduleConversation
 	p := &engineapi.ListScheduledMessagesParams{}
-	if filter != "" {
-		p.ConversationId = &filter
+	switch len(v.ScheduleConversations) {
+	case 0:
+	case 1:
+		p.ConversationId = &v.ScheduleConversations[0]
+	default:
+		p.ConversationIds = &v.ScheduleConversations
 	}
 	if v.ScheduleCursor != "" {
 		p.Cursor = &v.ScheduleCursor
@@ -50,7 +53,10 @@ func (s *Server) loadScheduled(ctx context.Context, v *view) {
 			v.ScheduleDestinations = append(v.ScheduleDestinations, item.Conversation)
 		}
 	}
-	if filter != "" && !slices.ContainsFunc(v.ScheduleDestinations, func(c engineapi.Conversation) bool { return c.Id == filter }) {
+	for _, filter := range v.ScheduleConversations {
+		if slices.ContainsFunc(v.ScheduleDestinations, func(c engineapi.Conversation) bool { return c.Id == filter }) {
+			continue
+		}
 		if c, err := s.client.GetConversationWithResponse(ctx, filter); err == nil && c.JSON200 != nil {
 			v.ScheduleDestinations = append(v.ScheduleDestinations, *c.JSON200)
 		}
@@ -81,8 +87,8 @@ func (v view) scheduleAllowed() bool {
 	return v.composeAllowed() && v.messagingImplemented("schedules")
 }
 
-func (v view) scheduleHref(conversation, cursor string) string {
-	return v.href("section", "scheduled", "chat", "", "q", "", "account", "", "scheduleConversation", conversation, "scheduleCursor", cursor)
+func (v view) scheduleHref(cursor string) string {
+	return v.href("section", "scheduled", "chat", "", "q", "", "account", "", "scheduleCursor", cursor)
 }
 
 func (v view) scheduleConversationHref(c engineapi.Conversation, edit string) string {

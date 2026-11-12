@@ -8,6 +8,7 @@
   "ScheduleWhen": "Send at",
   "ScheduleEmpty": "No scheduled messages",
   "ScheduleUnavailable": "Could not load scheduled messages.",
+  "ScheduleSelectedConversations": "%d conversations",
   "ScheduleReview": "Message preview",
   "ScheduleEditMode": "Editing scheduled message",
   "ScheduleSave": "Save",
