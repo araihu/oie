@@ -65,9 +65,13 @@ func TestGeneratedCLIExercisesRealContract(t *testing.T) {
 		cmd.Stdin = bytes.NewBufferString(input)
 		return cmd.CombinedOutput()
 	}
+	contract, err := engineapi.GetSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
 	output, err := run("", "system", "engine")
 	var identity engineapi.Engine
-	if err != nil || json.Unmarshal(output, &identity) != nil || identity.Id != string(id) || identity.ApiVersion != "0.29.0" {
+	if err != nil || json.Unmarshal(output, &identity) != nil || identity.Id != string(id) || string(identity.ApiVersion) != contract.Info.Version {
 		t.Fatalf("CLI engine identity: %v %s", err, output)
 	}
 	var exit *exec.ExitError
