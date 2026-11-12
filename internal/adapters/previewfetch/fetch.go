@@ -300,7 +300,8 @@ func (f *Fetcher) link(ctx context.Context, address string) (application.Preview
 	if err != nil {
 		return application.PreviewMetadata{}, err
 	}
-	defer func() { _ = response.Body.Close() }()
+	closePage := sync.OnceFunc(func() { _ = response.Body.Close() })
+	defer closePage()
 	out := application.PreviewMetadata{SiteName: plain(response.Request.URL.Hostname(), 200)}
 	mediaType, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	// A dynamic image endpoint is still an original, not an automatic thumbnail.
@@ -394,6 +395,8 @@ parseHead:
 			}
 		}
 	}
+	// Images and icons can use the same host, which allows one connection at a time.
+	closePage()
 	choose := func(keys ...string) string {
 		for _, key := range keys {
 			if metadata[key] != "" {

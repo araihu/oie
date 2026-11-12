@@ -1,6 +1,7 @@
 package previewfetch
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -93,6 +94,7 @@ func TestRedirectsAndRebindingCannotReachPrivateServices(t *testing.T) {
 	}
 }
 func TestBoundedMetadataAndOriginalImageSeparation(t *testing.T) {
+	thumbnail := []byte{137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3}
 	f, _ := fixtureFetcher(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/page":
@@ -107,7 +109,11 @@ func TestBoundedMetadataAndOriginalImageSeparation(t *testing.T) {
 		case "/large-body":
 			w.Header().Set("Content-Type", "text/html")
 			_, _ = fmt.Fprint(w, `<html><head><script>`, strings.Repeat("x", 780<<10),
-				`</script><meta property="og:title" content="Late title"></head><body>`, strings.Repeat("x", 1<<20))
+				`</script><meta property="og:title" content="Late title"><meta property="og:image" content="/thumbnail.png"></head><body>`,
+				strings.Repeat("x", 1<<20))
+		case "/thumbnail.png":
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write(thumbnail)
 		}
 	})
 	metadata, err := f.Link(t.Context(), "http://public.example/page")
@@ -125,7 +131,7 @@ func TestBoundedMetadataAndOriginalImageSeparation(t *testing.T) {
 		t.Fatal("unbounded HTML accepted", err)
 	}
 	metadata, err = f.Link(t.Context(), "http://public.example/large-body")
-	if err != nil || metadata.Title != "Late title" {
+	if err != nil || metadata.Title != "Late title" || !bytes.Equal(metadata.Image, thumbnail) {
 		t.Fatal("metadata in a large page head", metadata, err)
 	}
 }
