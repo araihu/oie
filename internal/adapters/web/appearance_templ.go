@@ -27,7 +27,7 @@ func appearanceOption(v view, value, label string, symbol icon.Symbol) radio.Con
 		Segmented:    true,
 		Checked:      v.Theme == value || value == "system" && v.Theme == "",
 		Alpine:       &radio.AlpineConfig{Model: "appearance"},
-		HTMX:         &radio.HTMXConfig{Get: "/?theme=" + value, Target: "#appearance-settings", Swap: "outerHTML show:none", PushURL: false},
+		HTMX:         &radio.HTMXConfig{Get: "/?lang=" + v.Locale + "&theme=" + value, Target: "#appearance-settings", Swap: "outerHTML show:none", PushURL: false},
 		InputAttrs:   templ.Attributes{"hx-select": "#appearance-settings", "hx-headers": `{"X-Oie-Fragment":"appearance"}`, "hx-params": "none"},
 	}
 }

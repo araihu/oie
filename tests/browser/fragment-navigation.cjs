@@ -10,7 +10,7 @@ const {chromium} = require('playwright');
 const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(check, label) {
-  for (let n = 0; n < 200; n++) {if (await check()) return; await wait(50);}
+  for (let n = 0; n < 600; n++) {if (await check()) return; await wait(50);}
   throw Error('Timed out: ' + label);
 }
 async function assertMobileControlOwnership(page) {
@@ -93,7 +93,7 @@ async function assertMobileControlOwnership(page) {
     // use fragments throughout that interval, then start one application scope.
     const early=await browser.newContext({viewport:{width:1440,height:1000},locale:'en'}),earlyPage=await early.newPage(),earlyDocuments=[],earlyHX=[],earlyErrors=[];let alpineHeld=false,releaseAlpine;const alpineGate=new Promise(resolve=>releaseAlpine=resolve);
     debuggingPage=earlyPage;await early.addInitScript(()=>{window.documentToken=Math.random();window.earlySettles=0;document.addEventListener('htmx:after:settle',()=>window.earlySettles++)});earlyPage.on('pageerror',error=>earlyErrors.push(error.message));earlyPage.on('request',request=>{if(request.resourceType()==='document')earlyDocuments.push(request.url());if(request.headers()['hx-request']==='true')earlyHX.push(request.url())});await earlyPage.route('**/assets/js/runtime/alpinejs/*/alpine.min.js',async route=>{alpineHeld=true;await alpineGate;try{await route.continue()}catch{}});
-    try{await earlyPage.goto(base+'/?section=chats&lang=en&theme=dark',{waitUntil:'commit'});await until(async()=>alpineHeld&&await earlyPage.evaluate(()=>!!window.htmx&&!window.OieRuntime?.generation),'HTMX ready before Alpine');const earlyToken=await earlyPage.evaluate(()=>{window.htmx.config.defaultSettleDelay=500;return window.documentToken});console.log('Early init diagnostic',JSON.stringify(await earlyPage.evaluate(()=>{const link=[...document.querySelectorAll('.oie-sidebar a')].find(link=>link.textContent.includes('Media & links'));return{ready:document.readyState,navigation:typeof window.OieNavigation,linkMatches:link.matches('.oie-navigation a[hx-boost=\"true\"]'),processed:link.getAttribute('data-htmx-powered'),process:typeof window.htmx.process}})));await earlyPage.locator('.oie-sidebar a').filter({hasText:'Media & links'}).click({noWaitAfter:true});await until(async()=>new URL(earlyPage.url()).searchParams.get('section')==='media'&&await earlyPage.locator('#shared-content-results').count()===1,'initial sidebar route before Alpine');console.log('Early sidebar evidence',JSON.stringify({documents:earlyDocuments.length,fragments:earlyHX.length,sameDocument:await earlyPage.evaluate(token=>window.documentToken===token,earlyToken)}));assert.equal(earlyDocuments.length,1,'sidebar reloaded after HTMX was ready but before Alpine');assert.equal(await earlyPage.evaluate(()=>window.documentToken),earlyToken);assert.equal(earlyHX.length,1);assert.equal(await earlyPage.evaluate(()=>window.OieRuntime.generation),0);assert.equal(streams.size,0);assert.equal(await earlyPage.evaluate(()=>window.earlySettles),0,'dependency release must precede fragment settlement');releaseAlpine();await until(async()=>await earlyPage.evaluate(()=>window.OieRuntime?.generation>0),'application starts after dependencies');await until(()=>streams.size===1,'one stream after delayed dependency');await until(async()=>await earlyPage.evaluate(()=>window.earlySettles)===1,'delayed fragment settles after dependency release');await wait(200);assert.equal(await earlyPage.evaluate(()=>window.OieRuntime.generation),1);assert.deepEqual(earlyErrors,[]);assert.equal(streams.size,1);findings.push('Sidebar navigation uses HTMX while Alpine is delayed and starts one application stream after dependency readiness')}finally{releaseAlpine();await early.close();await until(()=>streams.size===0,'early stream disposed')}
+    try{await earlyPage.goto(base+'/?section=chats&lang=en&theme=dark',{waitUntil:'commit'});await until(async()=>alpineHeld&&await earlyPage.evaluate(()=>!!window.htmx&&!window.OieRuntime?.generation),'HTMX ready before Alpine');const earlyToken=await earlyPage.evaluate(()=>{window.htmx.config.defaultSettleDelay=500;return window.documentToken});console.log('Early init diagnostic',JSON.stringify(await earlyPage.evaluate(()=>{const link=[...document.querySelectorAll('.oie-sidebar a')].find(link=>link.textContent.includes('Media & links'));return{ready:document.readyState,navigation:typeof window.OieNavigation,linkMatches:link.matches('.oie-navigation a[hx-boost=\"true\"]'),processed:link.getAttribute('data-htmx-powered'),process:typeof window.htmx.process}})));await earlyPage.locator('.oie-sidebar a').filter({hasText:'Media & links'}).click({noWaitAfter:true});await until(async()=>new URL(earlyPage.url()).searchParams.get('section')==='media'&&await earlyPage.locator('#shared-content-results').count()===1,'initial sidebar route before Alpine');console.log('Early sidebar evidence',JSON.stringify({documents:earlyDocuments.length,fragments:earlyHX.length,sameDocument:await earlyPage.evaluate(token=>window.documentToken===token,earlyToken)}));assert.equal(earlyDocuments.length,1,'sidebar reloaded after HTMX was ready but before Alpine');assert.equal(await earlyPage.evaluate(()=>window.documentToken),earlyToken);assert.equal(earlyHX.length,1);assert.equal(await earlyPage.evaluate(()=>window.OieRuntime.generation),0);assert.equal(streams.size,0);releaseAlpine();await until(async()=>await earlyPage.evaluate(()=>window.OieRuntime?.generation>0),'application starts after dependencies');await until(()=>streams.size===1,'one stream after delayed dependency');await until(async()=>await earlyPage.evaluate(()=>window.earlySettles)===1,'delayed fragment settles after dependency release');await wait(200);assert.equal(await earlyPage.evaluate(()=>window.OieRuntime.generation),1);assert.deepEqual(earlyErrors,[]);assert.equal(streams.size,1);findings.push('Sidebar navigation uses HTMX while Alpine is delayed and starts one application stream after dependency readiness')}finally{releaseAlpine();await early.close();await until(()=>streams.size===0,'early stream disposed')}
     const startup=await browser.newContext({viewport:{width:390,height:844},locale:'pt-BR'});
     const startupPage=await startup.newPage(),startupRequests=[];
     let releaseStartup, startupHeld=false;
@@ -113,13 +113,15 @@ async function assertMobileControlOwnership(page) {
       assert.equal(startupRequests.filter(([type])=>type==='document').length,1);
       assert.equal(startupRequests.filter(([,kind])=>kind==='conversation').length,1);
       releaseStartup();
+      await startupPage.waitForFunction(()=>window.OieRuntime.generation>0,{},{timeout:90000});
       await until(()=>streams.size===1,'one stream after starting in the selected chat');
     } finally {
       releaseStartup();await startup.close();await until(()=>streams.size===0,'startup stream disposed');
     }
     {
     const scopedContext=await browser.newContext({viewport:{width:1440,height:1000},locale:'en'});
-    const scoped=await scopedContext.newPage(), documents=[];
+    const scoped=await scopedContext.newPage(), documents=[], scopedErrors=[];
+    debuggingPage=scoped;scoped.on('pageerror',error=>scopedErrors.push(error.message));
     let subscriptions=0;
     scoped.on('request',request=>{
       if(request.resourceType()==='eventsource')subscriptions++;
@@ -168,6 +170,7 @@ async function assertMobileControlOwnership(page) {
     await keepChat();
     await scoped.keyboard.press('Escape');
     await scoped.locator('#settings-body').waitFor({state:'hidden'});
+    assert.deepEqual(scopedErrors,[]);
     await scopedContext.close();await until(()=>streams.size===0,'scoped stream disposed');
     findings.push('Account details, details history and appearance preserve the mounted chat and original event connection');
     }

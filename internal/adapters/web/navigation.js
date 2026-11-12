@@ -188,6 +188,9 @@
   for(const node of app().querySelectorAll('a[href*="theme="]'))node.setAttribute('href',update(node.getAttribute('href')));
   for(const field of app().querySelectorAll('input[type=hidden][name="theme"]'))field.value=mode;
   for(const field of app().querySelectorAll('input[name="returnTo"]'))field.value=update(field.value);
+  const editor=document.getElementById('schedule-editor');
+  if(editor)editor.dataset.returnTo=update(editor.dataset.returnTo);
+  document.dispatchEvent(new Event('oie:appearance-changed'));
   if(!history){const url=new URL(location.href);url.searchParams.set('theme',mode);url.searchParams.set('open','settings');addressSearch(url,true);}
   else currentURL=location.href;
   const open=new URL(location.href).searchParams.get('open')==='settings';
@@ -371,6 +374,7 @@
   else if(root.id==='shared-content-scroll'||root.id==='shared-search-results'){
    const page=ctx?.oieSharedPage;delete root.dataset.sharedChanging;root.removeAttribute('aria-busy');
    if(!page)return;
+   window.Alpine?.initTree(root);
    const form=document.getElementById('shared-content-search'),url=new URL(location.href);
    if(ctx.sourceElement!==document.getElementById('shared-search')){
     form.elements.q.value=url.searchParams.get('q')||'';
@@ -389,6 +393,7 @@
    document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:page}));document.dispatchEvent(new CustomEvent('oie:stars-refresh',{detail:{page,generation:ctx.oieStarGeneration}}));upgrade(app());
   }
   else if(root.id==='chat-info-content'){
+   window.Alpine?.initTree(root);
    if(ctx?.oieHistory){
     const open=new URL(location.href).searchParams.get('open')==='details';
     window.dispatchEvent(new CustomEvent(open?'drawer:open':'drawer:close',{detail:{id:'details'}}));
@@ -397,7 +402,7 @@
    const saved=ctx?.oieHistory?positions.get(location.href)?.['details-body']:undefined;
    if(saved!==undefined)document.getElementById('details-body').scrollTop=saved;
   }
-  else if(root.id==='account-workspace'){upgrade(root);accountReady(root,previousURL);}
+  else if(root.id==='account-workspace'){window.Alpine?.initTree(root);upgrade(root);accountReady(root,previousURL);}
   else if(root.id==='appearance-settings'){applyAppearance(root.dataset.mode,ctx?.oieHistory);}
   else if(root.id==='scheduled-results'){
    upgrade(root);
@@ -411,6 +416,7 @@
    upgrade(root);
   }
   else if(root.id==='message-timeline'){
+   window.Alpine?.initTree(root);
    const next=ctx?.oieTimelinePage?.getElementById(root.id);
    if(next){
     for(const key of ['version','roomArchive','archiveTextSearch','archiveInitial','archiveComplete','archiveCovered']){

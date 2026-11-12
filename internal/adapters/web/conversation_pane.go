@@ -9,9 +9,9 @@ import (
 )
 
 // A conversation fragment may reuse the inbox only within the same engine,
-// account filter, query and presentation settings.
+// account filter, query and locale. Theme changes apply to the mounted DOM.
 func (v view) conversationScope() string {
-	data, _ := json.Marshal([]string{v.EngineID, v.AccountFilter, v.Section, v.Query, v.Locale, v.Theme})
+	data, _ := json.Marshal([]string{v.EngineID, v.AccountFilter, v.Section, v.Query, v.Locale})
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:])
 }

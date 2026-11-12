@@ -94,7 +94,7 @@ func TestConversationFragmentScopeExcludesConversationAndInboxFilter(t *testing.
 	v := view{EngineID: testEngine, AccountFilter: testAccount, Locale: "en", Theme: "dark", Section: "chats", Filter: "all"}
 	scope := v.conversationScope()
 	next := v
-	next.ChatID, next.FocusMessage, next.InfoQuery, next.InfoView, next.Filter = testChat, testMessage, "room search", "shared", "unread"
+	next.ChatID, next.FocusMessage, next.InfoQuery, next.InfoView, next.Filter, next.Theme = testChat, testMessage, "room search", "shared", "unread", "light"
 	if next.conversationScope() != scope {
 		t.Fatal("conversation selection unnecessarily invalidates the inbox")
 	}
@@ -104,7 +104,6 @@ func TestConversationFragmentScopeExcludesConversationAndInboxFilter(t *testing.
 		func(v *view) { v.Section = "archived" },
 		func(v *view) { v.Query = "search" },
 		func(v *view) { v.Locale = "pt-BR" },
-		func(v *view) { v.Theme = "light" },
 	} {
 		changed := v
 		change(&changed)

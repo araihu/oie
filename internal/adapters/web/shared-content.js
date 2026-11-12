@@ -135,6 +135,13 @@ window.OieRuntime.register('shared-content', life => {
  life.on(window,'drawer:open',event=>{if(event.detail?.id==='details'){const c=bind(true);if(c){c.closed=false;life.timeout(()=>observe(c),250)}}});
  life.on(document,'oie:shared-refresh',event=>{update(event.detail,false);update(event.detail,true)});
  life.on(document,'oie:time-zone',()=>{for(const c of controllers.values())render(c,document)});
+ life.on(document,'oie:appearance-changed',()=>{
+  for(const c of controllers.values())for(const key of ['href','templateURL']){
+   if(!c[key])continue;
+   const url=new URL(c[key],location.href);url.searchParams.set('theme',document.documentElement.dataset.mode);
+   c[key]=url.pathname+url.search;
+  }
+ });
  const observer=new MutationObserver(()=>{for(const [key,c]of controllers)if(!c.results.isConnected){dispose(c);controllers.delete(key)}});observer.observe(document.getElementById('oie-app')||document.body,{childList:true,subtree:true});
  life.cleanup(()=>{observer.disconnect();for(const c of controllers.values())dispose(c);controllers.clear()});
 });

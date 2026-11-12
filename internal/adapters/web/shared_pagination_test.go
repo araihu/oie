@@ -9,7 +9,7 @@ import (
 func TestSharedPaginationScopeSeparatesCollectionsFromPages(t *testing.T) {
 	v := view{EngineID: testEngine, AccountFilter: testAccount, SharedType: "media", Query: "café", Locale: "pt-BR", Theme: "dark"}
 	initial := v.sharedPageScope()
-	v.SharedCursor = "opaque-next-page"
+	v.SharedCursor, v.Theme = "opaque-next-page", "light"
 	if v.sharedPageScope() != initial {
 		t.Fatal("page cursor changed collection identity")
 	}
@@ -20,7 +20,6 @@ func TestSharedPaginationScopeSeparatesCollectionsFromPages(t *testing.T) {
 		"category":     func(v *view) { v.SharedType = "links" },
 		"query":        func(v *view) { v.Query = "another search" },
 		"locale":       func(v *view) { v.Locale = "en" },
-		"theme":        func(v *view) { v.Theme = "light" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			next := v
