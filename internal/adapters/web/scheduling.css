@@ -152,6 +152,33 @@
 .oie-agenda-empty p { margin: 0; font-size: .875rem; }
 .oie-agenda-more { margin-block-start: 1rem; }
 
+.oie-conversation-schedules { padding: .875rem 1rem 1.25rem; }
+.oie-conversation-schedules-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .5rem 1rem;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+  margin-block-end: 1rem;
+  font-size: .875rem;
+}
+.oie-conversation-schedules .oie-agenda-card {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "time content";
+  padding: .625rem .75rem .625rem 0;
+  column-gap: .625rem;
+}
+.oie-conversation-schedules .oie-agenda-hour { padding-inline: .625rem; min-inline-size: auto; }
+.oie-conversation-schedules .oie-agenda-composition p { display: block; }
+.oie-conversation-schedules [data-conversation-schedules-status] {
+  margin-block: .75rem .25rem;
+  color: var(--oie-muted);
+  font-size: .875rem;
+}
+.oie-conversation-schedules [data-conversation-schedules-more] { margin-block-start: .75rem; }
+.oie-conversation-schedules [hidden] { display: none; }
+
 @container (max-width: 32rem) {
   .oie-agenda-header { grid-template-columns: minmax(0, 1fr); gap: .875rem; padding-block-end: 1.125rem; }
   .oie-agenda-card {

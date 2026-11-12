@@ -343,6 +343,8 @@ scheduled messages across conversations. Each entry identifies its destination.
 Users can filter by one or more conversations using the searchable selector,
 open the destination, edit in that
 conversation's composer, reschedule, cancel or send now.
+The conversation menu also opens a drawer with that conversation's scheduled
+messages and a link to manage them in the filtered agenda.
 
 The [engine OpenAPI contract](../api/openapi.yaml) defines complete
 compositions, attachment staging, cross-conversation listing and Send now.

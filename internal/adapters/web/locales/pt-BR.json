@@ -8,6 +8,8 @@
   "ScheduleWhen": "Enviar em",
   "ScheduleEmpty": "Nenhuma mensagem agendada",
   "ScheduleUnavailable": "Não foi possível carregar as mensagens agendadas.",
+  "ScheduleLoading": "Carregando mensagens agendadas…",
+  "ScheduleViewAgenda": "Ver na agenda",
   "ScheduleSelectedConversations": "%d conversas",
   "ScheduleReview": "Prévia da mensagem",
   "ScheduleEditMode": "Editando mensagem agendada",

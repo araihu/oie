@@ -377,7 +377,7 @@ window.OieRuntime.register('live', life => {
     document.getElementById('chat-leave-room')?.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
     form.dataset.roomMenuSubmit='true';try{form.requestSubmit()}finally{delete form.dataset.roomMenuSubmit}
   });
-  life.on(document, 'oie:conversation-details-open', ({target}) => {
+  life.on(document, 'oie:conversation-drawer-open', ({target, detail: id}) => {
     const menu = target.closest('#chat-options-panel');
     const trigger = document.querySelector('#chat-options [aria-controls="chat-options-panel"]');
     if (!menu || trigger?.getAttribute('aria-expanded') !== 'true') return;
@@ -391,7 +391,7 @@ window.OieRuntime.register('live', life => {
         return;
       }
       trigger.focus({preventScroll: true});
-      window.dispatchEvent(new CustomEvent('drawer:open', {detail: {id: 'details'}}));
+      window.dispatchEvent(new CustomEvent('drawer:open', {detail: {id}}));
     };
     life.raf(openAfterMenu);
   });

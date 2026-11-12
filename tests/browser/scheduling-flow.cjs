@@ -114,6 +114,34 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   await bobPage.locator(preview).getByRole('button', {name: 'Agendar mensagem', exact: true}).click();
   assert.equal((await (await bobSubmit).json()).ok, true);
 
+  for (const [page, conversation, label, message, otherMessage] of [
+    [alicePage, aliceConversation, 'Scheduled', content, 'Mensagem agendada em outro destino'],
+    [bobPage, bobConversation, 'Agendadas', 'Mensagem agendada em outro destino', content],
+  ]) {
+    const before = page.url();
+    const trigger = page.locator('#chat-options [aria-controls="chat-options-panel"]');
+    await trigger.click();
+    await page.locator('#chat-options-panel').getByRole('menuitem', {name: label, exact: true}).click();
+    const drawer = page.getByRole('dialog', {name: label, exact: true});
+    await drawer.waitFor({state:'visible'});
+    assert.equal(await trigger.getAttribute('aria-expanded'), 'false');
+    const row = drawer.locator('[data-scheduled-row]');
+    await row.getByText(message, {exact:true}).waitFor();
+    assert.equal(await row.count(), 1);
+    assert.equal(await drawer.getByText(otherMessage, {exact:true}).count(), 0);
+    const agenda = drawer.getByRole('link', {name: label === 'Scheduled' ? 'View in agenda' : 'Ver na agenda', exact:true});
+    const url = new URL(await agenda.getAttribute('href'), base);
+    assert.equal(url.searchParams.get('scheduleConversation'), conversation.id);
+    assert.equal(url.searchParams.get('section'), 'scheduled');
+    if (page === alicePage) {
+      assert.equal(await row.getByRole('link', {name: attachment.name, exact:true}).count(), 1);
+      assert.equal(await page.locator(source).inputValue(), 'Existing independent draft');
+    }
+    await page.keyboard.press('Escape');
+    await drawer.waitFor({state:'hidden'});
+    assert.equal(page.url(), before);
+  }
+
   await alicePage.locator('#desktop-navigation').getByRole('link', {name: 'Scheduled', exact: true}).click();
   await alicePage.locator('[data-scheduled-row]').first().waitFor();
   assert.equal(await alicePage.locator('[data-scheduled-row]').count(), 2);

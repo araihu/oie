@@ -2,6 +2,7 @@ package web
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	_ "embed"
 	"encoding/json"
@@ -21,6 +22,55 @@ var schedulingScript []byte
 
 //go:embed scheduling.css
 var schedulingStylesheet []byte
+
+func (s *Server) conversationSchedules(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	q := r.URL.Query()
+	engineID, conversationID, cursor := q.Get("engineId"), q.Get("conversationId"), q.Get("cursor")
+	if !validOperationKey(engineID) || !validOperationKey(conversationID) || len(cursor) > 8192 || (q.Has("cursor") && cursor == "") {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	p := &engineapi.ListScheduledMessagesParams{ConversationId: &conversationID}
+	if cursor != "" {
+		p.Cursor = &cursor
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	result, err := s.client.ListScheduledMessagesWithResponse(ctx, p)
+	if err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	if result.JSON200 == nil {
+		status := result.StatusCode()
+		if status != http.StatusBadRequest && status != http.StatusNotFound {
+			status = http.StatusServiceUnavailable
+		}
+		w.WriteHeader(status)
+		return
+	}
+	if result.JSON200.EngineId != engineID || slices.ContainsFunc(result.JSON200.Items, func(item engineapi.ScheduledMessageItem) bool {
+		return item.Conversation.Id != conversationID || item.Message.ConversationId != conversationID
+	}) {
+		w.WriteHeader(http.StatusConflict)
+		return
+	}
+	v := s.baseView(r)
+	v.EngineID, v.SchedulePage = engineID, result.JSON200
+	var fragment bytes.Buffer
+	if err := conversationSchedulePage(v, conversationID).Render(presentationContext(ctx, v), &fragment); err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = fragment.WriteTo(w)
+}
 
 func (s *Server) loadScheduled(ctx context.Context, v *view) {
 	if v.Preview {
@@ -85,6 +135,16 @@ func (s *Server) loadScheduleEdit(ctx context.Context, v *view, id string) {
 
 func (v view) scheduleAllowed() bool {
 	return v.composeAllowed() && v.messagingImplemented("schedules")
+}
+
+func (v view) conversationSchedulesAvailable() bool {
+	return v.Selected != nil && !v.Unavailable && !v.Preview && v.messagingImplemented("schedules")
+}
+
+func (v view) conversationScheduleAgendaHref() string {
+	v.Section = "scheduled"
+	v.ScheduleConversations = []string{v.Selected.Id}
+	return v.scheduleHref("")
 }
 
 func (v view) scheduleHref(cursor string) string {

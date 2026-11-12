@@ -203,8 +203,9 @@ type view struct {
 }
 
 type copy struct {
-	ScheduleSelectedConversations string
-	DismissLinkPreview            string
+	ScheduleSelectedConversations       string
+	ScheduleLoading, ScheduleViewAgenda string
+	DismissLinkPreview                  string
 
 	Scheduled, Schedule, Reschedule, ScheduleWhen, ScheduleEmpty, ScheduleUnavailable, ScheduleReview, ScheduleBack, ScheduleCancel, ScheduleEditMode, ScheduleSave, ScheduleSaved, SendNow, ScheduleTimeInvalid, ScheduleTimeAmbiguous, AttachmentFailed, AttachmentLimit, RemoveAttachment string
 
@@ -581,6 +582,10 @@ var liveScript []byte
 var roomArchiveScript []byte
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/ui/scheduling/conversation" {
+		s.conversationSchedules(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/link-preview" {
 		s.resolveDraftLinkPreview(w, r)
 		return

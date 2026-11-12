@@ -56,6 +56,82 @@ window.OieRuntime.register('scheduling', life => {
       }
     });
   }
+  const drawer = document.querySelector('[data-conversation-schedules]');
+  if (drawer) {
+    const conversationId = drawer.dataset.conversationSchedules;
+    const engineId = document.body.dataset.engineId;
+    const results = drawer.querySelector('[data-conversation-schedules-results]');
+    const status = drawer.querySelector('[data-conversation-schedules-status]');
+    const retry = drawer.querySelector('[data-conversation-schedules-retry]');
+    const more = drawer.querySelector('[data-conversation-schedules-more]');
+    let request, nextCursor = '', failedCursor = '';
+    const stop = () => {
+      request?.abort();
+      request = null;
+      results.removeAttribute('aria-busy');
+    };
+    life.cleanup(stop);
+    async function loadConversationSchedules(cursor = '') {
+      if (request) return;
+      const controller = new AbortController();
+      request = controller;
+      const query = new URLSearchParams({engineId, conversationId, lang: document.documentElement.lang});
+      if (cursor) query.set('cursor', cursor);
+      results.setAttribute('aria-busy', 'true');
+      status.textContent = drawer.dataset.loading;
+      status.hidden = false;
+      try {
+        const response = await life.fetch('/ui/scheduling/conversation?' + query, {signal: controller.signal});
+        if (!response.ok) throw Error('conversation schedules');
+        const html = new DOMParser().parseFromString(await response.text(), 'text/html');
+        const page = html.querySelector('[data-conversation-schedule-page]');
+        if (request !== controller || life.signal.aborted) return;
+        if (page?.dataset.engineId !== engineId || page.dataset.conversationId !== conversationId) throw Error('conversation scope');
+        if (cursor) {
+          const list = results.querySelector('[data-schedule-agenda]');
+          const nextList = page.querySelector('[data-schedule-agenda]');
+          if (nextList) list.append(...nextList.children);
+        } else {
+          results.replaceChildren(...page.children);
+        }
+        window.OieTime.localize(results);
+        nextCursor = page.dataset.nextCursor || '';
+        if ((!nextCursor && document.activeElement === more) || document.activeElement === retry) {
+          results.tabIndex = -1;
+          results.focus({preventScroll: true});
+        }
+        retry.hidden = true;
+        more.hidden = !nextCursor;
+        status.hidden = true;
+      } catch {
+        if (request !== controller || life.signal.aborted) return;
+        failedCursor = cursor;
+        status.textContent = drawer.dataset.unavailable;
+        more.hidden = true;
+        retry.hidden = false;
+        if (document.activeElement === document.body) retry.focus({preventScroll: true});
+      } finally {
+        if (request === controller) stop();
+      }
+    }
+    life.on(window, 'drawer:open', event => {
+      if (event.detail?.id !== 'conversation-schedules') return;
+      stop();
+      results.replaceChildren();
+      retry.hidden = true;
+      more.hidden = true;
+      loadConversationSchedules();
+    });
+    for (const name of ['drawer:close', 'drawer:close-request']) {
+      life.on(window, name, event => {
+        if (event.detail?.id !== 'conversation-schedules') return;
+        const closingRequest = request;
+        life.raf(() => { if (!event.defaultPrevented && request === closingRequest) stop(); });
+      });
+    }
+    life.on(retry, 'click', () => loadConversationSchedules(failedCursor));
+    life.on(more, 'click', () => { if (nextCursor) loadConversationSchedules(nextCursor); });
+  }
   const dialog = document.querySelector('[data-schedule-dialog]');
   if (!dialog) return;
   const composer = document.querySelector('[data-schedule-composer]');

@@ -777,6 +777,18 @@ type SetBrowserRoomArchiveModeParams struct {
 	XCSRFToken string `json:"X-CSRF-Token"`
 }
 
+// ListConversationSchedulesFragmentParams defines parameters for ListConversationSchedulesFragment.
+type ListConversationSchedulesFragmentParams struct {
+	// EngineId Engine that owns the selected conversation.
+	EngineId externalRef0.ID `form:"engineId" json:"engineId"`
+
+	// ConversationId Conversation whose scheduled messages are displayed.
+	ConversationId externalRef0.ID `form:"conversationId" json:"conversationId"`
+
+	// Cursor Continuation for the same engine and conversation.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // GetBrowserMessageSenderParams defines parameters for GetBrowserMessageSender.
 type GetBrowserMessageSenderParams struct {
 	// EngineId Identity of the engine that owns the retained message.

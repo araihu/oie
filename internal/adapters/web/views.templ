@@ -358,7 +358,10 @@ templ chatHeader(v view) {
 		@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Details, "title": v.Text.Details,"data-open-details":""}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'details'})"})) {
 			@glyph(heroicons.Icon16SolidInformationCircle)
 		}
-{{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{Label:v.Text.Details,OnClick:"$dispatch('oie:conversation-details-open')"}}},v.conversationPreferenceSection(),{Items:[]dropdown.Item{{ID:"chat-search-messages",Label:v.Text.SearchMessages,Icon:glyph(heroicons.Icon16SolidMagnifyingGlass),OnClick:"$dispatch('oie:conversation-search-open')"}}}} }}
+{{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{Label:v.Text.Details,OnClick:"$dispatch('oie:conversation-drawer-open','details')"}}},v.conversationPreferenceSection(),{Items:[]dropdown.Item{{ID:"chat-search-messages",Label:v.Text.SearchMessages,Icon:glyph(heroicons.Icon16SolidMagnifyingGlass),OnClick:"$dispatch('oie:conversation-search-open')"}}}} }}
+if v.conversationSchedulesAvailable() {
+{{ sections[0].Items=append(sections[0].Items,dropdown.Item{Label:v.Text.Scheduled,Icon:glyph(heroicons.Icon16SolidClock),OnClick:"$dispatch('oie:conversation-drawer-open','conversation-schedules')"}) }}
+}
 if v.Selected.Kind=="room" {
 {{ sections=append(sections,dropdown.Section{Items:[]dropdown.Item{{ID:"chat-leave-room",Label:v.Text.LeaveRoom,Icon:glyph(heroicons.Icon16SolidArrowTopRightOnSquare),OnClick:"$dispatch('oie:leave-room')",Disabled:v.RoomSession==nil||!v.RoomSession.Active||!v.messagingImplemented("room_messaging")}}}) }}
 }

@@ -19,6 +19,37 @@ tags:
 - name: Messages
   description: Browser submission receipt recovery
 paths:
+  /ui/scheduling/conversation:
+    get:
+      tags: [Conversations]
+      operationId: listConversationSchedulesFragment
+      summary: Render scheduled messages for a conversation drawer
+      parameters:
+      - name: engineId
+        in: query
+        required: true
+        description: Engine that owns the selected conversation.
+        schema: {$ref: './openapi.yaml#/components/schemas/ID'}
+      - name: conversationId
+        in: query
+        required: true
+        description: Conversation whose scheduled messages are displayed.
+        schema: {$ref: './openapi.yaml#/components/schemas/ID'}
+      - name: cursor
+        in: query
+        description: Continuation for the same engine and conversation.
+        schema: {type: string, minLength: 1, maxLength: 8192}
+        example: c2NoZWR1bGVkLXBhZ2U
+      responses:
+        '200':
+          description: Localized HTML fragment for one page of scheduled messages.
+          content:
+            text/html:
+              schema: {type: string}
+        '400': {description: 'Invalid conversation, engine identity or cursor.'}
+        '404': {description: Conversation unavailable on the engine.}
+        '409': {description: Engine identity changed.}
+        '503': {description: Scheduled messages could not be loaded.}
   /ui/link-preview:
     post:
       tags: [Messages]
