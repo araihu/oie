@@ -377,6 +377,24 @@ window.OieRuntime.register('live', life => {
     document.getElementById('chat-leave-room')?.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
     form.dataset.roomMenuSubmit='true';try{form.requestSubmit()}finally{delete form.dataset.roomMenuSubmit}
   });
+  life.on(document, 'oie:conversation-details-open', ({target}) => {
+    const menu = target.closest('#chat-options-panel');
+    const trigger = document.querySelector('#chat-options [aria-controls="chat-options-panel"]');
+    if (!menu || trigger?.getAttribute('aria-expanded') !== 'true') return;
+
+    trigger.click();
+    // The drawer's focus trap must start after the dropdown leaves the top layer.
+    const openAfterMenu = () => {
+      if (!menu.isConnected || trigger.getAttribute('aria-expanded') === 'true') return;
+      if (menu.getClientRects().length) {
+        life.raf(openAfterMenu);
+        return;
+      }
+      trigger.focus({preventScroll: true});
+      window.dispatchEvent(new CustomEvent('drawer:open', {detail: {id: 'details'}}));
+    };
+    life.raf(openAfterMenu);
+  });
   restoreRoomOperation();syncRoomLeave();
   function mutateDOM(target, html) {
     if (!target) return;

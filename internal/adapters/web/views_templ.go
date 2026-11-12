@@ -2445,7 +2445,7 @@ func chatHeader(v view) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		sections := []dropdown.Section{{Items: []dropdown.Item{{Label: v.Text.Details, OnClick: "$dispatch('drawer:open', {id: 'details'})"}}}, v.conversationPreferenceSection(), {Items: []dropdown.Item{{ID: "chat-search-messages", Label: v.Text.SearchMessages, Icon: glyph(heroicons.Icon16SolidMagnifyingGlass), OnClick: "$dispatch('oie:conversation-search-open')"}}}}
+		sections := []dropdown.Section{{Items: []dropdown.Item{{Label: v.Text.Details, OnClick: "$dispatch('oie:conversation-details-open')"}}}, v.conversationPreferenceSection(), {Items: []dropdown.Item{{ID: "chat-search-messages", Label: v.Text.SearchMessages, Icon: glyph(heroicons.Icon16SolidMagnifyingGlass), OnClick: "$dispatch('oie:conversation-search-open')"}}}}
 		if v.Selected.Kind == "room" {
 			sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "chat-leave-room", Label: v.Text.LeaveRoom, Icon: glyph(heroicons.Icon16SolidArrowTopRightOnSquare), OnClick: "$dispatch('oie:leave-room')", Disabled: v.RoomSession == nil || !v.RoomSession.Active || !v.messagingImplemented("room_messaging")}}})
 		}
