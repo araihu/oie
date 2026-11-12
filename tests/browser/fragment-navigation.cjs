@@ -207,7 +207,11 @@ async function assertMobileControlOwnership(page) {
     await choose(alpha,'Personal');await until(async()=>await page.locator('#message-composer').inputValue()===draft,'account draft restored');
     await page.locator('.oie-sidebar a').filter({hasText:'Media & links'}).click();await route(async()=>await page.locator('#shared-content-results').count()===1);assert.equal(await page.locator('[data-shared-item]').count(),27);
     await choose('','All accounts');assert.equal(await page.locator('[data-shared-item]').count(),50);
-    await page.locator('[data-shared-next]').click();await route(async()=>new URL(page.url()).searchParams.get('contentCursor')==='next-page'&&await page.locator('[data-shared-item]').count()===3);
+    const beforePage=await page.evaluate(()=>window.OieRuntime.generation);
+    await page.locator('[data-shared-next]').click();
+    await until(async()=>await page.locator('[data-shared-item]').count()>=53||
+      new URL(page.url()).searchParams.get('contentCursor')==='next-page'&&await page.locator('[data-shared-item]').count()===3,'catalog continuation');
+    assert.equal(await page.evaluate(()=>window.OieRuntime.generation),beforePage);
     await sharedTab('links',2);assert.equal(new URL(page.url()).searchParams.get('contentCursor'),null);
     await sharedTab('documents',2);
     const sourceCard=page.locator('[data-shared-conversation="'+chatA+'"]').first();await sourceCard.locator('[data-shared-menu-trigger]').click();await sourceCard.getByRole('menuitem',{name:'Go to message',exact:true}).click();await route(async()=>await page.locator('[data-message-id="'+messages[0].id+'"]').count()===1&&new URL(page.url()).searchParams.get('message')===messages[0].id);await until(async()=>page.locator('[data-message-id="'+messages[0].id+'"]').evaluate(node=>document.activeElement===node),'source message focused');assert.equal(await page.locator('#message-composer').inputValue(),draft);

@@ -59,8 +59,14 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    assert.equal(new URL(page.url()).searchParams.get('account'),alpha.id);assert.equal(new URL(page.url()).searchParams.get('contentType'),'documents');assert.equal(documents,1);assert.equal(writes,0);
    // Picker typeahead stays local; committing an account applies it immediately.
    await input.fill('faturamneto');await until(()=>new URL(page.url()).searchParams.get('q')==='faturamneto','query before scope change');
+   await page.evaluate(()=>{window.catalogForm=document.getElementById('shared-content-search')});
+   let accountStreams=0;
+   page.on('request',request=>{if(request.resourceType()==='eventsource')accountStreams++;});
    const pickerRequests=requests.length,pickerURL=page.url();await page.getByRole('combobox',{name:config.locale==='en'?'Account':'Conta',exact:true}).click();await page.locator('#shared-account [data-combobox-search]').fill('Work');await page.waitForTimeout(350);assert.equal(requests.length,pickerRequests,'account typeahead must not search the catalog');assert.equal(page.url(),pickerURL);await page.getByRole('option',{name:'Work · beta@fixture.invalid',exact:true}).click();
    await until(async()=>new URL(page.url()).searchParams.get('account')===beta.id&&await page.locator('[data-shared-item]').count()===1,'account scope applied');
+   assert(await page.evaluate(()=>window.catalogForm===document.getElementById('shared-content-search')));
+   assert.equal(await page.evaluate(()=>window.OieRuntime.generation),generation);
+   assert.equal(accountStreams,0);
    assert.equal(new URL(page.url()).searchParams.get('q'),'faturamneto');assert.equal(new URL(page.url()).searchParams.get('contentType'),'documents');assert.equal(new URL(page.url()).searchParams.get('contentCursor'),null);assert.equal(requests.length,pickerRequests+1,'one account commit produces one fragment request');assert.equal(documents,1);assert.equal(writes,0);assert((await page.locator('[data-account-switcher]').first().textContent()).includes('Work'));assert.equal(await page.locator('body').getAttribute('data-account-id'),'');
    await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);
    const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,`shared-search-${config.width}.png`)});
