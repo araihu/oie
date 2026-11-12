@@ -32,6 +32,7 @@ LEFT JOIN message_content_heads h ON h.canonical_id=m.id
 JOIN shared_content_state s ON s.message_id=m.id AND s.parser_version>=?1
 JOIN conversations c ON c.id=m.conversation_id JOIN accounts a ON a.id=m.account_id
 WHERE sc.id=?2
+AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id)
 `
@@ -85,6 +86,7 @@ JOIN shared_content_state AS s ON s.message_id=m.id AND s.parser_version>=?1
 JOIN conversations AS c ON c.id=m.conversation_id JOIN accounts AS a ON a.id=m.account_id
 LEFT JOIN message_previews AS p ON p.message_id=m.id AND p.url=sc.url
 WHERE (CAST(?2 AS TEXT)='' OR m.account_id=CAST(?2 AS TEXT))
+AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id)
 AND (CAST(?3 AS TEXT)='' OR m.conversation_id=CAST(?3 AS TEXT))
@@ -213,6 +215,7 @@ func (q *Queries) PutSharedContent(ctx context.Context, arg PutSharedContentPara
 const sharedContentCandidates = `-- name: SharedContentCandidates :many
 SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
 WHERE (s.message_id IS NULL OR s.parser_version<?1)
+AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT ?2
@@ -263,6 +266,7 @@ FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
 WHERE (CAST(?2 AS TEXT)='' OR m.account_id=CAST(?2 AS TEXT))
 AND (CAST(?3 AS TEXT)='' OR m.conversation_id=CAST(?3 AS TEXT))
 AND (CAST(?4 AS TEXT)='[]' OR m.id IN (SELECT value FROM json_each(CAST(?4 AS TEXT))))
+AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 `

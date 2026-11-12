@@ -61,7 +61,7 @@ func TestSchedulingPreviewMigratesWithoutDiscardingData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"000024_reaction_target_lookups", "000023_dispatch_wire_stage", "000022_scheduled_timeline", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
+	for _, name := range []string{"000025_room_invitation_credentials", "000024_reaction_target_lookups", "000023_dispatch_wire_stage", "000022_scheduled_timeline", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
 		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
 		if err != nil {
 			t.Fatal(err)

@@ -1,0 +1,1 @@
+DROP TABLE room_invitation_credentials;

@@ -20,10 +20,14 @@ for _,field:=range []string{"archived","favorite"} {
 </form>
 }
 </div>
+@conversationPreferenceFeedback(v)
+}
+}
+
+templ conversationPreferenceFeedback(v view){
 <p id="conversation-preference-status" class="oie-context-notice" role="status" aria-live="polite" hidden></p>
 <p id="conversation-preference-storage-warning" class="oie-storage-warning" role="status" hidden>{v.Text.ConversationPreferenceStorageUnavailable}</p>
 <div data-conversation-preference-copy hidden data-archive={v.Text.ArchiveConversation} data-unarchive={v.Text.UnarchiveConversation} data-favorite={v.Text.FavoriteConversation} data-unfavorite={v.Text.UnfavoriteConversation} data-retry={v.Text.RetryConversationPreference} data-uncertain={v.Text.ConversationPreferenceUncertain} data-conflict={v.Text.ConversationPreferenceConflict} data-unavailable={v.Text.ConversationPreferenceUnavailable}></div>
-}
 }
 
 templ conversationPreferenceData(v view){
@@ -38,7 +42,7 @@ templ nativeConversationPreferenceRecovery(v view){
 for _,key:=range []string{"accountId","conversationId","expectedRevisionId","lang"} {
 <input type="hidden" name={key} value={v.field(key)}/>
 }
-for _,field:=range []string{"archived","favorite"} {
+for _,field:=range []string{"archived","favorite","acceptRequest"} {
 if value:=v.field(field);value!="" {
 <input type="hidden" name={field} value={value}/>
 }

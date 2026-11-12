@@ -402,5 +402,9 @@ func emitCanonicalMessageEvent(ctx context.Context, q *dbgen.Queries, kind strin
 	if err := hydrateReply(ctx, q, &m); err != nil {
 		return 0, err
 	}
-	return change(ctx, q, kind, m, at)
+	sequence, err := q.InsertVisibleMessageChange(ctx, dbgen.InsertVisibleMessageChangeParams{Payload: jsonText(m), OccurredAt: stamp(at), Kind: kind, ConversationID: string(m.ConversationID)})
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	return sequence, err
 }

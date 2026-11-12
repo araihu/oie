@@ -25,6 +25,8 @@ func (e StateConflict) Unwrap() error { return ErrStateConflict }
 
 type ConnectionInput struct{ Password, Endpoint string }
 type Incoming struct {
+	CheckDirectHistory                        bool
+	DirectArchiveID                           string
 	Reaction                                  *IncomingReaction
 	SenderAddress                             string
 	MediaThumbnails                           []domain.MediaThumbnail
@@ -349,6 +351,9 @@ func (e *Engine) SendCompositionWithReplyReview(ctx context.Context, key, conver
 	if err != nil {
 		return MessageResult{}, err
 	}
+	if c.Request != "" {
+		return MessageResult{}, ErrStateConflict
+	}
 	if c.Kind != "direct" && c.Kind != "room" {
 		return MessageResult{}, ErrProtocolUnavailable
 	}
@@ -510,6 +515,9 @@ func (e *Engine) Receive(ctx context.Context, in Incoming) error {
 		created = now
 	}
 	c := domain.Conversation{ID: ids[0], RevisionID: ids[1], PeerID: ids[2], AccountID: a.ID, Kind: in.Kind, Address: address, Title: address, UpdatedAt: created}
+	if in.CheckDirectHistory && !in.Historical && !in.IsOwn && in.Kind == "direct" {
+		c.DirectHistoryCheck = &domain.DirectHistoryCheck{ArchiveID: in.DirectArchiveID, ProviderID: in.ProviderID}
+	}
 	if in.SenderAddress != "" {
 		if !validText(in.SenderAddress, 1023) {
 			return ErrInvalid

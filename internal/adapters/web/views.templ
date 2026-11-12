@@ -323,7 +323,7 @@ templ conversationRow(v view, c engineapi.Conversation) {
 			<div class="oie-row-content">
 				<div class="oie-row-top"><strong>{ c.Title }</strong><time datetime={ c.UpdatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ c.UpdatedAt.Format("15:04") }</time></div>
 				<div class="oie-row-bottom">
-					<span>{ c.LastMessage }</span>
+					<span>{ v.requestLabel(c) }</span>
 					if c.Kind=="room" {
 						<span class="oie-row-mention-slot">
 							if c.UnreadMention!=nil && *c.UnreadMention {
@@ -349,12 +349,15 @@ if len(v.Accounts)>1 {
 templ chatHeader(v view) {
 	<header class="oie-chat-header" id="chat-header" data-version={v.headerVersion()} x-data="{}">
 @conversationPreferenceData(v)
+if v.requestKind()=="" {
 <noscript>@link.Link(v.messageSearchHref(v.Selected.AccountId,v.Selected.Id)){ {v.Text.SearchMessages} }</noscript>
+}
 		@link.Link(v.href("chat", ""), link.WithRootClass("oie-back-button"), link.WithAttrs(templ.Attributes{"aria-label": v.Text.Back})) {
 			@glyph(heroicons.Icon16SolidChevronLeft)
 		}
 		@profileAvatar(v,v.Selected.AccountId,v.Selected.Address,avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeXS})
 		<div class="oie-chat-identity"><h2>{ v.Selected.Title }</h2><p>{v.accountLabel(v.Selected.AccountId)} · {v.connectionLabel(v.Selected.AccountId)}</p></div>
+if v.requestKind()=="" {
 		@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Details, "title": v.Text.Details,"data-open-details":""}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'details'})"})) {
 			@glyph(heroicons.Icon16SolidInformationCircle)
 		}
@@ -366,6 +369,7 @@ if v.Selected.Kind=="room" {
 {{ sections=append(sections,dropdown.Section{Items:[]dropdown.Item{{ID:"chat-leave-room",Label:v.Text.LeaveRoom,Icon:glyph(heroicons.Icon16SolidArrowTopRightOnSquare),OnClick:"$dispatch('oie:leave-room')",Disabled:v.RoomSession==nil||!v.RoomSession.Active||!v.messagingImplemented("room_messaging")}}}) }}
 }
 		@dropdown.Dropdown(dropdown.Config{ID:"chat-options",Label:v.Text.More,Trigger:menuTrigger(v.Text.More),MenuAlign:dropdown.AlignEnd,Sections:sections})
+}
 	</header>
 }
 
@@ -608,7 +612,7 @@ templ liveCopy(v view){
 <div id="oie-live-copy" hidden data-reply-unavailable={v.Text.ReplyUnavailable} data-reply-preparing={v.Text.ReplyPreparing} data-reply-locked={v.Text.ReplyLocked} data-room-command-unknown={v.Text.RoomCommandUnknown} data-saving={v.Text.Saving} data-invalid-message={v.Text.InvalidMessage} data-pending={v.Text.PendingAcceptance} data-storage-unavailable={v.Text.DraftStorageUnavailable} data-locked={v.Text.DraftLocked} data-retry={v.Text.RetrySubmission} data-send={v.Text.Send} data-live-ready={v.Text.LiveReady} data-live-retry={v.Text.LiveRetry} data-live-connecting={v.Text.LiveConnecting} data-latest={v.Text.JumpToLatest} data-new-messages={v.Text.NewMessages} data-engine-changed={v.Text.EngineChanged} data-today={v.Text.Today}></div>
 }
 templ liveRegions(v view){
-<div id="oie-live-regions" data-edit-message={v.latestEditMessage()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
+<div id="oie-live-regions" data-conversation-request={v.requestKind()} data-edit-message={v.latestEditMessage()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
 @avatarData(v)
 if v.Section=="scheduled"&&v.SchedulePage!=nil {
 @scheduledResults(v)

@@ -23,7 +23,7 @@ func (s *Server) changeConversationPreferences(ctx context.Context, r *http.Requ
 	}
 	input := engineapi.UpdateConversationPreferences{AccountId: account, ExpectedRevisionId: expected}
 	count := 0
-	for _, field := range []string{"archived", "favorite"} {
+	for _, field := range []string{"archived", "favorite", "acceptRequest"} {
 		if !r.Form.Has(field) {
 			continue
 		}
@@ -33,9 +33,15 @@ func (s *Server) changeConversationPreferences(ctx context.Context, r *http.Requ
 			return 422, mutationResult{Message: text.InvalidForm, Rejected: true}
 		}
 		desired := value == "true"
-		if field == "archived" {
+		switch field {
+		case "archived":
 			input.Archived = &desired
-		} else {
+		case "acceptRequest":
+			if !desired {
+				return 422, mutationResult{Message: text.InvalidForm, Rejected: true}
+			}
+			input.AcceptRequest = &desired
+		default:
 			input.Favorite = &desired
 		}
 	}

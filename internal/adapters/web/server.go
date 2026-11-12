@@ -204,10 +204,11 @@ type view struct {
 }
 
 type copy struct {
-	ScheduleSelectedConversations                           string
-	ScheduleLoading, ScheduleViewAgenda, ScheduleCancelSend string
-	ScheduleReviewChanged, AttachmentTooLarge               string
-	DismissLinkPreview                                      string
+	CheckingConversation, MessageRequest, RoomInvitation, AcceptMessageRequest string
+	ScheduleSelectedConversations                                              string
+	ScheduleLoading, ScheduleViewAgenda, ScheduleCancelSend                    string
+	ScheduleReviewChanged, AttachmentTooLarge                                  string
+	DismissLinkPreview                                                         string
 
 	Scheduled, Schedule, Reschedule, ScheduleWhen, ScheduleEmpty, ScheduleUnavailable, ScheduleReview, ScheduleBack, ScheduleCancel, ScheduleEditMode, ScheduleSave, ScheduleSaved, SendNow, ScheduleTimeInvalid, ScheduleTimeAmbiguous, AttachmentFailed, AttachmentLimit, RemoveAttachment string
 
@@ -935,6 +936,13 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 	}
 	v.Selected = conversation.JSON200
 	v.ChatID = selected
+	if v.requestKind() != "" {
+		s.loadAccountConnection(ctx, v, v.Selected.AccountId, editor)
+		if v.requestKind() == "room_invitation" {
+			s.loadMessaging(ctx, v)
+		}
+		return
+	}
 	s.loadRoomArchive(ctx, v)
 	s.loadConversationDetails(ctx, v)
 	if paneOnly {

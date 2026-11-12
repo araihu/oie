@@ -136,11 +136,35 @@ func (q *Queries) GetMessage(ctx context.Context, id string) (Message, error) {
 
 const getTimelineMessage = `-- name: GetTimelineMessage :one
 SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages AS m WHERE m.id=?
+AND EXISTS (SELECT 1 FROM conversations c WHERE c.id=m.conversation_id AND json_extract(c.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 `
 
 func (q *Queries) GetTimelineMessage(ctx context.Context, id string) (Message, error) {
 	row := q.db.QueryRowContext(ctx, getTimelineMessage, id)
+	var i Message
+	err := row.Scan(
+		&i.ID,
+		&i.RevisionID,
+		&i.AccountID,
+		&i.ConversationID,
+		&i.ProviderID,
+		&i.IsOwn,
+		&i.State,
+		&i.Payload,
+		&i.CreatedAtMs,
+		&i.TimelineAtMs,
+	)
+	return i, err
+}
+
+const getVisibleMessage = `-- name: GetVisibleMessage :one
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages AS m WHERE m.id=?
+AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
+`
+
+func (q *Queries) GetVisibleMessage(ctx context.Context, id string) (Message, error) {
+	row := q.db.QueryRowContext(ctx, getVisibleMessage, id)
 	var i Message
 	err := row.Scan(
 		&i.ID,
@@ -322,7 +346,7 @@ AND archived=?3
 AND (CAST(?4 AS INTEGER)=0 OR favorite=1)
 AND (CAST(?5 AS INTEGER)=0 OR unread_count>0)
 AND (CAST(?6 AS TEXT)='' OR json_extract(payload,'$.Kind')=CAST(?6 AS TEXT))
-AND (CAST(?7 AS TEXT)='' OR instr(lower(address || ' ' || json_extract(payload,'$.Title') || ' ' || json_extract(payload,'$.LastMessage')), lower(CAST(?7 AS TEXT)))>0)
+AND (CAST(?7 AS TEXT)='' OR instr(lower(address || ' ' || json_extract(payload,'$.Title') || ' ' || CASE WHEN json_extract(payload,'$.Request') IS NULL THEN json_extract(payload,'$.LastMessage') ELSE '' END), lower(CAST(?7 AS TEXT)))>0)
 ORDER BY activity_sequence DESC LIMIT ?8
 `
 
@@ -382,6 +406,7 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 
 const listMessages = `-- name: ListMessages :many
 SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages AS m WHERE m.conversation_id=?1
+AND EXISTS (SELECT 1 FROM conversations c WHERE c.id=m.conversation_id AND json_extract(c.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id) AND (
 CAST(?2 AS TEXT)='' OR
@@ -434,6 +459,7 @@ SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is
 JOIN messages AS anchor ON anchor.id=?1 AND anchor.conversation_id=?2
 WHERE m.conversation_id=?2
 AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)>(COALESCE(anchor.timeline_at_ms,anchor.created_at_ms),anchor.id)
+AND EXISTS (SELECT 1 FROM conversations c WHERE c.id=m.conversation_id AND json_extract(c.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
 ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) ASC,m.id ASC LIMIT ?3

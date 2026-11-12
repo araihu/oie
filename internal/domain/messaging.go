@@ -17,6 +17,8 @@ type Conversation struct {
 	UnreadMention                     bool `json:",omitempty"`
 	Archived, Favorite                bool
 	ActivitySequence                  int64
+	Request                           string              `json:",omitempty"`
+	DirectHistoryCheck                *DirectHistoryCheck `json:",omitempty"`
 }
 type Sender struct {
 	PersonalAddress string `json:"-"`

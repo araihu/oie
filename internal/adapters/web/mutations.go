@@ -90,7 +90,7 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 		s.mutationResponse(w, r, 400, mutationResult{Message: text.InvalidForm, Code: "invalid_request", Rejected: true})
 		return
 	}
-	if r.URL.Path == "/ui/conversations/preferences" {
+	if r.URL.Path == "/ui/conversations/preferences" || r.URL.Path == "/ui/rooms/join" {
 		if localized, ok := s.catalogs[r.Form.Get("lang")]; ok {
 			text = localized
 		}
@@ -468,7 +468,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 	v.ErrorMessage = result.Message
 	v.PreferenceRecovery = r.URL.Path == "/ui/conversations/preferences" && result.PreferencesPending
 	v.FormTarget = r.Form.Get("formTarget")
-	for _, key := range []string{"address", "label", "endpoint", "accountId", "conversationId", "originalText", "operationKey", "expectedRevisionId", "archived", "favorite", "lang"} {
+	for _, key := range []string{"address", "label", "endpoint", "accountId", "conversationId", "originalText", "operationKey", "expectedRevisionId", "archived", "favorite", "acceptRequest", "lang"} {
 		v.Values[key] = r.Form.Get(key)
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)

@@ -33,7 +33,7 @@ func (e *Engine) roomArchiveTarget(ctx context.Context, id domain.ID) (domain.Co
 	if err != nil {
 		return c, nil, err
 	}
-	if c.Kind != "room" {
+	if c.Kind != "room" || c.Request != "" {
 		return c, nil, ErrInvalid
 	}
 	r, ok := e.repo.(RoomArchiveRepository)

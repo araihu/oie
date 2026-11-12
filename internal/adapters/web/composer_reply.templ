@@ -27,7 +27,9 @@ if v.Selected!=nil&&v.Selected.Kind=="room" {
 }
 
 templ roomSessionStatus(v view){
-if v.Selected!=nil&&v.Selected.Kind=="room" {
+if v.requestKind()=="room_invitation" {
+ @roomInvitationStatus(v)
+}else if v.Selected!=nil&&v.Selected.Kind=="room" {
 <section id="room-session-status" class="oie-room-session" data-version={v.roomVersion()} data-room-state={v.roomState()} data-room-active={strconv.FormatBool(v.RoomSession!=nil&&v.RoomSession.Active)} data-send-allowed={strconv.FormatBool(v.sendAllowed())} data-compose-allowed={strconv.FormatBool(v.composeAllowed())} data-reply-allowed={strconv.FormatBool(v.replyAllowed())}>
 <p data-room-status-label>{v.roomLabel()}</p>
 if v.RoomSession!=nil&&v.RoomSession.Active&&v.RoomSession.State!="joined" {

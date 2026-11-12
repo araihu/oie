@@ -195,6 +195,16 @@ func TestDevelopmentServerMessageExchange(t *testing.T) {
 		}
 		for _, c := range res.JSON200.Items {
 			if c.Address == "alice@localhost" {
+				if c.Request != nil {
+					if *c.Request != "message" {
+						return false
+					}
+					accept := true
+					r, err := client.UpdateConversationPreferencesWithResponse(ctx, c.Id, &engineapi.UpdateConversationPreferencesParams{IdempotencyKey: string(id())}, engineapi.UpdateConversationPreferences{AccountId: bob, ExpectedRevisionId: c.RevisionId, AcceptRequest: &accept})
+					if err != nil || r.JSON200 == nil {
+						return false
+					}
+				}
 				receivedConversation = c.Id
 				return true
 			}
@@ -594,4 +604,15 @@ func xmppEndpoint() string {
 		return endpoint
 	}
 	return "127.0.0.1:5222"
+}
+
+func allowFixtureConversation(ctx context.Context, engine *application.Engine, c domain.Conversation) bool {
+	if c.Request == "" {
+		return true
+	}
+	if c.Request != domain.MessageRequest || c.DirectHistoryCheck != nil {
+		return false
+	}
+	_, err := engine.UpdateConversationPreferences(ctx, id(), c.ID, application.ConversationPreferencesInput{AccountID: c.AccountID, ExpectedRevisionID: c.RevisionID, AcceptRequest: true})
+	return err == nil
 }

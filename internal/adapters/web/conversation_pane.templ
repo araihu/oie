@@ -11,7 +11,7 @@ import (
 
 // The inbox remains mounted while this conversation-owned region is replaced.
 templ conversationPane(v view){
-<div id="conversation-pane" class="oie-conversation-pane" data-conversation-scope={v.conversationScope()} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)} data-open-chat={strconv.FormatBool(v.ChatOpen)}>
+<div id="conversation-pane" data-conversation-request={v.requestKind()} class="oie-conversation-pane" data-conversation-scope={v.conversationScope()} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)} data-open-chat={strconv.FormatBool(v.ChatOpen)}>
 @starData(v)
 @avatarData(v)
 		<section class="oie-chat-pane" aria-label={ v.Text.Conversations }>
@@ -35,6 +35,9 @@ templ conversationPane(v view){
 				<div class="oie-chat-empty">@glyph(heroicons.Icon16SolidRectangleGroup) @emptystate.EmptyState(emptystate.Config{Title: v.Text.MediaEmpty, Description: v.Text.MediaBody})</div>
 			} else if v.Selected!=nil && !v.Unavailable {
 				@chatHeader(v)
+if v.requestKind()!="" {
+ @conversationRequest(v)
+}else{
 @conversationPreferenceForms(v)
 @conversationSearchBar(v)
 				if v.Preview {
@@ -59,6 +62,7 @@ templ conversationPane(v view){
 <button type="button" class="oie-jump-latest" data-jump-latest hidden?={!v.ContextHasNewer&&!v.ContextMissing}>{v.Text.JumpToLatest}</button>
 
 				@composer(v)
+}
 			} else {
 				<div class="oie-chat-empty">
 					<img src={templ.URL(brandURL("icon-192.png"))} alt="" width="90" height="90"/>
@@ -67,6 +71,7 @@ templ conversationPane(v view){
 			}
 		</section>
 @conversationSkeleton(v)
+if v.requestKind()=="" {
 @roomSessionDialog(v)
 @conversationDetails(v)
 if v.conversationSchedulesAvailable() {
@@ -74,6 +79,7 @@ if v.conversationSchedulesAvailable() {
 }
 @senderDrawer(v)
 @messageHistoryDrawer(v)
+}
 </div>
 }
 

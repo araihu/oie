@@ -335,6 +335,11 @@ type RoomIntent struct {
 	UpdatedAt              string
 }
 
+type RoomInvitationCredential struct {
+	ConversationID string
+	Password       string
+}
+
 type RoomReactionPrivacy struct {
 	AccountID    string
 	Address      string

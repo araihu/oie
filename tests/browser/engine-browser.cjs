@@ -216,6 +216,46 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
     }, 'Bob conversation created by incoming XMPP');
     await bobPage.locator('a[data-conversation-id="' + bobConversation.id + '"]').waitFor({state: 'visible'});
     await bobPage.locator('a[data-conversation-id="' + bobConversation.id + '"]').click();
+    const request = bobPage.locator('[data-conversation-request-panel]');
+    const archive = request.getByRole('button', {name:'Archive conversation', exact:true});
+    await request.getByRole('heading', {name:'Message request'}).waitFor();
+    await request.getByRole('button', {name:'Accept', exact:true}).waitFor();
+    assert.equal(await bobPage.locator('#message-timeline, #message-composer').count(),0);
+    assert(!(await bobPage.content()).includes(firstText), 'pending message is absent from rendered HTML');
+    assert.equal((await api('/api/v1/conversations/'+bobConversation.id+'/messages')).items.length,0);
+    let completeArchive;
+    const archiveDelay = new Promise(resolve => {completeArchive=resolve});
+    await bobPage.route('**/ui/conversations/preferences', async route => {
+      await archiveDelay;
+      await route.continue();
+    }, {times:1});
+    const beforeArchive = await archive.boundingBox();
+    await archive.click();
+    const frameGeometry = await archive.evaluate(button => new Promise(resolve => {
+      const positions = [];
+      const frame = () => {
+        const {x,y,width,height} = button.getBoundingClientRect();
+        positions.push({x,y,width,height});
+        if (positions.length===8) resolve(positions); else requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+    }));
+    for (const rect of frameGeometry) for (const axis of ['x','y','width','height']) {
+      assert(Math.abs(rect[axis]-beforeArchive[axis])<=1, `request actions stay in place while archiving (${axis})`);
+    }
+    completeArchive();
+    await until(async () => (await api('/api/v1/conversations/'+bobConversation.id)).archived, 'request archived');
+    await bobPage.locator('a[data-conversation-id="' + bobConversation.id + '"]').waitFor({state:'hidden'});
+    await bobPage.setViewportSize({width:390,height:844});
+    await bobPage.goto(base+'/?section=archived&chat='+bobConversation.id+'&account='+bob.id+'&theme=dark&lang=pt-BR');
+    await request.getByRole('heading', {name:'Solicitação de mensagem'}).waitFor();
+    assert(await bobPage.evaluate(()=>document.documentElement.scrollWidth<=innerWidth), 'request fits the mobile viewport');
+    await bobPage.screenshot({path:'artifacts/'+prefix+'-request-mobile-pt.png'});
+    await request.getByRole('button', {name:'Aceitar', exact:true}).click();
+    await request.waitFor({state:'detached'});
+    await bobPage.setViewportSize({width:1440,height:900});
+    await bobPage.goto(base+'/?chat='+bobConversation.id+'&account='+bob.id+'&theme=dark&lang=en');
+    evidence.workflows.push('First direct message is hidden until accepted, including when archived and recovered');
     await bobPage.locator('[data-message-id]').filter({hasText: firstText}).waitFor({state: 'visible'});
     let bobMessages = await api('/api/v1/conversations/' + bobConversation.id + '/messages');
     assert.equal(bobMessages.items.filter(m => m.originalText === firstText && !m.isOwn).length, 1, 'one actual recipient effect');

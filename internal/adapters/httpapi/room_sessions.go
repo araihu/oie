@@ -52,7 +52,11 @@ func (s *Server) JoinRoom(ctx context.Context, r engineapi.JoinRoomRequestObject
 	if r.Body.ExpectedRevisionId != nil {
 		revision = domain.ID(*r.Body.ExpectedRevisionId)
 	}
-	value, err := s.engine.JoinRoom(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.ConversationId), nickname, revision)
+	conversationRevision := domain.ID("")
+	if r.Body.ExpectedConversationRevisionId != nil {
+		conversationRevision = domain.ID(*r.Body.ExpectedConversationRevisionId)
+	}
+	value, err := s.engine.JoinRoomInvitation(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.ConversationId), nickname, revision, conversationRevision)
 	if err != nil {
 		return nil, err
 	}

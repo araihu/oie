@@ -39,7 +39,9 @@ type roomSessionHost interface {
 }
 
 type mucUser struct {
-	Status []struct {
+	Invites   []struct{} `xml:"http://jabber.org/protocol/muc#user invite"`
+	Passwords []string   `xml:"http://jabber.org/protocol/muc#user password"`
+	Status    []struct {
 		Code int `xml:"code,attr"`
 	} `xml:"http://jabber.org/protocol/muc#user status"`
 	Item struct {
@@ -96,6 +98,9 @@ func (m *Manager) notifyRoom(ctx context.Context, e *entry, slot *roomSlot, snap
 	}
 }
 func (m *Manager) JoinRoom(ctx context.Context, a domain.Account, c domain.Conversation, nickname string, intentRevision domain.ID) (domain.RoomSession, error) {
+	return m.JoinInvitedRoom(ctx, a, c, nickname, "", intentRevision)
+}
+func (m *Manager) JoinInvitedRoom(ctx context.Context, a domain.Account, c domain.Conversation, nickname, password string, intentRevision domain.ID) (domain.RoomSession, error) {
 	e, room, err := m.roomEntry(a, c)
 	if err != nil {
 		return domain.RoomSession{}, err
@@ -217,7 +222,11 @@ func (m *Manager) JoinRoom(ctx context.Context, a domain.Account, c domain.Conve
 		deadline = time.Now().Add(10 * time.Second)
 	}
 	_ = raw.SetWriteDeadline(deadline)
-	err = s.Send(ctx, stanza.Presence{To: occupant, ID: slot.requestID}.Wrap(xml.NewDecoder(strings.NewReader(`<x xmlns="http://jabber.org/protocol/muc"><history maxstanzas="0"/></x>`))))
+	payload := `<x xmlns="http://jabber.org/protocol/muc"><history maxstanzas="0"/>`
+	if password != "" {
+		payload += "<password>" + escaped(password) + "</password>"
+	}
+	err = s.Send(ctx, stanza.Presence{To: occupant, ID: slot.requestID}.Wrap(xml.NewDecoder(strings.NewReader(payload+"</x>"))))
 	_ = raw.SetWriteDeadline(time.Time{})
 	e.sendMu.Unlock()
 	if err != nil {

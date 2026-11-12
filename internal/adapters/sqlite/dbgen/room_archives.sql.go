@@ -47,6 +47,7 @@ func (q *Queries) GetRoomArchive(ctx context.Context, conversationID string) (Ge
 
 const listRoomArchiveConversations = `-- name: ListRoomArchiveConversations :many
 SELECT id, revision_id, account_id, address, peer_id, payload, activity_sequence, unread_count, archived, favorite FROM conversations WHERE account_id=? AND json_extract(payload,'$.Kind')='room'
+AND json_extract(payload,'$.Request') IS NULL
 ORDER BY activity_sequence DESC,id
 `
 

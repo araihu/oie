@@ -131,6 +131,9 @@ func (e *Engine) ConversationPreviews(ctx context.Context, conversation domain.I
 	if err != nil {
 		return nil, err
 	}
+	if c.Request != "" {
+		return []domain.MessagePreview{}, nil
+	}
 	r, err := e.previewRepo()
 	if err != nil {
 		return nil, err

@@ -224,7 +224,7 @@ separate work. See [saved protocol contacts](contacts.md).
 
 Allow starting a direct chat by address without first adding a contact, where permitted, with the sending account clearly selected. Neither sending nor receiving a message automatically adds a contact, requests presence access, or links identities.
 
-Incoming non-contact chats appear in the normal conversation list with a localized **Not in contacts** label. Blocking/unblocking is backlogged; conversation muting is not a protocol block.
+A first incoming direct message appears in the conversation list as a **Message request** when prior messages are absent from local storage and the account archive. Keep message content hidden until accepted. Allow accepting or archiving the request. An unavailable or inconclusive archive leaves the request actionable. Blocking/unblocking is backlogged; conversation muting is not a protocol block.
 
 ### 3.3 Rooms
 
@@ -233,6 +233,8 @@ Support, subject to protocol support and permissions:
 - Public-room discovery and joining by room address.
 - Creation of group rooms.
 - Sending invitations and accepting/declining received invitations.
+
+**AGREED:** received direct and mediated room invitations appear in the conversation list. Allow entering or archiving. Show room messages after confirmed entry.
 - A room-details panel with name, topic, and the available participant list.
 - Name/topic editing where permitted.
 

@@ -399,7 +399,7 @@ window.OieRuntime.register('live', life => {
     if(!roomOperation)return;
     const form=document.querySelector('[data-room-command]');if(!form)return;
     form.action='/ui/rooms/'+roomOperation.command;form.dataset.oieAction=roomOperation.command+'_room';form.dataset.roomCommand=roomOperation.command;
-    for(const key of ['operationKey','expectedRevisionId','nickname']){const field=form.elements.namedItem(key);if(field)field.value=roomOperation[key]||'';}
+    for(const key of ['operationKey','expectedRevisionId','expectedConversationRevisionId','nickname']){const field=form.elements.namedItem(key);if(field)field.value=roomOperation[key]||'';}
     for(const field of form.querySelectorAll('input:not([type=hidden])'))field.readOnly=true;
     const button=form.querySelector('[data-room-action]');if(button){button.dataset.roomAction=roomOperation.command;button.textContent=text('retry');button.title=text('retry');}
     const region=form.querySelector('[data-form-feedback]');if(region){region.textContent=text('roomCommandUnknown');region.dataset.error='true';region.setAttribute('role','alert');}
@@ -612,9 +612,11 @@ window.OieRuntime.register('live', life => {
       if(pinned())showJump(true);
       readAvatars(page);
       const room=document.querySelector('#room-session-status'),nextRoom=page.querySelector('#live-room-session #room-session-status');
-      if(room&&nextRoom&&composer){
-        for(const key of ['sendAllowed','composeAllowed','replyAllowed'])composer.dataset[key]=nextRoom.dataset[key]||'false';
-        input.disabled=composer.dataset.composeAllowed!=='true'&&!journal?.pending;
+      if(room&&nextRoom){
+        if(composer){
+          for(const key of ['sendAllowed','composeAllowed','replyAllowed'])composer.dataset[key]=nextRoom.dataset[key]||'false';
+          input.disabled=composer.dataset.composeAllowed!=='true'&&!journal?.pending;
+        }
         if(room.dataset.version!==nextRoom.dataset.version&&!room.querySelector('input[name="nickname"]')?.matches(':focus')){
           const previousFocus=room.contains(document.activeElement),previousFeedback=room.querySelector('[data-form-feedback]'),previousCommand=room.querySelector('[data-room-command]')?.dataset.roomCommand;
           const savedFeedback=previousFeedback?.textContent,savedError=previousFeedback?.dataset.error;
@@ -630,6 +632,15 @@ window.OieRuntime.register('live', life => {
         reconcileConversationList(list,nextList);list.dataset.version=nextList.dataset.version;
       }else if(!preferencesCurrent)refreshAgain=true;
       if (regions.dataset.conversationId === body.dataset.conversationId) {
+        const pane=document.getElementById('conversation-pane');
+        if(pane&&(pane.dataset.conversationRequest||'')!==(regions.dataset.conversationRequest||'')){
+          const focus=pane.querySelector('[data-conversation-request-panel]')?.contains(document.activeElement);
+          const route=location.pathname+location.search;
+          if(!window.OieNavigation){location.reload();return;}
+          await window.OieNavigation.go(route,true);
+          if(focus)document.querySelector('#conversation-request-title,#message-composer')?.focus({preventScroll:true});
+          return;
+        }
         const timeline = document.querySelector('#message-timeline'), next = page.querySelector('#live-timeline');
         if (timeline && next && window.OieTimeline) {window.OieTimeline.refresh(page,forceBottom,reactionStartedAt);forceBottom=false;}
         const header = document.querySelector('#chat-header'), nextHeader = page.querySelector('#live-header');
@@ -794,7 +805,7 @@ window.OieRuntime.register('live', life => {
     const values = new URLSearchParams(new FormData(form));
     const roomCommand=form.dataset.roomCommand;
     const roomMenuSubmit=roomCommand==='leave'&&form.dataset.roomMenuSubmit==='true';
-    if(roomCommand){if(roomOperation){for(const key of ['operationKey','expectedRevisionId','nickname','conversationId','accountId'])values.set(key,roomOperation[key]||'')}else keepRoomOperation({command:roomCommand,operationKey:values.get('operationKey'),expectedRevisionId:values.get('expectedRevisionId'),nickname:values.get('nickname')||'',conversationId:values.get('conversationId'),accountId:values.get('accountId')})}
+    if(roomCommand){if(roomOperation){for(const key of ['operationKey','expectedRevisionId','expectedConversationRevisionId','nickname','conversationId','accountId'])values.set(key,roomOperation[key]||'')}else keepRoomOperation({command:roomCommand,operationKey:values.get('operationKey'),expectedRevisionId:values.get('expectedRevisionId'),expectedConversationRevisionId:values.get('expectedConversationRevisionId')||'',nickname:values.get('nickname')||'',conversationId:values.get('conversationId'),accountId:values.get('accountId')})}
 
     if(sending){values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');values.set('mentions',JSON.stringify(journal.mentions||[]));setScheduledValues(values);}
     const buttons = [...form.querySelectorAll('input:not([type=hidden]),textarea,select,button')];

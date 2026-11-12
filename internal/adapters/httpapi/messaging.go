@@ -20,6 +20,14 @@ func connection(c domain.Connection) engineapi.Connection {
 }
 func conversation(c domain.Conversation) engineapi.Conversation {
 	out := engineapi.Conversation{Id: string(c.ID), RevisionId: string(c.RevisionID), AccountId: string(c.AccountID), Kind: engineapi.ConversationKind(c.Kind), Address: c.Address, Title: c.Title, LastMessage: c.LastMessage, UpdatedAt: c.UpdatedAt, UnreadCount: c.UnreadCount, Archived: c.Archived, Favorite: c.Favorite}
+	if c.Request != "" {
+		request := engineapi.ConversationRequest(c.Request)
+		if c.DirectHistoryCheck != nil {
+			request = "checking"
+		}
+		out.Request = &request
+		out.LastMessage = ""
+	}
 	if c.UnreadMention {
 		out.UnreadMention = &c.UnreadMention
 	}

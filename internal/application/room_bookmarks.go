@@ -53,6 +53,9 @@ func (e *Engine) RestoreRoomBookmark(ctx context.Context, bookmark RoomBookmark)
 	if c.Kind != "room" || c.AccountID != a.ID || c.Address != address {
 		return ErrInvalid
 	}
+	if c.Request == domain.RoomInvitation {
+		return nil
+	}
 	intents, ok := e.repo.(RoomIntentRepository)
 	if !ok {
 		return ErrProtocolUnavailable

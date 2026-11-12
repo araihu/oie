@@ -18,7 +18,7 @@ AND archived=sqlc.arg(archived)
 AND (CAST(sqlc.arg(favorites_only) AS INTEGER)=0 OR favorite=1)
 AND (CAST(sqlc.arg(unread_only) AS INTEGER)=0 OR unread_count>0)
 AND (CAST(sqlc.arg(kind) AS TEXT)='' OR json_extract(payload,'$.Kind')=CAST(sqlc.arg(kind) AS TEXT))
-AND (CAST(sqlc.arg(query) AS TEXT)='' OR instr(lower(address || ' ' || json_extract(payload,'$.Title') || ' ' || json_extract(payload,'$.LastMessage')), lower(CAST(sqlc.arg(query) AS TEXT)))>0)
+AND (CAST(sqlc.arg(query) AS TEXT)='' OR instr(lower(address || ' ' || json_extract(payload,'$.Title') || ' ' || CASE WHEN json_extract(payload,'$.Request') IS NULL THEN json_extract(payload,'$.LastMessage') ELSE '' END), lower(CAST(sqlc.arg(query) AS TEXT)))>0)
 ORDER BY activity_sequence DESC LIMIT sqlc.arg(page_limit);
 -- name: InsertMessage :exec
 INSERT INTO messages(id,revision_id,account_id,conversation_id,provider_id,is_own,state,payload,created_at_ms) VALUES(?,?,?,?,?,?,?,?,?);
@@ -26,13 +26,18 @@ INSERT INTO messages(id,revision_id,account_id,conversation_id,provider_id,is_ow
 INSERT INTO message_revisions(id,entity_id,parents,payload,created_at) VALUES(?,?,?,?,?);
 -- name: GetMessage :one
 SELECT * FROM messages WHERE id=?;
+-- name: GetVisibleMessage :one
+SELECT m.* FROM messages AS m WHERE m.id=?
+AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL);
 -- name: GetTimelineMessage :one
 SELECT m.* FROM messages AS m WHERE m.id=?
+AND EXISTS (SELECT 1 FROM conversations c WHERE c.id=m.conversation_id AND json_extract(c.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id);
 -- name: FindProviderMessage :one
 SELECT * FROM messages WHERE account_id=? AND conversation_id=? AND provider_id=? AND is_own=?;
 -- name: ListMessages :many
 SELECT m.* FROM messages AS m WHERE m.conversation_id=sqlc.arg(page_conversation_id)
+AND EXISTS (SELECT 1 FROM conversations c WHERE c.id=m.conversation_id AND json_extract(c.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id) AND (
 CAST(sqlc.arg(page_cursor) AS TEXT)='' OR
@@ -61,6 +66,7 @@ SELECT m.* FROM messages AS m
 JOIN messages AS anchor ON anchor.id=sqlc.arg(cursor_id) AND anchor.conversation_id=sqlc.arg(conversation_id)
 WHERE m.conversation_id=sqlc.arg(conversation_id)
 AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)>(COALESCE(anchor.timeline_at_ms,anchor.created_at_ms),anchor.id)
+AND EXISTS (SELECT 1 FROM conversations c WHERE c.id=m.conversation_id AND json_extract(c.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
 ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) ASC,m.id ASC LIMIT sqlc.arg(page_limit);

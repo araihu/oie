@@ -87,6 +87,10 @@ func (s *Store) SetRoomIntent(ctx context.Context, in application.RoomIntentMuta
 	if c.AccountID != in.Session.AccountID || c.Kind != "room" {
 		return application.RoomIntentResult{}, application.ErrInvalid
 	}
+	if in.Session.Active && (c.Request == domain.RoomInvitation || in.ExpectedConversationRevisionID != "") &&
+		(c.Request != domain.RoomInvitation || c.RevisionID != in.ExpectedConversationRevisionID) {
+		return application.RoomIntentResult{}, application.RoomStateConflict{Current: domain.RoomSession{AccountID: c.AccountID, ConversationID: c.ID, State: "not_joined", UpdatedAt: in.Operation.CreatedAt}}
+	}
 	old, err := q.GetRoomIntent(ctx, string(c.ID))
 	if err == nil {
 		current, err := decodeRoomIntent(old)
@@ -157,7 +161,7 @@ func (s *Store) RevokeRoomIntent(ctx context.Context, id, expected, revision dom
 	}
 	return current, tx.Commit()
 }
-func (s *Store) RecordRoomSession(ctx context.Context, state domain.RoomSession) error {
+func (s *Store) RecordRoomSession(ctx context.Context, state domain.RoomSession, revision domain.ID) error {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
 		return err
@@ -176,11 +180,28 @@ func (s *Store) RecordRoomSession(ctx context.Context, state domain.RoomSession)
 	if current.RevisionID != string(state.IntentRevisionID) || current.AccountID != string(state.AccountID) {
 		return nil
 	}
+	if revision != "" && state.State == "joined" && current.Active == 1 {
+		row, err := q.GetConversation(ctx, string(state.ConversationID))
+		if err != nil {
+			return err
+		}
+		chat, err := decodeConversation(row)
+		if err != nil {
+			return err
+		}
+		if chat.Request == domain.RoomInvitation {
+			next := chat
+			next.Request = ""
+			if err = writeConversationDecision(ctx, q, chat, next, revision, state.UpdatedAt); err != nil {
+				return err
+			}
+		}
+	}
 	data, _ := json.Marshal([]any{state.IntentRevisionID, state.State, state.Nickname, state.LastErrorCode, state.Active})
 	sum := sha256.Sum256(data)
 	digest := hex.EncodeToString(sum[:])
 	if digest == current.ObservationFingerprint {
-		return nil
+		return tx.Commit()
 	}
 	if err = q.SetRoomObservation(ctx, dbgen.SetRoomObservationParams{ObservationFingerprint: digest, ConversationID: string(state.ConversationID), RevisionID: string(state.IntentRevisionID)}); err != nil {
 		return err

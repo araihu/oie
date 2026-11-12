@@ -1,6 +1,7 @@
 -- name: SharedContentCandidates :many
 SELECT m.* FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
 WHERE (s.message_id IS NULL OR s.parser_version<sqlc.arg(parser_version))
+AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT sqlc.arg(batch_limit);
@@ -27,6 +28,7 @@ FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
 WHERE (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
 AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
 AND (CAST(sqlc.arg(message_ids) AS TEXT)='[]' OR m.id IN (SELECT value FROM json_each(CAST(sqlc.arg(message_ids) AS TEXT))))
+AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id);
 
@@ -38,6 +40,7 @@ JOIN shared_content_state AS s ON s.message_id=m.id AND s.parser_version>=sqlc.a
 JOIN conversations AS c ON c.id=m.conversation_id JOIN accounts AS a ON a.id=m.account_id
 LEFT JOIN message_previews AS p ON p.message_id=m.id AND p.url=sc.url
 WHERE (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
+AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id)
 AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
@@ -58,5 +61,6 @@ LEFT JOIN message_content_heads h ON h.canonical_id=m.id
 JOIN shared_content_state s ON s.message_id=m.id AND s.parser_version>=sqlc.arg(parser_version)
 JOIN conversations c ON c.id=m.conversation_id JOIN accounts a ON a.id=m.account_id
 WHERE sc.id=sqlc.arg(item_id)
+AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id);

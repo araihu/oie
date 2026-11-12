@@ -122,6 +122,9 @@ func TestDirectReactionsWireEngineAndHTTPSetReplaceClear(t *testing.T) {
 			if c.Address != "bob@localhost" {
 				continue
 			}
+			if !allowFixtureConversation(ctx, engine, c) {
+				return false
+			}
 			messages, err := engine.Messages(ctx, c.ID, "", 100)
 			if err != nil {
 				continue

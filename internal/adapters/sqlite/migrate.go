@@ -16,7 +16,7 @@ import (
 var migrations embed.FS
 
 const schedulingMigration = 21
-const latestMigration = 24
+const latestMigration = 25
 
 func migrateDatabase(ctx context.Context, db *sql.DB) error {
 	// Catalog introspection is bootstrap housekeeping, not application queries.

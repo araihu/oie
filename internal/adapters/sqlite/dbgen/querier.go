@@ -53,10 +53,12 @@ type Querier interface {
 	GetOutbox(ctx context.Context, messageID string) (Outbox, error)
 	GetRoomArchive(ctx context.Context, conversationID string) (GetRoomArchiveRow, error)
 	GetRoomIntent(ctx context.Context, conversationID string) (RoomIntent, error)
+	GetRoomInvitationCredential(ctx context.Context, conversationID string) (string, error)
 	GetRoomReactionPrivacy(ctx context.Context, arg GetRoomReactionPrivacyParams) (GetRoomReactionPrivacyRow, error)
 	GetSharedContentItem(ctx context.Context, arg GetSharedContentItemParams) (GetSharedContentItemRow, error)
 	GetStagedAttachment(ctx context.Context, id string) (StagedAttachment, error)
 	GetTimelineMessage(ctx context.Context, id string) (Message, error)
+	GetVisibleMessage(ctx context.Context, id string) (Message, error)
 	HasMessageRead(ctx context.Context, canonicalID string) (bool, error)
 	InsertAccount(ctx context.Context, arg InsertAccountParams) error
 	InsertAccountRevision(ctx context.Context, arg InsertAccountRevisionParams) error
@@ -85,7 +87,9 @@ type Querier interface {
 	InsertPreviewRevision(ctx context.Context, arg InsertPreviewRevisionParams) error
 	InsertReactionObservation(ctx context.Context, arg InsertReactionObservationParams) error
 	InsertReadRevision(ctx context.Context, arg InsertReadRevisionParams) error
+	InsertRoomInvitationCredential(ctx context.Context, arg InsertRoomInvitationCredentialParams) error
 	InsertStagedAttachment(ctx context.Context, arg InsertStagedAttachmentParams) error
+	InsertVisibleMessageChange(ctx context.Context, arg InsertVisibleMessageChangeParams) (int64, error)
 	InterruptedMessageEditCommands(ctx context.Context) ([]MessageEditCommand, error)
 	InterruptedMessageReactionCommands(ctx context.Context) ([]MessageReactionCommand, error)
 	InterruptedMessages(ctx context.Context) ([]Message, error)
@@ -118,6 +122,7 @@ type Querier interface {
 	MessagesAfterTarget(ctx context.Context, arg MessagesAfterTargetParams) ([]Message, error)
 	MessagesAtOrBeforeTarget(ctx context.Context, arg MessagesAtOrBeforeTargetParams) ([]Message, error)
 	OriginalSendReceipt(ctx context.Context, resourceID string) (Operation, error)
+	PendingDirectHistoryChecks(ctx context.Context, accountID string) ([]Conversation, error)
 	PendingMessageEditCommands(ctx context.Context, nextAttemptAt string) ([]MessageEditCommand, error)
 	PendingMessageReactionCommands(ctx context.Context, nextAttemptAt string) ([]MessageReactionCommand, error)
 	PendingMessages(ctx context.Context, nextAttemptAt string) ([]Message, error)

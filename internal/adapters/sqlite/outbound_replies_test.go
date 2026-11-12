@@ -478,7 +478,7 @@ func TestRoomObservationEventsDeduplicateAndRejectOldIntent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = s.RecordRoomSession(t.Context(), observed); err != nil {
+	if err = s.RecordRoomSession(t.Context(), observed, ""); err != nil {
 		t.Fatal(err)
 	}
 	_, seq, _ := s.Snapshot(t.Context())

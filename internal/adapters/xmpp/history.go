@@ -30,9 +30,11 @@ type archiveMessage struct {
 	replyMetadata
 	correctionMetadata
 	reactionMetadata
-	Body  string `xml:"jabber:client body"`
-	Users []struct {
-		Items []struct {
+	Body              string                 `xml:"jabber:client body"`
+	DirectInvitations []directRoomInvitation `xml:"jabber:x:conference x"`
+	Users             []struct {
+		Invites []struct{} `xml:"invite"`
+		Items   []struct {
 			JID string `xml:"jid,attr"`
 		} `xml:"item"`
 	} `xml:"http://jabber.org/protocol/muc#user x"`
@@ -126,6 +128,14 @@ func archivedIncoming(account domain.Account, scope string, r *archiveResult, tr
 	if msg == nil || strings.TrimSpace(msg.Body) == "" {
 		return application.Incoming{}, false, nil
 	}
+	if len(msg.DirectInvitations) != 0 {
+		return application.Incoming{}, false, nil
+	}
+	for _, user := range msg.Users {
+		if len(user.Invites) != 0 {
+			return application.Incoming{}, false, nil
+		}
+	}
 	if len(r.ID) == 0 || len(r.ID) > 4096 {
 		return application.Incoming{}, false, errArchive
 	}
@@ -160,7 +170,7 @@ func archivedIncoming(account domain.Account, scope string, r *archiveResult, tr
 			in.ProviderID = "room:" + hex.EncodeToString(h[:])
 		}
 	} else {
-		if scope != account.Address || (msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage) {
+		if scope != account.Address || (msg.Type != "" && msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage) {
 			return in, false, nil
 		}
 		in.IsOwn = msg.From.Bare().Equal(own.Bare())

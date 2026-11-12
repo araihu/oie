@@ -341,6 +341,12 @@ func TestCLIDataOnlyXMPP(t *testing.T) {
 		for _, c := range chats.Items {
 			if c.Address == "alice@localhost" {
 				bobChat = c.Id
+				if c.Request != nil {
+					if *c.Request != "message" {
+						return false
+					}
+					p.call(nil, proofJSON(map[string]any{"accountId": bob.Id, "expectedRevisionId": c.RevisionId, "acceptRequest": true}), "conversations", "preferences", "set", "--conversation-id", c.Id, "--idempotency-key", proofID(), "--body-stdin")
+				}
 				for _, m := range p.messages(c.Id).Items {
 					if m.OriginalText == marker+" Olá 😀" && !m.IsOwn {
 						return true
@@ -351,7 +357,7 @@ func TestCLIDataOnlyXMPP(t *testing.T) {
 		return false
 	})
 	event := p.observe(identity.EventCursor, func(e engineapi.Event) bool {
-		return e.Message != nil && e.Message.OriginalText == marker+" Olá 😀" && !e.Message.IsOwn
+		return e.Conversation != nil && e.Conversation.Id == bobChat && e.Conversation.LastMessage == marker+" Olá 😀" && e.Conversation.Request == nil
 	})
 	// Reply through the CLI, producing a second actual provider direction.
 	var back engineapi.Message

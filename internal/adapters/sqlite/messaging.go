@@ -248,6 +248,9 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 	if err != nil {
 		return application.MessageResult{}, err
 	}
+	if c.Request != "" {
+		return application.MessageResult{}, application.ErrStateConflict
+	}
 	if c.Kind == "room" {
 		intent, err := q.GetRoomIntent(ctx, string(c.ID))
 		if errors.Is(err, sql.ErrNoRows) {
@@ -293,7 +296,7 @@ func (s *Store) Message(ctx context.Context, id domain.ID) (domain.Message, erro
 	if err != nil {
 		return domain.Message{}, err
 	}
-	row, err := s.queries.GetMessage(ctx, string(canonical))
+	row, err := s.queries.GetVisibleMessage(ctx, string(canonical))
 	if err != nil {
 		return domain.Message{}, notFound(err)
 	}
@@ -379,10 +382,25 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 			return err
 		}
 	}
+	check, requestRevision := c.DirectHistoryCheck, c.RevisionID
 	row, err := q.FindConversation(ctx, dbgen.FindConversationParams{AccountID: string(c.AccountID), Address: c.Address})
 	if err == nil {
 		c, err = decodeConversation(row)
+		if err == nil && check != nil && c.Kind == "direct" && c.Request == "" {
+			_, prior := q.LatestLogicalMessage(ctx, row.ID)
+			if errors.Is(prior, sql.ErrNoRows) {
+				next := c
+				next.Request, next.DirectHistoryCheck = domain.MessageRequest, check
+				err = writeConversationDecision(ctx, q, c, next, requestRevision, at)
+				c = next
+			} else if prior != nil {
+				err = prior
+			}
+		}
 	} else if errors.Is(err, sql.ErrNoRows) {
+		if check != nil {
+			c.Request = domain.MessageRequest
+		}
 		c, err = insertConversation(ctx, q, c)
 	}
 	if err != nil {

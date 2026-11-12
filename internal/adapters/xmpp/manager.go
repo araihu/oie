@@ -53,6 +53,7 @@ type entry struct {
 	raw                 net.Conn
 	historyMu           sync.Mutex
 	archives            map[string]*archiveQuery
+	requestsWake        chan struct{}
 	historyWake         chan struct{}
 	archiveSessionCtx   context.Context
 	archiveCapabilities map[string]roomArchiveCapability
@@ -344,6 +345,8 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.reactionCommands = nil
 			e.contactsWake = make(chan struct{}, 1)
 			e.historyWake = make(chan struct{}, 1)
+			e.requestsWake = make(chan struct{}, 1)
+			requestsWake := e.requestsWake
 			e.historyMu.Lock()
 			e.archiveCapabilities = nil
 			e.historyMu.Unlock()
@@ -366,6 +369,10 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 				if _, ok := m.host.(application.ContactHost); ok {
 					m.workers.Add(1)
 					go func() { defer m.workers.Done(); m.contactsLoop(historyCtx, e, session, contactsWake) }()
+				}
+				if host, ok := m.host.(application.ConversationRequestHost); ok {
+					m.workers.Add(1)
+					go func() { defer m.workers.Done(); m.checkDirectRequests(historyCtx, host, e, session, requestsWake) }()
 				}
 				delay = time.Second
 				err = session.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
@@ -620,8 +627,9 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 					Node string `xml:"node,attr"`
 				} `xml:"items"`
 			} `xml:"http://jabber.org/protocol/pubsub#event event"`
-			MUC   *mucUser `xml:"http://jabber.org/protocol/muc#user x"`
-			Delay struct {
+			MUC               *mucUser               `xml:"http://jabber.org/protocol/muc#user x"`
+			DirectInvitations []directRoomInvitation `xml:"jabber:x:conference x"`
+			Delay             struct {
 				From  string `xml:"from,attr"`
 				Stamp string `xml:"stamp,attr"`
 			} `xml:"urn:xmpp:delay delay"`
@@ -640,6 +648,9 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		}
 		if msg.Archive != nil {
 			return m.captureArchive(e, msg.Message, msg.Archive)
+		}
+		if handled, err := m.receiveRoomInvitation(ctx, e, msg.Message, msg.MUC, msg.DirectInvitations); handled {
+			return err
 		}
 		if msg.MUC != nil && msg.Delay.Stamp == "" && msg.Delay.From == "" {
 			if err := m.invalidateRoomConfiguration(ctx, e, msg.Message, msg.MUC); err != nil {
@@ -682,7 +693,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		if msg.Type == stanza.GroupChatMessage {
 			return m.receiveRoomMessage(ctx, e, msg.Message, msg.replyMetadata, msg.Body, msg.Delay.Stamp, msg.Delay.From, msg.fileSharingMetadata, msg.correctionMetadata)
 		}
-		if msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage {
+		if msg.Type != "" && msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage {
 			return nil
 		}
 		if strings.TrimSpace(msg.Body) == "" || msg.From.Localpart() == "" {
@@ -696,11 +707,20 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		if len(msg.Origins) == 0 && usableID(msg.ID) {
 			refs = append(refs, domain.MessageReference{Scope: "sender:" + msg.From.Bare().String(), ID: msg.ID, Author: msg.From.Bare().String()})
 		}
-		err := m.host.Receive(ctx, application.Incoming{MediaThumbnails: decodeFileThumbnails(msg.fileSharingMetadata), AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID, OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address, References: refs, Reply: reply, Correction: decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, false, false)})
+		_, requestsEnabled := m.host.(application.ConversationRequestHost)
+		own, _ := jid.Parse(e.account.Address)
+		err := m.host.Receive(ctx, application.Incoming{CheckDirectHistory: requestsEnabled, DirectArchiveID: roomStanzaID(own, msg.Stable), MediaThumbnails: decodeFileThumbnails(msg.fileSharingMetadata), AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID, OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address, References: refs, Reply: reply, Correction: decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, false, false)})
 		if errors.Is(err, application.ErrInvalid) {
 			return nil
 		}
 		if err == nil {
+			e.mu.RLock()
+			wake := e.requestsWake
+			e.mu.RUnlock()
+			select {
+			case wake <- struct{}{}:
+			default:
+			}
 			m.wakeAvatars(e)
 		}
 		return err

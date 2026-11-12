@@ -11,7 +11,9 @@ window.OieRuntime.register('conversation-preferences',life=>{
  memory.set('conversation-preference-tab',tab);
  const key=['oie.conversation-preference.v1',engine,tab,account,conversation].join(':');
  let intent=memory.get(key)||null,current=null,busy=false,blocked=body.dataset.mock==='true';
- const field=value=>value==='archived'||value==='favorite';
+ const requestPanel=!!document.querySelector('[data-request-preferences]');
+ const field=value=>value==='archived'||value==='favorite'||value==='acceptRequest';
+ const desired=name=>name==='acceptRequest'||requestPanel||!current[name];
  const valid=value=>value&&value.engineId===engine&&value.accountId===account&&value.conversationId===conversation&&canonical(value.operationKey)&&canonical(value.expectedRevisionId)&&field(value.field)&&typeof value.desired==='boolean';
  try{if(!intent)intent=JSON.parse(localStorage.getItem(key)||'null')}catch{denied=true}
  if(!valid(intent))intent=null;
@@ -26,7 +28,15 @@ window.OieRuntime.register('conversation-preferences',life=>{
   for(const form of forms){
    const name=form.dataset.conversationPreference,pending=intent?.field===name;
    form.dataset.busy=String(busy);form.setAttribute('aria-busy',String(busy));
-   if(current){form.elements.expectedRevisionId.value=pending?intent.expectedRevisionId:current.revisionId;form.elements[name].value=String(pending?intent.desired:!current[name]);if(pending)form.elements.operationKey.value=intent.operationKey}
+   if(current){form.elements.expectedRevisionId.value=pending?intent.expectedRevisionId:current.revisionId;form.elements[name].value=String(pending?intent.desired:desired(name));if(pending)form.elements.operationKey.value=intent.operationKey}
+   const requestButton=form.querySelector('[data-request-action]');
+   if(requestButton){
+    if(!requestButton.dataset.label)requestButton.dataset.label=requestButton.textContent.trim();
+    requestButton.textContent=pending&&!busy?copy.retry:requestButton.dataset.label;
+    requestButton.disabled=blocked||busy||!current||!!intent&&!pending;
+    form.hidden=name==='archived'&&!!current?.archived&&!pending;
+   }
+   if(name==='acceptRequest')continue;
    for(const [prefix,visible]of name==='archived'?[['archive',!current?.archived],['unarchive',!!current?.archived],['retry-archive',false]]:[['favorite',!current?.favorite],['unfavorite',!!current?.favorite],['retry-favorite',false]]){
     const item=document.getElementById(prefix+'-conversation-'+conversation);if(!item)continue;
     const hidden=pending?!prefix.startsWith('retry-'):!visible;
@@ -54,11 +64,11 @@ window.OieRuntime.register('conversation-preferences',life=>{
   if(busy||blocked||!current||body.dataset.engineId!==engine||body.dataset.accountId!==account||body.dataset.conversationId!==conversation)return;
   const name=form.dataset.conversationPreference;if(intent&&intent.field!==name)return;
   if(!window.OieNavigation?.pinConversation(conversation))return;
-  if(!intent)save({engineId:engine,accountId:account,conversationId:conversation,operationKey:form.elements.operationKey.value,expectedRevisionId:current.revisionId,field:name,desired:!current[name]});
+  if(!intent)save({engineId:engine,accountId:account,conversationId:conversation,operationKey:form.elements.operationKey.value,expectedRevisionId:current.revisionId,field:name,desired:desired(name)});
   if(!valid(intent)){clear();announce(copy.unavailable);return}
   const revision=current.revisionId,values=new URLSearchParams(new FormData(form));
   for(const name of ['engineId','accountId','conversationId','operationKey','expectedRevisionId'])values.set(name,intent[name]);
-  values.delete('archived');values.delete('favorite');values.set(intent.field,String(intent.desired));values.set('csrf',csrf);
+  values.delete('archived');values.delete('favorite');values.delete('acceptRequest');values.set(intent.field,String(intent.desired));values.set('csrf',csrf);
   busy=true;bump();render();
   const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),14000);
   try{

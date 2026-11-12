@@ -98,6 +98,9 @@ func TestReceivedCorrectionWirePreservesLogicalMessage(t *testing.T) {
 			if chat.Address != "bob@localhost" {
 				continue
 			}
+			if !allowFixtureConversation(ctx, engine, chat) {
+				return false
+			}
 			messages, err := engine.Messages(ctx, chat.ID, "", 100)
 			if err != nil {
 				return false

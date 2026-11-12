@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.29.0
+  version: 0.30.0
   description: >-
     Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
@@ -1032,7 +1032,7 @@ paths:
               example:
                 id: 019a5df0-0000-7000-8000-000000000003
                 role: local
-                apiVersion: 0.29.0
+                apiVersion: 0.30.0
                 eventCursor: 019a5df0-0000-7000-8000-000000000003:1
         '503':
           $ref: '#/components/responses/Unavailable'
@@ -2006,7 +2006,7 @@ paths:
     patch:
       operationId: updateConversationPreferences
       tags: [Conversations]
-      summary: Change retained conversation archive or favorite preferences
+      summary: Change conversation preferences or accept a direct message request
       description: >-
         Atomically updates only the supplied app-owned flags, records an immutable
         conversation revision and operation receipt, and emits conversation.updated
@@ -2017,7 +2017,9 @@ paths:
         checking current state. Reusing a key with different fields or preconditions
         conflicts. Setting an already-current value succeeds without another revision
         or event. Activity order, message timestamps, unread counts and outbox are
-        unchanged. Read the conversation after a replay for current state.
+        unchanged by archive or favorite changes. Accepting a direct message request
+        reveals the conversation and restores it from the archive. Read the
+        conversation after a replay for current state.
       parameters:
       - name: Idempotency-Key
         in: header
@@ -3120,7 +3122,7 @@ components:
       example:
         id: 019a5df0-0000-7000-8000-000000000003
         role: local
-        apiVersion: 0.29.0
+        apiVersion: 0.30.0
         eventCursor: 019a5df0-0000-7000-8000-000000000003:1
       additionalProperties: false
       required:
@@ -3144,6 +3146,7 @@ components:
           - 0.11.0
           - 0.12.0
           - 0.29.0
+          - 0.30.0
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -4221,7 +4224,7 @@ components:
         address: bob@localhost
     UpdateConversationPreferences:
       type: object
-      description: Field-isolated archive or favorite change with a current conversation revision precondition. At least one flag is required; omitted flags remain unchanged and null values are invalid.
+      description: Field-isolated archive, favorite or direct message request acceptance with a current conversation revision precondition.
       additionalProperties: false
       minProperties: 3
       required: [accountId, expectedRevisionId]
@@ -4240,6 +4243,9 @@ components:
         favorite:
           type: boolean
           description: Desired conversation favorite state, separate from source-message stars.
+        acceptRequest:
+          type: boolean
+          description: Set to true to accept a pending direct message request. Use this action on its own.
       example:
         accountId: 019a5df0-0000-7000-8000-000000000001
         expectedRevisionId: 019a5df0-0000-7000-8000-000000000002
@@ -4281,7 +4287,11 @@ components:
           description: Display title; initially the peer address.
         lastMessage:
           type: string
-          description: Original text preview of the most recently retained message.
+          description: Original text preview of the most recently retained message, empty while a request is pending.
+        request:
+          type: string
+          description: Pending user decision. Omitted for ordinary conversations.
+          enum: [checking, message, room_invitation]
         updatedAt:
           type: string
           format: date-time
@@ -5101,6 +5111,10 @@ components:
       additionalProperties: false
       required: [expectedRevisionId]
       properties:
+        expectedConversationRevisionId:
+          allOf:
+          - $ref: '#/components/schemas/ID'
+          description: Current conversation revision required when accepting a room invitation.
         nickname:
           type: string
           minLength: 1

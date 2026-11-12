@@ -1,0 +1,72 @@
+package web
+
+import (
+ "strconv"
+ "github.com/araihu/goshtoso/components/button"
+ "github.com/araihu/goshtoso/components/panel"
+ "github.com/araihu/goshtoso/components/textinput"
+ "github.com/araihu/goshtoso/components/link"
+)
+
+templ conversationRequest(v view) {
+<div class="oie-chat-empty oie-request" data-conversation-request-panel>
+ @panel.Panel(panel.Config{Density:panel.DensityCompact,Body:conversationRequestBody(v),RootAttrs:templ.Attributes{"aria-labelledby":"conversation-request-title"},RootClass:"oie-request-panel"})
+</div>
+}
+
+templ conversationRequestBody(v view) {
+<h3 id="conversation-request-title" tabindex="-1">{v.requestLabel(*v.Selected)}</h3>
+ <div class="oie-request-actions" data-request-preferences>
+ if v.requestKind()=="room_invitation" {
+  @roomSessionStatus(v)
+ } else {
+  @conversationRequestPreference(v,"acceptRequest",v.Text.AcceptMessageRequest)
+ }
+ if !v.Selected.Archived {
+  @conversationRequestPreference(v,"archived",v.Text.ArchiveConversation)
+ }
+ </div>
+ @conversationPreferenceFeedback(v)
+}
+
+templ conversationRequestPreference(v view,field,label string) {
+<form id={"request-"+field} action="/ui/conversations/preferences" method="post" data-conversation-preference={field}>
+ @mutationFields(v,"request-"+field,newOperationKey())
+ <input type="hidden" name="lang" value={v.Locale}/>
+ <input type="hidden" name="accountId" value={v.Selected.AccountId}/>
+ <input type="hidden" name="conversationId" value={v.Selected.Id}/>
+ <input type="hidden" name="expectedRevisionId" value={v.Selected.RevisionId}/>
+ <input type="hidden" name={field} value="true"/>
+ @button.Button(button.WithType("submit"),button.WithAttrs(templ.Attributes{"data-request-action":field}),button.WithAppearance(requestButtonAppearance(field))){ {label} }
+</form>
+}
+
+templ roomInvitationStatus(v view) {
+<section id="room-session-status" class="oie-request-room" data-version={v.roomVersion()+v.Selected.RevisionId} data-room-state={v.roomState()} data-room-active={strconv.FormatBool(v.RoomSession!=nil&&v.RoomSession.Active)}>
+ if v.RoomSession!=nil {
+  {{ joining := v.RoomSession.Active && v.RoomSession.State!="failed" }}
+  if joining {
+   <p role="status" data-room-status-label>{v.Text.RoomJoining}</p>
+   <noscript>@link.Link(v.href()){ {v.Text.DetailsRefresh} }</noscript>
+  }
+  if problem:=v.roomError();problem!="" {
+   <p role="status" class="oie-field-error" data-room-status-label>{problem}</p>
+  }
+  <form id={"room-join-"+v.Selected.Id} action="/ui/rooms/join" method="post" data-oie-action="join_room" data-room-command="join" hidden?={joining}>
+   @mutationFields(v,"room-"+v.Selected.Id,newOperationKey())
+   <input type="hidden" name="lang" value={v.Locale}/>
+   <input type="hidden" name="accountId" value={v.Selected.AccountId}/>
+   <input type="hidden" name="conversationId" value={v.Selected.Id}/>
+   <input type="hidden" name="expectedRevisionId" value={roomRevision(v.RoomSession)}/>
+   <input type="hidden" name="expectedConversationRevisionId" value={v.Selected.RevisionId}/>
+   if v.RoomSession.LastErrorCode!=nil && *v.RoomSession.LastErrorCode=="nickname_conflict" {
+    @textinput.TextInput(textinput.Config{ID:"room-nickname",Name:"nickname",Label:v.Text.RoomNickname,Value:roomNickname(v),InputAttrs:templ.Attributes{"maxlength":strconv.Itoa(100)}})
+   }
+   @button.Button(button.WithType("submit"),button.WithAttrs(templ.Attributes{"data-room-action":"join"})){ {v.Text.JoinRoom} }
+   <div data-form-feedback role="status" aria-live="polite"></div>
+  </form>
+ } else {
+  <p role="status" data-room-status-label>{v.Text.RoomUnavailable}</p>
+ }
+</section>
+}

@@ -17,4 +17,5 @@ AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
 
 -- name: ListRoomArchiveConversations :many
 SELECT * FROM conversations WHERE account_id=? AND json_extract(payload,'$.Kind')='room'
+AND json_extract(payload,'$.Request') IS NULL
 ORDER BY activity_sequence DESC,id;

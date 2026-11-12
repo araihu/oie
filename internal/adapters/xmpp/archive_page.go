@@ -18,12 +18,12 @@ import (
 const archivePageSize = 50
 
 type archivePageRequest struct {
-	Start, End            time.Time
-	Before, After, Search string
-	Backward              bool
-	Prepend               bool
-	Limit                 int
-	ReactionAnchor        domain.ArchiveReactionAnchor
+	Start, End                  time.Time
+	Before, After, Search, With string
+	Backward                    bool
+	Prepend                     bool
+	Limit                       int
+	ReactionAnchor              domain.ArchiveReactionAnchor
 }
 
 type archivePage struct {
@@ -36,7 +36,7 @@ type archivePage struct {
 
 func (r archivePageRequest) payload(id string) string {
 	var form strings.Builder
-	if !r.Start.IsZero() || !r.End.IsZero() || r.Search != "" {
+	if !r.Start.IsZero() || !r.End.IsZero() || r.Search != "" || r.With != "" {
 		form.WriteString(`<x xmlns="jabber:x:data" type="submit"><field var="FORM_TYPE" type="hidden"><value>` + mamNS + `</value></field>`)
 		field := func(name, value string) {
 			form.WriteString(`<field var="` + name + `"><value>` + escaped(value) + `</value></field>`)
@@ -46,6 +46,9 @@ func (r archivePageRequest) payload(id string) string {
 		}
 		if !r.End.IsZero() {
 			field("end", r.End.UTC().Format(time.RFC3339Nano))
+		}
+		if r.With != "" {
+			field("with", r.With)
 		}
 		if r.Search != "" {
 			field("{urn:xmpp:fulltext:0}fulltext", r.Search)

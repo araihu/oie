@@ -41,24 +41,16 @@ func (s *Store) UpdateConversationPreferences(ctx context.Context, in applicatio
 	if conversation.RevisionID != in.ExpectedRevisionID {
 		return application.ConversationResult{}, application.ConversationPreferencesConflict{Current: conversation}
 	}
+	if in.AcceptRequest && conversation.Request != domain.MessageRequest {
+		return application.ConversationResult{}, application.ConversationPreferencesConflict{Current: conversation}
+	}
 	next, changed := applyConversationPreferences(conversation, in)
 	if changed {
-		parents := jsonText([]domain.ID{conversation.RevisionID})
+		if err = writeConversationDecision(ctx, q, conversation, next, in.RevisionID, in.CreatedAt); err != nil {
+			return application.ConversationResult{}, err
+		}
 		conversation = next
 		conversation.RevisionID = in.RevisionID
-		count, err := q.UpdateConversationPreferences(ctx, dbgen.UpdateConversationPreferencesParams{ID: string(conversation.ID), AccountID: string(in.AccountID), ExpectedRevisionID: string(in.ExpectedRevisionID), RevisionID: string(conversation.RevisionID), Payload: jsonText(conversation), Archived: number(conversation.Archived), Favorite: number(conversation.Favorite)})
-		if err != nil {
-			return application.ConversationResult{}, err
-		}
-		if count != 1 {
-			return application.ConversationResult{}, conversationPreferencesConflict(ctx, q, in.ConversationID)
-		}
-		if err = q.InsertConversationRevision(ctx, dbgen.InsertConversationRevisionParams{ID: string(conversation.RevisionID), EntityID: string(conversation.ID), Parents: parents, Payload: jsonText(conversation), CreatedAt: stamp(in.CreatedAt)}); err != nil {
-			return application.ConversationResult{}, err
-		}
-		if _, err = change(ctx, q, "conversation.updated", conversation, in.CreatedAt); err != nil {
-			return application.ConversationResult{}, err
-		}
 	}
 	if err = q.SetOperationResult(ctx, dbgen.SetOperationResultParams{ID: string(in.ID), ResourceID: string(conversation.ID), Result: jsonText(conversation)}); err != nil {
 		return application.ConversationResult{}, err
@@ -73,21 +65,15 @@ func applyConversationPreferences(current domain.Conversation, in application.Co
 	next := current
 	if in.Archived != nil {
 		next.Archived = *in.Archived
+		if next.Archived {
+			next.DirectHistoryCheck = nil
+		}
 	}
 	if in.Favorite != nil {
 		next.Favorite = *in.Favorite
 	}
-	return next, current.Archived != next.Archived || current.Favorite != next.Favorite
-}
-
-func conversationPreferencesConflict(ctx context.Context, q *dbgen.Queries, id domain.ID) error {
-	row, err := q.GetConversation(ctx, string(id))
-	if err != nil {
-		return notFound(err)
+	if in.AcceptRequest {
+		next.Request, next.DirectHistoryCheck, next.Archived = "", nil, false
 	}
-	current, err := decodeConversation(row)
-	if err != nil {
-		return err
-	}
-	return application.ConversationPreferencesConflict{Current: current}
+	return next, current.Archived != next.Archived || current.Favorite != next.Favorite || current.Request != next.Request || current.DirectHistoryCheck != next.DirectHistoryCheck
 }

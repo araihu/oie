@@ -122,7 +122,14 @@ func (s *Server) changeRoom(ctx context.Context, r *http.Request, text copy, lea
 		if nickname != "" {
 			nick = &nickname
 		}
-		response, callErr := s.client.JoinRoomWithResponse(ctx, conversation, &engineapi.JoinRoomParams{IdempotencyKey: key}, engineapi.JoinRoom{ExpectedRevisionId: revision, Nickname: nick})
+		join := engineapi.JoinRoom{ExpectedRevisionId: revision, Nickname: nick}
+		if expectedChat := r.Form.Get("expectedConversationRevisionId"); expectedChat != "" {
+			if !validOperationKey(expectedChat) || len(r.Form["expectedConversationRevisionId"]) != 1 {
+				return 422, mutationResult{Message: text.InvalidForm, Rejected: true}
+			}
+			join.ExpectedConversationRevisionId = &expectedChat
+		}
+		response, callErr := s.client.JoinRoomWithResponse(ctx, conversation, &engineapi.JoinRoomParams{IdempotencyKey: key}, join)
 		err = callErr
 		if response != nil {
 			status = response.StatusCode()
