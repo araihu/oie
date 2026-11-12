@@ -10,6 +10,44 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
+func (s *Store) PreviewSources(ctx context.Context, conversation domain.ID, ids []domain.ID) ([]application.PreviewSource, error) {
+	rows, err := s.queries.ListPreviewSources(ctx, jsonText(ids))
+	if err != nil {
+		return nil, err
+	}
+	sources := make([]application.PreviewSource, 0, len(rows))
+	for _, row := range rows {
+		if row.MessageID == "" {
+			return nil, application.ErrNotFound
+		}
+		if row.ConversationID != string(conversation) {
+			return nil, application.ErrInvalid
+		}
+		var body struct {
+			OriginalText  string
+			OutboundReply *domain.OutboundReply
+		}
+		if err := json.Unmarshal([]byte(row.MessagePayload), &body); err != nil {
+			return nil, err
+		}
+		text := body.OriginalText
+		switch {
+		case body.OutboundReply != nil:
+			text = body.OutboundReply.BodyText
+		case row.ReplyPayload != nil:
+			var ref domain.ReplyReference
+			if err := json.Unmarshal([]byte(*row.ReplyPayload), &ref); err != nil {
+				return nil, err
+			}
+			text, _ = domain.ReplyBody(text, ref.Fallback)
+		}
+		sources = append(sources, application.PreviewSource{
+			ID: domain.ID(row.MessageID), AccountID: domain.ID(row.AccountID), ConversationID: conversation, Text: text,
+		})
+	}
+	return sources, nil
+}
+
 func decodePreview(row dbgen.MessagePreview, err error) (domain.MessagePreview, error) {
 	if err != nil {
 		return domain.MessagePreview{}, notFound(err)

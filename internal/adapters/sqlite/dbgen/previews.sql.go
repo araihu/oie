@@ -193,6 +193,58 @@ func (q *Queries) InterruptedPreviewJobs(ctx context.Context, limit int64) ([]Me
 	return items, nil
 }
 
+const listPreviewSources = `-- name: ListPreviewSources :many
+SELECT CAST(COALESCE(m.id,'') AS TEXT) AS message_id,
+ CAST(COALESCE(m.account_id,'') AS TEXT) AS account_id,
+ CAST(COALESCE(m.conversation_id,'') AS TEXT) AS conversation_id,
+ CAST(COALESCE(h.payload,m.payload,'') AS TEXT) AS message_payload,
+ r.payload AS reply_payload
+FROM json_each(CAST(?1 AS TEXT)) AS requested
+LEFT JOIN message_canonical_aliases AS a ON a.alias_id=requested.value
+LEFT JOIN messages AS m ON m.id=COALESCE(a.canonical_id,requested.value)
+LEFT JOIN message_content_heads AS h ON h.canonical_id=m.id
+LEFT JOIN message_replies AS r ON r.message_id=COALESCE(h.source_id,m.id)
+ AND r.body_hash=oie_source_hash(json_extract(COALESCE(h.payload,m.payload),'$.OriginalText'))
+ORDER BY CAST(requested.key AS INTEGER)
+`
+
+type ListPreviewSourcesRow struct {
+	MessageID      string
+	AccountID      string
+	ConversationID string
+	MessagePayload string
+	ReplyPayload   *string
+}
+
+func (q *Queries) ListPreviewSources(ctx context.Context, messageIds string) ([]ListPreviewSourcesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPreviewSources, messageIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPreviewSourcesRow{}
+	for rows.Next() {
+		var i ListPreviewSourcesRow
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.AccountID,
+			&i.ConversationID,
+			&i.MessagePayload,
+			&i.ReplyPayload,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const previewJobs = `-- name: PreviewJobs :many
 SELECT id, revision_id, account_id, conversation_id, message_id, url, state, download_state, updated_at, payload FROM message_previews WHERE state='queued' OR download_state='queued' OR (state='unavailable' AND coalesce(json_extract(payload,'$.Kind'),'')<>'video' AND updated_at<?1)
 ORDER BY CASE WHEN download_state='queued' THEN 0 ELSE 1 END,updated_at,id LIMIT ?2

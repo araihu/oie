@@ -12,8 +12,19 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
-// PreviewRepository owns derived cache records, never message/outbox transitions.
+// PreviewSource carries the retained message identity and visible text used to find URLs.
+type PreviewSource struct {
+	ID, AccountID, ConversationID domain.ID
+	Text                          string
+}
+
+func previewSource(m domain.Message) PreviewSource {
+	return PreviewSource{ID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID, Text: domain.DisplayBody(m)}
+}
+
+// PreviewRepository owns derived cache records and reads their message sources.
 type PreviewRepository interface {
+	PreviewSources(context.Context, domain.ID, []domain.ID) ([]PreviewSource, error)
 	Preview(context.Context, domain.ID) (domain.MessagePreview, error)
 	EnsurePreview(context.Context, domain.MessagePreview) (domain.MessagePreview, error)
 	SavePreview(context.Context, domain.MessagePreview, domain.ID) error
@@ -91,36 +102,40 @@ func (e *Engine) ConversationPreviews(ctx context.Context, conversation domain.I
 	if len(ids) > 100 {
 		return nil, ErrInvalid
 	}
-	messages := []domain.Message{}
+	var sources []PreviewSource
 	if len(ids) == 0 {
-		messages, err = e.Messages(ctx, c.ID, "", 50)
+		messages, err := e.Messages(ctx, c.ID, "", 50)
 		if err != nil {
 			return nil, err
 		}
+		sources = make([]PreviewSource, 0, len(messages))
+		for _, m := range messages {
+			sources = append(sources, previewSource(m))
+		}
 	} else {
-		seen := map[domain.ID]bool{}
+		seen := make(map[domain.ID]bool, len(ids))
+		unique := make([]domain.ID, 0, len(ids))
 		for _, id := range ids {
-			if seen[id] {
-				continue
-			}
-			seen[id] = true
-			m, err := e.Message(ctx, id)
-			if err != nil {
-				return nil, err
-			}
-			if m.ConversationID != c.ID {
+			if !validID(id) {
 				return nil, ErrInvalid
 			}
-			messages = append(messages, m)
+			if !seen[id] {
+				seen[id] = true
+				unique = append(unique, id)
+			}
+		}
+		sources, err = r.PreviewSources(ctx, c.ID, unique)
+		if err != nil {
+			return nil, err
 		}
 	}
 	out := []domain.MessagePreview{}
-	for _, m := range messages {
-		for _, address := range previewURLs(domain.DisplayBody(m)) {
+	for _, source := range sources {
+		for _, address := range previewURLs(source.Text) {
 			if knownNonPreviewFile(address) {
 				continue
 			}
-			p, err := e.ensureMessagePreview(ctx, r, m, address)
+			p, err := e.ensureMessagePreview(ctx, r, source, address)
 			if err != nil {
 				return nil, err
 			}
@@ -138,7 +153,7 @@ func knownNonPreviewFile(address string) bool {
 	}
 	return false
 }
-func (e *Engine) ensureMessagePreview(ctx context.Context, r PreviewRepository, m domain.Message, address string) (domain.MessagePreview, error) {
+func (e *Engine) ensureMessagePreview(ctx context.Context, r PreviewRepository, source PreviewSource, address string) (domain.MessagePreview, error) {
 	if knownNonPreviewFile(address) {
 		return domain.MessagePreview{}, ErrInvalid
 	}
@@ -150,7 +165,7 @@ func (e *Engine) ensureMessagePreview(ctx context.Context, r PreviewRepository, 
 	if err != nil {
 		return domain.MessagePreview{}, err
 	}
-	p := domain.MessagePreview{ID: id, RevisionID: rev, AccountID: m.AccountID, ConversationID: m.ConversationID, MessageID: m.ID, URL: address, PreviewVersion: previewRendererVersion, Kind: "link", State: "queued", DownloadState: "not_downloaded", UpdatedAt: e.now().UTC()}
+	p := domain.MessagePreview{ID: id, RevisionID: rev, AccountID: source.AccountID, ConversationID: source.ConversationID, MessageID: source.ID, URL: address, PreviewVersion: previewRendererVersion, Kind: "link", State: "queued", DownloadState: "not_downloaded", UpdatedAt: e.now().UTC()}
 	u, _ := url.Parse(address)
 	ext := strings.ToLower(path.Ext(u.Path))
 	if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" {

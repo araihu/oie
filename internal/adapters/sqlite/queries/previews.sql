@@ -1,3 +1,17 @@
+-- name: ListPreviewSources :many
+SELECT CAST(COALESCE(m.id,'') AS TEXT) AS message_id,
+ CAST(COALESCE(m.account_id,'') AS TEXT) AS account_id,
+ CAST(COALESCE(m.conversation_id,'') AS TEXT) AS conversation_id,
+ CAST(COALESCE(h.payload,m.payload,'') AS TEXT) AS message_payload,
+ r.payload AS reply_payload
+FROM json_each(CAST(sqlc.arg(message_ids) AS TEXT)) AS requested
+LEFT JOIN message_canonical_aliases AS a ON a.alias_id=requested.value
+LEFT JOIN messages AS m ON m.id=COALESCE(a.canonical_id,requested.value)
+LEFT JOIN message_content_heads AS h ON h.canonical_id=m.id
+LEFT JOIN message_replies AS r ON r.message_id=COALESCE(h.source_id,m.id)
+ AND r.body_hash=oie_source_hash(json_extract(COALESCE(h.payload,m.payload),'$.OriginalText'))
+ORDER BY CAST(requested.key AS INTEGER);
+
 -- name: GetMessagePreview :one
 SELECT * FROM message_previews WHERE id=?;
 -- name: FindMessagePreview :one

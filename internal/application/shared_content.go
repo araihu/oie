@@ -151,7 +151,7 @@ func (e *Engine) SharedContent(ctx context.Context, q domain.SharedContentQuery)
 			item.Preview = nil
 			continue
 		}
-		p, err := e.ensureMessagePreview(ctx, previews, item.Message, item.URL)
+		p, err := e.ensureMessagePreview(ctx, previews, previewSource(item.Message), item.URL)
 		if err != nil {
 			return empty, err
 		}

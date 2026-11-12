@@ -101,6 +101,7 @@ type Querier interface {
 	ListMessageHistorySources(ctx context.Context, arg ListMessageHistorySourcesParams) ([]ListMessageHistorySourcesRow, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
 	ListMessagesAfter(ctx context.Context, arg ListMessagesAfterParams) ([]Message, error)
+	ListPreviewSources(ctx context.Context, messageIds string) ([]ListPreviewSourcesRow, error)
 	ListRoomArchiveConversations(ctx context.Context, accountID string) ([]Conversation, error)
 	ListRoomIntents(ctx context.Context) ([]RoomIntent, error)
 	ListSharedContent(ctx context.Context, arg ListSharedContentParams) ([]ListSharedContentRow, error)

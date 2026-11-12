@@ -77,3 +77,32 @@ func TestCorrectionAliasesPreserveStarsAndReplaceSharedCatalog(t *testing.T) {
 		t.Fatal("star history was rewritten", rows, err)
 	}
 }
+
+func TestPreviewBatchUsesCurrentCanonicalReplyBody(t *testing.T) {
+	s, e, c := outboxFixture(t)
+	at := time.Date(2026, 11, 8, 12, 0, 0, 0, time.UTC)
+	original := replySeed(t, s, c, "https://example.test/old", at, nil, nil)
+	const quote = "> https://example.test/quoted\n"
+	const current = "https://example.test/current"
+	correction := replySeed(t, s, c, quote+current, at.Add(time.Second), nil, &domain.ReplyReference{
+		Target:   domain.MessageReference{Scope: "sender:verified", Author: "verified", ID: "missing-target"},
+		Fallback: []domain.TextRange{{Start: 0, End: len(quote)}},
+	})
+	original.Correction = &domain.MessageCorrection{Scope: "sender:verified", Author: "verified", ID: original.ProviderID}
+	correction.Correction = &domain.MessageCorrection{
+		Scope: original.Correction.Scope, Author: original.Correction.Author,
+		ID: correction.ProviderID, TargetID: original.ProviderID,
+	}
+	for _, source := range []domain.Message{correction, original} {
+		if err := s.ReceiveMessage(t.Context(), c, source, migrationID()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := e.ConversationPreviews(t.Context(), c.ID, []domain.ID{correction.ID, migrationID()}); !errors.Is(err, application.ErrNotFound) {
+		t.Fatal("preview batch accepted a missing source", err)
+	}
+	previews, err := e.ConversationPreviews(t.Context(), c.ID, []domain.ID{correction.ID})
+	if err != nil || len(previews) != 1 || previews[0].MessageID != original.ID || previews[0].URL != current {
+		t.Fatal("expected one preview for the displayed body of the canonical message", previews, err)
+	}
+}
