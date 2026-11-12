@@ -5,7 +5,10 @@
   color: var(--oie-text);
 }
 
-.oie-schedule-filter, .oie-schedule-actions, .oie-schedule-row-header,
+.oie-schedule-filter { width: min(100%, 30rem); }
+.oie-schedule-filter [role="option"][aria-selected="false"] .oie-schedule-filter-check { visibility: hidden; }
+
+.oie-schedule-actions, .oie-schedule-row-header,
 .oie-schedule-edit-bar, .oie-composer-attachments, .oie-message-attachments {
   display: flex;
   flex-wrap: wrap;
@@ -54,7 +57,7 @@
 .oie-schedule-dialog::backdrop { background: rgb(0 0 0 / 40%); }
 .oie-schedule-dialog form { display: grid; gap: .55rem; }
 .oie-schedule-dialog footer { display: flex; justify-content: end; gap: .5rem; }
-.oie-schedule-dialog input, .oie-schedule-dialog select, .oie-schedule-filter select {
+.oie-schedule-dialog input, .oie-schedule-dialog select {
   border: 1px solid var(--oie-border);
   background: var(--oie-raised);
   color: var(--oie-text);

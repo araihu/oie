@@ -1,5 +1,26 @@
 window.OieRuntime.register('scheduling', life => {
   'use strict';
+  const filter = document.querySelector('[data-schedule-filter]');
+  if (filter) {
+    const id = 'schedule-conversation';
+    const committed = filter.dataset.scheduleFilter;
+    let request;
+    life.on(filter, 'combobox:change', ({detail}) => {
+      if (detail?.id !== id || (!request && detail.values[0] === committed)) return;
+      filter.querySelector('[role="combobox"]').focus({preventScroll: true});
+      filter.requestSubmit();
+    });
+    life.on(filter, 'htmx:before:request', ({detail}) => {
+      if (detail.ctx.sourceElement === filter) request = detail.ctx;
+    });
+    life.on(filter, 'htmx:finally:request', ({detail}) => {
+      if (detail.ctx !== request) return;
+      request = null;
+      if (filter.isConnected) {
+        document.dispatchEvent(new CustomEvent('combobox:load', {detail: {id, values: [committed]}}));
+      }
+    });
+  }
   const dialog = document.querySelector('[data-schedule-dialog]');
   if (!dialog) return;
   const composer = document.querySelector('[data-schedule-composer]');

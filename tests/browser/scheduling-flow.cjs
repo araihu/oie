@@ -95,8 +95,10 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   await alicePage.locator('#desktop-navigation').getByRole('link', {name: 'Scheduled', exact: true}).click();
   await alicePage.locator('[data-scheduled-row]').first().waitFor();
   assert.equal(await alicePage.locator('[data-scheduled-row]').count(), 2);
-  await alicePage.locator('#schedule-conversation').selectOption(aliceConversation.id);
-  await alicePage.getByRole('button', {name: 'Filter', exact: true}).click();
+  const filter = alicePage.locator('#schedule-conversation');
+  await filter.getByRole('combobox').click();
+  await filter.getByRole('textbox', {name: 'Search conversations'}).fill(aliceConversation.title);
+  await filter.locator('[role="option"][data-value="' + aliceConversation.id + '"]').click();
   await alicePage.waitForURL(url => url.searchParams.get('scheduleConversation') === aliceConversation.id);
   const row = alicePage.locator('[data-scheduled-row]').filter({hasText: content});
   const previous = await row.locator('time').getAttribute('datetime');

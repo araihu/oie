@@ -4,10 +4,12 @@ import (
 	"time"
 	"github.com/araihu/goshtoso/components/button"
 	"github.com/araihu/goshtoso/components/chatbubble"
+	"github.com/araihu/goshtoso/components/combobox"
 	"github.com/araihu/goshtoso/components/dropdown"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/link"
 	"github.com/araihu/goshtoso/components/splitbutton"
+	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
@@ -21,21 +23,43 @@ templ scheduledWorkspace(v view) {
 			<p role="status">{v.Text.ScheduleUnavailable}</p>
 			@link.Link(v.scheduleHref(v.ScheduleConversation,"")) { {v.Text.Retry} }
 		} else if v.SchedulePage != nil {
-			<form method="get" action="/" class="oie-schedule-filter">
+			<form method="get" action="/" class="oie-schedule-filter" data-schedule-filter={v.ScheduleConversation} hx-sync="this:replace">
 				<input type="hidden" name="section" value="scheduled"/>
-				<label for="schedule-conversation">{v.Text.Conversations}</label>
-				<select id="schedule-conversation" name="scheduleConversation">
-					<option value="">{v.Text.SearchAllConversations}</option>
-					for _, c := range v.ScheduleDestinations {
-						<option value={c.Id} selected?={c.Id == v.ScheduleConversation}>{c.Title} · {v.accountLabel(c.AccountId)}</option>
-					}
-				</select>
-				@button.Button(button.WithType("submit"),button.WithSize(button.SizeSmall)) { {v.Text.ScheduleFilter} }
+				<input type="hidden" name="lang" value={v.Locale}/>
+				<input type="hidden" name="theme" value={v.Theme}/>
+				@scheduleConversationFilter(v)
 			</form>
 			@scheduledResults(v)
 		}
 		@scheduleDialog(v)
 	</section>
+}
+
+templ scheduleConversationFilter(v view) {
+	{{ config := scheduleConversationCombobox(v) }}
+	@combobox.Combobox(config, config.InitialState()).WithExpressions(expressions.Combobox{
+		SearchPlaceholder: v.Text.SearchChats,
+		EmptyText: v.Text.NoResults,
+	})
+}
+
+func scheduleConversationCombobox(v view) combobox.Config {
+	check := scheduleFilterCheck()
+	options := []combobox.Option{{Value: "", Label: v.Text.SearchAllConversations, Trailing: check}}
+	for _, c := range v.ScheduleDestinations {
+		options = append(options, combobox.Option{
+			Value: c.Id, Label: c.Title + " · " + v.accountLabel(c.AccountId), Trailing: check,
+		})
+	}
+	return combobox.Config{
+		ID: "schedule-conversation", Name: "scheduleConversation", Label: v.Text.Conversations,
+		Mode: combobox.ModeSingle, EnableSearch: true, DisablePersistence: true,
+		Source: combobox.Source{Static: options}, Selected: []string{v.ScheduleConversation},
+	}
+}
+
+templ scheduleFilterCheck() {
+	<span class="oie-schedule-filter-check">@glyph(heroicons.Icon16SolidCheck)</span>
 }
 
 templ scheduledResults(v view) {
