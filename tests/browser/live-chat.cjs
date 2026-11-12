@@ -98,9 +98,10 @@ const engine=id(1),account=id(2),chat=id(3);
     return {key:journal.key,text:journal.text};
   });
   const pending=await page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('oie.draft.v1')).map(k=>JSON.parse(localStorage.getItem(k))).find(v=>v.pending));assert(pending&&pending.text===draft);
+  const pendingReady=async()=>await page.locator('[data-pending-send][data-pending-state=uncertain]').count()===1&&await page.locator('[data-pending-send-retry]').isEnabled();
   for(const width of [390,1440])for(const lang of ['en','pt-BR'])for(const mode of ['light','dark'])for(const libraryTheme of ['goshtoso','minimal']){
     await page.setViewportSize({width,height:900});await page.goto(base+'/?chat='+chat+'&lang='+lang+'&theme='+mode);
-    await until(async()=>await page.locator('[data-pending-send][data-pending-state=uncertain]').count()===1&&await page.locator('#send-message-form').getAttribute('data-busy')==='false','matrix pending bubble');
+    await until(pendingReady,'matrix pending bubble');
     await page.evaluate(theme=>document.documentElement.dataset.theme=theme,libraryTheme);
     const retry=page.locator('[data-pending-send-retry]');await retry.scrollIntoViewIfNeeded();assert(await retry.isVisible());assert((await retry.getAttribute('aria-label')).includes(lang==='en'?'Retry submission':'Verificar e tentar novamente'));
     const box=await retry.boundingBox(),bubble=await page.locator('[data-pending-send] .oie-message-content').boundingBox();assert(box.x>=bubble.x&&box.x+box.width<=bubble.x+bubble.width+1&&box.y>=bubble.y&&box.y+box.height<=bubble.y+bubble.height+1,'retry icon stays inside the bubble');assert.equal((await retry.textContent()).trim(),'','recovery has no visible status label');assert.equal(await page.locator('[data-pending-send]>.oie-message-meta').count(),0,'uncertain send has no status box');
@@ -111,7 +112,7 @@ const engine=id(1),account=id(2),chat=id(3);
     if(lang==='en'&&libraryTheme==='goshtoso'){await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,`pending-send-${width}-${mode}.png`)});}
   }
   await page.goto(base+'/?chat='+chat+'&lang=en&theme=dark');
-  await page.reload();await until(async()=>await page.locator('[data-pending-send][data-pending-state=uncertain]').count()===1&&await page.locator('#send-message-form').getAttribute('data-busy')==='false','pending bubble restored after reload');assert.equal(await page.locator('[data-pending-send-text]').textContent(),draft);
+  await page.reload();await until(pendingReady,'pending bubble restored after reload');assert.equal(await page.locator('[data-pending-send-text]').textContent(),draft);
   allowRetry=true;await page.locator('[data-pending-send-retry]').focus();await page.keyboard.press('Enter');await until(async()=>!await page.locator('#message-composer').evaluate(e=>e.readOnly),'receipt reconciliation');assert.equal(state.effects,1);assert.equal(await page.locator('#send-message-form [data-form-feedback]').textContent(),'');assert.equal(await page.locator('.oie-list-footer').count(),0);
   await until(async()=>await page.locator('[data-pending-send]').count()===0,'canonical message replaces local placeholder');
   const outgoing=page.locator('[data-message-id="'+state.messages[0].id+'"]');assert.equal(await outgoing.locator('.oie-message-content').evaluate(e=>getComputedStyle(e).opacity),'0.8');assert.equal(await outgoing.locator('.oie-message-stamp [data-message-status]').count(),1,'queued state stays in the bubble timestamp row');assert.equal((await outgoing.locator('[data-message-status]').textContent()).trim(),'','queued state has no visible progress label');
