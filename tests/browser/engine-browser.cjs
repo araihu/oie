@@ -218,6 +218,8 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
     await bobPage.locator('a[data-conversation-id="' + bobConversation.id + '"]').click();
     const request = bobPage.locator('[data-conversation-request-panel]');
     const archive = request.getByRole('button', {name:'Archive conversation', exact:true});
+    assert(await request.evaluate(el=>el.classList.contains('oie-request-banner')&&el.getAttribute('role')==='region'), 'the request owns the banner and actions');
+    assert(await request.evaluate(el=>getComputedStyle(el.parentElement).backgroundImage.includes('/ui/chat-pattern.svg')), 'the request uses the chat wallpaper');
     await request.getByRole('heading', {name:'Message request'}).waitFor();
     await request.getByRole('button', {name:'Accept', exact:true}).waitFor();
     assert.equal(await bobPage.locator('#message-timeline, #message-composer').count(),0);

@@ -100,7 +100,8 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-back-button{display:none;color:var(--oie-text)}
 .oie-preview-note{margin:0;padding:7px 20px;text-align:center;font-size:11px;color:var(--oie-muted);background:var(--oie-panel);border-bottom:1px solid var(--oie-border)}
 .oie-timeline-frame{position:relative;display:flex;flex:1;min-height:0;flex-direction:column}
-:is(.oie-timeline,.oie-chat-skeleton-timeline){flex:1;min-height:0;overflow-y:auto;padding:22px clamp(20px,3vw,64px) 28px;background-image:linear-gradient(var(--oie-wallpaper-wash),var(--oie-wallpaper-wash)),url('/ui/chat-pattern.svg');background-size:480px 480px;scrollbar-width:thin;scrollbar-color:var(--oie-border) transparent;outline-offset:-3px}
+:is(.oie-timeline,.oie-chat-skeleton-timeline){flex:1;min-height:0;overflow-y:auto;padding:22px clamp(20px,3vw,64px) 28px;scrollbar-width:thin;scrollbar-color:var(--oie-border) transparent;outline-offset:-3px}
+:is(.oie-timeline,.oie-chat-skeleton-timeline,.oie-conversation-request){background-image:linear-gradient(var(--oie-wallpaper-wash),var(--oie-wallpaper-wash)),url('/ui/chat-pattern.svg');background-size:480px 480px}
 .oie-timeline{container-type:inline-size}
 .oie-day-divider{display:flex;justify-content:center;margin:0 0 22px}.oie-day-divider span{background:var(--oie-panel);border:1px solid var(--oie-border);padding:4px 12px;border-radius:7px;font-size:11px;color:var(--oie-muted)}
 .oie-message{margin-bottom:9px;max-width:min(88%,620px);font-size:13px;line-height:1.45}
@@ -520,10 +521,14 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-about ul{display:grid;gap:8px}
 .oie-about .oie-about-link{color:var(--oie-accent-text);text-decoration:underline}
 
-.oie-conversation-request{position:relative;flex-shrink:0;padding-block-end:2rem}
-/* The persistent status banner has no Alpine-controlled actions. */
+.oie-conversation-request{flex:1;min-height:0;overflow-y:auto}
+.oie-request-banner{flex-shrink:0;background-color:var(--oie-panel)}
+/* The persistent banner and its native forms can render before Alpine initializes. */
 .oie-request-banner[x-cloak]{display:flex!important}
-.oie-request-actions{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:.5rem;padding:1rem 1rem 0}
+.oie-request-banner-content{position:relative;display:flex;flex:1;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.5rem 1rem;min-width:0}
+.oie-request-banner-content h3{margin:0;font-size:.875rem;font-weight:650}
+.oie-request-actions{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem}
 .oie-request-room form[hidden],.oie-request-actions form[hidden]{display:none}
-.oie-conversation-request [role="status"]:empty{display:none}
-.oie-conversation-request [data-form-feedback],.oie-conversation-request #conversation-preference-status{position:absolute;inset-inline:1rem;bottom:.5rem;margin:0;text-align:center}
+.oie-request-banner [role="status"]:empty{display:none}
+.oie-request-banner [data-form-feedback],.oie-request-banner #conversation-preference-status{position:absolute;z-index:1;inset-inline:0;top:calc(100% + 1rem);margin:0;padding:.5rem 1rem;background:var(--oie-panel);color:var(--oie-text);text-align:center}
+.oie-request-banner [data-form-feedback][data-error=true]{color:light-dark(#9e2626,#ffb4ab)}

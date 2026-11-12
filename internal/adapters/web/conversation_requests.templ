@@ -9,12 +9,20 @@ import (
 )
 
 templ conversationRequest(v view) {
-<section class="oie-conversation-request" data-conversation-request-panel aria-labelledby="conversation-request-title">
- {{ title := v.requestLabel(*v.Selected) }}
- <h3 id="conversation-request-title" class="sr-only" tabindex="-1">{title}</h3>
- <div aria-hidden="true">
-  @banner.Banner(banner.Config{Description:title,Tone:banner.ToneInfo,Persistent:true,RootClass:"oie-request-banner"})
- </div>
+<div class="oie-conversation-request">
+ @banner.Banner(banner.Config{
+  Content: conversationRequestContent(v),
+  Tone: banner.ToneInfo,
+  Persistent: true,
+  RootClass: "oie-request-banner",
+  RootAttrs: templ.Attributes{"role":"region","aria-labelledby":"conversation-request-title","data-conversation-request-panel":""},
+ })
+</div>
+}
+
+templ conversationRequestContent(v view) {
+<div class="oie-request-banner-content">
+ <h3 id="conversation-request-title" tabindex="-1">{v.requestLabel(*v.Selected)}</h3>
  <div class="oie-request-actions" data-request-preferences>
   if v.requestKind()=="room_invitation" {
    @roomSessionStatus(v)
@@ -26,7 +34,7 @@ templ conversationRequest(v view) {
   }
  </div>
  @conversationPreferenceFeedback(v)
-</section>
+</div>
 }
 
 templ conversationRequestPreference(v view,field,label string) {

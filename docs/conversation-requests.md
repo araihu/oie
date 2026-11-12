@@ -1,6 +1,8 @@
 # Conversation requests
 
-A person reviewing an unexpected conversation needs the sender or room identity and a decision before seeing messages. The existing conversation list and header provide context. A persistent Goshtoso Banner appears below the conversation header, followed by native form actions while the request is pending. The layout follows the current themes and uses no animation. The current conversation URL identifies the selected request.
+A person reviewing an unexpected conversation needs the sender or room identity and a decision before seeing messages. The existing conversation list and header provide context. A persistent Goshtoso Banner below the conversation header contains the request title and native form actions. The chat wallpaper fills the remaining space while the request is pending. The layout follows the current themes and uses no animation. The current conversation URL identifies the selected request.
+
+The custom banner content API is tracked in [Goshtoso PR #382](https://github.com/araihu/goshtoso/pull/382). Oiê pins its implementation on top of the existing Goshtoso dependency.
 
 | State | Action | Result | Context and effect |
 | --- | --- | --- | --- |
