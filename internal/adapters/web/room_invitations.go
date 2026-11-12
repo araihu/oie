@@ -46,7 +46,11 @@ func roomFormAddress(value string) string {
 	return invitationRoom(value)
 }
 
-func roomInvitationLinks(value string) (string, bool) {
+func roomInvitationHref(address string) string {
+	return "/?" + url.Values{"open": {"join-room"}, "room": {address}}.Encode()
+}
+
+func roomInvitationLinks(value string, found func(string)) (string, bool) {
 	var out strings.Builder
 	start := 0
 	for _, match := range roomInvitationPattern.FindAllStringIndex(value, -1) {
@@ -55,7 +59,10 @@ func roomInvitationLinks(value string) (string, bool) {
 		if address == "" {
 			continue
 		}
-		href := "/?" + url.Values{"open": {"join-room"}, "room": {address}}.Encode()
+		if found != nil {
+			found(address)
+		}
+		href := roomInvitationHref(address)
 		out.WriteString(html.EscapeString(value[start:match[0]]))
 		out.WriteString(`<a href="` + html.EscapeString(href) + `" data-room-invitation="` + html.EscapeString(address) + `">` + html.EscapeString(label) + `</a>`)
 		start = match[0] + len(label)
@@ -69,7 +76,7 @@ func roomInvitationLinks(value string) (string, bool) {
 
 func plainRoomLinks(value string) templ.Component {
 	return templ.ComponentFunc(func(_ context.Context, w io.Writer) error {
-		out, linked := roomInvitationLinks(value)
+		out, linked := roomInvitationLinks(value, nil)
 		if !linked {
 			out = html.EscapeString(value)
 		}
@@ -78,7 +85,7 @@ func plainRoomLinks(value string) templ.Component {
 	})
 }
 
-func linkRenderedInvitations(rendered []byte, w io.Writer) error {
+func linkRenderedInvitations(rendered []byte, w io.Writer, found func(string)) error {
 	tokens := htmlstream.NewTokenizer(bytes.NewReader(rendered))
 	protected := 0
 	for {
@@ -104,7 +111,7 @@ func linkRenderedInvitations(rendered []byte, w io.Writer) error {
 			if protected == 0 && bytes.Contains(bytes.ToLower(raw), []byte("xmpp:")) {
 				// Text decoding may modify the tokenizer buffer.
 				raw = bytes.Clone(raw)
-				if linked, ok := roomInvitationLinks(string(tokens.Text())); ok {
+				if linked, ok := roomInvitationLinks(string(tokens.Text()), found); ok {
 					raw = []byte(linked)
 				}
 			}

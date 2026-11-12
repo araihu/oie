@@ -102,6 +102,8 @@
   "SearchChats": "Pesquisar conversas",
   "NoResults": "Nenhuma conversa encontrada",
   "NoResultsBody": "Tente outra pesquisa ou filtro.",
+  "RoomInvitation": "Convite para sala",
+  "ViewRoom": "Ver sala",
   "CreateRoom": "Criar sala",
   "PreviewRoom": "Ver prévia",
   "RoomAddress": "Endereço da sala",

@@ -846,6 +846,11 @@ if m.Formatted!=nil {
 }
 </div>
 <div class="oie-original-message" data-original-message>@plainRoomLinks(m.presentationText())</div>
+if !v.Preview {
+	for _, address := range m.RoomInvitations {
+		@roomInvitationCard(v, m.AccountId, address)
+	}
+}
 </div>
 <div class="oie-message-previews" data-message-previews={m.Id}>
 for _,p:=range v.MessagePreviews[m.Id] {

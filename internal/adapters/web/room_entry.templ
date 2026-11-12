@@ -5,6 +5,7 @@ import (
 	"strings"
 	"github.com/araihu/goshtoso/components/avatar"
 	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/card"
 	"github.com/araihu/goshtoso/components/drawer"
 	"github.com/araihu/goshtoso/components/form"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
@@ -121,4 +122,40 @@ templ roomPreviewContent(text copy, preview engineapi.RoomPreview) {
 		default:
 			<p>{text.RoomPreviewUnavailable}</p>
 	}
+}
+
+templ roomInvitationCard(v view, account, address string) {
+	<div class="oie-room-invitation" data-room-bubble={ address } data-room-bubble-account={ account }>
+		@card.Card(card.Config{Density:card.DensityCompact, Body:roomInvitationCardBody(v,address)})
+	</div>
+}
+
+templ roomInvitationCardBody(v view, address string) {
+	<div class="oie-room-invitation-summary" data-room-bubble-summary>
+		@roomInvitationSummary(v.Text,engineapi.RoomPreview{Address:address})
+	</div>
+	@link.Link(roomInvitationHref(address),link.WithRootClass("oie-room-invitation-action"),link.WithAttrs(templ.Attributes{"data-room-invitation":address})){
+		{v.Text.ViewRoom} @glyph(heroicons.Icon16SolidChevronRight)
+	}
+}
+
+templ roomInvitationSummary(text copy, preview engineapi.RoomPreview) {
+	{{ title, image, description := text.RoomInvitation, "", "" }}
+	if preview.Name!=nil && *preview.Name!="" {
+		{{ title = *preview.Name }}
+	}
+	if preview.AvatarHash!=nil && validAvatarHash(*preview.AvatarHash) {
+		{{ image = "/ui/avatars/"+*preview.AvatarHash }}
+	}
+	if preview.Description!=nil && *preview.Description!="" {
+		{{ description = *preview.Description }}
+	} else if preview.Topic!=nil {
+		{{ description = *preview.Topic }}
+	}
+	@avatar.Avatar(avatar.Config{Name:title,Src:image,Size:avatar.SizeSM,Icon:glyph(heroicons.Icon16SolidQueueList)})
+	<div class="oie-room-invitation-copy">
+		<strong title={ title }>{ title }</strong>
+		<small title={ preview.Address }>{ preview.Address }</small>
+		<p title={ description }>{ description }</p>
+	</div>
 }

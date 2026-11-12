@@ -102,6 +102,8 @@
   "SearchChats": "Search conversations",
   "NoResults": "No conversations found",
   "NoResultsBody": "Try another search or filter.",
+  "RoomInvitation": "Room invitation",
+  "ViewRoom": "View room",
   "CreateRoom": "Create room",
   "PreviewRoom": "Preview room",
   "RoomAddress": "Room address",

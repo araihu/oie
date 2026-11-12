@@ -132,6 +132,7 @@ type messageView struct {
 	PresentationKnown bool
 	VideosKnown       bool
 	Formatted         templ.Component
+	RoomInvitations   []string
 	Attachment        *mediaView
 }
 type mediaView struct{ Kind, Title, Description, PreviewUrl string }
@@ -486,6 +487,7 @@ type copy struct {
 	SwitchAccount, ManageAccounts                                                                                                                                        string
 	BackToAccounts, AdvancedConnection, AccountMissing, AddAccountHelp                                                                                                   string
 	Settings, You, All, Unread, Groups                                                                                                                                   string
+	RoomInvitation, ViewRoom                                                                                                                                             string
 	CreateRoom, PreviewRoom, RoomAddress, RoomAddressPlaceholder, RoomOccupants, RoomName                                                                                string
 	RoomPreviewLoading, RoomPreviewUnavailable, RoomAddressInvalid, RoomNotFound, RoomExists, RoomCreationFailed                                                         string
 	SearchChats, NoResults, NoResultsBody, NewChat, More                                                                                                                 string

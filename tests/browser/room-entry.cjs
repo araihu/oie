@@ -103,18 +103,24 @@ async function waitFor(predicate) {
     await waitFor(async () => { try { return (await fetch(base)).ok; } catch { return false; } });
     const page = await browser.newPage({viewport: {width: 1440, height: 950}, locale: 'pt-BR'});
     page.on('pageerror', error => errors.push(error.message));
+    held = new Promise(resolve => { release = resolve; });
     await page.goto(base + '/?' + new URLSearchParams({chat, account: alice, lang: 'pt-BR'}));
     const draft = page.locator('#message-composer');
     await draft.fill('Meu rascunho');
     const link = page.locator('.oie-rendered-message [data-room-invitation]');
     await link.waitFor();
     assert.equal(await link.textContent(), invitation);
-    assert.equal(previews.length, 0);
+    const card = page.locator('[data-room-bubble]');
+    await card.getByText('Convite para sala', {exact: true}).waitFor();
+    await waitFor(() => previews.length === 1);
+    assert.equal(previews[0].account, alice);
+    assert.equal(previews[0].address, address);
+    assert.equal(commands.length, 0);
     const foreign = await page.request.post(base + '/ui/rooms/preview', {form: {accountId: alice, address}});
     assert.equal(foreign.status(), 403);
 
     await page.evaluate(() => {
-      const elements = ['#send-message-form', '.oie-timeline-frame', '#message-timeline'].map(s => document.querySelector(s));
+      const elements = ['#send-message-form', '.oie-timeline-frame', '#message-timeline', '[data-room-bubble]', '.oie-room-invitation-action'].map(s => document.querySelector(s));
       const sample = () => elements.map(el => {
         const box = el.getBoundingClientRect();
         return [box.x, box.y, box.width, box.height, el.scrollTop];
@@ -128,6 +134,13 @@ async function waitFor(predicate) {
       }
       requestAnimationFrame(frame);
     });
+    release();
+    held = undefined;
+    await card.getByText('Saberes <script>', {exact: true}).waitFor();
+    await card.getByText('Bem-vindos!', {exact: true}).waitFor();
+    await waitFor(() => card.locator('img').evaluate(img => img.complete && img.naturalWidth > 0));
+    assert.equal(await card.locator('script').count(), 0);
+    previews.length = 0;
     held = new Promise(resolve => { release = resolve; });
     await link.focus();
     await page.keyboard.press('Enter');
@@ -155,7 +168,7 @@ async function waitFor(predicate) {
     assert.equal(await draft.inputValue(), 'Meu rascunho');
     assert.equal(commands.length, 0);
 
-    await link.click();
+    await card.getByRole('link', {name: 'Ver sala'}).click();
     await preview.getByText('Bem-vindos!').waitFor();
     await form.getByRole('combobox').click();
     await form.getByRole('option', {name: 'Bob · bob@fixture'}).click();
@@ -214,6 +227,19 @@ async function waitFor(predicate) {
     assert.equal(previews.at(-1).address, address);
     assert.equal(commands.length, 3);
 
+    const fallback = await browser.newPage({viewport: {width: 390, height: 860}, locale: 'en'});
+    fallback.on('pageerror', error => errors.push(error.message));
+    await fallback.route('**/ui/rooms/preview', route => {
+      const form = new URLSearchParams(route.request().postData());
+      return form.get('presentation') === 'message' ? route.fulfill({status: 204}) : route.continue();
+    });
+    await fallback.goto(base + '/?' + new URLSearchParams({chat, account: alice, lang: 'en'}));
+    await fallback.locator('[data-room-bubble]').getByText('Room invitation', {exact: true}).waitFor();
+    await fallback.locator('[data-room-bubble]').getByRole('link', {name: 'View room'}).click();
+    await fallback.locator('#join-room-form').getByText('Bem-vindos!').waitFor();
+    assert.equal(commands.length, 3);
+    await fallback.close();
+
     const artifacts = path.join(__dirname, 'artifacts');
     await fs.mkdir(artifacts, {recursive: true});
 
@@ -225,6 +251,7 @@ async function waitFor(predicate) {
           await view.goto(base + '/?' + new URLSearchParams({chat, account: alice, open: 'join-room', room: address, theme: mode, lang: 'en'}));
           await view.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
           await view.locator('#join-room-form').getByText('Bem-vindos!').waitFor();
+          await view.locator('[data-room-bubble]').getByText('Saberes <script>', {exact: true}).waitFor();
           assert(await view.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
           await view.addScriptTag({path: require.resolve('axe-core/axe.min.js')});
           const scan = id => view.evaluate(selector => window.axe.run(selector,
@@ -249,7 +276,7 @@ async function waitFor(predicate) {
       }
     }
     assert.deepEqual(errors, []);
-    console.log('PASS: keyboard invite, delayed scoped preview, draft and painted geometry, confirmed entry, creation and preview retry, eight responsive theme and mode combinations');
+    console.log('PASS: in-message vCard, stable fallback, keyboard invite, delayed scoped preview, draft and painted geometry, confirmed entry, creation and preview retry, eight responsive theme and mode combinations');
   } finally {
     release?.();
     await browser.close();

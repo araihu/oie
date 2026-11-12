@@ -110,3 +110,97 @@ window.OieRuntime.register('room-entry', life => {
     window.dispatchEvent(new CustomEvent('modal:close', {detail: {id: 'room-session-dialog'}}));
   });
 });
+
+window.OieRuntime.register('room-invitations', life => {
+  'use strict';
+  const timeline = document.querySelector('#message-timeline');
+  const csrf = document.querySelector('meta[name="oie-csrf"]')?.content;
+  const {engineId, accountId} = document.body.dataset;
+  if (!timeline || !csrf || !engineId || !accountId || typeof IntersectionObserver !== 'function') return;
+
+  const visible = new Set();
+  const requests = new Map();
+  const applied = new WeakSet();
+  const watched = new WeakSet();
+  let active = 0;
+
+  async function load(address) {
+    const body = new URLSearchParams({
+      address, accountId, engineId, csrf, lang: document.documentElement.lang, presentation: 'message'
+    });
+    try {
+      const response = await life.fetch('/ui/rooms/preview', {method: 'POST', body});
+      return response.status === 200 ? await response.text() : '';
+    } catch {
+      return '';
+    }
+  }
+
+  function pump() {
+    if (life.signal.aborted) return;
+    for (const card of visible) {
+      if (!timeline.contains(card) || applied.has(card)) {
+        visible.delete(card);
+        continue;
+      }
+      const address = card.dataset.roomBubble;
+      let pending = requests.get(address);
+      if (!pending) {
+        if (active >= 2 || requests.size >= 12) continue;
+        active++;
+        pending = load(address).finally(() => {
+          active--;
+          pump();
+        });
+        requests.set(address, pending);
+      }
+      applied.add(card);
+      visible.delete(card);
+      observer.unobserve(card);
+      void pending.then(html => {
+        const summary = card.querySelector('[data-room-bubble-summary]');
+        if (html && summary && timeline.contains(card) && !life.signal.aborted) summary.innerHTML = html;
+      });
+    }
+  }
+
+  const observer = new IntersectionObserver(entries => {
+    for (const {target, isIntersecting} of entries) {
+      if (isIntersecting) visible.add(target);
+      else visible.delete(target);
+    }
+    pump();
+  }, {root: timeline, threshold: 0.01});
+
+  function watch(card) {
+    if (card.dataset.roomBubbleAccount !== accountId || watched.has(card)) return;
+    watched.add(card);
+    observer.observe(card);
+  }
+
+  const changes = new MutationObserver(records => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+        if (node.matches('[data-room-bubble]')) watch(node);
+        else node.querySelectorAll('[data-room-bubble]').forEach(watch);
+      }
+      for (const node of record.removedNodes) {
+        if (node.nodeType !== Node.ELEMENT_NODE || timeline.contains(node)) continue;
+        const forget = card => {
+          visible.delete(card);
+          watched.delete(card);
+          observer.unobserve(card);
+        };
+        if (node.matches('[data-room-bubble]')) forget(node);
+        else node.querySelectorAll('[data-room-bubble]').forEach(forget);
+      }
+    }
+  });
+  timeline.querySelectorAll('[data-room-bubble]').forEach(watch);
+  changes.observe(timeline, {childList: true, subtree: true});
+  life.cleanup(() => {
+    changes.disconnect();
+    observer.disconnect();
+  });
+});

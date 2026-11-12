@@ -2,7 +2,9 @@
 
 Open **New conversation** to enter a room by address or create a room. In a
 message, activate an `xmpp:room@service?join` link to open the same entry form
-with the address filled in. You can also paste that link into the room address
+with the address filled in. Visible invitations also show a compact room card
+in the message bubble. **View room** opens the same entry form. You can also
+paste that link into the room address
 field. Choose the XMPP account and optionally enter a room nickname before
 confirming. The room preview can show the published name, description, topic,
 occupant count, and avatar. Its availability depends on what the room publishes
@@ -22,6 +24,11 @@ optional published name.
   Inline raster avatars pass through the existing thumbnail validator and
   same-origin image endpoint. External vCard photo URLs are ignored. Preview
   does not save a conversation, send presence or change read state.
+- The timeline renders a stable card for up to three distinct invite addresses
+  per message, using the same parser as its rendered links. It looks up visible
+  cards with the conversation account and reuses a result per destination within
+  that view. Each view starts up to twelve lookups with two in flight. The entry
+  form can still request a preview when an inline lookup is unavailable.
 - Opening a room atomically saves the conversation, its entry intent and the
   operation receipt. Replaying a command returns the existing conversation
   without reactivating a later leave. The room worker confirms membership from
@@ -42,6 +49,8 @@ behavior.
 
 | State | Action | Expected response | Context and focus | Effects |
 | --- | --- | --- | --- | --- |
+| Invitation card visible | Load room details | Show available name, photo and description in the existing card | Keep the action, composer and timeline geometry stable. | Read-only preview for the conversation account |
+| Invitation card with missing details | View room | Open the entry form from the fallback card | Keep the invite address and restore focus on dismissal. | Zero room-entry commands |
 | Invitation in a message | Activate the link | Open the prefilled room form and request a preview | Keep the conversation, scroll and draft. Escape returns focus to the link. | Zero room-entry commands |
 | Preview pending | Change account or dismiss | Discard the stale response. Request a new preview for the selected account when the form stays open. | Keep typed input and the source conversation geometry. | Zero room-entry commands |
 | Preview unavailable | Retry preview or explicitly confirm entry | Show available information or a localized lookup result | Keep the selected account, room and nickname. | Retry sends only a preview request |

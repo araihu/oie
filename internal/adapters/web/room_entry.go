@@ -50,6 +50,15 @@ func (s *Server) roomPreview(w http.ResponseWriter, r *http.Request) {
 	if localized, ok := s.catalogs[r.Form.Get("lang")]; ok {
 		v.Text = localized
 	}
+	if r.Form.Get("presentation") == "message" {
+		if response.JSON200.State != "known" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = roomInvitationSummary(v.Text, *response.JSON200).Render(r.Context(), w)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = roomPreviewContent(v.Text, *response.JSON200).Render(r.Context(), w)
 }
