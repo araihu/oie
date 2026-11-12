@@ -158,7 +158,7 @@ func (e *Engine) EditMessage(ctx context.Context, key, id, expected domain.ID, t
 	command := domain.MessageEditCommand{ID: key, RevisionID: revision, MessageID: candidate.Target.MessageID, AccountID: candidate.Target.AccountID, ConversationID: candidate.Target.ConversationID, ExpectedRevisionID: expected, OriginalText: text, State: "queued", CreatedAt: now, UpdatedAt: now}
 	result, err := r.AcceptMessageEdit(ctx, MessageEditMutation{Pending: domain.PendingMessageEdit{Command: command, Plan: plan, ContentRevisionID: content}, Fingerprint: digest})
 	if err == nil {
-		e.wake()
+		e.outgoingWorkCommitted()
 	}
 	return result, err
 }
@@ -263,6 +263,7 @@ func (e *Engine) dispatchMessageEdits(ctx context.Context) error {
 		if err != nil && !errors.Is(err, ErrStateConflict) {
 			return err
 		}
+		e.notifyEvents()
 	}
 	return nil
 }

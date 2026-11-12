@@ -280,6 +280,12 @@ Sync and backup merge use the same type-specific conflict/deletion policies. A m
 
 Use a **transactional outbox**: durably commit the outgoing message and send intent together in the accepting engine's database. Immediate sends become eligible immediately, with no artificial undo delay. Retry recoverable failures and resume after ordinary restart/reconnect.
 
+The engine wakes its dispatcher after committing a message, correction, or
+reaction. Room joins and leaves wake their own worker after committing the
+intent. The periodic scans also recover work that is due for retry. Committed
+outgoing changes wake the durable event stream. A matching message event can
+prompt the browser to read a pending reaction receipt before its polling timer.
+
 The guarantee is durable committed intent and eventual submission under recoverable failures while the owning engine runs and the provider is available, unless cancelled. This is not an unconditional guarantee of recipient delivery or exactly-once external delivery.
 
 Keep these milestones distinct:
@@ -561,6 +567,8 @@ Automatically mark incoming messages read only when visible in the active, focus
 
 Implemented alpha scope: record exact visible incoming message identities in the owning engine, with durable independent UUID revisions and idempotent read batches. Reading does not alter message content or conversation activity ordering, and it does not clear other messages or subsequent arrivals. Hosted clients observe the shared counter through conversation events. Independent-engine read replication, manual unread reminders and provider receipt emission remain separate work.
 
+**AGREED:** highlight received room messages that mention the account's room nickname, with or without `@`. Show an `@` indicator on the conversation while it has any unread mentions. Reading clears the conversation indicator once all matching messages have been read. See [room mentions](mentions.md).
+
 **RECOMMENDED R12:** the current browser implementation requires 500 ms of foreground visibility and at least 60% of the message height, capped by the available timeline height for tall messages. Hidden tabs, unfocused documents and open modal overlays do not qualify. Visibility tuning remains open; these defaults are not a new device preference.
 
 Provide synced **Mark as read** and **Mark as unread**. Unread is a reminder, not reversal of delivery/read evidence. Explicit Mark as read sends supported/enabled protocol read receipts, respecting the account setting, without requiring every message to be individually viewed.
@@ -603,7 +611,7 @@ Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screen
 
 **AGREED:** clicking a message author avatar opens a user-information drawer without replacing the conversation. Show available name, cached avatar, account and conversation context. Direct peers may show observed presence. Room nicknames do not prove a personal identity or current presence; richer room profiles require explicit protocol identity evidence. Show the published full name, nickname and personal user@host address separately when available. Personal addresses for room authors must come from authenticated message-time protocol evidence, never a same-name current occupant or self-declared vCard JABBERID. Retain that evidence across restart and duplicate archive recovery without changing message content or edit history; contradictory addresses suppress identity. Opening the drawer makes no contact, presence-subscription, read-state or room-session changes.
 
-**AGREED:** show a reaction shortcut beside the message bubble on hover and keyboard focus, on the right of received messages and the left of sent messages. Existing reactions use a compact capsule slightly overlapping the bubble's bottom border. Opening its summary and filtering by emoji are read-only actions. Clicking the capsule lists verified actors with name, cached avatar or initials and their emoji set. Emoji filters narrow that list. Own emoji actions remove only the current account's reaction. Show participant identities only when the API provides authoritative identity data. On touch devices, double-tapping a message opens the reaction selector; holding opens the existing message actions. Scrolling, canceled touches and navigation must cancel pending gestures without affecting the composer or sending a reaction. Preserve native links and playback controls. See [reaction interactions](reaction-interactions.md).
+**AGREED:** show a reaction shortcut beside the message bubble on hover and keyboard focus, on the right of received messages and the left of sent messages. The React action opens a compact row of common emojis beside the message. Choosing an emoji applies it immediately. The plus button opens the full searchable catalog above the row when space allows. Existing reactions use a compact capsule slightly overlapping the bubble's bottom border. Opening its summary and filtering by emoji are read-only actions. Clicking the capsule lists verified actors with name, cached avatar or initials and their emoji set. Emoji filters narrow that list. Own emoji actions remove only the current account's reaction. Show participant identities only when the API provides authoritative identity data. On touch devices, double-tapping a message opens the reaction selector; holding opens the existing message actions. Scrolling, canceled touches and navigation must cancel pending gestures without affecting the composer or sending a reaction. Preserve native links and playback controls. See [reaction interactions](reaction-interactions.md).
 
 **AGREED:** ordinary in-app navigation and filtering should use HTMX fragment swaps rather than full-document reloads. Changing an inbox filter updates only the filter controls and conversation list. Keep the open conversation, timeline position and draft even when the filtered list excludes that conversation. Selecting a different conversation within the same inbox replaces only the conversation region, preserving the navigation and conversation-list DOM, unfinished search input and list scroll. Show a conversation-shaped skeleton while a different conversation is loading. Skip the skeleton when the fragment arrives quickly and keep it static when reduced motion is enabled. Preserve addressable URLs, browser Back/Forward, account/conversation isolation, drafts and meaningful focus/scroll. Keep native links/forms as a fallback. Dispose obsolete listeners, timers and live subscriptions when a fragment replaces their owning screen; stale responses must not overwrite a newer screen or repeat a mutation. Keep the inbox free of history status banners and visible navigation progress text. Use a dismissible notification when a view fails to open.
 
@@ -620,7 +628,7 @@ suggestions. Selecting one replaces the shortcode in the draft with Unicode text
 Composition settings select the shortcut languages independently of the interface
 language. See [emoji shortcuts](emoji-picker.md#composer-shortcuts).
 
-**AGREED:** typing `@` at a word boundary in a room opens a filtered list of available participants. Selection inserts readable `@nickname` text without sending. Keep keyboard/touch access and IME input, and preserve selections in device drafts and pending-send intents. The engine validates scoped participant selections and freezes protocol references alongside the message. XMPP structured mentions follow XEP-0372 only with an observed real bare JID in a confirmed non-anonymous room; otherwise use readable plain text. Do not discover or expose hidden identities, infer JIDs from nicknames, claim a complete membership roster, or promise recipient notifications. See [room mentions](mentions.md).
+**AGREED:** typing `@` at a word boundary in a room opens a filtered list of available participants. Selection replaces the query with the nickname and adds a comma at the start of the message, preserving existing adjacent punctuation. Keep keyboard/touch access and IME input, and preserve selections in device drafts and pending-send intents. The engine validates scoped participant selections and freezes protocol references alongside the message. XMPP structured mentions follow XEP-0372 only with an observed real bare JID in a confirmed non-anonymous room; otherwise use readable plain text. Do not discover or expose hidden identities, infer JIDs from nicknames, claim a complete membership roster, or promise recipient notifications. See [room mentions](mentions.md).
 
 **AGREED:** submitting a message immediately places a pending bubble in the timeline. Keep send progress out of the composer layout. Keep a fixed status-icon slot beside the time inside the bubble. If acceptance is uncertain, that slot offers an accessible refresh-icon retry action, with retry also in the actions menu. State changes must not add a box or row below the bubble or shift its geometry. Retain the exact operation key, body, reply target and mentions. Receipt recovery is read-only; explicit retry reuses the original operation. Replace the local bubble by canonical message identity after confirmed engine acceptance. Engine acceptance is distinct from provider delivery.
 
@@ -874,7 +882,7 @@ A separate native daemon is an accepted future option. Wails desktop packaging i
 | --- | --- |
 | **B32** | Message search by sender, date range, and content type. Start with sender and date range in the current conversation. See O08 for search filter design. |
 | **B26** | A per-account **Note to self** shortcut for sending text and links to the account's own address. Verify that messages appear in both Oiê and Gajim when using the same XMPP account. |
-| **B27** | Activity for incoming mentions and reactions to the user's messages. Start by highlighting incoming mentions in rooms and marking the corresponding conversations. Then explore a reaction activity view that opens the source message and follows the existing active-conversation, mute, and Do Not Disturb policies. |
+| **B27** | Explore an activity view for incoming mentions and reactions to the user's messages. Open the source message and follow the existing active-conversation, mute, and Do Not Disturb policies. |
 | **B28** | Select multiple messages and export an individual conversation as a readable file. Start with copying selected messages. Bulk deletion depends on the deletion scopes and recovery behavior in section 9.1 and O10. |
 | **B29** | Organize chats across accounts. Start with filtering by existing contact groups. Explore user-defined workspaces that can contain direct chats and rooms from several accounts. |
 | **B30** | Start a private chat with a room occupant when the room does not disclose the occupant's personal address. Use the identity exposed by the room and respect room permissions. |
@@ -1081,12 +1089,35 @@ content revisions, activity, unread state and original message outbox.
 
 XMPP follows XEP-0444. Direct targets use scoped original identifiers and verified
 correction aliases. Room targets require trusted room-issued stanza IDs. Room
-updates additionally require current, non-anonymous real actor identity. Uncertain
-anonymous or archived room associations are omitted. Bodyless reaction controls
-never become timeline messages. Retained observations deduplicate provider and
-archive identities, exclude conflicting identifiers and preserve newer actor sets
-when older history arrives. Unresolved original references can resolve when the
-source is subsequently retained.
+updates additionally require a verified actor. Joined semianonymous rooms
+can supply XEP-0421 occupant IDs for live and authenticated archive reactions,
+including the account's own ID in verified self-presence. Those reactions are
+scoped to the account and room and projected with nicknames and opaque keys.
+Authenticated room configuration notices revoke cached reaction capabilities
+until discovery confirms them again. History checkpoints wait for that discovery.
+Real room addresses and contact avatars require current presence and verified
+non-anonymous discovery. After an observed identity-mode change, peer sets
+already retained under a previous mode stay out of counts. Legacy rooms with
+mixed identity schemes start a fresh peer set because the old observations
+cannot safely be correlated. Newly discovered archived reactions use their
+verified occupant identity. The local discovery time does not date the room's
+change. A fresh verified
+self-presence can restore occupant-based reactions during an existing room session.
+If a room archive page is read before self-presence establishes the account’s
+occupant ID, its skipped reaction range is stored with the text checkpoint.
+Joining resumes that range in bounded pages, or replays the latest page when no
+range was recorded.
+
+Bodyless reaction controls never become timeline messages. Room updates use the
+room-issued stanza or archive ID for deduplication. If the room leaves a live
+reaction without its own stanza ID, the engine records that delivery under a
+local identifier after verifying the sender. The client-provided stanza ID can
+correlate the account's own command echo. Echoes and archive copies preserve the
+reaction's revision when they enrich the same observation. Equal archive
+timestamps use the server’s result order across contiguous pages. Independent
+context boundaries are replayed through an unfiltered archive query to recover
+that order, and replay can repair older ordering. Unresolved original references can resolve
+when the source is subsequently retained.
 
 Freeze the desired set, operation UUID, target and sending session. Revalidate
 constraints at acceptance and dispatch. Known-unsent attempts may retry; ambiguous

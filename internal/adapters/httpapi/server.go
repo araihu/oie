@@ -422,6 +422,7 @@ func (s stream) VisitStreamEventsResponse(w http.ResponseWriter) error {
 	defer poll.Stop()
 	defer heartbeat.Stop()
 	for {
+		wake := s.engine.EventWake()
 		events, err := s.engine.Events(s.ctx, s.after)
 		if err != nil {
 			// The status is already 200. Close for reconnect; do not append a
@@ -442,6 +443,7 @@ func (s stream) VisitStreamEventsResponse(w http.ResponseWriter) error {
 		select {
 		case <-s.ctx.Done():
 			return nil
+		case <-wake:
 		case <-heartbeat.C:
 			if !write(": heartbeat\n\n") {
 				return nil

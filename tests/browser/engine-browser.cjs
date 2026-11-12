@@ -10,6 +10,9 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
   const engine = process.env.OIE_ENGINE_URL || 'http://127.0.0.1:18086';
   const endpoint = process.env.OIE_XMPP_ENDPOINT || '127.0.0.1:5222';
   const prefix = process.env.OIE_BROWSER_SCENE || 'real-engine';
+  const fixturePrefix = process.env.OIE_XMPP_BROWSER_FIXTURES === '1' ? 'browser-' : '';
+  const aliceAddress = `${fixturePrefix}alice@localhost`;
+  const bobAddress = `${fixturePrefix}bob@localhost`;
   const browser = await chromium.launch({headless: true});
   const evidence = {backend: 'real Oie engine + development Prosody', workflows: [], consoleErrors: [], expectedTransportFailures: []};
   const api = async path => {
@@ -121,15 +124,15 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
     await alicePage.goto(base + '/?theme=dark&lang=en');
     await openAccounts(alicePage);
     const accounts = [];
-    for (const who of ['alice', 'bob']) {
+    for (const [address, label] of [[aliceAddress, 'Alice development'], [bobAddress, 'Bob development']]) {
       if (await alicePage.locator('[data-account-back]:visible').count()) await alicePage.locator('[data-account-back]:visible').click();
       await alicePage.locator('[data-account-add]').click();
       const form = alicePage.locator('#register-account-form');
-      await form.locator('[name="address"]').fill(who + '@localhost');
-      await form.locator('[name="label"]').fill(who === 'alice' ? 'Alice development' : 'Bob development');
+      await form.locator('[name="address"]').fill(address);
+      await form.locator('[name="label"]').fill(label);
       await form.locator('button[type="submit"]').click();
-      await until(async () => (await api('/api/v1/accounts')).items.some(a => a.address === who + '@localhost'), 'account created by browser ' + who);
-      const saved=(await api('/api/v1/accounts')).items.find(a=>a.address===who+'@localhost');
+      await until(async () => (await api('/api/v1/accounts')).items.some(a => a.address === address), 'account created by browser ' + address);
+      const saved = (await api('/api/v1/accounts')).items.find(a => a.address === address);
       accounts.push(saved);
       await alicePage.waitForURL(u=>u.searchParams.get('managedAccount')===saved.id);
       await connectForm(alicePage,saved).waitFor({state:'visible'});
@@ -144,7 +147,7 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
     const newChat = alicePage.locator('#new-conversation-form');
     await newChat.waitFor({state: 'visible'});
     await choose(alicePage, newChat, 'Alice development');
-    await newChat.locator('[name="address"]').fill('bob@localhost');
+    await newChat.locator('[name="address"]').fill(bobAddress);
     await newChat.locator('button[type="submit"]').click();
     await alicePage.locator('#message-composer').waitFor({state: 'visible'});
     const nonce = Date.now().toString(36);
@@ -152,7 +155,7 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
     let aliceConversation;
     await until(async () => {
       const list = await api('/api/v1/conversations?accountId=' + alice.id);
-      aliceConversation = list.items.find(c => c.address === 'bob@localhost'); return !!aliceConversation;
+      aliceConversation = list.items.find(c => c.address === bobAddress); return !!aliceConversation;
     }, 'Alice conversation created');
     await bobPage.goto(base + '/?theme=dark&lang=en&account=' + bob.id);
     const originalOperation = await alicePage.locator('#send-message-form [name="operationKey"]').inputValue();
@@ -209,7 +212,7 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
     let bobConversation;
     await until(async () => {
       const list = await api('/api/v1/conversations?accountId=' + bob.id);
-      bobConversation = list.items.find(c => c.address === 'alice@localhost'); return !!bobConversation;
+      bobConversation = list.items.find(c => c.address === aliceAddress); return !!bobConversation;
     }, 'Bob conversation created by incoming XMPP');
     await bobPage.locator('a[data-conversation-id="' + bobConversation.id + '"]').waitFor({state: 'visible'});
     await bobPage.locator('a[data-conversation-id="' + bobConversation.id + '"]').click();

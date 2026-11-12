@@ -2,21 +2,29 @@
 .oie-reactions{position:absolute;inset-inline:0;bottom:0;display:flex;align-items:flex-start;gap:4px;height:0;max-width:100%;margin:0;color:var(--oie-text)}
 .oie-message-own .oie-reactions{justify-content:flex-end}
 .oie-reaction-summary-popover,[data-reaction-pending]{position:relative;top:8px;flex-shrink:0}
-.oie-message:has([data-reaction-summary]:not([hidden])){margin-bottom:32px}
-.oie-reactions:has([data-reaction-summary][hidden]){inset:0;height:auto;pointer-events:none}
+.oie-message:has(.oie-reactions:not([data-reaction-preview]) [data-reaction-summary]:not([hidden])){margin-bottom:32px}
+.oie-reactions:has([data-reaction-summary][hidden]),.oie-reactions[data-reaction-preview]{inset:0;height:auto;pointer-events:none}
 .oie-reactions:has([data-reaction-summary][hidden]) [data-reaction-pending]{position:absolute;inset-inline-start:calc(100% + 24px);top:50%;transform:translateY(-50%);pointer-events:auto}
 .oie-message-own .oie-reactions:has([data-reaction-summary][hidden]) [data-reaction-pending]{inset-inline-start:auto;inset-inline-end:calc(100% + 24px)}
 .oie-reactions:has([data-reaction-summary][hidden]) .oie-reaction-recovery{width:32px;height:32px}
-.oie-message:has([data-reaction-pending]:not(:empty)) .oie-reaction-shortcut-slot{visibility:hidden}
+.oie-reactions[data-reaction-preview] .oie-reaction-summary-popover{position:absolute;inset-inline-start:calc(100% + 12px);top:50%;transform:translateY(-50%)}
+.oie-message-own .oie-reactions[data-reaction-preview] .oie-reaction-summary-popover{inset-inline-start:auto;inset-inline-end:calc(100% + 12px)}
+.oie-message:has([data-reaction-summary][aria-busy=true],[data-reaction-pending]:not(:empty)) .oie-reaction-shortcut-slot{visibility:hidden}
 .oie-reaction-summary{display:inline-flex;align-items:center;gap:5px;min-height:26px;padding:3px 8px;border:1px solid var(--oie-border);border-radius:20px;background:var(--oie-panel);color:var(--oie-text);box-shadow:0 1px 2px #0002;font-size:14px;line-height:1.2;white-space:nowrap}
-.oie-reaction-summary small{font-size:10px;color:var(--oie-muted)}
+.oie-reaction-count-slot{display:inline-grid;place-items:center;min-inline-size:10px;color:var(--oie-muted)}
+.oie-reaction-count-slot>*{grid-area:1/1}
+.oie-reaction-count-slot small{font-size:10px}
+.oie-reaction-count-slot .oie-reaction-count-spinner{display:none;width:10px;height:10px;fill:currentColor}
+.oie-reaction-summary[aria-busy=true] small{visibility:hidden}
+.oie-reaction-summary[aria-busy=true] .oie-reaction-count-spinner{display:block}
 [data-reaction-summary][hidden],[data-reaction-shortcut-slot][hidden]{display:none!important}
 .oie-reaction-summary:hover{background:var(--oie-selected);text-decoration:none}
 .oie-reaction-summary:focus-visible,.oie-reaction-shortcut:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:2px}
 .oie-reaction-shortcut-slot{position:absolute;inset-inline-start:calc(100% + 24px);top:50%;transform:translateY(-50%);z-index:4;opacity:0;pointer-events:none}
 .oie-message-own .oie-reaction-shortcut-slot{inset-inline-start:auto;inset-inline-end:calc(100% + 24px)}
 .oie-reaction-shortcut{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;width:32px;height:32px;padding:6px;border-radius:50%;border:1px solid var(--oie-border);background:var(--oie-panel);color:var(--oie-muted);box-shadow:0 1px 3px #0002}
-.oie-reaction-shortcut .oie-icon{width:18px;height:18px}
+/* Optically center the face, whose features sit below the middle of the glyph. */
+.oie-reaction-shortcut .oie-icon{width:18px;height:18px;translate:0 -.5px}
 .oie-reaction-shortcut:hover{color:var(--oie-text);background:var(--oie-raised)}
 .oie-message:focus-within .oie-reaction-shortcut-slot{opacity:1;pointer-events:auto}
 @media(hover:hover) and (pointer:fine){.oie-message:hover .oie-reaction-shortcut-slot{opacity:1;pointer-events:auto}}
@@ -41,10 +49,16 @@
 .oie-reaction-chip[aria-pressed=true]{background:var(--oie-accent-soft);border-color:var(--oie-accent-text)}
 .oie-reaction-chip[aria-busy=true]{opacity:.7}.oie-reaction-chip:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:2px}.oie-reaction-chip:hover{text-decoration:none;background:var(--oie-selected)}
 .oie-reaction-chip .oie-icon,.oie-reaction-spinner{width:12px;height:12px}.oie-reaction-chip [hidden]{display:none!important}
-#oie-reaction-picker{width:min(360px,calc(100vw - 32px))}
-.oie-reaction-picker{display:flex;flex-direction:column;min-width:0;width:100%;color:var(--oie-text);background:var(--oie-panel)}
-.oie-reaction-picker>header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 12px 0}.oie-reaction-picker>header strong{font-size:15px;font-weight:650}.oie-reaction-picker>header button{width:28px;height:28px;min-width:28px;min-height:28px}
-.oie-reaction-picker [data-emoji-pick][aria-pressed=true]{background:var(--oie-accent-soft);outline:1px solid var(--oie-accent-text);outline-offset:-2px}
+#oie-reaction-quick{position:fixed;inset:auto;margin:0;padding:3px 4px;width:max-content;max-width:var(--oie-reaction-available-width,calc(100vw - 16px));box-sizing:border-box;overflow:visible;z-index:50;border:1px solid var(--oie-border);border-radius:999px;color:var(--oie-text);background:var(--oie-panel);box-shadow:0 3px 12px #0003}
+#oie-reaction-quick[hidden],.oie-reaction-quick-button[hidden]{display:none}
+.oie-reaction-quick-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:1px}
+.oie-reaction-quick-button{display:inline-flex;align-items:center;justify-content:center;width:clamp(27px,calc((100vw - 36px)/8),34px);height:34px;min-width:0;min-height:0;padding:0;border-radius:50%;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;font-size:21px;line-height:1}
+.oie-reaction-quick-button:hover{background:var(--oie-raised);text-decoration:none}
+.oie-reaction-quick-button:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:-2px}
+.oie-reaction-quick-button[aria-pressed=true],.oie-reaction-catalog-panel [data-emoji-pick][aria-pressed=true]{background:var(--oie-accent-soft);outline:1px solid var(--oie-accent-text);outline-offset:-2px}
+.oie-reaction-more .oie-icon{width:20px;height:20px}
+.oie-reaction-catalog-panel{width:min(336px,calc(100vw - 24px));padding:0}
+.oie-reaction-catalog-panel .oie-emoji-content{height:min(340px,58dvh);max-height:min(340px,58dvh)}
 
 .oie-reaction-actor{display:flex;align-items:center;gap:10px;min-height:52px;padding:6px 0}
 .oie-reaction-actor-avatar{flex:none;width:32px;height:32px}

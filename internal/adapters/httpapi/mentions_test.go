@@ -48,10 +48,10 @@ func TestRoomMentionHTTPScopesRangesAndImmutableReplay(t *testing.T) {
 		}
 	}
 	p.scope = room.ID
-	p.items = []domain.MentionCandidate{{ID: "opaque-juliet", DisplayName: "Juliet", InsertText: "@Juliet", ReferenceMode: "structured", URI: "xmpp:private-jid@localhost"}}
+	p.items = []domain.MentionCandidate{{ID: "opaque-juliet", LegacyID: address + "/Juliet", DisplayName: "Juliet", InsertText: "@Juliet", ReferenceMode: "structured", URI: "xmpp:private-jid@localhost"}}
 	client, _ := engineapi.NewClientWithResponses(server.URL)
 	choices, err := client.GetMentionCandidatesWithResponse(t.Context(), string(room.ID))
-	if err != nil || choices.JSON200 == nil || len(choices.JSON200.Items) != 1 || choices.JSON200.Items[0].InsertText != "@Juliet" {
+	if err != nil || choices.JSON200 == nil || choices.JSON200.BareNicknameSpans == nil || !*choices.JSON200.BareNicknameSpans || len(choices.JSON200.Items) != 1 || choices.JSON200.Items[0].InsertText != "@Juliet" {
 		t.Fatal(choices, err)
 	}
 	data, _ := json.Marshal(choices.JSON200)
@@ -64,6 +64,28 @@ func TestRoomMentionHTTPScopesRangesAndImmutableReplay(t *testing.T) {
 	if _, err := e.JoinRoom(t.Context(), id(), room.ID, "Alice", ""); err != nil {
 		t.Fatal(err)
 	}
+	nickname := []engineapi.MentionSelection{{ParticipantId: "opaque-juliet", Begin: 0, End: 6}}
+	opening := engineapi.SendMessage{OriginalText: "Juliet, hi", Mentions: &nickname}
+	accepted, err := client.SendMessageWithResponse(t.Context(), string(room.ID), &engineapi.SendMessageParams{IdempotencyKey: string(id())}, opening)
+	if err != nil || accepted.JSON202 == nil || accepted.JSON202.OriginalText != opening.OriginalText || accepted.JSON202.Mentions == nil || len(*accepted.JSON202.Mentions) != 1 {
+		t.Fatal("bare nickname was not accepted", accepted, err)
+	}
+	if mention := (*accepted.JSON202.Mentions)[0]; mention.Begin != 0 || mention.End != 6 || mention.ReferenceMode != "structured" {
+		t.Fatal("reference does not cover just the nickname", mention)
+	}
+	for _, text := range []string{"Romeox, hi", "Julieta, hi"} {
+		opening.OriginalText = text
+		rejected, err := client.SendMessageWithResponse(t.Context(), string(room.ID), &engineapi.SendMessageParams{IdempotencyKey: string(id())}, opening)
+		if err != nil || rejected.StatusCode() != 400 {
+			t.Fatal("different or embedded nickname was accepted", rejected, err)
+		}
+	}
+	legacy := []engineapi.MentionSelection{{ParticipantId: address + "/Juliet", Begin: 0, End: 7}}
+	legacyBody := engineapi.SendMessage{OriginalText: "@Juliet, hi", Mentions: &legacy}
+	accepted, err = client.SendMessageWithResponse(t.Context(), string(room.ID), &engineapi.SendMessageParams{IdempotencyKey: string(id())}, legacyBody)
+	if err != nil || accepted.JSON202 == nil || accepted.JSON202.Mentions == nil || len(*accepted.JSON202.Mentions) != 1 || (*accepted.JSON202.Mentions)[0].ReferenceMode != "text" {
+		t.Fatal("legacy nickname selection was not accepted as plain text", accepted, err)
+	}
 	selections := []engineapi.MentionSelection{{ParticipantId: "opaque-juliet", Begin: 2, End: 9}}
 	body := engineapi.SendMessage{OriginalText: "😀 @Juliet", Mentions: &selections}
 	key := string(id())
@@ -74,6 +96,11 @@ func TestRoomMentionHTTPScopesRangesAndImmutableReplay(t *testing.T) {
 	data, _ = json.Marshal(sent.JSON202)
 	if strings.Contains(string(data), "private-jid") {
 		t.Fatal("message response leaked protocol URI", string(data))
+	}
+	p.items[0].ID = "replacement-occupant"
+	stale, err := client.SendMessageWithResponse(t.Context(), string(room.ID), &engineapi.SendMessageParams{IdempotencyKey: string(id())}, body)
+	if err != nil || stale.StatusCode() != 400 {
+		t.Fatal("old observation selected a replacement occupant", stale, err)
 	}
 	p.items = nil
 	reads := p.reads

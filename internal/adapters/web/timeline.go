@@ -113,6 +113,10 @@ func (v view) messageVersion(m messageView) string {
 	return hex.EncodeToString(digest[:])
 }
 
+func (m messageView) mentionsYou() bool {
+	return !m.IsOwn && m.MentionsYou != nil && *m.MentionsYou
+}
+
 func (s *Server) formatTimeline(ctx context.Context, v *view, items []engineapi.Message, extras map[string]*mediaView) {
 	slices.Reverse(items)
 	for _, m := range items {

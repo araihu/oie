@@ -47,16 +47,22 @@ type archiveResult struct {
 		Message *archiveMessage `xml:"jabber:client message"`
 	} `xml:"urn:xmpp:forward:0 forwarded"`
 }
+type archiveTrust struct {
+	SIDVerified, OccupantVerified bool
+	OwnReactionActor              string
+	Semianonymous                 bool
+}
+
 type archiveQuery struct {
-	ID, Scope        string
-	FirstID, LastID  string
-	SIDVerified      bool
-	OccupantVerified bool
-	Messages         []application.Incoming
-	FirstAt, LastAt  time.Time
-	Start, End       time.Time
-	Bytes, Seen      int
-	Err              error
+	archiveTrust
+	ID, Scope       string
+	FirstID, LastID string
+	Messages        []application.Incoming
+	FirstAt, LastAt time.Time
+	Start, End      time.Time
+	Deferred        domain.DeferredRoomReactions
+	Bytes, Seen     int
+	Err             error
 }
 
 func archiveSender(from jid.JID, scope, account string) bool {
@@ -91,12 +97,16 @@ func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResul
 		q.FirstAt, q.FirstID = at.UTC(), r.ID
 	}
 	q.LastAt, q.LastID = at.UTC(), r.ID
-	in, ok, err := archivedIncoming(e.account, q.Scope, r, q.SIDVerified, q.OccupantVerified)
+	in, ok, err := archivedIncoming(e.account, q.Scope, r, q.archiveTrust)
 	if err != nil {
 		q.Err = err
 		return nil
 	}
 	if !ok {
+		return nil
+	}
+	if in.Reaction != nil && in.Reaction.Kind == "room" && q.OwnReactionActor == "" {
+		includeDeferredReaction(&q.Deferred, at)
 		return nil
 	}
 	q.Bytes += len(in.OriginalText)
@@ -107,10 +117,10 @@ func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResul
 	q.Messages = append(q.Messages, in)
 	return nil
 }
-func archivedIncoming(account domain.Account, scope string, r *archiveResult, trusted ...bool) (application.Incoming, bool, error) {
+func archivedIncoming(account domain.Account, scope string, r *archiveResult, trust archiveTrust) (application.Incoming, bool, error) {
 	msg := r.Forwarded.Message
 	if msg != nil && len(msg.Reactions) != 0 {
-		reaction, ok, err := archivedReaction(account, scope, r)
+		reaction, ok, err := archivedReaction(account, scope, r, trust)
 		return application.Incoming{AccountID: account.ID, Reaction: reaction}, ok, err
 	}
 	if msg == nil || strings.TrimSpace(msg.Body) == "" {
@@ -167,8 +177,8 @@ func archivedIncoming(account domain.Account, scope string, r *archiveResult, tr
 			return in, false, errArchive
 		}
 	}
-	verified := (len(trusted) == 1 || len(trusted) == 2) && trusted[0] && scope == msg.From.Bare().String()
-	occupantVerified := len(trusted) == 2 && trusted[1] && scope == msg.From.Bare().String()
+	verified := trust.SIDVerified && scope == msg.From.Bare().String()
+	occupantVerified := trust.OccupantVerified && scope == msg.From.Bare().String()
 	in.Correction = decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, in.Kind == "room", occupantVerified)
 	in.References, in.Reply = decodeReplyMetadata(msg.replyMetadata, msg.Body, msg.From, account.Address, in.Address, in.Kind == "room", verified)
 	if in.Kind == "room" {
@@ -453,15 +463,17 @@ func (m *Manager) recoverArchive(ctx context.Context, host application.HistoryHo
 	}
 	seen := map[string]bool{}
 	reset := false
+	var reactionAnchor domain.ArchiveReactionAnchor
 	for ctx.Err() == nil {
 		release, err := m.acquireArchive(ctx, scope, archiveAutomatic)
 		if err != nil {
 			return err
 		}
-		page, err := m.readArchivePage(ctx, e, s, scope, archivePageRequest{After: after})
+		page, err := m.readArchivePage(ctx, e, s, scope, archivePageRequest{After: after, ReactionAnchor: reactionAnchor})
 		release()
 		if errors.Is(err, errArchiveCursor) && after != "" && !reset {
 			after = ""
+			reactionAnchor = domain.ArchiveReactionAnchor{}
 			reset = true
 			if err = host.CommitHistoryCheckpoint(ctx, e.account.ID, scope, ""); err != nil {
 				return err
@@ -483,7 +495,7 @@ func (m *Manager) recoverArchive(ctx context.Context, host application.HistoryHo
 			if err = host.CommitHistoryCheckpoint(ctx, e.account.ID, scope, last); err != nil {
 				return err
 			}
-			after = last
+			after, reactionAnchor = last, page.nextReactionAnchor(false)
 		} else if !page.Complete {
 			return errArchive
 		}

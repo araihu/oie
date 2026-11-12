@@ -6,6 +6,31 @@ import (
 	"unicode/utf8"
 )
 
+func TestIncomingRoomMentionMatchesNicknameBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		text string
+		want bool
+	}{
+		{"Ana", true},
+		{"@ANA", true},
+		{"Oi Ana!", true},
+		{"Ana: tudo bem?", true},
+		{"Anabela e Mariana", false},
+		{"https://ana.example", false},
+		{"Ana\u0301", false},
+		{"Anabela, mas Ana pode responder", true},
+	} {
+		if got := incomingRoomMention(Incoming{Kind: "room", OwnRoomNickname: "Ana", OriginalText: tc.text}); got != tc.want {
+			t.Errorf("incomingRoomMention(%q) = %t, want %t", tc.text, got, tc.want)
+		}
+	}
+	quote := "> @Ana\n"
+	in := Incoming{Kind: "room", OwnRoomNickname: "Ana", OriginalText: quote + "resposta", Reply: &domain.ReplyReference{Fallback: []domain.TextRange{{Start: 0, End: len(quote)}}}}
+	if incomingRoomMention(in) {
+		t.Fatal("quoted nickname counted as a new mention")
+	}
+}
+
 func TestMentionRangesFollowReplyPrefixWithoutChangingAcceptedRanges(t *testing.T) {
 	authored := "😀 @Juliet"
 	prefix := "> Old 🍰\n\n"

@@ -9,8 +9,11 @@ import (
 	"context"
 )
 
-const countConversationUnread = `-- name: CountConversationUnread :one
-SELECT COUNT(*) FROM messages m
+const conversationUnreadSummary = `-- name: ConversationUnreadSummary :one
+SELECT COUNT(*) AS unread_count,
+ CAST(COALESCE(MAX(json_extract(COALESCE(h.payload,m.payload),'$.MentionsYou')),0) AS INTEGER) AS unread_mention
+FROM messages m
+LEFT JOIN message_content_heads h ON h.canonical_id=m.id
 WHERE m.conversation_id=? AND m.is_own=0 AND COALESCE(json_extract(m.payload,'$.Historical'),0)=0
 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
 AND NOT EXISTS(SELECT 1 FROM message_correction_facts f WHERE f.message_id=m.id AND f.target_id<>'')
@@ -18,11 +21,16 @@ AND NOT EXISTS(SELECT 1 FROM message_reads r LEFT JOIN message_canonical_aliases
  WHERE COALESCE(a.canonical_id,r.message_id)=m.id)
 `
 
-func (q *Queries) CountConversationUnread(ctx context.Context, conversationID string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countConversationUnread, conversationID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
+type ConversationUnreadSummaryRow struct {
+	UnreadCount   int64
+	UnreadMention int64
+}
+
+func (q *Queries) ConversationUnreadSummary(ctx context.Context, conversationID string) (ConversationUnreadSummaryRow, error) {
+	row := q.db.QueryRowContext(ctx, conversationUnreadSummary, conversationID)
+	var i ConversationUnreadSummaryRow
+	err := row.Scan(&i.UnreadCount, &i.UnreadMention)
+	return i, err
 }
 
 const getConversationReadHead = `-- name: GetConversationReadHead :one

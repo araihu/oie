@@ -426,10 +426,11 @@ window.OieRuntime.register('live', life => {
     else if(row)timeline.scrollTop+=row.getBoundingClientRect().top-top;
   },{capture:true});
   let highlightedMessage='',highlightTimer;
-  function pinned(){return !!body.dataset.focusMessage||!!window.OieTimeline?.hasNewer;}
+  function pinned(){const timeline=window.OieTimeline;return !!body.dataset.focusMessage||!!(timeline?.hasNewer&&!timeline.liveAttached);}
   function showJump(show){const jump=document.querySelector('[data-jump-latest]');if(jump){jump.hidden=!show;jump.textContent=pinned()?text('latest'):text('newMessages');}}
   function scrollLatest() {
-    const timeline=document.querySelector('#message-timeline');if(timeline)timeline.scrollTop=timeline.scrollHeight;
+    if(window.OieTimeline)window.OieTimeline.scrollLatest();
+    else{const timeline=document.querySelector('#message-timeline');if(timeline)timeline.scrollTop=timeline.scrollHeight;}
     showJump(pinned());
   }
   function focusMessage(id,focus=true){
@@ -533,6 +534,7 @@ window.OieRuntime.register('live', life => {
     const controller = new AbortController(); const timeout = life.timeout(() => controller.abort(), 12000);
     try {
       await reconcilePending(controller.signal);
+      const reactionStartedAt=performance.now();
       const response = await life.fetch('/ui/refresh?'+refreshQuery, {credentials:'same-origin',cache:'no-store',signal:controller.signal});
       if(life.signal.aborted)return;
       if (!response.ok) throw new Error('refresh unavailable');
@@ -569,7 +571,7 @@ window.OieRuntime.register('live', life => {
       }else if(!preferencesCurrent)refreshAgain=true;
       if (regions.dataset.conversationId === body.dataset.conversationId) {
         const timeline = document.querySelector('#message-timeline'), next = page.querySelector('#live-timeline');
-        if (timeline && next && window.OieTimeline) {window.OieTimeline.refresh(page,forceBottom);forceBottom=false;}
+        if (timeline && next && window.OieTimeline) {window.OieTimeline.refresh(page,forceBottom,reactionStartedAt);forceBottom=false;}
         const header = document.querySelector('#chat-header'), nextHeader = page.querySelector('#live-header');
         if (preferencesCurrent && header && nextHeader?.firstElementChild && header.dataset.version !== nextHeader.dataset.version && !header.contains(document.activeElement)) {
           const replacement = nextHeader.firstElementChild.cloneNode(true);
@@ -654,7 +656,7 @@ window.OieRuntime.register('live', life => {
         refreshAccountStatuses(menu,nextMenu);
       }
       if(composer&&regions.dataset.conversationId===body.dataset.conversationId){composer.dataset.latestEditMessage=regions.dataset.editMessage||'';for(const action of document.querySelectorAll('[id^="edit-message-"]'))action.hidden=action.id!=='edit-message-'+composer.dataset.latestEditMessage;renderEdit();}
-      document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));document.dispatchEvent(new CustomEvent("oie:shared-refresh",{detail:page}));applyAvatars();document.dispatchEvent(new CustomEvent("oie:stars-refresh",{detail:{page,generation:starGeneration}}));document.dispatchEvent(new CustomEvent("oie:previews-refresh",{detail:page}));localizeTimes();syncRoomLeave();
+      document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));document.dispatchEvent(new CustomEvent("oie:shared-refresh",{detail:page}));document.dispatchEvent(new CustomEvent('oie:reaction-snapshots',{detail:{page,startedAt:reactionStartedAt}}));applyAvatars();document.dispatchEvent(new CustomEvent("oie:stars-refresh",{detail:{page,generation:starGeneration}}));document.dispatchEvent(new CustomEvent("oie:previews-refresh",{detail:page}));localizeTimes();syncRoomLeave();
     } catch { if(!life.signal.aborted)announce(text('liveRetry')); }
     finally {
       clearTimeout(timeout);if(life.signal.aborted)return; refreshing = false;
@@ -727,13 +729,18 @@ window.OieRuntime.register('live', life => {
         if(result.code==='engine_changed'){stopped=true;source?.close();}
         if (sending && result.rejected) {
           window.Alpine?.destroyTree(pendingBubble);pendingBubble?.remove();pendingBubble=null;
-          input.value=journal.text;restoreMentions(journal.mentions);saveDraft({...journal,pending:false});lockComposer(false);feedback(form,result.message||text('invalidMessage'),true);
+          const mentions=result.code==='mention_unavailable'?[]:journal.mentions;
+          if(result.code==='mention_unavailable')form.dispatchEvent(new Event('oie:mentions-invalidated'));
+          input.value=journal.text;restoreMentions(mentions);saveDraft({...journal,mentions,pending:false});lockComposer(false);feedback(form,result.message||text('invalidMessage'),true);
         }
         if (sending) input.focus({preventScroll:true});
         if(roomCommand&&result.rejected){keepRoomOperation(null);for(const field of form.querySelectorAll('input:not([type=hidden])'))field.readOnly=false;}
         if(!sending)scheduleRefresh();
       } else {
-        if(roomCommand)keepRoomOperation(null);
+        if(roomCommand){
+          keepRoomOperation(null);
+          if(roomCommand==='leave')document.dispatchEvent(new CustomEvent('oie:room-reaction-visibility-withdrawn'));
+        }
         feedback(form,sending ? '' : result.message || '');
         if (sending && result.accepted) {
           if(!completeSubmission(result))feedback(form,text('pending'),true);
@@ -770,7 +777,25 @@ window.OieRuntime.register('live', life => {
     source = new EventSource('/ui/events?cursor='+encodeURIComponent(cursor || ''));
     source.onopen = () => { if(stopped)return;announce(text('liveReady'),true);scheduleRefresh();retryPending(); };
     source.onerror = () => {if(!stopped)announce(text('liveRetry'));};
-    for (const type of ['message.preview_changed','profile.avatar_changed','account.registered','account.connection_changed','account.history_changed','conversation.created','conversation.updated','conversation.room_session_changed','message.created','message.updated']) life.on(source,type,scheduleRefresh);
+    for (const type of ['message.preview_changed','profile.avatar_changed','account.registered','account.connection_changed','account.history_changed','conversation.created','conversation.updated','message.created']) life.on(source,type,scheduleRefresh);
+    life.on(source,'message.updated',event=>{
+      try{
+        const message=JSON.parse(event.data).message;
+        if(message&&message.accountId===body.dataset.accountId&&message.conversationId===body.dataset.conversationId){
+          document.dispatchEvent(new CustomEvent('oie:message-updated',{detail:{id:message.id}}));
+        }
+      }catch{}
+      scheduleRefresh();
+    });
+    life.on(source,'conversation.room_session_changed',event=>{
+      try{
+        const room=JSON.parse(event.data).roomSession;
+        if(room?.accountId===body.dataset.accountId&&room.conversationId===body.dataset.conversationId&&room.state!=='joined'){
+          document.dispatchEvent(new CustomEvent('oie:room-reaction-visibility-withdrawn'));
+        }
+      }catch{}
+      scheduleRefresh();
+    });
     life.on(source,'message.star_changed',event=>{try{document.dispatchEvent(new CustomEvent('oie:star-event',{detail:JSON.parse(event.data).star}));}catch{}scheduleRefresh();});
     life.on(source,'oie.reset', event => {
       try {

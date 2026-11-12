@@ -9,6 +9,17 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
+func incomingRoomMention(in Incoming) bool {
+	if in.Kind != "room" || in.IsOwn || in.OwnRoomNickname == "" {
+		return false
+	}
+	var fallback []domain.TextRange
+	if in.Reply != nil {
+		fallback = in.Reply.Fallback
+	}
+	return domain.RoomNicknameMention(in.OwnRoomNickname, in.OriginalText, fallback)
+}
+
 // MentionProvider supplies only observed, room-scoped participants. Protocol
 // address interpretation and disclosed-target selection belong to the adapter.
 type MentionProvider interface {
@@ -76,12 +87,20 @@ func (e *Engine) freezeMentions(ctx context.Context, a domain.Account, c domain.
 	byID := map[string]domain.MentionCandidate{}
 	for _, candidate := range candidates.Items {
 		byID[candidate.ID] = candidate
+		if candidate.LegacyID != "" {
+			candidate.ReferenceMode, candidate.URI = "text", ""
+			byID[candidate.LegacyID] = candidate
+		}
 	}
-	body := []rune(text)
+	// Sentinel boundaries let spans at either edge use the same check.
+	body := []rune("\x00" + text + "\x00")
 	mentions := make([]domain.MessageMention, 0, len(selections))
 	for _, selection := range selections {
 		candidate, ok := byID[selection.ParticipantID]
-		if !ok || candidate.InsertText == "" || string(body[selection.Begin:selection.End]) != candidate.InsertText {
+		selected := string(body[selection.Begin+1 : selection.End+1])
+		bare := selected == strings.TrimPrefix(candidate.InsertText, "@") &&
+			domain.MentionBoundary(body[selection.Begin], body[selection.End+1])
+		if !ok || (!bare && selected != candidate.InsertText) {
 			return nil, ErrInvalid
 		}
 		mode, uri := "text", ""

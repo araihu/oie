@@ -93,7 +93,7 @@ if [ -n "${OIE_CI_SSH_HOST:-}" ]; then
   export _EXPERIMENTAL_DAGGER_RUNNER_HOST="unix://$task_tmp/engine.sock"
 fi
 cd "$task_tmp/source"
-export OIE_CI_MODE="$mode" OIE_CI_RUN_ID="$(date -u +%Y%m%dT%H%M%S)-$$"
+export OIE_CI_MODE="$mode" OIE_CI_RUN_ID="${task_tmp##*/}"
 export OIE_CI_ARTIFACTS="$ci_artifacts" DAGGER_NO_NAG=1
 "$task_tmp/oie-ci" -mode "$mode" -source "$task_tmp/source" \
   -artifacts "$OIE_CI_ARTIFACTS" -timeout "${OIE_CI_TIMEOUT:-30m}" &

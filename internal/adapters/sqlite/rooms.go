@@ -108,6 +108,11 @@ func (s *Store) SetRoomIntent(ctx context.Context, in application.RoomIntentMuta
 	if err = putRoomIntent(ctx, q, in.Session); err != nil {
 		return application.RoomIntentResult{}, err
 	}
+	if !in.Session.Active {
+		if err := q.ClearRoomReactionVisibility(ctx, dbgen.ClearRoomReactionVisibilityParams{AccountID: string(c.AccountID), Address: c.Address}); err != nil {
+			return application.RoomIntentResult{}, err
+		}
+	}
 	if _, err = change(ctx, q, "conversation.room_session_changed", in.Session, in.Session.UpdatedAt); err != nil {
 		return application.RoomIntentResult{}, err
 	}

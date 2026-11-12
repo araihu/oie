@@ -19,10 +19,17 @@ func connection(c domain.Connection) engineapi.Connection {
 	return out
 }
 func conversation(c domain.Conversation) engineapi.Conversation {
-	return engineapi.Conversation{Id: string(c.ID), RevisionId: string(c.RevisionID), AccountId: string(c.AccountID), Kind: engineapi.ConversationKind(c.Kind), Address: c.Address, Title: c.Title, LastMessage: c.LastMessage, UpdatedAt: c.UpdatedAt, UnreadCount: c.UnreadCount, Archived: c.Archived, Favorite: c.Favorite}
+	out := engineapi.Conversation{Id: string(c.ID), RevisionId: string(c.RevisionID), AccountId: string(c.AccountID), Kind: engineapi.ConversationKind(c.Kind), Address: c.Address, Title: c.Title, LastMessage: c.LastMessage, UpdatedAt: c.UpdatedAt, UnreadCount: c.UnreadCount, Archived: c.Archived, Favorite: c.Favorite}
+	if c.UnreadMention {
+		out.UnreadMention = &c.UnreadMention
+	}
+	return out
 }
 func message(m domain.Message) engineapi.Message {
 	out := engineapi.Message{Id: string(m.ID), RevisionId: string(m.RevisionID), AccountId: string(m.AccountID), ConversationId: string(m.ConversationID), Sender: engineapi.Sender{Id: string(m.Sender.ID), DisplayName: m.Sender.DisplayName}, OriginalText: m.OriginalText, CreatedAt: m.CreatedAt, IsOwn: m.IsOwn, SendState: engineapi.MessageSendState(m.SendState)}
+	if m.MentionsYou && !m.IsOwn {
+		out.MentionsYou = &m.MentionsYou
+	}
 	if len(m.Mentions) > 0 {
 		mentions := make([]engineapi.MessageMention, 0, len(m.Mentions))
 		for _, mention := range m.Mentions {

@@ -6791,6 +6791,10 @@
             "type": "integer",
             "minimum": 0
           },
+          "unreadMention": {
+            "type": "boolean",
+            "description": "True when an unread incoming room message mentions the owning account by its room nickname. Omitted means false."
+          },
           "archived": {
             "type": "boolean"
           },
@@ -7148,20 +7152,20 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 1023,
-            "description": "Protocol-verified actor address, never inferred from a nickname.",
+            "description": "Protocol-verified actor address or an opaque occupant identifier prefixed with occupant: in a semianonymous room.",
             "example": "alice@example.test"
           },
           "displayName": {
             "type": "string",
             "minLength": 1,
             "maxLength": 1023,
-            "description": "Active contact name, observed actor name, or address fallback.",
+            "description": "Observed room nickname for opaque occupants. For other actors, the active contact name, observed name or address.",
             "example": "Alice"
           },
           "avatarHash": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$",
-            "description": "Cached avatar PNG SHA-256, resolved only for this verified address in the same account.",
+            "description": "Cached avatar PNG SHA-256 for a verified address in the same account. Omitted for opaque occupants.",
             "example": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
           },
           "own": {
@@ -7868,6 +7872,10 @@
               "$ref": "#/components/schemas/MessageMention"
             }
           },
+          "mentionsYou": {
+            "type": "boolean",
+            "description": "True when the current received room message text mentions the owning account by its observed room nickname. Omitted means false."
+          },
           "reply": {
             "$ref": "#/components/schemas/MessageReply"
           },
@@ -8117,7 +8125,7 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 16384,
-            "description": "Exclusive Unicode code-point offset. The selected span must equal the candidate insertion text."
+            "description": "Exclusive Unicode code-point offset. The span must match the candidate's nickname at word boundaries or its original at-prefixed insertText. Composer-added punctuation and spacing are outside the span."
           }
         }
       },
@@ -8177,7 +8185,7 @@
           "insertText": {
             "type": "string",
             "maxLength": 1100,
-            "description": "Exact readable text to insert, including the leading at sign."
+            "description": "Room nickname prefixed by one at sign. Clients can use the nickname without that prefix and add punctuation outside the selected span."
           },
           "referenceMode": {
             "type": "string",
@@ -8200,6 +8208,11 @@
           "truncated"
         ],
         "properties": {
+          "bareNicknameSpans": {
+            "type": "boolean",
+            "description": "The engine accepts a selected span containing just the nickname. Omission means only the original at-prefixed span is supported.",
+            "example": true
+          },
           "conversationId": {
             "$ref": "#/components/schemas/ID"
           },

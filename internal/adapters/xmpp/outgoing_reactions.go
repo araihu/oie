@@ -1,16 +1,20 @@
 package xmpp
 
 import (
+	"bytes"
 	"context"
-	"net/url"
+	"encoding/xml"
+	"net"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
+	"mellium.im/xmlstream"
 	mx "mellium.im/xmpp"
 	"mellium.im/xmpp/disco"
 	"mellium.im/xmpp/form"
@@ -78,6 +82,10 @@ func recordReactionRestrictions(e *entry, session *mx.Session, address string, i
 	if e.session != session || e.state.State != "connected" {
 		return
 	}
+	recordReactionRestrictionsLocked(e, address, info)
+}
+
+func recordReactionRestrictionsLocked(e *entry, address string, info disco.Info) {
 	if e.reactionLimits == nil {
 		e.reactionLimits = map[string]reactionLimit{}
 	}
@@ -111,25 +119,6 @@ func (m *Manager) PrepareReaction(ctx context.Context, a domain.Account, c domai
 	if e == nil {
 		return domain.OutgoingReaction{}, application.ErrProtocolUnavailable
 	}
-	if c.Kind == "room" {
-		e.mu.RLock()
-		slot := e.rooms[c.Address]
-		ownAddress := ""
-		if slot != nil {
-			ownAddress = c.Address + "/" + slot.snapshot.Nickname
-		}
-		e.mu.RUnlock()
-		from, err := jid.Parse(ownAddress)
-		if err != nil || liveRoomSenderAddress(e, from, "", "") != a.Address {
-			return domain.OutgoingReaction{}, application.ErrProtocolUnavailable
-		}
-		e.historyMu.Lock()
-		stable := e.sidScopes[c.Address]
-		e.historyMu.Unlock()
-		if !stable {
-			return domain.OutgoingReaction{}, application.ErrProtocolUnavailable
-		}
-	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	if e.session == nil || e.raw == nil || e.state.State != "connected" || e.correctionSession == "" {
@@ -138,13 +127,34 @@ func (m *Manager) PrepareReaction(ctx context.Context, a domain.Account, c domai
 	limit := currentReactionLimit(e, c.Address)
 	plan := domain.OutgoingReaction{TargetMessageID: target.ID, Reference: ref, Actor: a.Address, SessionID: e.correctionSession, MaxEmojis: limit.max, AllowedEmojis: slices.Clone(limit.allowed)}
 	if c.Kind == "room" {
-		slot := e.rooms[c.Address]
-		if slot == nil || slot.session != e.session || slot.snapshot.State != "joined" {
+		slot, actor := ownRoomReactionActor(e, c.Address)
+		if actor == "" {
 			return domain.OutgoingReaction{}, application.ErrProtocolUnavailable
+		}
+		if domain.IsRoomReactionActor(actor) {
+			plan.RoomActor, plan.ActorName = actor, slot.snapshot.Nickname
 		}
 		plan.RoomIntentRevisionID = slot.snapshot.IntentRevisionID
 	}
 	return plan, nil
+}
+
+func ownRoomReactionActor(e *entry, room string) (*roomSlot, string) {
+	slot, semianonymous, occupantVerified := roomReactionSupport(e, room)
+	if slot == nil {
+		return nil, ""
+	}
+	if semianonymous {
+		if !occupantVerified {
+			return nil, ""
+		}
+		return slot, roomReactionActor(e.account.ID, room, slot.ownOccupantID)
+	}
+	from, err := jid.Parse(room + "/" + slot.snapshot.Nickname)
+	if err != nil || liveRoomSenderAddressLocked(e, from) != e.account.Address {
+		return nil, ""
+	}
+	return slot, e.account.Address
 }
 
 func validReactionPayload(a domain.Account, out application.Outgoing) bool {
@@ -167,6 +177,9 @@ func validReactionPayload(a domain.Account, out application.Outgoing) bool {
 		return false
 	}
 	if out.Kind == "room" {
+		if p.RoomActor != "" && (!domain.IsRoomReactionActor(p.RoomActor) || strings.TrimSpace(p.ActorName) == "") {
+			return false
+		}
 		if p.Reference.Author != "" {
 			author, err := jid.Parse(p.Reference.Author)
 			if err != nil || author.Bare().String() != out.Address {
@@ -179,7 +192,7 @@ func validReactionPayload(a domain.Account, out application.Outgoing) bool {
 		return false
 	}
 	author := strings.TrimPrefix(p.Reference.Scope, "sender:")
-	return (author == a.Address || author == out.Address) && p.Reference.Scope == "sender:"+author && (p.Reference.Author == "" || p.Reference.Author == author) && p.RoomIntentRevisionID == ""
+	return p.RoomActor == "" && (author == a.Address || author == out.Address) && p.Reference.Scope == "sender:"+author && (p.Reference.Author == "" || p.Reference.Author == author) && p.RoomIntentRevisionID == ""
 }
 
 func withinReactionLimit(emojis []string, limit reactionLimit) bool {
@@ -196,35 +209,77 @@ func withinReactionLimit(emojis []string, limit reactionLimit) bool {
 	return true
 }
 
-// The send mutex is held by the caller. A frozen reaction never rebinds to a
-// new authenticated connection or silently becomes an ordinary chat message.
+// The caller holds e.mu. A frozen reaction never rebinds to a new authenticated
+// connection or silently becomes an ordinary chat message.
 func validFrozenReaction(e *entry, a domain.Account, out application.Outgoing) bool {
 	if !validReactionPayload(a, out) || out.Reaction.SessionID != e.correctionSession || !withinReactionLimit(out.ReactionEmojis, currentReactionLimit(e, out.Address)) {
 		return false
 	}
 	if out.Kind == "room" {
-		slot := e.rooms[out.Address]
-		if slot == nil || slot.session != e.session || slot.snapshot.State != "joined" || slot.snapshot.IntentRevisionID != out.Reaction.RoomIntentRevisionID {
+		slot, actor := ownRoomReactionActor(e, out.Address)
+		if actor == "" || slot.snapshot.IntentRevisionID != out.Reaction.RoomIntentRevisionID {
 			return false
 		}
-		public := false
-		for _, details := range e.details {
-			if details.conversation.Address == out.Address && details.conversation.Kind == "room" && (details.info.State == "known" || details.info.State == "partial") && !details.info.CheckedAt.IsZero() && details.info.CheckedAt.Compare(e.state.UpdatedAt) >= 0 {
-				public = slices.Contains(details.info.Features, "non_anonymous") && !slices.Contains(details.info.Features, "anonymous")
-				break
-			}
+		if out.Reaction.RoomActor != "" {
+			return actor == out.Reaction.RoomActor
 		}
-		observation := slot.mentionOccupants[out.Address+"/"+slot.snapshot.Nickname]
-		uri, validURI := mentionTargetURI(observation.uri, out.Address)
-		if !public || !observation.present || !validURI || uri != "xmpp:"+url.PathEscape(a.Address) {
-			return false
-		}
-		e.historyMu.Lock()
-		stable := e.sidScopes[out.Address]
-		e.historyMu.Unlock()
-		return stable
+		return actor == a.Address
 	}
 	return true
+}
+
+func sendFrozenReaction(ctx context.Context, e *entry, session *mx.Session, raw net.Conn, a domain.Account, out application.Outgoing, payload outboundMessage) string {
+	wire, err := xml.Marshal(payload)
+	if err != nil {
+		return application.Failed
+	}
+	// Keep the deadline and its cancellation callback within the ownership
+	// of the stream writer. Other stanzas use the same transport.
+	writer := session.TokenWriter()
+	defer func() { _ = writer.Close() }()
+	if ctx.Err() != nil || session.State()&mx.OutputStreamClosed != 0 {
+		return application.NotSent
+	}
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(10 * time.Second)
+	}
+	if err := raw.SetWriteDeadline(deadline); err != nil {
+		return application.NotSent
+	}
+	canceled := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		defer close(canceled)
+		_ = raw.SetWriteDeadline(time.Now())
+	})
+	defer func() {
+		if !stop() {
+			<-canceled
+		}
+		_ = raw.SetWriteDeadline(time.Time{})
+	}()
+
+	e.mu.Lock()
+	if ctx.Err() != nil || e.session != session || e.raw != raw || e.state.State != "connected" {
+		e.mu.Unlock()
+		return application.NotSent
+	}
+	if !validFrozenReaction(e, a, out) {
+		e.mu.Unlock()
+		return application.Failed
+	}
+	trackReactionCommand(e, out)
+	e.mu.Unlock()
+
+	decoder := xml.NewDecoder(bytes.NewReader(wire))
+	if _, err = xmlstream.Copy(writer, xmlstream.ReaderFunc(decoder.RawToken)); err == nil {
+		err = writer.Flush()
+	}
+	if err != nil {
+		_ = raw.Close()
+		return application.Unknown
+	}
+	return application.Submitted
 }
 
 func trackReactionCommand(e *entry, out application.Outgoing) {

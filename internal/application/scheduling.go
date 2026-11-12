@@ -252,7 +252,7 @@ func (e *Engine) UpdatePendingMessage(ctx context.Context, key, id, expected dom
 	}
 	out, err := repo.UpdatePendingMessage(ctx, in)
 	if err == nil {
-		e.wake()
+		e.outgoingWorkCommitted()
 	}
 	return out, err
 }

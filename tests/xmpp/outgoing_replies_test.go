@@ -263,6 +263,38 @@ func TestExplicitRoomJoinReplyWireReconnectAndLeave(t *testing.T) {
 		return err == nil && session.Active && session.State == "joined"
 	})
 
+	var receivedMentions []domain.ID
+	for _, body := range []string{"Oie reply, hello!", "Hello @OIE REPLY!"} {
+		payload := "<body>" + stanzaText(body) + "</body>"
+		if err = seed.Send(ctx, stanza.Message{To: room, Type: stanza.GroupChatMessage, ID: string(id())}.Wrap(xml.NewDecoder(strings.NewReader(payload)))); err != nil {
+			t.Fatal(err)
+		}
+		eventually(t, func() bool {
+			items, err := engine.Messages(ctx, conversation.ID, "", 100)
+			if err != nil {
+				return false
+			}
+			for _, item := range items {
+				if item.OriginalText == body && item.MentionsYou {
+					receivedMentions = append(receivedMentions, item.ID)
+					return true
+				}
+			}
+			return false
+		})
+	}
+	chat, err := engine.Conversation(ctx, conversation.ID)
+	if err != nil || !chat.UnreadMention {
+		t.Fatal("incoming nickname mention did not mark the room", chat, err)
+	}
+	if _, err = engine.MarkMessagesRead(ctx, id(), conversation.ID, receivedMentions); err != nil {
+		t.Fatal(err)
+	}
+	chat, err = engine.Conversation(ctx, conversation.ID)
+	if err != nil || chat.UnreadMention {
+		t.Fatal("read mentions kept the room marked", chat, err)
+	}
+
 	// The room explicitly discloses real JIDs. Verify an actual XEP-0372 stanza
 	// against Prosody rather than inferring support from a discovery flag alone.
 	var mention domain.MentionCandidate
@@ -279,15 +311,20 @@ func TestExplicitRoomJoinReplyWireReconnectAndLeave(t *testing.T) {
 		}
 		return false
 	})
-	mentionBody := "😀 " + mention.InsertText
-	chosen := []domain.MentionSelection{{ParticipantID: mention.ID, Begin: 2, End: utf8.RuneCountInString(mentionBody)}}
-	acceptedMention, err := engine.SendMessageWithMentions(ctx, id(), conversation.ID, mentionBody, "", chosen)
-	if err != nil || len(acceptedMention.Message.Mentions) != 1 {
-		t.Fatal("mention acceptance", acceptedMention, err)
-	}
-	mentionWire := awaitWire(mentionBody)
-	if len(mentionWire.Mentions) != 1 || mentionWire.Mentions[0].Type != "mention" || mentionWire.Mentions[0].URI != "xmpp:bob@localhost" || mentionWire.Mentions[0].Begin != 2 || mentionWire.Mentions[0].End != utf8.RuneCountInString(mentionBody) {
-		t.Fatal("XEP-0372 mention was not preserved by the room", mentionWire)
+	nickname := strings.TrimPrefix(mention.InsertText, "@")
+	for _, body := range []struct{ before, after string }{{"", ", hello!"}, {"😀 hello ", "!"}} {
+		mentionBody := body.before + nickname + body.after
+		begin := utf8.RuneCountInString(body.before)
+		end := begin + utf8.RuneCountInString(nickname)
+		chosen := []domain.MentionSelection{{ParticipantID: mention.ID, Begin: begin, End: end}}
+		acceptedMention, err := engine.SendMessageWithMentions(ctx, id(), conversation.ID, mentionBody, "", chosen)
+		if err != nil || len(acceptedMention.Message.Mentions) != 1 {
+			t.Fatal("mention acceptance", acceptedMention, err)
+		}
+		mentionWire := awaitWire(mentionBody)
+		if len(mentionWire.Mentions) != 1 || mentionWire.Mentions[0].Type != "mention" || mentionWire.Mentions[0].URI != "xmpp:bob@localhost" || mentionWire.Mentions[0].Begin != begin || mentionWire.Mentions[0].End != end {
+			t.Fatal("XEP-0372 mention was not preserved by the room", mentionWire)
+		}
 	}
 	original := "Original 🧑🏽‍💻 & café\nsecond line"
 	clientID := "owner-client-" + string(id())

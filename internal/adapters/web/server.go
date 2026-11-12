@@ -208,6 +208,7 @@ type copy struct {
 
 	DeleteAllData, DeleteDataWarning, DeleteHostedDataWarning, DeleteDataConfirmation, DeleteDataCancel, DeleteDataFailed, DeleteDataPending, DeleteDataComplete string
 	Reactions, ReactMessage, ReactionUnavailable, ReactionPending, ReactionUnknown, ReactionFailed, ReactionCheck, ReactionRemove                                string
+	ReactionMore, ReactionThumbsUp, ReactionHeart, ReactionLaugh, ReactionSurprise, ReactionCry, ReactionPray, ReactionClap                                      string
 
 	CapabilitySendCorrectionsNote string
 
@@ -226,6 +227,7 @@ type copy struct {
 	RetryConversationPreference, ConversationPreferenceUpdated, ConversationPreferenceConflict, ConversationPreferenceUncertain, ConversationPreferenceUnavailable, ConversationPreferenceStorageUnavailable string
 	CapabilityMentions                                                                                                                                                                                       string
 	MentionUsers, MentionLoading, MentionEmpty, MentionFailed, MentionPartial                                                                                                                                string
+	MentionedYou, UnreadMention, MentionChanged                                                                                                                                                              string
 	MessageStarred                                                                                                                                                                                           string
 	AutoVideoThumbnails, AutoVideoThumbnailsHelp, VideoThumbnailLoad, VideoThumbnailLoading, VideoThumbnailFailed                                                                                            string
 	ReadFailed                                                                                                                                                                                               string
@@ -1053,7 +1055,7 @@ func (v view) timelineVersion() string {
 		out.WriteString(m.Id + ":" + m.RevisionId + ":" + string(m.SendState) + ";")
 		videos, _ := json.Marshal(v.messageVideos(m.Id))
 		_, _ = fmt.Fprintf(&out, "video:%x;", sha256.Sum256(videos))
-		reply, _ := json.Marshal([]any{m.Reply, m.Edited, m.EditedAt, v.Reactions[m.Id]})
+		reply, _ := json.Marshal([]any{m.Reply, m.Edited, m.EditedAt, m.MentionsYou, v.Reactions[m.Id]})
 		_, _ = fmt.Fprintf(&out, "%x;", sha256.Sum256(reply))
 	}
 	return out.String()

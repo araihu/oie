@@ -7,8 +7,11 @@ INSERT INTO conversation_read_revisions(id,conversation_id,parents,payload,messa
 -- name: PutConversationReadHead :exec
 INSERT INTO conversation_read_states(conversation_id,revision_id,updated_at) VALUES(?,?,?)
 ON CONFLICT(conversation_id) DO UPDATE SET revision_id=excluded.revision_id,updated_at=excluded.updated_at;
--- name: CountConversationUnread :one
-SELECT COUNT(*) FROM messages m
+-- name: ConversationUnreadSummary :one
+SELECT COUNT(*) AS unread_count,
+ CAST(COALESCE(MAX(json_extract(COALESCE(h.payload,m.payload),'$.MentionsYou')),0) AS INTEGER) AS unread_mention
+FROM messages m
+LEFT JOIN message_content_heads h ON h.canonical_id=m.id
 WHERE m.conversation_id=? AND m.is_own=0 AND COALESCE(json_extract(m.payload,'$.Historical'),0)=0
 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
 AND NOT EXISTS(SELECT 1 FROM message_correction_facts f WHERE f.message_id=m.id AND f.target_id<>'')

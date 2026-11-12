@@ -14,6 +14,7 @@ type Conversation struct {
 	Kind, Address, Title, LastMessage string
 	UpdatedAt                         time.Time
 	UnreadCount                       int
+	UnreadMention                     bool `json:",omitempty"`
 	Archived, Favorite                bool
 	ActivitySequence                  int64
 }
@@ -39,6 +40,7 @@ type Message struct {
 	Composition                               *OutgoingComposition `json:",omitempty"`
 	Attachments                               []StagedAttachment   `json:",omitempty"`
 	Mentions                                  []MessageMention     `json:",omitempty"`
+	MentionsYou                               bool                 `json:",omitempty"`
 	MediaThumbnails                           []MediaThumbnail     `json:",omitempty"`
 	Edited                                    bool                 `json:",omitempty"`
 	EditedAt                                  time.Time            `json:",omitempty"`
@@ -54,6 +56,8 @@ type Message struct {
 	References                                []MessageReference `json:"-"`
 	ReplyReference                            *ReplyReference    `json:"-"`
 	Reply                                     *MessageReply      `json:"-"`
+	// ObservedRoomNickname is internal evidence for classifying later edits.
+	ObservedRoomNickname string `json:",omitempty"`
 }
 
 type OutgoingComposition struct {

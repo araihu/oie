@@ -34,6 +34,7 @@ type Incoming struct {
 	IsOwn                                     bool
 	Historical                                bool
 	Kind, SenderName, ArchiveScope, ArchiveID string
+	OwnRoomNickname                           string
 	References                                []domain.MessageReference
 	Reply                                     *domain.ReplyReference
 	CanonicalID                               domain.ID
@@ -353,7 +354,7 @@ func (e *Engine) SendComposition(ctx context.Context, key, conversationID domain
 	}
 	result, err := repo.AcceptMessage(ctx, MessageMutation{Operation: Operation{ID: key, ResourceID: id, CreatedAt: now, Kind: "send_message"}, Fingerprint: requestFingerprint, Message: m, ConversationRevisionID: cr})
 	if err == nil {
-		e.wake()
+		e.outgoingWorkCommitted()
 	}
 	return result, err
 }
@@ -487,6 +488,10 @@ func (e *Engine) Receive(ctx context.Context, in Incoming) error {
 		}
 	}
 	m := domain.Message{ID: ids[3], RevisionID: ids[4], AccountID: a.ID, Sender: domain.Sender{DisplayName: address, PersonalAddress: in.SenderAddress}, OriginalText: in.OriginalText, CreatedAt: created, IsOwn: in.IsOwn, SendState: "received", ProviderID: in.ProviderID, ArchiveScope: in.ArchiveScope, ArchiveID: in.ArchiveID, Historical: in.Historical, MediaThumbnails: normalizeMediaThumbnails(in.OriginalText, in.MediaThumbnails), References: in.References, ReplyReference: in.Reply, Correction: in.Correction}
+	m.MentionsYou = incomingRoomMention(in)
+	if in.Kind == "room" && !in.IsOwn {
+		m.ObservedRoomNickname = in.OwnRoomNickname
+	}
 	if in.SenderName != "" {
 		m.Sender.DisplayName = in.SenderName
 	}
@@ -507,17 +512,23 @@ func (e *Engine) ConnectionChanged(ctx context.Context, c domain.Connection) err
 	if err != nil {
 		return err
 	}
-	err = r.RecordConnection(ctx, c)
-	if c.State == "connected" {
-		e.wake()
+	if err := r.RecordConnection(ctx, c); err != nil {
+		return err
 	}
-	return err
+	if c.State == "connected" {
+		e.wakeRooms()
+		e.outgoingWorkCommitted()
+	} else {
+		e.notifyEvents()
+	}
+	return nil
 }
-func (e *Engine) wake() {
+func (e *Engine) outgoingWorkCommitted() {
 	select {
 	case e.work <- struct{}{}:
 	default:
 	}
+	e.notifyEvents()
 }
 
 // Run owns one serial dispatcher. Network I/O happens only after an atomic SQL
@@ -633,6 +644,7 @@ func (e *Engine) runOutbox(ctx context.Context) error {
 				if err != nil && !errors.Is(err, ErrStateConflict) {
 					return err
 				}
+				e.notifyEvents()
 			}
 		}
 		if e.protocols != nil {

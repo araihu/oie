@@ -3,11 +3,13 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	"github.com/google/uuid"
 )
@@ -18,6 +20,63 @@ func migrationID() domain.ID {
 		panic(err)
 	}
 	return domain.ID(value.String())
+}
+
+func TestSchedulingPreviewMigratesWithoutDiscardingData(t *testing.T) {
+	ctx := t.Context()
+	store, engine, conversation := outboxFixture(t)
+	when := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+	const body = "Scheduled before merging main"
+	result, err := engine.SendComposition(ctx, migrationID(), conversation.ID, domain.OutgoingComposition{OriginalText: body}, &when)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const content = "retained attachment"
+	file, _, err := store.StageAttachment(ctx, conversation.ID, domain.StagedAttachment{
+		ID: migrationID(), FileName: "note.txt", MediaType: "text/plain",
+	}, strings.NewReader(content))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
+		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = store.db.ExecContext(ctx, string(down)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err = store.db.ExecContext(ctx, "UPDATE schema_migrations SET version=18"); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := Open(ctx, store.dir, migrationID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = upgraded.Close() }()
+	items, err := upgraded.ScheduledMessages(ctx, application.ScheduledQuery{Limit: 10})
+	if err != nil || len(items) != 1 || items[0].Message.ID != result.Message.ID || items[0].Message.OriginalText != body ||
+		items[0].Message.ScheduledAt == nil || !items[0].Message.ScheduledAt.Equal(when) {
+		t.Fatalf("schedule changed during migration: %+v %v", items, err)
+	}
+	retained, reader, err := upgraded.OpenStagedAttachment(ctx, conversation.ID, file.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = reader.Close() }()
+	data, err := io.ReadAll(reader)
+	if err != nil || retained != file || string(data) != content {
+		t.Fatalf("staged attachment changed during migration: %+v %v", retained, err)
+	}
+	var version int
+	var dirty bool
+	if err = upgraded.db.QueryRowContext(ctx, "SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestMigration || dirty {
+		t.Fatalf("migrate journal: %d %v %v", version, dirty, err)
+	}
 }
 func TestLegacyFoundationMigratesWithoutDiscardingData(t *testing.T) {
 	dir := t.TempDir()

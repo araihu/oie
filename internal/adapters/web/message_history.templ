@@ -50,14 +50,12 @@ templ messageHistoryPage(v view, h historyPageView) {
 				for _,item:=range h.Items {
 					<li data-history-revision={ item.RevisionId } data-history-source={ item.SourceMessageId } data-history-is-current={ strconv.FormatBool(item.IsCurrent) } data-history-is-original={ strconv.FormatBool(item.IsOriginal) }>
 						@panel.Panel(panel.Config{Header: messageHistoryHeading(v, item), Density: panel.DensityCompact, RootClass: "oie-history-version"}) {
-							<div class="oie-rendered-message">
-								if item.Formatted!=nil {
-									@item.Formatted
-								} else {
-									<div class="oie-plain-fallback">{ item.OriginalText }</div>
-								}
-							</div>
-							<div class="oie-original-message">{ item.OriginalText }</div>
+							if item.Formatted!=nil {
+								<div class="oie-rendered-message">@item.Formatted</div>
+								<div class="oie-original-message">{ item.OriginalText }</div>
+							} else {
+								<div class="oie-plain-fallback">{ item.OriginalText }</div>
+							}
 						}
 					</li>
 				}

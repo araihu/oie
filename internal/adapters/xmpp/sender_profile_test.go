@@ -214,7 +214,7 @@ func TestArchivedSenderAddressRequiresUnambiguousRoomMetadata(t *testing.T) {
 		if err := xml.Unmarshal([]byte(raw), &result); err != nil {
 			t.Fatal(err)
 		}
-		in, ok, err := archivedIncoming(account, room, &result)
+		in, ok, err := archivedIncoming(account, room, &result, archiveTrust{})
 		if err != nil || !ok || in.SenderAddress != tc.want {
 			t.Fatalf("unexpected archived address %q want %q, err %v", in.SenderAddress, tc.want, err)
 		}

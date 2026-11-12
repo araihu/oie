@@ -272,6 +272,20 @@ func reconcileCorrections(ctx context.Context, q *dbgen.Queries, seed domain.Mes
 			projected.References = nil
 			projected.Reply = nil
 			projected.ReplyReference = nil
+			if !projected.IsOwn && projected.ObservedRoomNickname == "" {
+				for ancestor := parents[source.message.ID]; ancestor != ""; ancestor = parents[ancestor] {
+					nickname := nodes[ancestor].message.ObservedRoomNickname
+					if nickname == "" {
+						continue
+					}
+					projected.ObservedRoomNickname = nickname
+					projected.MentionsYou, err = mentionWithStoredReply(ctx, q, source.message.ID, projected)
+					if err != nil {
+						return err
+					}
+					break
+				}
+			}
 			if err = q.PutContentHead(ctx, dbgen.PutContentHeadParams{CanonicalID: string(root), SourceID: string(source.message.ID), RevisionID: string(winner.ID), Payload: jsonText(projected), EditedAt: stamp(projected.EditedAt)}); err != nil {
 				return err
 			}
@@ -346,11 +360,20 @@ func refreshCorrectionConversation(ctx context.Context, q *dbgen.Queries, id dom
 	if err = hydrateMessageProjection(ctx, q, &m); err != nil {
 		return err
 	}
-	if c.LastMessage == m.OriginalText && c.UpdatedAt.Equal(m.CreatedAt) {
+	unreadMention := false
+	if c.Kind == "room" && c.UnreadCount > 0 {
+		summary, err := q.ConversationUnreadSummary(ctx, string(c.ID))
+		if err != nil {
+			return err
+		}
+		unreadMention = summary.UnreadMention != 0
+	}
+	if c.LastMessage == m.OriginalText && c.UpdatedAt.Equal(m.CreatedAt) && c.UnreadMention == unreadMention {
 		return nil
 	}
 	c.LastMessage = m.OriginalText
 	c.UpdatedAt = m.CreatedAt
+	c.UnreadMention = unreadMention
 	if err = q.UpdateConversation(ctx, dbgen.UpdateConversationParams{RevisionID: string(c.RevisionID), Payload: jsonText(c), ActivitySequence: c.ActivitySequence, UnreadCount: int64(c.UnreadCount), ID: string(c.ID)}); err != nil {
 		return err
 	}
