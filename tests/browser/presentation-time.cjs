@@ -55,6 +55,7 @@ async function assertDisplay(page, value) {
         assert.notEqual(system.day, preferred.day, 'fixture crosses midnight in the preferred zone');
         await assertDisplay(page, system);
 
+        await dialog.locator('input[name="theme"]:checked:focus').waitFor({state:'attached'});
         await select.focus();
         await page.evaluate(() => {
           const nodes = ['#message-timeline', '#send-message-form', '#settings-time-zone'].map(id => document.querySelector(id));
