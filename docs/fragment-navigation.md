@@ -37,3 +37,11 @@ A read-only check of the live BFF confirmed that all four sidebar destinations a
 An isolated fixture reproduced an actual startup gap by delaying the final Alpine dependency without changing HTMX or forcing its processing from the test. Clicking the sidebar after `window.htmx` existed but before application startup loaded a second document and made no fragment request. Server-declared attributes and the pre-start click handler address that case. The fixture checks document identity and requests, dependency readiness, desktop/mobile navigation, Back/Forward, drafts and one active live stream.
 
 For this correction, `make check` and containerized `make ci-check` pass, including golangci-lint, generated-file checks, native tests, race tests and application/CLI builds. The delayed-start regression now records one document and one HTMX fragment. Readiness deliberately occurs between swap and settlement; the runtime starts once and retains one live stream. The live BFF serves the updated startup controller and fragment attributes for both sidebar layouts.
+
+## Scoped navigation verification on 2026-11-12
+
+The Chromium navigation fixture completed with one document load per desktop and mobile context. Separate probes confirmed that opening a conversation with Alpine held still requested the conversation fragment, and that account details, drawer history and appearance kept the original composer, a nonzero timeline scroll position and the original event stream.
+
+The scheduling probe used the actual BFF and an isolated engine API fixture. Entering and saving a schedule edit kept the original composer and timeline nodes and restored the independent draft. Reschedule, Send now and Cancel in the agenda updated the result region with no additional document or event-stream request. These probes exercise browser behavior and the BFF contract.
+
+The media search fixture used an isolated engine with SQLite. It passed desktop English and mobile Brazilian Portuguese search, account filtering, focus, caret, IME and stale-response checks. HTTP adapter tests and OpenAPI lint also passed.
