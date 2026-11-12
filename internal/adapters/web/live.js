@@ -897,7 +897,10 @@ window.OieRuntime.register('live', life => {
           input.focus({preventScroll:true});renderReply();
         } else if(form.dataset.oieAction==='schedule-row'){
           if(scheduleDrawer) scheduleDrawer.dispatchEvent(new Event('oie:schedule-refresh'));
-          else document.dispatchEvent(new CustomEvent('oie:agenda-refresh',{detail:{form}}));
+          else {
+            document.dispatchEvent(new CustomEvent('oie:agenda-refresh',{detail:{form}}));
+            return;
+          }
         } else if (form.dataset.oieAction === 'register' || form.dataset.oieAction === 'open') {
           if (result.redirect) { if(window.OieNavigation)window.OieNavigation.go(result.redirect);else location.assign(result.redirect); return; }
         }

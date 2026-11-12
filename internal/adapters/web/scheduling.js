@@ -56,6 +56,7 @@ window.OieRuntime.register('scheduling', life => {
       } catch {
         if (request !== controller || life.signal.aborted) return;
         request = null;
+        if (mutation) document.dispatchEvent(new Event('oie:refresh-request'));
         if (!mutation) document.getElementById(id)?.dispatchEvent(new CustomEvent('combobox:load', {bubbles:true,detail:{id,values:committed}}));
         window.dispatchEvent(new CustomEvent('notify', {detail: {kind: 'toast', tone: 'danger', message: filter.dataset.filterUnavailable}}));
       } finally {
