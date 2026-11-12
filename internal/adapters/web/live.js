@@ -304,9 +304,9 @@ window.OieRuntime.register('live', life => {
       button.title = locked ? text('locked') : text('send');
     }
   }
-  function restoreDraft(nextKey = submissionKey?.value) {
+  function restoreDraft(nextKey = submissionKey?.value, initialText = '') {
     journal = null;
-    input.value = '';
+    input.value = initialText;
     submissionKey.value = nextKey;
     let saved = readDraft();
     if(!saved&&scheduledMessage){
@@ -324,7 +324,7 @@ window.OieRuntime.register('live', life => {
     }
   }
   if (input && submissionKey && draftKey && !mock) {
-    restoreDraft();
+    restoreDraft(submissionKey.value,input.value);
     life.on(input,'input', () => {
       if(editSession){if(!editSession.submitted){keepEdit({...editSession,text:input.value});renderEdit();}return;}
       if (journal?.pending) return;

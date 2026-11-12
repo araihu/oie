@@ -119,6 +119,11 @@ async function assertMobileControlOwnership(page) {
       releaseStartup();await startup.close();await until(()=>streams.size===0,'startup stream disposed');
     }
     {
+    const retainedCount=messages.length;
+    for(let index=0;index<24;index++)messages.push({
+      ...messages[0],id:id(200+index),createdAt:new Date(Date.parse('2026-11-08T12:00:00Z')+(index+1)*60000).toISOString(),
+      originalText:'A retained message to make the history scroll · '+index
+    });
     const scopedContext=await browser.newContext({viewport:{width:1440,height:1000},locale:'en'});
     const scoped=await scopedContext.newPage(), documents=[], scopedErrors=[];
     debuggingPage=scoped;scoped.on('pageerror',error=>scopedErrors.push(error.message));
@@ -134,8 +139,10 @@ async function assertMobileControlOwnership(page) {
     const chatBefore=await scoped.evaluate(()=>{
       const selectors=['#oie-app','#message-composer','#message-timeline','#conversation-list'];
       window.chatNodes=selectors.map(selector=>document.querySelector(selector));
+      window.chatNodes[2].scrollTop=150;
       return {generation:window.OieRuntime.generation,scroll:window.chatNodes[2].scrollTop};
     });
+    assert(chatBefore.scroll>0,'fixture timeline overflows');
     const keepChat=async()=>{
       assert(await scoped.evaluate(({generation,scroll})=>window.OieRuntime.generation===generation&&
         window.chatNodes.every(node=>node.isConnected)&&window.chatNodes[2].scrollTop===scroll,chatBefore));
@@ -172,6 +179,7 @@ async function assertMobileControlOwnership(page) {
     await scoped.locator('#settings-body').waitFor({state:'hidden'});
     assert.deepEqual(scopedErrors,[]);
     await scopedContext.close();await until(()=>streams.size===0,'scoped stream disposed');
+    messages.splice(retainedCount);
     findings.push('Account details, details history and appearance preserve the mounted chat and original event connection');
     }
     const context=await browser.newContext({viewport:{width:1440,height:1000},locale:'en'}),page=await context.newPage(),errors=[],documents=[],hx=[],fragmentChecks=[];
