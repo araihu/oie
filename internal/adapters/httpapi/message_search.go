@@ -59,6 +59,9 @@ func (s *Server) SearchMessages(ctx context.Context, r engineapi.SearchMessagesR
 			if p.ImageHash != "" {
 				item.Preview.ImageHash = &p.ImageHash
 			}
+			if p.FaviconHash != "" {
+				item.Preview.FaviconHash = &p.FaviconHash
+			}
 		}
 		out.Items = append(out.Items, item)
 	}

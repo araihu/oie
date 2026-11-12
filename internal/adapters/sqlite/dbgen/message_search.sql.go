@@ -14,6 +14,7 @@ WITH candidates AS (
  SELECT sc.id,sc.message_id,
  CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,
  CAST(COALESCE(NULLIF(json_extract(p.payload,'$.ImageHash'),''),NULLIF(json_extract(p.payload,'$.FaviconHash'),''),'') AS TEXT) AS image_hash,
+ CAST(COALESCE(json_extract(p.payload,'$.FaviconHash'),'') AS TEXT) AS favicon_hash,
  CASE WHEN NULLIF(json_extract(p.payload,'$.ImageHash'),'') IS NOT NULL THEN 0
       WHEN NULLIF(json_extract(p.payload,'$.FaviconHash'),'') IS NOT NULL THEN 1 ELSE 2 END AS priority
  FROM shared_content AS sc
@@ -21,9 +22,9 @@ WITH candidates AS (
  LEFT JOIN message_previews AS p ON p.message_id=sc.message_id AND p.url=sc.url
  WHERE sc.message_id IN (SELECT value FROM json_each(CAST(?2 AS TEXT)))
 ), ranked AS (
- SELECT id, message_id, kind, image_hash, priority,row_number() OVER (PARTITION BY message_id ORDER BY priority,id) AS position FROM candidates
+ SELECT id, message_id, kind, image_hash, favicon_hash, priority,row_number() OVER (PARTITION BY message_id ORDER BY priority,id) AS position FROM candidates
 )
-SELECT message_id,kind,image_hash FROM ranked WHERE position=1
+SELECT message_id,kind,image_hash,favicon_hash FROM ranked WHERE position=1
 `
 
 type SearchMessagePreviewsParams struct {
@@ -32,9 +33,10 @@ type SearchMessagePreviewsParams struct {
 }
 
 type SearchMessagePreviewsRow struct {
-	MessageID string
-	Kind      string
-	ImageHash string
+	MessageID   string
+	Kind        string
+	ImageHash   string
+	FaviconHash string
 }
 
 func (q *Queries) SearchMessagePreviews(ctx context.Context, arg SearchMessagePreviewsParams) ([]SearchMessagePreviewsRow, error) {
@@ -46,7 +48,12 @@ func (q *Queries) SearchMessagePreviews(ctx context.Context, arg SearchMessagePr
 	items := []SearchMessagePreviewsRow{}
 	for rows.Next() {
 		var i SearchMessagePreviewsRow
-		if err := rows.Scan(&i.MessageID, &i.Kind, &i.ImageHash); err != nil {
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.Kind,
+			&i.ImageHash,
+			&i.FaviconHash,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

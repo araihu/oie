@@ -108,8 +108,9 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       if(!photo)return send(404,{code:'not_found'});
       res.setHeader('Content-Type','image/png');return res.end(photo);
     }
-    if(u.pathname==='/api/v1/media/'+conversationHash){
-      res.setHeader('Content-Type','image/png');res.setHeader('ETag','"'+conversationHash+'"');return res.end(conversationPhoto);
+    if(u.pathname==='/api/v1/media/'+conversationHash||u.pathname==='/api/v1/media/'+senderHash){
+      const hash=u.pathname.split('/').at(-1);
+      res.setHeader('Content-Type','image/png');res.setHeader('ETag','"'+hash+'"');return res.end(hash===conversationHash?conversationPhoto:senderPhoto);
     }
     if (u.pathname.endsWith('/avatars')||u.pathname.endsWith('/previews')||u.pathname.endsWith('/message-stars')||u.pathname==='/api/v1/shared-content') return send(200,{items:[]});
     if (u.pathname === '/api/v1/messages/search') {
@@ -125,8 +126,8 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
         const c=[...chats,archiveRoom].find(c=>c.id===m.conversationId),a=accounts.find(a=>a.id===m.accountId);
         const senderAddress=m.isOwn?a.address:c.kind==='direct'?c.address:undefined;
         const base={message:m,accountLabel:a.label,conversationTitle:c.title,conversationAddress:c.address,senderAddress,matchedAt:m.createdAt,matchKind:'text',...(m===corpus[54]?{senderAvatarHash:senderHash}:{})};
-        if(m===layoutMessages[0])base.preview={kind:'link',imageHash:conversationHash};
-        if(m===layoutMessages[1])base.preview={kind:'document'};
+        if(m===layoutMessages[0])base.preview={kind:'link',imageHash:conversationHash,faviconHash:senderHash};
+        if(m===layoutMessages[1])base.preview={kind:'link'};
         const rows=fold(m.originalText).includes(fold(q))?[{...base,matchedRevisionId:m===corpus[1]?id(9001):m.revisionId,historical:false,excerpt:m.originalText}]:[];
         if(history&&m===corpus[0]&&fold('Pineapple original').includes(fold(q)))rows.push(...[2,1].map(n=>({...base,matchedRevisionId:id(8000+n),matchedAt:`2026-11-09T12:00:0${n}Z`,historical:true,excerpt:'Pineapple prior version '+n})));
         return rows;
@@ -499,7 +500,8 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       let releasePreview;
       await layout.route('**/ui/media/'+conversationHash,async route=>{
         await new Promise(resolve=>releasePreview=resolve);
-        await route.continue();
+        if(width===390)await route.fulfill({status:404});
+        else await route.continue();
       });
       await query(layout).fill('brigada-layout');await settled(layout,'brigada-layout');
       const room=layout.locator('[data-message-search-conversation="'+layoutRoom.id+'"]');
@@ -526,10 +528,15 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       assert(beforeImage.x>=(await excerpt.boundingBox()).x+(await excerpt.boundingBox()).width,'the thumbnail is on the right of the excerpt');
       assert.equal(beforeImage.width,beforeImage.height);
       const imageResponse=layout.waitForResponse(response=>response.url().endsWith('/ui/media/'+conversationHash));
-      releasePreview();assert.equal((await imageResponse).status(),200);
+      const favicon=thumbnail.locator('.oie-message-search-preview-favicon[data-loaded]');
+      await favicon.waitFor({state:'visible'});
+      releasePreview();assert.equal((await imageResponse).status(),width===390?404:200);
+      await thumbnail.locator('.oie-message-search-preview-image'+(width===390?'[hidden]':'[data-loaded]')).waitFor({state:'attached'});
       await layout.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
       assert.deepEqual(await thumbnail.boundingBox(),beforeImage,'loading the image preserves its rectangle');
-      assert.equal(await previous.locator('[data-search-preview=document] .oie-message-search-preview-image').count(),0);
+      const fallback=previous.locator('[data-search-preview=link]');
+      assert.equal(await fallback.locator('img').count(),0);
+      assert.equal(await fallback.locator('svg use').getAttribute('href').then(href=>href.split('#').at(-1)),'hi-16-solid-link');
       await layout.unroute('**/ui/media/'+conversationHash);
       const todayText=lang==='pt-BR'?'Hoje 00:05':'Today 12:05 AM';
       const previousText=lang==='pt-BR'?'9 de nov. de 2026 23:50':'Nov 9, 2026 11:50 PM';

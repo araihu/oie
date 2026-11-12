@@ -22,7 +22,7 @@ type MessageSearchHit struct {
 }
 
 type MessageSearchPreview struct {
-	Kind, ImageHash string
+	Kind, ImageHash, FaviconHash string
 }
 
 type MessageSearchPage struct {

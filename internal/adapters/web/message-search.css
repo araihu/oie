@@ -7,7 +7,11 @@
 .oie-message-search-result{display:flex;align-items:center;gap:.55rem;min-width:0}
 .oie-message-search-text{display:flex;flex:1;flex-direction:column;align-items:flex-start;gap:.4rem;min-width:0;overflow-wrap:anywhere}
 .oie-message-search-preview{position:relative;display:grid;place-items:center;flex:none;inline-size:3rem;block-size:3rem;overflow:hidden;border-radius:.4rem;background:var(--oie-accent-soft);color:var(--oie-accent-text)}
-.oie-message-search-preview-image{position:absolute;inset:0;background-position:center;background-size:cover}
+.oie-message-search-preview img{position:absolute;inset:0;width:100%;height:100%}
+.oie-message-search-preview img[data-loaded]{background:var(--oie-accent-soft)}
+.oie-message-search-preview img[hidden]{display:none}
+.oie-message-search-preview-image{object-fit:cover}
+.oie-message-search-preview-favicon{object-fit:contain;padding:.65rem}
 .oie-search-result-identity{display:flex;align-items:flex-start;gap:.5rem;min-width:0}
 .oie-search-avatar{display:flex;flex:none}
 .oie-search-result-copy{display:flex;flex:1;flex-direction:column;gap:.25rem;min-width:0;overflow-wrap:anywhere}

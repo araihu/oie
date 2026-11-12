@@ -177,7 +177,7 @@ func TestMessageSearchCurrentMetadataIsLocalAndInvalidatesOnCorrection(t *testin
 	s, e, c := outboxFixture(t)
 	at := time.Now().Add(-time.Hour).UTC()
 	e.SetProtocols(&outboundProtocol{})
-	receiveCorrection(t, e, c, "first", "source https://example.test/first.pdf", "", "proof:bob", "bob", at)
+	receiveCorrection(t, e, c, "first", "source https://example.test/first-page", "", "proof:bob", "bob", at)
 	m := correctionMessages(t, e, c)[0]
 	refs := application.SharedReferences(m.OriginalText)
 	for i := range refs {
@@ -187,7 +187,7 @@ func TestMessageSearchCurrentMetadataIsLocalAndInvalidatesOnCorrection(t *testin
 	if err := s.IndexSharedContent(t.Context(), []domain.SharedContentMutation{{Message: m, References: refs, ParserVersion: application.SharedContentVersion}}); err != nil {
 		t.Fatal(err)
 	}
-	preview := domain.MessagePreview{ID: migrationID(), RevisionID: migrationID(), MessageID: m.ID, AccountID: c.AccountID, ConversationID: c.ID, URL: refs[0].URL, Title: "Orçamento especial", Description: "annual projection", State: "ready", Kind: "link", DownloadState: "not_downloaded", ImageHash: strings.Repeat("a", 64), UpdatedAt: time.Now().UTC()}
+	preview := domain.MessagePreview{ID: migrationID(), RevisionID: migrationID(), MessageID: m.ID, AccountID: c.AccountID, ConversationID: c.ID, URL: refs[0].URL, Title: "Orçamento especial", Description: "annual projection", State: "ready", Kind: "link", DownloadState: "not_downloaded", ImageHash: strings.Repeat("a", 64), FaviconHash: strings.Repeat("b", 64), UpdatedAt: time.Now().UTC()}
 	if _, err := s.EnsurePreview(t.Context(), preview); err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestMessageSearchCurrentMetadataIsLocalAndInvalidatesOnCorrection(t *testin
 	if len(page.Items) != 1 || page.Items[0].MatchKind != "metadata" || !strings.Contains(page.Items[0].Excerpt, "Orçamento especial") || page.MetadataIndexing.State != "complete" {
 		t.Fatal(page)
 	}
-	if p := page.Items[0].Preview; p == nil || p.Kind != "document" || p.ImageHash != preview.ImageHash {
+	if p := page.Items[0].Preview; p == nil || p.Kind != "link" || p.ImageHash != preview.ImageHash || p.FaviconHash != preview.FaviconHash {
 		t.Fatalf("missing cached preview: %+v", p)
 	}
 	after, _ := e.Snapshot(t.Context())
@@ -220,7 +220,7 @@ func TestMessageSearchCurrentMetadataIsLocalAndInvalidatesOnCorrection(t *testin
 	if len(current.Items) != 1 || current.Items[0].Historical || current.Items[0].Preview != nil {
 		t.Fatal(current)
 	}
-	history := searchMessages(t, e, domain.MessageSearchQuery{Search: "first.pdf", IncludeEditHistory: true, Limit: 10})
+	history := searchMessages(t, e, domain.MessageSearchQuery{Search: "first-page", IncludeEditHistory: true, Limit: 10})
 	if len(history.Items) != 1 || !history.Items[0].Historical || history.Items[0].Preview != nil {
 		t.Fatal(history)
 	}

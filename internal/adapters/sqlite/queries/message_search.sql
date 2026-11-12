@@ -43,6 +43,7 @@ WITH candidates AS (
  SELECT sc.id,sc.message_id,
  CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,
  CAST(COALESCE(NULLIF(json_extract(p.payload,'$.ImageHash'),''),NULLIF(json_extract(p.payload,'$.FaviconHash'),''),'') AS TEXT) AS image_hash,
+ CAST(COALESCE(json_extract(p.payload,'$.FaviconHash'),'') AS TEXT) AS favicon_hash,
  CASE WHEN NULLIF(json_extract(p.payload,'$.ImageHash'),'') IS NOT NULL THEN 0
       WHEN NULLIF(json_extract(p.payload,'$.FaviconHash'),'') IS NOT NULL THEN 1 ELSE 2 END AS priority
  FROM shared_content AS sc
@@ -52,4 +53,4 @@ WITH candidates AS (
 ), ranked AS (
  SELECT *,row_number() OVER (PARTITION BY message_id ORDER BY priority,id) AS position FROM candidates
 )
-SELECT message_id,kind,image_hash FROM ranked WHERE position=1;
+SELECT message_id,kind,image_hash,favicon_hash FROM ranked WHERE position=1;

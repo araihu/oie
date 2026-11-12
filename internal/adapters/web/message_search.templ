@@ -227,6 +227,7 @@ if hit.Preview != nil && !hit.Historical {
 }
 
 templ messageSearchPreview(p engineapi.MessageSearchPreview){
+{{ artwork:=mediaSource(p.ImageHash);favicon:=mediaSource(p.FaviconHash) }}
 <span class="oie-message-search-preview" aria-hidden="true" data-search-preview={string(p.Kind)}>
 switch p.Kind {
 case "video":
@@ -240,10 +241,17 @@ case "document":
 default:
 @glyph(heroicons.Icon16SolidLink)
 }
-if source:=mediaSource(p.ImageHash);source!="" {
-<span class="oie-message-search-preview-image" style={templ.SafeCSS("background-image:url("+source+")")}></span>
+if favicon!="" {
+@messageSearchPreviewImage(favicon,"oie-message-search-preview-favicon")
+}
+if artwork!="" && artwork!=favicon {
+@messageSearchPreviewImage(artwork,"oie-message-search-preview-image")
 }
 </span>
+}
+
+templ messageSearchPreviewImage(source, className string){
+<img class={className} src={source} alt="" loading="lazy" decoding="async" x-data x-on:load="$el.dataset.loaded=''" x-on:error="$el.hidden=true" x-init="if ($el.complete) { if ($el.naturalWidth) $el.dataset.loaded=''; else $el.hidden=true }"/>
 }
 
 templ messageSearchConversations(v view){

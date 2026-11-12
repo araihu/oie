@@ -3610,7 +3610,11 @@ components:
         imageHash:
           type: string
           pattern: '^[0-9a-f]{64}$'
-          description: Digest of a locally cached thumbnail or site icon, retrievable with getMediaImage.
+          description: Digest of a locally cached thumbnail, or the site icon when it is the only artwork. Use getMediaImage to retrieve it.
+        faviconHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Digest of the locally cached site icon for a link. Use getMediaImage to retrieve it.
     MessageSearchPage:
       type: object
       description: Retained message search results. Message text is immediate; metadata indexing coverage is reported separately.

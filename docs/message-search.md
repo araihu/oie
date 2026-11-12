@@ -102,9 +102,9 @@ Within a conversation, Down and Up jump to older and newer matches, just as
 Enter and Shift+Enter do.
 
 Each current message result can show one compact preview of indexed shared
-content. The search response carries the category and any cached image digest,
-preferring artwork over a site icon. The result uses a category icon when no
-image is available. Search reads existing previews and does not enqueue downloads.
+content. Link results show cached page artwork when available, then the cached
+favicon fitted inside the tile, then the generic link icon. Search reads
+existing previews and does not enqueue downloads.
 
 The existing `conversation-search` field opens global search when the user enters
 a non-blank query. Focusing the field keeps the conversation list visible.

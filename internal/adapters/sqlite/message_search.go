@@ -136,6 +136,9 @@ func loadSearchPreviews(ctx context.Context, q *dbgen.Queries, hits []domain.Mes
 		if application.ValidImageHash(row.ImageHash) {
 			preview.ImageHash = row.ImageHash
 		}
+		if row.Kind == "link" && application.ValidImageHash(row.FaviconHash) {
+			preview.FaviconHash = row.FaviconHash
+		}
 		hits[current[row.MessageID]].Preview = &preview
 	}
 	return nil
