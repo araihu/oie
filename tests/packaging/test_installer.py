@@ -17,7 +17,7 @@ import struct
 
 ROOT = Path(__file__).resolve().parents[2]
 INSTALLER = ROOT / "scripts/install.sh"
-VERSION = "v0.0.1-rc.0"
+VERSION = "v0.0.1-rc.1"
 RELEASES = "https://github.com/araihu/oie/releases/download/"
 EXECUTABLE = b"#!/bin/sh\nprintf '%s\\n' 'Oie installer fixture one'\n"
 DESKTOP = b"[Desktop Entry]\nType=Application\nName=Oi\xc3\xaa\nExec=oie-desktop\nIcon=org.araihu.oie\nTerminal=false\nCategories=Network;InstantMessaging;\n"
@@ -224,6 +224,7 @@ sys.exit(97)
         output = self.install("--help").stdout
         self.assertIn("--version", output)
         self.assertIn("--prefix", output)
+        self.assertIn(f"Default version: {VERSION}.", output)
         self.assertEqual(self.requested_urls(), [])
 
     def test_linux_default_and_optional_ffmpeg(self):
@@ -234,10 +235,10 @@ sys.exit(97)
 
     def test_linux_custom_prefix_spaces_and_explicit_version(self):
         prefix = self.root / "installation with spaces"
-        self.release(version="v0.0.1-rc.1")
-        self.install("--prefix", prefix, "--version", "v0.0.1-rc.1")
+        self.release(version="v0.0.1-rc.0")
+        self.install("--prefix", prefix, "--version", "v0.0.1-rc.0")
         self.assert_linux(prefix)
-        self.assertTrue(all("/v0.0.1-rc.1/" in url for url in self.requested_urls()))
+        self.assertTrue(all("/v0.0.1-rc.0/" in url for url in self.requested_urls()))
 
     def test_desktop_entry_quotes_literal_prefix_characters(self):
         prefix = self.root / 'apps "quoted" $literal `name` 100% \\path'

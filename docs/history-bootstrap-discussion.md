@@ -1,9 +1,8 @@
 # Initial room-history recovery discussion
 
 Recorded on 2026-11-10 from testing a fresh standalone installation.
-Tracking item: **B25, first backlog priority before alpha v0.0.1**. The rc.0
-packages are published. This discussion now defines the recovery policy;
-implementation has not started.
+Tracking item: **B25, required for alpha v0.0.1**. The room recovery changes
+described under Implementation are included in v0.0.1-rc.1.
 
 ## Agreed goals and release boundary
 

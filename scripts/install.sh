@@ -3,7 +3,8 @@
 set -eu
 umask 077
 
-version=v0.0.1-rc.0
+default_version=v0.0.1-rc.1
+version=$default_version
 prefix=
 temporary=
 stage=
@@ -13,10 +14,10 @@ previous=
 complete=false
 
 usage() {
-  cat <<'EOF'
+  cat <<EOF
 Usage: install.sh [--version VERSION] [--prefix DIR] [--help]
 
-Install Oie from araihu/oie GitHub Releases. Default version: v0.0.1-rc.0.
+Install Oie from araihu/oie GitHub Releases. Default version: $default_version.
 Linux defaults to ~/.local. macOS defaults to ~/Applications and installs Oie.app
 inside that directory. Quit Oie before installing or updating. Existing app data
 is preserved. Dependencies are checked, never installed. No sudo is used.

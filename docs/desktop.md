@@ -21,7 +21,7 @@ that tag. Each archive includes source/build metadata and license notices. The
 release's `packaging-receipt.json` records the source revision, packaging-tooling
 revision, source archive hash, platform metadata and artifact hashes separately.
 
-The installer defaults to rc.0 and selects only `darwin/arm64` or `linux/amd64`.
+The installer selects either `darwin/arm64` or `linux/amd64`.
 It verifies the selected archive against `SHA256SUMS` before extraction, rejects
 unsafe archive entries and stages installation beside the destination. Existing
 application files remain available for rollback until replacement completes.
@@ -46,21 +46,23 @@ The [installation guide](installation.md#platforms-and-verified-scope) and
 ### Rebuild the release archives
 
 Use the packaging revision in the release receipt as the tooling checkout.
-It is newer than the application tag. `make package-linux` obtains the tagged
-source and runs the Ubuntu amd64 build and installation checks through Dagger.
-Its output is under the selected CI artifact directory's `release` folder.
+`OIE_RELEASE_VERSION=v0.0.1-rc.1 make package-linux` obtains the tagged source
+and runs the Ubuntu amd64 build and installation checks through Dagger. Its
+output is under the selected CI artifact directory's `release` folder.
 
 On native Apple Silicon with the build dependencies installed, obtain the
 application tree separately from the tooling checkout:
 
 ```sh
 release_inputs=$(mktemp -d)
+release_version=v0.0.1-rc.1
+release_revision=$(git rev-parse "$release_version^{commit}")
 mkdir "$release_inputs/source"
-git archive --format=tar --output="$release_inputs/source.tar" v0.0.1-rc.0
+git archive --format=tar --output="$release_inputs/source.tar" "$release_revision"
 tar -xf "$release_inputs/source.tar" -C "$release_inputs/source"
-sh scripts/package-desktop.sh --version v0.0.1-rc.0 \
-  --revision e8ffe5d0d924727478b8a5cbe3567a4240d7ae48 \
-  --source "$release_inputs/source" --output "$PWD/dist/v0.0.1-rc.0"
+sh scripts/package-desktop.sh --version "$release_version" \
+  --revision "$release_revision" \
+  --source "$release_inputs/source" --output "$PWD/dist/$release_version"
 ```
 
 The builder refuses to overwrite an existing archive. Build timestamps and
