@@ -5,6 +5,7 @@ import (
 	"github.com/araihu/goshtoso/components/button"
 	"github.com/araihu/goshtoso/components/chatbubble"
 	"github.com/araihu/goshtoso/components/dropdown"
+	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/link"
 	"github.com/araihu/goshtoso/components/splitbutton"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -99,7 +100,7 @@ templ scheduleRowForm(v view,m engineapi.Message,path,label string) {
 
 templ scheduleControl(v view) {
 	@splitbutton.SplitButton(splitbutton.Config{
-		ID:"composer-split", Primary:splitbutton.Action{ID:"composer-send",Label:schedulePrimaryLabel(v),OnClick:"$el.closest('form').requestSubmit()",Disabled:!v.sendAllowed() && v.ScheduleEdit==nil},
+		ID:"composer-split", Primary:schedulePrimaryAction(v),
 		MenuLabel:v.Text.More, MenuAlign:dropdown.AlignEnd,
 		Sections:[]dropdown.Section{{Items:[]dropdown.Item{{Label:scheduleMenuLabel(v),OnClick:"$dispatch('oie:schedule-compose')",Disabled:!v.sendAllowed() && v.ScheduleEdit==nil}}}},
 		RootClass:"oie-schedule-split",
@@ -177,11 +178,19 @@ func scheduleDate(at *time.Time) string {
 	return at.Format(time.RFC3339Nano)
 }
 
-func schedulePrimaryLabel(v view) string {
-	if v.ScheduleEdit != nil {
-		return v.Text.ScheduleSave
+func schedulePrimaryAction(v view) splitbutton.Action {
+	action := splitbutton.Action{
+		ID: "composer-send",
+		OnClick: "$el.closest('form').requestSubmit()",
+		Disabled: !v.sendAllowed() && v.ScheduleEdit == nil,
 	}
-	return v.Text.Send
+	if v.ScheduleEdit != nil {
+		action.Label = v.Text.ScheduleSave
+	} else {
+		action.Icon = glyph(heroicons.Icon16SolidArrowUp)
+		action.Tooltip = v.Text.Send
+	}
+	return action
 }
 
 func scheduleMenuLabel(v view) string {
