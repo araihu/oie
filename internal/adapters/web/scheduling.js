@@ -9,12 +9,13 @@ window.OieRuntime.register('scheduling', life => {
     let committed = new FormData(filter).getAll(name);
     let request;
     life.cleanup(() => request?.abort());
-    life.on(filter, 'combobox:change', async ({detail}) => {
-      if (detail?.id !== id) return;
-      const values = [...detail.values].sort();
-      request?.abort();
+    async function updateAgenda(url, values, form) {
+      const mutation = !!form;
+      const previousURL = location.href;
+      const rowID = form?.closest('[data-scheduled-row]')?.dataset.scheduledRow;
       const results = document.getElementById('scheduled-results');
-      if (!results || selectionKey(values) === selectionKey(committed)) {
+      request?.abort();
+      if (!results || (!mutation && selectionKey(values) === selectionKey(committed))) {
         request = null;
         results?.removeAttribute('aria-busy');
         if (results) results.inert = false;
@@ -22,21 +23,18 @@ window.OieRuntime.register('scheduling', life => {
       }
       const controller = new AbortController();
       request = controller;
-      const url = new URL(location.href);
-      url.searchParams.delete('scheduleCursor');
-      url.searchParams.delete(name);
-      for (const value of values) url.searchParams.append(name, value);
       results.setAttribute('aria-busy', 'true');
       results.inert = true;
       const timeout = life.timeout(() => controller.abort(), 10000);
       try {
-        const response = await life.fetch('/ui/refresh' + url.search, {cache: 'no-store', signal: controller.signal});
+        const response = await life.fetch(url, {cache: 'no-store', signal: controller.signal, headers:{'HX-Request':'true','X-Oie-Fragment':'scheduled'}});
         if (!response.ok) throw Error('schedule filter');
         const page = new DOMParser().parseFromString(await response.text(), 'text/html');
         const next = page.getElementById('scheduled-results');
-        if (request !== controller || life.signal.aborted) return;
-        if (!next || page.getElementById('oie-live-regions')?.dataset.engineId !== document.body.dataset.engineId) throw Error('schedule scope');
+        if (request !== controller || life.signal.aborted || !results.isConnected || location.href !== previousURL) return;
+        if (!next || next.dataset.engineId !== document.body.dataset.engineId) throw Error('schedule scope');
         const replacement = document.importNode(next, true);
+        const workspace = document.getElementById('workspace'), top = workspace.scrollTop;
         window.OieTime.localize(replacement);
         const replace = () => {
           window.Alpine?.destroyTree(results);
@@ -44,13 +42,21 @@ window.OieRuntime.register('scheduling', life => {
           window.Alpine?.initTree(replacement);
         };
         if (window.Alpine?.mutateDom) window.Alpine.mutateDom(replace); else replace();
-        committed = values;
-        window.OieNavigation.addressSearch(url, true);
+        workspace.scrollTop = top;
+        if (!mutation) {
+          committed = values;
+          window.OieNavigation.addressSearch(url, true);
+        } else if (rowID) {
+          const rows = [...replacement.querySelectorAll('[data-scheduled-row]')];
+          const oldRows = [...results.querySelectorAll('[data-scheduled-row]')];
+          const nextRow = rows.find(row => row.dataset.scheduledRow === rowID) || rows[Math.min(rows.length - 1, oldRows.findIndex(row => row.dataset.scheduledRow === rowID))];
+          (nextRow?.querySelector('[data-schedule-actions-trigger], .oie-agenda-chat') || filter.querySelector('[data-agenda-filter-control]'))?.focus({preventScroll:true});
+        }
         document.dispatchEvent(new Event('oie:navigation-upgrade'));
       } catch {
         if (request !== controller || life.signal.aborted) return;
         request = null;
-        document.dispatchEvent(new CustomEvent('combobox:load', {detail: {id, values: committed}}));
+        if (!mutation) document.getElementById(id)?.dispatchEvent(new CustomEvent('combobox:load', {bubbles:true,detail:{id,values:committed}}));
         window.dispatchEvent(new CustomEvent('notify', {detail: {kind: 'toast', tone: 'danger', message: filter.dataset.filterUnavailable}}));
       } finally {
         clearTimeout(timeout);
@@ -59,6 +65,27 @@ window.OieRuntime.register('scheduling', life => {
           results.removeAttribute('aria-busy');
           results.inert = false;
         }
+      }
+    }
+    life.on(filter, 'combobox:change', ({detail}) => {
+      if (detail?.id !== id) return;
+      const values = [...detail.values].sort();
+      const url = new URL(location.href);
+      url.searchParams.delete('scheduleCursor');
+      url.searchParams.delete(name);
+      for (const value of values) url.searchParams.append(name, value);
+      void updateAgenda(url, values);
+    });
+    life.on(document,'oie:agenda-refresh',event=>void updateAgenda(new URL(location.href),committed,event.detail.form));
+    life.on(document,'oie:agenda-settled',event=>{
+      request?.abort();
+      committed = new URLSearchParams(location.search).getAll(name);
+      document.getElementById(id)?.dispatchEvent(new CustomEvent('combobox:load',{bubbles:true,detail:{id,values:committed}}));
+      window.OieTime.localize(event.detail.root);
+      if(event.detail.source?.matches('[data-agenda-next]')){
+        const row=event.detail.root.querySelector('[data-scheduled-row] a');
+        row?.focus({preventScroll:true});
+        document.getElementById('workspace').scrollTop=0;
       }
     });
   }
@@ -216,8 +243,8 @@ window.OieRuntime.register('scheduling', life => {
       if (ctx !== drawerEditRequest) return;
       if (!open) { event.preventDefault(); return; }
       const page = new DOMParser().parseFromString(ctx.text || '', 'text/html');
-      const root = page.getElementById('oie-app');
-      const editor = root?.querySelector('[data-editing-schedule] input[name="messageId"]');
+      const root = page.getElementById('schedule-editor');
+      const editor = root?.querySelector('input[name="messageId"]');
       if (ctx.response?.status !== 200 || root?.dataset.engineId !== engineId || root.dataset.conversationId !== conversationId ||
           editor?.value !== ctx.sourceElement.dataset.conversationScheduleEdit || snapshot().editBlocked !== false) {
         event.preventDefault();

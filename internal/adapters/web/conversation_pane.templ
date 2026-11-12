@@ -42,19 +42,7 @@ templ conversationPane(v view){
 				}
 				<div id="context-notice" class="oie-context-notice" role="status">@contextNotice(v)</div>
 <div class="oie-timeline-frame">
-<div class="oie-timeline" id="message-timeline" tabindex="0" aria-label={v.Text.Conversations} data-version={v.timelineVersion()}
- if v.RoomArchive != nil {
-  data-room-archive={string(v.RoomArchive.Availability)}
-  data-archive-text-search={string(v.RoomArchive.TextSearch)}
-  data-archive-initial={strconv.FormatBool(v.RoomArchive.InitialComplete)}
-  data-archive-complete={strconv.FormatBool(v.RoomArchive.OlderComplete)}
-  if v.RoomArchive.OldestCoveredAt != nil {
-   data-archive-covered={strconv.FormatInt(v.RoomArchive.OldestCoveredAt.UnixMilli(),10)}
-  }
- }
->
-@timeline(v)
-</div>
+@conversationTimeline(v)
 </div>
 <button type="button" class="oie-jump-latest" data-jump-latest hidden?={!v.ContextHasNewer&&!v.ContextMissing}>{v.Text.JumpToLatest}</button>
 
@@ -100,4 +88,28 @@ templ conversationSkeleton(v view) {
   @skeleton.Skeleton(skeleton.Config{Shape:skeleton.ShapeRectangle,ItemClass:"oie-chat-skeleton-input"})
  </div>
 </div>
+}
+
+templ conversationTimeline(v view) {
+<div class="oie-timeline" id="message-timeline" tabindex="0" aria-label={v.Text.Conversations} data-version={v.timelineVersion()} data-engine-id={v.EngineID} data-conversation-id={v.ChatID}
+ if v.RoomArchive != nil {
+  data-room-archive={string(v.RoomArchive.Availability)}
+  data-archive-text-search={string(v.RoomArchive.TextSearch)}
+  data-archive-initial={strconv.FormatBool(v.RoomArchive.InitialComplete)}
+  data-archive-complete={strconv.FormatBool(v.RoomArchive.OlderComplete)}
+  if v.RoomArchive.OldestCoveredAt != nil {
+   data-archive-covered={strconv.FormatInt(v.RoomArchive.OldestCoveredAt.UnixMilli(),10)}
+  }
+ }
+>
+@timeline(v)
+</div>
+}
+
+templ timelineNavigationFragment(v view) {
+	<div>
+		@starData(v)
+		@avatarData(v)
+		@conversationTimeline(v)
+	</div>
 }

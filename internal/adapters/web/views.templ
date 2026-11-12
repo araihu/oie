@@ -142,7 +142,7 @@ if v.DevBuildID!="" {
 
 // Application state travels with each shell fragment; the head/runtime persists.
 templ appFragment(v view) {
-<div id="oie-app" hx-history-elt data-route-error={v.Text.NavFailed} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
+<div id="oie-app" hx-history-elt data-shared-account={v.AccountFilter} data-route-error={v.Text.NavFailed} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
 @toast.ToastContainer(toast.ContainerConfig{}).WithExpressions(expressions.Toast{DismissLabel:v.Text.Close,DismissAriaLabel:v.Text.Close})
 @liveCopy(v)
 <p class="sr-only" data-read-status data-read-failed={v.Text.ReadFailed} role="status" aria-live="polite" hidden></p>
@@ -317,8 +317,11 @@ templ filterLink(v view, key, label string) {
 }
 
 templ conversationRow(v view, c engineapi.Conversation) {
+	{{ attrs := navigationAttrs("conversation-pane", "conversation", "outerHTML settle:0ms show:none") }}
+	{{ attrs["data-conversation-id"] = c.Id }}
+	{{ attrs["aria-current"] = strconv.FormatBool(v.ChatID == c.Id) }}
 	<li data-conversation-row={c.Id} data-version={v.conversationRowVersion(c)}>
-		@link.Link(v.href("chat", c.Id,"message","","infoView","","infoType","","infoCursor","","infoQuery","","infoFocus","","lang",v.Locale,"theme",v.Theme), link.WithRootClass("oie-chat-link"), link.WithAttrs(templ.Attributes{"data-conversation-id": c.Id, "aria-current": strconv.FormatBool(v.ChatID == c.Id)})) {
+		@link.Link(v.href("chat", c.Id,"message","","infoView","","infoType","","infoCursor","","infoQuery","","infoFocus","","lang",v.Locale,"theme",v.Theme), link.WithRootClass("oie-chat-link"), link.WithAttrs(attrs)) {
 			@profileAvatar(v,c.AccountId,c.Address,avatar.Config{Name: c.Title, Initials: chatInitials(c), Size: avatar.SizeSM, RootClass: "oie-chat-avatar"})
 			<div class="oie-row-content">
 				<div class="oie-row-top"><strong>{ c.Title }</strong><time datetime={ c.UpdatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ c.UpdatedAt.Format("15:04") }</time></div>
@@ -413,7 +416,7 @@ func messageSide(own bool) chatbubble.Side {
 func selectedAccountID(v view)string{if v.Selected!=nil{return v.Selected.AccountId};return ""}
 
 templ composer(v view){
-<form id="send-message-form" action={templ.URL(composerAction(v))} method="post" data-oie-action="send" x-data="{}" data-schedule-composer?={v.scheduleAllowed()} data-editing-schedule?={v.ScheduleEdit!=nil} data-send-allowed={strconv.FormatBool(v.sendAllowed())} data-compose-allowed={strconv.FormatBool(v.composeAllowed())} data-reply-allowed={strconv.FormatBool(v.replyAllowed())} data-edit-allowed={strconv.FormatBool(v.ScheduleEdit==nil&&v.messagingImplemented("send_corrections"))} data-edit-target-url={v.editTargetHref("")} data-latest-edit-message={v.latestEditMessage()}>
+<form id="send-message-form" action={templ.URL(composerAction(v))} method="post" data-oie-action="send" x-data="{}" data-schedule-composer?={v.scheduleAllowed()} data-editing-schedule?={v.ScheduleEdit!=nil} data-send-allowed={strconv.FormatBool(v.sendAllowed())} data-compose-allowed={strconv.FormatBool(v.composeAllowed())} data-reply-allowed={strconv.FormatBool(v.replyAllowed())} data-edit-allowed={strconv.FormatBool(v.messagingImplemented("send_corrections"))} data-edit-target-url={v.editTargetHref("")} data-latest-edit-message={v.latestEditMessage()}>
 @mutationFieldsAt(v,"send",sendKey(v),composerReturn(v))
 if v.scheduleAllowed() {
 @scheduleFields(v)
@@ -461,7 +464,11 @@ func sendKey(v view)string{if v.FormTarget=="send"&&v.field("operationKey")!=""{
 
 templ accounts(v view){
 @drawer.Drawer(drawer.Config{ID:"accounts",Title:v.Text.Accounts,PanelClass:v.accountDrawerClass()}){
-<div class={"oie-account-workspace",templ.KV("oie-account-list-workspace",v.accountScreen()=="list"),templ.KV("oie-account-detail-workspace",v.accountScreen()=="detail")}>
+@accountWorkspace(v)
+}
+}
+templ accountWorkspace(v view){
+<div id="account-workspace" data-engine-id={v.EngineID} data-panel-class={v.accountDrawerClass()} class={"oie-account-workspace",templ.KV("oie-account-list-workspace",v.accountScreen()=="list"),templ.KV("oie-account-detail-workspace",v.accountScreen()=="detail")}>
 switch v.accountScreen() {
 case "add":
 @accountBack(v)
@@ -492,7 +499,6 @@ default:
 </footer>
 }
 </div>
-}
 }
 func registerKey(v view)string{if v.FormTarget=="register"&&validOperationKey(v.field("operationKey")){return v.field("operationKey")};return newOperationKey()}
 templ accountBack(v view){

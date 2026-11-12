@@ -796,11 +796,18 @@ func (s *Server) baseView(r *http.Request) view {
 }
 func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	fragment := ""
-	if r.URL.Path == "/" && r.Header.Get("HX-Request") == "true" && v.Section != "media" && v.Section != "scheduled" && r.URL.Query().Get("editSchedule") == "" {
+	if r.URL.Path == "/" && r.Header.Get("HX-Request") == "true" {
 		fragment = r.Header.Get("X-Oie-Fragment")
 	}
 	listOnly := fragment == "inbox"
-	paneOnly := fragment == "conversation" && v.ChatID != ""
+	editorOnly := fragment == "schedule-editor" && v.ChatID != ""
+	infoOnly := fragment == "info" && v.ChatID != ""
+	paneOnly := (fragment == "conversation" || fragment == "timeline") && v.ChatID != "" || editorOnly || infoOnly
+	accountsOnly := fragment == "accounts"
+	scheduledOnly := fragment == "scheduled" && v.Section == "scheduled"
+	if fragment == "appearance" {
+		return
+	}
 	editor := func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept-Language", v.Locale)
 		return nil
@@ -826,12 +833,14 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		s.loadMessageSearch(ctx, v)
 		return
 	}
-	if !listOnly && !paneOnly {
+	if !listOnly && !paneOnly && !scheduledOnly && !accountsOnly {
 		v.AccountUnread = s.accountUnread(ctx)
 	}
 	for _, a := range v.Accounts {
-		s.loadAvatars(ctx, v, a.Id)
-		if listOnly || paneOnly {
+		if !editorOnly && !scheduledOnly {
+			s.loadAvatars(ctx, v, a.Id)
+		}
+		if listOnly || paneOnly || scheduledOnly {
 			continue
 		}
 		if !v.Preview && v.accountScreen() == "detail" && a.Id == v.managedAccountID() {
@@ -842,11 +851,14 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		}
 		s.loadAccountConnection(ctx, v, a.Id, editor)
 	}
-	if !listOnly && !paneOnly {
+	if !listOnly && !paneOnly && !scheduledOnly {
 		s.loadCapabilities(ctx, v)
 	}
+	if accountsOnly {
+		return
+	}
 	if v.Section == "scheduled" {
-		s.loadScheduled(ctx, v)
+		s.loadScheduled(ctx, v, !scheduledOnly)
 		return
 	}
 	if v.Section == "media" {
@@ -859,7 +871,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	if listOnly {
 		return
 	}
-	s.loadConversation(ctx, r, v, paneOnly, editor)
+	s.loadConversation(ctx, r, v, paneOnly, editorOnly, infoOnly, editor)
 	s.loadScheduleEdit(ctx, v, r.URL.Query().Get("editSchedule"))
 }
 
@@ -908,7 +920,7 @@ func (s *Server) loadInbox(ctx context.Context, v *view, editor engineapi.Reques
 	return true
 }
 
-func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view, paneOnly bool, editor engineapi.RequestEditorFn) {
+func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view, paneOnly, editorOnly, infoOnly bool, editor engineapi.RequestEditorFn) {
 	selected := v.ChatID
 	if selected == "" && !v.InboxOnly && len(v.Chats) > 0 {
 		selected = v.Chats[0].Id
@@ -935,6 +947,10 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 	}
 	v.Selected = conversation.JSON200
 	v.ChatID = selected
+	if editorOnly {
+		s.loadMessaging(ctx, v)
+		return
+	}
 	s.loadRoomArchive(ctx, v)
 	s.loadConversationDetails(ctx, v)
 	if paneOnly {
@@ -945,11 +961,11 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		}
 	}
 	s.loadMessaging(ctx, v)
-	s.latestEditTarget(ctx, v)
 	s.loadChatInfo(ctx, v)
-	if r.URL.Path == "/ui/info" {
+	if infoOnly || r.URL.Path == "/ui/info" {
 		return
 	}
+	s.latestEditTarget(ctx, v)
 	items, usedContext := s.contextMessages(ctx, v, v.Selected.AccountId)
 	if v.Unavailable {
 		return
@@ -1105,14 +1121,39 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	component := page(v)
 	if r.Header.Get("HX-Request") == "true" {
 		component = appFragment(v)
-		if r.URL.Path == "/" && r.Header.Get("X-Oie-Fragment") == "inbox" && v.Section != "media" {
-			component = inboxList(v)
-		}
-		if r.Header.Get("X-Oie-Fragment") == "conversation" && v.Section != "media" {
-			component = conversationPane(v)
-		}
-		if r.Header.Get("X-Oie-Fragment") == "info" && v.Selected != nil {
-			component = chatInfoShell(v)
+		switch r.Header.Get("X-Oie-Fragment") {
+		case "inbox":
+			if r.URL.Path == "/" && v.Section != "media" && v.Section != "scheduled" {
+				component = inboxList(v)
+			}
+		case "conversation":
+			if v.Section != "media" && v.Section != "scheduled" {
+				component = conversationPane(v)
+			}
+		case "timeline":
+			if v.Selected != nil {
+				component = timelineNavigationFragment(v)
+			}
+		case "info":
+			if v.Selected != nil {
+				component = chatInfoShell(v)
+			}
+		case "schedule-editor":
+			if v.Selected != nil && v.scheduleAllowed() {
+				component = scheduleEditor(v)
+			}
+		case "scheduled":
+			if v.Section == "scheduled" {
+				component = scheduledResults(v)
+			}
+		case "accounts":
+			component = accountWorkspace(v)
+		case "shared":
+			if v.Section == "media" {
+				component = sharedFragment(v)
+			}
+		case "appearance":
+			component = appearanceSettings(v)
 		}
 	}
 	if err := component.Render(ctx, &buf); err != nil {

@@ -72,12 +72,16 @@ func scheduleConversationCombobox(v view) combobox.Config {
 }
 
 templ scheduledResults(v view) {
-	<div id="scheduled-results" data-version={v.scheduleVersion()}>
+	<div id="scheduled-results" data-engine-id={v.EngineID} data-version={v.scheduleVersion()}>
+		if v.SchedulePage == nil {
+			<p role="status">{v.Text.ScheduleUnavailable}</p>
+		} else {
 		@scheduledAgenda(v,false)
 		if v.SchedulePage.NextCursor != nil {
 			<div class="oie-agenda-more">
-				@link.Link(v.scheduleHref(*v.SchedulePage.NextCursor),link.WithAppearance(link.AppearanceButton)) { {v.Text.SearchMore} }
+				@link.Link(v.scheduleHref(*v.SchedulePage.NextCursor),link.WithAppearance(link.AppearanceButton),link.WithAttrs(templ.Attributes{"data-agenda-next":""})) { {v.Text.SearchMore} }
 			</div>
+		}
 		}
 	</div>
 }
@@ -239,10 +243,16 @@ templ scheduleControl(v view) {
 		ID:"composer-split", Primary:schedulePrimaryAction(v),
 		MenuLabel:v.Text.More, MenuAlign:dropdown.AlignEnd,
 		Sections:[]dropdown.Section{{Items:[]dropdown.Item{{
-			Label:scheduleMenuLabel(v),
+			ID:"composer-schedule-new",
+			Label:v.Text.Schedule,
 			Icon:glyph(heroicons.Icon16SolidClock),
 			OnClick:"$dispatch('oie:schedule-compose')",
-			Disabled:!v.sendAllowed() && v.ScheduleEdit==nil,
+			Disabled:!v.sendAllowed(),
+		},{
+			ID:"composer-schedule-reschedule",
+			Label:v.Text.Reschedule,
+			Icon:glyph(heroicons.Icon16SolidClock),
+			OnClick:"$dispatch('oie:schedule-compose')",
 		}}}},
 		RootClass:"oie-schedule-split",
 	})
@@ -252,6 +262,13 @@ templ scheduleFields(v view) {
 	@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-schedule-retry"),button.WithAttrs(templ.Attributes{"data-schedule-retry":"","hidden":true})){ {v.Text.Retry} }
 	<input type="hidden" name="scheduledAt"/>
 	<input type="hidden" name="attachmentIds"/>
+	@scheduleEditor(v)
+	<input type="file" data-attachment-picker multiple hidden disabled?={!v.messagingImplemented("file_upload")}/>
+	<div data-composer-attachments class="oie-composer-attachments" hidden></div>
+}
+
+templ scheduleEditor(v view) {
+	<div id="schedule-editor" data-engine-id={v.EngineID} data-account-id={selectedAccountID(v)} data-conversation-id={v.ChatID} data-return-to={composerReturn(v)} data-operation-key={sendKey(v)}>
 	if v.ScheduleEdit != nil {
 		<input type="hidden" name="messageId" value={v.ScheduleEdit.Id}/>
 		<input type="hidden" name="expectedRevisionId" value={v.ScheduleEdit.RevisionId}/>
@@ -262,8 +279,7 @@ templ scheduleFields(v view) {
 			@link.Link(v.scheduleExitHref(),link.WithAttrs(templ.Attributes{"data-cancel-schedule-edit":""})) { {v.Text.CancelEdit} }
 		</div>
 	}
-	<input type="file" data-attachment-picker multiple hidden disabled?={!v.messagingImplemented("file_upload")}/>
-	<div data-composer-attachments class="oie-composer-attachments" hidden></div>
+	</div>
 }
 
 templ scheduleDialog(v view) {
@@ -325,23 +341,16 @@ func agendaDate(at *time.Time,layout string) string {
 }
 
 func schedulePrimaryAction(v view) splitbutton.Action {
-	action := splitbutton.Action{
+	return splitbutton.Action{
 		ID: "composer-send",
 		OnClick: "$el.closest('form').requestSubmit()",
 		Disabled: !v.sendAllowed() && v.ScheduleEdit == nil,
+		Icon: schedulePrimaryContent(v),
+		Tooltip: v.Text.Send,
 	}
-	if v.ScheduleEdit != nil {
-		action.Label = v.Text.ScheduleSave
-	} else {
-		action.Icon = glyph(heroicons.Icon16SolidArrowUp)
-		action.Tooltip = v.Text.Send
-	}
-	return action
 }
 
-func scheduleMenuLabel(v view) string {
-	if v.ScheduleEdit != nil {
-		return v.Text.Reschedule
-	}
-	return v.Text.Schedule
+templ schedulePrimaryContent(v view) {
+	<span data-schedule-send-icon>@glyph(heroicons.Icon16SolidArrowUp)</span>
+	<span data-schedule-save-label>{v.Text.ScheduleSave}</span>
 }

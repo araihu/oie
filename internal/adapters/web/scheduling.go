@@ -73,7 +73,7 @@ func (s *Server) conversationSchedules(w http.ResponseWriter, r *http.Request) {
 	_, _ = fragment.WriteTo(w)
 }
 
-func (s *Server) loadScheduled(ctx context.Context, v *view) {
+func (s *Server) loadScheduled(ctx context.Context, v *view, includeDestinations bool) {
 	if v.Preview {
 		return
 	}
@@ -94,6 +94,9 @@ func (s *Server) loadScheduled(ctx context.Context, v *view) {
 		return
 	}
 	v.SchedulePage = response.JSON200
+	if !includeDestinations {
+		return
+	}
 	limit := 100
 	conversations, err := s.client.ListConversationsWithResponse(ctx, &engineapi.ListConversationsParams{Limit: &limit})
 	if err == nil && conversations.JSON200 != nil {
@@ -418,6 +421,9 @@ func scheduleQuoteSender(reply *engineapi.MessageReply) string {
 }
 
 func (v view) scheduleVersion() string {
+	if v.SchedulePage == nil {
+		return ""
+	}
 	var version strings.Builder
 	for _, item := range v.SchedulePage.Items {
 		version.WriteString(item.Message.RevisionId)

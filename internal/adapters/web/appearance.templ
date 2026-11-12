@@ -18,12 +18,13 @@ func appearanceOption(v view, value, label string, symbol icon.Symbol) radio.Con
 		Segmented:    true,
 		Checked:      v.Theme == value || value == "system" && v.Theme == "",
 		Alpine:       &radio.AlpineConfig{Model: "appearance"},
-		HTMX:         &radio.HTMXConfig{Get: v.href("theme", value, "open", "settings"), Target: "#oie-app", Swap: "outerHTML show:none", PushURL: true},
-		InputAttrs:   templ.Attributes{"hx-select": "#oie-app", "hx-headers": `{"X-Oie-Fragment":"app"}`, "hx-params": "none"},
+		HTMX:         &radio.HTMXConfig{Get: "/?theme="+value, Target: "#appearance-settings", Swap: "outerHTML show:none", PushURL: false},
+		InputAttrs:   templ.Attributes{"hx-select": "#appearance-settings", "hx-headers": `{"X-Oie-Fragment":"appearance"}`, "hx-params": "none"},
 	}
 }
 
 templ appearanceSettings(v view) {
+<section id="appearance-settings" data-mode={v.Theme}>
 	<h2>{ v.Text.Appearance }</h2>
 	<div role="radiogroup" aria-label={ v.Text.Appearance } x-data={ "{ appearance: " + strconv.Quote(v.Theme) + " }" }>
 		@radio.RadioBar() {
@@ -32,4 +33,5 @@ templ appearanceSettings(v view) {
 			@radio.Radio(appearanceOption(v, "dark", v.Text.Dark, heroicons.Icon16SolidMoon))
 		}
 	</div>
+</section>
 }

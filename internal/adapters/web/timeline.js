@@ -244,6 +244,16 @@ window.OieRuntime.register('timeline',life=>{
  life.on(root,'wheel',event=>{if(event.deltaY<0)loadArchiveAtTop()},{passive:true});
  life.on(root,'touchend',loadArchiveAtTop,{passive:true});
  life.on(root,'keydown',event=>{if(event.target===root&&['ArrowUp','PageUp','Home'].includes(event.key))loadArchiveAtTop()});
+ life.on(document,'oie:timeline-replacing',()=>{
+  cancelFocus();epoch++;controller?.abort();observer?.disconnect();resizer?.disconnect();
+ });
+ life.on(document,'oie:timeline-latest',event=>{
+  const page=parse(root,50);if(!page)return;
+  anchor=null;failed='';forceFollow=false;refreshAgain=false;refreshPage=null;
+  older=page.data.hasOlder==='true';newer=page.data.hasNewer==='true';liveAttached=true;
+  hooks(event.detail.page||document,event.detail.generation,performance.now());
+  scrollLatest();controls();observe();
+ });
  life.on(document,'oie:timeline-snapshot',event=>refresh(event.detail.page,false,event.detail.startedAt));
  life.on(document,'oie:actions-refreshed',()=>{if(!busy&&!failed)observe()});
  life.on(document,'keydown',event=>{if(event.key==='Escape'&&failed==='paused')life.timeout(()=>{failed='';controls();observe()},200)});

@@ -96,7 +96,7 @@ window.OieRuntime.register('shared-content', life => {
   const cursor=revalidate??c.next,href=refreshing?null:c.href;let url;try{url=requestURL(c,cursor,href)}catch{c.failed=true;feedback(c,true);return}
   const generation=++c.generation;c.busy=true;if(!refreshing)c.failed=false;feedback(c);const request=new AbortController();c.request=request;const timeout=life.timeout(()=>request.abort(),12000),oldest=sorted(c.items.values()).at(-1);
   try{
-   const response=await life.fetch(url.pathname+url.search,{credentials:'same-origin',cache:'no-store',redirect:'error',headers:{'HX-Request':'true','X-Oie-Fragment':c.info?'info':'app'},signal:request.signal});if(!response.ok)throw Error('unavailable');const page=new DOMParser().parseFromString(await response.text(),'text/html');if(c.disposed||c.closed||generation!==c.generation||!c.results.isConnected||controllers.get(c.prefix)!==c)return;
+   const response=await life.fetch(url.pathname+url.search,{credentials:'same-origin',cache:'no-store',redirect:'error',headers:{'HX-Request':'true','X-Oie-Fragment':c.info?'info':'shared'},signal:request.signal});if(!response.ok)throw Error('unavailable');const page=new DOMParser().parseFromString(await response.text(),'text/html');if(c.disposed||c.closed||generation!==c.generation||!c.results.isConnected||controllers.get(c.prefix)!==c)return;
    capturePreviews(c);const data=pageData(page,c.info),items=check(c,data,cursor),newItems=items.filter(item=>!c.items.has(item.id)),upper=c.edges.get(cursor);if(items.some(item=>upper&&keyCompare(item,upper)>=0)||items.some(item=>c.items.has(item.id)&&c.items.get(item.id).ms!==item.ms))throw Error('invalid_boundary');if(!items.length&&data.next)throw Error('nonadvancing_page');if(!upper&&cursor!==c.base)throw Error('unknown_boundary');
    if(!refreshing&&((items.length&&!newItems.length)||(!items.length&&data.next)||c.used.has(data.next)&&data.next))throw Error('nonadvancing_page');
    if(data.next&&items.length)c.edges.set(data.next,items.at(-1));
@@ -168,24 +168,24 @@ window.OieRuntime.register('shared-search', life => {
   on(form,'combobox:change',event=>{alignTabs();if(!info&&event.detail?.id==='shared-account'&&connected()){cancel();form.requestSubmit()}});
   on(document,'htmx:before:request',event=>{
    const ctx=event.detail.ctx;if(['oie-app','chat-info-content','shared-content-scroll'].includes(ctx?.target?.id))cancel();if(!owned(ctx)||!connected())return;
-   active.add(ctx);ctx.oieSearch={form,scope:scope(),generation:Number(document.body.dataset.starGeneration||0),engine:document.body.dataset.engineId,conversation:document.body.dataset.conversationId};accepted=null;region()?.setAttribute('aria-busy','true');
+   active.add(ctx);if(!info)return;ctx.oieSearch={form,scope:scope(),generation:Number(document.body.dataset.starGeneration||0),engine:document.body.dataset.engineId,conversation:document.body.dataset.conversationId};accepted=null;region()?.setAttribute('aria-busy','true');
   },{capture:true});
   on(document,'htmx:finally:request',event=>active.delete(event.detail.ctx),{capture:true});
   on(document,'htmx:before:swap',event=>{
-   const ctx=event.detail.ctx;if(!owned(ctx))return;const request=ctx.oieSearch;
+   const ctx=event.detail.ctx;if(!info||!owned(ctx))return;const request=ctx.oieSearch;
    if(!request||!connected()||request.scope!==scope()||request.engine!==document.body.dataset.engineId||request.conversation!==document.body.dataset.conversationId){event.preventDefault();return}
    const page=new DOMParser().parseFromString(ctx.text||'','text/html'),fresh=page.querySelector('#'+targetID);
    if(!fresh||info&&page.querySelector('#chat-info-content')?.dataset.detailsConversation!==request.conversation){event.preventDefault();region()?.removeAttribute('aria-busy');window.OieNavigation.showError(ctx);return}
    accepted={...request,page};
   },{capture:true});
   on(document,'htmx:after:settle',event=>{
-   const root=event.detail.task?.target;if(root?.id!==targetID||!connected()||!root.isConnected||root!==region()||!accepted)return;
+   const root=event.detail.task?.target;if(!info||root?.id!==targetID||!connected()||!root.isConnected||root!==region()||!accepted)return;
    const fresh=accepted;accepted=null;root.removeAttribute('aria-busy');
    document.dispatchEvent(new CustomEvent(info?'oie:info-shared-search-settled':'oie:shared-search-settled',{detail:{root,page:fresh.page}}));
    document.dispatchEvent(new CustomEvent('oie:stars-refresh',{detail:{page:fresh.page,generation:fresh.generation}}));
    document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:fresh.page}));document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));
   });
-  on(document,'htmx:error',event=>{const ctx=event.detail.ctx;if(owned(ctx)&&connected()){region()?.removeAttribute('aria-busy');window.OieNavigation.showError(ctx)}});
+  on(document,'htmx:error',event=>{const ctx=event.detail.ctx;if(info&&owned(ctx)&&connected()){region()?.removeAttribute('aria-busy');window.OieNavigation.showError(ctx)}});
   return binding;
  }
  bind(false);bind(true);
