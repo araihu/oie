@@ -2,11 +2,14 @@ package httpapi
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
 	"mime/multipart"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -127,6 +130,7 @@ func (s *Server) GetStagedMessageAttachment(ctx context.Context, r engineapi.Get
 
 type scheduleCursor struct {
 	Engine, Conversation domain.ID
+	Selection            string `json:",omitempty"`
 	Time                 time.Time
 	ID                   domain.ID
 }
@@ -140,16 +144,36 @@ func (s *Server) ListScheduledMessages(ctx context.Context, r engineapi.ListSche
 	if r.Params.Limit != nil {
 		query.Limit = *r.Params.Limit
 	}
+	key := scheduleCursor{Engine: snapshot.ID}
 	if r.Params.ConversationId != nil {
-		query.ConversationID = domain.ID(*r.Params.ConversationId)
-	}
-	if r.Params.Cursor != nil {
-		var key scheduleCursor
-		data, err := base64.RawURLEncoding.DecodeString(*r.Params.Cursor)
-		if err != nil || json.Unmarshal(data, &key) != nil || key.Engine != snapshot.ID || key.Conversation != query.ConversationID || key.Time.IsZero() {
+		if r.Params.ConversationIds != nil {
 			return nil, application.ErrInvalid
 		}
-		query.AfterTime, query.AfterID = key.Time, key.ID
+		key.Conversation = domain.ID(*r.Params.ConversationId)
+		query.ConversationIDs = []domain.ID{key.Conversation}
+	} else if r.Params.ConversationIds != nil {
+		ids := slices.Clone(*r.Params.ConversationIds)
+		if len(ids) < 1 || len(ids) > application.MaxScheduledConversationFilters {
+			return nil, application.ErrInvalid
+		}
+		slices.Sort(ids)
+		for _, id := range ids {
+			query.ConversationIDs = append(query.ConversationIDs, domain.ID(id))
+		}
+		if len(ids) == 1 {
+			key.Conversation = domain.ID(ids[0])
+		} else {
+			digest := sha256.Sum256([]byte(strings.Join(ids, "\n")))
+			key.Selection = base64.RawURLEncoding.EncodeToString(digest[:])
+		}
+	}
+	if r.Params.Cursor != nil {
+		var previous scheduleCursor
+		data, err := base64.RawURLEncoding.DecodeString(*r.Params.Cursor)
+		if err != nil || json.Unmarshal(data, &previous) != nil || previous.Engine != key.Engine || previous.Conversation != key.Conversation || previous.Selection != key.Selection || previous.Time.IsZero() {
+			return nil, application.ErrInvalid
+		}
+		query.AfterTime, query.AfterID = previous.Time, previous.ID
 	}
 	items, err := s.engine.ScheduledMessages(ctx, query)
 	if err != nil {
@@ -158,7 +182,8 @@ func (s *Server) ListScheduledMessages(ctx context.Context, r engineapi.ListSche
 	page := engineapi.ScheduledMessagePage{EngineId: string(snapshot.ID), Items: make([]engineapi.ScheduledMessageItem, 0, min(query.Limit, len(items)))}
 	if len(items) > query.Limit {
 		last := items[query.Limit-1].Message
-		data, err := json.Marshal(scheduleCursor{Engine: snapshot.ID, Conversation: query.ConversationID, Time: *last.ScheduledAt, ID: last.ID})
+		key.Time, key.ID = *last.ScheduledAt, last.ID
+		data, err := json.Marshal(key)
 		if err != nil {
 			return nil, err
 		}

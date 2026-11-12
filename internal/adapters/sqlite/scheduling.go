@@ -41,7 +41,11 @@ func (s *Store) ScheduledMessages(ctx context.Context, in application.ScheduledQ
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	rows, err := q.ListScheduledMessages(ctx, dbgen.ListScheduledMessagesParams{ConversationID: string(in.ConversationID), AfterTime: after, AfterID: string(in.AfterID), PageLimit: int64(in.Limit)})
+	conversations := "[]"
+	if len(in.ConversationIDs) > 0 {
+		conversations = jsonText(in.ConversationIDs)
+	}
+	rows, err := q.ListScheduledMessages(ctx, dbgen.ListScheduledMessagesParams{ConversationIds: conversations, AfterTime: after, AfterID: string(in.AfterID), PageLimit: int64(in.Limit)})
 	if err != nil {
 		return nil, err
 	}

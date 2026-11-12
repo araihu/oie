@@ -85,16 +85,16 @@ FROM outbox AS o
 JOIN messages AS m ON m.id = o.message_id
 JOIN conversations AS c ON c.id = m.conversation_id
 WHERE o.state = 'queued' AND o.scheduled_at <> ''
-AND (CAST(?1 AS TEXT) = '' OR m.conversation_id = ?1)
+AND (CAST(?1 AS TEXT) = '[]' OR m.conversation_id IN (SELECT value FROM json_each(CAST(?1 AS TEXT))))
 AND (o.scheduled_at, o.message_id) > (?2, ?3)
 ORDER BY o.scheduled_at, o.message_id LIMIT ?4
 `
 
 type ListScheduledMessagesParams struct {
-	ConversationID string
-	AfterTime      string
-	AfterID        string
-	PageLimit      int64
+	ConversationIds string
+	AfterTime       string
+	AfterID         string
+	PageLimit       int64
 }
 
 type ListScheduledMessagesRow struct {
@@ -104,7 +104,7 @@ type ListScheduledMessagesRow struct {
 
 func (q *Queries) ListScheduledMessages(ctx context.Context, arg ListScheduledMessagesParams) ([]ListScheduledMessagesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listScheduledMessages,
-		arg.ConversationID,
+		arg.ConversationIds,
 		arg.AfterTime,
 		arg.AfterID,
 		arg.PageLimit,

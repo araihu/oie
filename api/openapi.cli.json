@@ -4395,9 +4395,29 @@
           {
             "name": "conversationId",
             "in": "query",
-            "description": "Limit results to one conversation on this engine.",
+            "description": "Limit results to one conversation on this engine. Cannot be combined with conversationIds.",
             "schema": {
               "$ref": "#/components/schemas/ID"
+            }
+          },
+          {
+            "name": "conversationIds",
+            "in": "query",
+            "description": "Limit results to any of the selected conversations on this engine. Cannot be combined with conversationId. Order does not affect results or continuation.",
+            "style": "form",
+            "explode": true,
+            "example": [
+              "019a5df0-0000-7000-8000-000000000001",
+              "019a5df0-0000-7000-8000-000000000002"
+            ],
+            "schema": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 200,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/components/schemas/ID"
+              }
             }
           },
           {

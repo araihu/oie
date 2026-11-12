@@ -21,11 +21,13 @@ const MaxMessageAttachments = 16
 var ErrAttachmentTooLarge = errors.New("attachment too large")
 
 type ScheduledQuery struct {
-	ConversationID domain.ID
-	AfterTime      time.Time
-	AfterID        domain.ID
-	Limit          int
+	ConversationIDs []domain.ID
+	AfterTime       time.Time
+	AfterID         domain.ID
+	Limit           int
 }
+
+const MaxScheduledConversationFilters = 200
 
 type ScheduledMessage struct {
 	Message      domain.Message
@@ -258,11 +260,16 @@ func (e *Engine) UpdatePendingMessage(ctx context.Context, key, id, expected dom
 }
 
 func (e *Engine) ScheduledMessages(ctx context.Context, query ScheduledQuery) ([]ScheduledMessage, error) {
-	if query.Limit < 1 || query.Limit > 100 || (!query.AfterTime.IsZero() && !validID(query.AfterID)) {
+	if query.Limit < 1 || query.Limit > 100 || len(query.ConversationIDs) > MaxScheduledConversationFilters || (!query.AfterTime.IsZero() && !validID(query.AfterID)) {
 		return nil, ErrInvalid
 	}
-	if query.ConversationID != "" {
-		if _, err := e.Conversation(ctx, query.ConversationID); err != nil {
+	seen := make(map[domain.ID]bool, len(query.ConversationIDs))
+	for _, id := range query.ConversationIDs {
+		if seen[id] {
+			return nil, ErrInvalid
+		}
+		seen[id] = true
+		if _, err := e.Conversation(ctx, id); err != nil {
 			return nil, err
 		}
 	}

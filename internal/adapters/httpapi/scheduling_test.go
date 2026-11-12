@@ -34,7 +34,8 @@ func TestSchedulingAcrossRoomsAndAttachmentDispatchAfterRestart(t *testing.T) {
 	}, rooms: make(map[domain.ID]domain.RoomSession)}, sent: make(chan application.Outgoing, 2)}
 	e, store, server := newMessagingEngine(t, dir, protocol)
 	protocol.host = e
-	account := openTestConversation(t, e, "alice@localhost").AccountID
+	direct := openTestConversation(t, e, "alice@localhost")
+	account := direct.AccountID
 	client, err := engineapi.NewClientWithResponses(server.URL)
 	if err != nil {
 		t.Fatal(err)
@@ -129,6 +130,26 @@ func TestSchedulingAcrossRoomsAndAttachmentDispatchAfterRestart(t *testing.T) {
 	page, err = client.ListScheduledMessagesWithResponse(ctx, &engineapi.ListScheduledMessagesParams{ConversationId: &room})
 	if err != nil || page.JSON200 == nil || len(page.JSON200.Items) != 1 || page.JSON200.Items[0].Message.Id != first.Id {
 		t.Fatalf("scoped scheduled page: %+v %v", page, err)
+	}
+	selected := []string{room, other}
+	page, err = client.ListScheduledMessagesWithResponse(ctx, &engineapi.ListScheduledMessagesParams{ConversationIds: &selected, Limit: &limit})
+	if err != nil || page.JSON200 == nil || len(page.JSON200.Items) != 1 || page.JSON200.Items[0].Message.Id != first.Id || page.JSON200.NextCursor == nil {
+		t.Fatalf("multi-conversation first page: %+v %v", page, err)
+	}
+	selected[0], selected[1] = selected[1], selected[0]
+	selectionCursor := page.JSON200.NextCursor
+	page, err = client.ListScheduledMessagesWithResponse(ctx, &engineapi.ListScheduledMessagesParams{ConversationIds: &selected, Cursor: selectionCursor})
+	if err != nil || page.JSON200 == nil || len(page.JSON200.Items) != 1 || page.JSON200.Items[0].Message.Id != second.Id {
+		t.Fatalf("reordered selection continuation: %+v %v", page, err)
+	}
+	page, err = client.ListScheduledMessagesWithResponse(ctx, &engineapi.ListScheduledMessagesParams{ConversationId: &room, Cursor: selectionCursor})
+	if err != nil || page.StatusCode() != 400 {
+		t.Fatalf("cursor accepted with another filter: %+v %v", page, err)
+	}
+	subset := []string{room, string(direct.ID)}
+	page, err = client.ListScheduledMessagesWithResponse(ctx, &engineapi.ListScheduledMessagesParams{ConversationIds: &subset})
+	if err != nil || page.JSON200 == nil || len(page.JSON200.Items) != 1 || page.JSON200.Items[0].Message.Id != first.Id {
+		t.Fatalf("multi-conversation subset: %+v %v", page, err)
 	}
 	scheduled, err := store.PendingMessages(ctx, time.Now())
 	if err != nil || len(scheduled) != 0 {
