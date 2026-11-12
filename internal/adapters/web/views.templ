@@ -784,7 +784,7 @@ if pending {
 }
 
 templ messageEditedIcon(v view,m messageView){
-@link.Link(v.editHistoryHref(m),link.WithRootClass("oie-message-edited"),link.WithAttrs(templ.Attributes{"data-message-edited":"","data-open-message-history":"","data-edited-at":messageEditedAt(m),"aria-label":v.Text.Edited+" · "+v.Text.ViewEditHistory})){@glyph(heroicons.Icon16SolidClock)}
+@link.Link(v.editHistoryHref(m),link.WithRootClass("oie-message-edited"),link.WithAttrs(templ.Attributes{"data-message-edited":"","data-open-message-history":"","data-edited-at":messageEditedAt(m),"aria-label":v.Text.Edited+" · "+v.Text.ViewEditHistory})){@glyph(heroicons.Icon16SolidPencilSquare)}
 }
 
 templ messageStarIndicator(v view,id string){
