@@ -13,12 +13,34 @@ import (
  "github.com/araihu/goshtoso/components/emptystate"
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/link"
+ "github.com/araihu/goshtoso/components/modal"
  "github.com/araihu/goshtoso/components/spinner"
  "github.com/araihu/goshtoso/components/textinput"
  "github.com/araihu/goshtoso/components/tooltip"
  "github.com/araihu/goshtoso/expressions"
  "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
+
+templ quickMessageSearch(v view){
+@modal.Dialog(modal.DialogConfig{ID:"oie-quick-search",Title:v.Text.SearchEverything,Compact:true,Content:quickMessageSearchContent(v)})
+}
+
+templ quickMessageSearchContent(v view){
+<div class="oie-quick-search" data-quick-search data-loading={v.Text.SearchResultsLoading} data-failed={v.Text.SearchResultsFailed} data-invalid={v.Text.SearchInvalid} data-engine-changed={v.Text.EngineChanged}>
+<form class="oie-quick-search-form" role="search">
+<div class="oie-quick-search-field">
+@textinput.TextInput(textinput.Config{ID:"oie-quick-search-query",Name:"q",Type:textinput.TypeSearch,Placeholder:v.Text.SearchEverything,InputAttrs:templ.Attributes{"aria-label":v.Text.SearchEverything,"aria-controls":"oie-quick-search-results","aria-keyshortcuts":"Control+K Meta+K","autocomplete":"off","autofocus":true,"maxlength":"400"}})
+</div>
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"data-quick-search-close":"","aria-label":v.Text.Close,"title":v.Text.Close})){@glyph(heroicons.Icon16SolidXMark)}
+</form>
+<p class="oie-quick-search-status" role="status" data-quick-search-status hidden></p>
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-quick-search-retry":"","hidden":true})){ {v.Text.Retry} }
+<div id="oie-quick-search-results" class="oie-quick-search-scroll" aria-busy="false">
+<div data-quick-search-items></div>
+<div data-quick-search-pagination></div>
+</div>
+</div>
+}
 
 templ messageSearchSlot(v view){
 <div id="message-search-slot" class="oie-message-search-slot" hidden?={!v.GlobalMessageSearch}>

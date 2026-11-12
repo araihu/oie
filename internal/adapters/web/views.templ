@@ -169,6 +169,7 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 			@about(v)
 			@accounts(v)
 @newConversation(v)
+@quickMessageSearch(v)
 @imageViewer(v)
 @documentViewer(v)
 @reactionPicker(v)
@@ -272,7 +273,7 @@ if v.NativeMessageSearch {
 				<input type="hidden" name="section" value={ v.Section }/>
 				<input type="hidden" name="filter" value={ v.Filter }/>
 				{{ searchValue := v.Query; if v.GlobalMessageSearch { searchValue = v.MessageSearch.Query } }}
-				@textinput.TextInput(textinput.Config{ID: "conversation-search", Name: "q", Value: searchValue, Type: textinput.TypeSearch, Placeholder: v.Text.SearchEverything, InputAttrs: templ.Attributes{"aria-label":v.Text.SearchEverything,"style": "padding-inline-end:2.5rem;border-radius:1.4rem;background:var(--oie-raised);border-color:var(--oie-border);color:var(--oie-text)"}})
+				@textinput.TextInput(textinput.Config{ID: "conversation-search", Name: "q", Value: searchValue, Type: textinput.TypeSearch, Placeholder: v.Text.SearchEverything, InputAttrs: templ.Attributes{"aria-label":v.Text.SearchEverything,"aria-keyshortcuts":"Control+K Meta+K","style": "padding-inline-end:2.5rem;border-radius:1.4rem;background:var(--oie-raised);border-color:var(--oie-border);color:var(--oie-text)"}})
 				@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button oie-global-search-cancel"),button.WithAttrs(templ.Attributes{"data-message-search-close":"","aria-label":v.Text.SearchCancel,"title":v.Text.SearchCancel,"hidden":!v.GlobalMessageSearch})){@glyph(heroicons.Icon16SolidXMark)}
 			</form>
 @messageSearchSlot(v)

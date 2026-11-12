@@ -9,6 +9,16 @@
 .oie-search-result-copy{display:flex;flex:1;flex-direction:column;gap:.25rem;min-width:0;overflow-wrap:anywhere}
 .oie-message-search-hit .oie-search-result-identity{align-items:center}
 .oie-message-search-hit .oie-search-result-copy strong{color:var(--oie-sender-color,inherit)}
+.oie-quick-search{display:flex;flex-direction:column;max-height:min(78dvh,42rem);background:var(--oie-panel);color:var(--oie-text)}
+.oie-quick-search-form{display:flex;align-items:center;gap:.5rem;padding:.75rem;flex:none}
+.oie-quick-search-field{flex:1;min-width:0}
+.oie-quick-search-scroll{min-height:0;overflow:auto;overscroll-behavior:contain;padding-inline:.75rem}
+.oie-quick-search-scroll:has([data-quick-search-items]:not(:empty),[data-quick-search-pagination]:not(:empty)){border-top:1px solid var(--oie-border);padding-bottom:.5rem}
+.oie-quick-search-status{margin:0;padding:.25rem .75rem .75rem;color:var(--oie-muted);font-size:.85rem}
+.oie-quick-search [data-quick-search-retry]{align-self:flex-start;margin:0 .75rem .5rem}
+.oie-quick-search [hidden]{display:none!important}
+.oie-quick-search .oie-message-search-excerpt{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+:is(.oie-quick-search-scroll,.oie-message-search-scroll) :is([data-message-search-source],[data-message-search-conversation],[data-message-search-contact],[data-message-search-next]):focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:-2px;border-radius:6px}
 .oie-message-search-context{overflow-wrap:anywhere}
 .oie-search-domain{display:inline-block;margin-inline-start:.3rem;max-inline-size:calc(100% - .3rem);overflow-wrap:anywhere}
 .oie-message-search-hit time,.oie-message-search-hit small{font-size:.75rem;color:var(--oie-muted)}

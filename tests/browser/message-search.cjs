@@ -173,7 +173,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   let stderr='';child.stderr.on('data',c=>stderr+=c);
   const browser=await chromium.launch({headless:true}),base='http://127.0.0.1:'+port,errors=[],findings=[],screenshots=[];
   const until=async(fn,label)=>{for(let n=0;n<240;n++){if(await fn())return;await new Promise(r=>setTimeout(r,50))}throw Error('Timed out: '+label+'\n'+stderr)};
-  const fresh=async(options={})=>{const context=await browser.newContext({viewport:{width:1440,height:950},locale:'en',...options}),page=await context.newPage();await page.addInitScript(()=>{document.addEventListener('oie:message-search-settled',event=>{const form=document.getElementById('message-search-form');window.searchSettled={q:form.elements.q.value.trim(),account:event.detail.root.dataset.searchAccount,category:event.detail.root.dataset.searchType,conversation:form.elements.conversationId.value,history:form.elements.includeEditHistory.checked};});});page.on('pageerror',e=>errors.push(e.message));return page};
+  const fresh=async(options={})=>{const context=await browser.newContext({viewport:{width:1440,height:950},locale:'en',...options}),page=await context.newPage();await page.addInitScript(()=>{document.addEventListener('oie:message-search-settled',event=>{if(!event.detail.root.matches('[data-message-search-root]'))return;const form=document.getElementById('message-search-form');window.searchSettled={q:form.elements.q.value.trim(),account:event.detail.root.dataset.searchAccount,category:event.detail.root.dataset.searchType,conversation:form.elements.conversationId.value,history:form.elements.includeEditHistory.checked};});});page.on('pageerror',e=>errors.push(e.message));return page};
   const initial=()=>base+'/?chat='+chat.id+'&account='+account+'&lang=en&theme=dark';
   const hits=page=>page.locator('#message-search-results [data-message-search-hit]');
   const senderStyle=hit=>hit.evaluate(row=>{
@@ -407,7 +407,8 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     }
     assert.equal(await chatSearch.getAttribute('data-search-complete'),'true');assert.equal(await chatSearch.getAttribute('data-search-loaded'),String(orderedMatches.length));assert(await chatSearch.locator('[data-conversation-search-older]').isDisabled(),'oldest matching source does not wrap');
     assert(state.searchReads.slice(readsBeforeOlder).filter(read=>read.conversationId===chat.id&&read.cursor).length>=2,'older navigation loads subsequent short scoped search pages');
-    await chatSearch.locator('[data-conversation-search-newer]').click();await until(async()=>await selected()===orderedMatches.at(-2).id,'newer matching source moves back one hit');
+    await chatQuery.press('ArrowUp');await until(async()=>await selected()===orderedMatches.at(-2).id,'Up moves to a newer conversation match');
+    await chatQuery.press('ArrowDown');await until(async()=>await selected()===orderedMatches.at(-1).id,'Down moves to an older conversation match');
     assert((await page.locator('mark[data-conversation-search-highlight]:visible').count())>0,'current literal matching text is highlighted');
     await chatQuery.fill('Pineapple');await chatSearch.locator('#conversation-search-history').check();await until(async()=>await selected()===corpus[0].id&&await chatSearch.getAttribute('data-search-loaded')==='2','chat edit-history search');
     assert((await chatSearch.locator('[data-conversation-search-excerpt]').textContent()).includes('Pineapple'));assert.equal(await page.locator('[data-message-id="'+corpus[0].id+'"] mark[data-conversation-search-highlight]').count(),0,'prior content is not invented as a highlight in the current bubble');
@@ -422,7 +423,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     assert.equal(await page.locator('body').getAttribute('data-focus-message'),corpus[0].id,'closing chat search keeps its selected source');
     findings.push('Global and per-chat queries coexist independently; next/previous traverse scoped pages without wrapping, preserve draft/global DOM/focus, highlight only current literal content and keep timeline bounded to200 rows');
 
-    const native=await fresh({javaScriptEnabled:false});await native.goto(base+'/search?q=Telescope&accountId='+work+'&lang=en&theme=light');assert.equal(await hits(native).count(),19);assert.equal(await native.locator('form[role="search"] input[name="q"]').inputValue(),'Telescope');
+    const native=await fresh({javaScriptEnabled:false});await native.goto(base+'/search?q=Telescope&accountId='+work+'&lang=en&theme=light');assert.equal(await hits(native).count(),19);assert.equal(await form(native).locator('input[name="q"]').inputValue(),'Telescope');
     await native.goto(initial()+'&searchMode=messages&searchQuery=%20');
     assert(await native.locator('#conversation-list-default').isVisible(),'server renders the inbox for a blank global search');
     assert(await native.locator('#message-search-slot').isHidden());
@@ -639,6 +640,81 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       await navigation.context().close();
     }
     findings.push('After closing a server-rendered search, conversation links, Back and inbox filters stay outside search on desktop and mobile');
+
+    for(const [width,lang,shortcut] of [[1440,'en','Control+k'],[390,'pt-BR','Meta+k']]){
+      const mobile=width===390;
+      const keyboard=await fresh({viewport:{width,height:900},locale:lang,hasTouch:mobile});
+      await keyboard.goto(base+'/?account='+account+'&chat='+chat.id+'&lang='+lang+(mobile?'&inbox=1':''));
+      await keyboard.waitForFunction(()=>window.OieRuntime?.generation>0);
+      const sidebar=query(keyboard),sidebarFirst=hits(keyboard).first().locator('[data-message-search-source]');
+      await sidebar.fill('Telescope');await settled(keyboard,'Telescope');
+      await sidebar.press('ArrowDown');
+      assert(await sidebarFirst.evaluate(link=>link===document.activeElement),'sidebar Down focuses its first match');
+      await keyboard.keyboard.press('ArrowDown');
+      const sidebarSecond=hits(keyboard).nth(1).locator('[data-message-search-source]');
+      assert(await sidebarSecond.evaluate(link=>link===document.activeElement),'sidebar Down advances');
+      await keyboard.keyboard.press('ArrowUp');
+      assert(await sidebarFirst.evaluate(link=>link===document.activeElement),'sidebar Up returns to the previous result');
+      await keyboard.keyboard.press('ArrowUp');
+      assert(await sidebar.evaluate(input=>input===document.activeElement),'sidebar Up returns to the field');
+
+      const previous=mobile?sidebar:keyboard.locator('#message-composer');
+      if(!mobile)await previous.fill('Draft during quick search');
+      await previous.focus();
+      const originalURL=keyboard.url();
+      const quick=keyboard.getByRole('dialog',{name:mobile?'Pesquisar':'Search',exact:true});
+      const quickQuery=quick.locator('#oie-quick-search-query');
+      const quickHits=quick.locator('[data-message-search-hit]'),quickMessage=quickHits.first().locator('[data-message-search-source]');
+      await keyboard.keyboard.press(shortcut);await quick.waitFor({state:'visible'});
+      await keyboard.waitForFunction(()=>document.activeElement?.id==='oie-quick-search-query');
+      assert.equal(await quickQuery.inputValue(),'');
+      assert.equal(keyboard.url(),originalURL);
+
+      let releaseQuick,finishQuick;
+      const delayedQuick=new Promise(resolve=>finishQuick=resolve);
+      await keyboard.route('**/ui/message-search?**',async route=>{
+        if(new URL(route.request().url()).searchParams.get('q')!=='Unrelated delayed shortcut')return route.continue();
+        const response=await route.fetch();
+        await new Promise(resolve=>releaseQuick=resolve);
+        await route.fulfill({response}).catch(()=>{});finishQuick();
+      });
+      await quickQuery.fill('Unrelated delayed shortcut');await until(()=>releaseQuick,'held quick search response');
+      await quickQuery.fill('brigada-layout');await quickMessage.waitFor({state:'visible'});
+      releaseQuick();await delayedQuick;await keyboard.unroute('**/ui/message-search?**');
+      assert.equal(await quickHits.count(),2);
+      assert.equal(await sidebar.inputValue(),'Telescope');
+      assert.equal(keyboard.url(),originalURL);
+      assert(await quickQuery.evaluate(input=>input===document.activeElement),'results preserve the modal caret');
+      await quickQuery.press('ArrowDown');
+      assert(await quick.locator('[data-message-search-contact]').first().evaluate(link=>link===document.activeElement),'modal starts with the first result group');
+      await keyboard.keyboard.press('ArrowDown');
+      assert(await quick.locator('[data-message-search-conversation]').first().evaluate(link=>link===document.activeElement),'modal crosses result groups');
+      await keyboard.keyboard.press('ArrowDown');
+      assert(await quickMessage.evaluate(link=>link===document.activeElement),'modal reaches messages');
+      await keyboard.keyboard.press('Escape');await quick.waitFor({state:'hidden'});
+      await until(()=>previous.evaluate(node=>node===document.activeElement),'quick search restores focus');
+      assert.equal(await sidebar.inputValue(),'Telescope');
+      if(!mobile)assert.equal(await previous.inputValue(),'Draft during quick search');
+
+      await keyboard.keyboard.press(shortcut);await quick.waitFor({state:'visible'});
+      await quickQuery.fill('CAFÉ 😀');await quickMessage.waitFor({state:'visible'});
+      await quickQuery.press('Enter');await quick.waitFor({state:'hidden'});
+      await keyboard.waitForURL(url=>url.searchParams.get('message')===corpus[2].id);
+      await keyboard.locator('[data-message-id="'+corpus[2].id+'"]').waitFor({state:'visible'});
+      assert.equal(new URL(keyboard.url()).searchParams.get('searchQuery'),'Telescope');
+      await keyboard.context().close();
+    }
+    const mediaQuick=await fresh();
+    await mediaQuick.goto(base+'/?section=media&lang=en');
+    await mediaQuick.waitForFunction(()=>window.OieRuntime?.generation>0);
+    await mediaQuick.keyboard.press('Control+k');
+    const mediaDialog=mediaQuick.getByRole('dialog',{name:'Search',exact:true});
+    await mediaDialog.locator('#oie-quick-search-query').fill('brigada-layout');
+    await mediaDialog.locator('[data-message-search-conversation]').waitFor({state:'visible'});
+    await mediaQuick.keyboard.press('Escape');await mediaDialog.waitFor({state:'hidden'});
+    assert.equal(new URL(mediaQuick.url()).searchParams.get('section'),'media');
+    await mediaQuick.context().close();
+    findings.push('Ctrl/Cmd+K opens the independent global dialog in chats or media; arrows cross result groups, Enter opens a bounded source and Escape restores focus');
 
     await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});
     for(const width of [390,1440])for(const design of ['goshtoso','minimal'])for(const theme of ['light','dark']){

@@ -86,6 +86,19 @@ The coordinator records whole-pipeline Dagger evidence separately.
 
 ## Unified global field and conversation toolbar
 
+Ctrl+K or Cmd+K opens a compact global dialog in the workspace. It searches
+all accounts using the same retained result groups and bounded source links as
+the sidebar. The dialog query is temporary and independent of the sidebar
+query and filters. Escape closes the dialog and returns focus to the previous
+control. The dialog uses Goshtoso's public compact Dialog and the existing
+search response because the public SearchModal ranks a client-side result set.
+
+In the dialog and sidebar, Down and Up move focus between results. Up from the
+first result returns to the field. Enter opens the focused result or the first
+result when the field has focus. Tab also reaches the results and controls.
+Within a conversation, Down and Up jump to older and newer matches, just as
+Enter and Shift+Enter do.
+
 The existing `conversation-search` field opens global search when the user enters
 a non-blank query. Focusing the field keeps the conversation list visible.
 The X at the right of the field cancels the search and returns focus to the field.
