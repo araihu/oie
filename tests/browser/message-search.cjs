@@ -6,9 +6,14 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const {spawn} = require('node:child_process');
 const {once} = require('node:events');
+const {createHash} = require('node:crypto');
 const {chromium} = require('playwright');
 const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
 (async () => {
+  const conversationPhoto=await fs.readFile(path.join(__dirname,'fixtures/video-poster.png'));
+  const senderPhoto=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64');
+  const photoHash=photo=>createHash('sha256').update(photo).digest('hex');
+  const conversationHash=photoHash(conversationPhoto),senderHash=photoHash(senderPhoto);
   const account = id(2), work = id(3), streams = new Set();
   const state = {engine:id(1), writes:0, searchReads:[], titleReads:[], contactReads:[], contexts:[], mode:'normal'};
   const accounts = [
@@ -81,6 +86,12 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     if (a) return send(200,a);
     if (u.pathname.endsWith('/connection')) return send(200,{accountId:u.pathname.includes(work)?work:account,state:'connected',updatedAt:chat.updatedAt});
     if (u.pathname.endsWith('/history')) return send(200,{accountId:account,state:'complete',retainedMessages:all.length,conversations:3,updatedAt:chat.updatedAt});
+    if(u.pathname==='/api/v1/accounts/'+account+'/avatars')return send(200,{items:[{id:id(62),revisionId:id(63),accountId:account,address:chat.address,imageHash:conversationHash,updatedAt:chat.updatedAt}]});
+    if(u.pathname.startsWith('/api/v1/avatars/')){
+      const hash=u.pathname.split('/').at(-1),photo=hash===conversationHash?conversationPhoto:hash===senderHash?senderPhoto:null;
+      if(!photo)return send(404,{code:'not_found'});
+      res.setHeader('Content-Type','image/png');return res.end(photo);
+    }
     if (u.pathname.endsWith('/avatars')||u.pathname.endsWith('/previews')||u.pathname.endsWith('/message-stars')||u.pathname==='/api/v1/shared-content') return send(200,{items:[]});
     if (u.pathname === '/api/v1/messages/search') {
       state.searchReads.push(Object.fromEntries(u.searchParams));
@@ -90,7 +101,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       let offset=0;
       if (u.searchParams.has('cursor')) {try {const cursor=JSON.parse(Buffer.from(u.searchParams.get('cursor'),'base64url'));if(cursor.scope!==fingerprint)throw Error('scope');offset=cursor.offset}catch{return send(400,{code:'invalid_cursor'})}}
       let hits=corpus.filter(m=>(!selectedAccount||m.accountId===selectedAccount)&&(!conversation||m.conversationId===conversation)).flatMap(m=>{
-        const c=[...chats,archiveRoom].find(c=>c.id===m.conversationId),base={message:m,accountLabel:accounts.find(a=>a.id===m.accountId).label,conversationTitle:c.title,matchedAt:m.createdAt,matchKind:'text'};
+        const c=[...chats,archiveRoom].find(c=>c.id===m.conversationId),base={message:m,accountLabel:accounts.find(a=>a.id===m.accountId).label,conversationTitle:c.title,matchedAt:m.createdAt,matchKind:'text',...(m===corpus[54]?{senderAvatarHash:senderHash}:{})};
         const rows=fold(m.originalText).includes(fold(q))?[{...base,matchedRevisionId:m===corpus[1]?id(9001):m.revisionId,historical:false,excerpt:m.originalText}]:[];
         if(history&&m===corpus[0]&&fold('Pineapple original').includes(fold(q)))rows.push(...[2,1].map(n=>({...base,matchedRevisionId:id(8000+n),matchedAt:`2026-11-09T12:00:0${n}Z`,historical:true,excerpt:'Pineapple prior version '+n})));
         return rows;
@@ -172,7 +183,34 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     assert.equal(state.searchReads.length,blankReads,'blank search does not query saved messages');
     assert.equal(state.titleReads.length,blankTitles,'blank search does not query conversation titles');
     assert.equal(state.contactReads.length,blankContacts,'blank search does not query protocol contacts');
-    await query(page).fill('Telescope');await settled(page,'Telescope');assert.equal(await query(page).evaluate(node=>document.activeElement===node),true,'results retain typing focus');await chooseAccount(page,'Personal');await settled(page,'Telescope');assert.equal(await hits(page).count(),30);assert.equal(await page.locator('[data-message-search-contacts]').count(),0,'an unsupported contacts endpoint does not produce a fabricated contacts group');
+    let releaseAvatar;
+    const avatarPath='**/ui/avatars/'+senderHash;
+    await page.route(avatarPath,async route=>{
+      const response=await route.fetch();
+      await new Promise(resolve=>releaseAvatar=resolve);
+      await route.fulfill({response});
+    });
+    await query(page).fill('Telescope');await settled(page,'Telescope');
+    const senderRow=page.locator('[data-search-message="'+corpus[54].id+'"]');
+    const senderAvatar=senderRow.locator('.oie-search-avatar');
+    await until(()=>releaseAvatar,'cached sender avatar request');
+    await senderRow.evaluate(row=>{
+      const nodes=[row,row.querySelector('.oie-search-avatar'),document.getElementById('message-composer')];
+      const sample=()=>nodes.flatMap(node=>{const {x,y,width,height}=node.getBoundingClientRect();return [x,y,width,height]});
+      const baseline=sample(),frames=[];
+      let handle=requestAnimationFrame(function paint(){frames.push(sample());handle=requestAnimationFrame(paint)});
+      window.finishAvatarGeometry=()=>{cancelAnimationFrame(handle);return {baseline,frames:[...frames,sample()]}};
+    });
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    releaseAvatar();
+    await until(()=>senderAvatar.locator('img').evaluate(image=>image.complete&&image.naturalWidth>0),'sender avatar renders');
+    await senderAvatar.locator('img').waitFor({state:'visible'});
+    await page.unroute(avatarPath);
+    const avatarGeometry=await page.evaluate(()=>window.finishAvatarGeometry());
+    assert(avatarGeometry.frames.length>1);
+    assert(avatarGeometry.frames.every(frame=>frame.every((value,index)=>Math.abs(value-avatarGeometry.baseline[index])<=1)),'sender photo preserves result and composer geometry on every painted frame');
+    assert.equal(await query(page).evaluate(node=>document.activeElement===node),true,'results retain typing focus');
+    await chooseAccount(page,'Personal');await settled(page,'Telescope');assert.equal(await hits(page).count(),30);assert.equal(await page.locator('[data-message-search-contacts]').count(),0,'an unsupported contacts endpoint does not produce a fabricated contacts group');
     assert.equal(await page.locator('#message-search-pagination [data-message-search-indexing]').count(),1,'metadata coverage is explicit while indexing is incomplete');
     const inbox=new URL(page.url());assert.equal(inbox.searchParams.get('account'),account);assert.equal(inbox.searchParams.get('chat'),before.chat);assert.equal(inbox.searchParams.get('q'),null);assert.equal(inbox.searchParams.get('searchQuery'),'Telescope');
     assert.equal(await page.evaluate(()=>history.length),before.history+1,'typing replaces the single search history entry');
@@ -192,10 +230,18 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     await page.locator('#message-search-scroll').evaluate(node=>node.scrollTop=node.scrollHeight);await until(async()=>await hits(page).count()===57,'all-account second page');
     assert(await page.locator('[data-search-message="'+corpus[1].id+'"] [data-message-search-source]').count(),'current cancelled source with prior content revision renders normally');
     assert.equal(await page.locator('[data-search-message="'+corpus[1].id+'"]').getAttribute('data-search-historical'),'false');
-    await query(page).fill('Family');await settled(page,'Family');assert.equal(await hits(page).count(),0);assert.equal(await page.locator('[data-message-search-conversation="'+chat.id+'"]').count(),1,'conversation titles form a distinct group');await query(page).fill('Telescope');await settled(page,'Telescope');
+    await query(page).fill('Family');await settled(page,'Family');assert.equal(await hits(page).count(),0);
+    const conversationResult=page.locator('[data-message-search-conversation="'+chat.id+'"]');
+    assert.equal(await conversationResult.count(),1,'conversation titles form a distinct group');
+    const conversationAvatar=conversationResult.locator('img[src="/ui/avatars/'+conversationHash+'"]');
+    await conversationAvatar.waitFor({state:'attached'});
+    await until(()=>conversationAvatar.evaluate(image=>image.complete&&image.naturalWidth>0),'conversation thumbnail renders from the owning account');
+    await conversationResult.locator('[data-avatar-ready="true"]').waitFor({state:'visible'});
+    await query(page).fill('Telescope');await settled(page,'Telescope');
     await chooseAccount(page,'Work');await settled(page,'Telescope');await until(async()=>await hits(page).count()===19,'account scope before pagination');
     assert((await hits(page).evaluateAll(nodes=>nodes.map(n=>n.textContent))).every(text=>text.includes('Work')));
     await chooseAccount(page,'All accounts');await query(page).fill('CAFÉ 😀');await settled(page,'CAFÉ 😀');assert.equal(await hits(page).count(),1);assert.equal(await page.evaluate(()=>window.searchInjection),undefined);assert.equal(await hits(page).locator('img').count(),0);
+    assert.equal((await hits(page).locator('.oie-search-avatar').textContent()).trim(),'P','a sender without a retained photo has initials');
     const readCount=state.searchReads.length;await field.fill('');
     assert(await list.isVisible(),'clearing the query restores the conversation list');
     assert(await slot.isHidden());

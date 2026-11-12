@@ -24,6 +24,53 @@ func searchMessages(t *testing.T, e *application.Engine, q domain.MessageSearchQ
 	}
 	return p
 }
+
+func TestMessageSearchUsesAccountScopedSenderAvatars(t *testing.T) {
+	s, e, direct := outboxFixture(t)
+	room := domain.Conversation{ID: migrationID(), RevisionID: migrationID(), AccountID: direct.AccountID, PeerID: migrationID(), Kind: "room", Address: "room@conference.localhost", Title: "Room", UpdatedAt: time.Now().UTC()}
+	foreign, err := e.Register(t.Context(), migrationID(), application.RegisterInput{Protocol: "xmpp", Address: "foreign@localhost", Label: "Foreign"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	save := func(account domain.ID, address, hash string) {
+		t.Helper()
+		if err := s.SaveAvatar(t.Context(), domain.Avatar{ID: migrationID(), RevisionID: migrationID(), AccountID: account, Address: address, ImageHash: hash, UpdatedAt: time.Now().UTC()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	peerHash, authorHash, ownHash := strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("c", 64)
+	save(direct.AccountID, direct.Address, peerHash)
+	save(room.AccountID, "author@localhost", authorHash)
+	save(room.AccountID, "alice@localhost", ownHash)
+	save(room.AccountID, room.Address, strings.Repeat("d", 64))
+	save(foreign.Account.ID, "foreign-peer@localhost", strings.Repeat("e", 64))
+
+	peer := senderSeed(t, s, direct, "")
+	known := senderSeed(t, s, room, "author@localhost")
+	anonymous := senderSeed(t, s, room, "")
+	foreignOnly := senderSeed(t, s, room, "foreign-peer@localhost")
+	disputed := senderSeed(t, s, room, "author@localhost")
+	disputed.Sender.PersonalAddress = "foreign-peer@localhost"
+	if err = s.ReceiveMessage(t.Context(), room, disputed, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+	own := domain.Message{ID: migrationID(), RevisionID: migrationID(), AccountID: direct.AccountID, ConversationID: direct.ID, Sender: domain.Sender{ID: direct.AccountID, DisplayName: "Alice"}, IsOwn: true, OriginalText: "retained source", CreatedAt: time.Now().UTC(), SendState: "received"}
+	if err = s.ReceiveMessage(t.Context(), direct, own, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+	page := searchMessages(t, e, domain.MessageSearchQuery{Search: "retained source", AccountID: direct.AccountID})
+	want := map[domain.ID]string{peer.ID: peerHash, own.ID: ownHash, known.ID: authorHash, anonymous.ID: "", foreignOnly.ID: "", disputed.ID: ""}
+	if len(page.Items) != len(want) {
+		t.Fatalf("got %d matches, want %d", len(page.Items), len(want))
+	}
+	for _, hit := range page.Items {
+		hash, found := want[hit.Message.ID]
+		if !found || hit.SenderAvatarHash != hash {
+			t.Errorf("message %s has avatar %q, want %q", hit.Message.ID, hit.SenderAvatarHash, hash)
+		}
+	}
+}
+
 func TestMessageSearchFiltersBeforePagingAndPreservesIngestPosition(t *testing.T) {
 	s, e, c := outboxFixture(t)
 	base := time.Now().Add(-time.Hour).UTC()

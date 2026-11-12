@@ -3551,6 +3551,10 @@ components:
         conversationTitle:
           type: string
           description: Current source conversation title.
+        senderAvatarHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 of the retained sender avatar PNG in the owning account, when the sender identity and image are available. Use getAvatarImage to retrieve it.
         matchedRevisionId:
           $ref: '#/components/schemas/ID'
         matchedAt:

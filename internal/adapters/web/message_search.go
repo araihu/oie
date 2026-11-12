@@ -163,6 +163,15 @@ func (s *Server) loadMessageSearch(ctx context.Context, v *view) {
 	if state.ConversationID == "" && state.Cursor == "" {
 		s.loadSearchConversations(ctx, v)
 		s.loadSearchContacts(ctx, v)
+		if v.NativeMessageSearch {
+			accounts := map[string]bool{}
+			for _, conversation := range state.Conversations {
+				if !accounts[conversation.AccountId] {
+					s.loadAvatars(ctx, v, conversation.AccountId)
+					accounts[conversation.AccountId] = true
+				}
+			}
+		}
 	}
 }
 func validMessageSearchPage(page engineapi.MessageSearchPage, request messageSearchView) bool {

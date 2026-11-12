@@ -93,6 +93,10 @@ Clearing the query also returns to the list and cancels pending search requests.
 It uses the native unified `/search` GET page as its fallback. Global mode
 shows categories for the existing media, links and documents catalog, matching
 saved roster contacts, bounded conversation-title matches and saved messages.
+Conversation matches show the conversation avatar. Message matches show the
+author's avatar from the owning account when the identity and thumbnail are
+available, with initials as the fallback. Search uses retained images and does
+not request profiles from the provider.
 It leaves the original conversation list, title query, filter controls and scroll
 mounted behind the results. Closing restores that list and query without
 reopening search through its own focus restoration.
@@ -119,7 +123,7 @@ subscribe to presence or infer contacts from room occupants. An existing contact
 conversation opens directly. A contact without one opens the existing new-chat
 form with its account and address prefilled; creation still needs explicit form
 submission. Category links use the existing catalog and its device preferences.
-Search itself does not fetch thumbnails or enrich remote previews.
+Search does not fetch shared-content thumbnails or enrich remote previews.
 
 Whole-pipeline validation completed on `ef9a9a6` with exit 0 and all 39 browser
 workflows, including the isolated real-engine XMPP workflow. Native `make check`

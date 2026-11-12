@@ -2,7 +2,7 @@
 WITH initial_revisions AS (
  SELECT entity_id,min(rowid) AS revision_row FROM message_revisions GROUP BY entity_id
 ), roots AS (
- SELECT m.id,m.created_at_ms,m.payload,a.label AS account_label,c.payload AS conversation_payload,
+ SELECT m.id,m.created_at_ms,m.payload,a.label AS account_label,a.address AS account_address,c.payload AS conversation_payload,
  CAST(COALESCE(h.payload,m.payload) AS TEXT) AS content_payload,
  CAST(COALESCE(head_source.id,first_source.id) AS TEXT) AS matched_revision_id,
  CAST(COALESCE(head_source.created_at,first_source.created_at) AS TEXT) AS matched_at,
@@ -19,7 +19,7 @@ WITH initial_revisions AS (
 ), variants AS (
  SELECT roots.*,CAST(json_extract(content_payload,'$.OriginalText') AS TEXT) AS body,1 AS is_current,'' AS revision_key_at,'' AS revision_key_id FROM roots
  UNION ALL
- SELECT roots.id,roots.created_at_ms,roots.payload,roots.account_label,roots.conversation_payload,source.payload,source.id,source.created_at,'',CAST(json_extract(source.payload,'$.OriginalText') AS TEXT),0,source.created_at,source.id
+ SELECT roots.id,roots.created_at_ms,roots.payload,roots.account_label,roots.account_address,roots.conversation_payload,source.payload,source.id,source.created_at,'',CAST(json_extract(source.payload,'$.OriginalText') AS TEXT),0,source.created_at,source.id
  FROM roots JOIN message_content_heads h ON h.canonical_id=roots.id
  JOIN message_correction_facts f ON f.message_id=roots.id OR f.message_id IN (SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=roots.id)
  JOIN message_revisions r ON r.id=f.source_revision_id
@@ -33,6 +33,6 @@ WITH initial_revisions AS (
  SELECT *,CAST(oie_search_match(body,CAST(sqlc.arg(search) AS TEXT)) AS INTEGER) AS text_match FROM variants
  WHERE oie_search_match(body||' '||metadata,CAST(sqlc.arg(search) AS TEXT))=1
 )
-SELECT id,created_at_ms,payload,account_label,conversation_payload,matched_revision_id,matched_at,body,metadata,is_current,revision_key_at,revision_key_id,text_match FROM matched
+SELECT id,created_at_ms,payload,account_label,account_address,conversation_payload,matched_revision_id,matched_at,body,metadata,is_current,revision_key_at,revision_key_id,text_match FROM matched
 WHERE (CAST(sqlc.arg(cursor_id) AS TEXT)='' OR (created_at_ms,id,is_current,revision_key_at,revision_key_id)<(CAST(sqlc.arg(cursor_ms) AS INTEGER),CAST(sqlc.arg(cursor_id) AS TEXT),CAST(sqlc.arg(cursor_current) AS INTEGER),CAST(sqlc.arg(cursor_revision_at) AS TEXT),CAST(sqlc.arg(cursor_revision_id) AS TEXT)))
 ORDER BY created_at_ms DESC,id DESC,is_current DESC,revision_key_at DESC,revision_key_id DESC LIMIT sqlc.arg(page_limit);

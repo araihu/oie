@@ -37,7 +37,11 @@ func (s *Server) SearchMessages(ctx context.Context, r engineapi.SearchMessagesR
 		out.ConversationId = &id
 	}
 	for _, hit := range page.Items {
-		out.Items = append(out.Items, engineapi.MessageSearchHit{Message: message(hit.Message), AccountLabel: hit.AccountLabel, ConversationTitle: hit.ConversationTitle, MatchedRevisionId: string(hit.MatchedRevisionID), MatchedAt: hit.MatchedAt, Historical: hit.Historical, MatchKind: engineapi.MessageSearchHitMatchKind(hit.MatchKind), Excerpt: hit.Excerpt})
+		item := engineapi.MessageSearchHit{Message: message(hit.Message), AccountLabel: hit.AccountLabel, ConversationTitle: hit.ConversationTitle, MatchedRevisionId: string(hit.MatchedRevisionID), MatchedAt: hit.MatchedAt, Historical: hit.Historical, MatchKind: engineapi.MessageSearchHitMatchKind(hit.MatchKind), Excerpt: hit.Excerpt}
+		if hit.SenderAvatarHash != "" {
+			item.SenderAvatarHash = &hit.SenderAvatarHash
+		}
+		out.Items = append(out.Items, item)
 	}
 	if page.NextCursor != "" {
 		out.NextCursor = &page.NextCursor

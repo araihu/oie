@@ -2,7 +2,9 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 	"unicode"
@@ -35,6 +37,8 @@ func (s *Store) SearchMessages(ctx context.Context, query domain.MessageSearchQu
 	if more {
 		rows = rows[:query.Limit]
 	}
+	avatarHashes := make(map[dbgen.FindAvatarParams]string)
+	senderAddresses := make(map[domain.ID]string)
 	for _, row := range rows {
 		hit := domain.MessageSearchHit{AccountLabel: row.AccountLabel, MatchedRevisionID: domain.ID(row.MatchedRevisionID), Historical: row.IsCurrent == 0, MatchKind: "text"}
 		if err = json.Unmarshal([]byte(row.Payload), &hit.Message); err != nil {
@@ -50,6 +54,26 @@ func (s *Store) SearchMessages(ctx context.Context, query domain.MessageSearchQu
 		}
 		if err = hydrateReply(ctx, q, &hit.Message); err != nil {
 			return page, err
+		}
+		address, known := senderAddresses[hit.Message.ID]
+		if !known {
+			address, err = searchSenderAddress(ctx, q, hit.Message, c, row.AccountAddress)
+			if err != nil {
+				return page, err
+			}
+			senderAddresses[hit.Message.ID] = address
+		}
+		if address != "" {
+			key := dbgen.FindAvatarParams{AccountID: string(hit.Message.AccountID), Address: address}
+			hash, known := avatarHashes[key]
+			if !known {
+				hash, err = searchAvatarHash(ctx, q, key)
+				if err != nil {
+					return page, err
+				}
+				avatarHashes[key] = hash
+			}
+			hit.SenderAvatarHash = hash
 		}
 		hit.MatchedAt, err = time.Parse(time.RFC3339Nano, row.MatchedAt)
 		if err != nil {
@@ -80,6 +104,41 @@ func (s *Store) SearchMessages(ctx context.Context, query domain.MessageSearchQu
 	}
 	page.MetadataIndexing = domain.SharedContentIndex{State: state, IndexedMessages: status.IndexedMessages, TotalMessages: status.TotalMessages}
 	return page, tx.Commit()
+}
+
+func searchSenderAddress(ctx context.Context, q *dbgen.Queries, m domain.Message, c domain.Conversation, accountAddress string) (string, error) {
+	if c.AccountID != m.AccountID {
+		return "", nil
+	}
+	if m.IsOwn {
+		return accountAddress, nil
+	}
+	switch c.Kind {
+	case "direct":
+		return c.Address, nil
+	case "room":
+		if err := hydrateSenderIdentity(ctx, q, &m); err != nil {
+			return "", err
+		}
+		return m.Sender.PersonalAddress, nil
+	default:
+		return "", nil
+	}
+}
+
+func searchAvatarHash(ctx context.Context, q *dbgen.Queries, key dbgen.FindAvatarParams) (string, error) {
+	row, err := q.FindAvatar(ctx, key)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	var photo domain.Avatar
+	if json.Unmarshal([]byte(row.Payload), &photo) != nil || string(photo.AccountID) != key.AccountID || photo.Address != key.Address || !application.ValidImageHash(photo.ImageHash) {
+		return "", nil
+	}
+	return photo.ImageHash, nil
 }
 
 // Excerpts preserve source text. The query only selects a bounded window; it never

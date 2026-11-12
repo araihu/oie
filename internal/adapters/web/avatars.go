@@ -29,7 +29,10 @@ func validAvatarHash(hash string) bool {
 }
 
 func (v view) avatarSource(account, address string) string {
-	hash := v.Avatars[avatarIdentity{account, address}]
+	return avatarImageSource(v.Avatars[avatarIdentity{account, address}])
+}
+
+func avatarImageSource(hash string) string {
 	if !validAvatarHash(hash) {
 		return ""
 	}

@@ -12,6 +12,7 @@ type MessageSearchQuery struct {
 type MessageSearchHit struct {
 	Message                         Message
 	AccountLabel, ConversationTitle string
+	SenderAvatarHash                string
 	MatchedRevisionID               ID
 	MatchedAt                       time.Time
 	Historical                      bool

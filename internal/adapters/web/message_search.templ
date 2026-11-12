@@ -2,6 +2,7 @@ package web
 
 import (
  "strconv"
+ "github.com/araihu/goshtoso/components/avatar"
  "github.com/araihu/goshtoso/components/badge"
  "github.com/araihu/goshtoso/components/button"
  "github.com/araihu/goshtoso/components/checkbox"
@@ -126,10 +127,16 @@ if next:=v.messageSearchNext();next!="" {
 </div>
 }
 templ messageSearchHit(v view,hit engineapi.MessageSearchHit){
+{{ senderAvatar:=avatar.Config{Name:hit.Message.Sender.DisplayName,Initials:initials(hit.Message.Sender.DisplayName),Size:avatar.SizeXS};if hit.SenderAvatarHash!=nil {senderAvatar.Src=avatarImageSource(*hit.SenderAvatarHash)} }}
 <article data-message-search-hit={hit.Message.Id+":"+hit.MatchedRevisionId} data-search-message={hit.Message.Id} data-search-revision={hit.MatchedRevisionId} data-search-historical={strconv.FormatBool(hit.Historical)} data-search-match-kind={string(hit.MatchKind)}>
 @link.Link(v.messageSearchSourceHref(hit.Message),link.WithRootClass("oie-message-search-hit"),link.WithAttrs(templ.Attributes{"data-message-search-source":""})){
+<div class="oie-search-result-identity">
+<div class="oie-search-avatar" aria-hidden="true">@avatar.Avatar(senderAvatar)</div>
+<div class="oie-search-result-copy">
 <div class="oie-message-search-hit-heading"><strong>{hit.ConversationTitle}</strong><time data-message-search-time datetime={hit.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{hit.Message.CreatedAt.Format("2006-01-02 15:04")}</time></div>
 <small>{hit.AccountLabel} · {hit.Message.Sender.DisplayName}</small>
+</div>
+</div>
 if hit.Historical {
 @badge.Badge(badge.Config{Label:v.Text.SearchPriorVersion,Size:badge.SizeSM,Appearance:badge.AppearanceSoft})
 }
@@ -146,7 +153,12 @@ if len(v.MessageSearch.Conversations)>0 {
 <section class="oie-search-conversations" data-message-search-conversations>
 <h3>{v.Text.SearchConversations}</h3>
 for _,c:=range v.MessageSearch.Conversations {
-@link.Link(v.messageSearchConversationHref(c),link.WithRootClass("oie-search-conversation"),link.WithAttrs(templ.Attributes{"data-message-search-conversation":c.Id})){<strong>{c.Title}</strong><small>{c.Address}</small>}
+@link.Link(v.messageSearchConversationHref(c),link.WithRootClass("oie-search-conversation"),link.WithAttrs(templ.Attributes{"data-message-search-conversation":c.Id})){
+<div class="oie-search-result-identity">
+<div class="oie-search-avatar" aria-hidden="true">@profileAvatar(v,c.AccountId,c.Address,avatar.Config{Name:c.Title,Initials:chatInitials(c),Size:avatar.SizeXS})</div>
+<div class="oie-search-result-copy"><strong>{c.Title}</strong><small>{c.Address}</small></div>
+</div>
+}
 }
 if v.MessageSearch.ConversationsLimited {
 <p class="oie-message-search-help">{v.Text.SearchConversationsLimited}</p>
