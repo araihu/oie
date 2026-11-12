@@ -471,6 +471,12 @@ Provide WhatsApp-like rich link cards using structured engine metadata. Preview 
 
 Search matches the latest message revision by default. **Include edit history** explicitly enables retained earlier versions, with historical matches labeled. Retracted content is hidden from search and Media/Files/Links by default; **Include retracted** enables deliberate retrieval. These filters are independent and never bypass explicit deletion.
 
+**AGREED:** show a compact preview for the first HTTP(S) link detected in the
+composer. Show the link immediately and enrich it with bounded cached metadata
+and a raster thumbnail when available. Preview only the URL through the owning
+engine and discard stale responses when the draft or conversation changes.
+Dismissing the card leaves the draft text intact.
+
 **RECOMMENDED R08/R10:** SQLite FTS5 as a derived index; source-linked catalog records; bounded, cached link-preview enrichment independent of history fetching. **OPEN O08:** indexing/tokenization, filters/ranking, preview fetching/refresh policy, cache limits, and provider capability fallbacks.
 
 ## 8. Media and downloaded files

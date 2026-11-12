@@ -41,7 +41,16 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
 
   await alicePage.goto(path(aliceConversation, alice, 'en'));
   await alicePage.locator('body[data-oie-live-ready]').waitFor();
+  const draftURL = 'https://example.com/studio';
+  await alicePage.route('**/ui/link-preview', async route => {
+    assert.deepEqual(route.request().postDataJSON(), {url: draftURL});
+    await route.fulfill({json: {url: draftURL, title: 'Studio directions'}});
+  }, {times: 1});
   await alicePage.locator(source).fill(content);
+  const draftPreview = alicePage.locator('[data-draft-link-preview]');
+  await draftPreview.getByRole('link', {name: 'Studio directions'}).waitFor();
+  await draftPreview.getByRole('button', {name: 'Dismiss link preview'}).click();
+  assert.equal(await alicePage.locator(source).inputValue(), content);
   await alicePage.route('**/ui/scheduling/stage?*', async route => {
     await new Promise(resolve => setTimeout(resolve, 550));
     await route.continue();

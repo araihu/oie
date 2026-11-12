@@ -1,0 +1,31 @@
+package web
+
+import (
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/card"
+	"github.com/araihu/goshtoso/components/icon/heroicons"
+	"github.com/araihu/goshtoso/components/link"
+)
+
+templ draftLinkPreview(v view) {
+	<div class="oie-draft-link-preview" data-draft-link-preview data-fetch-preview?={v.messagingImplemented("link_previews")} hidden>
+		@card.Card(card.Config{Body:draftLinkPreviewBody(v),Density:card.DensityCompact,RootClass:"oie-draft-link-card"})
+	</div>
+}
+
+templ draftLinkPreviewBody(v view) {
+	<div class="oie-draft-link-body">
+		<span class="oie-draft-link-thumb" aria-hidden="true">
+			@glyph(heroicons.Icon16SolidLink)
+			<img data-draft-link-image alt="" width="44" height="44" hidden/>
+		</span>
+		<div class="oie-link-card-copy">
+			@link.Link("#",link.WithRootClass("oie-draft-link-title"),link.WithAttrs(templ.Attributes{"data-draft-link-title":"","target":"_blank","rel":"noopener noreferrer"})) {}
+			<p class="oie-preview-excerpt" data-draft-link-description></p>
+			<p class="oie-preview-site" data-draft-link-host></p>
+		</div>
+		@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.DismissLinkPreview,"title":v.Text.DismissLinkPreview,"data-dismiss-draft-link":""})){
+			@glyph(heroicons.Icon16SolidXMark)
+		}
+	</div>
+}

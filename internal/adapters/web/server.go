@@ -202,6 +202,8 @@ type view struct {
 }
 
 type copy struct {
+	DismissLinkPreview string
+
 	Scheduled, Schedule, Reschedule, ScheduleWhen, ScheduleEmpty, ScheduleUnavailable, ScheduleReview, ScheduleBack, ScheduleCancel, ScheduleEditMode, ScheduleSave, ScheduleSaved, SendNow, ScheduleTimeInvalid, ScheduleTimeAmbiguous, AttachmentFailed, AttachmentLimit, RemoveAttachment string
 
 	DeleteAllData, DeleteDataWarning, DeleteHostedDataWarning, DeleteDataConfirmation, DeleteDataCancel, DeleteDataFailed, DeleteDataPending, DeleteDataComplete string
@@ -575,6 +577,10 @@ var liveScript []byte
 var roomArchiveScript []byte
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/ui/link-preview" {
+		s.resolveDraftLinkPreview(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/scheduling/stage" || r.URL.Path == "/ui/scheduling/file" {
 		s.serveStagedAttachment(w, r)
 		return
@@ -646,6 +652,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mime string
 		body []byte
 	}{
+		"/ui/draft-link-preview.js": {"text/javascript", draftLinkPreviewScript}, "/ui/draft-link-preview.css": {"text/css", draftLinkPreviewStylesheet},
 		"/ui/scheduling.js":        {"text/javascript", schedulingScript},
 		"/ui/scheduling.css":       {"text/css", schedulingStylesheet},
 		"/ui/sidebar.js":           {"text/javascript", sidebarScript},

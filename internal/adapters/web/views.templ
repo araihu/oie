@@ -125,7 +125,7 @@ templ page(v view) {
 <script src="/ui/room-archive.js" defer></script>
 <script src="/ui/timeline.js" defer></script>
 <script src="/ui/reset-data.js" defer></script>
-<script src="/ui/live.js" defer></script><script src="/ui/scheduling.js" defer></script><link rel="stylesheet" href="/ui/scheduling.css"/><script src="/ui/read-state.js" defer></script>
+<script src="/ui/live.js" defer></script><script src="/ui/draft-link-preview.js" defer></script><link rel="stylesheet" href="/ui/draft-link-preview.css"/><script src="/ui/scheduling.js" defer></script><link rel="stylesheet" href="/ui/scheduling.css"/><script src="/ui/read-state.js" defer></script>
 <script src="/ui/emoji-picker.js" defer></script><script src="/ui/emoji-completion.js" defer></script><script src="/ui/mentions.js" defer></script>
 <script src="/ui/navigation.js"></script>
 if v.DevBuildID!="" {
@@ -417,6 +417,9 @@ if v.scheduleAllowed() {
 <div class="oie-composer-feedback" data-form-feedback role="status" aria-live="polite"></div>
 </div>
 @pendingSendTemplate(v)
+if v.composeAllowed() {
+@draftLinkPreview(v)
+}
 <div class="oie-composer">
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Attach,"data-attach-file":"","disabled":!v.scheduleAllowed()||!v.messagingImplemented("file_upload")})){@glyph(heroicons.Icon16SolidPlus)}
 <div class="oie-composer-field">

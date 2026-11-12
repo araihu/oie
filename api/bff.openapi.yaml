@@ -19,6 +19,39 @@ tags:
 - name: Messages
   description: Browser submission receipt recovery
 paths:
+  /ui/link-preview:
+    post:
+      tags: [Messages]
+      operationId: resolveBrowserDraftLinkPreview
+      summary: Resolve a preview for a link in the composer
+      parameters:
+      - name: X-Oie-Engine-ID
+        in: header
+        required: true
+        description: Selected engine identity.
+        schema: {$ref: './openapi.yaml#/components/schemas/ID'}
+      - name: X-CSRF-Token
+        in: header
+        required: true
+        description: Same-origin browser token.
+        schema: {type: string}
+      requestBody:
+        description: The link detected in the draft.
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './openapi.yaml#/components/schemas/DraftLinkPreviewRequest'}
+      responses:
+        '200':
+          description: Preview for the submitted URL.
+          content:
+            application/json:
+              schema: {$ref: './openapi.yaml#/components/schemas/DraftLinkPreview'}
+        '204': {description: Metadata unavailable.}
+        '400': {description: Invalid URL or request.}
+        '403': {description: Browser token missing or invalid.}
+        '409': {description: Engine identity changed.}
+        '503': {description: Preview service unavailable.}
   /ui/engine/reset:
     post:
       operationId: resetBrowserEngineData

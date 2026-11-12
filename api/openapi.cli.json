@@ -1258,6 +1258,48 @@
         "x-cli-name": "list"
       }
     },
+    "/api/v1/link-previews": {
+      "post": {
+        "tags": [
+          "Previews"
+        ],
+        "operationId": "resolveDraftLinkPreview",
+        "summary": "Resolve a link preview for a draft",
+        "description": "Fetches metadata and an optional bounded raster image for one public HTTP(S) URL. Uses the transient link cache and creates no message, durable preview record or original download.",
+        "requestBody": {
+          "required": true,
+          "description": "Only the URL selected for preview.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftLinkPreviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Metadata and optional raster image for the submitted URL.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftLinkPreview"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "Metadata is unavailable. The client may still display the URL as a link."
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/previews/{previewId}": {
       "get": {
         "tags": [
@@ -5665,6 +5707,77 @@
           "accountId": "019a5df0-0000-7000-8000-000000000001",
           "state": "not_connected",
           "updatedAt": "2026-11-07T12:00:00Z"
+        }
+      },
+      "DraftLinkPreviewRequest": {
+        "type": "object",
+        "description": "Public HTTP or HTTPS URL detected in a draft.",
+        "additionalProperties": false,
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 4096,
+            "example": "https://example.com/studio"
+          }
+        }
+      },
+      "DraftLinkPreview": {
+        "type": "object",
+        "description": "Transient link metadata for a draft composition.",
+        "additionalProperties": false,
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 4096,
+            "example": "https://example.com/studio"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 300,
+            "example": "Studio"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000,
+            "example": "Opening hours and directions."
+          },
+          "image": {
+            "$ref": "#/components/schemas/DraftLinkPreviewImage"
+          }
+        }
+      },
+      "DraftLinkPreviewImage": {
+        "type": "object",
+        "description": "Optional bounded raster image for a draft link preview.",
+        "additionalProperties": false,
+        "required": [
+          "mediaType",
+          "data"
+        ],
+        "properties": {
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "image/png",
+              "image/jpeg",
+              "image/gif"
+            ],
+            "example": "image/png"
+          },
+          "data": {
+            "type": "string",
+            "maxLength": 174764,
+            "description": "Base64 of at most 128 KiB of raster image bytes.",
+            "example": "iVBORw0KGgo="
+          }
         }
       },
       "MessagePreview": {

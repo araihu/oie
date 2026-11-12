@@ -648,6 +648,15 @@ type ResetBrowserEngineDataFormdataBody struct {
 // ResetBrowserEngineDataFormdataBodyConfirmation defines parameters for ResetBrowserEngineData.
 type ResetBrowserEngineDataFormdataBodyConfirmation string
 
+// ResolveBrowserDraftLinkPreviewParams defines parameters for ResolveBrowserDraftLinkPreview.
+type ResolveBrowserDraftLinkPreviewParams struct {
+	// XOieEngineID Selected engine identity.
+	XOieEngineID externalRef0.ID `json:"X-Oie-Engine-ID"`
+
+	// XCSRFToken Same-origin browser token.
+	XCSRFToken string `json:"X-CSRF-Token"`
+}
+
 // GetBrowserMessageEditTargetParams defines parameters for GetBrowserMessageEditTarget.
 type GetBrowserMessageEditTargetParams struct {
 	// EngineId Owning engine identity.
@@ -800,6 +809,9 @@ type RenderDocumentMarkdownJSONRequestBody = MarkdownSource
 
 // ResetBrowserEngineDataFormdataRequestBody defines body for ResetBrowserEngineData for application/x-www-form-urlencoded ContentType.
 type ResetBrowserEngineDataFormdataRequestBody ResetBrowserEngineDataFormdataBody
+
+// ResolveBrowserDraftLinkPreviewJSONRequestBody defines body for ResolveBrowserDraftLinkPreview for application/json ContentType.
+type ResolveBrowserDraftLinkPreviewJSONRequestBody = externalRef0.DraftLinkPreviewRequest
 
 // SubmitBrowserMessageEditFormdataRequestBody defines body for SubmitBrowserMessageEdit for application/x-www-form-urlencoded ContentType.
 type SubmitBrowserMessageEditFormdataRequestBody = BrowserEditIntent
