@@ -203,9 +203,9 @@ type view struct {
 }
 
 type copy struct {
-	ScheduleSelectedConversations       string
-	ScheduleLoading, ScheduleViewAgenda string
-	DismissLinkPreview                  string
+	ScheduleSelectedConversations                           string
+	ScheduleLoading, ScheduleViewAgenda, ScheduleCancelSend string
+	DismissLinkPreview                                      string
 
 	Scheduled, Schedule, Reschedule, ScheduleWhen, ScheduleEmpty, ScheduleUnavailable, ScheduleReview, ScheduleBack, ScheduleCancel, ScheduleEditMode, ScheduleSave, ScheduleSaved, SendNow, ScheduleTimeInvalid, ScheduleTimeAmbiguous, AttachmentFailed, AttachmentLimit, RemoveAttachment string
 

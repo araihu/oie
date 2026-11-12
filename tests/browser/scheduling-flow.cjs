@@ -34,6 +34,14 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
     assert.equal(await trigger.getAttribute('aria-expanded'), 'false');
     return drawer;
   };
+  const assertCentered = async dialog => {
+    const bounds = await dialog.evaluate(node => {
+      const {left, right, top, bottom} = node.getBoundingClientRect();
+      return [left, innerWidth - right, top, innerHeight - bottom];
+    });
+    assert(bounds.every(inset => inset >= 15), JSON.stringify(bounds));
+    assert(Math.abs(bounds[0] - bounds[1]) <= 1 && Math.abs(bounds[2] - bounds[3]) <= 1, JSON.stringify(bounds));
+  };
   const sample = page => page.evaluate(() => {
     const selectors = ['#message-composer', '#message-timeline', '#composer-split'];
     const sampleRects = () => selectors.map(selector => {
@@ -95,6 +103,7 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   await alicePage.getByRole('menuitem', {name: 'Schedule message'}).click();
   const dialog = alicePage.locator(preview);
   await dialog.waitFor({state: 'visible'});
+  await assertCentered(dialog);
   assert.equal(await dialog.locator('[data-schedule-preview-text]').textContent(), content);
   assert.equal(await dialog.locator('img').getAttribute('alt'), attachment.name);
   await dialog.getByRole('button', {name: 'Back', exact: true}).click();
@@ -132,6 +141,19 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
     const row = drawer.locator('[data-scheduled-row]');
     await row.getByText(message, {exact:true}).waitFor();
     assert.equal(await row.count(), 1);
+    const actions = await row.locator('.oie-conversation-schedule-actions').evaluate(node => {
+      return [...node.children].map(action => {
+        const {x, y, width, height} = action.getBoundingClientRect();
+        return {x, y, width, height, fits:action.scrollWidth <= action.clientWidth};
+      });
+    });
+    assert.equal(actions.length, 4);
+    assert(actions.every(action => action.fits && action.height >= 36 && Math.abs(action.width - actions[0].width) <= 1));
+    assert.equal(actions[0].y, actions[1].y);
+    assert.equal(actions[2].y, actions[3].y);
+    assert.equal(actions[0].x, actions[2].x);
+    assert.equal(actions[1].x, actions[3].x);
+    assert(actions[2].y > actions[0].y);
     assert.equal(await drawer.getByText(otherMessage, {exact:true}).count(), 0);
     const agenda = drawer.getByRole('link', {name: label === 'Scheduled' ? 'View in agenda' : 'Ver na agenda', exact:true});
     const url = new URL(await agenda.getAttribute('href'), base);
@@ -190,7 +212,9 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   const rescheduleButton = drawerRow.getByRole('button', {name:'Reschedule',exact:true});
   await rescheduleButton.click();
   await reschedule.waitFor({state:'visible'});
+  await assertCentered(reschedule);
   await reschedule.getByRole('link', {name:attachment.name,exact:true}).waitFor();
+  assert.equal(await reschedule.locator('[data-schedule-preview-files] img').getAttribute('alt'), attachment.name);
   const field = reschedule.locator('input[type="datetime-local"]');
   const [date, time] = (await field.inputValue()).split('T');
   const utc = new Date(date+'T'+time+'Z');
@@ -260,10 +284,11 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   const bobReschedule = bobRow.getByRole('button', {name:'Reagendar',exact:true});
   await bobReschedule.click();
   await bobPage.locator(preview).waitFor({state:'visible'});
+  await assertCentered(bobPage.locator(preview));
   await bobPage.keyboard.press('Escape');
   await bobPage.locator(preview).waitFor({state:'hidden'});
   await until(() => bobReschedule.evaluate(node => node === document.activeElement), 'mobile returns focus to the drawer after Escape');
-  await bobRow.getByRole('button', {name:'Cancelar mensagem agendada',exact:true}).click();
+  await bobRow.getByRole('button', {name:'Cancelar envio',exact:true}).click();
   await until(async () => (await api('/api/v1/scheduled-messages')).items.length === 0, 'second schedule cancelled');
   await bobRow.waitFor({state:'hidden'});
   assert(await bobDrawer.isVisible());

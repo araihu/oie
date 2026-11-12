@@ -264,20 +264,26 @@ window.OieRuntime.register('scheduling', life => {
     return '/ui/scheduling/file?' + query;
   }
 
-  function fileLink(file, preview) {
+  function attachmentLink(href, name, thumbnail) {
     const link = document.createElement('a');
-    link.href = fileURL(file.id, true);
-    link.download = file.fileName;
-    if (preview && ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'].includes(file.mediaType)) {
+    link.href = href;
+    link.download = name;
+    if (thumbnail) {
       const img = document.createElement('img');
-      img.src = fileURL(file.id);
-      img.alt = file.fileName;
+      img.src = thumbnail;
+      img.alt = name;
       img.width = 224;
       img.height = 128;
       link.append(img);
+      link.setAttribute('aria-label', name);
     }
-    link.append(file.fileName);
+    link.append(name);
     return link;
+  }
+
+  function fileLink(file, preview) {
+    const raster = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'].includes(file.mediaType);
+    return attachmentLink(fileURL(file.id, true), file.fileName, preview && raster ? fileURL(file.id) : '');
   }
 
   function snapshot() {
@@ -363,7 +369,7 @@ window.OieRuntime.register('scheduling', life => {
     }
   });
 
-  function open(form, initial, text, reply, items, reschedule) {
+  function open(form, initial, text, reply, links, reschedule) {
     activeForm = form;
     title.textContent = submit.textContent = reschedule ? dialog.dataset.update : dialog.dataset.create;
     error.hidden = true;
@@ -383,7 +389,7 @@ window.OieRuntime.register('scheduling', life => {
     }
     quote.hidden = !reply;
     quote.textContent = reply ? [reply.senderName, reply.excerpt].filter(Boolean).join(' · ') : '';
-    previewFiles.replaceChildren(...items.map(file => fileLink(file, true)));
+    previewFiles.replaceChildren(...links);
     const requested = Date.parse(initial);
     localTime.value = wallTime(new Date(requested > Date.now() + 60000 ? requested : Date.now() + 3600000));
     dialog.querySelector('[data-schedule-zone]').textContent = zone().replaceAll('_', ' ');
@@ -397,7 +403,7 @@ window.OieRuntime.register('scheduling', life => {
     if (current.blocked || (!current.text.trim() && !current.files.length)) return;
     const editing = composer.hasAttribute('data-editing-schedule');
     const original = document.getElementById('schedule-edit-data');
-    open(composer, original ? JSON.parse(original.textContent).scheduledAt : '', current.text, current.reply, current.files, editing);
+    open(composer, original ? JSON.parse(original.textContent).scheduledAt : '', current.text, current.reply, current.files.map(file => fileLink(file, true)), editing);
   });
   function runScheduleAction(row, command, trigger) {
     if (!row.isConnected || dialog.open) return;
@@ -414,9 +420,8 @@ window.OieRuntime.register('scheduling', life => {
     const source = row.querySelector('[data-scheduled-quote]');
     const reply = source ? {senderName: source.dataset.sender, excerpt: source.content.textContent} : null;
     const scheduledAt = row.querySelector('[data-scheduled-date]').dateTime;
-    open(form, form.elements.namedItem('scheduledAt').value || scheduledAt, row.querySelector('[data-scheduled-text]')?.textContent || '', reply, [], true);
-    const links = Array.from(row.querySelectorAll('[data-message-attachments] a')).map(link => link.cloneNode(true));
-    previewFiles.replaceChildren(...links);
+    const links = Array.from(row.querySelectorAll('[data-message-attachments] a'), link => attachmentLink(link.href, link.download, link.querySelector('img')?.src));
+    open(form, form.elements.namedItem('scheduledAt').value || scheduledAt, row.querySelector('[data-scheduled-text]')?.textContent || '', reply, links, true);
   }
   life.on(drawer, 'click', event => {
     const trigger = event.target.closest('[data-conversation-schedule-command]');
