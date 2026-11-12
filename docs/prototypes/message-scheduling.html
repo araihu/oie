@@ -1,0 +1,863 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Oiê · Agendamento de mensagens</title>
+  <!-- goshtoso-dependencies -->
+  <style>
+    :root {
+      color-scheme: light;
+      --ink:#172725; --muted:#51645f; --line:#d7e0dc; --paper:#fff; --base:#eff3f0;
+      --chat:#e6ede8; --bubble:#d7e9ee; --accent:#254d61; --accent-light:#e5eff3;
+      --danger:#932e36; --ring:#1c6488;
+      --color-primary:var(--accent); --color-on-primary:#fff;
+      --color-surface:var(--paper); --color-on-surface:var(--ink); --color-outline:var(--line);
+      font-family:system-ui,sans-serif; color:var(--ink); background:var(--base);
+    }
+    * { box-sizing:border-box }
+    body { margin:0; min-width:320px }
+    [hidden] { display:none !important }
+    :is(select,input,textarea) { font:inherit; color:inherit }
+    :is(button,select,input,textarea):focus-visible { outline:2px solid var(--ring); outline-offset:3px }
+    button { cursor:pointer }
+    .preview-bar {
+      max-width:1600px; margin:auto; min-height:65px; padding:12px 24px;
+      display:flex; align-items:center; justify-content:space-between; gap:16px;
+    }
+    .preview-bar h1 { margin:0; font-size:15px; font-weight:650 }
+    .preview-tools { display:flex; align-items:center; flex-wrap:wrap; gap:8px }
+    .preview-tools select {
+      border:1px solid var(--line); background:var(--paper); border-radius:8px;
+      padding:7px 8px; max-width:min(100%,17rem); font-size:13px;
+    }
+    .frame {
+      width:calc(100% - 48px); max-width:1552px; height:min(780px, calc(100dvh - 89px)); min-height:520px;
+      margin:0 auto 24px; background:var(--paper); border:1px solid var(--line);
+      border-radius:14px; overflow:hidden; box-shadow:0 15px 40px #21372d10;
+      display:grid; grid-template-columns:240px minmax(0,1fr) auto;
+    }
+    .inbox { padding:20px 12px; border-right:1px solid var(--line); min-height:0; overflow:auto }
+    .brand { margin:0 8px 17px; color:var(--accent); font-size:26px; font-weight:750; letter-spacing:-.06em }
+    .main-nav { display:grid; gap:4px; margin-block-end:18px; padding-block-end:12px; border-block-end:1px solid var(--line) }
+    .main-nav .main-nav-link { display:block; border-radius:8px; padding:9px 10px; color:var(--accent); text-decoration:none; font-weight:650; font-size:14px }
+    .main-nav-link:hover, .main-nav-link[aria-current="page"] { background:var(--accent-light) }
+    .main-nav-link:focus-visible, .room-link:focus-visible { outline:2px solid var(--ring); outline-offset:2px }
+    .chat-row { display:flex; align-items:center; gap:10px; border-radius:9px; padding:10px; width:100%; text-align:start; background:var(--paper) }
+    .chat-row:hover, .chat-row[aria-current="true"] { background:var(--accent-light) }
+    .chat-row .room-summary { min-width:0 }
+    .chat-row small { display:block; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+    .avatar {
+      width:40px; height:40px; border-radius:50%; display:grid; place-items:center; flex:none;
+      background:#dce8de; color:#294e3a; font-size:13px; font-weight:700;
+    }
+    .conversation { min-width:0; min-height:0; display:grid; grid-template-rows:auto 1fr auto }
+    .conversation header,.drawer header {
+      min-height:70px; border-bottom:1px solid var(--line);
+      display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 18px;
+    }
+    .contact { display:flex; align-items:center; gap:10px }
+    .contact h2,.drawer h2 { margin:0; font-size:16px }
+    .btn {
+      display:inline-flex; align-items:center; justify-content:center; gap:7px;
+      border:1px solid var(--line); background:var(--paper); padding:8px 12px; min-height:38px;
+      border-radius:8px; white-space:nowrap; font-size:13px; font-weight:650;
+    }
+    .btn:hover { background:var(--accent-light) }
+    .primary { background:var(--accent); color:white; border-color:var(--accent) }
+    .primary:hover { background:#183b4c }
+    .danger { background:var(--danger); color:white; border-color:var(--danger) }
+    .danger:hover { background:#75242c }
+    .quiet { background:transparent; border-color:transparent; padding:6px; color:var(--accent) }
+    .icon-only { min-width:40px; padding:6px }
+    .clock {
+      width:16px; height:16px; border:1.6px solid currentColor; border-radius:50%;
+      position:relative; flex:none;
+    }
+    .clock::before { content:""; position:absolute; top:3px; left:6px; height:4px; border-left:1.5px solid currentColor }
+    .clock::after { content:""; position:absolute; top:6px; left:6px; width:4px; border-top:1.5px solid currentColor; transform:rotate(24deg); transform-origin:left }
+    .timeline, .schedule-preview {
+      display:flex; flex-direction:column; background-color:var(--chat);
+      background-image:radial-gradient(#587d691f 1px,transparent 1px); background-size:23px 23px;
+    }
+    .timeline { min-height:0; overflow:auto; padding:20px clamp(14px,4vw,56px); gap:12px }
+    .schedule-preview {
+      padding:12px; border:1px solid var(--line); border-radius:8px;
+      max-height:min(30dvh,16rem); overflow:auto;
+    }
+    .schedule-preview:focus-visible { outline:2px solid var(--ring); outline-offset:2px }
+    .timeline::before { content:""; flex:1 }
+    .day {
+      align-self:center; padding:4px 10px; border-radius:6px; margin:0 0 8px;
+      background:#f3f7f3; color:var(--muted); font-size:12px;
+    }
+    .bubble {
+      align-self:flex-start; background:var(--paper); padding:10px 12px; border-radius:12px 12px 12px 3px;
+      max-width:min(85%,470px); display:flex; align-items:end; gap:12px;
+      box-shadow:0 1px 2px #21372d13; font-size:14px;
+    }
+    .bubble.own { align-self:flex-end; background:var(--bubble); border-radius:12px 12px 3px 12px }
+    .bubble p { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; min-width:0 }
+    .bubble time { color:var(--muted); font-size:11px; white-space:nowrap }
+    .composer { display:grid; gap:8px; padding:12px; border-top:1px solid var(--line) }
+    .composer-row { display:flex; align-items:end; gap:8px; min-width:0 }
+    #composer-actions { flex:none }
+    .edit-context {
+      display:flex; align-items:center; justify-content:space-between; gap:6px;
+      font-size:13px; color:var(--accent); border-inline-start:3px solid var(--accent); padding-inline-start:8px;
+    }
+    .edit-context button { min-height:30px; padding:2px 8px }
+    .composition-content { min-width:0 }
+    .attachments { display:flex; flex-wrap:wrap; gap:6px; margin:0; padding:0; list-style:none }
+    #draft-attachments { max-height:110px; overflow:auto }
+    .attachments li {
+      display:flex; align-items:center; min-width:0; max-width:100%; gap:7px; margin:0; padding:4px 7px;
+      border:1px solid var(--line); border-radius:7px; color:var(--ink); background:var(--paper); font-size:12px;
+    }
+    .attachments img { width:32px; height:32px; flex:none; object-fit:cover; border-radius:4px }
+    .attachments span { overflow-wrap:anywhere }
+    .attachments button { padding:0 4px; border:0; background:transparent; color:var(--accent) }
+    .composition-content .attachments { margin-block:5px }
+    .composition-content a { color:var(--accent); text-decoration:underline }
+    .composer textarea {
+      min-width:0; flex:1; resize:none; min-height:42px; max-height:110px; padding:10px 12px;
+      background:var(--base); border:1px solid var(--line); border-radius:9px;
+    }
+    .drawer {
+      width:min(330px,30vw); display:flex; flex-direction:column; min-height:0;
+      border-left:1px solid var(--line); background:var(--paper);
+    }
+    .queue { margin:0; padding:6px 16px 12px; overflow:auto; list-style:none }
+    .queue > li { padding:15px 0; border-bottom:1px solid var(--line) }
+    .queue .when {
+      display:flex; align-items:center; gap:7px; color:var(--accent); font-size:13px; font-weight:700;
+    }
+    .queue p { margin:7px 0; font-size:14px; overflow-wrap:anywhere; white-space:pre-wrap }
+    .queue .state { color:var(--muted); font-size:12px; margin:2px 0 }
+    .actions { display:flex; flex-wrap:wrap; gap:2px; margin-inline-start:-5px }
+    .actions button { padding-inline:5px }
+    .actions button:disabled { opacity:.55; cursor:default }
+    .actions .cancel { color:var(--danger) }
+    .actions .sendNow { font-weight:750 }
+    .empty { margin:18px; color:var(--muted); font-size:14px }
+    .scheduled-workspace { grid-column:2/-1; min-width:0; min-height:0; display:flex; flex-direction:column }
+    .scheduled-heading {
+      display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+      min-height:70px; border-bottom:1px solid var(--line); padding:12px 24px;
+    }
+    .scheduled-heading h2 { margin:0; font-size:20px; font-weight:650 }
+    .room-filter { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted) }
+    .room-filter select { padding:7px 9px; border:1px solid var(--line); background:var(--paper); color:var(--ink); border-radius:8px; max-width:100% }
+    .scheduled-workspace .queue { padding-inline:24px }
+    .scheduled-workspace .queue > li { padding-block:14px }
+    .scheduled-meta { display:flex; align-items:center; flex-wrap:wrap; gap:8px 18px }
+    .room-link { color:var(--ink); font-size:14px; font-weight:700; text-decoration:underline; text-underline-offset:3px }
+    .room-switch { display:none }
+    dialog {
+      width:min(430px,calc(100vw - 26px)); color:var(--ink); padding:0; background:var(--paper);
+      border:1px solid var(--line); border-radius:14px; box-shadow:0 20px 70px #12252245;
+      position:fixed; inset:0; margin:auto; max-height:calc(100dvh - 28px);
+    }
+    dialog::backdrop { background:#10251f66 }
+    dialog form { padding:20px; display:grid; gap:14px }
+    dialog h2 { font-size:19px; margin:0 }
+    .field { display:grid; gap:5px; font-size:13px; font-weight:600; min-width:0 }
+    .field :is(input,textarea) { width:100%; border:1px solid var(--line); border-radius:7px; padding:8px; background:var(--paper) }
+    .zone-note,.confirm-text { margin:0; font-size:13px; color:var(--muted); overflow-wrap:anywhere }
+    .form-error { margin:0; min-height:1lh; font-size:13px; color:var(--danger) }
+    .dialog-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:8px }
+    .toast {
+      position:fixed; z-index:3; inset:auto 16px 17px auto; max-width:calc(100vw - 32px); padding:10px 14px;
+      border-radius:8px; background:var(--accent); color:white; box-shadow:0 8px 24px #12252230; font-size:14px;
+    }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; clip-path:inset(50%); overflow:hidden; white-space:nowrap }
+    @media (max-width:1000px) {
+      .frame { grid-template-columns:174px minmax(0,1fr) auto }
+      .drawer { width:280px }
+    }
+    @media (max-width:760px) {
+      .preview-bar { padding:10px 12px; gap:8px; flex-wrap:wrap }
+      .preview-tools select { max-width:220px }
+      .frame { width:100%; height:calc(100dvh - 80px); min-height:400px; margin:0; border-radius:0; border-inline:0; grid-template-columns:minmax(0,1fr); grid-template-rows:49px minmax(0,1fr); position:relative }
+      .inbox { display:contents }
+      .inbox .brand, #room-list { display:none }
+      .main-nav { grid-row:1; display:flex; padding:4px 8px; margin:0; align-items:center }
+      .main-nav-link { flex:1; text-align:center }
+      .conversation, .scheduled-workspace { grid-column:1; grid-row:2 }
+      .drawer { position:absolute; z-index:2; inset:49px 0 0 auto; width:min(100%,330px); box-shadow:-8px 0 22px #12252221 }
+      .conversation header { padding-inline:12px }
+      .conversation .contact h2 { position:absolute; width:1px; height:1px; clip-path:inset(50%); overflow:hidden }
+      .room-switch { display:block; font-size:14px; font-weight:600; max-width:39vw }
+      .scheduled-heading, .scheduled-workspace .queue { padding-inline:14px }
+    }
+  </style>
+</head>
+<body>
+  <header class="preview-bar">
+    <h1 data-copy="prototype"></h1>
+    <div class="preview-tools">
+      <label class="sr-only" for="locale" data-copy="language"></label>
+      <select id="locale"><option value="pt-BR">Português (Brasil)</option><option value="en">English</option></select>
+      <label class="sr-only" for="zone" data-copy="zone"></label>
+      <select id="zone">
+        <option value="America/Sao_Paulo">São Paulo</option>
+        <option value="America/New_York">New York</option>
+        <option value="Europe/Lisbon">Lisboa</option>
+        <option value="Asia/Tokyo">Tokyo</option>
+        <option value="UTC">UTC</option>
+      </select>
+    </div>
+  </header>
+  <main class="frame">
+    <aside class="inbox">
+      <div class="brand">Oiê</div>
+      <nav class="main-nav" id="main-nav" aria-label="Navegação principal"><!-- main-navigation --></nav>
+      <div id="room-list"></div>
+    </aside>
+    <section class="conversation" id="conversation" aria-labelledby="contact-name">
+      <header>
+        <div class="contact"><span class="avatar" id="contact-avatar" aria-hidden="true"></span><h2 id="contact-name" tabindex="-1"></h2><select class="room-switch" id="room-switch"></select></div>
+        <button class="btn" id="queue-trigger" type="button" aria-controls="drawer"><i class="clock" aria-hidden="true"></i><span data-copy="scheduled"></span><span id="count"></span></button>
+      </header>
+      <div class="timeline" id="timeline" role="log" aria-labelledby="contact-name"></div>
+      <form class="composer" id="composer" x-data>
+        <div class="edit-context" id="edit-context" hidden>
+          <span data-copy="editTitle"></span>
+          <button class="btn quiet" type="button" id="discard-edit" data-copy="discardEdit"></button>
+        </div>
+        <ul class="attachments" id="draft-attachments" hidden></ul>
+        <div class="composer-row">
+          <input type="file" id="files" multiple hidden>
+          <button class="btn icon-only" id="attach" type="button"><span aria-hidden="true">＋</span><span class="sr-only" data-copy="attach"></span></button>
+          <label class="sr-only" for="draft" data-copy="message"></label>
+          <textarea id="draft" rows="1" maxlength="16384"></textarea>
+          <!-- composer-actions -->
+        </div>
+      </form>
+    </section>
+    <aside class="drawer" id="drawer" aria-labelledby="drawer-title" hidden>
+      <header><h2 id="drawer-title" data-copy="scheduled"></h2><button class="btn quiet icon-only" type="button" id="close-drawer"><span aria-hidden="true">×</span><span class="sr-only" data-copy="close"></span></button></header>
+      <ul class="queue" id="queue"></ul>
+      <p class="empty" id="empty" data-copy="empty" hidden></p>
+    </aside>
+    <section class="scheduled-workspace" id="scheduled-workspace" aria-labelledby="scheduled-title" hidden>
+      <header class="scheduled-heading">
+        <h2 id="scheduled-title" tabindex="-1" data-copy="scheduled"></h2>
+        <label class="room-filter"><span data-copy="room"></span><select id="scheduled-room"></select></label>
+      </header>
+      <ul class="queue" id="all-scheduled"></ul>
+      <p class="empty" id="all-empty" hidden></p>
+    </section>
+  </main>
+  <dialog id="editor" aria-labelledby="editor-title">
+    <form id="edit-form">
+      <h2 id="editor-title"></h2>
+      <div class="schedule-preview" id="schedule-content" role="group" tabindex="0" hidden></div>
+      <label class="field" id="date-field"><span data-copy="sendAt"></span><input id="send-at" type="datetime-local" aria-describedby="zone-note form-error"></label>
+      <p class="zone-note" id="zone-note"></p>
+      <p class="confirm-text" id="confirm-text" data-copy="cancelPrompt" hidden></p>
+      <p class="form-error" id="form-error" role="status"></p>
+      <div class="dialog-actions">
+        <button class="btn" type="button" id="dismiss" data-copy="back"></button>
+        <button class="btn primary" type="submit" id="confirm"></button>
+      </div>
+    </form>
+  </dialog>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <script>
+    const copy = {
+      'pt-BR': {
+        prototype:'Oiê · Protótipo de agendamento', language:'Idioma', zone:'Fuso de exibição', chats:'Conversas',
+        scheduled:'Agendadas', today:'Hoje', message:'Mensagem', placeholder:'Digite uma mensagem',
+        schedule:'Agendar mensagem', send:'Enviar', sendNow:'Enviar agora', sendOptions:'Opções de envio',
+        messagePreview:'Prévia da mensagem',
+        close:'Fechar', empty:'Nenhuma mensagem agendada nesta conversa.',
+        navigation:'Navegação principal', room:'Conversa', allRooms:'Todas as conversas', allEmpty:'Nenhuma mensagem agendada.',
+        finishCurrentEdit:'Salve ou descarte a edição atual para trocar de conversa.',
+        studio:'Estúdio', production:'Equipe de produção', studioMessage:'A sala está reservada.', productionMessage:'A pauta está pronta.',
+        sendAt:'Enviar em', cancelPrompt:'Deseja cancelar o envio desta mensagem?', back:'Voltar', edit:'Editar',
+        reschedule:'Reagendar', cancel:'Cancelar envio', editTitle:'Editando mensagem agendada', save:'Salvar',
+        discardEdit:'Cancelar edição', attach:'Anexar arquivos', remove:'Remover {file}', sent:'Mensagem enviada.',
+        waiting:'Aguardando conexão', scheduledOK:'Mensagem agendada.', saved:'Alterações salvas.',
+        cancelled:'Envio cancelado.', missing:'Digite uma mensagem ou anexe um arquivo.', future:'Escolha uma data e hora no futuro.',
+        invalidTime:'Esse horário não está disponível neste fuso. Escolha outro.',
+        ambiguous:'Esse horário ocorre duas vezes neste fuso. Escolha outro.',
+        received1:'Oi! Você pode me mandar o endereço do estúdio?', sent1:'Claro. Vou conferir a entrada certa.',
+        received2:'Perfeito, obrigada!', exampleDraft:'Oi, Ana! A entrada é pela Rua das Flores, 28.',
+        queued1:'Lembrete: amanhã a gente se encontra às 10h.', queued2:'Aqui estão as referências para o estúdio. https://example.org/studio',
+        queued3:'Lembrete para a equipe: revisem a pauta antes da reunião.',
+      },
+      en: {
+        prototype:'Oiê · Scheduling prototype', language:'Language', zone:'Display time zone', chats:'Chats',
+        scheduled:'Scheduled', today:'Today', message:'Message', placeholder:'Type a message',
+        schedule:'Schedule message', send:'Send', sendNow:'Send now', sendOptions:'Send options',
+        messagePreview:'Message preview',
+        close:'Close', empty:'No scheduled messages in this chat.',
+        navigation:'Main navigation', room:'Conversation', allRooms:'All conversations', allEmpty:'No scheduled messages.',
+        finishCurrentEdit:'Save or discard the current edit to switch conversations.',
+        studio:'Studio', production:'Production team', studioMessage:'The room is booked.', productionMessage:'The agenda is ready.',
+        sendAt:'Send at', cancelPrompt:'Cancel this scheduled message?', back:'Back', edit:'Edit',
+        reschedule:'Reschedule', cancel:'Cancel send', editTitle:'Editing scheduled message', save:'Save',
+        discardEdit:'Discard changes', attach:'Attach files', remove:'Remove {file}', sent:'Message sent.',
+        waiting:'Waiting for connection', scheduledOK:'Message scheduled.', saved:'Changes saved.',
+        cancelled:'Send cancelled.', missing:'Enter a message or attach a file.', future:'Choose a date and time in the future.',
+        invalidTime:'This time is unavailable in this zone. Choose another.',
+        ambiguous:'This time occurs twice in this zone. Choose another.',
+        received1:'Hi! Can you send me the studio address?', sent1:'Of course. I’ll check which entrance to use.',
+        received2:'Perfect, thanks!', exampleDraft:'Hi Ana! Use the entrance at 28 Rua das Flores.',
+        queued1:'Reminder: we’re meeting tomorrow at 10.', queued2:'Here are the studio references. https://example.org/studio',
+        queued3:'Team reminder: please review the agenda before the meeting.',
+      },
+    };
+    const $ = id => document.getElementById(id);
+    const text = key => copy[document.documentElement.lang][key];
+    const zone = () => $('zone').value;
+    const minute = 60_000;
+    const now = Date.now();
+    const rooms = [
+      {id:'ana', name:'Ana Martins', initials:'AM'},
+      {id:'studio', key:'studio', initials:'ES'},
+      {id:'production', key:'production', initials:'EP'},
+    ];
+    const messages = [
+      {room:'ana', key:'received1', at:now - 8 * minute},
+      {room:'ana', key:'sent1', at:now - 5 * minute, own:true},
+      {room:'ana', key:'received2', at:now - 2 * minute},
+      {room:'studio', key:'studioMessage', at:now - 6 * minute},
+      {room:'production', key:'productionMessage', at:now - 3 * minute},
+    ];
+    const queue = [
+      {id:1, room:'studio', key:'queued1', at:now + 21 * 60 * minute},
+      {id:2, room:'ana', key:'queued2', at:now - 5 * minute, attachments:[{name:'studio-reference.pdf'}]},
+      {id:3, room:'production', key:'queued3', at:now + 24 * 60 * minute},
+    ];
+    let nextId = 4;
+    let activeView = location.hash === '#scheduled' ? 'scheduled' : 'chats';
+    let activeRoom = 'ana';
+    const drafts = new Map();
+    let action, toastTimer, editing;
+    let draftFiles = [];
+    const previewURLs = new Set();
+    const mobile = matchMedia('(max-width:760px)');
+    let drawerOpen = !mobile.matches;
+
+    function dateTime(instant, options) {
+      return new Intl.DateTimeFormat(document.documentElement.lang, {timeZone:zone(), ...options}).format(instant);
+    }
+
+    function wallTime(instant) {
+      const parts = new Intl.DateTimeFormat('en', {
+        timeZone:zone(), year:'numeric', month:'2-digit', day:'2-digit',
+        hour:'2-digit', minute:'2-digit', hourCycle:'h23',
+      }).formatToParts(instant);
+      const value = Object.fromEntries(parts.map(({type,value}) => [type,value]));
+      return value.year + '-' + value.month + '-' + value.day + 'T' + value.hour + ':' + value.minute;
+    }
+
+    function wallTimeCandidates(value) {
+      const clock = Date.parse(value + ':00Z');
+      if (!Number.isFinite(clock)) return [];
+      const day = 24 * 60 * minute;
+      const offsets = new Set([-day, 0, day].map(delta => Date.parse(wallTime(clock + delta) + ':00Z') - (clock + delta)));
+      return [...offsets].map(offset => clock - offset).filter(instant => wallTime(instant) === value);
+    }
+
+    function name(item) {
+      return item.key ? text(item.key) : item.body ?? item.name;
+    }
+
+    const menuTrigger = () => $('composer-actions-menu').querySelector('[data-popover-trigger] button');
+    const hasContent = item => !!(item.body.trim() || item.attachments.length);
+
+    function composition() {
+      return {body:$('draft').value, attachments:[...draftFiles]};
+    }
+
+    function setComposition(item) {
+      $('draft').value = item.body;
+      draftFiles = [...item.attachments];
+      renderComposer();
+    }
+
+    function prunePreviews() {
+      const retained = new Set();
+      for (const item of [...queue, ...messages, ...drafts.values(), {attachments:draftFiles}, editing?.draft]) {
+        for (const file of item?.attachments ?? []) retained.add(file.preview);
+      }
+      for (const url of previewURLs) {
+        if (retained.has(url)) continue;
+        URL.revokeObjectURL(url);
+        previewURLs.delete(url);
+      }
+    }
+
+    function renderFiles(list, files, remove) {
+      list.replaceChildren();
+      list.hidden = files.length === 0;
+      for (const [index,file] of files.entries()) {
+        const row = document.createElement('li');
+        if (file.preview) {
+          const image = document.createElement('img');
+          image.src = file.preview;
+          image.alt = '';
+          row.append(image);
+        }
+        const label = document.createElement('span');
+        label.textContent = file.name;
+        row.append(label);
+        if (remove) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = '×';
+          button.setAttribute('aria-label', text('remove').replace('{file}',file.name));
+          button.addEventListener('click', () => remove(index));
+          row.append(button);
+        }
+        list.append(row);
+      }
+    }
+
+    function renderContent(item) {
+      const content = document.createElement('div');
+      content.className = 'composition-content';
+      const body = name(item);
+      if (body) {
+        const paragraph = document.createElement('p');
+        let offset = 0;
+        for (const match of body.matchAll(/https?:\/\/[^\s<>]+/g)) {
+          const url = match[0].replace(/[.,!?;)]+$/, '');
+          const link = document.createElement('a');
+          link.href = url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = url;
+          paragraph.append(body.slice(offset,match.index),link);
+          offset = match.index + url.length;
+        }
+        paragraph.append(body.slice(offset));
+        content.append(paragraph);
+      }
+      if (item.attachments?.length) {
+        const list = document.createElement('ul');
+        list.className = 'attachments';
+        renderFiles(list,item.attachments);
+        content.append(list);
+      }
+      return content;
+    }
+
+    function renderComposer() {
+      $('edit-context').hidden = !editing;
+      $('send-action').querySelector('span span').textContent = text(editing ? 'save' : 'send');
+      $('schedule-action').querySelector('span').textContent = text('schedule');
+      $('composer-actions').setAttribute('aria-label', text('sendOptions'));
+      menuTrigger().setAttribute('aria-label', text('sendOptions'));
+      menuTrigger().disabled = !!editing;
+      renderFiles($('draft-attachments'), draftFiles, index => {
+        draftFiles.splice(index,1);
+        renderComposer();
+        prunePreviews();
+        $('attach').focus();
+      });
+    }
+
+    function time(instant, options) {
+      const node = document.createElement('time');
+      node.dateTime = new Date(instant).toISOString();
+      node.textContent = dateTime(instant, options);
+      return node;
+    }
+
+    function renderBubble(item) {
+      const bubble = document.createElement('article');
+      bubble.className = 'bubble' + (item.own ? ' own' : '');
+      bubble.append(renderContent(item), time(item.at, {timeStyle:'short'}));
+      return bubble;
+    }
+
+    function renderChat() {
+      const timeline = $('timeline');
+      const fragment = document.createDocumentFragment();
+      const today = wallTime(Date.now()).slice(0,10);
+      let previousDay;
+      for (const item of messages) {
+        if (item.room !== activeRoom) continue;
+        const day = wallTime(item.at).slice(0,10);
+        if (day !== previousDay) {
+          const divider = document.createElement('p');
+          divider.className = 'day';
+          divider.textContent = day === today ? text('today') : dateTime(item.at, {dateStyle:'medium'});
+          fragment.append(divider);
+          previousDay = day;
+        }
+        fragment.append(renderBubble(item));
+      }
+      timeline.replaceChildren(fragment);
+    }
+
+    function currentQueue() {
+      return $(activeView === 'scheduled' ? 'all-scheduled' : 'queue');
+    }
+
+    function focusQueue(item, kind) {
+      const target = item && currentQueue().querySelector('[data-item="' + item.id + '"][data-action="' + kind + '"]');
+      const fallback = activeView === 'scheduled' ? 'scheduled-title' : drawerOpen ? 'close-drawer' : 'queue-trigger';
+      (target || $(fallback)).focus();
+    }
+
+    function renderQueueItems(list, items, showRoom) {
+      list.replaceChildren();
+      for (const item of items.sort((a,b) => a.at - b.at)) {
+        const row = document.createElement('li');
+        const meta = document.createElement('div');
+        meta.className = 'scheduled-meta';
+        if (showRoom) {
+          const room = rooms.find(room => room.id === item.room);
+          const link = document.createElement('a');
+          link.href = '#chats';
+          link.className = 'room-link';
+          link.textContent = name(room);
+          link.addEventListener('click', event => {
+            event.preventDefault();
+            if (switchRoom(room.id)) navigate('chats');
+          });
+          meta.append(link);
+        }
+        const when = document.createElement('div');
+        when.className = 'when';
+        const clock = document.createElement('i');
+        clock.className = 'clock';
+        clock.setAttribute('aria-hidden','true');
+        when.append(clock, time(item.at, {dateStyle:'medium',timeStyle:'short'}));
+        meta.append(when);
+        row.append(meta, renderContent(item));
+        if (item.at <= Date.now()) {
+          const state = document.createElement('p');
+          state.className = 'state';
+          state.textContent = text('waiting');
+          row.append(state);
+        }
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        for (const kind of ['sendNow','edit','reschedule','cancel']) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'btn quiet ' + kind;
+          button.dataset.item = item.id;
+          button.dataset.action = kind;
+          button.textContent = text(kind);
+          button.disabled = editing?.item === item || kind === 'edit' && !!editing;
+          button.addEventListener('click', () => {
+            if (kind === 'sendNow') {
+              queue.splice(queue.indexOf(item),1);
+              send({room:item.room, body:name(item), attachments:item.attachments});
+              renderQueue();
+              focusQueue();
+            } else if (kind === 'edit') {
+              startEdit(item);
+            } else {
+              openEditor(kind,item,button);
+            }
+          });
+          actions.append(button);
+        }
+        row.append(actions);
+        list.append(row);
+      }
+    }
+
+    function renderQueue() {
+      const roomQueue = queue.filter(item => item.room === activeRoom);
+      const filter = $('scheduled-room').value;
+      const all = queue.filter(item => !filter || item.room === filter);
+      const showDrawer = activeView === 'chats' && drawerOpen;
+      $('drawer').hidden = !showDrawer;
+      $('conversation').inert = showDrawer && mobile.matches;
+      $('queue-trigger').setAttribute('aria-expanded', String(showDrawer));
+      $('count').textContent = roomQueue.length;
+      $('empty').hidden = roomQueue.length > 0;
+      $('all-empty').hidden = all.length > 0;
+      $('all-empty').textContent = text(filter ? 'empty' : 'allEmpty');
+      renderQueueItems($('queue'), roomQueue, false);
+      renderQueueItems($('all-scheduled'), all, true);
+    }
+
+    function renderRooms() {
+      const room = rooms.find(room => room.id === activeRoom);
+      $('contact-name').textContent = name(room);
+      $('contact-avatar').textContent = room.initials;
+      $('room-switch').value = activeRoom;
+      $('room-list').replaceChildren();
+      for (const room of rooms) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'chat-row';
+        const avatar = document.createElement('span');
+        avatar.className = 'avatar';
+        avatar.setAttribute('aria-hidden','true');
+        avatar.textContent = room.initials;
+        const summary = document.createElement('span');
+        summary.className = 'room-summary';
+        const title = document.createElement('strong');
+        title.textContent = name(room);
+        const last = messages.findLast(item => item.room === room.id);
+        const preview = document.createElement('small');
+        preview.textContent = name(last) || last.attachments?.[0]?.name || '';
+        summary.append(title,preview);
+        button.append(avatar,summary);
+        if (room.id === activeRoom && activeView === 'chats') button.setAttribute('aria-current','true');
+        button.addEventListener('click', () => {
+          if (switchRoom(room.id)) navigate('chats');
+        });
+        $('room-list').append(button);
+      }
+    }
+
+    function switchRoom(id) {
+      if (id === activeRoom) return true;
+      if (editing) {
+        announce('finishCurrentEdit');
+        return false;
+      }
+      drafts.set(activeRoom, composition());
+      activeRoom = id;
+      setComposition(drafts.get(id) ?? {body:'', attachments:[]});
+      drafts.delete(id);
+      renderChat();
+      return true;
+    }
+
+    function showView(view, focus = false) {
+      activeView = view;
+      const scheduled = view === 'scheduled';
+      if (scheduled && mobile.matches) drawerOpen = false;
+      $('conversation').hidden = scheduled;
+      $('scheduled-workspace').hidden = !scheduled;
+      for (const link of $('main-nav').querySelectorAll('[data-view]')) {
+        if (link.dataset.view === view) link.setAttribute('aria-current','page');
+        else link.removeAttribute('aria-current');
+      }
+      renderRooms();
+      renderQueue();
+      if (focus) $(scheduled ? 'scheduled-title' : mobile.matches ? 'room-switch' : 'contact-name').focus();
+    }
+
+    function navigate(view) {
+      if (location.hash !== '#' + view) history.pushState(null, '', '#' + view);
+      showView(view, true);
+    }
+
+    function translate() {
+      document.title = text('prototype');
+      for (const node of document.querySelectorAll('[data-copy]')) node.textContent = text(node.dataset.copy);
+      $('main-nav').setAttribute('aria-label',text('navigation'));
+      const filter = $('scheduled-room').value;
+      $('scheduled-room').replaceChildren(new Option(text('allRooms'), ''), ...rooms.map(room => new Option(name(room), room.id)));
+      $('scheduled-room').value = filter;
+      $('room-switch').replaceChildren(...rooms.map(room => new Option(name(room), room.id)));
+      $('room-switch').setAttribute('aria-label',text('room'));
+      $('draft').placeholder = text('placeholder');
+      renderComposer();
+      renderChat();
+      showView(activeView);
+    }
+
+    function openEditor(kind, item, trigger, draft) {
+      action = {kind, item, trigger, draft};
+      const timing = kind !== 'cancel';
+      const preview = $('schedule-content');
+      preview.replaceChildren();
+      preview.hidden = kind !== 'schedule';
+      $('date-field').hidden = $('zone-note').hidden = !timing;
+      $('confirm-text').hidden = kind !== 'cancel';
+      const at = item?.at ?? Date.now() + 60 * minute;
+      $('send-at').value = wallTime(at);
+      if (draft) {
+        preview.setAttribute('aria-label', text('messagePreview'));
+        preview.append(renderBubble({...draft, at, own:true}));
+        updatePreviewTime();
+      }
+      $('zone-note').textContent = $('zone').selectedOptions[0].label;
+      $('editor-title').textContent = text(kind);
+      $('confirm').textContent = text(kind);
+      $('confirm').className = 'btn ' + (kind === 'cancel' ? 'danger' : 'primary');
+      $('form-error').textContent = '';
+      $('editor').showModal();
+      $(timing ? 'send-at' : 'dismiss').focus();
+    }
+
+    function updatePreviewTime() {
+      if (action?.kind !== 'schedule') return;
+      const timestamp = $('schedule-content').querySelector('time');
+      const candidates = wallTimeCandidates($('send-at').value);
+      timestamp.style.visibility = candidates.length === 1 ? '' : 'hidden';
+      if (candidates.length !== 1) return;
+      timestamp.dateTime = new Date(candidates[0]).toISOString();
+      timestamp.textContent = dateTime(candidates[0], {timeStyle:'short'});
+    }
+
+    function announce(key) {
+      $('toast').hidden = false;
+      $('toast').textContent = text(key);
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {$('toast').hidden = true;}, 2600);
+    }
+
+    function send(item) {
+      messages.push({...item, at:Date.now(), own:true});
+      renderRooms();
+      if (item.room === activeRoom) {
+        renderChat();
+        $('timeline').scrollTop = $('timeline').scrollHeight;
+      }
+      announce('sent');
+    }
+
+    function startEdit(item) {
+      if (editing || !switchRoom(item.room)) return;
+      editing = {
+        item,
+        fromSchedule:activeView === 'scheduled',
+        draft:composition(),
+        selection:[$('draft').selectionStart,$('draft').selectionEnd],
+      };
+      if (mobile.matches) drawerOpen = false;
+      setComposition({body:name(item), attachments:item.attachments ?? []});
+      showView('chats');
+      $('draft').focus();
+      $('draft').setSelectionRange($('draft').value.length,$('draft').value.length);
+    }
+
+    function finishEdit() {
+      const {draft,selection,item,fromSchedule} = editing;
+      editing = null;
+      setComposition(draft);
+      prunePreviews();
+      if (fromSchedule) {
+        showView('scheduled');
+        focusQueue(item,'edit');
+        return;
+      }
+      renderQueue();
+      $('draft').focus();
+      $('draft').setSelectionRange(...selection);
+    }
+
+    $('attach').addEventListener('click', () => $('files').click());
+    $('files').addEventListener('change', event => {
+      for (const file of event.target.files) {
+        const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : '';
+        if (preview) previewURLs.add(preview);
+        draftFiles.push({name:file.name, preview});
+      }
+      event.target.value = '';
+      renderComposer();
+    });
+    $('discard-edit').addEventListener('click', finishEdit);
+    $('composer').addEventListener('keydown', event => {
+      if (event.key === 'Escape' && editing) {
+        event.preventDefault();
+        finishEdit();
+      }
+    });
+    $('composer').addEventListener('submit', event => {
+      event.preventDefault();
+      const draft = composition();
+      if (!hasContent(draft)) {
+        announce('missing');
+        return $('draft').focus();
+      }
+      if (editing) {
+        delete editing.item.key;
+        Object.assign(editing.item,draft);
+        finishEdit();
+        return announce('saved');
+      }
+      send({...draft, room:activeRoom});
+      setComposition({body:'', attachments:[]});
+      $('draft').focus();
+    });
+    window.openSchedulingDialog = () => {
+      if (editing) return;
+      const trigger = menuTrigger();
+      if (trigger.getAttribute('aria-expanded') === 'true') trigger.click();
+      const draft = composition();
+      if (!hasContent(draft)) {
+        announce('missing');
+        return requestAnimationFrame(() => $('draft').focus());
+      }
+      requestAnimationFrame(() => openEditor('schedule',null,trigger,draft));
+    };
+    for (const link of $('main-nav').querySelectorAll('[data-view]')) {
+      link.addEventListener('click', event => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        navigate(link.dataset.view);
+      });
+    }
+    window.addEventListener('popstate', () => showView(location.hash === '#scheduled' ? 'scheduled' : 'chats'));
+    $('scheduled-room').addEventListener('change', renderQueue);
+    $('room-switch').addEventListener('change', event => {
+      if (switchRoom(event.target.value)) showView('chats');
+      else event.target.value = activeRoom;
+    });
+    $('queue-trigger').addEventListener('click', () => {drawerOpen = !drawerOpen; renderQueue(); if(drawerOpen) $('close-drawer').focus();});
+    function closeDrawer() {
+      drawerOpen = false;
+      renderQueue();
+      $('queue-trigger').focus();
+    }
+    $('close-drawer').addEventListener('click', closeDrawer);
+    $('drawer').addEventListener('keydown', event => {
+      if (event.key === 'Escape') closeDrawer();
+    });
+    mobile.addEventListener('change', () => {
+      if (mobile.matches && drawerOpen) closeDrawer();
+      else $('conversation').inert = false;
+    });
+    $('dismiss').addEventListener('click', () => $('editor').close());
+    $('send-at').addEventListener('input', updatePreviewTime);
+    $('editor').addEventListener('close', () => {
+      const {trigger,item,kind} = action;
+      if (trigger.isConnected && !trigger.closest('[inert]')) trigger.focus();
+      else focusQueue(item,kind);
+    });
+    $('edit-form').addEventListener('submit', event => {
+      event.preventDefault();
+      const {kind,item,draft} = action;
+      const error = key => {$('form-error').textContent = text(key);};
+      let at;
+      if (kind === 'schedule' || kind === 'reschedule') {
+        if (!$('send-at').value) return error('future');
+        const candidates = wallTimeCandidates($('send-at').value);
+        if (candidates.length === 0) return error('invalidTime');
+        if (candidates.length > 1) return error('ambiguous');
+        [at] = candidates;
+        if (at <= Date.now()) return error('future');
+      }
+      if (kind === 'schedule') {
+        queue.push({id:nextId++, room:activeRoom, ...draft, at});
+        drawerOpen = true;
+        setComposition({body:'', attachments:[]});
+      } else if (kind === 'reschedule') {
+        item.at = at;
+      } else {
+        queue.splice(queue.indexOf(item),1);
+      }
+      renderQueue();
+      $('editor').close();
+      prunePreviews();
+      announce(kind === 'cancel' ? 'cancelled' : kind === 'schedule' ? 'scheduledOK' : 'saved');
+    });
+    $('locale').addEventListener('change', event => {
+      const wasExample = !editing && $('draft').value === text('exampleDraft');
+      document.documentElement.lang = event.target.value;
+      if (wasExample) $('draft').value = text('exampleDraft');
+      translate();
+    });
+    $('zone').addEventListener('change', () => {renderChat(); renderQueue();});
+    $('draft').value = text('exampleDraft');
+    translate();
+  </script>
+</body>
+</html>

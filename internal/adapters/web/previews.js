@@ -93,7 +93,7 @@ window.OieRuntime.register('previews', life => {
         const replace=()=>{for(const child of identity.children)window.Alpine?.destroyTree(child);identity.replaceChildren(template.content.cloneNode(true));for(const child of identity.children)window.Alpine?.initTree(child);};
         if(window.Alpine?.mutateDom)window.Alpine.mutateDom(replace);else replace();
         identity.dataset.sourceId=viewer.dataset.viewerMessageId;
-        const time=identity.querySelector('time');if(time)time.textContent=new Intl.DateTimeFormat(document.documentElement.lang,{dateStyle:'medium',timeStyle:'short'}).format(new Date(time.dateTime));
+        window.OieTime.localize(identity);
       }
     }
     data.viewerUrl=scope.dataset.previewUrl || '';

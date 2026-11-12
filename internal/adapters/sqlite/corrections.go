@@ -67,6 +67,7 @@ func hydrateMessageProjection(ctx context.Context, q *dbgen.Queries, m *domain.M
 	// Delivery ownership and accepted outbox bodies remain in the immutable source.
 	projected.SendState = m.SendState
 	projected.IsOwn = m.IsOwn
+	projected.TimelineAt = m.TimelineAt
 	projected.ProviderID = m.ProviderID
 	projected.ArchiveID = m.ArchiveID
 	projected.ArchiveScope = m.ArchiveScope
@@ -333,11 +334,11 @@ func reconcileCorrections(ctx context.Context, q *dbgen.Queries, seed domain.Mes
 		}
 	}
 	if changed {
-		return refreshCorrectionConversation(ctx, q, seed.ConversationID)
+		return refreshConversationSummary(ctx, q, seed.ConversationID, time.Now().UTC())
 	}
 	return nil
 }
-func refreshCorrectionConversation(ctx context.Context, q *dbgen.Queries, id domain.ID) error {
+func refreshConversationSummary(ctx context.Context, q *dbgen.Queries, id domain.ID, at time.Time) error {
 	row, err := q.GetConversation(ctx, string(id))
 	if err != nil {
 		return err
@@ -347,17 +348,27 @@ func refreshCorrectionConversation(ctx context.Context, q *dbgen.Queries, id dom
 		return err
 	}
 	latest, err := q.LatestLogicalMessage(ctx, string(id))
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	m, err := decodeMessage(latest)
-	if err != nil {
-		return err
-	}
-	if err = hydrateMessageProjection(ctx, q, &m); err != nil {
+	var lastMessage string
+	var updatedAt time.Time
+	if err == nil {
+		m, err := decodeMessage(latest)
+		if err != nil {
+			return err
+		}
+		if err = hydrateMessageProjection(ctx, q, &m); err != nil {
+			return err
+		}
+		lastMessage, updatedAt = m.OriginalText, m.TimelineTime()
+	} else if errors.Is(err, sql.ErrNoRows) {
+		opened, err := q.GetConversationOpenedAt(ctx, string(id))
+		if err != nil {
+			return err
+		}
+		updatedAt, err = time.Parse(time.RFC3339Nano, opened)
+		if err != nil {
+			return err
+		}
+	} else {
 		return err
 	}
 	unreadMention := false
@@ -368,16 +379,16 @@ func refreshCorrectionConversation(ctx context.Context, q *dbgen.Queries, id dom
 		}
 		unreadMention = summary.UnreadMention != 0
 	}
-	if c.LastMessage == m.OriginalText && c.UpdatedAt.Equal(m.CreatedAt) && c.UnreadMention == unreadMention {
+	if c.LastMessage == lastMessage && c.UpdatedAt.Equal(updatedAt) && c.UnreadMention == unreadMention {
 		return nil
 	}
-	c.LastMessage = m.OriginalText
-	c.UpdatedAt = m.CreatedAt
+	c.LastMessage = lastMessage
+	c.UpdatedAt = updatedAt
 	c.UnreadMention = unreadMention
 	if err = q.UpdateConversation(ctx, dbgen.UpdateConversationParams{RevisionID: string(c.RevisionID), Payload: jsonText(c), ActivitySequence: c.ActivitySequence, UnreadCount: int64(c.UnreadCount), ID: string(c.ID)}); err != nil {
 		return err
 	}
-	_, err = change(ctx, q, "conversation.updated", c, time.Now().UTC())
+	_, err = change(ctx, q, "conversation.updated", c, at)
 	return err
 }
 

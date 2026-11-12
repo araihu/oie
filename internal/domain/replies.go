@@ -2,6 +2,8 @@ package domain
 
 import (
 	"cmp"
+	"crypto/sha256"
+	"encoding/hex"
 	"slices"
 	"strings"
 )
@@ -62,10 +64,36 @@ func DisplayBody(m Message) string {
 	return m.OriginalText
 }
 
+func ReplyExcerpt(text string) string {
+	remaining := 512
+	for i := range text {
+		if remaining == 0 {
+			return text[:i]
+		}
+		remaining--
+	}
+	return text
+}
+
+func ReplyExcerptSHA256(excerpt string) string {
+	sum := sha256.Sum256([]byte(excerpt))
+	return hex.EncodeToString(sum[:])
+}
+
+func ValidReplyExcerptSHA256(digest string) bool {
+	if len(digest) != sha256.Size*2 || strings.ToLower(digest) != digest {
+		return false
+	}
+	_, err := hex.DecodeString(digest)
+	return err == nil
+}
+
 // OutboundReply is the immutable, server-created send plan. It survives outbox
 // retries without trusting later browser quotes or reselecting a provider ID.
 type OutboundReply struct {
 	TargetRevisionID              ID
+	Reviewed                      bool   `json:",omitempty"`
+	ExpectedExcerptSHA256         string `json:",omitempty"`
 	TargetBodyHash                string
 	TargetID                      ID
 	SenderName, Excerpt, BodyText string

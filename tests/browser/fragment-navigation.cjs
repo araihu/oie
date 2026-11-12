@@ -62,7 +62,7 @@ async function assertMobileControlOwnership(page) {
       if(u.pathname===`/api/v1/conversations/${c.id}/messages`){
         if(req.method==='POST'){
           const key=req.headers['idempotency-key'];let m=operations.get(key);
-          if(!m){m={...messages[0],id:id(1000+state.effects),accountId:c.accountId,conversationId:c.id,originalText:body.originalText,isOwn:true,sendState:'queued'};operations.set(key,m);state.effects++;messages.push(m);emit();}
+          if(!m){m={...messages[0],id:id(1000+state.effects),accountId:c.accountId,conversationId:c.id,originalText:body.originalText,isOwn:true,sendState:'queued'};operations.set(key,structuredClone(m));state.effects++;messages.push(m);emit();}
           return send(202,m);
         }
         const compare=(a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt)||b.id.localeCompare(a.id),ordered=messages.filter(m=>m.conversationId===c.id).sort(compare),cursor=u.searchParams.get('cursor'),limit=Number(u.searchParams.get('limit')||50),direction=u.searchParams.get('direction')||'older',anchor=cursor?ordered.find(message=>message.id===cursor):null;
@@ -77,7 +77,7 @@ async function assertMobileControlOwnership(page) {
       if(context){const m=messages.find(m=>m.id===context[1]&&m.conversationId===c.id);return m?send(200,{items:[m],targetId:m.id,hasOlder:false,hasNewer:false}):send(404,{status:404});}
     }
     const retained=u.pathname.match(/^\/api\/v1\/messages\/([^/]+)$/);if(retained){const m=messages.find(message=>message.id===retained[1]);return m?send(200,m):send(404,{status:404});}
-    if(u.pathname.startsWith('/api/v1/operations/')){const m=operations.get(u.pathname.split('/').at(-1));return m?send(200,{id:u.pathname.split('/').at(-1),kind:'send_message',resourceId:m.id,status:'succeeded',createdAt:m.createdAt}):send(404,{status:404});}
+    if(u.pathname.startsWith('/api/v1/operations/')){const id=u.pathname.split('/').at(-1),m=operations.get(id);return m?send(200,{id,kind:'send_message',resourceId:m.id,status:'succeeded',createdAt:m.createdAt,...(u.searchParams.get('includeAcceptedMessage')==='true'?{acceptedMessage:m}:{})}):send(404,{status:404});}
     if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return;}
     send(404,{status:404});
   });

@@ -600,6 +600,12 @@ func conversationPane(v view) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
+		if v.conversationSchedulesAvailable() {
+			templ_7745c5c3_Err = conversationSchedulesDrawer(v).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
 		templ_7745c5c3_Err = senderDrawer(v).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -640,7 +646,7 @@ func conversationSkeleton(v view) templ.Component {
 		var templ_7745c5c3_Var34 string
 		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.TimelineLoading)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_pane.templ`, Line: 79, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_pane.templ`, Line: 82, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 		if templ_7745c5c3_Err != nil {

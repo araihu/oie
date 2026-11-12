@@ -20,7 +20,7 @@ window.OieRuntime.register('shared-content', life => {
   if(!results||results.querySelector(':scope>.oie-shared-date-group'))return;
   const items=[...results.querySelectorAll('[data-shared-item]')];if(!items.length)return;
   const fragment=document.createDocumentFragment();let previous='',grid;
-  for(const item of items){const date=new Date(Number(item.dataset.sharedCreatedMs)),month=date.getFullYear()+'-'+date.getMonth();if(Number.isNaN(date.getTime()))continue;if(month!==previous){previous=month;const section=document.createElement('section'),heading=document.createElement('h3');section.className='oie-shared-date-group';section.dataset.sharedMonth=month;heading.className='oie-shared-month';heading.textContent=new Intl.DateTimeFormat(document.documentElement.lang,{month:'long',year:'numeric'}).format(date);grid=document.createElement('div');grid.className='oie-shared-grid';section.append(heading,grid);fragment.append(section)}grid.append(item)}
+  for(const item of items){const date=new Date(Number(item.dataset.sharedCreatedMs));if(Number.isNaN(date.getTime()))continue;const month=window.OieTime.dateKey(date,'month');if(month!==previous){previous=month;const section=document.createElement('section'),heading=document.createElement('h3');section.className='oie-shared-date-group';section.dataset.sharedMonth=month;heading.className='oie-shared-month';heading.textContent=window.OieTime.format(date,{month:'long',year:'numeric'});grid=document.createElement('div');grid.className='oie-shared-grid';section.append(heading,grid);fragment.append(section)}grid.append(item)}
   results.replaceChildren(fragment);
  }
  function replace(target,html){if(window.OieVideos?.swap(target,html))return;const apply=()=>{for(const child of target.children)window.Alpine?.destroyTree(child);target.innerHTML=html;for(const child of target.children)window.Alpine?.initTree(child)};if(window.Alpine?.mutateDom)window.Alpine.mutateDom(apply);else apply()}
@@ -53,27 +53,30 @@ window.OieRuntime.register('shared-content', life => {
   const top=c.scroll.scrollTop,anchor=[...c.results.querySelectorAll('[data-shared-item]')].find(item=>item.getBoundingClientRect().bottom>=c.scroll.getBoundingClientRect().top),anchorID=anchor?.dataset.sharedItem,anchorTop=anchor?.getBoundingClientRect().top,active=c.results.contains(document.activeElement)?document.activeElement:null,activeID=active?.id;
   const activeItem=active?.closest("[data-shared-item]")?.dataset.sharedItem,activeAction=["data-preview-expand","data-preview-download","data-shared-source","data-image-menu-trigger","data-video-player","data-video-play","data-video-retry"].find(name=>active?.hasAttribute(name));
   group(c.results);const existing=new Map([...c.results.querySelectorAll('[data-shared-item]')].map(node=>[node.dataset.sharedItem,node])),months=new Map();
-  for(const item of sorted(c.items.values())){const date=new Date(item.ms),key=date.getFullYear()+'-'+date.getMonth();if(!months.has(key))months.set(key,{date,items:[]});months.get(key).items.push(item)}
+  for(const item of sorted(c.items.values())){const date=new Date(item.ms),key=window.OieTime.dateKey(date,'month');if(!months.has(key))months.set(key,{date,items:[]});months.get(key).items.push(item)}
   const apply=()=>{
    for(const [id,node]of existing)if(!c.items.has(id)){window.OieVideos?.release(node);window.Alpine?.destroyTree(node);node.remove();c.rendered.delete(id)}
    const sections=new Map([...c.results.querySelectorAll(':scope>.oie-shared-date-group')].map(node=>[node.dataset.sharedMonth,node]));
    for(const node of [...c.results.children])if(!node.matches('.oie-shared-date-group')){window.Alpine?.destroyTree(node);node.remove()}
-   for(const [key,node]of sections)if(!months.has(key)){window.OieVideos?.release(node);window.Alpine?.destroyTree(node);node.remove()}
    const keys=[...months.keys()];
    for(let index=0;index<keys.length;index++){
     const key=keys[index],month=months.get(key);let section=sections.get(key);
-    if(!section){section=document.createElement('section');section.className='oie-shared-date-group';section.dataset.sharedMonth=key;const heading=document.createElement('h3');heading.className='oie-shared-month';heading.textContent=new Intl.DateTimeFormat(document.documentElement.lang,{month:'long',year:'numeric'}).format(month.date);const grid=document.createElement('div');grid.className='oie-shared-grid';section.append(heading,grid);const before=keys.slice(index+1).map(key=>sections.get(key)).find(node=>node?.isConnected)||null;c.results.insertBefore(section,before);sections.set(key,section)}
+    if(!section){section=document.createElement('section');section.className='oie-shared-date-group';section.dataset.sharedMonth=key;const heading=document.createElement('h3');heading.className='oie-shared-month';heading.textContent=window.OieTime.format(month.date,{month:'long',year:'numeric'});const grid=document.createElement('div');grid.className='oie-shared-grid';section.append(heading,grid);const before=keys.slice(index+1).map(key=>sections.get(key)).find(node=>node?.isConnected)||null;c.results.insertBefore(section,before);sections.set(key,section)}
     const grid=section.querySelector('.oie-shared-grid');
     for(let n=0;n<month.items.length;n++){
      const item=month.items[n];let node=existing.get(item.id);
-     if(!node||!node.isConnected){const template=document.createElement('template');template.innerHTML=item.html;node=template.content.firstElementChild;const before=month.items.slice(n+1).map(item=>existing.get(item.id)).find(node=>node?.parentElement===grid)||null;grid.insertBefore(node,before);window.Alpine?.initTree(node);existing.set(item.id,node)}
+     const freshNode=!node||!node.isConnected;
+     if(freshNode){const template=document.createElement('template');template.innerHTML=item.html;node=template.content.firstElementChild;existing.set(item.id,node)}
+     if(node.parentElement!==grid){const before=month.items.slice(n+1).map(item=>existing.get(item.id)).find(node=>node?.parentElement===grid)||null;grid.insertBefore(node,before)}
+     if(freshNode)window.Alpine?.initTree(node);
      else if(c.rendered.get(item.id)!==(item.version||item.html)){const actions=node.querySelector('[data-shared-actions]');if(actions&&(actions.contains(document.activeElement)||actions.querySelector('[aria-expanded="true"]')))continue;const template=document.createElement('template');template.innerHTML=item.html;const fresh=template.content.firstElementChild;replace(node,fresh.innerHTML);for(const attr of fresh.attributes)node.setAttribute(attr.name,attr.value)}
      c.rendered.set(item.id,item.version||item.html);
     }
    }
+   for(const [key,node]of sections)if(!months.has(key)){window.OieVideos?.release(node);window.Alpine?.destroyTree(node);node.remove()}
   };
   if(window.Alpine?.mutateDom)window.Alpine.mutateDom(apply);else apply();
-  if(active&&!active.isConnected){const item=activeItem&&c.results.querySelector(`[data-shared-item="${CSS.escape(activeItem)}"]`),target=activeID?document.getElementById(activeID):activeAction?item?.querySelector('['+activeAction+']'):null;target?.focus({preventScroll:true});}
+  if(active&&document.activeElement!==active){const item=activeItem&&c.results.querySelector(`[data-shared-item="${CSS.escape(activeItem)}"]`),target=active.isConnected?active:activeID?document.getElementById(activeID):activeAction?item?.querySelector('['+activeAction+']'):null;target?.focus({preventScroll:true});}
   document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:page||document}));document.dispatchEvent(new CustomEvent('oie:shared-append',{detail:{page:page||document}}));document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));const correct=()=>{if(c.disposed||!c.results.isConnected)return;const same=anchorID&&c.results.querySelector(`[data-shared-item="${CSS.escape(anchorID)}"]`);if(same)c.scroll.scrollTop+=same.getBoundingClientRect().top-anchorTop;else c.scroll.scrollTop=top;c.top=c.scroll.scrollTop;save(c)};correct();life.raf(correct);
  }
  function mergeWindow(c,items,head=false,upper=null){
@@ -131,6 +134,7 @@ window.OieRuntime.register('shared-content', life => {
  for(const name of ['drawer:close','drawer:close-request'])life.on(window,name,event=>{if(event.detail?.id==='details')life.timeout(()=>{if(!event.defaultPrevented){const c=controllers.get('info-shared');if(c){c.closed=true;c.generation++;c.request?.abort();c.request=null;c.busy=false;c.observer?.disconnect();capturePreviews(c);feedback(c,c.failed);save(c)}}},0)});
  life.on(window,'drawer:open',event=>{if(event.detail?.id==='details'){const c=bind(true);if(c){c.closed=false;life.timeout(()=>observe(c),250)}}});
  life.on(document,'oie:shared-refresh',event=>{update(event.detail,false);update(event.detail,true)});
+ life.on(document,'oie:time-zone',()=>{for(const c of controllers.values())render(c,document)});
  const observer=new MutationObserver(()=>{for(const [key,c]of controllers)if(!c.results.isConnected){dispose(c);controllers.delete(key)}});observer.observe(document.getElementById('oie-app')||document.body,{childList:true,subtree:true});
  life.cleanup(()=>{observer.disconnect();for(const c of controllers.values())dispose(c);controllers.clear()});
 });

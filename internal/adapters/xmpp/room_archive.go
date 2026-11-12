@@ -160,7 +160,7 @@ func (m *Manager) roomArchiveTurn(waitCtx, sessionCtx context.Context, host appl
 		}
 	}
 	if request.Action == "search" || request.Action == "context" || request.Action == "older" && request.Anchor != nil &&
-		(p.Boundary.IsZero() || request.Anchor.CreatedAt.UnixMilli() < p.Boundary.UnixMilli()) {
+		(p.Boundary.IsZero() || request.Anchor.TimelineTime().UnixMilli() < p.Boundary.UnixMilli()) {
 		return m.isolatedRoomPage(sessionCtx, host, e, s, c, result, request)
 	}
 	if p.WindowEnd.IsZero() {

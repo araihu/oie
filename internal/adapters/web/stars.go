@@ -79,7 +79,7 @@ func (s *Server) setStar(ctx context.Context, r *http.Request, text copy) (int, 
 	conflict := writeErr == nil && response.StatusCode() == 409
 	rejected := writeErr == nil && (response.StatusCode() == 400 || response.StatusCode() == 404 || response.StatusCode() == 422)
 	if writeErr != nil {
-		receipt, err := s.client.GetOperationWithResponse(ctx, key)
+		receipt, err := s.client.GetOperationWithResponse(ctx, key, nil)
 		committed = err == nil && receipt.JSON200 != nil && receipt.JSON200.Kind == "set_message_star" && receipt.JSON200.ResourceId == id
 	}
 	current, readErr := s.client.GetMessageStarWithResponse(ctx, id)

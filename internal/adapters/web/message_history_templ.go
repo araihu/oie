@@ -853,7 +853,7 @@ func messageHistoryDocument(v view, h historyPageView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "<link rel=\"stylesheet\" href=\"/ui/app.css\"><link rel=\"stylesheet\" href=\"/ui/message-history.css\"><script src=\"/ui/theme.js\"></script><script src=\"/ui/message-history.js\" defer></script></head><body><main class=\"oie-history-document\" data-message-history-native><header><h1>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "<link rel=\"stylesheet\" href=\"/ui/app.css\"><link rel=\"stylesheet\" href=\"/ui/message-history.css\"><script src=\"/ui/theme.js\"></script><script src=\"/ui/presentation-time.js\" defer></script><script src=\"/ui/message-history.js\" defer></script></head><body><main class=\"oie-history-document\" data-message-history-native><header><h1>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

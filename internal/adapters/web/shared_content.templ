@@ -79,7 +79,8 @@ for _,item:=range v.SharedContent.Items {
 }
 }
 templ sharedItem(v view,item engineapi.SharedContentItem){
-<article class="oie-shared-item" data-shared-item={item.Id} data-shared-record-version={sharedItemVersion(item)} data-shared-created-at={item.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-shared-created-ms={strconv.FormatInt(item.Message.CreatedAt.UnixMilli(),10)} data-shared-conversation={item.Message.ConversationId}>
+{{ position := messageTimelineTime(item.Message) }}
+<article class="oie-shared-item" data-shared-item={item.Id} data-shared-record-version={sharedItemVersion(item)} data-shared-created-at={position.Format("2006-01-02T15:04:05Z07:00")} data-shared-created-ms={strconv.FormatInt(position.UnixMilli(),10)} data-shared-conversation={item.Message.ConversationId}>
 @sharedViewerSource(v,item)
 @sharedItemActions(v,item)
 if item.Kind=="video" {
@@ -93,7 +94,7 @@ if item.Kind=="video" {
 }
 <footer class="oie-shared-source">
 <strong>{item.ConversationTitle}</strong><small>{v.sharedAccountLabel(item)} · {item.Message.Sender.DisplayName}</small>
-<time data-shared-source-date datetime={item.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{item.Message.CreatedAt.Format("2006-01-02 15:04")}</time>
+<time data-shared-source-date datetime={position.Format("2006-01-02T15:04:05Z07:00")}>{position.Format("2006-01-02 15:04")}</time>
 </footer>
 </article>
 }
@@ -117,10 +118,11 @@ templ sharedPagination(v view){
 @sharedPageControls(v)
 }
 templ sharedViewerSource(v view,item engineapi.SharedContentItem){
+{{ position := messageTimelineTime(item.Message) }}
 <template data-viewer-source={item.Message.Id}>
 <div class="oie-viewer-source" data-viewer-source-id={item.Message.Id}>
 @profileAvatar(v,item.Message.AccountId,v.sharedSenderAddress(item),avatar.Config{Name:item.Message.Sender.DisplayName,Size:avatar.SizeXS})
-<div class="oie-viewer-sender"><strong title={item.Message.Sender.DisplayName}>{item.Message.Sender.DisplayName}</strong><time data-viewer-date datetime={item.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{item.Message.CreatedAt.Format("2006-01-02 15:04")}</time></div>
+<div class="oie-viewer-sender"><strong title={item.Message.Sender.DisplayName}>{item.Message.Sender.DisplayName}</strong><time data-viewer-date datetime={position.Format("2006-01-02T15:04:05Z07:00")}>{position.Format("2006-01-02 15:04")}</time></div>
 </div>
 </template>
 }

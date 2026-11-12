@@ -17,7 +17,7 @@ func implementedFeatures() []domain.CapabilityFeature {
 		{"direct_text", "supported", "account"}, {"account_history", "supported", "account"},
 		{"saved_rooms", "supported", "account"}, {"room_history", "supported", "room"},
 		{"room_discovery", "unsupported", "service"}, {"room_messaging", "partial", "room"},
-		{"file_upload", "unsupported", "service"}, {"image_previews", "supported", "local"},
+		{"file_upload", "supported", "service"}, {"image_previews", "supported", "local"},
 		{"link_previews", "supported", "local"}, {"received_replies", "supported", "peer"},
 		{"send_replies", "supported", "peer"}, {"mentions", "supported", "room"}, {"edit_messages", "partial", "peer"},
 		{"send_corrections", "partial", "peer"},
@@ -25,7 +25,7 @@ func implementedFeatures() []domain.CapabilityFeature {
 		{"read_receipts", "unsupported", "peer"}, {"typing", "unsupported", "peer"},
 		{"presence", "partial", "peer"}, {"profile_images", "partial", "peer"},
 		{"formatting", "partial", "peer"}, {"e2ee", "unsupported", "peer"},
-		{"message_stars", "supported", "local"}, {"message_search", "supported", "local"}, {"schedules", "unsupported", "local"},
+		{"message_stars", "supported", "local"}, {"message_search", "supported", "local"}, {"schedules", "supported", "local"},
 		{"sync", "unsupported", "local"},
 	} {
 		row := domain.CapabilityFeature{ID: v.id, AppSupport: v.app, Scope: v.scope, ProtocolSupport: "unknown", ServerSupport: "unknown"}
@@ -52,6 +52,13 @@ func (e *Engine) AccountCapabilities(ctx context.Context, id domain.ID) (domain.
 		result.Reason = "adapter_connected"
 		result.DirectText = true
 		result.Discovery.State = "pending"
+	}
+	if _, available := e.protocols.(AttachmentProtocol); !available {
+		for i := range result.Features {
+			if result.Features[i].ID == "file_upload" {
+				result.Features[i].AppSupport = "unsupported"
+			}
+		}
 	}
 	if provider, ok := e.protocols.(CapabilityProvider); ok {
 		evidence, err := provider.CapabilityEvidence(ctx, a)

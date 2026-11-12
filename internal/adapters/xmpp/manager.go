@@ -62,6 +62,8 @@ type entry struct {
 	roomConfigurations  map[string]roomConfiguration
 	discovery           domain.CapabilityDiscovery
 	discoveryPartial    bool
+	uploadLimits        map[string]int64
+	attachmentUploads   map[domain.ID]attachmentUploadProgress
 	detailsWake         chan struct{}
 	details             map[domain.ID]*detailSlot
 	peerPresence        map[string]map[string]peerResource
@@ -306,6 +308,8 @@ func (m *Manager) publish(ctx context.Context, e *entry, state, code string) err
 		e.details = nil
 		e.peerPresence = nil
 		e.reactionLimits = nil
+		e.uploadLimits = nil
+		e.attachmentUploads = nil
 		e.reactionCommands = nil
 	} else {
 		e.discovery = domain.CapabilityDiscovery{State: "pending", Services: []domain.DiscoveredService{}}
@@ -335,6 +339,8 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.correctionSources = map[string]ownCorrectionSource{}
 			e.correctionLatest = map[string]domain.ID{}
 			e.reactionLimits = nil
+			e.uploadLimits = nil
+			e.attachmentUploads = nil
 			e.reactionCommands = nil
 			e.contactsWake = make(chan struct{}, 1)
 			e.historyWake = make(chan struct{}, 1)
@@ -466,7 +472,9 @@ func (m *Manager) connect(ctx context.Context, e *entry) (*mx.Session, net.Conn,
 	_ = raw.SetDeadline(time.Time{})
 	return session, raw, nil
 }
-func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Outgoing) string {
+func (*Manager) RequiresOriginalWireAttempt(domain.Account) bool { return true }
+
+func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Outgoing) (outcome string) {
 	m.mu.RLock()
 	e := m.entries[a.ID]
 	m.mu.RUnlock()
@@ -478,6 +486,26 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	e.mu.RUnlock()
 	if session == nil || raw == nil || state != "connected" {
 		return application.NotSent
+	}
+	var attachmentBody string
+	if len(out.Attachments) != 0 {
+		if out.RecordWireAttempt == nil {
+			return application.NotSent
+		}
+		defer func() {
+			if outcome != application.NotSent {
+				e.forgetAttachmentUpload(session, out.ID)
+			}
+		}()
+		var uploadOutcome string
+		attachmentBody, uploadOutcome = m.uploadMessageAttachments(ctx, e, session, out)
+		if uploadOutcome != "" {
+			return uploadOutcome
+		}
+		out.OriginalText = attachmentBody
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
 	}
 	payload, err := buildOutgoing(a, out)
 	if err != nil {
@@ -527,6 +555,9 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	}
 	if out.Reaction != nil {
 		return sendFrozenReaction(ctx, e, session, raw, a, out, payload)
+	}
+	if out.RecordWireAttempt != nil && out.RecordWireAttempt(ctx, attachmentBody) != nil {
+		return application.NotSent
 	}
 	deadline, ok := ctx.Deadline()
 	if !ok {

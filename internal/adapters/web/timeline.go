@@ -14,8 +14,26 @@ import (
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
+func messageTimelineTime(m engineapi.Message) time.Time {
+	if m.TimelineAt != nil {
+		return *m.TimelineAt
+	}
+	return m.CreatedAt
+}
+
+func timelineHiddenSchedule(m engineapi.Message) bool {
+	if m.TimelineAt != nil {
+		return m.SendState == "cancelled"
+	}
+	return m.ScheduledAt != nil && (m.SendState == "queued" || m.SendState == "dispatching" || m.SendState == "cancelled")
+}
+
+func timelinePositionMutable(m engineapi.Message) bool {
+	return m.IsOwn && (m.SendState == "queued" || m.SendState == "dispatching")
+}
+
 func messageCompare(a, b engineapi.Message) int {
-	if at, bt := a.CreatedAt.UnixMilli(), b.CreatedAt.UnixMilli(); at < bt {
+	if at, bt := messageTimelineTime(a).UnixMilli(), messageTimelineTime(b).UnixMilli(); at < bt {
 		return -1
 	} else if at > bt {
 		return 1
@@ -90,7 +108,7 @@ func (v view) timelineEdgeMS(direction string) string {
 	if direction == "newer" {
 		index = len(v.Messages) - 1
 	}
-	return strconv.FormatInt(v.Messages[index].CreatedAt.UnixMilli(), 10)
+	return strconv.FormatInt(messageTimelineTime(v.Messages[index].Message).UnixMilli(), 10)
 }
 func (v view) timelinePageHref(direction string) string {
 	return v.href("chat", v.ChatID, "account", selectedAccountID(v), "message", "", "timelineCursor", v.timelineEdge(direction), "timelineDirection", direction, "lang", v.Locale, "theme", v.Theme)
@@ -252,9 +270,18 @@ func (s *Server) timelinePage(w http.ResponseWriter, r *http.Request) {
 			if m == nil {
 				return nil, status
 			}
+		}
+		delete(v.TimelineAliases, id)
+		if !timelineHiddenSchedule(*m) && (m.Id != id || mode != "context" && m.TimelineAt != nil) {
 			v.TimelineAliases[id] = messageView{Message: *m, Presentation: m.OriginalText, Formatted: formattedMessage(ctx, m.OriginalText)}
 		}
 		return m, 200
+	}
+	recheck := func(id string, previous *engineapi.Message) (*engineapi.Message, int) {
+		if !timelinePositionMutable(*previous) {
+			return previous, http.StatusOK
+		}
+		return anchor(id)
 	}
 
 	var items []engineapi.Message
@@ -267,6 +294,10 @@ func (s *Server) timelinePage(w http.ResponseWriter, r *http.Request) {
 		}
 		limit := 50
 		response, e := s.client.GetMessageContextWithResponse(ctx, conversation, bound.Id, &engineapi.GetMessageContextParams{Limit: &limit})
+		if e == nil && response.StatusCode() == http.StatusNotFound {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		if e != nil || response.JSON200 == nil || !validContextTarget(*response.JSON200, bound.Id, conversation, account) || !validTimelineMessages(response.JSON200.Items, account, conversation, 50) {
 			w.WriteHeader(503)
 			return
@@ -284,9 +315,22 @@ func (s *Server) timelinePage(w http.ResponseWriter, r *http.Request) {
 		}
 		limit := 50
 		dir := engineapi.ListMessagesParamsDirection(direction)
+		list := func(at *engineapi.Message) (*engineapi.ListMessagesResponse, error) {
+			return s.client.ListMessagesWithResponse(ctx, conversation, &engineapi.ListMessagesParams{Cursor: &at.Id, Direction: &dir, Limit: &limit})
+		}
+		response, e := list(bound)
+		latest, status := recheck(cursor, bound)
+		if latest == nil {
+			w.WriteHeader(status)
+			return
+		}
+		if messageCompare(*latest, *bound) != 0 {
+			// The page read can race the first anchor read. Retry once against
+			// the current position and include its proof in the fragment.
+			bound = latest
+			response, e = list(bound)
+		}
 		v.TimelineCanonicalCursor = bound.Id
-		canonicalCursor := bound.Id
-		response, e := s.client.ListMessagesWithResponse(ctx, conversation, &engineapi.ListMessagesParams{Cursor: &canonicalCursor, Direction: &dir, Limit: &limit})
 		if e != nil || response.JSON200 == nil || !validTimelinePage(*response.JSON200, account, conversation, direction, bound, limit) {
 			w.WriteHeader(503)
 			return
@@ -300,21 +344,34 @@ func (s *Server) timelinePage(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(status)
 			return
 		}
-		high, status := anchor(v.TimelineRequestNewest)
-		if high == nil {
-			w.WriteHeader(status)
-			return
+		high := low
+		if v.TimelineRequestOldest != v.TimelineRequestNewest {
+			high, status = anchor(v.TimelineRequestNewest)
+			if high == nil {
+				w.WriteHeader(status)
+				return
+			}
 		}
+		v.TimelineHiddenOldest = timelineHiddenSchedule(*low)
+		v.TimelineHiddenNewest = timelineHiddenSchedule(*high)
 		if messageCompare(*low, *high) > 0 {
-			w.WriteHeader(400)
-			return
+			if low.TimelineAt == nil && high.TimelineAt == nil {
+				w.WriteHeader(400)
+				return
+			}
+			// A released schedule can outgrow a previously mounted interval. The
+			// anchor proof lets the client reconcile before asking for rows again.
+			break
 		}
-		items = []engineapi.Message{*high}
+		if !v.TimelineHiddenNewest {
+			items = []engineapi.Message{*high}
+		}
 		v.TimelineOlder = true
 		v.TimelineNewer = true
 		if low.Id == high.Id {
 			v.TimelineComplete = true
 		} else {
+			valid := true
 			next := high.Id
 			bound := high
 			dir := engineapi.ListMessagesParamsDirectionOlder
@@ -322,11 +379,15 @@ func (s *Server) timelinePage(w http.ResponseWriter, r *http.Request) {
 				limit := min(100, 200-len(items))
 				response, e := s.client.ListMessagesWithResponse(ctx, conversation, &engineapi.ListMessagesParams{Cursor: &next, Direction: &dir, Limit: &limit})
 				if e != nil || response.JSON200 == nil || !validTimelinePage(*response.JSON200, account, conversation, "older", bound, limit) {
-					w.WriteHeader(503)
-					return
+					valid = false
+					break
 				}
 				for _, m := range response.JSON200.Items {
 					if messageCompare(m, *low) < 0 {
+						v.TimelineComplete = true
+						break
+					}
+					if m.Id == low.Id && v.TimelineHiddenOldest {
 						v.TimelineComplete = true
 						break
 					}
@@ -346,6 +407,28 @@ func (s *Server) timelinePage(w http.ResponseWriter, r *http.Request) {
 				next = *response.JSON200.NextCursor
 				last := response.JSON200.Items[len(response.JSON200.Items)-1]
 				bound = &last
+			}
+			latestLow, status := recheck(v.TimelineRequestOldest, low)
+			if latestLow == nil {
+				w.WriteHeader(status)
+				return
+			}
+			latestHigh, status := recheck(v.TimelineRequestNewest, high)
+			if latestHigh == nil {
+				w.WriteHeader(status)
+				return
+			}
+			if messageCompare(*latestLow, *low) != 0 || messageCompare(*latestHigh, *high) != 0 ||
+				timelineHiddenSchedule(*latestLow) != v.TimelineHiddenOldest || timelineHiddenSchedule(*latestHigh) != v.TimelineHiddenNewest {
+				v.TimelineHiddenOldest = timelineHiddenSchedule(*latestLow)
+				v.TimelineHiddenNewest = timelineHiddenSchedule(*latestHigh)
+				v.TimelineComplete = false
+				items = nil
+				break
+			}
+			if !valid {
+				w.WriteHeader(503)
+				return
 			}
 		}
 	}

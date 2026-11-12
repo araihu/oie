@@ -1178,6 +1178,7 @@ func messageSearchHit(v view, hit engineapi.MessageSearchHit) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
+		position := messageTimelineTime(hit.Message)
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "<article data-message-search-hit=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -1185,7 +1186,7 @@ func messageSearchHit(v view, hit engineapi.MessageSearchHit) templ.Component {
 		var templ_7745c5c3_Var68 string
 		templ_7745c5c3_Var68, templ_7745c5c3_Err = templruntime.NewAttributeExpression(hit.Message.Id + ":" + hit.MatchedRevisionId).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 129, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 130, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var68)
 		if templ_7745c5c3_Err != nil {
@@ -1198,7 +1199,7 @@ func messageSearchHit(v view, hit engineapi.MessageSearchHit) templ.Component {
 		var templ_7745c5c3_Var69 string
 		templ_7745c5c3_Var69, templ_7745c5c3_Err = templruntime.NewAttributeExpression(hit.Message.Id).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 129, Col: 111}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 130, Col: 111}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var69)
 		if templ_7745c5c3_Err != nil {
@@ -1211,7 +1212,7 @@ func messageSearchHit(v view, hit engineapi.MessageSearchHit) templ.Component {
 		var templ_7745c5c3_Var70 string
 		templ_7745c5c3_Var70, templ_7745c5c3_Err = templruntime.NewAttributeExpression(hit.MatchedRevisionId).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 129, Col: 156}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 130, Col: 156}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var70)
 		if templ_7745c5c3_Err != nil {
@@ -1224,7 +1225,7 @@ func messageSearchHit(v view, hit engineapi.MessageSearchHit) templ.Component {
 		var templ_7745c5c3_Var71 string
 		templ_7745c5c3_Var71, templ_7745c5c3_Err = templruntime.NewAttributeExpression(strconv.FormatBool(hit.Historical)).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 129, Col: 216}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 130, Col: 216}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var71)
 		if templ_7745c5c3_Err != nil {
@@ -1237,7 +1238,7 @@ func messageSearchHit(v view, hit engineapi.MessageSearchHit) templ.Component {
 		var templ_7745c5c3_Var72 string
 		templ_7745c5c3_Var72, templ_7745c5c3_Err = templruntime.NewAttributeExpression(string(hit.MatchKind)).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 129, Col: 263}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 130, Col: 263}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var72)
 		if templ_7745c5c3_Err != nil {
@@ -1266,7 +1267,7 @@ func messageSearchHit(v view, hit engineapi.MessageSearchHit) templ.Component {
 			var templ_7745c5c3_Var74 string
 			templ_7745c5c3_Var74, templ_7745c5c3_Err = templ.JoinStringErrs(hit.ConversationTitle)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 131, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 132, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var74))
 			if templ_7745c5c3_Err != nil {
@@ -1277,9 +1278,9 @@ func messageSearchHit(v view, hit engineapi.MessageSearchHit) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var75 string
-			templ_7745c5c3_Var75, templ_7745c5c3_Err = templruntime.NewAttributeExpression(hit.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")).Resolve(ctx)
+			templ_7745c5c3_Var75, templ_7745c5c3_Err = templruntime.NewAttributeExpression(position.Format("2006-01-02T15:04:05Z07:00")).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 131, Col: 182}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 132, Col: 169}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var75)
 			if templ_7745c5c3_Err != nil {
@@ -1290,9 +1291,9 @@ func messageSearchHit(v view, hit engineapi.MessageSearchHit) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var76 string
-			templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.JoinStringErrs(hit.Message.CreatedAt.Format("2006-01-02 15:04"))
+			templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.JoinStringErrs(position.Format("2006-01-02 15:04"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 131, Col: 233}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 132, Col: 207}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var76))
 			if templ_7745c5c3_Err != nil {
@@ -1305,7 +1306,7 @@ func messageSearchHit(v view, hit engineapi.MessageSearchHit) templ.Component {
 			var templ_7745c5c3_Var77 string
 			templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.JoinStringErrs(hit.AccountLabel)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 132, Col: 24}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 133, Col: 24}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var77))
 			if templ_7745c5c3_Err != nil {
@@ -1318,7 +1319,7 @@ func messageSearchHit(v view, hit engineapi.MessageSearchHit) templ.Component {
 			var templ_7745c5c3_Var78 string
 			templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.JoinStringErrs(hit.Message.Sender.DisplayName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 132, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 133, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var78))
 			if templ_7745c5c3_Err != nil {
@@ -1351,7 +1352,7 @@ func messageSearchHit(v view, hit engineapi.MessageSearchHit) templ.Component {
 			var templ_7745c5c3_Var79 string
 			templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.JoinStringErrs(hit.Excerpt)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 139, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 140, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var79))
 			if templ_7745c5c3_Err != nil {
@@ -1400,7 +1401,7 @@ func messageSearchConversations(v view) templ.Component {
 			var templ_7745c5c3_Var81 string
 			templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.SearchConversations)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 147, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 148, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var81))
 			if templ_7745c5c3_Err != nil {
@@ -1430,7 +1431,7 @@ func messageSearchConversations(v view) templ.Component {
 					var templ_7745c5c3_Var83 string
 					templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.JoinStringErrs(c.Title)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 149, Col: 183}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 150, Col: 183}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var83))
 					if templ_7745c5c3_Err != nil {
@@ -1443,7 +1444,7 @@ func messageSearchConversations(v view) templ.Component {
 					var templ_7745c5c3_Var84 string
 					templ_7745c5c3_Var84, templ_7745c5c3_Err = templ.JoinStringErrs(c.Address)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 149, Col: 210}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 150, Col: 210}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var84))
 					if templ_7745c5c3_Err != nil {
@@ -1468,7 +1469,7 @@ func messageSearchConversations(v view) templ.Component {
 				var templ_7745c5c3_Var85 string
 				templ_7745c5c3_Var85, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.SearchConversationsLimited)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 152, Col: 69}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 153, Col: 69}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var85))
 				if templ_7745c5c3_Err != nil {
@@ -1492,7 +1493,7 @@ func messageSearchConversations(v view) templ.Component {
 			var templ_7745c5c3_Var86 string
 			templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.SearchMessagesGroup)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 157, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 158, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var86))
 			if templ_7745c5c3_Err != nil {
@@ -1532,7 +1533,7 @@ func messageSearchContacts(v view) templ.Component {
 			var templ_7745c5c3_Var88 string
 			templ_7745c5c3_Var88, templ_7745c5c3_Err = templruntime.NewAttributeExpression(strconv.FormatBool(v.MessageSearch.ContactsKnown)).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 163, Col: 143}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 164, Col: 143}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var88)
 			if templ_7745c5c3_Err != nil {
@@ -1545,7 +1546,7 @@ func messageSearchContacts(v view) templ.Component {
 			var templ_7745c5c3_Var89 string
 			templ_7745c5c3_Var89, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.SearchContacts)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 164, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 165, Col: 26}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var89))
 			if templ_7745c5c3_Err != nil {
@@ -1575,7 +1576,7 @@ func messageSearchContacts(v view) templ.Component {
 					var templ_7745c5c3_Var91 string
 					templ_7745c5c3_Var91, templ_7745c5c3_Err = templ.JoinStringErrs(c.DisplayName)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 166, Col: 179}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 167, Col: 179}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var91))
 					if templ_7745c5c3_Err != nil {
@@ -1588,7 +1589,7 @@ func messageSearchContacts(v view) templ.Component {
 					var templ_7745c5c3_Var92 string
 					templ_7745c5c3_Var92, templ_7745c5c3_Err = templ.JoinStringErrs(c.AccountLabel)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 166, Col: 211}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 167, Col: 211}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var92))
 					if templ_7745c5c3_Err != nil {
@@ -1601,7 +1602,7 @@ func messageSearchContacts(v view) templ.Component {
 					var templ_7745c5c3_Var93 string
 					templ_7745c5c3_Var93, templ_7745c5c3_Err = templ.JoinStringErrs(c.Address)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 166, Col: 226}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 167, Col: 226}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var93))
 					if templ_7745c5c3_Err != nil {
@@ -1626,7 +1627,7 @@ func messageSearchContacts(v view) templ.Component {
 				var templ_7745c5c3_Var94 string
 				templ_7745c5c3_Var94, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.SearchContactsPartial)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 169, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 170, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var94))
 				if templ_7745c5c3_Err != nil {
@@ -1645,7 +1646,7 @@ func messageSearchContacts(v view) templ.Component {
 				var templ_7745c5c3_Var95 string
 				templ_7745c5c3_Var95, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.SearchContactsLimited)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 172, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/message_search.templ`, Line: 173, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var95))
 				if templ_7745c5c3_Err != nil {

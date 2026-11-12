@@ -23,7 +23,11 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(u.pathname.endsWith('/capabilities'))return send(200,{accountId:account,state:'available',directText:true,features:['room_messaging','send_replies'].map(feature=>({id:feature,appSupport:'supported',protocolSupport:'supported',serverSupport:'scope_dependent',scope:'room'})),discovery:{state:'complete',services:[]}});
   if(u.pathname==='/api/v1/conversations')return send(200,{items:chats});
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
-  if(u.pathname.includes('/operations/')){const item=receipts.get(parts.at(-1));return item?send(200,{id:parts.at(-1),kind:'send_message',resourceId:item.message.id,createdAt:item.message.createdAt}):send(404,{status:404})}
+  if(u.pathname.includes('/operations/')){
+   const key=parts.at(-1),item=receipts.get(key);if(!item)return send(404,{status:404});
+   const metadata={id:key,kind:'send_message',status:'succeeded',resourceId:item.message.id,createdAt:item.message.createdAt};
+   return send(200,u.searchParams.get('includeAcceptedMessage')==='true'?{...metadata,acceptedMessage:item.message}:metadata);
+  }
   if(u.pathname.startsWith('/api/v1/messages/')){const message=messages.find(m=>m.id===parts[4]);return message?send(200,message):send(404,{status:404})}
   const chat=chats.find(c=>c.id===parts[4]);
   if(chat&&parts.length===5)return send(200,chat);
@@ -33,7 +37,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    if(req.method==='POST'){state.posts++;let raw='';for await(const b of req)raw+=b;const body=JSON.parse(raw),key=req.headers['idempotency-key'];if(receipts.has(key)){assert.deepEqual(body,receipts.get(key).body);return send(200,receipts.get(key).message)}
     if(state.legacy&&body.mentions?.some(m=>!Array.from(body.originalText).slice(m.begin,m.end).join('').startsWith('@')))return send(400,{status:400,code:'invalid_request'});
     if(state.rejectMention&&body.mentions?.length)return send(400,{status:400,code:'invalid_request'});
-    state.effects++;const message={id:id(100+state.effects),revisionId:revision,conversationId:chat.id,accountId:account,sender:{id:account,displayName:'Me'},originalText:body.originalText,mentions:body.mentions?.map(m=>({...m,referenceMode:candidates.find(c=>c.id===m.participantId)?.referenceMode||'text'})),createdAt:'2026-11-09T12:00:00Z',isOwn:true,sendState:'queued'};messages.push(message);receipts.set(key,{body,message});return send(202,message)}
+    state.effects++;const message={id:id(100+state.effects),revisionId:revision,conversationId:chat.id,accountId:account,sender:{id:account,displayName:'Me'},originalText:body.originalText,mentions:body.mentions?.map(m=>({...m,referenceMode:candidates.find(c=>c.id===m.participantId)?.referenceMode||'text'})),createdAt:'2026-11-09T12:00:00Z',isOwn:true,sendState:'queued'};messages.push(message);receipts.set(key,{body,message:structuredClone(message)});return send(202,message)}
    return send(200,{items:messages.filter(m=>m.conversationId===chat.id).slice().reverse()});
   }
   if(u.pathname.endsWith('/avatars')||u.pathname.endsWith('/previews')||u.pathname.endsWith('/message-stars')||u.pathname==='/api/v1/shared-content')return send(200,{items:[]});

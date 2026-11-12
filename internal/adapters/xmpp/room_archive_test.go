@@ -554,3 +554,33 @@ func TestIsolatedRoomArchiveDefersReactionAtAmbiguousPageBoundary(t *testing.T) 
 		t.Fatal("unfiltered replay did not establish the newer set", host.reactions)
 	}
 }
+
+func TestIsolatedRoomArchiveUsesScheduledReleaseAsTimeBoundary(t *testing.T) {
+	release := time.Date(2026, 11, 12, 12, 0, 0, 0, time.UTC)
+	const cursor = "retained-source"
+	m, e, host := archiveFixture(t, func(iq testArchiveIQ, index int) string {
+		switch index {
+		case 0:
+			if iq.Query.Set.Before != cursor || iq.field("end") != "" {
+				t.Error("archive cursor lost precedence")
+			}
+			return `<iq xmlns="jabber:client" from="` + iq.To.String() + `" type="error" id="` + iq.ID + `"><error type="cancel"><item-not-found xmlns="urn:ietf:params:xml:ns:xmpp-stanzas"/></error></iq>`
+		case 1:
+			if iq.Query.Set.Before != "" || iq.field("end") != release.Format(time.RFC3339) {
+				t.Errorf("incorrect backward release boundary: %q", iq.field("end"))
+			}
+		case 2:
+			if iq.Query.Set.After != "" || iq.field("start") != release.Format(time.RFC3339) {
+				t.Errorf("incorrect forward release boundary: %q", iq.field("start"))
+			}
+		default:
+			t.Error("unexpected archive request")
+		}
+		return iq.page(true)
+	})
+	anchor := &domain.Message{ArchiveScope: host.room.Address, ArchiveID: cursor, CreatedAt: release.Add(-72 * time.Hour), TimelineAt: &release}
+	result := domain.RoomArchiveResult{Archive: host.archive}
+	if _, err := m.isolatedRoomPage(t.Context(), host, e, e.session, host.room, result, domain.RoomArchiveRequest{Action: "context", Anchor: anchor}); err != nil {
+		t.Fatal(err)
+	}
+}

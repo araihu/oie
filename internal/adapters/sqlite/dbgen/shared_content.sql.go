@@ -25,7 +25,7 @@ func (q *Queries) DeleteObsoleteSharedContent(ctx context.Context, arg DeleteObs
 }
 
 const getSharedContentItem = `-- name: GetSharedContentItem :one
-SELECT sc.id,sc.revision_id,sc.message_id,sc.url,CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,sc.file_name,CAST(COALESCE(h.payload,m.payload) AS TEXT) AS message_payload
+SELECT sc.id,sc.revision_id,sc.message_id,sc.url,CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,sc.file_name,CAST(COALESCE(h.payload,m.payload) AS TEXT) AS message_payload,m.timeline_at_ms
 FROM shared_content sc JOIN messages m ON m.id=sc.message_id
 LEFT JOIN message_previews p ON p.message_id=m.id AND p.url=sc.url
 LEFT JOIN message_content_heads h ON h.canonical_id=m.id
@@ -33,6 +33,7 @@ JOIN shared_content_state s ON s.message_id=m.id AND s.parser_version>=?1
 JOIN conversations c ON c.id=m.conversation_id JOIN accounts a ON a.id=m.account_id
 WHERE sc.id=?2
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
+AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id)
 `
 
 type GetSharedContentItemParams struct {
@@ -48,6 +49,7 @@ type GetSharedContentItemRow struct {
 	Kind           string
 	FileName       string
 	MessagePayload string
+	TimelineAtMs   *int64
 }
 
 func (q *Queries) GetSharedContentItem(ctx context.Context, arg GetSharedContentItemParams) (GetSharedContentItemRow, error) {
@@ -61,6 +63,7 @@ func (q *Queries) GetSharedContentItem(ctx context.Context, arg GetSharedContent
 		&i.Kind,
 		&i.FileName,
 		&i.MessagePayload,
+		&i.TimelineAtMs,
 	)
 	return i, err
 }
@@ -75,7 +78,7 @@ func (q *Queries) InvalidateSharedContent(ctx context.Context, messageID string)
 }
 
 const listSharedContent = `-- name: ListSharedContent :many
-SELECT sc.id,sc.revision_id,CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,sc.url,sc.file_name,CAST(COALESCE(h.payload,m.payload) AS TEXT) AS message_payload,c.payload AS conversation_payload,a.label AS account_label,p.payload AS preview_payload
+SELECT sc.id,sc.revision_id,CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,sc.url,sc.file_name,CAST(COALESCE(h.payload,m.payload) AS TEXT) AS message_payload,m.timeline_at_ms,c.payload AS conversation_payload,a.label AS account_label,p.payload AS preview_payload
 FROM shared_content AS sc JOIN messages AS m ON m.id=sc.message_id
 LEFT JOIN message_content_heads AS h ON h.canonical_id=m.id
 JOIN shared_content_state AS s ON s.message_id=m.id AND s.parser_version>=?1
@@ -83,15 +86,16 @@ JOIN conversations AS c ON c.id=m.conversation_id JOIN accounts AS a ON a.id=m.a
 LEFT JOIN message_previews AS p ON p.message_id=m.id AND p.url=sc.url
 WHERE (CAST(?2 AS TEXT)='' OR m.account_id=CAST(?2 AS TEXT))
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
+AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id)
 AND (CAST(?3 AS TEXT)='' OR m.conversation_id=CAST(?3 AS TEXT))
 AND (CAST(?4 AS TEXT)='[]' OR m.id IN (SELECT value FROM json_each(CAST(?4 AS TEXT))))
 AND ((CAST(?5 AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
  OR (CAST(?5 AS TEXT)='video' AND sc.kind='video' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
  OR (CAST(?5 AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
  OR (CAST(?5 AS TEXT)='documents' AND sc.kind='document' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image'))
-AND (CAST(?6 AS TEXT)='' OR (m.created_at_ms,sc.id)<(CAST(?7 AS INTEGER),CAST(?6 AS TEXT)))
+AND (CAST(?6 AS TEXT)='' OR (COALESCE(m.timeline_at_ms,m.created_at_ms),sc.id)<(CAST(?7 AS INTEGER),CAST(?6 AS TEXT)))
 AND (CAST(?8 AS TEXT)='' OR oie_search_match(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),''),CAST(?8 AS TEXT))=1)
-ORDER BY m.created_at_ms DESC,sc.id DESC LIMIT ?9
+ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,sc.id DESC LIMIT ?9
 `
 
 type ListSharedContentParams struct {
@@ -113,6 +117,7 @@ type ListSharedContentRow struct {
 	Url                 string
 	FileName            string
 	MessagePayload      string
+	TimelineAtMs        *int64
 	ConversationPayload string
 	AccountLabel        string
 	PreviewPayload      *string
@@ -144,6 +149,7 @@ func (q *Queries) ListSharedContent(ctx context.Context, arg ListSharedContentPa
 			&i.Url,
 			&i.FileName,
 			&i.MessagePayload,
+			&i.TimelineAtMs,
 			&i.ConversationPayload,
 			&i.AccountLabel,
 			&i.PreviewPayload,
@@ -205,10 +211,11 @@ func (q *Queries) PutSharedContent(ctx context.Context, arg PutSharedContentPara
 }
 
 const sharedContentCandidates = `-- name: SharedContentCandidates :many
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
 WHERE (s.message_id IS NULL OR s.parser_version<?1)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
-ORDER BY m.created_at_ms DESC,m.id DESC LIMIT ?2
+AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
+ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT ?2
 `
 
 type SharedContentCandidatesParams struct {
@@ -235,6 +242,7 @@ func (q *Queries) SharedContentCandidates(ctx context.Context, arg SharedContent
 			&i.State,
 			&i.Payload,
 			&i.CreatedAtMs,
+			&i.TimelineAtMs,
 		); err != nil {
 			return nil, err
 		}
@@ -256,6 +264,7 @@ WHERE (CAST(?2 AS TEXT)='' OR m.account_id=CAST(?2 AS TEXT))
 AND (CAST(?3 AS TEXT)='' OR m.conversation_id=CAST(?3 AS TEXT))
 AND (CAST(?4 AS TEXT)='[]' OR m.id IN (SELECT value FROM json_each(CAST(?4 AS TEXT))))
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
+AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 `
 
 type SharedContentIndexStatusParams struct {

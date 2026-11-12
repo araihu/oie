@@ -32,7 +32,10 @@ DELETE FROM message_canonical_aliases WHERE alias_id IN (SELECT value FROM json_
 DELETE FROM message_content_heads WHERE canonical_id IN (SELECT value FROM json_each(CAST(sqlc.arg(ids) AS TEXT)));
 
 -- name: LatestLogicalMessage :one
-SELECT m.* FROM messages m WHERE m.conversation_id=? AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id) ORDER BY m.created_at_ms DESC,m.id DESC LIMIT 1;
+SELECT m.* FROM messages m WHERE m.conversation_id=?
+AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
+AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
+ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT 1;
 
 -- name: ListCanonicalMessageReferences :many
 SELECT r.scope,r.remote_id,r.author,r.source_hash,m.payload AS message_payload

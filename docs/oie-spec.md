@@ -303,9 +303,9 @@ Missing optional delivery/read receipts must not trigger indefinite resending of
 
 ### 5.2 Mutation cutoff and races
 
-| State/evidence | Cancel, edit pending content, or reschedule |
+| State/evidence | Cancel, edit pending content, reschedule or send now |
 | --- | --- |
-| Scheduled, queued, or waiting for retry with known-unsent status, before dispatch | Allowed through an atomic engine-side guard. |
+| Scheduled or queued with known-unsent status, before the first dispatch claim | Allowed through an atomic engine-side guard. |
 | Dispatch has started or the original transmission is in flight | Reject the mutation and return actual status. |
 | A previous transmission may have been accepted, but its outcome is unknown | Preserve uncertainty; do not present this as a safely unsent item. Reconciliation policy is open. |
 | Provider-accepted/delivered/read | Pending-send mutation no longer applies. Supported correction/retraction is a separate operation. |
@@ -328,6 +328,43 @@ This reachability restriction is temporary. Full centralized sync should eventua
 **RECOMMENDED R06:** separate send ownership from replicated visibility, select eligible work without letting a future schedule block an immediate send, and reconcile ambiguous provider outcomes before retrying.
 
 **OPEN O06:** permanent-failure recovery, ambiguous acceptance, ordering of eligible sends, staged-upload cutoff, and explicit engine migration/ownership transfer. Recurring schedules are not selected.
+
+**AGREED:** The composer uses Goshtoso Split Button for Send and Schedule.
+Scheduling captures the full composition, including text, links, images and
+other supported attachments and message content. The scheduling dialog previews
+the outgoing message bubble for final review. A changed quote requires a fresh
+review. Edit opens that composition
+in the same composer and restores any prior draft when the user saves or
+discards the edit. Scheduled items offer Send now, which makes the same intent
+eligible immediately and uses the same atomic cutoff as edit, reschedule and
+cancel. Delivery still depends on the owning engine and provider connectivity.
+
+**AGREED:** Scheduled appears in the main navigation and lists pending
+scheduled messages across conversations. Each entry identifies its destination.
+Users can filter by one or more conversations using the searchable selector,
+open the destination, edit in that
+conversation's composer, reschedule, cancel or send now.
+The conversation menu also opens a drawer with that conversation's scheduled
+messages. Each eligible message can be edited, rescheduled, sent now or
+cancelled from the drawer. Editing closes the drawer and loads the full
+composition in the conversation's composer.
+
+The [engine OpenAPI contract](../api/openapi.yaml) defines complete
+compositions, attachment staging, cross-conversation listing and Send now.
+Edit, reschedule, cancel and Send now share an atomic cutoff at the dispatch
+claim, before the first provider attempt. The engine stores staged bytes and
+their SHA-256 in its data directory and keeps the dispatch instant in UTC.
+This increment accepts up to 16 files per message, each at most 20 MiB.
+An advertised provider limit can be lower. XMPP dispatch uploads the files
+and sends their ordered HTTPS links in the outgoing message body. After a
+restart, a claimed send can retry when the engine knows that no stanza write
+began. It keeps the original mutation cutoff. If a write may have begun, the
+outcome stays unknown. Staging retention and resumable transfer remain open
+under O09. Pending schedules stay out of conversation history, search and shared
+content until release. `timelineAt` records when a scheduled message enters
+history. `createdAt` still records its original acceptance. The
+[scheduling prototype](prototypes/message-scheduling.html) demonstrates the
+agreed controls with example data.
 
 ### 5.4 Explicit Send while the UI is offline
 
@@ -450,6 +487,12 @@ Provide WhatsApp-like rich link cards using structured engine metadata. Preview 
 **AGREED:** link-card fallbacks prefer the available preview image. Without an image, use a compact card with page title, available description and the domain once. Use a cached site icon when available; otherwise use a local link icon. When metadata is unavailable, show a readable URL path and domain, preserving the full URL as the destination. Do not reserve an empty image column. Keep message cards compact and catalog cards full-width. Metadata failures leave the basic card usable; More options offers an explicit metadata refresh without changing the message.
 
 Search matches the latest message revision by default. **Include edit history** explicitly enables retained earlier versions, with historical matches labeled. Retracted content is hidden from search and Media/Files/Links by default; **Include retracted** enables deliberate retrieval. These filters are independent and never bypass explicit deletion.
+
+**AGREED:** show a compact preview for the first HTTP(S) link detected in the
+composer. Show the link immediately and enrich it with bounded cached metadata
+and a raster thumbnail when available. Preview only the URL through the owning
+engine and discard stale responses when the draft or conversation changes.
+Dismissing the card leaves the draft text intact.
 
 **RECOMMENDED R08/R10:** SQLite FTS5 as a derived index; source-linked catalog records; bounded, cached link-preview enrichment independent of history fetching. **OPEN O08:** indexing/tokenization, filters/ranking, preview fetching/refresh policy, cache limits, and provider capability fallbacks.
 
@@ -681,6 +724,10 @@ Use and expand reusable Goshtoso expression support rather than hardcoding user-
 Do not mutate a process-global locale for a hosted engine's devices. Full-page rendering, HTMX fragments, SSE-driven rendering, and cached offline presentation need the same resolved device locale.
 
 Use UTC internally for timestamps and scheduling. Convert local input into an instant at the presentation boundary and format that instant locally. DST input ambiguity and exact wire precision are **OPEN O14**.
+
+**AGREED:** General settings offers a per-device display time zone. The default
+follows the system. An explicit IANA time zone changes displayed times and
+calendar groupings across the app without changing the underlying instants.
 
 ### 11.6 Delete all Oiê data
 

@@ -143,6 +143,11 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 .oie-settings{padding:8px;color:var(--oie-text)}
 .oie-settings [role=tab]{white-space:nowrap}
 .oie-settings-section{display:flex;flex-direction:column;gap:14px}
+.oie-time-zone-setting{display:grid;gap:6px}
+.oie-time-zone-setting label{font-size:14px;font-weight:500}
+.oie-time-zone-setting select{width:100%;min-height:40px;padding:7px 10px;border:1px solid var(--oie-border);border-radius:var(--radius-radius);background:var(--oie-panel);color:var(--oie-text);font:inherit;color-scheme:light}
+.dark .oie-time-zone-setting select{color-scheme:dark}
+.oie-time-zone-setting select:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:2px}
 .oie-settings-section h2{margin:8px 0 0;font-weight:650;font-size:14px}
 .oie-settings-section p,.oie-settings>.oie-settings-note{font-size:13px;line-height:1.6;color:var(--oie-muted)}
 .oie-settings-links{display:flex;gap:15px;flex-wrap:wrap}.oie-settings-note{border-top:1px solid var(--oie-border);padding-top:16px}

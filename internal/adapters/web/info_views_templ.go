@@ -683,6 +683,7 @@ func infoStarredContent(v view) templ.Component {
 		} else {
 			starView := v.infoStarView()
 			for _, item := range v.InfoStars.Items {
+				position := messageTimelineTime(item.Message)
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<article class=\"oie-info-star\" data-info-star-message=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -690,7 +691,7 @@ func infoStarredContent(v view) templ.Component {
 				var templ_7745c5c3_Var38 string
 				templ_7745c5c3_Var38, templ_7745c5c3_Err = templruntime.NewAttributeExpression(item.Message.Id).Resolve(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/info_views.templ`, Line: 71, Col: 70}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/info_views.templ`, Line: 72, Col: 70}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 				if templ_7745c5c3_Err != nil {
@@ -711,7 +712,7 @@ func infoStarredContent(v view) templ.Component {
 				var templ_7745c5c3_Var39 string
 				templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(item.Message.Sender.DisplayName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/info_views.templ`, Line: 72, Col: 134}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/info_views.templ`, Line: 73, Col: 134}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 				if templ_7745c5c3_Err != nil {
@@ -738,9 +739,9 @@ func infoStarredContent(v view) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var40 string
-				templ_7745c5c3_Var40, templ_7745c5c3_Err = templruntime.NewAttributeExpression(item.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")).Resolve(ctx)
+				templ_7745c5c3_Var40, templ_7745c5c3_Err = templruntime.NewAttributeExpression(position.Format("2006-01-02T15:04:05Z07:00")).Resolve(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/info_views.templ`, Line: 74, Col: 98}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/info_views.templ`, Line: 75, Col: 84}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 				if templ_7745c5c3_Err != nil {
@@ -751,9 +752,9 @@ func infoStarredContent(v view) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var41 string
-				templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(item.Message.CreatedAt.Format("2006-01-02 15:04"))
+				templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(position.Format("2006-01-02 15:04"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/info_views.templ`, Line: 74, Col: 150}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/info_views.templ`, Line: 75, Col: 122}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 				if templ_7745c5c3_Err != nil {
@@ -778,7 +779,7 @@ func infoStarredContent(v view) templ.Component {
 					var templ_7745c5c3_Var43 string
 					templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.SharedGoToMessage)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/info_views.templ`, Line: 75, Col: 138}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/info_views.templ`, Line: 76, Col: 138}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 					if templ_7745c5c3_Err != nil {
@@ -815,7 +816,7 @@ func infoStarredContent(v view) templ.Component {
 					var templ_7745c5c3_Var45 string
 					templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.SharedNext)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/info_views.templ`, Line: 79, Col: 175}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/info_views.templ`, Line: 80, Col: 175}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 					if templ_7745c5c3_Err != nil {
@@ -861,7 +862,7 @@ func infoStarExcerpt(text string) templ.Component {
 		var templ_7745c5c3_Var47 string
 		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(text)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/info_views.templ`, Line: 84, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/info_views.templ`, Line: 85, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 		if templ_7745c5c3_Err != nil {

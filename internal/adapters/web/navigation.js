@@ -271,11 +271,13 @@
    if(pane)window.Alpine?.initTree(pane);
    if(booted)runtime.start();
    const saved=positions.get(location.href);
-   const savedTimelineTop=saved?.['message-timeline'];
+   const scheduleEditor=root.querySelector('[data-editing-schedule] #message-composer');
+   const savedTimelineTop=saved?.['message-timeline']??(scheduleEditor?positions.get(previousURL)?.['message-timeline']:undefined);
    if(savedTimelineTop!==undefined&&!new URL(location.href).searchParams.has('message')){
     const timeline=document.getElementById('message-timeline');
     if(timeline)timeline.scrollTop=savedTimelineTop;
    }
+   if(scheduleEditor)scheduleEditor.focus({preventScroll:true});
    requestAnimationFrame(()=>{if(!root.isConnected||root!==document.getElementById(root.id))return;if(saved&&root.id==='oie-app')for(const [id,top]of Object.entries(saved)){if(id==='message-timeline')continue;const node=document.getElementById(id);if(node)node.scrollTop=top}const info=document.getElementById('chat-info-content');if(info)document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root:info,generation:Number(document.body.dataset.starGeneration||0)}}));});
   }
  });

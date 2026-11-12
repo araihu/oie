@@ -228,13 +228,14 @@ func (r runner) integration(ctx context.Context, source *dagger.Directory, goCon
 		WithFile("/opt/oie/start.sh", source.File("dev/xmpp/start.sh")).
 		WithEnvVariable("OIE_CI_RUN_ID", runID).
 		WithEnvVariable(browserFixtures, "1").
-		WithExec([]string{"sh", "-c", "mkdir -p /var/lib/prosody/certs && openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj /CN=localhost -addext subjectAltName=DNS:localhost,IP:127.0.0.1 -keyout /var/lib/prosody/certs/localhost.key -out /var/lib/prosody/certs/localhost.crt"})
+		WithExec([]string{"sed", "-i", "-e", `s/http_host = "localhost"/http_host = "xmpp"/`, "-e", `s|https://localhost:5281|https://xmpp:5281|`, "/etc/prosody/prosody.cfg.lua"}).
+		WithExec([]string{"sh", "-c", "mkdir -p /var/lib/prosody/certs && openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj /CN=localhost -addext subjectAltName=DNS:localhost,DNS:xmpp,IP:127.0.0.1 -keyout /var/lib/prosody/certs/localhost.key -out /var/lib/prosody/certs/localhost.crt"})
 	ca := prosody.File("/var/lib/prosody/certs/localhost.crt")
 	for _, port := range []int{80, 443, 5269, 5280, 5281, 5347} {
 		prosody = prosody.WithoutExposedPort(port)
 	}
 	// The receipt lives outside the service filesystem so a restart is counted.
-	xmpp := prosody.WithExposedPort(5222).
+	xmpp := prosody.WithExposedPort(5222).WithExposedPort(5281).
 		WithMountedCache(startsDir, starts).WithEnvVariable("OIE_CI_PROSODY_STARTS_FILE", startsFile).
 		AsService(dagger.ContainerAsServiceOpts{Args: []string{"sh", "-ec", `
 printf 'started\n' >> "$OIE_CI_PROSODY_STARTS_FILE"

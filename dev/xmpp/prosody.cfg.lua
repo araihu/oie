@@ -22,6 +22,10 @@ ssl = {
   key = "/var/lib/prosody/certs/localhost.key";
   certificate = "/var/lib/prosody/certs/localhost.crt";
 }
+https_ssl = {
+  key = "/var/lib/prosody/certs/localhost.key";
+  certificate = "/var/lib/prosody/certs/localhost.crt";
+}
 archive_expires_after = "never"
 default_archive_policy = true
 max_archive_query_results = 50

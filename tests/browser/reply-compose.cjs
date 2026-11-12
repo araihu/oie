@@ -40,13 +40,18 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
     return send(200,{items});
    }
    const key=req.headers['idempotency-key'];state.sendBodies.push({key,input});
-   if(operations.has(key))return send(200,messages.find(m=>m.id===operations.get(key).resourceId));
+   if(operations.has(key))return send(200,operations.get(key).acceptedMessage);
    const target=input.replyToMessageId?messages.find(m=>m.id===input.replyToMessageId&&m.conversationId===conversation.id):null;if(input.replyToMessageId&&!target)return problem(409,'invalid_reply');
    const m={id:id(100+state.effects),revisionId:id(200+state.effects),accountId:account,conversationId:conversation.id,sender:{id:account,displayName:'Alice'},originalText:target?'> '+target.sender.displayName+': '+target.originalText.split('\n').join('\n> ')+'\n\n'+input.originalText:input.originalText,createdAt:new Date().toISOString(),isOwn:true,sendState:'queued'};
    if(target){m.replyToMessageId=target.id;m.reply={available:true,messageId:target.id,senderName:target.sender.displayName,excerpt:target.originalText,bodyText:input.originalText}}
-   messages.push(m);state.effects++;operations.set(key,{id:key,kind:'send_message',resourceId:m.id,status:'succeeded',createdAt:m.createdAt});emit();return send(202,m);
+   messages.push(m);state.effects++;operations.set(key,{id:key,kind:'send_message',resourceId:m.id,status:'succeeded',createdAt:m.createdAt,acceptedMessage:structuredClone(m)});emit();return send(202,m);
   }
-  if(parts[3]==='operations'){state.receiptReads++;return operations.has(parts[4])?send(200,operations.get(parts[4])):problem(404,'not_found')}
+  if(parts[3]==='operations'){
+   state.receiptReads++;
+   const receipt=operations.get(parts[4]);if(!receipt)return problem(404,'not_found');
+   const {acceptedMessage,...metadata}=receipt;
+   return send(200,u.searchParams.get('includeAcceptedMessage')==='true'?{...metadata,acceptedMessage}:metadata);
+  }
   if(parts[3]==='messages'){const m=messages.find(m=>m.id===parts[4]);return m?send(200,m):problem(404,'not_found')}
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
   problem(404,'not_found');
