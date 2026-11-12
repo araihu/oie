@@ -104,6 +104,10 @@ Conversation matches show the conversation avatar. Message matches show the
 author's avatar from the owning account when the identity and thumbnail are
 available, with initials as the fallback. Search uses retained images and does
 not request profiles from the provider.
+Message results lead with the author, followed by the account and conversation,
+the excerpt, and the timestamp. Address-based labels use the local part as the
+name and show the domain separately. Browser timestamps use the local calendar
+day and show Today or the date before the time.
 It leaves the original conversation list, title query, filter controls and scroll
 mounted behind the results. Closing restores that list and query without
 reopening search through its own focus restoration.

@@ -4,6 +4,7 @@ import (
  "slices"
  "strconv"
  "strings"
+ "time"
  "github.com/araihu/goshtoso/components/avatar"
  "github.com/araihu/goshtoso/components/badge"
  "github.com/araihu/goshtoso/components/button"
@@ -133,16 +134,37 @@ if next:=v.messageSearchNext();next!="" {
 </div>
 }
 templ messageSearchHit(v view,hit engineapi.MessageSearchHit){
-{{ senderAvatar:=avatar.Config{Name:hit.Message.Sender.DisplayName,Initials:initials(hit.Message.Sender.DisplayName),Size:avatar.SizeXS};if hit.SenderAvatarHash!=nil {senderAvatar.Src=avatarImageSource(*hit.SenderAvatarHash)} }}
+{{
+	sender, senderDomain := searchNameParts(hit.Message.Sender.DisplayName)
+	conversation, conversationDomain := searchNameParts(hit.ConversationTitle)
+	if sender == "" {
+		sender = v.Text.UnknownParticipant
+	}
+	senderAvatar := avatar.Config{Name:sender,Initials:initials(sender),Size:avatar.SizeXS}
+	if hit.SenderAvatarHash != nil {
+		senderAvatar.Src = avatarImageSource(*hit.SenderAvatarHash)
+	}
+}}
 <article data-message-search-hit={hit.Message.Id+":"+hit.MatchedRevisionId} data-search-message={hit.Message.Id} data-search-revision={hit.MatchedRevisionId} data-search-historical={strconv.FormatBool(hit.Historical)} data-search-match-kind={string(hit.MatchKind)}>
 @link.Link(v.messageSearchSourceHref(hit.Message),link.WithRootClass("oie-message-search-hit"),link.WithAttrs(templ.Attributes{"data-message-search-source":""})){
 <div class="oie-search-result-identity">
 <div class="oie-search-avatar" aria-hidden="true">@avatar.Avatar(senderAvatar)</div>
 <div class="oie-search-result-copy">
-<div class="oie-message-search-hit-heading"><strong>{hit.ConversationTitle}</strong><time data-message-search-time datetime={hit.Message.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{hit.Message.CreatedAt.Format("2006-01-02 15:04")}</time></div>
-<small>{hit.AccountLabel} · {hit.Message.Sender.DisplayName}</small>
+<strong>{sender}</strong>
+if senderDomain != "" {
+<small>{senderDomain}</small>
+}
 </div>
 </div>
+<small class="oie-message-search-context">
+{hit.AccountLabel}
+if conversation != "" {
+{ " · " + conversation }
+}
+if conversationDomain != "" {
+<span class="oie-search-domain">{ " (" + conversationDomain + ")" }</span>
+}
+</small>
 if hit.Historical {
 @badge.Badge(badge.Config{Label:v.Text.SearchPriorVersion,Size:badge.SizeSM,Appearance:badge.AppearanceSoft})
 }
@@ -150,6 +172,7 @@ if hit.MatchKind=="metadata" {
 @badge.Badge(badge.Config{Label:v.Text.SearchMetadata,Size:badge.SizeSM,Appearance:badge.AppearanceSoft})
 }
 <p class="oie-message-search-excerpt">{hit.Excerpt}</p>
+<time data-message-search-time datetime={hit.Message.CreatedAt.Format(time.RFC3339)}>{hit.Message.CreatedAt.Format("2006-01-02 15:04")}</time>
 }
 </article>
 }
@@ -159,10 +182,16 @@ if len(v.MessageSearch.Conversations)>0 {
 <section class="oie-search-conversations" data-message-search-conversations>
 <h3>{v.Text.SearchConversations}</h3>
 for _,c:=range v.MessageSearch.Conversations {
+{{ name, detail := searchIdentityParts(c.Title,c.Address) }}
 @link.Link(v.messageSearchConversationHref(c),link.WithRootClass("oie-search-conversation"),link.WithAttrs(templ.Attributes{"data-message-search-conversation":c.Id})){
 <div class="oie-search-result-identity">
 <div class="oie-search-avatar" aria-hidden="true">@profileAvatar(v,c.AccountId,c.Address,avatar.Config{Name:c.Title,Initials:chatInitials(c),Size:avatar.SizeXS})</div>
-<div class="oie-search-result-copy"><strong>{c.Title}</strong><small>{c.Address}</small></div>
+<div class="oie-search-result-copy">
+<strong>{name}</strong>
+if detail != "" {
+<small>{detail}</small>
+}
+</div>
 </div>
 }
 }
@@ -181,7 +210,16 @@ if len(v.MessageSearch.Contacts)>0 {
 <section class="oie-search-contacts" data-message-search-contacts data-search-contacts-known={strconv.FormatBool(v.MessageSearch.ContactsKnown)}>
 <h3>{v.Text.SearchContacts}</h3>
 for _,c:=range v.MessageSearch.Contacts {
-@link.Link(v.messageSearchContactHref(c),link.WithRootClass("oie-search-conversation"),link.WithAttrs(templ.Attributes{"data-message-search-contact":c.Id})){<strong>{c.DisplayName}</strong><small>{c.AccountLabel} · {c.Address}</small>}
+{{ name, detail := searchIdentityParts(c.DisplayName,c.Address) }}
+@link.Link(v.messageSearchContactHref(c),link.WithRootClass("oie-search-conversation"),link.WithAttrs(templ.Attributes{"data-message-search-contact":c.Id})){
+<strong>{name}</strong>
+<small>
+{c.AccountLabel}
+if detail != "" {
+{ " · " + detail }
+}
+</small>
+}
 }
 if v.MessageSearch.ContactsPartial {
 <p class="oie-message-search-help">{v.Text.SearchContactsPartial}</p>

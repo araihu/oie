@@ -335,6 +335,26 @@ func (v view) messageSearchNativeHref(cursor string) string {
 }
 func (v view) messageSearchSourceHref(m engineapi.Message) string { return v.infoSourceHref(m) }
 
+func searchNameParts(label string) (name, domain string) {
+	label = strings.TrimSpace(label)
+	if validProfileAddress(label) {
+		name, domain, _ = strings.Cut(label, "@")
+		return name, domain
+	}
+	return label, ""
+}
+
+func searchIdentityParts(label, address string) (name, detail string) {
+	if strings.TrimSpace(label) == "" {
+		return searchNameParts(address)
+	}
+	name, detail = searchNameParts(label)
+	if detail == "" && name != address {
+		detail = address
+	}
+	return name, detail
+}
+
 func (v view) messageSearchNext() string {
 	if v.MessageSearch.Page != nil && v.MessageSearch.Page.NextCursor != nil {
 		return *v.MessageSearch.Page.NextCursor

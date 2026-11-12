@@ -29,6 +29,8 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   ].map(c => ({...c,revisionId:id(15),kind:'direct',address:'peer@fixture',lastMessage:'Retained text',updatedAt:'2026-11-09T14:00:00Z',unreadCount:0,archived:false,favorite:false}));
   const [chat] = chats;
   for(let n=0;n<26;n++)chats.push({...chat,id:id(100+n),title:'Spare conversation '+n,address:'spare'+n+'@fixture'});
+  const layoutRoom={...chat,id:id(15),kind:'room',title:'brigada-layout@grupos.exemplo.org',address:'brigada-layout@grupos.exemplo.org'};
+  chats.push(layoutRoom);
   const corpus = Array.from({length:57}, (_, n) => {
     const c = chats[n % 3];
     return {id:id(1000+n),revisionId:id(2000+n),accountId:c.accountId,conversationId:c.id,sender:{id:id(9),displayName:'Peer'},originalText:'Telescope retained message '+n,createdAt:new Date(Date.UTC(2026,10,9,12,n)).toISOString(),isOwn:false,sendState:'received',historical:true};
@@ -53,6 +55,13 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     originalText:'Account scope marker '+index,createdAt:new Date(Date.UTC(2026,10,9,16,index)).toISOString()
   }));
   corpus.push(...scopeMessages);
+  const layoutMessages=[
+    {id:id(6060),revisionId:id(6160),displayName:'bio',createdAt:'2026-11-10T03:05:00Z'},
+    {id:id(6061),revisionId:id(6161),displayName:'nanda@usuarios.exemplo.org',createdAt:'2026-11-10T02:50:00Z'}
+  ].map(({displayName,...message})=>({
+    ...corpus[0],...message,conversationId:layoutRoom.id,sender:{id:id(9),displayName},originalText:'brigada-layout message'
+  }));
+  corpus.push(...layoutMessages);
   const all = [...corpus,...fillers];
   const chronological = c => all.filter(m => m.conversationId===c.id).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
   const fold = value => value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
@@ -119,7 +128,14 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       const indexedMessages=corpus.filter(matchesScope).length,totalMessages=all.filter(matchesScope).length;
       return send(200,{query:q,...(selectedAccount?{accountId:selectedAccount}:{}),...(accountIds.length?{accountIds}:{}),...(conversation?{conversationId:conversation}:{}),includeEditHistory:history,items,nextCursor:offset+limit<hits.length?Buffer.from(JSON.stringify({scope:fingerprint,offset:offset+limit})).toString('base64url'):undefined,metadataIndexing:{state:totalMessages===indexedMessages?'complete':'pending',indexedMessages,totalMessages}});
     }
-    if(u.pathname.endsWith('/contacts')){state.contactReads.push(Object.fromEntries(u.searchParams));return send(404,{code:'unsupported'})}
+    if(u.pathname.endsWith('/contacts')){
+      state.contactReads.push(Object.fromEntries(u.searchParams));
+      if(u.searchParams.get('q')==='brigada-layout'){
+        const address='brigada-layout@usuarios.exemplo.org';
+        return send(200,{items:[{id:id(6062),revisionId:id(6162),accountId:account,accountLabel:'Personal',address,displayName:address,groups:[],subscription:'both'}],sources:[{accountId:account,state:'known'}]});
+      }
+      return send(404,{code:'unsupported'});
+    }
     if(u.pathname==='/api/v1/conversations'&&u.searchParams.get('q'))state.titleReads.push(Object.fromEntries(u.searchParams));
     if (u.pathname === '/api/v1/conversations') {
       const accountIds=u.searchParams.getAll('accountIds');
@@ -256,6 +272,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     await query(page).fill('Family');await settled(page,'Family');assert.equal(await hits(page).count(),0);
     const conversationResult=page.locator('[data-message-search-conversation="'+chat.id+'"]');
     assert.equal(await conversationResult.count(),1,'conversation titles form a distinct group');
+    assert.equal(await conversationResult.locator('strong').textContent(),'Family');
     const conversationAvatar=conversationResult.locator('img[src="/ui/avatars/'+conversationHash+'"]');
     await conversationAvatar.waitFor({state:'attached'});
     await until(()=>conversationAvatar.evaluate(image=>image.complete&&image.naturalWidth>0),'conversation thumbnail renders from the owning account');
@@ -446,6 +463,38 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     assert.equal(await trigger.innerText(),'All accounts');
     await multi.context().close();
     findings.push('Searchable account checkboxes preserve selected accounts and query, apply before pagination, restore via Back, and clear to all accounts');
+
+    for(const [width,lang] of [[390,'pt-BR'],[1440,'en']]){
+      const layout=await fresh({viewport:{width,height:900},locale:lang,timezoneId:'America/Sao_Paulo'});
+      await layout.clock.setFixedTime(new Date('2026-11-10T03:15:00Z'));
+      await layout.goto(base+'/?lang='+lang);
+      await layout.waitForFunction(()=>window.OieRuntime?.generation>0);
+      await query(layout).fill('brigada-layout');await settled(layout,'brigada-layout');
+      const room=layout.locator('[data-message-search-conversation="'+layoutRoom.id+'"]');
+      assert.equal(await room.locator('strong').textContent(),'brigada-layout');
+      assert.equal(await room.locator('small').textContent(),'grupos.exemplo.org');
+      const contact=layout.locator('[data-message-search-contact="'+id(6062)+'"]');
+      assert.equal(await contact.locator('strong').textContent(),'brigada-layout');
+      assert.equal((await contact.locator('small').innerText()).trim(),'Personal · usuarios.exemplo.org');
+      const today=hits(layout).first(),previous=hits(layout).nth(1);
+      assert.equal(await today.locator('strong').textContent(),'bio');
+      assert.equal(await previous.locator('strong').textContent(),'nanda');
+      assert.equal(await previous.locator('.oie-search-result-copy small').textContent(),'usuarios.exemplo.org');
+      assert.equal((await today.locator('.oie-message-search-context').innerText()).replace(/\s+/g,' ').trim(),'Personal · brigada-layout (grupos.exemplo.org)');
+      assert.deepEqual(await today.locator('a').evaluate(anchor=>[...anchor.children].map(node=>node.matches('time')?'time':node.className)),[
+        'oie-search-result-identity','oie-message-search-context','oie-message-search-excerpt','time'
+      ]);
+      const todayText=lang==='pt-BR'?'Hoje 00:05':'Today 12:05 AM';
+      const previousText=lang==='pt-BR'?'9 de nov. de 2026 23:50':'Nov 9, 2026 11:50 PM';
+      assert.equal(await today.locator('time').textContent(),todayText);
+      assert.equal(await previous.locator('time').textContent(),previousText);
+      await layout.evaluate(()=>document.dispatchEvent(new CustomEvent('oie:inbox-filtered',{detail:{root:document.getElementById('workspace')}})));
+      assert.equal(await today.locator('time').textContent(),todayText,'the live clock refresh preserves the date');
+      assert.equal(await previous.locator('time').textContent(),previousText);
+      assert(await layout.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+      await layout.context().close();
+    }
+    findings.push('Search results separate address names from domains, lead with the author, and show local Today or the date before the time');
 
     await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});
     for(const width of [390,1440])for(const design of ['goshtoso','minimal'])for(const theme of ['light','dark']){

@@ -36,7 +36,10 @@ window.OieRuntime.register('live', life => {
   }
   readAvatars(document);
   life.on(document,'alpine:initialized',()=>applyAvatars());life.raf(()=>applyAvatars());
-  life.on(document,'oie:message-search-settled',event=>applyAvatars(event.detail.root));
+  life.on(document,'oie:message-search-settled',event=>{
+    applyAvatars(event.detail.root);
+    localizeTimes(event.detail.root);
+  });
   const memoryKey='device-drafts';
   if(!window.OieRuntime.memory.has(memoryKey))window.OieRuntime.memory.set(memoryKey,new Map());
   const inMemory=window.OieRuntime.memory.get(memoryKey);
@@ -382,19 +385,28 @@ window.OieRuntime.register('live', life => {
   function localizeTimes(root=document) {
     const locale=document.documentElement.lang || undefined;
     const clock=new Intl.DateTimeFormat(locale,{hour:'2-digit',minute:'2-digit'});
+    const calendar=new Intl.DateTimeFormat(locale,{dateStyle:'medium'});
+    const dateTime=new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'});
+    const key=date=>[date.getFullYear(),date.getMonth(),date.getDate()].join('-');
+    const today=key(new Date());
     for (const time of root.querySelectorAll('time[datetime]:not([data-day]):not([data-history-date])')) {
-      const date=new Date(time.dateTime);if(!Number.isNaN(date.getTime()))time.textContent=time.matches('[data-viewer-date],[data-capability-date],[data-details-date],[data-shared-source-date]')?new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(date):clock.format(date);
+      const date=new Date(time.dateTime);
+      if(Number.isNaN(date.getTime()))continue;
+      if(time.hasAttribute('data-message-search-time')){
+        time.textContent=(key(date)===today?text('today'):calendar.format(date))+' '+clock.format(date);
+      }else{
+        time.textContent=time.matches('[data-viewer-date],[data-capability-date],[data-details-date],[data-shared-source-date]')?dateTime.format(date):clock.format(date);
+      }
     }
     const timeline=root.querySelector('#message-timeline');if(!timeline)return;
     for(const divider of timeline.querySelectorAll('.oie-day-divider'))divider.remove();
-    const key=date=>[date.getFullYear(),date.getMonth(),date.getDate()].join('-');
-    const today=key(new Date());let previous='';
+    let previous='';
     for(const row of timeline.querySelectorAll(':scope>[data-message-id],:scope>[data-pending-send]')){
       const date=new Date(row.dataset.createdAt);if(Number.isNaN(date.getTime()))continue;
       const current=key(date);if(current===previous)continue;previous=current;
       const divider=document.createElement('div');divider.className='oie-day-divider';
       const time=document.createElement('time');time.dateTime=row.dataset.createdAt;time.dataset.day='true';
-      time.textContent=current===today?text('today'):new Intl.DateTimeFormat(locale,{dateStyle:'medium'}).format(date);
+      time.textContent=current===today?text('today'):calendar.format(date);
       divider.append(time);row.before(divider);
     }
   }
