@@ -74,7 +74,8 @@ window.OieRuntime.register('timeline',life=>{
   let ordered=[...items.values()].sort(tuple),trimmed=[];
   while(ordered.length>200){const index=direction==='older'?ordered.length-1:0,item=ordered[index];if(item.node.isConnected&&protectedRow(item.node)){failed='paused';retryDirection=direction==='older'?'older':'newer';controls();return false}trimmed.push(item);ordered.splice(index,1)}
   capture();if(followEnd)follow=true;const keep=new Set(ordered.map(item=>item.id)),existing=new Map(old.map(item=>[item.id,item.node]));
-  if(anchor&&(retired.has(anchor.id)||relocated.has(anchor.id))){
+  const replacement=anchor&&aliases.find(plan=>plan.previous===anchor.id&&keep.has(plan.record.id));
+  if(anchor&&(!keep.has(anchor.id)&&!replacement||relocated.has(anchor.id))){
    const survivor=old.slice(old.findIndex(item=>item.id===anchor.id)+1).find(item=>keep.has(item.id)&&!relocated.has(item.id));
    anchor=survivor?{id:survivor.id,top:survivor.node.getBoundingClientRect().top}:null;
   }

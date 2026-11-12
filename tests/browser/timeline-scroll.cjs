@@ -111,15 +111,24 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
   }
   findings.push('A distant after-mount correction alias never joins disconnected ranges: an unfocused edge retires and retries from its surviving neighbor; focused aliases reset to50 canonical context rows without navigation or history changes');
   app=await open();({page,context}=app);
-  const staleEdge=messages.at(-1),staleWindow=await snapshot(page),staleItems=messages.slice(-2);
+  const staleEdge=messages.at(-1),staleWindow=await snapshot(page),hiddenInterior=messages.at(-25),staleItems=[hiddenInterior,...messages.slice(-2)];
   assert.equal(staleWindow.ids.at(-1),staleEdge.id);
+  await timeline(page).evaluate((root,id)=>{
+   const target=root.querySelector(`[data-message-id="${CSS.escape(id)}"]`);
+   root.scrollTop+=target.getBoundingClientRect().top-root.getBoundingClientRect().top+5;
+   root.dispatchEvent(new Event('scroll'));
+  },hiddenInterior.id);
+  assert.equal((await anchor(page)).id,hiddenInterior.id);
+  const survivorId=staleWindow.ids[staleWindow.ids.indexOf(hiddenInterior.id)+1];
+  const survivor=page.locator(`[data-message-id="${survivorId}"]`),survivorTop=(await survivor.boundingBox()).y;
   for(const item of staleItems){
    state.hidden.add(item.id);
    state.edits.set(item.id,{revisionId:id(9000099),sendState:'queued',scheduledAt:new Date(baseTime+3600000).toISOString()});
   }
   emit('conversation.updated');
   await until(async()=>await page.locator(`[data-message-id="${staleEdge.id}"]`).count()===0,'refresh retires the hidden latest boundary without a message event');
-  assert.deepEqual((await snapshot(page)).ids,staleWindow.ids.slice(0,-staleItems.length));
+  assert.deepEqual((await snapshot(page)).ids,staleWindow.ids.filter(id=>!state.hidden.has(id)));
+  await until(async()=>Math.abs((await survivor.boundingBox()).y-survivorTop)<3,'hidden visible anchor preserves its surviving neighbor');
   assert(app.reads.some(read=>read.mode==='window'&&read.newest===staleEdge.id));
   assert.equal(app.documents(),1);
   await context.close();state.hidden.clear();for(const item of staleItems)state.edits.delete(item.id);
