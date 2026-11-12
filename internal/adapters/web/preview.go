@@ -107,6 +107,9 @@ func (v view) href(pairs ...string) string {
 		q.Set("searchMode", "messages")
 		q.Set("searchQuery", v.MessageSearch.Query)
 		q["searchAccount"] = v.MessageSearch.accounts()
+		if v.MessageSearch.Category != "" {
+			q.Set("searchType", v.MessageSearch.Category)
+		}
 		q.Set("searchEngine", v.EngineID)
 		if v.MessageSearch.IncludeHistory {
 			q.Set("includeEditHistory", "true")
@@ -121,7 +124,7 @@ func (v view) href(pairs ...string) string {
 	}
 	for i := 0; i+1 < len(pairs); i += 2 {
 		if pairs[i] == "section" && pairs[i+1] == "media" {
-			for _, key := range []string{"searchMode", "searchQuery", "searchAccount", "searchEngine", "includeEditHistory", "chatSearch", "chatQuery", "chatIncludeHistory"} {
+			for _, key := range []string{"searchMode", "searchQuery", "searchAccount", "searchType", "searchEngine", "includeEditHistory", "chatSearch", "chatQuery", "chatIncludeHistory"} {
 				q.Del(key)
 			}
 		}

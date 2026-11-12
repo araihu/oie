@@ -38,6 +38,7 @@
 .oie-search-conversation small{font-size:.75rem;color:var(--oie-muted)}
 .oie-search-categories{display:flex;gap:.4rem;flex-wrap:wrap;flex-shrink:0}
 .oie-search-category{display:inline-flex;align-items:center;justify-content:center;padding:.45rem .7rem;min-height:2rem;border:1px solid var(--oie-border);border-radius:2rem;font-size:.75rem;color:var(--oie-text)}
+.oie-search-category[aria-current=true]{background:var(--oie-accent-soft);border-color:transparent;color:var(--oie-text)}
 .oie-search-contacts h3{font-size:.8rem;font-weight:600;color:var(--oie-muted);padding:.75rem .25rem .25rem}
 
 .oie-search-history-option{display:flex;align-items:center;gap:4px}

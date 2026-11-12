@@ -24,6 +24,9 @@ var messageSearchScript []byte
 //go:embed message-search.css
 var messageSearchStylesheet []byte
 
+const searchConversationsOnly = "conversations"
+const searchMessagesOnly = "messages"
+
 func messageSearchStylesheetURL() string {
 	digest := sha256.Sum256(messageSearchStylesheet)
 	return fmt.Sprintf("/ui/message-search.css?v=%x", digest[:8])
@@ -36,6 +39,7 @@ type messageSearchView struct {
 	ContactsLimited                                                              bool
 	Conversations                                                                []engineapi.Conversation
 	ConversationsLimited                                                         bool
+	Category                                                                     string
 	Query, AccountID, ConversationID, Cursor, RequestedEngine, ConversationTitle string
 	AccountIDs                                                                   []string
 	IncludeHistory                                                               bool
@@ -68,6 +72,7 @@ func (v *view) configureMessageSearch(r *http.Request) {
 	native := r.URL.Path == "/search" || r.URL.Path == "/ui/message-search"
 	v.MessageSearch = messageSearchView{Limit: 30, State: "blank"}
 	s := &v.MessageSearch
+	s.Category = q.Get("searchType")
 	if native {
 		s.Query = q.Get("q")
 		s.AccountID = q.Get("accountId")
@@ -86,6 +91,11 @@ func (v *view) configureMessageSearch(r *http.Request) {
 		s.RequestedEngine = q.Get("searchEngine")
 	}
 	s.Query = strings.TrimSpace(s.Query)
+	if s.Category != "" && s.Category != searchMessagesOnly && s.Category != searchConversationsOnly ||
+		s.Category == searchConversationsOnly && (s.ConversationID != "" || s.Cursor != "") {
+		s.State = "invalid"
+		s.Status = 400
+	}
 	slices.Sort(s.AccountIDs)
 	if len(s.AccountIDs) > 100 || s.AccountID != "" && len(s.AccountIDs) > 0 {
 		s.State = "invalid"
@@ -162,6 +172,16 @@ func (s *Server) loadMessageSearch(ctx context.Context, v *view) {
 	}
 	state.State = "unavailable"
 	state.Status = 503
+	if state.Category == searchConversationsOnly {
+		if s.loadSearchConversations(ctx, v) {
+			state.State, state.Status = "ready", 200
+			s.loadSearchConversationAvatars(ctx, v)
+		} else {
+			state.Conversations = nil
+			state.ConversationsLimited = false
+		}
+		return
+	}
 	params := engineapi.SearchMessagesParams{Q: state.Query, IncludeEditHistory: &state.IncludeHistory, Limit: &state.Limit}
 	if state.AccountID != "" {
 		params.AccountId = &state.AccountID
@@ -195,17 +215,22 @@ func (s *Server) loadMessageSearch(ctx context.Context, v *view) {
 	state.Page = response.JSON200
 	state.State = "ready"
 	state.Status = 200
-	if state.ConversationID == "" && state.Cursor == "" {
+	if state.Category == "" && state.ConversationID == "" && state.Cursor == "" {
 		s.loadSearchConversations(ctx, v)
 		s.loadSearchContacts(ctx, v)
-		if v.NativeMessageSearch {
-			accounts := map[string]bool{}
-			for _, conversation := range state.Conversations {
-				if !accounts[conversation.AccountId] {
-					s.loadAvatars(ctx, v, conversation.AccountId)
-					accounts[conversation.AccountId] = true
-				}
-			}
+		s.loadSearchConversationAvatars(ctx, v)
+	}
+}
+
+func (s *Server) loadSearchConversationAvatars(ctx context.Context, v *view) {
+	if !v.NativeMessageSearch {
+		return
+	}
+	accounts := map[string]bool{}
+	for _, conversation := range v.MessageSearch.Conversations {
+		if !accounts[conversation.AccountId] {
+			s.loadAvatars(ctx, v, conversation.AccountId)
+			accounts[conversation.AccountId] = true
 		}
 	}
 }
@@ -313,6 +338,9 @@ func (v view) messageSearchHref(account, conversation string) string {
 }
 func (v view) messageSearchNativeHref(cursor string) string {
 	q := url.Values{"q": {v.MessageSearch.Query}, "lang": {v.Locale}, "theme": {v.Theme}}
+	if v.MessageSearch.Category != "" {
+		q.Set("searchType", v.MessageSearch.Category)
+	}
 	if v.EngineID != "" {
 		q.Set("engineId", v.EngineID)
 	}
@@ -381,10 +409,11 @@ func (v view) messageSearchAllHref() string {
 	return out.messageSearchNativeHref("")
 }
 
-func (s *Server) loadSearchConversations(ctx context.Context, v *view) {
+func (s *Server) loadSearchConversations(ctx context.Context, v *view) bool {
 	state := &v.MessageSearch
 	limit := 20
 	seen := map[string]bool{}
+	complete := true
 	for _, archived := range []bool{false, true} {
 		params := engineapi.ListConversationsParams{Q: &state.Query, Limit: &limit, Archived: &archived}
 		if state.AccountID != "" {
@@ -395,6 +424,7 @@ func (s *Server) loadSearchConversations(ctx context.Context, v *view) {
 		}
 		response, err := s.client.ListConversationsWithResponse(ctx, &params)
 		if err != nil || response.JSON200 == nil {
+			complete = false
 			continue
 		}
 		state.ConversationsLimited = state.ConversationsLimited || response.JSON200.NextCursor != nil || len(response.JSON200.Items) >= limit
@@ -417,6 +447,7 @@ func (s *Server) loadSearchConversations(ctx context.Context, v *view) {
 		state.Conversations = state.Conversations[:limit]
 		state.ConversationsLimited = true
 	}
+	return complete
 }
 func (v view) messageSearchConversationHref(c engineapi.Conversation) string {
 	return v.href("section", "chats", "chat", c.Id, "account", c.AccountId, "message", "", "q", "", "filter", "all")
@@ -468,4 +499,12 @@ func (v view) messageSearchContactHref(c engineapi.Contact) string {
 
 func (v view) messageSearchCategoryHref(kind string) string {
 	return v.href("section", "media", "contentType", kind, "contentCursor", "", "chat", "", "message", "", "q", v.MessageSearch.Query, "account", v.MessageSearch.AccountID)
+}
+
+func (v view) messageSearchFilterHref(category string) string {
+	if v.NativeMessageSearch {
+		v.MessageSearch.Category = category
+		return v.messageSearchNativeHref("")
+	}
+	return v.href("searchType", category)
 }

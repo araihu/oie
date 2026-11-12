@@ -97,6 +97,8 @@ to the checked accounts before pagination. With no boxes checked, search covers
 all accounts. The selection belongs to the search URL. Category links pass the
 query and a single checked account to the shared-content gallery. With multiple
 accounts checked, the gallery opens with all accounts.
+The All, Conversations, and Messages filters switch result types in place and
+keep the query and account selection. The All view includes contacts.
 It uses the native unified `/search` GET page as its fallback. Global mode
 shows categories for the existing media, links and documents catalog, matching
 saved roster contacts, bounded conversation-title matches and saved messages.

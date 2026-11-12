@@ -36,20 +36,24 @@ templ messageSearchWorkspace(v view){
 </section>
 }
 templ messageSearchContent(v view){
-<div class="oie-message-search" data-message-search-root data-search-open={strconv.FormatBool(v.GlobalMessageSearch||v.NativeMessageSearch)} data-native={strconv.FormatBool(v.NativeMessageSearch)} data-title-query={v.Query} data-inbox-filter={v.Filter} data-inbox-section={v.Section} data-search-loading={v.Text.SearchLoading} data-search-failed={v.Text.SearchFailed} data-search-invalid={v.Text.SearchInvalid} data-search-engine-changed={v.Text.EngineChanged} data-search-all={v.Text.SearchAllConversations} data-search-everything={v.Text.SearchEverything}>
+<div class="oie-message-search" data-message-search-root data-search-open={strconv.FormatBool(v.GlobalMessageSearch||v.NativeMessageSearch)} data-native={strconv.FormatBool(v.NativeMessageSearch)} data-title-query={v.Query} data-inbox-filter={v.Filter} data-inbox-section={v.Section} data-search-failed={v.Text.SearchResultsFailed} data-search-invalid={v.Text.SearchInvalid} data-search-engine-changed={v.Text.EngineChanged} data-search-all={v.Text.SearchAllConversations} data-search-everything={v.Text.SearchEverything}>
 if v.NativeMessageSearch {
 <p class="oie-message-search-help">{v.Text.SearchSavedMessages}</p>
 }
+<nav class="oie-search-categories" data-message-search-categories aria-label={v.Text.SearchResultCategories} hidden?={v.NativeMessageSearch&&v.MessageSearch.ConversationID!=""}>
+@messageSearchFilter(v,"",v.Text.SearchAllResults)
+@messageSearchFilter(v,searchConversationsOnly,v.Text.SearchConversations)
+@messageSearchFilter(v,searchMessagesOnly,v.Text.SearchMessagesGroup)
 if !v.NativeMessageSearch {
-<nav class="oie-search-categories" aria-label={v.Text.SharedMedia}>
 @link.Link(v.messageSearchCategoryHref("media"),link.WithRootClass("oie-search-category"),link.WithAttrs(templ.Attributes{"data-message-search-category":"media"})){ {v.Text.SharedMediaTab} }
 @link.Link(v.messageSearchCategoryHref("links"),link.WithRootClass("oie-search-category"),link.WithAttrs(templ.Attributes{"data-message-search-category":"links"})){ {v.Text.SharedLinksTab} }
 @link.Link(v.messageSearchCategoryHref("documents"),link.WithRootClass("oie-search-category"),link.WithAttrs(templ.Attributes{"data-message-search-category":"documents"})){ {v.Text.SharedDocsTab} }
-</nav>
 }
+</nav>
 
 <form id="message-search-form" action="/search" method="get" role="search" hx-get="/ui/message-search" hx-trigger="oie:message-search" hx-target="#message-search-page-buffer" hx-select="[data-message-search-response]" hx-swap="innerHTML show:none" hx-sync="this:replace">
 <input type="hidden" name="engineId" value={v.EngineID}/><input type="hidden" name="conversationId" value={v.MessageSearch.ConversationID}/><input type="hidden" name="lang" value={v.Locale}/><input type="hidden" name="theme" value={v.Theme}/><input type="hidden" name="limit" value={strconv.Itoa(v.MessageSearch.Limit)}/>
+<input type="hidden" name="searchType" value={v.MessageSearch.Category}/>
 if v.NativeMessageSearch {
 @textinput.TextInput(textinput.Config{ID:"message-search-query",Name:"q",Type:textinput.TypeSearch,Label:v.Text.SearchQuery,Placeholder:v.Text.SearchQuery,Value:v.MessageSearch.Query,InputAttrs:templ.Attributes{"aria-label":v.Text.SearchQuery,"maxlength":"400","aria-controls":"message-search-results","autocomplete":"off"}})
 }else{
@@ -67,7 +71,7 @@ if v.NativeMessageSearch {
 </div>
 <noscript>@button.Button(button.WithType("submit")){ {v.Text.SearchMessages} }</noscript>
 </form>
-<div class="oie-message-search-feedback" data-message-search-loading hidden role="status">@spinner.Spinner(spinner.Config{Size:spinner.SizeSM})<span>{v.Text.SearchLoading}</span></div>
+<div class="oie-message-search-feedback" data-message-search-loading hidden role="status">@spinner.Spinner(spinner.Config{Size:spinner.SizeSM})<span>{v.Text.SearchResultsLoading}</span></div>
 <p id="message-search-feedback" class="oie-message-search-feedback" role="status" hidden></p>
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-message-search-retry":"","hidden":true})){ {v.Text.Retry} }
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-message-search-restart":"","hidden":true})){ {v.Text.SearchRestart} }
@@ -78,6 +82,10 @@ if v.NativeMessageSearch {
 <div id="message-search-page-buffer" hidden></div>
 <template data-message-search-blank>@messageSearchResponse(v.blankMessageSearchView())</template>
 </div>
+}
+
+templ messageSearchFilter(v view, category,label string){
+@link.Link(v.messageSearchFilterHref(category),link.WithRootClass("oie-search-category"),link.WithAttrs(templ.Attributes{"data-message-search-filter":category,"aria-current":strconv.FormatBool(v.MessageSearch.Category==category)})){ {label} }
 }
 
 templ messageSearchAccountFilter(v view){
@@ -94,15 +102,22 @@ for _,a:=range v.Accounts {
 }
 
 templ messageSearchResponse(v view){
-<div data-message-search-response data-search-engine={v.EngineID} data-search-query={v.MessageSearch.Query} data-search-account={strings.Join(v.MessageSearch.accounts(),",")} data-search-conversation={v.MessageSearch.ConversationID} data-search-history={strconv.FormatBool(v.MessageSearch.IncludeHistory)} data-search-cursor={v.MessageSearch.Cursor} data-search-state={v.MessageSearch.State} data-search-next={v.messageSearchNext()}>
+<div data-message-search-response data-search-engine={v.EngineID} data-search-query={v.MessageSearch.Query} data-search-account={strings.Join(v.MessageSearch.accounts(),",")} data-search-conversation={v.MessageSearch.ConversationID} data-search-history={strconv.FormatBool(v.MessageSearch.IncludeHistory)} data-search-type={v.MessageSearch.Category} data-search-cursor={v.MessageSearch.Cursor} data-search-state={v.MessageSearch.State} data-search-next={v.messageSearchNext()}>
 <div data-message-search-items>
+if v.MessageSearch.Category=="" {
 if v.MessageSearch.ConversationID==""&&v.MessageSearch.Query!=""&&v.MessageSearch.Page!=nil&&len(v.MessageSearch.Page.Items)==0&&len(v.MessageSearch.Conversations)==0&&len(v.MessageSearch.Contacts)==0&&!v.MessageSearch.ContactsKnown {
 <p class="oie-message-search-help" data-message-search-contact-coverage>{v.Text.SearchContactsCoverage}</p>
 @link.Link(v.messageSearchNativeHref(""),link.WithAttrs(templ.Attributes{"data-message-search-retry":""})){ {v.Text.Retry} }
 }
 
 @messageSearchContacts(v)
+}
+if v.MessageSearch.Category!=searchMessagesOnly {
 @messageSearchConversations(v)
+}
+if v.MessageSearch.Category==""&&v.MessageSearch.Query!=""&&v.MessageSearch.Cursor==""&&v.MessageSearch.ConversationID=="" {
+<h3 class="oie-search-messages-heading">{v.Text.SearchMessagesGroup}</h3>
+}
 if v.MessageSearch.State=="blank" {
 @emptystate.EmptyState(emptystate.Config{Title:v.Text.SearchBlankTitle,Description:v.Text.SearchBlankBody})
 }else if v.MessageSearch.State=="invalid" {
@@ -112,8 +127,12 @@ if v.MessageSearch.State=="blank" {
 @emptystate.EmptyState(emptystate.Config{Title:v.Text.SearchMissing})
 }else if v.MessageSearch.State=="engine_changed" {
 @emptystate.EmptyState(emptystate.Config{Title:v.Text.EngineChanged})
+}else if v.MessageSearch.State=="ready"&&v.MessageSearch.Category==searchConversationsOnly {
+if len(v.MessageSearch.Conversations)==0 {
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.SearchConversationsEmpty,Description:v.Text.SearchEmptyBody})
+}
 }else if v.MessageSearch.Page==nil {
-@emptystate.EmptyState(emptystate.Config{Title:v.Text.SearchFailed})
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.SearchResultsFailed})
 @link.Link(v.messageSearchNativeHref(v.MessageSearch.Cursor),link.WithAttrs(templ.Attributes{"data-message-search-retry":""})){ {v.Text.Retry} }
 }else if len(v.MessageSearch.Page.Items)==0 {
 @emptystate.EmptyState(emptystate.Config{Title:v.Text.SearchEmptyTitle,Description:v.Text.SearchEmptyBody})
@@ -180,7 +199,9 @@ if hit.MatchKind=="metadata" {
 templ messageSearchConversations(v view){
 if len(v.MessageSearch.Conversations)>0 {
 <section class="oie-search-conversations" data-message-search-conversations>
+if v.MessageSearch.Category=="" {
 <h3>{v.Text.SearchConversations}</h3>
+}
 for _,c:=range v.MessageSearch.Conversations {
 {{ name, detail := searchIdentityParts(c.Title,c.Address) }}
 @link.Link(v.messageSearchConversationHref(c),link.WithRootClass("oie-search-conversation"),link.WithAttrs(templ.Attributes{"data-message-search-conversation":c.Id})){
@@ -199,9 +220,6 @@ if v.MessageSearch.ConversationsLimited {
 <p class="oie-message-search-help">{v.Text.SearchConversationsLimited}</p>
 }
 </section>
-}
-if v.MessageSearch.Query!=""&&v.MessageSearch.Cursor==""&&v.MessageSearch.ConversationID=="" {
-<h3 class="oie-search-messages-heading">{v.Text.SearchMessagesGroup}</h3>
 }
 }
 
