@@ -76,3 +76,14 @@
   z-index: 2;
   background: var(--oie-panel);
 }
+
+.oie-schedule-split #composer-send {
+  min-block-size: 2.5rem;
+  padding: .375rem .5rem;
+}
+
+.oie-schedule-split #composer-split-menu button:not([role="menuitem"]) {
+  min-block-size: 2.5rem;
+  min-inline-size: 2rem;
+  padding: .375rem;
+}
