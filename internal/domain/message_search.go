@@ -5,6 +5,7 @@ import "time"
 type MessageSearchQuery struct {
 	Search, Cursor, ScopeHash string
 	AccountID, ConversationID ID
+	AccountIDs                []ID
 	IncludeEditHistory        bool
 	Limit                     int
 }
@@ -22,6 +23,7 @@ type MessageSearchHit struct {
 type MessageSearchPage struct {
 	Query                     string
 	AccountID, ConversationID ID
+	AccountIDs                []ID
 	IncludeEditHistory        bool
 	Items                     []MessageSearchHit
 	NextCursor                string

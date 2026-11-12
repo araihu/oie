@@ -15,7 +15,7 @@ import (
 )
 
 func (s *Store) SearchMessages(ctx context.Context, query domain.MessageSearchQuery) (domain.MessageSearchPage, error) {
-	page := domain.MessageSearchPage{Query: query.Search, AccountID: query.AccountID, ConversationID: query.ConversationID, IncludeEditHistory: query.IncludeEditHistory, Items: []domain.MessageSearchHit{}}
+	page := domain.MessageSearchPage{Query: query.Search, AccountID: query.AccountID, AccountIDs: query.AccountIDs, ConversationID: query.ConversationID, IncludeEditHistory: query.IncludeEditHistory, Items: []domain.MessageSearchHit{}}
 	cursor, err := application.ParseMessageSearchCursor(query.Cursor, query.ScopeHash)
 	if err != nil {
 		return page, err
@@ -29,7 +29,8 @@ func (s *Store) SearchMessages(ctx context.Context, query domain.MessageSearchQu
 	if query.IncludeEditHistory {
 		history = 1
 	}
-	rows, err := q.SearchMessages(ctx, dbgen.SearchMessagesParams{AccountID: string(query.AccountID), ConversationID: string(query.ConversationID), IncludeHistory: history, Search: query.Search, ParserVersion: application.SharedContentVersion, PageLimit: int64(query.Limit + 1), CursorID: string(cursor.ID), CursorMs: cursor.Milliseconds, CursorCurrent: cursor.Current, CursorRevisionAt: cursor.RevisionAt, CursorRevisionID: string(cursor.RevisionID)})
+	accountIDs := jsonText(nonNilIDs(query.AccountIDs))
+	rows, err := q.SearchMessages(ctx, dbgen.SearchMessagesParams{AccountID: string(query.AccountID), AccountIds: accountIDs, ConversationID: string(query.ConversationID), IncludeHistory: history, Search: query.Search, ParserVersion: application.SharedContentVersion, PageLimit: int64(query.Limit + 1), CursorID: string(cursor.ID), CursorMs: cursor.Milliseconds, CursorCurrent: cursor.Current, CursorRevisionAt: cursor.RevisionAt, CursorRevisionID: string(cursor.RevisionID)})
 	if err != nil {
 		return page, err
 	}
@@ -94,7 +95,7 @@ func (s *Store) SearchMessages(ctx context.Context, query domain.MessageSearchQu
 		last := rows[len(rows)-1]
 		page.NextCursor = application.EncodeMessageSearchCursor(application.MessageSearchCursor{Scope: query.ScopeHash, Milliseconds: last.CreatedAtMs, ID: domain.ID(last.ID), Current: last.IsCurrent, RevisionAt: last.RevisionKeyAt, RevisionID: domain.ID(last.RevisionKeyID)})
 	}
-	status, err := q.SharedContentIndexStatus(ctx, dbgen.SharedContentIndexStatusParams{ParserVersion: application.SharedContentVersion, AccountID: string(query.AccountID), ConversationID: string(query.ConversationID), MessageIds: "[]"})
+	status, err := q.SharedContentIndexStatus(ctx, dbgen.SharedContentIndexStatusParams{ParserVersion: application.SharedContentVersion, AccountID: string(query.AccountID), AccountIds: accountIDs, ConversationID: string(query.ConversationID), MessageIds: "[]"})
 	if err != nil {
 		return page, err
 	}

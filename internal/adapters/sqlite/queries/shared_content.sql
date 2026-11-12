@@ -24,6 +24,7 @@ DELETE FROM shared_content_state WHERE message_id=?;
 SELECT COUNT(*) AS total_messages,COUNT(CASE WHEN s.parser_version>=sqlc.arg(parser_version) THEN 1 END) AS indexed_messages
 FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
 WHERE (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
+AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))
 AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
 AND (CAST(sqlc.arg(message_ids) AS TEXT)='[]' OR m.id IN (SELECT value FROM json_each(CAST(sqlc.arg(message_ids) AS TEXT))))
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id);

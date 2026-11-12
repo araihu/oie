@@ -253,14 +253,16 @@ const sharedContentIndexStatus = `-- name: SharedContentIndexStatus :one
 SELECT COUNT(*) AS total_messages,COUNT(CASE WHEN s.parser_version>=?1 THEN 1 END) AS indexed_messages
 FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
 WHERE (CAST(?2 AS TEXT)='' OR m.account_id=CAST(?2 AS TEXT))
-AND (CAST(?3 AS TEXT)='' OR m.conversation_id=CAST(?3 AS TEXT))
-AND (CAST(?4 AS TEXT)='[]' OR m.id IN (SELECT value FROM json_each(CAST(?4 AS TEXT))))
+AND (CAST(?3 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?3 AS TEXT))))
+AND (CAST(?4 AS TEXT)='' OR m.conversation_id=CAST(?4 AS TEXT))
+AND (CAST(?5 AS TEXT)='[]' OR m.id IN (SELECT value FROM json_each(CAST(?5 AS TEXT))))
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 `
 
 type SharedContentIndexStatusParams struct {
 	ParserVersion  int64
 	AccountID      string
+	AccountIds     string
 	ConversationID string
 	MessageIds     string
 }
@@ -274,6 +276,7 @@ func (q *Queries) SharedContentIndexStatus(ctx context.Context, arg SharedConten
 	row := q.db.QueryRowContext(ctx, sharedContentIndexStatus,
 		arg.ParserVersion,
 		arg.AccountID,
+		arg.AccountIds,
 		arg.ConversationID,
 		arg.MessageIds,
 	)

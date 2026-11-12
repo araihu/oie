@@ -23,7 +23,7 @@ Public `search.Search` provides a client-ranked command palette and JSON item
 loading, which does not own the engine-scoped history cursor contract. Compose
 `textinput`, searchable `combobox`, `checkbox`, `link`, `button`,
 `badge`, `spinner` and `emptystate` instead. Native account selection uses public
-Radio inputs inside a noscript fieldset. No dependency internals or copied
+checkboxes inside a noscript fieldset. No dependency internals or copied
 component DOM are used. App-owned code owns debounce, request scope, history and
 bounded result pagination.
 
@@ -62,10 +62,10 @@ after sending or cancellation. The explicit historical flag identifies earlier
 content. Result ordering follows engine UTC millisecond precision, then UUID.
 
 The browser keeps search request state separate from inbox `q`. Account selection
-uses the public `combobox:load` event. The native account radio fieldset is disabled
+uses the public `combobox:load` event. The native account fieldset is disabled
 when JavaScript initializes, including after HTMX parses a full application
-fragment. Only `/search` accepts `nativeAccountId`; fragments always use the
-explicit `accountId` contract.
+fragment. Only `/search` accepts `nativeAccountId`. Fragments use `accountId`
+for one account and repeated `accountIds` values for a set.
 
 Source navigation carries an engine-bound pending search intent through a pane
 swap when the user immediately reopens search. New typing and scope choices win.
@@ -92,6 +92,11 @@ The X at the right of the field cancels the search and returns focus to the fiel
 Clearing the query also returns to the list and cancels pending search requests.
 The edit-history help closes on outside interaction or Escape without changing
 the query or the checkbox.
+The searchable account picker filters conversation, contact, and message matches
+to the checked accounts before pagination. With no boxes checked, search covers
+all accounts. The selection belongs to the search URL. Category links pass the
+query and a single checked account to the shared-content gallery. With multiple
+accounts checked, the gallery opens with all accounts.
 It uses the native unified `/search` GET page as its fallback. Global mode
 shows categories for the existing media, links and documents catalog, matching
 saved roster contacts, bounded conversation-title matches and saved messages.

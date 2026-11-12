@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -70,14 +71,11 @@ func (e *Engine) SearchMessages(ctx context.Context, q domain.MessageSearchQuery
 	if q.Search == "" || !utf8.ValidString(q.Search) || strings.ContainsRune(q.Search, 0) || utf8.RuneCountInString(q.Search) > 200 || q.Limit < 1 || q.Limit > 100 {
 		return empty, ErrInvalid
 	}
-	if q.AccountID != "" {
-		if !validID(q.AccountID) {
-			return empty, ErrInvalid
-		}
-		if _, err := e.Account(ctx, q.AccountID); err != nil {
-			return empty, err
-		}
+	accountIDs, err := e.validateSearchAccounts(ctx, q.AccountID, q.AccountIDs)
+	if err != nil {
+		return empty, err
 	}
+	q.AccountIDs = accountIDs
 	if q.ConversationID != "" {
 		if !validID(q.ConversationID) {
 			return empty, ErrInvalid
@@ -86,7 +84,7 @@ func (e *Engine) SearchMessages(ctx context.Context, q domain.MessageSearchQuery
 		if err != nil {
 			return empty, err
 		}
-		if q.AccountID != "" && c.AccountID != q.AccountID {
+		if q.AccountID != "" && c.AccountID != q.AccountID || len(q.AccountIDs) > 0 && !slices.Contains(q.AccountIDs, c.AccountID) {
 			return empty, ErrInvalid
 		}
 	}
@@ -99,7 +97,8 @@ func (e *Engine) SearchMessages(ctx context.Context, q domain.MessageSearchQuery
 		Query                     string
 		AccountID, ConversationID domain.ID
 		History                   bool
-	}{snapshot.ID, q.Search, q.AccountID, q.ConversationID, q.IncludeEditHistory})
+		AccountIDs                []domain.ID `json:",omitempty"`
+	}{snapshot.ID, q.Search, q.AccountID, q.ConversationID, q.IncludeEditHistory, q.AccountIDs})
 	if _, err = ParseMessageSearchCursor(q.Cursor, q.ScopeHash); err != nil {
 		return empty, err
 	}
@@ -108,4 +107,35 @@ func (e *Engine) SearchMessages(ctx context.Context, q domain.MessageSearchQuery
 		return empty, ErrProtocolUnavailable
 	}
 	return r.SearchMessages(ctx, q)
+}
+
+func normalizeSearchAccountIDs(account domain.ID, selected []domain.ID) ([]domain.ID, error) {
+	if account != "" && (!validID(account) || len(selected) > 0) || len(selected) > 100 {
+		return nil, ErrInvalid
+	}
+	ids := slices.Clone(selected)
+	slices.Sort(ids)
+	for i, id := range ids {
+		if !validID(id) || i > 0 && id == ids[i-1] {
+			return nil, ErrInvalid
+		}
+	}
+	return ids, nil
+}
+
+func (e *Engine) validateSearchAccounts(ctx context.Context, account domain.ID, selected []domain.ID) ([]domain.ID, error) {
+	ids, err := normalizeSearchAccountIDs(account, selected)
+	if err != nil {
+		return nil, err
+	}
+	owners := ids
+	if account != "" {
+		owners = []domain.ID{account}
+	}
+	for _, owner := range owners {
+		if _, err := e.Account(ctx, owner); err != nil {
+			return nil, err
+		}
+	}
+	return ids, nil
 }

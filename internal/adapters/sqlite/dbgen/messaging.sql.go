@@ -280,17 +280,19 @@ const listConversations = `-- name: ListConversations :many
 SELECT id, revision_id, account_id, address, peer_id, payload, activity_sequence, unread_count, archived, favorite FROM conversations
 WHERE activity_sequence < ?1
 AND (CAST(?2 AS TEXT)='' OR account_id=CAST(?2 AS TEXT))
-AND archived=?3
-AND (CAST(?4 AS INTEGER)=0 OR favorite=1)
-AND (CAST(?5 AS INTEGER)=0 OR unread_count>0)
-AND (CAST(?6 AS TEXT)='' OR json_extract(payload,'$.Kind')=CAST(?6 AS TEXT))
-AND (CAST(?7 AS TEXT)='' OR instr(lower(address || ' ' || json_extract(payload,'$.Title') || ' ' || json_extract(payload,'$.LastMessage')), lower(CAST(?7 AS TEXT)))>0)
-ORDER BY activity_sequence DESC LIMIT ?8
+AND (CAST(?3 AS TEXT)='[]' OR account_id IN (SELECT value FROM json_each(CAST(?3 AS TEXT))))
+AND archived=?4
+AND (CAST(?5 AS INTEGER)=0 OR favorite=1)
+AND (CAST(?6 AS INTEGER)=0 OR unread_count>0)
+AND (CAST(?7 AS TEXT)='' OR json_extract(payload,'$.Kind')=CAST(?7 AS TEXT))
+AND (CAST(?8 AS TEXT)='' OR instr(lower(address || ' ' || json_extract(payload,'$.Title') || ' ' || json_extract(payload,'$.LastMessage')), lower(CAST(?8 AS TEXT)))>0)
+ORDER BY activity_sequence DESC LIMIT ?9
 `
 
 type ListConversationsParams struct {
 	Cursor        int64
 	AccountID     string
+	AccountIds    string
 	Archived      int64
 	FavoritesOnly int64
 	UnreadOnly    int64
@@ -303,6 +305,7 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 	rows, err := q.db.QueryContext(ctx, listConversations,
 		arg.Cursor,
 		arg.AccountID,
+		arg.AccountIds,
 		arg.Archived,
 		arg.FavoritesOnly,
 		arg.UnreadOnly,

@@ -128,14 +128,11 @@ func (e *Engine) Contacts(ctx context.Context, q domain.ContactQuery) (domain.Co
 	if !utf8.ValidString(q.Search) || utf8.RuneCountInString(q.Search) > 200 || strings.ContainsRune(q.Search, 0) || q.Limit < 1 || q.Limit > 100 {
 		return empty, ErrInvalid
 	}
-	if q.AccountID != "" {
-		if !validID(q.AccountID) {
-			return empty, ErrInvalid
-		}
-		if _, err := e.Account(ctx, q.AccountID); err != nil {
-			return empty, err
-		}
+	accountIDs, err := e.validateSearchAccounts(ctx, q.AccountID, q.AccountIDs)
+	if err != nil {
+		return empty, err
 	}
+	q.AccountIDs = accountIDs
 	snapshot, err := e.Snapshot(ctx)
 	if err != nil {
 		return empty, err
@@ -143,7 +140,8 @@ func (e *Engine) Contacts(ctx context.Context, q domain.ContactQuery) (domain.Co
 	q.ScopeHash = fingerprint("contacts", struct {
 		EngineID, AccountID domain.ID
 		Query               string
-	}{snapshot.ID, q.AccountID, q.Search})
+		AccountIDs          []domain.ID `json:",omitempty"`
+	}{snapshot.ID, q.AccountID, q.Search, q.AccountIDs})
 	if _, err = ParseContactCursor(q.Cursor, q.ScopeHash); err != nil {
 		return empty, err
 	}

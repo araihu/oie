@@ -1,7 +1,9 @@
 package web
 
 import (
+ "slices"
  "strconv"
+ "strings"
  "github.com/araihu/goshtoso/components/avatar"
  "github.com/araihu/goshtoso/components/badge"
  "github.com/araihu/goshtoso/components/button"
@@ -10,10 +12,10 @@ import (
  "github.com/araihu/goshtoso/components/emptystate"
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/link"
- "github.com/araihu/goshtoso/components/radio"
  "github.com/araihu/goshtoso/components/spinner"
  "github.com/araihu/goshtoso/components/textinput"
  "github.com/araihu/goshtoso/components/tooltip"
+ "github.com/araihu/goshtoso/expressions"
  "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
@@ -53,16 +55,7 @@ if v.NativeMessageSearch {
 <input type="hidden" name="q" value={v.MessageSearch.Query}/>
 }
 
-{{ cfg:=v.messageSearchAccountCombobox() }}
-@combobox.Combobox(cfg,cfg.InitialState())
-<noscript>
-<fieldset data-message-search-native-accounts><legend>{v.Text.SharedAccount}</legend>
-@radio.Radio(radio.Config{ID:"message-search-native-all",Name:"nativeAccountId",Value:"",Label:v.Text.AllAccounts,Checked:v.MessageSearch.AccountID==""})
-for _,a:=range v.Accounts {
-@radio.Radio(radio.Config{ID:"message-search-native-"+a.Id,Name:"nativeAccountId",Value:a.Id,Label:a.Label+" · "+a.Address,Checked:v.MessageSearch.AccountID==a.Id})
-}
-</fieldset>
-</noscript>
+@messageSearchAccountFilter(v)
 <div class="oie-message-search-scope" data-message-search-scope hidden?={v.MessageSearch.ConversationID==""}>
 <span>{v.Text.SearchScope}: <strong data-message-search-scope-name>{v.MessageSearch.ConversationTitle}</strong></span>
 @link.Link(v.messageSearchAllHref(),link.WithAttrs(templ.Attributes{"data-message-search-clear-scope":""})){ {v.Text.SearchAllConversations} }
@@ -86,8 +79,21 @@ for _,a:=range v.Accounts {
 </div>
 }
 
+templ messageSearchAccountFilter(v view){
+{{ ctx=expressions.With(ctx,expressions.Set{Combobox:expressions.Combobox{ClearLabel:v.Text.SearchClearAccounts,SelectedLabel:v.messageSearchAccountCount}});cfg:=v.messageSearchAccountCombobox();selected:=v.MessageSearch.accounts() }}
+@combobox.Combobox(cfg,cfg.InitialState())
+<noscript>
+<fieldset data-message-search-native-accounts><legend>{v.Text.Accounts}</legend>
+<input type="hidden" name="nativeAccountFilter" value="1"/>
+for _,a:=range v.Accounts {
+@checkbox.Checkbox(checkbox.Config{ID:"message-search-native-"+a.Id,Name:"nativeAccountId",Value:a.Id,Label:a.Label+" · "+a.Address,Checked:slices.Contains(selected,a.Id)})
+}
+</fieldset>
+</noscript>
+}
+
 templ messageSearchResponse(v view){
-<div data-message-search-response data-search-engine={v.EngineID} data-search-query={v.MessageSearch.Query} data-search-account={v.MessageSearch.AccountID} data-search-conversation={v.MessageSearch.ConversationID} data-search-history={strconv.FormatBool(v.MessageSearch.IncludeHistory)} data-search-cursor={v.MessageSearch.Cursor} data-search-state={v.MessageSearch.State} data-search-next={v.messageSearchNext()}>
+<div data-message-search-response data-search-engine={v.EngineID} data-search-query={v.MessageSearch.Query} data-search-account={strings.Join(v.MessageSearch.accounts(),",")} data-search-conversation={v.MessageSearch.ConversationID} data-search-history={strconv.FormatBool(v.MessageSearch.IncludeHistory)} data-search-cursor={v.MessageSearch.Cursor} data-search-state={v.MessageSearch.State} data-search-next={v.messageSearchNext()}>
 <div data-message-search-items>
 if v.MessageSearch.ConversationID==""&&v.MessageSearch.Query!=""&&v.MessageSearch.Page!=nil&&len(v.MessageSearch.Page.Items)==0&&len(v.MessageSearch.Conversations)==0&&len(v.MessageSearch.Contacts)==0&&!v.MessageSearch.ContactsKnown {
 <p class="oie-message-search-help" data-message-search-contact-coverage>{v.Text.SearchContactsCoverage}</p>

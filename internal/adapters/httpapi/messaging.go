@@ -126,7 +126,7 @@ func (s *Server) GetConversation(ctx context.Context, r engineapi.GetConversatio
 	return engineapi.GetConversation200JSONResponse(conversation(c)), nil
 }
 func (s *Server) ListConversations(ctx context.Context, r engineapi.ListConversationsRequestObject) (engineapi.ListConversationsResponseObject, error) {
-	in := application.ConversationQuery{Limit: 50}
+	in := application.ConversationQuery{Limit: 50, AccountIDs: searchAccountIDs(r.Params.AccountIds)}
 	p := r.Params
 	cursorValue := ""
 	if p.Limit != nil {

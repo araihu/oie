@@ -26,7 +26,8 @@ WITH initial_revisions AS (
  LEFT JOIN message_revisions head_source ON head_source.rowid=head_initial.revision_row
  WHERE NOT EXISTS(SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
  AND (CAST(?8 AS TEXT)='' OR m.account_id=CAST(?8 AS TEXT))
- AND (CAST(?9 AS TEXT)='' OR m.conversation_id=CAST(?9 AS TEXT))
+ AND (CAST(?9 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?9 AS TEXT))))
+ AND (CAST(?10 AS TEXT)='' OR m.conversation_id=CAST(?10 AS TEXT))
 ), variants AS (
  SELECT roots.id, roots.created_at_ms, roots.payload, roots.account_label, roots.account_address, roots.conversation_payload, roots.content_payload, roots.matched_revision_id, roots.matched_at, roots.metadata,CAST(json_extract(content_payload,'$.OriginalText') AS TEXT) AS body,1 AS is_current,'' AS revision_key_at,'' AS revision_key_id FROM roots
  UNION ALL
@@ -36,13 +37,13 @@ WITH initial_revisions AS (
  JOIN message_revisions r ON r.id=f.source_revision_id
  JOIN initial_revisions first ON first.entity_id=f.message_id
  JOIN message_revisions source ON source.rowid=first.revision_row
- WHERE CAST(?10 AS INTEGER)=1 AND source.id<>roots.matched_revision_id
+ WHERE CAST(?11 AS INTEGER)=1 AND source.id<>roots.matched_revision_id
  AND f.source_hash=oie_source_hash(json_extract(r.payload,'$.OriginalText'))
  AND f.source_hash=oie_source_hash(json_extract(source.payload,'$.OriginalText'))
  GROUP BY roots.id,source.id
 ), matched AS (
- SELECT id, created_at_ms, payload, account_label, account_address, conversation_payload, content_payload, matched_revision_id, matched_at, metadata, body, is_current, revision_key_at, revision_key_id,CAST(oie_search_match(body,CAST(?11 AS TEXT)) AS INTEGER) AS text_match FROM variants
- WHERE oie_search_match(body||' '||metadata,CAST(?11 AS TEXT))=1
+ SELECT id, created_at_ms, payload, account_label, account_address, conversation_payload, content_payload, matched_revision_id, matched_at, metadata, body, is_current, revision_key_at, revision_key_id,CAST(oie_search_match(body,CAST(?12 AS TEXT)) AS INTEGER) AS text_match FROM variants
+ WHERE oie_search_match(body||' '||metadata,CAST(?12 AS TEXT))=1
 )
 SELECT id,created_at_ms,payload,account_label,account_address,conversation_payload,matched_revision_id,matched_at,body,metadata,is_current,revision_key_at,revision_key_id,text_match FROM matched
 WHERE (CAST(?1 AS TEXT)='' OR (created_at_ms,id,is_current,revision_key_at,revision_key_id)<(CAST(?2 AS INTEGER),CAST(?1 AS TEXT),CAST(?3 AS INTEGER),CAST(?4 AS TEXT),CAST(?5 AS TEXT)))
@@ -58,6 +59,7 @@ type SearchMessagesParams struct {
 	PageLimit        int64
 	ParserVersion    int64
 	AccountID        string
+	AccountIds       string
 	ConversationID   string
 	IncludeHistory   int64
 	Search           string
@@ -90,6 +92,7 @@ func (q *Queries) SearchMessages(ctx context.Context, arg SearchMessagesParams) 
 		arg.PageLimit,
 		arg.ParserVersion,
 		arg.AccountID,
+		arg.AccountIds,
 		arg.ConversationID,
 		arg.IncludeHistory,
 		arg.Search,

@@ -22,6 +22,7 @@ type ContactSource struct {
 
 type ContactQuery struct {
 	AccountID                 ID
+	AccountIDs                []ID
 	Search, Cursor, ScopeHash string
 	Limit                     int
 }

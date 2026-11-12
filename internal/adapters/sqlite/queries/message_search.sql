@@ -15,6 +15,7 @@ WITH initial_revisions AS (
  LEFT JOIN message_revisions head_source ON head_source.rowid=head_initial.revision_row
  WHERE NOT EXISTS(SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
  AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
+ AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))
  AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
 ), variants AS (
  SELECT roots.*,CAST(json_extract(content_payload,'$.OriginalText') AS TEXT) AS body,1 AS is_current,'' AS revision_key_at,'' AS revision_key_id FROM roots

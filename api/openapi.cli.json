@@ -77,6 +77,9 @@
             }
           },
           {
+            "$ref": "#/components/parameters/SearchAccountIDs"
+          },
+          {
             "name": "cursor",
             "in": "query",
             "description": "Opaque position bound to the engine, account and trimmed query.",
@@ -151,9 +154,12 @@
             }
           },
           {
+            "$ref": "#/components/parameters/SearchAccountIDs"
+          },
+          {
             "name": "conversationId",
             "in": "query",
-            "description": "Restrict to one conversation. A supplied account must own it.",
+            "description": "Restrict to one conversation. Its owning account must be included in any supplied account filter.",
             "schema": {
               "$ref": "#/components/schemas/ID"
             }
@@ -2405,6 +2411,9 @@
             }
           },
           {
+            "$ref": "#/components/parameters/SearchAccountIDs"
+          },
+          {
             "name": "q",
             "in": "query",
             "description": "Conversation address/title/latest-preview substring.",
@@ -4193,6 +4202,26 @@
   },
   "components": {
     "parameters": {
+      "SearchAccountIDs": {
+        "name": "accountIds",
+        "in": "query",
+        "style": "form",
+        "explode": true,
+        "description": "Restrict results to the selected owning accounts before pagination. Mutually exclusive with accountId.",
+        "example": [
+          "019a5df0-0000-7000-8000-000000000001",
+          "019a5df0-0000-7000-8000-000000000002"
+        ],
+        "schema": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/components/schemas/ID"
+          }
+        }
+      },
       "AccountID": {
         "name": "accountId",
         "in": "path",
@@ -5718,6 +5747,16 @@
           },
           "accountId": {
             "$ref": "#/components/schemas/ID"
+          },
+          "accountIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "uniqueItems": true,
+            "description": "Applied account set in ascending UUID order, present when accountIds was supplied.",
+            "items": {
+              "$ref": "#/components/schemas/ID"
+            }
           },
           "conversationId": {
             "$ref": "#/components/schemas/ID"

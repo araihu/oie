@@ -14,16 +14,18 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   const senderPhoto=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64');
   const photoHash=photo=>createHash('sha256').update(photo).digest('hex');
   const conversationHash=photoHash(conversationPhoto),senderHash=photoHash(senderPhoto);
-  const account = id(2), work = id(3), streams = new Set();
+  const account = id(2), work = id(3), other = id(8), streams = new Set();
   const state = {engine:id(1), writes:0, searchReads:[], titleReads:[], contactReads:[], contexts:[], mode:'normal'};
   const accounts = [
     {id:account,address:'alice@fixture',label:'Personal'},
     {id:work,address:'work@fixture',label:'Work'},
+    {id:other,address:'other@fixture',label:'Other account'},
   ].map(a => ({...a,revisionId:id(4),protocol:'xmpp',connectionState:'connected',createdAt:'2026-11-09T12:00:00Z'}));
   const chats = [
     {id:id(10),accountId:account,title:'Family'},
     {id:id(11),accountId:work,title:'Team'},
     {id:id(12),accountId:account,title:'Other conversation'},
+    {id:id(14),accountId:other,title:'Other account conversation'},
   ].map(c => ({...c,revisionId:id(15),kind:'direct',address:'peer@fixture',lastMessage:'Retained text',updatedAt:'2026-11-09T14:00:00Z',unreadCount:0,archived:false,favorite:false}));
   const [chat] = chats;
   for(let n=0;n<26;n++)chats.push({...chat,id:id(100+n),title:'Spare conversation '+n,address:'spare'+n+'@fixture'});
@@ -46,6 +48,11 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   let releaseSearch, finishArchiveMode;
   const archiveModes=[];
   corpus.push(savedMatch);
+  const scopeMessages=[chats[0],chats[1],chats[3]].map((c,index)=>({
+    ...corpus[0],id:id(6050+index),revisionId:id(6150+index),accountId:c.accountId,conversationId:c.id,
+    originalText:'Account scope marker '+index,createdAt:new Date(Date.UTC(2026,10,9,16,index)).toISOString()
+  }));
+  corpus.push(...scopeMessages);
   const all = [...corpus,...fillers];
   const chronological = c => all.filter(m => m.conversationId===c.id).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
   const fold = value => value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
@@ -94,24 +101,30 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     }
     if (u.pathname.endsWith('/avatars')||u.pathname.endsWith('/previews')||u.pathname.endsWith('/message-stars')||u.pathname==='/api/v1/shared-content') return send(200,{items:[]});
     if (u.pathname === '/api/v1/messages/search') {
-      state.searchReads.push(Object.fromEntries(u.searchParams));
+      const accountIds=u.searchParams.getAll('accountIds').sort();
+      state.searchReads.push({...Object.fromEntries(u.searchParams),accountIds});
       if (state.mode==='unavailable') return send(503,{code:'unavailable'});
       const q=u.searchParams.get('q')?.trim(), selectedAccount=u.searchParams.get('accountId')||'', conversation=u.searchParams.get('conversationId')||'', history=u.searchParams.get('includeEditHistory')==='true';
-      const fingerprint=JSON.stringify([state.engine,q,selectedAccount,conversation,history]);
+      const matchesScope=m=>(!selectedAccount||m.accountId===selectedAccount)&&(!accountIds.length||accountIds.includes(m.accountId))&&(!conversation||m.conversationId===conversation);
+      const fingerprint=JSON.stringify([state.engine,q,selectedAccount,accountIds,conversation,history]);
       let offset=0;
       if (u.searchParams.has('cursor')) {try {const cursor=JSON.parse(Buffer.from(u.searchParams.get('cursor'),'base64url'));if(cursor.scope!==fingerprint)throw Error('scope');offset=cursor.offset}catch{return send(400,{code:'invalid_cursor'})}}
-      let hits=corpus.filter(m=>(!selectedAccount||m.accountId===selectedAccount)&&(!conversation||m.conversationId===conversation)).flatMap(m=>{
+      let hits=corpus.filter(matchesScope).flatMap(m=>{
         const c=[...chats,archiveRoom].find(c=>c.id===m.conversationId),base={message:m,accountLabel:accounts.find(a=>a.id===m.accountId).label,conversationTitle:c.title,matchedAt:m.createdAt,matchKind:'text',...(m===corpus[54]?{senderAvatarHash:senderHash}:{})};
         const rows=fold(m.originalText).includes(fold(q))?[{...base,matchedRevisionId:m===corpus[1]?id(9001):m.revisionId,historical:false,excerpt:m.originalText}]:[];
         if(history&&m===corpus[0]&&fold('Pineapple original').includes(fold(q)))rows.push(...[2,1].map(n=>({...base,matchedRevisionId:id(8000+n),matchedAt:`2026-11-09T12:00:0${n}Z`,historical:true,excerpt:'Pineapple prior version '+n})));
         return rows;
       }).sort((a,b)=>new Date(b.message.createdAt).getTime()-new Date(a.message.createdAt).getTime()||b.message.id.localeCompare(a.message.id)||Number(a.historical)-Number(b.historical)||b.matchedAt.localeCompare(a.matchedAt));
       const limit=conversation===chat.id?Math.min(7,Number(u.searchParams.get('limit')||50)):Number(u.searchParams.get('limit')||50),items=hits.slice(offset,offset+limit);
-      return send(200,{query:q,...(selectedAccount?{accountId:selectedAccount}:{}),...(conversation?{conversationId:conversation}:{}),includeEditHistory:history,items,nextCursor:offset+limit<hits.length?Buffer.from(JSON.stringify({scope:fingerprint,offset:offset+limit})).toString('base64url'):undefined,metadataIndexing:{state:all.filter(m=>(!selectedAccount||m.accountId===selectedAccount)&&(!conversation||m.conversationId===conversation)).length===corpus.filter(m=>(!selectedAccount||m.accountId===selectedAccount)&&(!conversation||m.conversationId===conversation)).length?'complete':'pending',indexedMessages:corpus.filter(m=>(!selectedAccount||m.accountId===selectedAccount)&&(!conversation||m.conversationId===conversation)).length,totalMessages:all.filter(m=>(!selectedAccount||m.accountId===selectedAccount)&&(!conversation||m.conversationId===conversation)).length}});
+      const indexedMessages=corpus.filter(matchesScope).length,totalMessages=all.filter(matchesScope).length;
+      return send(200,{query:q,...(selectedAccount?{accountId:selectedAccount}:{}),...(accountIds.length?{accountIds}:{}),...(conversation?{conversationId:conversation}:{}),includeEditHistory:history,items,nextCursor:offset+limit<hits.length?Buffer.from(JSON.stringify({scope:fingerprint,offset:offset+limit})).toString('base64url'):undefined,metadataIndexing:{state:totalMessages===indexedMessages?'complete':'pending',indexedMessages,totalMessages}});
     }
     if(u.pathname.endsWith('/contacts')){state.contactReads.push(Object.fromEntries(u.searchParams));return send(404,{code:'unsupported'})}
     if(u.pathname==='/api/v1/conversations'&&u.searchParams.get('q'))state.titleReads.push(Object.fromEntries(u.searchParams));
-    if (u.pathname === '/api/v1/conversations') return send(200,{items:chats.filter(c=>(!u.searchParams.get('accountId')||c.accountId===u.searchParams.get('accountId'))&&c.archived===(u.searchParams.get('archived')==='true')&&(!u.searchParams.get('q')||fold(c.title).includes(fold(u.searchParams.get('q'))))).slice(0,Number(u.searchParams.get('limit')||100))});
+    if (u.pathname === '/api/v1/conversations') {
+      const accountIds=u.searchParams.getAll('accountIds');
+      return send(200,{items:chats.filter(c=>(!u.searchParams.get('accountId')||c.accountId===u.searchParams.get('accountId'))&&(!accountIds.length||accountIds.includes(c.accountId))&&c.archived===(u.searchParams.get('archived')==='true')&&(!u.searchParams.get('q')||fold(c.title).includes(fold(u.searchParams.get('q'))))).slice(0,Number(u.searchParams.get('limit')||100))});
+    }
     for (const c of [...chats,archiveRoom]) {
       const prefix='/api/v1/conversations/'+c.id, messages=chronological(c),limit=Number(u.searchParams.get('limit')||50);
       if (u.pathname===prefix) return send(200,c);
@@ -141,14 +154,22 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   let stderr='';child.stderr.on('data',c=>stderr+=c);
   const browser=await chromium.launch({headless:true}),base='http://127.0.0.1:'+port,errors=[],findings=[],screenshots=[];
   const until=async(fn,label)=>{for(let n=0;n<240;n++){if(await fn())return;await new Promise(r=>setTimeout(r,50))}throw Error('Timed out: '+label+'\n'+stderr)};
-  const fresh=async(options={})=>{const context=await browser.newContext({viewport:{width:1440,height:950},locale:'en',...options}),page=await context.newPage();await page.addInitScript(()=>{document.addEventListener('oie:message-search-settled',()=>{const form=document.getElementById('message-search-form');window.searchSettled={q:form.elements.q.value.trim(),account:form.querySelector('input[name=accountId]')?.value||'',conversation:form.elements.conversationId.value,history:form.elements.includeEditHistory.checked};});});page.on('pageerror',e=>errors.push(e.message));return page};
+  const fresh=async(options={})=>{const context=await browser.newContext({viewport:{width:1440,height:950},locale:'en',...options}),page=await context.newPage();await page.addInitScript(()=>{document.addEventListener('oie:message-search-settled',event=>{const form=document.getElementById('message-search-form');window.searchSettled={q:form.elements.q.value.trim(),account:event.detail.root.dataset.searchAccount,conversation:form.elements.conversationId.value,history:form.elements.includeEditHistory.checked};});});page.on('pageerror',e=>errors.push(e.message));return page};
   const initial=()=>base+'/?chat='+chat.id+'&account='+account+'&lang=en&theme=dark';
   const hits=page=>page.locator('#message-search-results [data-message-search-hit]');
   const query=page=>page.locator('#conversation-search:visible,#message-search-query:visible');
   const form=page=>page.locator('#message-search-form');
-  const settled=async(page,q)=>until(async()=>await page.evaluate(q=>{const last=window.searchSettled,form=document.getElementById('message-search-form');return last?.q===q&&last.account===(form.querySelector('input[name=accountId]')?.value||'')&&last.conversation===form.elements.conversationId.value&&last.history===form.elements.includeEditHistory.checked},q),'ready query '+q);
+  const settled=async(page,q)=>until(async()=>await page.evaluate(q=>{const last=window.searchSettled,form=document.getElementById('message-search-form');const selected=[...form.querySelectorAll('input[name=accountId]')].map(input=>input.value).sort().join(',');return last?.q===q&&last.account===selected&&last.conversation===form.elements.conversationId.value&&last.history===form.elements.includeEditHistory.checked},q),'ready query '+q);
   const openGlobal=async page=>{await query(page).waitFor({state:'visible'});await query(page).focus()};
-  const chooseAccount=async(page,label)=>{await page.locator('#message-search-account-trigger').click();await page.getByRole('option').filter({hasText:label}).click()};
+  const chooseAccount=async(page,label)=>{
+    const picker=page.locator('#message-search-account'),trigger=picker.getByRole('combobox'),clear=picker.locator('[data-combobox-clear-all]');
+    await trigger.click();
+    await picker.getByRole('listbox').waitFor({state:'visible'});
+    if(await picker.locator('input[name=accountId]').count())await clear.click();
+    if(label!=='All accounts')await picker.getByRole('option').filter({hasText:label}).click();
+    await trigger.press('Escape');
+    await picker.getByRole('listbox').waitFor({state:'hidden'});
+  };
   let page;
   try {
     await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
@@ -338,10 +359,10 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     assert.equal(new URL(page.url()).searchParams.has('searchMode'),false);
     await field.fill('CAFÉ 😀');await settled(page,'CAFÉ 😀');await until(async()=>await hits(page).count()===1,'reopen search after clearing during source navigation');
 
-    const globalSearchNodes=await page.evaluate(()=>{window.concurrentSearchNodes={input:document.getElementById('conversation-search'),results:document.getElementById('message-search-results'),composer:document.getElementById('message-composer')};return{query:document.getElementById('conversation-search').value,account:document.querySelector('#message-search-form input[name=accountId]').value}});
+    const globalSearchNodes=await page.evaluate(()=>{window.concurrentSearchNodes={input:document.getElementById('conversation-search'),results:document.getElementById('message-search-results'),composer:document.getElementById('message-composer')};return{query:document.getElementById('conversation-search').value}});
     await page.locator('#chat-options button').first().click();await page.locator('#chat-search-messages:visible').click();
     const chatSearch=page.locator('[data-conversation-search]'),chatQuery=page.locator('#conversation-search-query');await chatQuery.waitFor({state:'visible'});await page.locator('#chat-options [role=menu]').waitFor({state:'hidden'});
-    const orderedMatches=corpus.filter(message=>message.conversationId===chat.id).sort((a,b)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime()||b.id.localeCompare(a.id));
+    const orderedMatches=corpus.filter(message=>message.conversationId===chat.id&&message.originalText.includes('Telescope')).sort((a,b)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime()||b.id.localeCompare(a.id));
     const selected=()=>chatSearch.getAttribute('data-search-selected');
     await chatQuery.fill('Telescope');await until(async()=>await selected()===orderedMatches[0].id,'per-chat search starts at newest matching source');
     assert.equal(await chatQuery.evaluate(node=>document.activeElement===node),true,'initial chat search preserves typing focus');
@@ -367,14 +388,65 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     await page.route('**/ui/message-search?**',async route=>{const url=new URL(route.request().url());if(url.searchParams.get('q')==='Telescope'&&url.searchParams.get('conversationId')===chat.id){const response=await route.fetch();chatHeld=true;await new Promise(resolve=>chatRelease=resolve);await route.fulfill({response}).catch(()=>{});chatReleased();return}await route.continue()});
     const sourceBeforeStale=await page.locator('body').getAttribute('data-focus-message');await chatQuery.fill('Telescope');await until(()=>chatHeld,'held old chat-search query');await chatQuery.fill('No matching source');await until(async()=>await chatSearch.getAttribute('data-search-complete')==='true'&&await chatSearch.getAttribute('data-search-loaded')==='0','new empty chat query');chatRelease();await chatStaleResponse;await page.unroute('**/ui/message-search?**');assert.equal(await chatQuery.inputValue(),'No matching source');assert.equal(await chatSearch.getAttribute('data-search-loaded'),'0');assert.equal(await page.locator('body').getAttribute('data-focus-message'),sourceBeforeStale,'old chat query cannot refocus its source');
     state.mode='unavailable';await chatQuery.fill('Chat transport failure');await chatSearch.locator('[data-conversation-search-retry]').waitFor({state:'visible'});assert.equal(await query(page).inputValue(),globalSearchNodes.query);state.mode='normal';await chatSearch.locator('[data-conversation-search-retry]').click();await until(async()=>await chatSearch.getAttribute('data-search-complete')==='true'&&await chatSearch.getAttribute('data-search-loaded')==='0','chat search retry recovers without a synthetic match');
-    await chatSearch.locator('[data-conversation-search-close]').click();await chatSearch.waitFor({state:'hidden'});assert.equal(await page.locator('body').getAttribute('data-focus-message'),corpus[0].id,'closing chat search keeps its selected source');assert.equal(await query(page).inputValue(),globalSearchNodes.query);assert.equal(await hits(page).count(),1);
+    await chatSearch.locator('[data-conversation-search-close]').click();await chatSearch.waitFor({state:'hidden'});
+    await until(async()=>await query(page).inputValue()===globalSearchNodes.query&&await hits(page).count()===1,'closing chat search restores the independently scoped global results');
+    assert.equal(await page.locator('body').getAttribute('data-focus-message'),corpus[0].id,'closing chat search keeps its selected source');
     findings.push('Global and per-chat queries coexist independently; next/previous traverse scoped pages without wrapping, preserve draft/global DOM/focus, highlight only current literal content and keep timeline bounded to200 rows');
 
     const native=await fresh({javaScriptEnabled:false});await native.goto(base+'/search?q=Telescope&accountId='+work+'&lang=en&theme=light');assert.equal(await hits(native).count(),19);assert.equal(await native.locator('form[role="search"] input[name="q"]').inputValue(),'Telescope');
     await native.goto(initial()+'&searchMode=messages&searchQuery=%20');
     assert(await native.locator('#conversation-list-default').isVisible(),'server renders the inbox for a blank global search');
     assert(await native.locator('#message-search-slot').isHidden());
+    await native.goto(base+'/search?'+new URLSearchParams([['q','Account scope marker'],['accountIds',account],['accountIds',work],['lang','en']]));
+    assert.equal(await hits(native).count(),2);
+    await native.locator('#message-search-native-'+account).uncheck();
+    await native.locator('#message-search-native-'+work).uncheck();
+    await native.getByRole('button',{name:'Search messages',exact:true}).click();
+    await native.waitForURL(url=>url.searchParams.has('nativeAccountFilter'));
+    assert.equal(await hits(native).count(),3,'clearing the native checkboxes searches all accounts');
     await native.context().close();
+
+    const multi=await fresh();
+    await multi.goto(initial());
+    await multi.waitForFunction(()=>window.OieRuntime?.generation>0);
+    await query(multi).fill('Account scope marker');await settled(multi,'Account scope marker');
+    const picker=multi.locator('#message-search-account'),trigger=picker.getByRole('combobox');
+    const option=id=>picker.locator('[data-combobox-option][data-value="'+id+'"]');
+    await trigger.click();
+    let pickerSearchReads=0;
+    multi.on('request',request=>{if(request.url().includes('/ui/message-search?'))pickerSearchReads++});
+    const pickerSearch=picker.locator('[data-combobox-search]');
+    await pickerSearch.fill('work@fixture');
+    assert(await option(work).isVisible());
+    assert(await option(account).isHidden());
+    assert.equal(pickerSearchReads,0,'typing in the combobox filters its options only');
+    await option(work).click();await settled(multi,'Account scope marker');
+    assert(await option(work).locator('input[type=checkbox]').isChecked());
+    assert.equal(await trigger.getAttribute('aria-expanded'),'true','selecting one account keeps the picker open');
+    await pickerSearch.fill('Personal');
+    assert(await option(account).isVisible());
+    const fieldBounds=await query(multi).boundingBox(),composerBounds=await multi.locator('#message-composer').boundingBox();
+    await option(account).click();await settled(multi,'Account scope marker');
+    assert(await option(account).locator('input[type=checkbox]').isChecked());
+    assert(await option(work).locator('input[type=checkbox]').isChecked());
+    assert.equal(await trigger.innerText(),'2 accounts selected');
+    assert.deepEqual(new URL(multi.url()).searchParams.getAll('searchAccount'),[account,work]);
+    assert.deepEqual(await hits(multi).evaluateAll(nodes=>nodes.map(node=>node.dataset.searchMessage)),[scopeMessages[1].id,scopeMessages[0].id]);
+    assert.deepEqual(await query(multi).boundingBox(),fieldBounds);
+    assert.deepEqual(await multi.locator('#message-composer').boundingBox(),composerBounds);
+    await trigger.press('Escape');await picker.getByRole('listbox').waitFor({state:'hidden'});
+    const selectedURL=multi.url(),sourceId=scopeMessages[1].id;
+    await hits(multi).first().locator('[data-message-search-source]').click();
+    await multi.waitForURL(url=>url.searchParams.get('message')===sourceId);
+    await multi.goBack();await multi.waitForURL(selectedURL);
+    await until(async()=>await hits(multi).count()===2,'Back restores both selected accounts');
+    assert.deepEqual(await form(multi).locator('input[name=accountId]').evaluateAll(inputs=>inputs.map(input=>input.value).sort()),[account,work]);
+    await chooseAccount(multi,'All accounts');await settled(multi,'Account scope marker');
+    assert.equal(await hits(multi).count(),3);
+    assert.equal(await trigger.innerText(),'All accounts');
+    await multi.context().close();
+    findings.push('Searchable account checkboxes preserve selected accounts and query, apply before pagination, restore via Back, and clear to all accounts');
+
     await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});
     for(const width of [390,1440])for(const design of ['goshtoso','minimal'])for(const theme of ['light','dark']){
       const variant=await fresh({viewport:{width,height:900},locale:width===390?'pt-BR':'en',hasTouch:width===390}),lang=width===390?'pt-BR':'en';

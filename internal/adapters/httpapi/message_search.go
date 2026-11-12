@@ -7,7 +7,7 @@ import (
 )
 
 func (s *Server) SearchMessages(ctx context.Context, r engineapi.SearchMessagesRequestObject) (engineapi.SearchMessagesResponseObject, error) {
-	q := domain.MessageSearchQuery{Search: r.Params.Q, Limit: 50}
+	q := domain.MessageSearchQuery{Search: r.Params.Q, Limit: 50, AccountIDs: searchAccountIDs(r.Params.AccountIds)}
 	if r.Params.AccountId != nil {
 		q.AccountID = domain.ID(*r.Params.AccountId)
 	}
@@ -32,6 +32,13 @@ func (s *Server) SearchMessages(ctx context.Context, r engineapi.SearchMessagesR
 		id := string(page.AccountID)
 		out.AccountId = &id
 	}
+	if len(page.AccountIDs) > 0 {
+		ids := make([]engineapi.ID, len(page.AccountIDs))
+		for i, id := range page.AccountIDs {
+			ids[i] = string(id)
+		}
+		out.AccountIds = &ids
+	}
 	if page.ConversationID != "" {
 		id := string(page.ConversationID)
 		out.ConversationId = &id
@@ -47,4 +54,15 @@ func (s *Server) SearchMessages(ctx context.Context, r engineapi.SearchMessagesR
 		out.NextCursor = &page.NextCursor
 	}
 	return engineapi.SearchMessages200JSONResponse(out), nil
+}
+
+func searchAccountIDs(values *[]engineapi.ID) []domain.ID {
+	if values == nil {
+		return nil
+	}
+	ids := make([]domain.ID, len(*values))
+	for i, value := range *values {
+		ids[i] = domain.ID(value)
+	}
+	return ids
 }

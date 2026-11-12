@@ -106,7 +106,7 @@ func (v view) href(pairs ...string) string {
 	if v.GlobalMessageSearch && !v.NativeMessageSearch {
 		q.Set("searchMode", "messages")
 		q.Set("searchQuery", v.MessageSearch.Query)
-		q.Set("searchAccount", v.MessageSearch.AccountID)
+		q["searchAccount"] = v.MessageSearch.accounts()
 		q.Set("searchEngine", v.EngineID)
 		if v.MessageSearch.IncludeHistory {
 			q.Set("includeEditHistory", "true")

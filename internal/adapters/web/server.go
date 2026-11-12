@@ -315,7 +315,7 @@ type copy struct {
 	InfoStarsEmpty                                                                                                                                                                                           string
 	InfoNavigationFailed                                                                                                                                                                                     string
 	SharedAccount                                                                                                                                                                                            string
-	SearchAccounts                                                                                                                                                                                           string
+	SearchAccounts, SearchAccountSelected, SearchAccountsSelected, SearchClearAccounts                                                                                                                       string
 	NoAccountsFound                                                                                                                                                                                          string
 	SharedTools                                                                                                                                                                                              string
 	SharedContentTypes                                                                                                                                                                                       string
