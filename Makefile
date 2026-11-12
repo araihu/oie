@@ -8,6 +8,7 @@ CODEGEN = GOWORK=off $(GO) tool -modfile=tools/go.mod
 VACUUM ?= env GOWORK=off $(GO) tool -modfile=tools/vacuum/go.mod vacuum
 GOLANGCI_LINT ?= $(CODEGEN) golangci-lint
 CLI_ARGS = --spec api/openapi.cli.json --name oiectl --module github.com/araihu/oie/cli --out cli
+GO_TEST_EXEC = $(if $(OIE_GO_TEST_EXEC),-exec "$(OIE_GO_TEST_EXEC)")
 
 .PHONY: generate lint lint-go build build-cli run check test test-race check-generated dev-up dev-down test-xmpp test-engine-xmpp
 
@@ -48,11 +49,11 @@ run:
 	GOWORK=off $(GO) run ./cmd/oie
 
 test:
-	GOWORK=off $(GO) test ./...
-	GOWORK=off $(GO) -C cli test ./...
+	GOWORK=off $(GO) test $(GO_TEST_EXEC) ./...
+	GOWORK=off $(GO) -C cli test $(GO_TEST_EXEC) ./...
 
 test-race:
-	GOWORK=off $(GO) test -race ./...
+	GOWORK=off $(GO) test $(GO_TEST_EXEC) -race ./...
 
 check-generated:
 	sh scripts/check-generated.sh $(VACUUM)
@@ -69,7 +70,7 @@ check: lint lint-go check-generated check-api-compatibility check-ci-tools test-
 check-ci-tools:
 	@test -z "$$(gofmt -l tools/ci/*.go)" || { echo 'CI Go formatting drift'; exit 1; }
 	GOWORK=off $(GO) -C tools/ci vet -tags=http2legacy ./...
-	GOWORK=off $(GO) -C tools/ci test -tags=http2legacy ./...
+	GOWORK=off $(GO) -C tools/ci test $(GO_TEST_EXEC) -tags=http2legacy ./...
 	python3 -m unittest discover -s tools/ci -p '*_test.py'
 
 dev-up:
