@@ -673,7 +673,7 @@ func TestRoomReactionReplayRepairsV17BackwardPageOrder(t *testing.T) {
 		}
 	}
 	// Downgrade the scratch database to the actual V17 migration state.
-	for _, name := range []string{"000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
+	for _, name := range []string{"000021_scheduled_sends", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
 		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
 		if err != nil {
 			t.Fatal(err)
@@ -861,7 +861,7 @@ func TestRoomReactionUpgradeRetiresMixedLegacyPeerSets(t *testing.T) {
 	}
 	// v18 retained observations without their identity-mode epochs. It also
 	// persisted the latest non-anonymous mode as a currently public flag.
-	for _, name := range []string{"000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode"} {
+	for _, name := range []string{"000021_scheduled_sends", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode"} {
 		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
 		if err != nil {
 			t.Fatal(err)
