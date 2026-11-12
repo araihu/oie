@@ -278,42 +278,72 @@ exec go test -race -count=1 -p 1 -v ./tests/xmpp ./tests/cli
 	}
 	const browserScratch = "/tmp/oie-browser"
 	browser = browser.WithDirectory("/src", source).
-		WithFile("/src/bin/oie", checked.File("/src/bin/oie")).WithFile("/src/bin/oie-mock", checked.File("/src/bin/oie-mock")).
-		WithFile("/tmp/xmpp-ca.crt", ca).WithWorkdir("/src").WithServiceBinding("xmpp", xmpp).
-		WithMountedCache(startsDir, starts).WithEnvVariable("OIE_CI_PROSODY_STARTS_FILE", startsFile).
+		WithFile("/src/bin/oie", checked.File("/src/bin/oie")).WithWorkdir("/src").
 		WithMountedTemp(browserScratch, dagger.ContainerWithMountedTempOpts{Size: 2 << 30}).
 		WithEnvVariable("TMPDIR", browserScratch).
+		WithEnvVariable("OIE_CI_RUN_ID", runID)
+	consumer := browser.WithFile("/src/bin/oie-mock", checked.File("/src/bin/oie-mock")).
+		WithExec([]string{"sh", "-c", browserCommand, "sh", "consumer", "consumer.log"}, dagger.ContainerWithExecOpts{Expect: dagger.ReturnTypeAny})
+	browser = browser.
+		WithFile("/tmp/xmpp-ca.crt", ca).WithServiceBinding("xmpp", xmpp).
+		WithMountedCache(startsDir, starts).WithEnvVariable("OIE_CI_PROSODY_STARTS_FILE", startsFile).
 		WithEnvVariable("OIE_XMPP_CA_FILE", "/tmp/xmpp-ca.crt").WithEnvVariable("OIE_XMPP_ENDPOINT", "xmpp:5222").
 		WithEnvVariable(browserFixtures, "1").
-		WithEnvVariable("OIE_CI_RUN_ID", runID).WithExec([]string{"sh", "-c", browserCommand}, dagger.ContainerWithExecOpts{Expect: dagger.ReturnTypeAny})
-	browser, err = r.stage(ctx, "browser", browser)
-	if err != nil {
-		return err
+		WithExec([]string{"sh", "-c", browserCommand, "sh", "integration", "ci.log"}, dagger.ContainerWithExecOpts{Expect: dagger.ReturnTypeAny})
+	// The consumer fixtures need neither the XMPP binding nor the live browser's
+	// loopback ports. Keep each group's processes and filesystem in its own container.
+	type browserResult struct {
+		container *dagger.Container
+		err       error
 	}
+	consumerResult := make(chan browserResult, 1)
+	go func() {
+		evaluated, err := r.stage(ctx, "browser-consumer", consumer)
+		consumerResult <- browserResult{evaluated, err}
+	}()
+	browser, liveErr := r.stage(ctx, "browser", browser)
+	result := <-consumerResult
+	// Merge the disjoint evidence files sequentially on the host.
+	if result.err == nil {
+		result.err = r.exportBrowserEvidence(ctx, result.container, "consumer.log")
+	}
+	if liveErr == nil {
+		liveErr = r.exportBrowserEvidence(ctx, browser, "ci.log")
+	}
+	return errors.Join(result.err, liveErr)
+}
+
+func (r runner) exportBrowserEvidence(ctx context.Context, browser *dagger.Container, logName string) error {
 	// Export evidence before deciding whether the workflow failed. A failure can
 	// never become a passing CI just because the export succeeded.
 	if _, err := browser.Directory("/src/tests/browser/artifacts").Export(ctx, filepath.Join(r.logs, "browser")); err != nil {
-		return fmt.Errorf("export browser evidence: %w", err)
+		return fmt.Errorf("export browser evidence for %s: %w", logName, err)
 	}
 	code, err := browser.File("/tmp/oie-browser-exit").Contents(ctx)
 	if err != nil {
 		return err
 	}
-	return browserOutcome(code)
+	if err := browserOutcome(code); err != nil {
+		return fmt.Errorf("%w; see exported browser/%s", err, logName)
+	}
+	return nil
 }
 
 const browserCommand = `
 mkdir -p tests/browser/artifacts
-log=tests/browser/artifacts/ci.log
-sh tools/ci/browser.sh > "$log" 2>&1
+log="tests/browser/artifacts/$2"
+sh tools/ci/browser.sh "$1" > "$log" 2>&1
 result=$?
-starts=0
-if [ -f "$OIE_CI_PROSODY_STARTS_FILE" ]; then
-  starts=$(wc -l < "$OIE_CI_PROSODY_STARTS_FILE")
+if [ "$1" = integration ]; then
+  starts=0
+  starts_file="${OIE_CI_PROSODY_STARTS_FILE:-}"
+  if [ -f "$starts_file" ]; then
+    starts=$(wc -l < "$starts_file")
+    rm -f "$starts_file"
+  fi
+  printf 'Prosody starts: %s (expected 1)\n' "$starts" >> "$log"
+  if [ "$starts" != 1 ] && [ "$result" = 0 ]; then result=1; fi
 fi
-printf 'Prosody starts: %s (expected 1)\n' "$starts" >> "$log"
-rm -f "$OIE_CI_PROSODY_STARTS_FILE"
-if [ "$starts" != 1 ] && [ "$result" = 0 ]; then result=1; fi
 printf '%s\n' "$result" > /tmp/oie-browser-exit
 cat "$log"
 exit "$result"
@@ -321,7 +351,7 @@ exit "$result"
 
 func browserOutcome(code string) error {
 	if strings.TrimSpace(code) != "0" {
-		return fmt.Errorf("browser workflow failed with exit %q; see exported browser/ci.log", strings.TrimSpace(code))
+		return fmt.Errorf("browser workflow failed with exit %q", strings.TrimSpace(code))
 	}
 	return nil
 }

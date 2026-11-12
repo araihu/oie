@@ -299,6 +299,11 @@ Each full Dagger run starts one disposable Prosody service and shares its TLS
 certificate across the protocol smoke check, Go integration tests and live
 browser workflow. The smoke check and Go integration tests run in sequence
 while Playwright setup runs in parallel.
+The browser scenarios run in two containers built from the same Playwright
+setup. Only the group that runs the live browser scenario gets the Prosody
+binding. Each group starts its own browser and application fixtures. The CI
+artifact keeps the existing reports and screenshots, with per-scenario timings
+in `browser/consumer.log` and `browser/ci.log`.
 The browser evidence records the number of Prosody starts for that run. CI
 fails if the count differs from one.
 
