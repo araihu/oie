@@ -90,6 +90,8 @@ The existing `conversation-search` field opens global search when the user enter
 a non-blank query. Focusing the field keeps the conversation list visible.
 The X at the right of the field cancels the search and returns focus to the field.
 Clearing the query also returns to the list and cancels pending search requests.
+The edit-history help closes on outside interaction or Escape without changing
+the query or the checkbox.
 It uses the native unified `/search` GET page as its fallback. Global mode
 shows categories for the existing media, links and documents catalog, matching
 saved roster contacts, bounded conversation-title matches and saved messages.

@@ -223,6 +223,8 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     findings.push('Live search owns a separate URL/history scope, loads scoped pages, and preserves draft, inbox/timeline nodes, focus, stream runtime and scroll');
 
     const cancelSearch=page.getByRole('button',{name:'Cancel search',exact:true});
+    const historyHelp=page.getByRole('button',{name:'Include edit history',exact:true});
+    const historyTip=page.locator('#message-search-history-help');
     await cancelSearch.click();await page.locator('#conversation-list-default').waitFor({state:'visible'});
     assert(await page.evaluate(()=>window.searchNodes.list===document.getElementById('conversation-list')),'closing restores the same conversation-list node');assert.equal(await page.locator('#conversation-list').evaluate(node=>node.scrollTop),before.listScroll);assert.equal(await query(page).inputValue(),'','closing restores the original title filter');assert.equal(await page.locator('#message-composer').inputValue(),draft);
     await query(page).fill('Telescope');await settled(page,'Telescope');
@@ -274,6 +276,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     let closeRelease,closeHeld=false,closedDone;const closedResponse=new Promise(resolve=>closedDone=resolve);
     await page.route('**/ui/message-search?**',async route=>{if(new URL(route.request().url()).searchParams.get('q')==='Telescope'){const response=await route.fetch();closeHeld=true;await new Promise(resolve=>closeRelease=resolve);await route.fulfill({response}).catch(()=>{});closedDone();return}await route.continue()});
     await query(page).fill('Telescope');await until(()=>closeHeld,'pending query after reopening source global list search');
+    await historyHelp.click();await historyTip.waitFor({state:'visible'});
     await page.evaluate(()=>{
       const nodes=['conversation-search','message-composer','message-timeline'].map(id=>document.getElementById(id));
       const sample=()=>nodes.flatMap(node=>{const {x,y,width,height}=node.getBoundingClientRect();return [x,y,width,height,node.scrollTop]});
@@ -282,6 +285,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       window.finishCancelGeometry=()=>{cancelAnimationFrame(handle);return {baseline,frames:[...frames,sample()]}};
     });
     await cancelSearch.click();await page.locator('#message-search-slot').waitFor({state:'hidden'});
+    await page.waitForFunction(()=>!document.getElementById('message-search-history-help').matches(':popover-open'));
     await until(async()=>new URL(page.url()).searchParams.get('searchMode')===null,'closing a reopened search restores the conversation-list route');const readsAtClose=state.searchReads.length;
     closeRelease();await closedResponse;await page.unroute('**/ui/message-search?**');await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
     const {baseline,frames}=await page.evaluate(()=>window.finishCancelGeometry());
@@ -294,7 +298,10 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
 
     let sourceHeld=false,sourceRelease,sourceReleased;const pendingSource=new Promise(resolve=>sourceReleased=resolve);
     await page.route('**/*',async route=>{const url=new URL(route.request().url());if(url.origin===base&&url.pathname==='/'&&url.searchParams.get('message')===corpus[2].id){const response=await route.fetch();sourceHeld=true;await new Promise(resolve=>sourceRelease=resolve);await route.fulfill({response}).catch(()=>{});sourceReleased();return}await route.continue()});
-    await hits(page).first().locator('[data-message-search-source]').click();await until(()=>sourceHeld,'held canonical source fragment');await openGlobal(page);await query(page).fill('Telescope');await chooseAccount(page,'Work');await settled(page,'Telescope');assert.equal(await hits(page).count(),19);
+    await historyHelp.click();await historyTip.waitFor({state:'visible'});
+    await hits(page).first().locator('[data-message-search-source]').press('Enter');await until(()=>sourceHeld,'held canonical source fragment');
+    await historyTip.waitFor({state:'hidden'});
+    await openGlobal(page);await query(page).fill('Telescope');await chooseAccount(page,'Work');await settled(page,'Telescope');assert.equal(await hits(page).count(),19);
     sourceRelease();await pendingSource;await page.unroute('**/*');await until(async()=>await query(page).isVisible()&&await query(page).inputValue()==='Telescope'&&await form(page).locator('[name=accountId]').inputValue()===work&&await hits(page).count()===19,'latest search intent survives the older source fragment');
     assert.equal(await page.locator('#message-composer').inputValue(),draft);assert.equal(new URL(page.url()).searchParams.get('searchQuery'),'Telescope');assert.equal(new URL(page.url()).searchParams.get('searchAccount'),work);
     findings.push('A held source fragment cannot erase a later reopened search query/account intent or its device draft');
@@ -380,6 +387,24 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       assert(await cancel.isHidden(),'cancel appears only for an active search');
       const idleField=await query(variant).boundingBox();
       await query(variant).fill('Telescope');await settled(variant,'Telescope');await chooseAccount(variant,'Work');await settled(variant,'Telescope');
+      const help=variant.getByRole('button',{name:lang==='pt-BR'?'Incluir histórico de edições':'Include edit history',exact:true});
+      const tip=variant.locator('#message-search-history-help'),outside=variant.locator('.oie-list-heading h2');
+      assert(await tip.isHidden());
+      if(width===390)await help.tap();
+      else await help.click();
+      await tip.waitFor({state:'visible'});
+      assert.equal(await help.getAttribute('aria-expanded'),'true');
+      if(width===390)await outside.tap();
+      else await outside.click();
+      await tip.waitFor({state:'hidden'});
+      assert.equal(await help.getAttribute('aria-expanded'),'false');
+      if(width===1440){
+        await help.press('Enter');await tip.waitFor({state:'visible'});
+        await help.press('Escape');await tip.waitFor({state:'hidden'});
+        assert(await help.evaluate(node=>node===document.activeElement));
+      }
+      assert.equal(await query(variant).inputValue(),'Telescope');
+      assert.equal(await variant.locator('#message-search-history').isChecked(),false);
       await hits(variant).first().waitFor({state:'visible'});await variant.evaluate(design=>document.documentElement.dataset.theme=design,design);assert.equal(await variant.locator('html').getAttribute('data-theme'),design);
       if(width===1440){await variant.locator('#chat-options button').first().click();await variant.locator('#chat-search-messages:visible').click();await variant.locator('#chat-options [role=menu]').waitFor({state:'hidden'});await variant.locator('#conversation-search-query').fill(corpus[55].originalText);await until(async()=>await variant.locator('[data-conversation-search]').getAttribute('data-search-selected')===corpus[55].id,'independent desktop queries in '+design+'/'+theme);assert.equal(await query(variant).inputValue(),'Telescope');assert.equal(await hits(variant).count(),19)}
       const activeField=await query(variant).boundingBox(),cancelBox=await cancel.boundingBox();

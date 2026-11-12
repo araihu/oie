@@ -654,7 +654,7 @@ func messageSearchContent(v view) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = tooltip.Tooltip("message-search-history-help", v.Text.IncludeEditHistory, tooltip.WithDescription(v.Text.SearchHistoryHelp), tooltip.WithTrigger(searchHistoryInfo(v)), tooltip.WithPortal(true), tooltip.WithPosition(tooltip.PositionBottom)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = tooltip.Tooltip("message-search-history-help", v.Text.IncludeEditHistory, tooltip.WithDescription(v.Text.SearchHistoryHelp), tooltip.WithTrigger(searchHistoryInfo(v)), tooltip.WithActivation(tooltip.ActivationClick), tooltip.WithPortal(true), tooltip.WithPosition(tooltip.PositionBottom)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

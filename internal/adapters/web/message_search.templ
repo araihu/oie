@@ -69,7 +69,7 @@ for _,a:=range v.Accounts {
 </div>
 <div class="oie-search-history-option">
 @checkbox.Checkbox(checkbox.Config{ID:"message-search-history",Name:"includeEditHistory",Value:"true",Label:v.Text.IncludeEditHistory,Checked:v.MessageSearch.IncludeHistory})
-@tooltip.Tooltip("message-search-history-help",v.Text.IncludeEditHistory,tooltip.WithDescription(v.Text.SearchHistoryHelp),tooltip.WithTrigger(searchHistoryInfo(v)),tooltip.WithPortal(true),tooltip.WithPosition(tooltip.PositionBottom))
+@tooltip.Tooltip("message-search-history-help",v.Text.IncludeEditHistory,tooltip.WithDescription(v.Text.SearchHistoryHelp),tooltip.WithTrigger(searchHistoryInfo(v)),tooltip.WithActivation(tooltip.ActivationClick),tooltip.WithPortal(true),tooltip.WithPosition(tooltip.PositionBottom))
 </div>
 <noscript>@button.Button(button.WithType("submit")){ {v.Text.SearchMessages} }</noscript>
 </form>
