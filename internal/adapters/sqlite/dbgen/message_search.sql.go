@@ -9,6 +9,57 @@ import (
 	"context"
 )
 
+const searchMessagePreviews = `-- name: SearchMessagePreviews :many
+WITH candidates AS (
+ SELECT sc.id,sc.message_id,
+ CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,
+ CAST(COALESCE(NULLIF(json_extract(p.payload,'$.ImageHash'),''),NULLIF(json_extract(p.payload,'$.FaviconHash'),''),'') AS TEXT) AS image_hash,
+ CASE WHEN NULLIF(json_extract(p.payload,'$.ImageHash'),'') IS NOT NULL THEN 0
+      WHEN NULLIF(json_extract(p.payload,'$.FaviconHash'),'') IS NOT NULL THEN 1 ELSE 2 END AS priority
+ FROM shared_content AS sc
+ JOIN shared_content_state AS s ON s.message_id=sc.message_id AND s.parser_version>=?1
+ LEFT JOIN message_previews AS p ON p.message_id=sc.message_id AND p.url=sc.url
+ WHERE sc.message_id IN (SELECT value FROM json_each(CAST(?2 AS TEXT)))
+), ranked AS (
+ SELECT id, message_id, kind, image_hash, priority,row_number() OVER (PARTITION BY message_id ORDER BY priority,id) AS position FROM candidates
+)
+SELECT message_id,kind,image_hash FROM ranked WHERE position=1
+`
+
+type SearchMessagePreviewsParams struct {
+	ParserVersion int64
+	MessageIds    string
+}
+
+type SearchMessagePreviewsRow struct {
+	MessageID string
+	Kind      string
+	ImageHash string
+}
+
+func (q *Queries) SearchMessagePreviews(ctx context.Context, arg SearchMessagePreviewsParams) ([]SearchMessagePreviewsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchMessagePreviews, arg.ParserVersion, arg.MessageIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchMessagePreviewsRow{}
+	for rows.Next() {
+		var i SearchMessagePreviewsRow
+		if err := rows.Scan(&i.MessageID, &i.Kind, &i.ImageHash); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const searchMessages = `-- name: SearchMessages :many
 WITH initial_revisions AS (
  SELECT entity_id,min(rowid) AS revision_row FROM message_revisions GROUP BY entity_id

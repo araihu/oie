@@ -18,6 +18,11 @@ type MessageSearchHit struct {
 	MatchedAt                                            time.Time
 	Historical                                           bool
 	MatchKind, Excerpt                                   string
+	Preview                                              *MessageSearchPreview
+}
+
+type MessageSearchPreview struct {
+	Kind, ImageHash string
 }
 
 type MessageSearchPage struct {

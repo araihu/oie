@@ -37,3 +37,19 @@ WITH initial_revisions AS (
 SELECT id,created_at_ms,payload,account_label,account_address,conversation_payload,matched_revision_id,matched_at,body,metadata,is_current,revision_key_at,revision_key_id,text_match FROM matched
 WHERE (CAST(sqlc.arg(cursor_id) AS TEXT)='' OR (created_at_ms,id,is_current,revision_key_at,revision_key_id)<(CAST(sqlc.arg(cursor_ms) AS INTEGER),CAST(sqlc.arg(cursor_id) AS TEXT),CAST(sqlc.arg(cursor_current) AS INTEGER),CAST(sqlc.arg(cursor_revision_at) AS TEXT),CAST(sqlc.arg(cursor_revision_id) AS TEXT)))
 ORDER BY created_at_ms DESC,id DESC,is_current DESC,revision_key_at DESC,revision_key_id DESC LIMIT sqlc.arg(page_limit);
+
+-- name: SearchMessagePreviews :many
+WITH candidates AS (
+ SELECT sc.id,sc.message_id,
+ CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,
+ CAST(COALESCE(NULLIF(json_extract(p.payload,'$.ImageHash'),''),NULLIF(json_extract(p.payload,'$.FaviconHash'),''),'') AS TEXT) AS image_hash,
+ CASE WHEN NULLIF(json_extract(p.payload,'$.ImageHash'),'') IS NOT NULL THEN 0
+      WHEN NULLIF(json_extract(p.payload,'$.FaviconHash'),'') IS NOT NULL THEN 1 ELSE 2 END AS priority
+ FROM shared_content AS sc
+ JOIN shared_content_state AS s ON s.message_id=sc.message_id AND s.parser_version>=sqlc.arg(parser_version)
+ LEFT JOIN message_previews AS p ON p.message_id=sc.message_id AND p.url=sc.url
+ WHERE sc.message_id IN (SELECT value FROM json_each(CAST(sqlc.arg(message_ids) AS TEXT)))
+), ranked AS (
+ SELECT *,row_number() OVER (PARTITION BY message_id ORDER BY priority,id) AS position FROM candidates
+)
+SELECT message_id,kind,image_hash FROM ranked WHERE position=1;

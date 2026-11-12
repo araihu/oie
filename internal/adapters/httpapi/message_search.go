@@ -54,6 +54,12 @@ func (s *Server) SearchMessages(ctx context.Context, r engineapi.SearchMessagesR
 		if hit.SenderAvatarHash != "" {
 			item.SenderAvatarHash = &hit.SenderAvatarHash
 		}
+		if p := hit.Preview; p != nil {
+			item.Preview = &engineapi.MessageSearchPreview{Kind: engineapi.MessageSearchPreviewKind(p.Kind)}
+			if p.ImageHash != "" {
+				item.Preview.ImageHash = &p.ImageHash
+			}
+		}
 		out.Items = append(out.Items, item)
 	}
 	if page.NextCursor != "" {

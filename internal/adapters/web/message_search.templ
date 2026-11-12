@@ -189,6 +189,8 @@ templ messageSearchHit(v view,hit engineapi.MessageSearchHit){
 }}
 <article data-message-search-hit={hit.Message.Id+":"+hit.MatchedRevisionId} data-search-message={hit.Message.Id} data-search-revision={hit.MatchedRevisionId} data-search-historical={strconv.FormatBool(hit.Historical)} data-search-match-kind={string(hit.MatchKind)}>
 @link.Link(v.messageSearchSourceHref(hit.Message),link.WithRootClass("oie-message-search-hit"),link.WithAttrs(templ.Attributes{"data-message-search-source":""})){
+<div class="oie-message-search-result">
+<div class="oie-message-search-text">
 <div class="oie-search-result-identity">
 <div class="oie-search-avatar" aria-hidden="true">@avatar.Avatar(senderAvatar)</div>
 <div class="oie-search-result-copy">
@@ -214,9 +216,34 @@ if hit.MatchKind=="metadata" {
 @badge.Badge(badge.Config{Label:v.Text.SearchMetadata,Size:badge.SizeSM,Appearance:badge.AppearanceSoft})
 }
 <p class="oie-message-search-excerpt">{hit.Excerpt}</p>
+</div>
+if hit.Preview != nil && !hit.Historical {
+@messageSearchPreview(*hit.Preview)
+}
+</div>
 <time data-message-search-time datetime={hit.Message.CreatedAt.Format(time.RFC3339)}>{hit.Message.CreatedAt.Format("2006-01-02 15:04")}</time>
 }
 </article>
+}
+
+templ messageSearchPreview(p engineapi.MessageSearchPreview){
+<span class="oie-message-search-preview" aria-hidden="true" data-search-preview={string(p.Kind)}>
+switch p.Kind {
+case "video":
+@glyph(heroicons.Icon16SolidPlay)
+case "audio":
+@glyph(heroicons.Icon16SolidMicrophone)
+case "image":
+@glyph(heroicons.Icon16SolidRectangleGroup)
+case "document":
+@glyph(heroicons.Icon16SolidDocumentText)
+default:
+@glyph(heroicons.Icon16SolidLink)
+}
+if source:=mediaSource(p.ImageHash);source!="" {
+<span class="oie-message-search-preview-image" style={templ.SafeCSS("background-image:url("+source+")")}></span>
+}
+</span>
 }
 
 templ messageSearchConversations(v view){

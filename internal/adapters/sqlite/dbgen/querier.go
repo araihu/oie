@@ -136,6 +136,7 @@ type Querier interface {
 	ResetRoomReactionPrivacy(ctx context.Context, accountID string) error
 	ResolveMessageAlias(ctx context.Context, aliasID string) (string, error)
 	SearchContacts(ctx context.Context, arg SearchContactsParams) ([]SearchContactsRow, error)
+	SearchMessagePreviews(ctx context.Context, arg SearchMessagePreviewsParams) ([]SearchMessagePreviewsRow, error)
 	SearchMessages(ctx context.Context, arg SearchMessagesParams) ([]SearchMessagesRow, error)
 	SetOperationResult(ctx context.Context, arg SetOperationResultParams) error
 	SetRoomObservation(ctx context.Context, arg SetRoomObservationParams) error

@@ -96,8 +96,15 @@ search response because the public SearchModal ranks a client-side result set.
 In the dialog and sidebar, Down and Up move focus between results. Up from the
 first result returns to the field. Enter opens the focused result or the first
 result when the field has focus. Tab also reaches the results and controls.
+Escape cancels the active sidebar search and returns focus to the field. An
+open account picker or help tooltip handles Escape first when it has focus.
 Within a conversation, Down and Up jump to older and newer matches, just as
 Enter and Shift+Enter do.
+
+Each current message result can show one compact preview of indexed shared
+content. The search response carries the category and any cached image digest,
+preferring artwork over a site icon. The result uses a category icon when no
+image is available. Search reads existing previews and does not enqueue downloads.
 
 The existing `conversation-search` field opens global search when the user enters
 a non-blank query. Focusing the field keeps the conversation list visible.

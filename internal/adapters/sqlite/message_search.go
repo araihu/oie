@@ -95,6 +95,9 @@ func (s *Store) SearchMessages(ctx context.Context, query domain.MessageSearchQu
 		hit.Excerpt = messageSearchExcerpt(content, query.Search)
 		page.Items = append(page.Items, hit)
 	}
+	if err = loadSearchPreviews(ctx, q, page.Items); err != nil {
+		return page, err
+	}
 	if more {
 		last := rows[len(rows)-1]
 		page.NextCursor = application.EncodeMessageSearchCursor(application.MessageSearchCursor{Scope: query.ScopeHash, Milliseconds: last.CreatedAtMs, ID: domain.ID(last.ID), Current: last.IsCurrent, RevisionAt: last.RevisionKeyAt, RevisionID: domain.ID(last.RevisionKeyID)})
@@ -109,6 +112,33 @@ func (s *Store) SearchMessages(ctx context.Context, query domain.MessageSearchQu
 	}
 	page.MetadataIndexing = domain.SharedContentIndex{State: state, IndexedMessages: status.IndexedMessages, TotalMessages: status.TotalMessages}
 	return page, tx.Commit()
+}
+
+func loadSearchPreviews(ctx context.Context, q *dbgen.Queries, hits []domain.MessageSearchHit) error {
+	current := make(map[string]int, len(hits))
+	ids := make([]string, 0, len(hits))
+	for i, hit := range hits {
+		if !hit.Historical {
+			id := string(hit.Message.ID)
+			current[id] = i
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	previews, err := q.SearchMessagePreviews(ctx, dbgen.SearchMessagePreviewsParams{MessageIds: jsonText(ids), ParserVersion: application.SharedContentVersion})
+	if err != nil {
+		return err
+	}
+	for _, row := range previews {
+		preview := domain.MessageSearchPreview{Kind: row.Kind}
+		if application.ValidImageHash(row.ImageHash) {
+			preview.ImageHash = row.ImageHash
+		}
+		hits[current[row.MessageID]].Preview = &preview
+	}
+	return nil
 }
 
 func searchSenderAddress(ctx context.Context, q *dbgen.Queries, m domain.Message, c domain.Conversation, accountAddress string) (string, error) {

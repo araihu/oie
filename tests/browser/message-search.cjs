@@ -108,6 +108,9 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       if(!photo)return send(404,{code:'not_found'});
       res.setHeader('Content-Type','image/png');return res.end(photo);
     }
+    if(u.pathname==='/api/v1/media/'+conversationHash){
+      res.setHeader('Content-Type','image/png');res.setHeader('ETag','"'+conversationHash+'"');return res.end(conversationPhoto);
+    }
     if (u.pathname.endsWith('/avatars')||u.pathname.endsWith('/previews')||u.pathname.endsWith('/message-stars')||u.pathname==='/api/v1/shared-content') return send(200,{items:[]});
     if (u.pathname === '/api/v1/messages/search') {
       const accountIds=u.searchParams.getAll('accountIds').sort();
@@ -122,6 +125,8 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
         const c=[...chats,archiveRoom].find(c=>c.id===m.conversationId),a=accounts.find(a=>a.id===m.accountId);
         const senderAddress=m.isOwn?a.address:c.kind==='direct'?c.address:undefined;
         const base={message:m,accountLabel:a.label,conversationTitle:c.title,conversationAddress:c.address,senderAddress,matchedAt:m.createdAt,matchKind:'text',...(m===corpus[54]?{senderAvatarHash:senderHash}:{})};
+        if(m===layoutMessages[0])base.preview={kind:'link',imageHash:conversationHash};
+        if(m===layoutMessages[1])base.preview={kind:'document'};
         const rows=fold(m.originalText).includes(fold(q))?[{...base,matchedRevisionId:m===corpus[1]?id(9001):m.revisionId,historical:false,excerpt:m.originalText}]:[];
         if(history&&m===corpus[0]&&fold('Pineapple original').includes(fold(q)))rows.push(...[2,1].map(n=>({...base,matchedRevisionId:id(8000+n),matchedAt:`2026-11-09T12:00:0${n}Z`,historical:true,excerpt:'Pineapple prior version '+n})));
         return rows;
@@ -491,6 +496,11 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       await layout.clock.setFixedTime(new Date('2026-11-10T03:15:00Z'));
       await layout.goto(base+'/?lang='+lang);
       await layout.waitForFunction(()=>window.OieRuntime?.generation>0);
+      let releasePreview;
+      await layout.route('**/ui/media/'+conversationHash,async route=>{
+        await new Promise(resolve=>releasePreview=resolve);
+        await route.continue();
+      });
       await query(layout).fill('brigada-layout');await settled(layout,'brigada-layout');
       const room=layout.locator('[data-message-search-conversation="'+layoutRoom.id+'"]');
       assert.equal(await room.locator('strong').textContent(),'brigada-layout');
@@ -507,9 +517,20 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       assert.equal(roomStyle.width,'2px');
       assert.notEqual((await senderStyle(previous)).name,roomStyle.name,'the fixture room nicknames use different hues');
       assert.equal((await today.locator('.oie-message-search-context').innerText()).replace(/\s+/g,' ').trim(),'Personal · brigada-layout (grupos.exemplo.org)');
-      assert.deepEqual(await today.locator('a').evaluate(anchor=>[...anchor.children].map(node=>node.matches('time')?'time':node.className)),[
-        'oie-search-result-identity','oie-message-search-context','oie-message-search-excerpt','time'
+      assert.deepEqual(await today.locator('.oie-message-search-text').evaluate(text=>[...text.children].map(node=>node.className)),[
+        'oie-search-result-identity','oie-message-search-context','oie-message-search-excerpt'
       ]);
+      const thumbnail=today.locator('[data-search-preview=link]'),excerpt=today.locator('.oie-message-search-excerpt');
+      await until(()=>releasePreview,'held search thumbnail');
+      const beforeImage=await thumbnail.boundingBox();
+      assert(beforeImage.x>=(await excerpt.boundingBox()).x+(await excerpt.boundingBox()).width,'the thumbnail is on the right of the excerpt');
+      assert.equal(beforeImage.width,beforeImage.height);
+      const imageResponse=layout.waitForResponse(response=>response.url().endsWith('/ui/media/'+conversationHash));
+      releasePreview();assert.equal((await imageResponse).status(),200);
+      await layout.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      assert.deepEqual(await thumbnail.boundingBox(),beforeImage,'loading the image preserves its rectangle');
+      assert.equal(await previous.locator('[data-search-preview=document] .oie-message-search-preview-image').count(),0);
+      await layout.unroute('**/ui/media/'+conversationHash);
       const todayText=lang==='pt-BR'?'Hoje 00:05':'Today 12:05 AM';
       const previousText=lang==='pt-BR'?'9 de nov. de 2026 23:50':'Nov 9, 2026 11:50 PM';
       assert.equal(await today.locator('time').textContent(),todayText);
@@ -680,6 +701,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       });
       await quickQuery.fill('Unrelated delayed shortcut');await until(()=>releaseQuick,'held quick search response');
       await quickQuery.fill('brigada-layout');await quickMessage.waitFor({state:'visible'});
+      assert.equal(await quickMessage.locator('[data-search-preview=link]').count(),1);
       releaseQuick();await delayedQuick;await keyboard.unroute('**/ui/message-search?**');
       assert.equal(await quickHits.count(),2);
       assert.equal(await sidebar.inputValue(),'Telescope');
@@ -696,6 +718,25 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       assert.equal(await sidebar.inputValue(),'Telescope');
       if(!mobile)assert.equal(await previous.inputValue(),'Draft during quick search');
 
+      await sidebar.press('ArrowDown');
+      assert(await sidebarFirst.evaluate(link=>link===document.activeElement),'sidebar focus is on a result before cancelling');
+      await keyboard.keyboard.press('Escape');
+      await keyboard.locator('#message-search-slot').waitFor({state:'hidden'});
+      assert(await sidebar.evaluate(input=>input===document.activeElement));
+      assert.equal(new URL(keyboard.url()).searchParams.has('searchMode'),false);
+
+      await sidebar.fill('Telescope');await settled(keyboard,'Telescope');
+      const accountTrigger=keyboard.locator('#message-search-account-trigger');
+      await accountTrigger.press('Enter');
+      await keyboard.locator('#message-search-account [role=listbox]').waitFor({state:'visible'});
+      await accountTrigger.press('Escape');
+      await keyboard.locator('#message-search-account [role=listbox]').waitFor({state:'hidden'});
+      assert.equal(await sidebar.inputValue(),'Telescope');
+      await accountTrigger.press('Escape');
+      await keyboard.locator('#message-search-slot').waitFor({state:'hidden'});
+      assert(await sidebar.evaluate(input=>input===document.activeElement));
+
+      await sidebar.fill('Telescope');await settled(keyboard,'Telescope');
       await keyboard.keyboard.press(shortcut);await quick.waitFor({state:'visible'});
       await quickQuery.fill('CAFÉ 😀');await quickMessage.waitFor({state:'visible'});
       await quickQuery.press('Enter');await quick.waitFor({state:'hidden'});
