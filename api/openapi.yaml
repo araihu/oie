@@ -1571,6 +1571,10 @@ paths:
         required: true
         description: Bare XMPP room address.
         schema: {type: string, minLength: 3, maxLength: 2047}
+      - name: discoveredServiceOnly
+        in: query
+        description: Restrict automatic lookups to MUC services advertised by the account server. Other destinations return unavailable without an XMPP request.
+        schema: {type: boolean, default: false}
       responses:
         '200':
           description: Available public room information or its lookup state.
@@ -2273,6 +2277,10 @@ paths:
         description: Stable Idempotency-Key reference.
         schema:
           $ref: '#/components/schemas/ID'
+      - name: X-Oie-Expected-Conversation-Kind
+        in: header
+        description: Conversation kind observed by the caller. A changed kind rejects a new send before acceptance.
+        schema: {type: string, enum: [direct, room]}
       requestBody:
         required: true
         description: Structured operation input.
@@ -3621,6 +3629,9 @@ components:
           $ref: '#/components/schemas/Message'
         currentRoomSession:
           $ref: '#/components/schemas/RoomSession'
+        roomAddressInUse:
+          type: boolean
+          description: The address has a direct conversation with retained content that cannot be converted to a room.
         replySourceChanged:
           type: boolean
           description: True on a state conflict caused by an unavailable or changed reply source or excerpt when the request included expectedReplyRevisionId.

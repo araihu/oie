@@ -178,7 +178,7 @@ func (s *Server) messageEditHistory(w http.ResponseWriter, r *http.Request) {
 	for _, item := range page.Items {
 		content, exists := formatted[item.OriginalText]
 		if !exists && ctx.Err() == nil {
-			content = formattedMessage(ctx, item.OriginalText)
+			content, _ = formattedMessageWithInvitations(ctx, item.OriginalText, invitationScope{account, conversation, v.Locale})
 			formatted[item.OriginalText] = content
 		}
 		h.Items = append(h.Items, historyItemView{MessageEditHistoryItem: item, Formatted: content})

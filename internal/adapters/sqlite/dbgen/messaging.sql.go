@@ -18,6 +18,18 @@ func (q *Queries) AcquireWriteLock(ctx context.Context) error {
 	return err
 }
 
+const canPromoteRoomPlaceholder = `-- name: CanPromoteRoomPlaceholder :one
+SELECT NOT EXISTS(SELECT 1 FROM messages WHERE messages.conversation_id=?1)
+   AND NOT EXISTS(SELECT 1 FROM staged_attachments WHERE staged_attachments.conversation_id=?1)
+`
+
+func (q *Queries) CanPromoteRoomPlaceholder(ctx context.Context, roomID string) (*bool, error) {
+	row := q.db.QueryRowContext(ctx, canPromoteRoomPlaceholder, roomID)
+	var column_1 *bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const findConversation = `-- name: FindConversation :one
 SELECT id, revision_id, account_id, address, peer_id, payload, activity_sequence, unread_count, archived, favorite FROM conversations WHERE account_id=? AND address=?
 `

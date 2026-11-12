@@ -9,7 +9,7 @@ import (
 )
 
 func (s *Server) PreviewRoom(ctx context.Context, r engineapi.PreviewRoomRequestObject) (engineapi.PreviewRoomResponseObject, error) {
-	preview, err := s.engine.PreviewRoom(ctx, domain.ID(r.AccountId), r.Params.Address)
+	preview, err := s.engine.PreviewRoom(ctx, domain.ID(r.AccountId), r.Params.Address, r.Params.DiscoveredServiceOnly != nil && *r.Params.DiscoveredServiceOnly)
 	if err != nil {
 		return nil, err
 	}

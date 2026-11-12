@@ -164,7 +164,7 @@ func (s *Server) formatTimeline(ctx context.Context, v *view, items []engineapi.
 	for i := range v.Messages {
 		m := &v.Messages[i]
 		m.Presentation = videoPresentation(imagePresentation(m.displayBody(), v.MessagePreviews[m.Id]), v.messageVideos(m.Id))
-		m.Formatted, m.RoomInvitations = formattedMessageWithInvitations(ctx, m.Presentation)
+		m.Formatted, m.RoomInvitations = formattedMessageWithInvitations(ctx, m.Presentation, invitationScope{m.AccountId, m.ConversationId, v.Locale})
 	}
 }
 
@@ -273,7 +273,7 @@ func (s *Server) timelinePage(w http.ResponseWriter, r *http.Request) {
 		}
 		delete(v.TimelineAliases, id)
 		if !timelineHiddenSchedule(*m) && (m.Id != id || mode != "context" && m.TimelineAt != nil) {
-			formatted, rooms := formattedMessageWithInvitations(ctx, m.OriginalText)
+			formatted, rooms := formattedMessageWithInvitations(ctx, m.OriginalText, invitationScope{m.AccountId, m.ConversationId, v.Locale})
 			v.TimelineAliases[id] = messageView{Message: *m, Presentation: m.OriginalText, Formatted: formatted, RoomInvitations: rooms}
 		}
 		return m, 200

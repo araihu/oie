@@ -21,7 +21,7 @@ const accounts = [
   {id: bob, revisionId: revision, label: 'Bob', address: 'bob@fixture', protocol: 'xmpp', createdAt: at}
 ];
 const previews = [], commands = [], streams = new Set();
-let held, destination, roomState = 'joining', cursor = 0, conflict = false;
+let held, destination, roomState = 'joining', cursor = 0, conflict = false, trustedService = true;
 
 async function apiHandler(req, res) {
   const u = new URL(req.url, 'http://fixture');
@@ -44,7 +44,9 @@ async function apiHandler(req, res) {
     return;
   }
   if (u.pathname.endsWith('/room-preview')) {
-    previews.push({account: u.pathname.split('/')[4], address: u.searchParams.get('address')});
+    const scoped = u.searchParams.get('discoveredServiceOnly') === 'true';
+    if (scoped && !trustedService) return send(200, {address, state: 'unavailable'});
+    previews.push({account: u.pathname.split('/')[4], address: u.searchParams.get('address'), scoped});
     if (held) await held;
     if (u.searchParams.get('address') === 'missing@fixture') return send(200, {address: 'missing@fixture', state: 'not_found'});
     return send(200, {address, state: 'known', name: 'Saberes <script>', description: 'Bem-vindos!', topic: 'Encontro', occupantCount: 17, avatarHash});
@@ -115,6 +117,7 @@ async function waitFor(predicate) {
     await waitFor(() => previews.length === 1);
     assert.equal(previews[0].account, alice);
     assert.equal(previews[0].address, address);
+    assert.equal(previews[0].scoped, true);
     assert.equal(commands.length, 0);
     const foreign = await page.request.post(base + '/ui/rooms/preview', {form: {accountId: alice, address}});
     assert.equal(foreign.status(), 403);
@@ -156,6 +159,7 @@ async function waitFor(predicate) {
     await form.getByRole('option', {name: 'Bob · bob@fixture'}).click();
     await waitFor(() => previews.length === 2);
     assert.deepEqual(previews.map(value => value.account), [alice, bob]);
+    assert(previews.every(value => !value.scoped));
     release();
     held = undefined;
     await preview.getByText('Saberes <script>', {exact: true}).waitFor();
@@ -173,15 +177,28 @@ async function waitFor(predicate) {
     await form.getByRole('combobox').click();
     await form.getByRole('option', {name: 'Bob · bob@fixture'}).click();
     await form.locator('[name=nickname]').fill('Leitora');
-    const joined = page.waitForResponse(res => res.url() === base + '/ui/rooms/open');
+    await page.route('**/ui/rooms/open', async route => {
+      await route.fetch();
+      await route.abort();
+    }, {times: 1});
     await form.getByRole('button', {name: 'Entrar na sala', exact: true}).click();
+    await waitFor(() => commands.length === 1);
+    await page.reload();
+    await page.locator('body[data-oie-live-ready=true]').waitFor();
+    await page.locator('.oie-rendered-message [data-room-invitation]').click();
+    assert.equal(await form.locator('[name=nickname]').inputValue(), 'Leitora');
+    assert.equal(await form.locator('[name=nickname]').getAttribute('readonly'), '');
+    assert.equal(await form.locator('[name=accountId]').inputValue(), bob);
+    const joined = page.waitForResponse(res => res.url() === base + '/ui/rooms/open');
+    await form.locator('button[type=submit]').click();
     const joinResponse = await joined;
     assert.equal(joinResponse.status(), 200, await joinResponse.text());
     await page.waitForURL(url => url.searchParams.get('chat') === room).catch(async error => {
       throw new Error(JSON.stringify({url: page.url(), response: await joinResponse.json(), commands, errors}), {cause: error});
     });
     await page.locator('#room-session-status[data-room-state=joining]').waitFor();
-    assert.deepEqual(commands.map(({key, ...command}) => command), [{accountId: bob, address, action: 'join', nickname: 'Leitora', name: ''}]);
+    assert.deepEqual(commands[1], commands[0]);
+    assert.deepEqual(commands.map(({key, ...command}) => command), Array(2).fill({accountId: bob, address, action: 'join', nickname: 'Leitora', name: ''}));
     roomState = 'joined';
     cursor++;
     for (const stream of streams) stream.write('id: ' + engine + ':' + cursor + '\nevent: conversation.room_session_changed\ndata: {}\n\n');
@@ -202,9 +219,9 @@ async function waitFor(predicate) {
     conflict = false;
     await create.getByRole('button', {name: 'Create room'}).click();
     await page.waitForURL(url => url.searchParams.get('chat') === room);
-    assert.equal(commands[1].key, commands[2].key);
-    assert.equal(commands[2].action, 'create');
-    assert.equal(commands[2].name, 'A new room');
+    assert.equal(commands[2].key, commands[3].key);
+    assert.equal(commands[3].action, 'create');
+    assert.equal(commands[3].name, 'A new room');
 
     await page.goto(base + '/?' + new URLSearchParams({chat, account: alice, open: 'join-room', lang: 'en'}));
     await form.waitFor();
@@ -225,20 +242,35 @@ async function waitFor(predicate) {
     await previewButton.click();
     await preview.getByText('Bem-vindos!').waitFor();
     assert.equal(previews.at(-1).address, address);
-    assert.equal(commands.length, 3);
+    assert.equal(commands.length, 4);
 
     const fallback = await browser.newPage({viewport: {width: 390, height: 860}, locale: 'en'});
     fallback.on('pageerror', error => errors.push(error.message));
-    await fallback.route('**/ui/rooms/preview', route => {
-      const form = new URLSearchParams(route.request().postData());
-      return form.get('presentation') === 'message' ? route.fulfill({status: 204}) : route.continue();
-    });
+    trustedService = false;
+    const beforeFallback = previews.length;
     await fallback.goto(base + '/?' + new URLSearchParams({chat, account: alice, lang: 'en'}));
-    await fallback.locator('[data-room-bubble]').getByText('Room invitation', {exact: true}).waitFor();
-    await fallback.locator('[data-room-bubble]').getByRole('link', {name: 'View room'}).click();
-    await fallback.locator('#join-room-form').getByText('Bem-vindos!').waitFor();
-    assert.equal(commands.length, 3);
+    const fallbackCard = fallback.locator('[data-room-bubble]');
+    await fallbackCard.getByText('Room invitation', {exact: true}).waitFor();
+    const fallbackLink = fallbackCard.getByRole('link', {name: /View room/});
+    const href = await fallbackLink.getAttribute('href');
+    const params = new URL(href, base).searchParams;
+    assert.equal(params.get('chat'), chat);
+    assert.equal(params.get('account'), alice);
+    assert.equal(params.get('lang'), 'en');
+    assert.equal(previews.length, beforeFallback);
+    await fallback.goto(base + href);
+    const newTabForm = fallback.locator('#join-room-form');
+    await newTabForm.waitFor();
+    assert.equal(await newTabForm.locator('[name=accountId]').inputValue(), alice);
+    assert.equal(await newTabForm.locator('[name=address]').inputValue(), address);
+    assert.equal(previews.length, beforeFallback);
+    await newTabForm.getByRole('button', {name: 'Preview room'}).click();
+    await newTabForm.getByText('Bem-vindos!').waitFor();
+    await fallbackCard.getByText('Saberes <script>', {exact: true}).waitFor();
+    assert.equal(previews.length, beforeFallback + 1);
+    assert.equal(commands.length, 4);
     await fallback.close();
+    trustedService = true;
 
     const artifacts = path.join(__dirname, 'artifacts');
     await fs.mkdir(artifacts, {recursive: true});
@@ -250,12 +282,15 @@ async function waitFor(predicate) {
           view.on('pageerror', error => errors.push(error.message));
           await view.goto(base + '/?' + new URLSearchParams({chat, account: alice, open: 'join-room', room: address, theme: mode, lang: 'en'}));
           await view.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+          await view.locator('#join-room-form').getByRole('button', {name: 'Preview room'}).click();
           await view.locator('#join-room-form').getByText('Bem-vindos!').waitFor();
           await view.locator('[data-room-bubble]').getByText('Saberes <script>', {exact: true}).waitFor();
           assert(await view.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
           await view.addScriptTag({path: require.resolve('axe-core/axe.min.js')});
           const scan = id => view.evaluate(selector => window.axe.run(selector,
             {runOnly: {type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa']}}), id);
+          const cardIssues = await scan('[data-room-bubble]');
+          assert.deepEqual(cardIssues.violations.map(value => value.id), [], ['card', width, theme, mode].join(' '));
           const joinedIssues = await scan('#join-room-body');
           assert.deepEqual(joinedIssues.violations.map(value => value.id), [], ['join', width, theme, mode].join(' '));
           await view.screenshot({path: path.join(artifacts, `room-join-${width}-${theme}-${mode}.png`), animations: 'disabled'});

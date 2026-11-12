@@ -2,6 +2,9 @@
 SELECT * FROM conversations WHERE id=?;
 -- name: FindConversation :one
 SELECT * FROM conversations WHERE account_id=? AND address=?;
+-- name: CanPromoteRoomPlaceholder :one
+SELECT NOT EXISTS(SELECT 1 FROM messages WHERE messages.conversation_id=sqlc.arg(room_id))
+   AND NOT EXISTS(SELECT 1 FROM staged_attachments WHERE staged_attachments.conversation_id=sqlc.arg(room_id));
 -- name: InsertConversation :exec
 INSERT INTO conversations(id,revision_id,account_id,address,peer_id,payload,activity_sequence) VALUES(?,?,?,?,?,?,?);
 -- name: InsertConversationRevision :exec

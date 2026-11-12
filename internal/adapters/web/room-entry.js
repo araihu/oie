@@ -40,7 +40,14 @@ window.OieRuntime.register('room-entry', life => {
         return;
       }
       const result = await response.text();
-      if (request === current && !life.signal.aborted) preview.innerHTML = result;
+      if (request !== current || life.signal.aborted) return;
+      preview.innerHTML = result;
+      const summary = preview.querySelector('template[data-room-preview-summary]');
+      if (summary) {
+        document.dispatchEvent(new CustomEvent('oie:room-preview-resolved', {
+          detail: {address: summary.dataset.roomPreviewSummary, accountId: body.get('accountId'), summary: summary.innerHTML}
+        }));
+      }
     } catch {
       if (request === current && !life.signal.aborted) preview.textContent = preview.dataset.unavailable;
     }
@@ -49,15 +56,21 @@ window.OieRuntime.register('room-entry', life => {
   function openDrawer(id, trigger, address) {
     activeDrawer = id;
     if (trigger) lastTrigger = trigger;
-    if (address && join) {
-      join.elements.address.value = address;
+    if (address && join && join.dataset.busy !== 'true') {
       const currentAccount = document.body.dataset.accountId;
-      if (join.dataset.roomAccountIds.split(' ').includes(currentAccount)) {
-        const account = join.elements.accountId;
-        account.value = currentAccount;
+      const account = join.elements.accountId;
+      const priorAddress = join.elements.address.value;
+      const recovering = join.dataset.roomEntryPending === 'true' && priorAddress === address;
+      let selected = account.value;
+      if (!recovering && join.dataset.roomAccountIds.split(' ').includes(currentAccount)) selected = currentAccount;
+      clearPreview();
+      document.dispatchEvent(new CustomEvent('oie:room-entry-target', {detail: {form: join, account: selected, address}}));
+      if (join.dataset.roomEntryPending !== 'true') {
+        join.elements.address.value = address;
+        account.value = selected;
         account.dispatchEvent(new Event('input', {bubbles: true}));
+        void showPreview();
       }
-      void showPreview();
     }
     drawer('open', id);
   }
@@ -95,7 +108,6 @@ window.OieRuntime.register('room-entry', life => {
   const showInitial = () => {
     if (target === 'join-room' || target === 'create-room') {
       openDrawer(target);
-      if (target === 'join-room' && join?.elements.address.value && new URLSearchParams(location.search).has('room')) void showPreview();
     } else if (target === 'room-session' && document.querySelector('#room-session-status:not([data-room-state="joined"])')) {
       openedStatus = true;
       window.dispatchEvent(new CustomEvent('modal:open', {detail: {id: 'room-session-dialog'}}));
@@ -120,6 +132,7 @@ window.OieRuntime.register('room-invitations', life => {
 
   const visible = new Set();
   const requests = new Map();
+  const resolved = new Map();
   const applied = new WeakSet();
   const watched = new WeakSet();
   let active = 0;
@@ -136,6 +149,24 @@ window.OieRuntime.register('room-invitations', life => {
     }
   }
 
+  function apply(card, html) {
+    const summary = card.querySelector('[data-room-bubble-summary]');
+    if (html && summary && timeline.contains(card) && !life.signal.aborted) summary.innerHTML = html;
+  }
+
+  life.on(document, 'oie:room-preview-resolved', event => {
+    const {address, accountId: selectedAccount, summary} = event.detail;
+    if (selectedAccount !== accountId) return;
+    if (resolved.size >= 12) resolved.delete(resolved.keys().next().value);
+    resolved.set(address, summary);
+    for (const card of timeline.querySelectorAll('[data-room-bubble]')) {
+      if (card.dataset.roomBubble === address && card.dataset.roomBubbleAccount === accountId) {
+        apply(card, summary);
+        card.dataset.roomBubbleReady = 'true';
+      }
+    }
+  });
+
   function pump() {
     if (life.signal.aborted) return;
     for (const card of visible) {
@@ -144,7 +175,7 @@ window.OieRuntime.register('room-invitations', life => {
         continue;
       }
       const address = card.dataset.roomBubble;
-      let pending = requests.get(address);
+      let pending = resolved.has(address) ? Promise.resolve(resolved.get(address)) : requests.get(address);
       if (!pending) {
         if (active >= 2 || requests.size >= 12) continue;
         active++;
@@ -158,8 +189,9 @@ window.OieRuntime.register('room-invitations', life => {
       visible.delete(card);
       observer.unobserve(card);
       void pending.then(html => {
-        const summary = card.querySelector('[data-room-bubble-summary]');
-        if (html && summary && timeline.contains(card) && !life.signal.aborted) summary.innerHTML = html;
+        if (!html || card.dataset.roomBubbleReady === 'true' || life.signal.aborted) return;
+        apply(card, html);
+        card.dataset.roomBubbleReady = 'true';
       });
     }
   }

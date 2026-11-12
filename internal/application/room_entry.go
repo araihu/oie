@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -9,8 +10,21 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
+var ErrRoomAddressConflict = errors.New("room address is already used by a direct conversation with retained content")
+
+type roomNicknameValidator interface {
+	ValidateRoomNickname(domain.Account, string) error
+}
+
+func (e *Engine) checkRoomNickname(account domain.Account, nickname string) error {
+	if validator, ok := e.protocols.(roomNicknameValidator); ok {
+		return validator.ValidateRoomNickname(account, nickname)
+	}
+	return nil
+}
+
 type RoomPreviewProvider interface {
-	PreviewRoom(context.Context, domain.Account, string) (domain.RoomPreview, []byte, error)
+	PreviewRoom(context.Context, domain.Account, string, bool) (domain.RoomPreview, []byte, error)
 }
 
 type RoomCreator interface {
@@ -30,7 +44,7 @@ func (e *Engine) roomTarget(ctx context.Context, accountID domain.ID, address st
 	return a, canonical, err
 }
 
-func (e *Engine) PreviewRoom(ctx context.Context, accountID domain.ID, address string) (domain.RoomPreview, error) {
+func (e *Engine) PreviewRoom(ctx context.Context, accountID domain.ID, address string, discoveredServiceOnly bool) (domain.RoomPreview, error) {
 	a, canonical, err := e.roomTarget(ctx, accountID, address)
 	if err != nil {
 		return domain.RoomPreview{}, err
@@ -39,7 +53,7 @@ func (e *Engine) PreviewRoom(ctx context.Context, accountID domain.ID, address s
 	if !ok {
 		return domain.RoomPreview{}, ErrProtocolUnavailable
 	}
-	preview, photo, err := p.PreviewRoom(ctx, a, canonical)
+	preview, photo, err := p.PreviewRoom(ctx, a, canonical, discoveredServiceOnly)
 	if err != nil {
 		return domain.RoomPreview{}, err
 	}
@@ -63,7 +77,7 @@ func (e *Engine) OpenRoom(ctx context.Context, key, accountID domain.ID, address
 	if !validID(key) || !validRoomNickname(nickname) || !validRoomLabel(name) || (!create && name != "") {
 		return ConversationResult{}, ErrInvalid
 	}
-	_, canonical, err := e.roomTarget(ctx, accountID, address)
+	account, canonical, err := e.roomTarget(ctx, accountID, address)
 	if err != nil {
 		return ConversationResult{}, err
 	}
@@ -74,6 +88,9 @@ func (e *Engine) OpenRoom(ctx context.Context, key, accountID domain.ID, address
 		if _, ok := e.protocols.(RoomCreator); !ok {
 			return ConversationResult{}, ErrProtocolUnavailable
 		}
+	}
+	if err := e.checkRoomNickname(account, nickname); err != nil {
+		return ConversationResult{}, err
 	}
 	repo, err := e.messaging()
 	if err != nil {

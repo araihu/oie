@@ -77,7 +77,7 @@ templ roomEntryDrawer(v view, create bool) {
 						<div class="oie-room-preview" data-room-preview role="status" aria-live="polite" data-loading={v.Text.RoomPreviewLoading} data-unavailable={v.Text.RoomPreviewUnavailable} data-invalid={v.Text.RoomAddressInvalid} hidden></div>
 					}
 					@textinput.TextInput(textinput.Config{ID:target+"-nickname",Name:"nickname",Label:v.Text.RoomNickname,Value:nickname,InputAttrs:templ.Attributes{"maxlength":"100"}})
-					@button.Button(button.WithType("submit")){ {title} }
+					@button.Button(button.WithType("submit"),button.WithAttrs(templ.Attributes{"data-room-entry-label":title})){ {title} }
 					<div data-form-feedback role="status" aria-live="polite"></div>
 				}
 			}
@@ -92,9 +92,10 @@ func roomPreviewName(preview engineapi.RoomPreview) string {
 	return *preview.Name
 }
 
-templ roomPreviewContent(text copy, preview engineapi.RoomPreview) {
+templ roomPreviewContent(text copy, preview engineapi.RoomPreview, address string) {
 	switch preview.State {
 		case "known":
+			<template data-room-preview-summary={ address }>@roomInvitationSummary(text,preview)</template>
 			<div class="oie-room-preview-heading">
 				if preview.AvatarHash != nil && validAvatarHash(*preview.AvatarHash) {
 					@avatar.Avatar(avatar.Config{Name:roomPreviewName(preview),Src:"/ui/avatars/"+*preview.AvatarHash,Size:avatar.SizeMD})
@@ -124,17 +125,17 @@ templ roomPreviewContent(text copy, preview engineapi.RoomPreview) {
 	}
 }
 
-templ roomInvitationCard(v view, account, address string) {
-	<div class="oie-room-invitation" data-room-bubble={ address } data-room-bubble-account={ account }>
-		@card.Card(card.Config{Density:card.DensityCompact, Body:roomInvitationCardBody(v,address)})
+templ roomInvitationCard(v view, scope invitationScope, address string) {
+	<div class="oie-room-invitation" data-room-bubble={ address } data-room-bubble-account={ scope.account }>
+		@card.Card(card.Config{Density:card.DensityCompact, Body:roomInvitationCardBody(v,scope,address)})
 	</div>
 }
 
-templ roomInvitationCardBody(v view, address string) {
+templ roomInvitationCardBody(v view, scope invitationScope, address string) {
 	<div class="oie-room-invitation-summary" data-room-bubble-summary>
 		@roomInvitationSummary(v.Text,engineapi.RoomPreview{Address:address})
 	</div>
-	@link.Link(roomInvitationHref(address),link.WithRootClass("oie-room-invitation-action"),link.WithAttrs(templ.Attributes{"data-room-invitation":address})){
+	@link.Link(scope.href(address),link.WithRootClass("oie-room-invitation-action"),link.WithAttrs(templ.Attributes{"data-room-invitation":address,"aria-label":v.Text.ViewRoom+" · "+address})){
 		{v.Text.ViewRoom} @glyph(heroicons.Icon16SolidChevronRight)
 	}
 }

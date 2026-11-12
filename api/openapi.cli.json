@@ -2417,6 +2417,15 @@
               "maxLength": 2047,
               "minLength": 3
             }
+          },
+          {
+            "name": "discoveredServiceOnly",
+            "in": "query",
+            "description": "Restrict automatic lookups to MUC services advertised by the account server. Other destinations return unavailable without an XMPP request.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
           }
         ],
         "responses": {
@@ -3568,6 +3577,18 @@
             "description": "Stable Idempotency-Key reference.",
             "schema": {
               "$ref": "#/components/schemas/ID"
+            }
+          },
+          {
+            "name": "X-Oie-Expected-Conversation-Kind",
+            "in": "header",
+            "description": "Conversation kind observed by the caller. A changed kind rejects a new send before acceptance.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "direct",
+                "room"
+              ]
             }
           }
         ],
@@ -5807,6 +5828,10 @@
           },
           "currentRoomSession": {
             "$ref": "#/components/schemas/RoomSession"
+          },
+          "roomAddressInUse": {
+            "type": "boolean",
+            "description": "The address has a direct conversation with retained content that cannot be converted to a room."
           },
           "replySourceChanged": {
             "type": "boolean",

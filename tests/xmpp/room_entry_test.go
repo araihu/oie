@@ -86,7 +86,7 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	address := room.String()
-	preview, err := engine.PreviewRoom(ctx, bob, address)
+	preview, err := engine.PreviewRoom(ctx, bob, address, false)
 	if err != nil || preview.State != "not_found" {
 		t.Fatalf("preview absent room: %+v %v", preview, err)
 	}
@@ -120,13 +120,16 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 		return latest
 	}
 	failed := waitRoom(absent.Conversation.ID, "failed")
-	if failed.LastErrorCode != "room_unavailable" {
+	if failed.LastErrorCode != "room_not_found" {
 		t.Fatalf("wrong failure: %+v", failed)
 	}
-	if _, err := engine.LeaveRoom(ctx, id(), absent.Conversation.ID, failed.IntentRevisionID); err != nil {
-		t.Fatal(err)
+	if failed.Active {
+		eventually(t, func() bool {
+			session, err := engine.RoomSession(ctx, absent.Conversation.ID)
+			return err == nil && !session.Active && session.LastErrorCode == "room_not_found"
+		})
 	}
-	preview, err = engine.PreviewRoom(ctx, bob, address)
+	preview, err = engine.PreviewRoom(ctx, bob, address, false)
 	if err != nil || preview.State != "not_found" {
 		t.Fatalf("entry created a room: %+v %v", preview, err)
 	}
@@ -160,7 +163,7 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 	if joined.Nickname != "Host" {
 		t.Fatalf("unexpected creator nickname: %+v", joined)
 	}
-	preview, err = engine.PreviewRoom(ctx, bob, address)
+	preview, err = engine.PreviewRoom(ctx, bob, address, false)
 	if err != nil || preview.State != "known" || preview.Name != "Garden & Books" || preview.AvatarHash != "" {
 		t.Fatalf("disco fallback before vCard: %+v %v", preview, err)
 	}
@@ -173,7 +176,7 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 	if err := ownerIQ(`<vCard xmlns="vcard-temp"><FN>Garden vCard</FN><DESC>Room profile</DESC><PHOTO><TYPE>image/png</TYPE><BINVAL>` + base64.StdEncoding.EncodeToString(avatar.Bytes()) + `</BINVAL></PHOTO></vCard>`); err != nil {
 		t.Fatal("publish room vCard:", err)
 	}
-	preview, err = engine.PreviewRoom(ctx, bob, address)
+	preview, err = engine.PreviewRoom(ctx, bob, address, false)
 	if err != nil || preview.State != "known" || preview.Name != "Garden vCard" || preview.Description != "Room profile" || preview.AvatarHash == "" {
 		t.Fatalf("room vCard: %+v %v", preview, err)
 	}
@@ -214,7 +217,7 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 	if collision := waitRoom(created.Conversation.ID, "failed"); collision.LastErrorCode != "room_exists" || collision.Active {
 		t.Fatalf("existing room was not rejected: %+v", collision)
 	}
-	preview, err = engine.PreviewRoom(ctx, bob, address)
+	preview, err = engine.PreviewRoom(ctx, bob, address, false)
 	if err != nil || preview.Name != "Garden vCard" {
 		t.Fatalf("creation collision changed room: %+v %v", preview, err)
 	}

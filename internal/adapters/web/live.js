@@ -52,6 +52,7 @@ window.OieRuntime.register('live', life => {
     ? ['oie.draft.v1', body.dataset.engineId, body.dataset.accountId, body.dataset.conversationId].join(':') : '';
   const draftKey = editingSchedule ? ordinaryDraftKey + ':scheduled:' +
     composer.elements.namedItem('messageId').value + ':' + composer.elements.namedItem('expectedRevisionId').value : ordinaryDraftKey;
+  const conversationKind = composer?.elements.namedItem('expectedConversationKind')?.value;
   let journal,preparingReply=false,replyEpoch=0;
   const replyField=composer?.elements.namedItem('replyToMessageId');
   const mentionField=composer?.elements.namedItem('mentions');
@@ -210,6 +211,7 @@ window.OieRuntime.register('live', life => {
   }
   function saveDraft(record) {
     if (!draftKey) return;
+    record = {...record, conversationKind: record.conversationKind || conversationKind};
     journal = record; inMemory.set(draftKey, record);
     try { localStorage.setItem(draftKey, JSON.stringify(record)); }
     catch { storageWarning(); }
@@ -312,6 +314,7 @@ window.OieRuntime.register('live', life => {
         reply:composition.replyToMessageId?{messageId:composition.replyToMessageId,engineId:body.dataset.engineId,accountId:m.accountId,conversationId:m.conversationId,
           senderName:m.reply?.senderName||'',excerpt:m.reply?.excerpt||''}:null};
     }
+    if (saved && saved.conversationKind && saved.conversationKind !== conversationKind) saved = null;
     if (saved && typeof saved.text === 'string' && (canonicalID(saved.key)||(saved.key===''&&!saved.pending)) && (!saved.reply || (canonicalID(saved.reply.messageId) && saved.reply.engineId===body.dataset.engineId && saved.reply.accountId===body.dataset.accountId && saved.reply.conversationId===body.dataset.conversationId && typeof saved.reply.senderName==='string' && typeof saved.reply.excerpt==='string' && Array.from(saved.reply.excerpt).length<=512))) {
       journal = {...saved,key:canonicalID(saved.key)?saved.key:submissionKey.value}; input.value = saved.pending&&!saved.scheduledAt&&!editingSchedule?'':saved.text; submissionKey.value = journal.key; restoreMentions(saved.mentions);
       lockComposer(saved.pending === true);
@@ -403,6 +406,85 @@ window.OieRuntime.register('live', life => {
     for(const field of form.querySelectorAll('input:not([type=hidden])'))field.readOnly=true;
     const button=form.querySelector('[data-room-action]');if(button){button.dataset.roomAction=roomOperation.command;button.textContent=text('retry');button.title=text('retry');}
     const region=form.querySelector('[data-form-feedback]');if(region){region.textContent=text('roomCommandUnknown');region.dataset.error='true';region.setAttribute('role','alert');}
+  }
+  const roomEntryFields = ['operationKey','accountId','address','name','nickname'];
+  function roomEntryStorage(form, account, address) {
+    const scope = ['oie.room-entry.v1', body.dataset.engineId, form.dataset.roomEntry].join(':');
+    return account && address ? scope + ':' + JSON.stringify([account,address]) : scope;
+  }
+  function pendingRoomEntry(form, account, address) {
+    const scope = roomEntryStorage(form, account, address);
+    let saved = inMemory.get(scope);
+    if (!saved) {
+      try { saved = JSON.parse(sessionStorage.getItem(scope)); } catch {}
+    }
+    return saved && canonicalID(saved.operationKey) && canonicalID(saved.accountId)
+      && typeof saved.address === 'string' && saved.address.length <= 2047 ? saved : null;
+  }
+  function restoreRoomEntry(form, saved) {
+    form.dataset.roomEntryPending = String(!!saved);
+    for (const name of roomEntryFields) {
+      const field = form.elements.namedItem(name);
+      if (saved && field) {
+        field.value = saved[name] || '';
+        if (name === 'accountId') field.dispatchEvent(new Event('input', {bubbles:true}));
+      }
+      if (name !== 'operationKey' && field) field.readOnly = !!saved;
+    }
+    const account = form.querySelector('[role=combobox]');
+    if (account) account.disabled = !!saved;
+    const submit = form.querySelector('[type=submit]');
+    if (submit) submit.textContent = saved ? text('retry') : submit.dataset.roomEntryLabel;
+  }
+  function saveRoomEntry(form, saved) {
+    const prior = pendingRoomEntry(form);
+    const command = saved || prior;
+    const scopes = [roomEntryStorage(form)];
+    if (command) scopes.push(roomEntryStorage(form, command.accountId, command.address));
+    for (const scope of scopes) {
+      if (saved) inMemory.set(scope, saved); else inMemory.delete(scope);
+      try {
+        if (saved) sessionStorage.setItem(scope, JSON.stringify(saved));
+        else sessionStorage.removeItem(scope);
+      } catch {}
+    }
+    restoreRoomEntry(form, saved);
+  }
+  function roomOperationKey() {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    let timestamp = Date.now();
+    for (let i = 5; i >= 0; i--) {
+      bytes[i] = timestamp % 256;
+      timestamp = Math.floor(timestamp / 256);
+    }
+    bytes[6] = (bytes[6] & 15) | 112;
+    bytes[8] = (bytes[8] & 63) | 128;
+    const hex = Array.from(bytes, value => value.toString(16).padStart(2,'0')).join('');
+    return [hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),hex.slice(16,20),hex.slice(20)].join('-');
+  }
+  life.on(document, 'oie:room-entry-target', event => {
+    const {form, account, address} = event.detail;
+    if (form.dataset.busy === 'true') return;
+    const scope = roomEntryStorage(form);
+    const saved = pendingRoomEntry(form, account, address);
+    if (saved) {
+      saveRoomEntry(form, saved);
+      feedback(form, text('roomCommandUnknown'), true);
+    } else {
+      inMemory.delete(scope);
+      try { sessionStorage.removeItem(scope); } catch {}
+      restoreRoomEntry(form, null);
+      form.elements.namedItem('operationKey').value = roomOperationKey();
+      feedback(form, '');
+    }
+  });
+  for (const form of document.querySelectorAll('form[data-room-entry]')) {
+    const saved = pendingRoomEntry(form);
+    if (saved) {
+      restoreRoomEntry(form, saved);
+      const status = form.querySelector('[data-form-feedback]');
+      if (status) status.textContent = text('roomCommandUnknown');
+    }
   }
   function syncRoomLeave(){
     const item=document.getElementById('chat-leave-room'),form=document.querySelector('[data-room-command]'),room=document.getElementById('room-session-status');
@@ -793,6 +875,15 @@ window.OieRuntime.register('live', life => {
       saveDraft({text:value,key:submissionKey.value,pending:true,reply:journal?.reply||null,mentions,attachments:journal?.attachments||[],scheduledAt});if(!scheduledAt&&!editingSchedule)input.value='';restoreMentions(mentions);lockComposer(true);renderReply();
     }
     const values = new URLSearchParams(new FormData(form));
+    const roomEntry = !!form.dataset.roomEntry;
+    if (roomEntry) {
+      const saved = pendingRoomEntry(form);
+      if (saved) {
+        for (const name of roomEntryFields) values.set(name, saved[name] || '');
+      } else if (canonicalID(values.get('accountId')) && values.get('address')) {
+        saveRoomEntry(form, Object.fromEntries(roomEntryFields.map(name => [name, values.get(name) || ''])));
+      }
+    }
     const roomCommand=form.dataset.roomCommand;
     const roomMenuSubmit=roomCommand==='leave'&&form.dataset.roomMenuSubmit==='true';
     if(roomCommand){if(roomOperation){for(const key of ['operationKey','expectedRevisionId','nickname','conversationId','accountId'])values.set(key,roomOperation[key]||'')}else keepRoomOperation({command:roomCommand,operationKey:values.get('operationKey'),expectedRevisionId:values.get('expectedRevisionId'),nickname:values.get('nickname')||'',conversationId:values.get('conversationId'),accountId:values.get('accountId')})}
@@ -828,12 +919,17 @@ window.OieRuntime.register('live', life => {
           feedback(form, result.message || text('pending'), true);
         }
         if (sending) input.focus({preventScroll:true});
+        if (roomEntry && (result.rejected || result.code === 'idempotency_conflict')) {
+          saveRoomEntry(form, null);
+          if (result.nextKey) form.elements.namedItem('operationKey').value = result.nextKey;
+        }
         if(roomCommand&&result.rejected){keepRoomOperation(null);for(const field of form.querySelectorAll('input:not([type=hidden])'))field.readOnly=false;}
         if(scheduleDrawer&&['state_conflict','revision_conflict','not_found'].includes(result.code)){
           scheduleDrawer.dispatchEvent(new Event('oie:schedule-refresh'));
         }
         if(!sending)scheduleRefresh();
       } else {
+        if (roomEntry) saveRoomEntry(form, null);
         if(roomCommand){
           keepRoomOperation(null);
           if(roomCommand==='leave')document.dispatchEvent(new CustomEvent('oie:room-reaction-visibility-withdrawn'));
@@ -858,6 +954,7 @@ window.OieRuntime.register('live', life => {
     } finally {
       clearTimeout(timeout);if(life.signal.aborted)return;pendingRequests--;form.dataset.busy='false';form.removeAttribute('aria-busy');
       buttons.forEach((button,index)=>button.disabled=disabled[index]);renderReply();syncRoomLeave();
+      if (roomEntry) restoreRoomEntry(form, pendingRoomEntry(form));
       if(journal?.pending)renderPendingSend(pendingBubble?.dataset.pendingState||'uncertain');
       if(sending)input.focus({preventScroll:true});
       if(roomMenuSubmit&&form.querySelector('[data-form-feedback]')?.dataset.error==='true'){

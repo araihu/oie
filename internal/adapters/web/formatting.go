@@ -14,11 +14,11 @@ import (
 )
 
 func formattedMessage(ctx context.Context, original string) templ.Component {
-	component, _ := formattedMessageWithInvitations(ctx, original)
+	component, _ := formattedMessageWithInvitations(ctx, original, invitationScope{})
 	return component
 }
 
-func formattedMessageWithInvitations(ctx context.Context, original string) (templ.Component, []string) {
+func formattedMessageWithInvitations(ctx context.Context, original string, scope invitationScope) (templ.Component, []string) {
 	content, err := margo.RenderChatWithOptions(ctx, original, margo.ChatOptions{ExplicitBlockquotes: true})
 	if err != nil {
 		return nil, nil
@@ -31,7 +31,7 @@ func formattedMessageWithInvitations(ctx context.Context, original string) (temp
 		return nil, nil
 	}
 	var rooms []string
-	if err := linkRenderedInvitations(rendered.Bytes(), &linked, func(address string) {
+	if err := linkRenderedInvitations(rendered.Bytes(), &linked, scope, func(address string) {
 		if len(rooms) < 3 && !slices.Contains(rooms, address) {
 			rooms = append(rooms, address)
 		}

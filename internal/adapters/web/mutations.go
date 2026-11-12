@@ -305,6 +305,14 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 		return 422, mutationResult{Message: text.InvalidMessage, Code: "invalid_request", Rejected: true}
 	}
 	payload := sendInput(body, target, replyRevision, replyExcerptSHA256, mentions, attachments, at)
+	expectedKind := engineapi.SendMessageParamsXOieExpectedConversationKind(r.Form.Get("expectedConversationKind"))
+	params := &engineapi.SendMessageParams{IdempotencyKey: key}
+	if expectedKind != "" {
+		if !expectedKind.Valid() {
+			return 422, mutationResult{Message: text.InvalidMessage, Code: "invalid_request", Rejected: true}
+		}
+		params.XOieExpectedConversationKind = &expectedKind
+	}
 	receipt, evidence := s.sendReceipt(ctx, key)
 	switch evidence {
 	case "found":
@@ -318,7 +326,7 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 		}
 		// Older engines expose only metadata here. An explicit retry can ask
 		// them to verify the request against the already committed operation.
-		response, err := s.client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, payload)
+		response, err := s.client.SendMessageWithResponse(ctx, conversation, params, payload)
 		if err != nil {
 			return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
 		}
@@ -346,6 +354,9 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 	}
 	if owner.JSON200.AccountId != account {
 		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
+	}
+	if expectedKind != "" && string(owner.JSON200.Kind) != string(expectedKind) {
+		return 409, mutationResult{Message: text.ConversationChanged, Code: "state_conflict", Rejected: true}
 	}
 	if owner.JSON200.Kind == "room" {
 		session, callErr := s.client.GetRoomSessionWithResponse(ctx, conversation)
@@ -378,7 +389,7 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 			return status, mutationResult{Message: text.ReplyUnavailable, Code: "reply_unavailable", Rejected: status == 400 || status == 404}
 		}
 	}
-	response, err := s.client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, payload)
+	response, err := s.client.SendMessageWithResponse(ctx, conversation, params, payload)
 	if err != nil {
 		message, _ := s.sendReceipt(ctx, key)
 		if message != nil && matchingComposition(*message, conversation, account, payload) {
@@ -392,6 +403,12 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 	}
 	if message == nil {
 		result := problemResult(text, response.StatusCode(), response.Body)
+		if expectedKind != "" && result.Code == "state_conflict" {
+			var problem engineapi.Problem
+			if json.Unmarshal(response.Body, &problem) == nil && problem.CurrentRoomSession == nil {
+				result.Message, result.Rejected = text.ConversationChanged, true
+			}
+		}
 		if len(mentions) > 0 && response.StatusCode() == 400 && result.Code == "invalid_request" {
 			result.Code, result.Message = "mention_unavailable", text.MentionChanged
 		}

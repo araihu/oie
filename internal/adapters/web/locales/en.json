@@ -106,6 +106,8 @@
   "ViewRoom": "View room",
   "CreateRoom": "Create room",
   "PreviewRoom": "Preview room",
+  "ConversationChanged": "This conversation changed. Reopen it before sending.",
+  "RoomAddressConflict": "This address already has a direct conversation with saved content.",
   "RoomAddress": "Room address",
   "RoomAddressPlaceholder": "room@rooms.example.org",
   "RoomOccupants": "Occupants",

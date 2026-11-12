@@ -166,6 +166,15 @@ func (e *Engine) setRoomIntent(ctx context.Context, key, id domain.ID, nickname 
 	if c.Kind != "room" {
 		return RoomIntentResult{}, ErrInvalid
 	}
+	if active {
+		account, err := e.Account(ctx, c.AccountID)
+		if err != nil {
+			return RoomIntentResult{}, err
+		}
+		if err := e.checkRoomNickname(account, nickname); err != nil {
+			return RoomIntentResult{}, err
+		}
+	}
 	if _, ok := e.protocols.(RoomProtocol); !ok {
 		return RoomIntentResult{}, ErrProtocolUnavailable
 	}
@@ -248,6 +257,13 @@ func (e *Engine) RoomSessionChanged(ctx context.Context, s domain.RoomSession) e
 	return nil
 }
 
+// RoomEntryCurrent lets the wire adapter recheck the durable intent after
+// discovery or waiting for an IQ slot.
+func (e *Engine) RoomEntryCurrent(ctx context.Context, id, revision domain.ID, create bool) (bool, error) {
+	intent, err := e.roomIntent(ctx, id)
+	return err == nil && intent.Active && intent.IntentRevisionID == revision && (intent.CreationName != nil) == create, err
+}
+
 func (e *Engine) wakeRooms() {
 	select {
 	case e.roomWork <- struct{}{}:
@@ -302,10 +318,11 @@ func (e *Engine) runRooms(ctx context.Context) error {
 				}
 				continue
 			}
-			if intent.CreationName != nil && s.IntentRevisionID == intent.IntentRevisionID && s.State == "joined" {
+			if s.IntentRevisionID == intent.IntentRevisionID && (s.Revoked || (intent.CreationName != nil && s.State == "joined")) {
 				if err := e.RoomSessionChanged(ctx, s); err != nil && ctx.Err() == nil {
 					return err
 				}
+				continue
 			}
 
 			if s.IntentRevisionID == intent.IntentRevisionID && (s.State == "joined" || s.State == "joining" || s.LastErrorCode == "nickname_conflict" || s.LastErrorCode == "unsupported") {
@@ -324,14 +341,22 @@ func (e *Engine) runRooms(ctx context.Context) error {
 			}
 			next[c.ID] = e.now().Add(10 * time.Second)
 			call, cancel := context.WithTimeout(ctx, 10*time.Second)
-			if intent.CreationName != nil {
+			var dispatchErr error
+			if current.CreationName != nil {
 				if creator, ok := p.(RoomCreator); ok {
-					_, _ = creator.CreateRoom(call, a, c, intent.Nickname, *intent.CreationName, intent.IntentRevisionID)
+					_, dispatchErr = creator.CreateRoom(call, a, c, current.Nickname, *current.CreationName, current.IntentRevisionID)
 				}
 			} else {
-				_, _ = p.JoinRoom(call, a, c, intent.Nickname, intent.IntentRevisionID)
+				_, dispatchErr = p.JoinRoom(call, a, c, current.Nickname, current.IntentRevisionID)
 			}
 			cancel()
+			if errors.Is(dispatchErr, ErrInvalid) {
+				failed := intent
+				failed.State, failed.LastErrorCode, failed.Revoked = "failed", "invalid_nickname", true
+				if err := e.RoomSessionChanged(ctx, failed); err != nil && ctx.Err() == nil {
+					return err
+				}
+			}
 		}
 		select {
 		case <-ctx.Done():

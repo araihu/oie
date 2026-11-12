@@ -46,11 +46,19 @@ func roomFormAddress(value string) string {
 	return invitationRoom(value)
 }
 
-func roomInvitationHref(address string) string {
-	return "/?" + url.Values{"open": {"join-room"}, "room": {address}}.Encode()
+type invitationScope struct{ account, conversation, locale string }
+
+func (scope invitationScope) href(address string) string {
+	values := url.Values{"open": {"join-room"}, "room": {address}}
+	if scope.account != "" {
+		values.Set("account", scope.account)
+		values.Set("chat", scope.conversation)
+		values.Set("lang", scope.locale)
+	}
+	return "/?" + values.Encode()
 }
 
-func roomInvitationLinks(value string, found func(string)) (string, bool) {
+func roomInvitationLinks(value string, scope invitationScope, found func(string)) (string, bool) {
 	var out strings.Builder
 	start := 0
 	for _, match := range roomInvitationPattern.FindAllStringIndex(value, -1) {
@@ -62,7 +70,7 @@ func roomInvitationLinks(value string, found func(string)) (string, bool) {
 		if found != nil {
 			found(address)
 		}
-		href := roomInvitationHref(address)
+		href := scope.href(address)
 		out.WriteString(html.EscapeString(value[start:match[0]]))
 		out.WriteString(`<a href="` + html.EscapeString(href) + `" data-room-invitation="` + html.EscapeString(address) + `">` + html.EscapeString(label) + `</a>`)
 		start = match[0] + len(label)
@@ -74,9 +82,9 @@ func roomInvitationLinks(value string, found func(string)) (string, bool) {
 	return out.String(), true
 }
 
-func plainRoomLinks(value string) templ.Component {
+func plainRoomLinks(value string, scope invitationScope) templ.Component {
 	return templ.ComponentFunc(func(_ context.Context, w io.Writer) error {
-		out, linked := roomInvitationLinks(value, nil)
+		out, linked := roomInvitationLinks(value, scope, nil)
 		if !linked {
 			out = html.EscapeString(value)
 		}
@@ -85,7 +93,7 @@ func plainRoomLinks(value string) templ.Component {
 	})
 }
 
-func linkRenderedInvitations(rendered []byte, w io.Writer, found func(string)) error {
+func linkRenderedInvitations(rendered []byte, w io.Writer, scope invitationScope, found func(string)) error {
 	tokens := htmlstream.NewTokenizer(bytes.NewReader(rendered))
 	protected := 0
 	for {
@@ -111,7 +119,7 @@ func linkRenderedInvitations(rendered []byte, w io.Writer, found func(string)) e
 			if protected == 0 && bytes.Contains(bytes.ToLower(raw), []byte("xmpp:")) {
 				// Text decoding may modify the tokenizer buffer.
 				raw = bytes.Clone(raw)
-				if linked, ok := roomInvitationLinks(string(tokens.Text()), found); ok {
+				if linked, ok := roomInvitationLinks(string(tokens.Text()), scope, found); ok {
 					raw = []byte(linked)
 				}
 			}

@@ -167,6 +167,9 @@ func build9(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("query", "address", &params.Address); err != nil {
 		return nil, err
 	}
+	if err := input.Decode("query", "discoveredServiceOnly", &params.DiscoveredServiceOnly); err != nil {
+		return nil, err
+	}
 	return api.NewPreviewRoomRequest(server, path0, &params)
 }
 func build10(server string, input cliruntime.Input) (*http.Request, error) {
@@ -337,6 +340,9 @@ func build25(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	var params api.SendMessageParams
 	if err := input.Decode("header", "Idempotency-Key", &params.IdempotencyKey); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("header", "X-Oie-Expected-Conversation-Kind", &params.XOieExpectedConversationKind); err != nil {
 		return nil, err
 	}
 	return api.NewSendMessageRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))

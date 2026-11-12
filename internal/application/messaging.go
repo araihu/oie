@@ -102,10 +102,11 @@ type ConversationMutation struct {
 	RoomEntry    *domain.RoomSession
 }
 type MessageMutation struct {
-	Operation              Operation
-	Fingerprint            string
-	Message                domain.Message
-	ConversationRevisionID domain.ID
+	Operation                Operation
+	Fingerprint              string
+	Message                  domain.Message
+	ConversationRevisionID   domain.ID
+	ExpectedConversationKind string
 }
 type CancelMutation struct {
 	Operation                                 Operation
@@ -294,8 +295,12 @@ func (e *Engine) SendComposition(ctx context.Context, key, conversationID domain
 	return e.SendCompositionWithReplyReview(ctx, key, conversationID, in, at, ReplyReview{})
 }
 
-func (e *Engine) SendCompositionWithReplyReview(ctx context.Context, key, conversationID domain.ID, in domain.OutgoingComposition, at *time.Time, review ReplyReview) (result MessageResult, err error) {
-	if !validID(key) || !validID(conversationID) {
+func (e *Engine) SendCompositionWithReplyReview(ctx context.Context, key, conversationID domain.ID, in domain.OutgoingComposition, at *time.Time, review ReplyReview) (MessageResult, error) {
+	return e.SendCompositionForKind(ctx, key, conversationID, in, at, review, "")
+}
+
+func (e *Engine) SendCompositionForKind(ctx context.Context, key, conversationID domain.ID, in domain.OutgoingComposition, at *time.Time, review ReplyReview, expectedKind string) (result MessageResult, err error) {
+	if !validID(key) || !validID(conversationID) || (expectedKind != "" && expectedKind != "direct" && expectedKind != "room") {
 		return MessageResult{}, ErrInvalid
 	}
 	if err := validateComposition(in); err != nil {
@@ -350,6 +355,9 @@ func (e *Engine) SendCompositionWithReplyReview(ctx context.Context, key, conver
 	if err != nil {
 		return MessageResult{}, err
 	}
+	if expectedKind != "" && c.Kind != expectedKind {
+		return MessageResult{}, ErrStateConflict
+	}
 	if c.Kind != "direct" && c.Kind != "room" {
 		return MessageResult{}, ErrProtocolUnavailable
 	}
@@ -390,7 +398,7 @@ func (e *Engine) SendCompositionWithReplyReview(ctx context.Context, key, conver
 	if err != nil {
 		return MessageResult{}, err
 	}
-	result, err = repo.AcceptMessage(ctx, MessageMutation{Operation: Operation{ID: key, ResourceID: id, CreatedAt: now, Kind: "send_message"}, Fingerprint: requestFingerprint, Message: m, ConversationRevisionID: cr})
+	result, err = repo.AcceptMessage(ctx, MessageMutation{Operation: Operation{ID: key, ResourceID: id, CreatedAt: now, Kind: "send_message"}, Fingerprint: requestFingerprint, Message: m, ConversationRevisionID: cr, ExpectedConversationKind: c.Kind})
 	if err == nil {
 		e.outgoingWorkCommitted()
 	}

@@ -42,6 +42,8 @@ func (m *Manager) roomEntryAvailability(ctx context.Context, e *entry, session *
 			return ""
 		}
 		return "creation_failed"
+	case errors.Is(err, errArchiveCursor):
+		return "room_not_found"
 	case errors.Is(err, errDetailPermission):
 		return "forbidden"
 	case err != nil:
@@ -53,8 +55,8 @@ func (m *Manager) roomEntryAvailability(ctx context.Context, e *entry, session *
 	}
 }
 
-func (m *Manager) PreviewRoom(ctx context.Context, a domain.Account, address string) (domain.RoomPreview, []byte, error) {
-	e, _, err := m.roomEntry(a, domain.Conversation{AccountID: a.ID, Address: address, Kind: "room"})
+func (m *Manager) PreviewRoom(ctx context.Context, a domain.Account, address string, discoveredServiceOnly bool) (domain.RoomPreview, []byte, error) {
+	e, target, err := m.roomEntry(a, domain.Conversation{AccountID: a.ID, Address: address, Kind: "room"})
 	if err != nil {
 		return domain.RoomPreview{}, nil, err
 	}
@@ -64,9 +66,23 @@ func (m *Manager) PreviewRoom(ctx context.Context, a domain.Account, address str
 	}
 	e.mu.RLock()
 	session, connected := e.session, e.state.State == "connected"
+	allowed := !discoveredServiceOnly
+	if discoveredServiceOnly {
+		for _, service := range e.discovery.Services {
+			if service.Address != target.Domain().String() || !serverServiceSupports(service, "http://jabber.org/protocol/muc") {
+				continue
+			}
+			for _, identity := range service.Identities {
+				allowed = allowed || (identity.Category == "conference" && identity.Type == "text")
+			}
+		}
+	}
 	e.mu.RUnlock()
 	if session == nil || !connected {
 		return preview, nil, nil
+	}
+	if !allowed {
+		return domain.RoomPreview{State: "unavailable"}, nil, nil
 	}
 	// Preview discovery must not update any joined-room capability evidence.
 	lookup, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -127,12 +143,13 @@ func applyRoomVCard(preview *domain.RoomPreview, payload string) []byte {
 // Self-presence for a locked room arrives on the receive loop, which must
 // remain free to receive the configuration IQ response.
 func (m *Manager) finishRoomEntry(ctx context.Context, e *entry, slot *roomSlot, presence incomingPresence, ownsNewRoom bool) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	sessionCtx := ctx
+	ctx, cancel := context.WithTimeout(sessionCtx, 10*time.Second)
 	defer cancel()
 	room := slot.conversation.Address
 	defer func() {
 		e.mu.Lock()
-		slot.configuring = false
+		slot.configuring, slot.cleaningUp = false, false
 		e.mu.Unlock()
 	}()
 	e.mu.RLock()
@@ -146,8 +163,8 @@ func (m *Manager) finishRoomEntry(ctx context.Context, e *entry, slot *roomSlot,
 	cancelLocked := ownsNewRoom
 	switch {
 	case ownsNewRoom && slot.creationName != nil:
-		submitted, err := m.configureNewRoom(ctx, e, session, slot, *slot.creationName)
-		cancelLocked = !submitted
+		outcomeUnknown, err := m.configureNewRoom(ctx, e, session, slot, *slot.creationName)
+		cancelLocked = err != nil && !outcomeUnknown
 		if err != nil {
 			code = "creation_failed"
 		}
@@ -157,19 +174,25 @@ func (m *Manager) finishRoomEntry(ctx context.Context, e *entry, slot *roomSlot,
 		code = "room_unavailable"
 	}
 	if code != "" {
-		// Cancel a locked room only when this request received owner status 201.
-		cleanup, done := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
-		e.mu.RLock()
-		current := e.session == session && e.rooms[room] == slot && slot.snapshot.State == "joining"
-		e.mu.RUnlock()
-		if cancelLocked && current {
-			_, _ = m.readHistoryIQ(cleanup, e, session, room, stanza.SetIQ, `<query xmlns="http://jabber.org/protocol/muc#owner"><x xmlns="jabber:x:data" type="cancel"/></query>`)
+		e.mu.Lock()
+		slot.cleaningUp = true
+		e.mu.Unlock()
+		if cancelLocked {
+			cleanup, done := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+			e.mu.RLock()
+			current := e.session == session && e.rooms[room] == slot && slot.snapshot.State == "joining"
+			e.mu.RUnlock()
+			if current {
+				_, _ = readArchiveIQ(cleanup, e, session, room, stanza.SetIQ, `<query xmlns="http://jabber.org/protocol/muc#owner"><x xmlns="jabber:x:data" type="cancel"/></query>`)
+			}
+			done()
 		}
+		cleanup, done := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 		e.roomNotifyMu.Lock()
 		e.mu.RLock()
 		leave := e.session == session && e.rooms[room] == slot && slot.snapshot.State == "joining"
 		e.mu.RUnlock()
-		if leave && cleanup.Err() == nil {
+		if leave {
 			e.sendMu.Lock()
 			deadline, _ := cleanup.Deadline()
 			_ = raw.SetWriteDeadline(deadline)
@@ -202,7 +225,9 @@ func (m *Manager) finishRoomEntry(ctx context.Context, e *entry, slot *roomSlot,
 	}
 	snapshot := slot.snapshot
 	e.mu.Unlock()
-	m.notifyRoom(ctx, e, slot, snapshot)
+	notifyCtx, cancelNotify := context.WithTimeout(context.WithoutCancel(sessionCtx), 3*time.Second)
+	defer cancelNotify()
+	m.notifyRoom(notifyCtx, e, slot, snapshot)
 }
 
 type roomConfigField struct {
@@ -267,14 +292,21 @@ func (m *Manager) configureNewRoom(ctx context.Context, e *entry, s *mx.Session,
 	if err != nil {
 		return false, err
 	}
+	release, err := m.acquireArchive(ctx, room, archiveMaintenance)
+	if err != nil {
+		return false, err
+	}
+	defer release()
 	e.mu.RLock()
 	current := e.session == s && e.rooms[room] == slot && slot.snapshot.State == "joining"
+	revision := slot.snapshot.IntentRevisionID
 	e.mu.RUnlock()
-	if !current {
+	if !current || !m.roomEntryCurrent(ctx, slot.conversation.ID, revision, true) || ctx.Err() != nil {
 		return false, errArchive
 	}
-	_, err = m.readHistoryIQ(ctx, e, s, room, stanza.SetIQ, submit)
-	return true, err
+	_, err = readArchiveIQ(ctx, e, s, room, stanza.SetIQ, submit)
+	var rejected archiveIQRejected
+	return err != nil && !errors.As(err, &rejected), err
 }
 
 var _ application.RoomPreviewProvider = (*Manager)(nil)

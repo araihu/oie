@@ -11,6 +11,7 @@ import (
 type Querier interface {
 	AcquireWriteLock(ctx context.Context) error
 	ArchivedReactionNeighbors(ctx context.Context, arg ArchivedReactionNeighborsParams) (ArchivedReactionNeighborsRow, error)
+	CanPromoteRoomPlaceholder(ctx context.Context, roomID string) (*bool, error)
 	ClearCanonicalAliases(ctx context.Context, ids string) error
 	ClearContentHeads(ctx context.Context, ids string) error
 	ClearRoomReactionVisibility(ctx context.Context, arg ClearRoomReactionVisibilityParams) error
