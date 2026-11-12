@@ -2,24 +2,80 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"errors"
-	"github.com/araihu/oie/internal/application"
-	"github.com/araihu/oie/internal/domain"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
+	"github.com/araihu/oie/internal/application"
+	"github.com/araihu/oie/internal/domain"
 )
 
 func downReactionMigration(t *testing.T, s *Store) {
 	t.Helper()
-	for _, name := range []string{"000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation", "000017_room_archives", "000016_message_reactions"} {
+	for _, name := range []string{"000021_reaction_target_lookups", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation", "000017_room_archives", "000016_message_reactions"} {
 		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if _, err = s.db.Exec(string(down)); err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+func TestReactionObservationsUseTargetAndCommandIndexes(t *testing.T) {
+	s, _, c := outboxFixture(t)
+	source, err := os.ReadFile("queries/reactions.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, query, ok := strings.Cut(string(source), "-- name: ReactionObservationsForTargets :many")
+	if !ok {
+		t.Fatal("reaction observations query missing")
+	}
+	query, _, _ = strings.Cut(query, "-- name:")
+	query = strings.NewReplacer(
+		"sqlc.arg(references)", ":refs",
+		"sqlc.arg(account_id)", ":account",
+		"sqlc.arg(address)", ":address",
+		"sqlc.arg(message_id)", ":message",
+		"sqlc.arg(kind)", ":kind",
+		"sqlc.arg(room_epoch)", ":epoch",
+	).Replace(query)
+	rows, err := s.db.QueryContext(t.Context(), "EXPLAIN QUERY PLAN "+query,
+		sql.Named("refs", `[{"id":"reference","unique":true}]`), sql.Named("account", string(c.AccountID)),
+		sql.Named("address", c.Address), sql.Named("message", string(migrationID())),
+		sql.Named("kind", c.Kind), sql.Named("epoch", 0),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	var plan strings.Builder
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+			t.Fatal(err)
+		}
+		plan.WriteString(detail + "\n")
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	for _, lookup := range []string{
+		"reaction_observation_target (account_id=? AND address=? AND target_id=?)",
+		"reaction_command_message (message_id=?)",
+		"reaction_observation_command (command_id=?)",
+		"SEARCH o USING INTEGER PRIMARY KEY (rowid=?)",
+	} {
+		if !strings.Contains(plan.String(), lookup) {
+			t.Fatalf("missing indexed lookup %q:\n%s", lookup, plan.String())
 		}
 	}
 }
@@ -189,6 +245,12 @@ func TestReactionPendingRacesUnknownAndLateRejection(t *testing.T) {
 	receipt, err := e.MessageReactionCommand(t.Context(), accepted.Command.ID)
 	if err != nil || receipt.State != "submitted" {
 		t.Fatal("verified own echo did not resolve unknown", receipt, err)
+	}
+	linked, err := s.queries.ReactionObservationsForTargets(t.Context(), dbgen.ReactionObservationsForTargetsParams{
+		AccountID: string(c.AccountID), Address: c.Address, Kind: c.Kind, MessageID: string(m.ID), References: "[]",
+	})
+	if err != nil || len(linked) != 1 || linked[0].CommandID != string(accepted.Command.ID) {
+		t.Fatal("command-linked observation missing without provider references", linked, err)
 	}
 	current := reactionSnapshot(t, e, m.ID)
 	if len(current.OwnEmojis) != 1 {
@@ -673,7 +735,7 @@ func TestRoomReactionReplayRepairsV17BackwardPageOrder(t *testing.T) {
 		}
 	}
 	// Downgrade the scratch database to the actual V17 migration state.
-	for _, name := range []string{"000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
+	for _, name := range []string{"000021_reaction_target_lookups", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
 		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
 		if err != nil {
 			t.Fatal(err)
@@ -861,7 +923,7 @@ func TestRoomReactionUpgradeRetiresMixedLegacyPeerSets(t *testing.T) {
 	}
 	// v18 retained observations without their identity-mode epochs. It also
 	// persisted the latest non-anonymous mode as a currently public flag.
-	for _, name := range []string{"000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode"} {
+	for _, name := range []string{"000021_reaction_target_lookups", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode"} {
 		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
 		if err != nil {
 			t.Fatal(err)

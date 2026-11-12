@@ -15,14 +15,16 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
+const latestSchemaVersion = 21
+
 func migrateDatabase(ctx context.Context, db *sql.DB) error {
 	// Catalog introspection is bootstrap housekeeping, not application queries.
 	var legacy, tables int
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&legacy); err != nil {
 		return err
 	}
-	if legacy > 20 {
-		return fmt.Errorf("database schema %d is newer than supported version 20", legacy)
+	if legacy > latestSchemaVersion {
+		return fmt.Errorf("database schema %d is newer than supported version %d", legacy, latestSchemaVersion)
 	}
 	driver, err := migratesqlite.WithInstance(db, &migratesqlite.Config{})
 	if err != nil {
@@ -44,8 +46,8 @@ func migrateDatabase(ctx context.Context, db *sql.DB) error {
 	if dirty {
 		return fmt.Errorf("database migration %d is dirty; repair explicitly before starting", version)
 	}
-	if err == nil && version > 20 {
-		return fmt.Errorf("database migration %d is newer than supported version 20", version)
+	if err == nil && version > latestSchemaVersion {
+		return fmt.Errorf("database migration %d is newer than supported version %d", version, latestSchemaVersion)
 	}
 	if errors.Is(err, migrate.ErrNilVersion) && legacy == 1 {
 		if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('accounts','revisions','operations','changes','engine_identity')").Scan(&tables); err != nil {

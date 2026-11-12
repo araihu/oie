@@ -388,21 +388,36 @@ func (q *Queries) ReactionActorProfile(ctx context.Context, arg ReactionActorPro
 }
 
 const reactionObservationsForTargets = `-- name: ReactionObservationsForTargets :many
-WITH matching AS (
-SELECT o.ordinal, o.id, o.account_id, o.address, o.kind, o.actor, o.provider_id, o.archive_scope, o.archive_id, o.target_id, o.target_scope, o.target_author, o.fingerprint, o.occurred_at, o.payload, o.command_id, o.archive_order, o.room_epoch FROM message_reaction_observations o
-LEFT JOIN message_reaction_commands command ON command.id=o.command_id
-WHERE o.account_id=?1 AND o.address=?2 AND o.kind=?3
-AND (command.message_id=?4 OR EXISTS(SELECT 1 FROM json_each(CAST(?5 AS TEXT)) ref
- WHERE json_extract(ref.value,'$.id')=o.target_id
+WITH candidates AS (
+ SELECT o.ordinal
+ FROM json_each(CAST(?1 AS TEXT)) ref
+ CROSS JOIN message_reaction_observations o
+ WHERE o.account_id=?2 AND o.address=?3
+ AND o.target_id=json_extract(ref.value,'$.id')
  AND (o.target_scope<>'' OR json_extract(ref.value,'$.unique')=1)
  AND (o.target_scope='' OR json_extract(ref.value,'$.scope')=o.target_scope)
- AND (o.target_author='' OR json_extract(ref.value,'$.author')=o.target_author)))
+ AND (o.target_author='' OR json_extract(ref.value,'$.author')=o.target_author)
+ UNION
+ SELECT o.ordinal
+ FROM message_reaction_commands command
+ CROSS JOIN message_reaction_observations o
+ WHERE command.message_id=?4 AND o.command_id=command.id AND o.command_id<>''
+), matching AS (
+SELECT o.ordinal, o.id, o.account_id, o.address, o.kind, o.actor, o.provider_id, o.archive_scope, o.archive_id, o.target_id, o.target_scope, o.target_author, o.fingerprint, o.occurred_at, o.payload, o.command_id, o.archive_order, o.room_epoch FROM candidates
+CROSS JOIN message_reaction_observations o ON o.ordinal=candidates.ordinal
+LEFT JOIN message_reaction_commands command ON command.id=o.command_id
+WHERE o.account_id=?2 AND o.address=?3 AND o.kind=?5
 AND (command.id IS NULL OR command.state<>'failed')
 AND (o.kind<>'room' OR json_extract(o.payload,'$.IsOwn')=1 OR o.room_epoch=?6)
-AND NOT EXISTS(SELECT 1 FROM message_reaction_observations conflict
+AND (o.provider_id='' OR NOT EXISTS(
+ SELECT 1 FROM message_reaction_observations conflict
  WHERE conflict.account_id=o.account_id AND conflict.address=o.address AND conflict.actor=o.actor
- AND ((o.provider_id<>'' AND conflict.provider_id=o.provider_id) OR (o.archive_id<>'' AND conflict.archive_scope=o.archive_scope AND conflict.archive_id=o.archive_id))
- AND conflict.fingerprint<>o.fingerprint)
+ AND conflict.provider_id=o.provider_id AND conflict.fingerprint<>o.fingerprint))
+AND (o.archive_id='' OR NOT EXISTS(
+ SELECT 1 FROM message_reaction_observations conflict
+ WHERE conflict.account_id=o.account_id AND conflict.address=o.address AND conflict.actor=o.actor
+ AND conflict.archive_scope=o.archive_scope AND conflict.archive_id=o.archive_id
+ AND conflict.fingerprint<>o.fingerprint))
 ), ranked AS (
  SELECT matching.ordinal, matching.id, matching.account_id, matching.address, matching.kind, matching.actor, matching.provider_id, matching.archive_scope, matching.archive_id, matching.target_id, matching.target_scope, matching.target_author, matching.fingerprint, matching.occurred_at, matching.payload, matching.command_id, matching.archive_order, matching.room_epoch,row_number() OVER(PARTITION BY actor ORDER BY occurred_at DESC,
  (archive_id<>'') DESC,archive_order DESC,
@@ -414,11 +429,11 @@ FROM ranked WHERE position=1 ORDER BY ordinal
 `
 
 type ReactionObservationsForTargetsParams struct {
+	References string
 	AccountID  string
 	Address    string
-	Kind       string
 	MessageID  string
-	References string
+	Kind       string
 	RoomEpoch  int64
 }
 
@@ -442,13 +457,14 @@ type ReactionObservationsForTargetsRow struct {
 	ArchiveOrder int64
 }
 
+// Start from references or commands so each lookup reads only matching observations.
 func (q *Queries) ReactionObservationsForTargets(ctx context.Context, arg ReactionObservationsForTargetsParams) ([]ReactionObservationsForTargetsRow, error) {
 	rows, err := q.db.QueryContext(ctx, reactionObservationsForTargets,
+		arg.References,
 		arg.AccountID,
 		arg.Address,
-		arg.Kind,
 		arg.MessageID,
-		arg.References,
+		arg.Kind,
 		arg.RoomEpoch,
 	)
 	if err != nil {

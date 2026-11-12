@@ -1,19 +1,35 @@
 -- name: ReactionObservationsForTargets :many
-WITH matching AS (
-SELECT o.* FROM message_reaction_observations o
-LEFT JOIN message_reaction_commands command ON command.id=o.command_id
-WHERE o.account_id=sqlc.arg(account_id) AND o.address=sqlc.arg(address) AND o.kind=sqlc.arg(kind)
-AND (command.message_id=sqlc.arg(message_id) OR EXISTS(SELECT 1 FROM json_each(CAST(sqlc.arg(references) AS TEXT)) ref
- WHERE json_extract(ref.value,'$.id')=o.target_id
+-- Start from references or commands so each lookup reads only matching observations.
+WITH candidates AS (
+ SELECT o.ordinal
+ FROM json_each(CAST(sqlc.arg(references) AS TEXT)) ref
+ CROSS JOIN message_reaction_observations o
+ WHERE o.account_id=sqlc.arg(account_id) AND o.address=sqlc.arg(address)
+ AND o.target_id=json_extract(ref.value,'$.id')
  AND (o.target_scope<>'' OR json_extract(ref.value,'$.unique')=1)
  AND (o.target_scope='' OR json_extract(ref.value,'$.scope')=o.target_scope)
- AND (o.target_author='' OR json_extract(ref.value,'$.author')=o.target_author)))
+ AND (o.target_author='' OR json_extract(ref.value,'$.author')=o.target_author)
+ UNION
+ SELECT o.ordinal
+ FROM message_reaction_commands command
+ CROSS JOIN message_reaction_observations o
+ WHERE command.message_id=sqlc.arg(message_id) AND o.command_id=command.id AND o.command_id<>''
+), matching AS (
+SELECT o.* FROM candidates
+CROSS JOIN message_reaction_observations o ON o.ordinal=candidates.ordinal
+LEFT JOIN message_reaction_commands command ON command.id=o.command_id
+WHERE o.account_id=sqlc.arg(account_id) AND o.address=sqlc.arg(address) AND o.kind=sqlc.arg(kind)
 AND (command.id IS NULL OR command.state<>'failed')
 AND (o.kind<>'room' OR json_extract(o.payload,'$.IsOwn')=1 OR o.room_epoch=sqlc.arg(room_epoch))
-AND NOT EXISTS(SELECT 1 FROM message_reaction_observations conflict
+AND (o.provider_id='' OR NOT EXISTS(
+ SELECT 1 FROM message_reaction_observations conflict
  WHERE conflict.account_id=o.account_id AND conflict.address=o.address AND conflict.actor=o.actor
- AND ((o.provider_id<>'' AND conflict.provider_id=o.provider_id) OR (o.archive_id<>'' AND conflict.archive_scope=o.archive_scope AND conflict.archive_id=o.archive_id))
- AND conflict.fingerprint<>o.fingerprint)
+ AND conflict.provider_id=o.provider_id AND conflict.fingerprint<>o.fingerprint))
+AND (o.archive_id='' OR NOT EXISTS(
+ SELECT 1 FROM message_reaction_observations conflict
+ WHERE conflict.account_id=o.account_id AND conflict.address=o.address AND conflict.actor=o.actor
+ AND conflict.archive_scope=o.archive_scope AND conflict.archive_id=o.archive_id
+ AND conflict.fingerprint<>o.fingerprint))
 ), ranked AS (
  SELECT matching.*,row_number() OVER(PARTITION BY actor ORDER BY occurred_at DESC,
  (archive_id<>'') DESC,archive_order DESC,
