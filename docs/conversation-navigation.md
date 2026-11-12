@@ -30,6 +30,14 @@ on this root exposed the drawer's empty wrapper as another grid item, creating a
 second row and shortening both the inbox and the chat for short conversations.
 On mobile the whole fragment is hidden until a conversation opens.
 
+The conversation list uses the [Oiê palette](branding.md) for its row states.
+Hover adds a neutral surface on devices with a hover pointer. The open
+conversation retains a blue-tinted surface and a leading stripe even when the
+pointer is elsewhere. Keyboard focus draws a full outline inside the row.
+The stripe and outline use the high-contrast accent and leave row geometry
+stable. See [WCAG non-text contrast](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html)
+and [visible focus](https://www.w3.org/WAI/WCAG22/Understanding/focus-visible.html).
+
 The focused browser fixture is `tests/browser/conversation-navigation.cjs`.
 It uses isolated HTTP engines and checks unchanged DOM nodes and scroll,
 drafts, details, Back/Forward, stale requests, failure preservation, real inbox

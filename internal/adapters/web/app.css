@@ -77,8 +77,17 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-filter[aria-current=true]{background:var(--oie-accent-soft);border-color:transparent;color:var(--oie-text)}
 .oie-conversation-scroll{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--oie-border) transparent}
 .oie-conversations{list-style:none;margin:0;padding:0 8px 12px}
-.oie-chat-link{display:flex;align-items:center;gap:11px;min-width:0;height:78px;padding:10px 11px;border-radius:9px;color:var(--oie-text);text-decoration:none;font-weight:400}
-.oie-chat-link:hover,.oie-chat-link[aria-current=true]{background:var(--oie-selected);color:var(--oie-text);text-decoration:none}
+.oie-chat-link{position:relative;display:flex;align-items:center;gap:11px;min-width:0;height:78px;padding:10px 11px;border-radius:9px;color:var(--oie-text);text-decoration:none;font-weight:400}
+@media(hover:hover){
+ .oie-chat-link:hover{color:var(--oie-text);text-decoration:none}
+ .oie-chat-link:not([aria-current=true]):hover{background:var(--oie-raised)}
+}
+.oie-chat-link[aria-current=true]{background:var(--oie-accent-soft)}
+.oie-chat-link[aria-current=true]::before{
+ content:"";position:absolute;inset-block:12px;inset-inline-start:4px;
+ border-inline-start:3px solid var(--oie-accent-text);border-radius:3px;pointer-events:none
+}
+.oie-chat-link:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:-2px}
 .oie-chat-avatar{flex-shrink:0}
 .oie-row-content{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
 .oie-row-top,.oie-row-bottom{display:flex;align-items:center;gap:8px;min-width:0}

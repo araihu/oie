@@ -115,6 +115,28 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF ready');
   let opened=await fresh();page=opened.page;await page.goto(base+'/?chat='+a.id+'&lang=en&theme=dark');await ready(a);await page.setViewportSize({width:1530,height:1220});assert.equal((await layout()).timelineContent,(await layout()).timelineHeight);await page.setViewportSize({width:900,height:950});await layout();await page.setViewportSize({width:1440,height:950});const token=await page.evaluate(()=>window.documentToken);const startDocuments=requests.filter(request=>request.kind==='document').length;
+  const currentRow=page.locator('#conversation-list a[aria-current=true]');
+  const nextRow=page.locator('#conversation-list a[aria-current=false]').first();
+  const rowStyle=row=>row.evaluate(link=>{
+   const style=getComputedStyle(link),marker=getComputedStyle(link,'::before');
+   return {background:style.backgroundColor,marker:marker.content,markerWidth:marker.borderInlineStartWidth,outline:style.outlineStyle,outlineWidth:style.outlineWidth};
+  });
+  const currentStyle=await rowStyle(currentRow),nextStyle=await rowStyle(nextRow);
+  const currentBounds=await currentRow.boundingBox(),nextBounds=await nextRow.boundingBox();
+  assert.equal(currentStyle.markerWidth,'3px');
+  assert.equal(nextStyle.marker,'none');
+  await nextRow.hover();
+  await until(async()=>(await rowStyle(nextRow)).background!==nextStyle.background,'conversation hover surface');
+  await nextRow.evaluate(link=>Promise.all(link.getAnimations().map(animation=>animation.finished)));
+  assert.notEqual((await rowStyle(nextRow)).background,currentStyle.background);
+  assert.deepEqual(await rowStyle(currentRow),currentStyle,'hover leaves the current conversation highlighted');
+  await page.keyboard.press('Tab');
+  await nextRow.focus();
+  await until(async()=>(await rowStyle(nextRow)).outlineWidth==='2px','conversation keyboard focus outline');
+  assert.equal((await rowStyle(nextRow)).outline,'solid');
+  assert.equal((await rowStyle(nextRow)).marker,'none');
+  assert.deepEqual(await currentRow.boundingBox(),currentBounds);
+  assert.deepEqual(await nextRow.boundingBox(),nextBounds);
   await page.evaluate(()=>{window.savedList=document.getElementById('conversation-list');window.savedApp=document.getElementById('oie-app');window.savedSidebar=document.querySelector('.oie-sidebar')});
   await page.locator('#message-composer').fill('Draft A');
   const originalQuery=await page.locator('#conversation-search').inputValue(),originalTitleParameter=new URL(page.url()).searchParams.get('q');
