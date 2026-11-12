@@ -424,12 +424,12 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
     const refusedQuote = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/messages/send');
     await staleQuote.click();
     await refusedQuote;
+    await dismissToast(page, changedMessage, portuguese);
     await refreshedQuote;
     await until(() => composer.isEditable(), 'a reply revision conflict unlocks the composer');
     assert.equal(await composer.inputValue(), newText);
     await page.locator('[data-composer-reply]').waitFor();
     await until(() => page.locator('#composer-send').isEnabled(), 'the quote refresh allows a new review');
-    await dismissToast(page, changedMessage, portuguese);
 
     const reviewedAgain = await openSchedule(page, portuguese);
     await fillPlannedTime(page);
