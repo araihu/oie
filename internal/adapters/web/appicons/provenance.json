@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "tool": "goshtoso-iconpack",
+  "release": "iconpack-651078185e64",
+  "catalogSha256": "651078185e647dca4e11bf632aadc85126720a97f1a3f996ae2809a82d7350ef",
+  "sourceKind": "muamba-snapshot",
+  "archiveSha256": "",
+  "sourceConfigSha256": "651078185e647dca4e11bf632aadc85126720a97f1a3f996ae2809a82d7350ef",
+  "sourceLockSha256": "5a273030b3a3a546dfe50ccb90522b2992c2798eb84310331b89437fd80530d7",
+  "sources": [
+    {
+      "namespace": "custom",
+      "product": "heroicons",
+      "spritePath": "",
+      "spriteSha256": "",
+      "manifestPath": ".iconpack.yaml",
+      "manifestSha256": "651078185e647dca4e11bf632aadc85126720a97f1a3f996ae2809a82d7350ef",
+      "provenancePath": "",
+      "provenanceSha256": "",
+      "licensePath": "heroicons/LICENSE",
+      "licenseSha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    }
+  ],
+  "assets": [
+    {
+      "canonicalName": "heroicons-16-solid-chat-bubble-left",
+      "source": "https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/chat-bubble-left.svg:16/solid/chat-bubble-left.svg",
+      "license": "MIT",
+      "path": "heroicons/16/solid/chat-bubble-left.svg",
+      "sha256": "c59f230d1a64adc26e65ddb08284d89c61cb33768586057938efd44dc2e4efcd"
+    }
+  ]
+}

@@ -35,7 +35,6 @@ html,body{margin:0;height:100%;font-family:var(--font-body);background:var(--oie
 html[data-sidebar-collapsed] .oie-sidebar{display:none}
 .oie-icon-button.oie-sidebar-toggle,.oie-sidebar-splitter{display:none}
 html[data-sidebar-ready] .oie-sidebar-toggle{display:inline-flex}
-html[data-sidebar-collapsed] .oie-sidebar-toggle .oie-icon{transform:rotate(180deg)}
 html[data-sidebar-ready] .oie-sidebar-splitter{
  display:block;position:absolute;z-index:1;inset-block:0;right:-6px;width:12px;
  cursor:col-resize;touch-action:none;outline:none

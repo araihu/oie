@@ -69,3 +69,20 @@ that preview retained the same shell and inbox nodes across two conversation
 selections, made only one document request and kept the composer at the viewport
 bottom. The existing engine process and protocol sessions were retained. The
 separate development preview on port 8082 is also still available.
+
+## Navigation icons
+
+The sidebar toggle and mobile menu use the bundled Heroicons Bars 3 symbol.
+The Chats link uses the 16px solid Chat Bubble Left glyph from the same
+Heroicons v2.2.0 source. Goshtoso's consumer iconpack supplies that glyph as a
+local sprite because the bundled selection omits it. The source and integrity
+lock live under `tools/icons`.
+
+Regenerate the supplemental sprite from the repository root with the pinned
+Goshtoso generator.
+
+```sh
+GOWORK=off go -C tools run github.com/araihu/goshtoso/cmd/iconpack@v0.6.2-0.20261110110007-83aed4efdc31 \
+  -config icons/.iconpack.yaml -out ../internal/adapters/web/appicons \
+  -package appicons -const-prefix Icon -sprite-url /ui/icons/heroicons-extra.svg
+```

@@ -1,0 +1,12 @@
+schema: 1
+files:
+  - id: heroicons/icon
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/chat-bubble-left.svg
+    path: .iconpack/sources/heroicons/16/solid/chat-bubble-left.svg
+    size: 424
+    integrity: sha384-iDckmKRK+JWEy0sN6q1oYk0DGVCD38BZUBqjtwzTp7rkFW17y+LGwPPP3jEL5Jhq
+  - id: heroicons/license
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+    path: .iconpack/sources/heroicons/LICENSE
+    size: 1071
+    integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU

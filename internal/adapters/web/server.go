@@ -19,12 +19,16 @@ import (
 	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/cachehttp"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/adapters/web/appicons"
 
 	"golang.org/x/text/language"
 )
 
 //go:embed app.css
 var stylesheet []byte
+
+//go:embed appicons/sprite.svg
+var appIconSprite []byte
 
 //go:embed chat-pattern.svg
 var chatPattern []byte
@@ -632,6 +636,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mime string
 		body []byte
 	}{
+		appicons.SpriteURL:  {"image/svg+xml", appIconSprite},
 		"/ui/sidebar.js":    {"text/javascript", sidebarScript},
 		"/ui/reset-data.js": {"text/javascript", resetDataScript},
 		"/ui/mentions.js":   {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},

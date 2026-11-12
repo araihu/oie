@@ -13,6 +13,7 @@ import (
 	"github.com/araihu/goshtoso/components/head"
 	"github.com/araihu/goshtoso/components/icon"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
+	"github.com/araihu/oie/internal/adapters/web/appicons"
 	"github.com/araihu/goshtoso/components/link"
 "github.com/araihu/goshtoso/components/popover"
 	"github.com/araihu/goshtoso/components/sidebar"
@@ -32,7 +33,7 @@ func navigation(v view, id string) sidebar.Config {
 	cfg := sidebar.Config{
 		DisableSkipLink: true, RootClass: "oie-navigation", FooterSlot: navigationFooter(v,id),
 		Items: []sidebar.Item{
-			{ID: "chats", Label: v.Text.Chats, Href: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidQueueList), Active: v.Section == "chats", LinkAttrs: sidebarNavigationAttrs()},
+			{ID: "chats", Label: v.Text.Chats, Href: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), Icon: appicons.Icon(appicons.Config{Symbol: appicons.IconHeroicons16SolidChatBubbleLeft, Decorative: true, RootClass: "oie-icon"}), Active: v.Section == "chats", LinkAttrs: sidebarNavigationAttrs()},
 
             {ID: "media", Label: v.Text.SharedMedia, Href: v.href("section", "media", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidRectangleGroup), Active: v.Section == "media", LinkAttrs: sidebarNavigationAttrs()},
 			{ID: "archived", Label: v.Text.Archived, Href: v.href("section", "archived", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidFolder), Active: v.Section == "archived", LinkAttrs: sidebarNavigationAttrs()},
@@ -57,7 +58,7 @@ templ navigationControl(v view) {
 		"data-expand-label": v.Text.ExpandNavigation, "data-collapse-label": v.Text.CollapseNavigation,
 		"aria-expanded": "true", "aria-label": v.Text.CollapseNavigation, "title": v.Text.CollapseNavigation,
 	})) {
-		@glyph(heroicons.Icon16SolidChevronLeft)
+		@glyph(heroicons.Icon16SolidBars3)
 	}
 	<div class="oie-mobile-nav">
 		@sidebar.Overlay(sidebar.OverlayConfig{ID: "mobile-navigation", Sidebar: navigation(v,"mobile-navigation"), TriggerLabel: v.Text.OpenNavigation, Trigger: glyph(heroicons.Icon16SolidBars3)})
