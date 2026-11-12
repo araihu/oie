@@ -91,9 +91,11 @@ paths:
         revisions or independent correction aliases. Current associated URLs, filenames
         and cached page titles/descriptions are searched only while their catalog source
         is current. Metadata coverage can lag immediate message-text coverage.
-        Order is newest original message timestamp at UTC millisecond precision and UUID first, current hit before
-        earlier content revisions, then newest revision timestamp and UUID. New arrivals
-        or corrections can change subsequent results; pages are not a frozen snapshot.
+        Unreleased schedules and scheduled sends cancelled before dispatch are excluded.
+        Order is newest message position (`timelineAt`, falling back to `createdAt`) at UTC
+        millisecond precision and UUID first, current hit before earlier content revisions,
+        then newest revision timestamp and UUID. New arrivals or corrections can change
+        subsequent results; pages are not a frozen snapshot.
       parameters:
       - name: q
         in: query
@@ -153,11 +155,12 @@ paths:
       operationId: listSharedContent
       summary: Browse shared content across retained conversations
       description: >-
-        Browse the local derived catalog, newest original message time first with
-        item UUID ties at millisecond precision. Account/conversation filters apply
+        Browse the local derived catalog, newest message position (`timelineAt`, falling back
+        to `createdAt`) first with item UUID ties at millisecond precision. Unreleased schedules
+        and scheduled sends cancelled before dispatch are excluded. Account/conversation filters apply
         before pagination. Metadata search covers URL, filename, visible caption,
         cached preview title/description, sender, conversation and account label.
-        A background worker indexes all retained and incoming messages. Listing
+        A background worker indexes visible retained and incoming messages. Listing
         registers preview enrichment only for the returned image/link references;
         originals still follow device preferences and explicit download operations.
         Document/audio entries remain URL references. Video bytes are available only through
@@ -522,10 +525,11 @@ paths:
       operationId: getMessageContext
       tags: [Messages]
       summary: Read a bounded timeline around a retained message
-      description: Reads the target and nearest retained neighbors from the same conversation, newest first by
-        original UTC timestamp at millisecond precision and UUID tie-break. Includes the target even with limit 1.
+      description: Reads the target and nearest visible retained neighbors from the same conversation, newest first by
+        timelineAt or createdAt at UTC millisecond precision and UUID tie-break. Includes the target even with limit 1.
         Only local retained data is read; no provider archive queries or read receipts are triggered. Foreign or
-        unavailable source messages return not_found. Clients should offer return to latest when hasNewer is true.
+        unavailable source messages return not_found, including unreleased schedules and scheduled sends cancelled
+        before dispatch. Clients should offer return to latest when hasNewer is true.
         A retained correction-source alias resolves to the original logical targetId with requestedTargetId
         identifying the requested alias. All returned items remain scoped to this conversation.
       parameters:
@@ -816,6 +820,32 @@ paths:
           $ref: '#/components/responses/Invalid'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/link-previews:
+    post:
+      tags: [Previews]
+      operationId: resolveDraftLinkPreview
+      summary: Resolve a link preview for a draft
+      description: Fetches metadata and an optional bounded raster image for one public HTTP(S) URL. Uses the transient link cache and creates no message, durable preview record or original download.
+      requestBody:
+        required: true
+        description: Only the URL selected for preview.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DraftLinkPreviewRequest'
+      responses:
+        '200':
+          description: Metadata and optional raster image for the submitted URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DraftLinkPreview'
+        '204':
+          description: Metadata is unavailable. The client may still display the URL as a link.
+        '400':
+          $ref: '#/components/responses/Invalid'
         '503':
           $ref: '#/components/responses/Unavailable'
   /api/v1/previews/{previewId}:
@@ -1350,8 +1380,8 @@ paths:
       - Operations
       operationId: getOperation
       summary: Reconcile a mutation after an ambiguous response
-      description: A receipt proves the local mutation committed; send receipts prove durable engine acceptance,
-        never recipient delivery. Unknown IDs return 404.
+      description: >-
+        A receipt proves the local mutation committed. Send receipts prove durable engine acceptance. Request includeAcceptedMessage to read the immutable send acceptance snapshot, including the original composition and scheduled instant. This route exposes the receipt kinds defined by Operation. An ID without an exposed receipt returns 404. Recover the result of updatePendingMessage or sendScheduledMessageNow by replaying the original request with the same key and input.
       parameters:
       - name: operationId
         in: path
@@ -1359,6 +1389,12 @@ paths:
         description: The original Idempotency-Key.
         schema:
           $ref: '#/components/schemas/ID'
+      - name: includeAcceptedMessage
+        in: query
+        description: Include the original acceptance snapshot for a send_message receipt. Other receipt kinds never include a message.
+        schema:
+          type: boolean
+          default: false
       responses:
         '200':
           description: Durable operation receipt
@@ -2050,8 +2086,9 @@ paths:
       tags:
       - Messages
       summary: Read retained messages
-      description: Returns a bounded page of retained text newest-first by original UTC timestamp at millisecond
-        precision, with a UUID tie-break. Includes serially recovered archive messages. The default direction is older;
+      description: Returns a bounded page of retained messages newest-first by timelineAt when present and createdAt
+        otherwise, at UTC millisecond precision with a UUID tie-break. Includes serially recovered archive messages.
+        Pending scheduled messages are omitted until release. The default direction is older;
         without a cursor it reads the latest page. Newer requires a cursor and reads the nearest messages after that
         retained conversation-scoped anchor, without skipping to the latest page. Both directions return newest-first.
         nextCursor continues in the requested direction. Reads never fetch provider history or mark messages as read.
@@ -2073,7 +2110,7 @@ paths:
       parameters:
       - name: cursor
         in: query
-        description: Retained message UUID anchoring this conversation-scoped page. Excludes the anchor. Use the oldest returned item for older and the newest returned item for newer. Required for newer.
+        description: Retained message UUID anchoring this conversation-scoped page at its current position. A schedule can move to a new position at release. Excludes the anchor. Use the oldest returned item for older and the newest returned item for newer. Required for newer.
         schema:
           $ref: '#/components/schemas/ID'
       - name: direction
@@ -2095,14 +2132,14 @@ paths:
       operationId: sendMessage
       tags:
       - Messages
-      summary: Accept an immediate text message
-      description: Atomically stores the message, operation receipt, and transactional outbox intent. Queued work
-        survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with
-        cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous
-        transmission becomes unknown, never a blind retry.
+      summary: Accept an immediate or scheduled message
+      description: >-
+        Atomically commits one logical message, operation receipt and outbox intent for the complete composition, including the ordered references to staged attachments. The engine checks the destination, reply, mentions, attachment scope and effective send capabilities before acceptance. Invalid or unavailable attachments reject the whole composition. Attachment bytes are staged locally and any provider upload belongs to dispatch. Room dispatch waits for confirmed membership under an active explicit join intent.
+
+        Omitting scheduledAt makes the intent immediately eligible. A future schedule never blocks another eligible send. A missed schedule dispatches when the owning engine and destination become available again. Optional expectedReplyRevisionId and expectedReplyExcerptSha256 bind a new scheduled reply to the reviewed source and excerpt. A changed source rejects acceptance with state_conflict and replySourceChanged set to true. Idempotency includes the complete composition, normalized instant and any reply preconditions. A matching replay returns the original acceptance snapshot even after the scheduled time passes, attachment availability changes or the source is corrected. Different input with the same key yields idempotency_conflict. Read the message for current state. Ambiguous transmission remains unknown.
       responses:
         '413':
-          description: Request body exceeds the one MiB engine limit.
+          description: The request body exceeds the one MiB engine limit or an attachment exceeds the known provider upload limit.
           content:
             application/problem+json:
               schema: {$ref: '#/components/schemas/Problem'}
@@ -2173,8 +2210,17 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/SendMessage'
-            example:
-              originalText: Hello from Oie!
+            examples:
+              immediateText:
+                summary: Existing immediate text send
+                value:
+                  originalText: Hello from Oie!
+              scheduledComposition:
+                summary: Scheduled text with a link and a staged file
+                value:
+                  originalText: 'Studio entrance: https://example.org/studio'
+                  attachmentIds: [019a5df0-0000-7000-8000-000000000006]
+                  scheduledAt: '2026-11-12T12:30:00-03:00'
   /api/v1/messages/{messageId}/reactions:
     parameters:
     - $ref: '#/components/parameters/MessageID'
@@ -2563,9 +2609,9 @@ paths:
       operationId: cancelMessage
       tags:
       - Messages
-      summary: Cancel a queued send
-      description: Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage
-        and makes no change. Cancelled intents never resume on ordinary restart.
+      summary: Cancel a pending send
+      description: >-
+        Requires the current revision and a queued, known-unsent message at the owning engine, including a future schedule. Cancellation and dispatch share an atomic cutoff before any external provider attempt for that intent, including attachment upload. A stale revision or ineligible state yields state_conflict with currentMessage. Cancellation retires the send intent and preserves any independent retained references. A matching idempotent replay returns the original cancellation snapshot.
       responses:
         '413':
           description: Request body exceeds the one MiB engine limit.
@@ -2619,6 +2665,200 @@ paths:
               $ref: '#/components/schemas/CancelMessage'
             example:
               expectedRevisionId: 019a5df0-0000-7000-8000-000000000001
+  /api/v1/conversations/{conversationId}/staged-attachments/{attachmentId}:
+    parameters:
+      - $ref: '#/components/parameters/ConversationID'
+      - $ref: '#/components/parameters/StagedAttachmentID'
+    put:
+      tags: [Messages]
+      operationId: stageMessageAttachment
+      summary: Stage a file for an outgoing message
+      description: >-
+        Store one complete file durably on the owning engine, scoped to this conversation and its account. The client assigns the ID once. A matching repeat with the same file bytes and filename returns the original receipt. Different input for that ID yields idempotency_conflict. An incomplete request leaves no usable attachment. Confirmed local staging performs no provider upload. Send and pending edit accept only available attachments in the same scope. The engine retains accepted references while their send is unresolved, including through restart, rescheduling and Send now.
+      requestBody:
+        required: true
+        description: One file with its filename in the file part's Content-Disposition.
+        content:
+          multipart/form-data:
+            example:
+              file: hello
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file]
+              properties:
+                file: {type: string, format: binary, example: hello}
+      responses:
+        '201':
+          description: File durably staged
+          headers:
+            Location:
+              description: Scoped URL for the staged bytes.
+              schema: {type: string, format: uri-reference}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StagedAttachment'
+        '200':
+          description: Matching staged attachment receipt replayed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StagedAttachment'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          description: File exceeds the engine's attachment staging limit.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '415':
+          description: Unsupported request media type or attachment format.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      tags: [Messages]
+      operationId: getStagedMessageAttachment
+      summary: Read retained bytes of an outgoing attachment
+      description: >-
+        Reads local bytes in this conversation and account scope, for example when reopening an existing scheduled composition. Returns 404 when bytes are unavailable or the attachment is outside this scope.
+      responses:
+        '200':
+          description: Retained attachment bytes
+          content:
+            application/octet-stream:
+              schema: {type: string, format: binary}
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/scheduled-messages:
+    get:
+      tags: [Messages]
+      operationId: listScheduledMessages
+      summary: List scheduled messages across conversations
+      description: >-
+        Lists the selected engine's own queued, known-unsent messages with a configured schedule, including overdue sends waiting for connectivity. Results include their destination. Successful Send now removes the item from this list even if connectivity delays dispatch. Results sort by scheduledAt ascending, then message UUID ascending. Pagination is over current data. Concurrent changes can move items across the cursor boundary.
+      parameters:
+        - name: conversationId
+          in: query
+          description: Limit results to one conversation on this engine. Cannot be combined with conversationIds.
+          schema:
+            $ref: '#/components/schemas/ID'
+        - name: conversationIds
+          in: query
+          description: Limit results to any of the selected conversations on this engine. Cannot be combined with conversationId. Order does not affect results or continuation.
+          style: form
+          explode: true
+          example: [019a5df0-0000-7000-8000-000000000001, 019a5df0-0000-7000-8000-000000000002]
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 200
+            uniqueItems: true
+            items:
+              $ref: '#/components/schemas/ID'
+        - name: cursor
+          in: query
+          description: Opaque continuation bound to this engine and conversation filter.
+          schema: {type: string, minLength: 1, maxLength: 8192}
+        - name: limit
+          in: query
+          description: Maximum number of scheduled messages in this page.
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+      responses:
+        '200':
+          description: One page of pending scheduled messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledMessagePage'
+              example:
+                engineId: 019a5df0-0000-7000-8000-000000000001
+                items: []
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/messages/{messageId}/pending:
+    parameters:
+      - $ref: '#/components/parameters/MessageID'
+    patch:
+      tags: [Messages]
+      operationId: updatePendingMessage
+      summary: Edit or reschedule a pending message
+      description: >-
+        Replace the full composition, change the schedule, or do both in one transaction at the owning engine. It must be an own queued, known-unsent message with the expected revision. The message ID, destination and creation time are retained. The engine validates new or changed reply, mentions and attachment references, then commits the updated composition and attachment references together. A schedule-only update preserves the accepted composition.
+
+        The mutation and the dispatch claim share an atomic cutoff before any external provider attempt for this intent, including attachment upload. Stale revision, ineligible state or a winning dispatch claim yields state_conflict with currentMessage. When the mutation wins, a later claim uses the new revision and eligibility time. Matching idempotent replay returns the original result before evaluating current state, attachment availability or time preconditions.
+      parameters:
+        - $ref: '#/components/parameters/ScheduledMutationKey'
+      requestBody:
+        required: true
+        description: Expected revision and the fields to change.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePendingMessage'
+      responses:
+        '200':
+          $ref: '#/components/responses/PendingMessageUpdated'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/SchedulingBodyTooLarge'
+        '415':
+          $ref: '#/components/responses/SchedulingUnsupportedMedia'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/messages/{messageId}/send-now:
+    parameters:
+      - $ref: '#/components/parameters/MessageID'
+    post:
+      tags: [Messages]
+      operationId: sendScheduledMessageNow
+      summary: Make a scheduled message eligible immediately
+      description: >-
+        With the current expected revision, atomically clears scheduledAt on the same queued, known-unsent scheduled intent and makes it eligible immediately. The message ID, destination, composition and attachments remain attached to the same intent. Acceptance records eligibility. Dispatch still requires the owning engine, connectivity and any existing destination prerequisites. This operation and dispatch share the same atomic cutoff as pending edit and cancel, including before provider attachment upload. A stale revision, ineligible state or winning dispatch claim yields state_conflict with currentMessage. Repeating the same key and input returns the original successful result even if dispatch has since started.
+      parameters:
+        - $ref: '#/components/parameters/ScheduledMutationKey'
+      requestBody:
+        required: true
+        description: Expected revision of the scheduled message to send now.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendScheduledMessageNow'
+      responses:
+        '200':
+          $ref: '#/components/responses/PendingMessageUpdated'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/SchedulingBodyTooLarge'
+        '415':
+          $ref: '#/components/responses/SchedulingUnsupportedMedia'
+        '503':
+          $ref: '#/components/responses/Unavailable'
 components:
   parameters:
     AccountID:
@@ -2640,6 +2880,20 @@ components:
       in: path
       required: true
       description: Stable messageId UUIDv7.
+      schema:
+        $ref: '#/components/schemas/ID'
+    StagedAttachmentID:
+      name: attachmentId
+      in: path
+      required: true
+      description: Client-assigned UUIDv7 of one staged attachment.
+      schema:
+        $ref: '#/components/schemas/ID'
+    ScheduledMutationKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Stable mutation key. Different input with the same key yields idempotency_conflict.
       schema:
         $ref: '#/components/schemas/ID'
   responses:
@@ -2668,7 +2922,7 @@ components:
             code: not_found
             documentation: https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#not_found
     Conflict:
-      description: Idempotency conflict, duplicate address, invalid stream cursor, or message state conflict
+      description: Idempotency conflict, duplicate address, invalid stream cursor, or a message or reply source conflict
       content:
         application/problem+json:
           schema:
@@ -2691,6 +2945,22 @@ components:
             status: 503
             code: unavailable
             documentation: https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#unavailable
+    PendingMessageUpdated:
+      description: Committed message revision or original successful replay
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Message'
+    SchedulingBodyTooLarge:
+      description: JSON mutation exceeds the one MiB engine request limit or a pending composition edit includes an attachment exceeding the known provider upload limit.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    SchedulingUnsupportedMedia:
+      description: JSON mutation requires application/json.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
   schemas:
     ID:
       type: string
@@ -3146,6 +3416,10 @@ components:
         createdAt:
           type: string
           format: date-time
+        acceptedMessage:
+          allOf:
+          - $ref: '#/components/schemas/Message'
+          description: Immutable original message acceptance, available only when requested for a send_message receipt. Read the message resource separately for its current state.
     Event:
       type: object
       description: Durable event with the payload corresponding to its type. Accounts, connections, conversations,
@@ -3277,6 +3551,9 @@ components:
           $ref: '#/components/schemas/Message'
         currentRoomSession:
           $ref: '#/components/schemas/RoomSession'
+        replySourceChanged:
+          type: boolean
+          description: True on a state conflict caused by an unavailable or changed reply source or excerpt when the request included expectedReplyRevisionId.
     Connection:
       type: object
       description: Current owning-engine connection state. Contains no credentials.
@@ -3311,6 +3588,53 @@ components:
         accountId: 019a5df0-0000-7000-8000-000000000001
         state: not_connected
         updatedAt: '2026-11-07T12:00:00Z'
+    DraftLinkPreviewRequest:
+      type: object
+      description: Public HTTP or HTTPS URL detected in a draft.
+      additionalProperties: false
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 4096
+          example: https://example.com/studio
+    DraftLinkPreview:
+      type: object
+      description: Transient link metadata for a draft composition.
+      additionalProperties: false
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 4096
+          example: https://example.com/studio
+        title:
+          type: string
+          maxLength: 300
+          example: Studio
+        description:
+          type: string
+          maxLength: 1000
+          example: Opening hours and directions.
+        image:
+          $ref: '#/components/schemas/DraftLinkPreviewImage'
+    DraftLinkPreviewImage:
+      type: object
+      description: Optional bounded raster image for a draft link preview.
+      additionalProperties: false
+      required: [mediaType, data]
+      properties:
+        mediaType:
+          type: string
+          enum: [image/png, image/jpeg, image/gif]
+          example: image/png
+        data:
+          type: string
+          maxLength: 174764
+          description: Base64 of at most 128 KiB of raster image bytes.
+          example: iVBORw0KGgo=
     MessagePreview:
       type: object
       description: Source-linked cached metadata. Entity UUID remains stable as enrichment/download revisions change.
@@ -3329,12 +3653,12 @@ components:
       - downloadState
       - updatedAt
       properties:
-        id: &id001
+        id: &auditUUID
           $ref: '#/components/schemas/ID'
-        revisionId: *id001
-        accountId: *id001
-        conversationId: *id001
-        messageId: *id001
+        revisionId: *auditUUID
+        accountId: *auditUUID
+        conversationId: *auditUUID
+        messageId: *auditUUID
         url:
           type: string
           format: uri
@@ -4643,6 +4967,12 @@ components:
           allOf:
           - $ref: '#/components/schemas/ID'
           description: Canonical target UUID frozen in an outgoing reply intent, including a text-only fallback. It does not imply the original is still available. Reply bodyText preserves the authored response for receipt reconciliation.
+        expectedReplyRevisionId:
+          allOf:
+          - $ref: '#/components/schemas/ID'
+          description: Source revision explicitly required when the reply was scheduled or the current quote was replaced. Omitted when the caller supplied no review precondition for the current quote.
+        expectedReplyExcerptSha256:
+          $ref: '#/components/schemas/ReplyExcerptSHA256'
         originalText:
           type: string
           description: Exact text of the current retained content revision. Validated incoming corrections retain the logical message UUID and original creation time; prior source bodies remain retained. Copying returns this text without removing formatting or compatibility quoting.
@@ -4650,6 +4980,10 @@ components:
           type: string
           format: date-time
           description: UTC timestamp.
+        timelineAt:
+          type: string
+          format: date-time
+          description: UTC position of a released scheduled message in the conversation. Use createdAt when omitted. The original createdAt is preserved.
         isOwn:
           type: boolean
         historical:
@@ -4674,6 +5008,27 @@ components:
           - unknown
           - failed
           - cancelled
+        scheduledAt:
+          type: string
+          format: date-time
+          description: >-
+            Configured earliest dispatch instant in UTC, when retained. A scheduled send remains queued while waiting for that instant or for connectivity. Send now clears this field. createdAt is the original acceptance time.
+          example: '2026-11-12T15:30:00Z'
+        dispatchStarted:
+          type: boolean
+          description: True once this intent has crossed its first dispatch claim. Queued retries with this flag cannot be edited, rescheduled, cancelled or sent now.
+          example: true
+        composition:
+          allOf:
+            - $ref: '#/components/schemas/OutgoingComposition'
+          description: >-
+            Accepted authored input for an editable own pending message and its acceptance or mutation snapshots. Reopen the editor from this input. Reply rendering and attachment metadata are exposed on the same Message.
+        attachments:
+          type: array
+          minItems: 1
+          description: Ordered metadata for retained outgoing attachments.
+          items:
+            $ref: '#/components/schemas/StagedAttachment'
       example:
         id: 019a5df0-0000-7000-8000-000000000001
         revisionId: 019a5df0-0000-7000-8000-000000000001
@@ -4688,7 +5043,8 @@ components:
         sendState: received
     MessagePage:
       type: object
-      description: Logical messages newest first by original UTC creation time and UUID tie-break. Validated
+      description: Visible logical messages newest first by timelineAt or createdAt at UTC millisecond precision and
+        UUID tie-break. Unreleased schedules and scheduled sends cancelled before dispatch are excluded. Validated
         correction sources are retained as revisions rather than additional timeline items. Use nextCursor for
         records in the requested direction; render each page in reverse for a chronological timeline. For newer pages, nextCursor is the newest returned UUID, while older pages use the oldest returned UUID.
       additionalProperties: false
@@ -4854,25 +5210,15 @@ components:
     SendMessage:
       type: object
       description: >-
-        Durably accept authored text with an optional source-message reply. The engine
-        validates the retained target within the same account and conversation and
-        snapshots the sender, excerpt, wire reference and compatibility quote. Clients
-        submit only the target UUID, never a quoted body or protocol identifier.
-        originalText in the resulting Message is the full transmitted body, including
-        fallback text. Message.reply.bodyText contains the authored response. Structured
-        references are emitted where valid protocol identifiers are available, with
-        text fallback for legacy clients or an unavailable stable target identifier.
-        Room sends require an active explicit join intent; dispatch waits for confirmed
-        own membership. No room is joined by accepting or preparing a reply.
+        Authored text and optional reply, mentions and ordered staged attachments. Links are part of the authored text. Reply targets use canonical UUIDs scoped to the destination. The engine freezes reply and mention references before enqueueing. The resulting Message.originalText follows the existing retained body format, including any reply compatibility text. Message.composition contains the editable input for pending sends.
       additionalProperties: false
       required:
       - originalText
       properties:
         originalText:
           type: string
-          description: Original UTF-8 text. Whitespace/newlines are preserved; empty or whitespace-only bodies are
-            rejected.
-          minLength: 1
+          description: Exact authored UTF-8 text. Empty or whitespace-only text requires at least one attachment.
+          minLength: 0
           maxLength: 16384
         mentions:
           type: array
@@ -4884,12 +5230,33 @@ components:
           allOf:
           - $ref: '#/components/schemas/ID'
           description: Retained source UUID in this conversation. Omitted for an ordinary message. Part of the immutable send intent and operation fingerprint.
+        expectedReplyRevisionId:
+          allOf:
+          - $ref: '#/components/schemas/ID'
+          description: Reviewed revision of the retained reply source. Requires replyToMessageId and scheduledAt. A changed or unavailable source rejects the new scheduled send before acceptance.
+        expectedReplyExcerptSha256:
+          $ref: '#/components/schemas/ReplyExcerptSHA256'
+        attachmentIds:
+          $ref: '#/components/schemas/StagedAttachmentIDs'
+        scheduledAt:
+          $ref: '#/components/schemas/ScheduledSendInstant'
       example:
         originalText: Hello from Oie!
+      not:
+        type: object
+        properties:
+          originalText: {type: string, maxLength: 0}
+        not:
+          type: object
+          required: [attachmentIds]
+    ReplyExcerptSHA256:
+      type: string
+      pattern: '^[0-9a-f]{64}$'
+      description: SHA-256 of the exact UTF-8 quote excerpt, at most the first 512 Unicode code points of the displayed source body. Optional on reviewed reply mutations and requires expectedReplyRevisionId. The engine preserves it in the original acceptance when supplied.
+      example: 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
     CancelMessage:
       type: object
-      description: Cancel only while queued and before dispatch starts. A conflict returns currentMessage with actual
-        state.
+      description: Cancel a queued, known-unsent message using its current revision. A state conflict returns currentMessage.
       additionalProperties: false
       required:
       - expectedRevisionId
@@ -4898,3 +5265,150 @@ components:
           $ref: '#/components/schemas/ID'
       example:
         expectedRevisionId: 019a5df0-0000-7000-8000-000000000001
+    ScheduledSendInstant:
+      type: string
+      format: date-time
+      pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2})$'
+      description: >-
+        An RFC 3339 instant strictly in the future when the owning engine first accepts it. Supply an explicit offset or Z, with up to nine fractional second digits. The engine normalizes to UTC. Equivalent offsets identify the same instant for idempotency.
+      example: '2026-11-12T12:30:00-03:00'
+    StagedAttachmentIDs:
+      type: array
+      minItems: 1
+      maxItems: 16
+      uniqueItems: true
+      description: Ordered unique IDs of available staged files in the same destination scope.
+      items:
+        $ref: '#/components/schemas/ID'
+    StagedAttachment:
+      type: object
+      description: Immutable metadata for locally staged attachment bytes.
+      additionalProperties: false
+      required: [id, fileName, mediaType, size, sha256]
+      properties:
+        id:
+          $ref: '#/components/schemas/ID'
+        fileName:
+          type: string
+          minLength: 1
+          description: Display filename with no storage path.
+          example: notes.txt
+        mediaType:
+          type: string
+          description: Effective content type for presentation.
+          example: text/plain
+        size:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Exact number of staged bytes.
+          example: 5
+        sha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 computed over the complete staged bytes.
+          example: 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+      example:
+        id: 019a5df0-0000-7000-8000-000000000006
+        fileName: notes.txt
+        mediaType: text/plain
+        size: 5
+        sha256: 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+    OutgoingComposition:
+      type: object
+      description: >-
+        Complete authored content in the same form used at initial acceptance. Omit an optional field to clear it when replacing the composition.
+      additionalProperties: false
+      required: [originalText]
+      not:
+        type: object
+        properties:
+          originalText: {type: string, maxLength: 0}
+        not:
+          type: object
+          required: [attachmentIds]
+      properties:
+        originalText:
+          type: string
+          maxLength: 16384
+          description: Exact UTF-8 text, including links. Empty or whitespace-only text requires at least one attachment.
+        replyToMessageId:
+          $ref: '#/components/schemas/ID'
+        mentions:
+          type: array
+          maxItems: 32
+          items:
+            $ref: '#/components/schemas/MentionSelection'
+        attachmentIds:
+          $ref: '#/components/schemas/StagedAttachmentIDs'
+      example:
+        originalText: 'Studio entrance: https://example.org/studio'
+        attachmentIds: [019a5df0-0000-7000-8000-000000000006]
+    UpdatePendingMessage:
+      type: object
+      description: >-
+        Supply composition, scheduledAt or both. Each omitted top-level field retains its current value. Null is invalid. Replacing the composition creates a pending revision without a sent-message correction. The frozen reply is preserved when the target is unchanged and no reply precondition is supplied. Use sendScheduledMessageNow to make an existing schedule eligible now.
+      additionalProperties: false
+      minProperties: 2
+      required: [expectedRevisionId]
+      properties:
+        expectedRevisionId:
+          $ref: '#/components/schemas/ID'
+        composition:
+          $ref: '#/components/schemas/OutgoingComposition'
+        expectedReplyRevisionId:
+          allOf:
+          - $ref: '#/components/schemas/ID'
+          description: Requires a replacement composition with a reply target. Freezes the selected source at this reviewed revision, including when the target UUID is unchanged. A changed or unavailable source rejects the edit with state_conflict and replySourceChanged set to true.
+        expectedReplyExcerptSha256:
+          $ref: '#/components/schemas/ReplyExcerptSHA256'
+        scheduledAt:
+          $ref: '#/components/schemas/ScheduledSendInstant'
+      example:
+        expectedRevisionId: 019a5df0-0000-7000-8000-000000000002
+        composition:
+          originalText: ''
+          attachmentIds: [019a5df0-0000-7000-8000-000000000006]
+        scheduledAt: '2026-11-12T12:30:00-03:00'
+    SendScheduledMessageNow:
+      type: object
+      description: Revision precondition for making a scheduled message eligible now.
+      additionalProperties: false
+      required: [expectedRevisionId]
+      properties:
+        expectedRevisionId:
+          $ref: '#/components/schemas/ID'
+    ScheduledMessagePage:
+      type: object
+      description: Scheduled messages and their destinations at the selected owning engine.
+      additionalProperties: false
+      required: [engineId, items]
+      properties:
+        engineId:
+          $ref: '#/components/schemas/ID'
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ScheduledMessageItem'
+          example: []
+        nextCursor:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          description: Omitted at the end of the list.
+          example: opaque-schedule-cursor
+    ScheduledMessageItem:
+      type: object
+      description: The current queued message, including scheduledAt and composition, and its destination.
+      additionalProperties: false
+      required: [message, conversation]
+      properties:
+        message:
+          x-go-type: Message
+          allOf:
+            - $ref: '#/components/schemas/Message'
+            - type: object
+              required: [scheduledAt, composition]
+        conversation:
+          $ref: '#/components/schemas/Conversation'

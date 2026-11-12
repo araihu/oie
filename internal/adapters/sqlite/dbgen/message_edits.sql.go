@@ -130,7 +130,7 @@ func (q *Queries) InterruptedMessageEditCommands(ctx context.Context) ([]Message
 }
 
 const latestOwnMessage = `-- name: LatestOwnMessage :one
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms FROM original_transmission_order attempt JOIN messages m ON m.id=attempt.message_id
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM original_transmission_order attempt JOIN messages m ON m.id=attempt.message_id
 WHERE attempt.conversation_id=? AND m.conversation_id=attempt.conversation_id AND m.is_own=1
 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
 ORDER BY attempt.ordinal DESC LIMIT 1
@@ -149,6 +149,7 @@ func (q *Queries) LatestOwnMessage(ctx context.Context, conversationID string) (
 		&i.State,
 		&i.Payload,
 		&i.CreatedAtMs,
+		&i.TimelineAtMs,
 	)
 	return i, err
 }

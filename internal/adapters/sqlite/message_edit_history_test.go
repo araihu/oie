@@ -227,24 +227,7 @@ func TestEditHistoryMigration13To14PreservesSourceIdentityAndPendingSends(t *tes
 	if err = s.db.QueryRow("SELECT payload FROM messages WHERE id=?", source.ID).Scan(&sourcePayload); err != nil {
 		t.Fatal(err)
 	}
-	editDown, err := migrations.ReadFile("migrations/000015_message_edit_commands.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.db.Exec(string(editDown)); err != nil {
-		t.Fatal(err)
-	}
-	downReactionMigration(t, s)
-	down, err := migrations.ReadFile("migrations/000014_message_revision_index.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.db.Exec(string(down)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.db.Exec("UPDATE schema_migrations SET version=13,dirty=0"); err != nil {
-		t.Fatal(err)
-	}
+	migrateFixtureToVersion(t, s, 13)
 	var databaseIndex int
 	var databaseName, path string
 	if err = s.db.QueryRow("PRAGMA database_list").Scan(&databaseIndex, &databaseName, &path); err != nil {
@@ -276,7 +259,7 @@ func TestEditHistoryMigration13To14PreservesSourceIdentityAndPendingSends(t *tes
 	}
 	var version, indexes int
 	var dirty bool
-	if err = upgraded.db.QueryRow("SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestSchemaVersion || dirty {
+	if err = upgraded.db.QueryRow("SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestMigration || dirty {
 		t.Fatal("unclean migration", err)
 	}
 	if err = upgraded.db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='index' AND name='message_revisions_entity'").Scan(&indexes); err != nil || indexes != 1 {

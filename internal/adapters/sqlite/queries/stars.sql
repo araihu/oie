@@ -34,7 +34,7 @@ ON CONFLICT(message_id) DO UPDATE SET revision_id=excluded.revision_id,starred=e
 INSERT INTO message_star_revisions(id,message_id,parents,payload,created_at) VALUES(?,?,?,?,?);
 
 -- name: ListStarredMessages :many
-SELECT CAST(COALESCE(h.payload,m.payload) AS TEXT) AS message_payload,c.payload AS conversation_payload,s.payload AS star_payload
+SELECT CAST(COALESCE(h.payload,m.payload) AS TEXT) AS message_payload,m.timeline_at_ms,c.payload AS conversation_payload,s.payload AS star_payload
 FROM messages AS m JOIN conversations AS c ON c.id=m.conversation_id
 LEFT JOIN message_content_heads AS h ON h.canonical_id=m.id
 JOIN message_stars AS s ON s.message_id=(
@@ -45,8 +45,9 @@ JOIN message_stars AS s ON s.message_id=(
 )
 WHERE s.starred=1
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
+AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id)
 AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
 AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
 AND (CAST(sqlc.arg(page_cursor) AS TEXT)='' OR
- (m.created_at_ms,m.id)<(SELECT x.created_at_ms,x.id FROM messages AS x WHERE x.id=CAST(sqlc.arg(page_cursor) AS TEXT)))
-ORDER BY m.created_at_ms DESC,m.id DESC LIMIT sqlc.arg(page_limit);
+ (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)<(SELECT COALESCE(x.timeline_at_ms,x.created_at_ms),x.id FROM messages AS x WHERE x.id=CAST(sqlc.arg(page_cursor) AS TEXT)))
+ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT sqlc.arg(page_limit);

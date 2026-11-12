@@ -1,7 +1,7 @@
 (() => {
- const dates=page=>{for(const node of page.querySelectorAll('[data-history-date]')){const date=new Date(node.dateTime);if(!Number.isNaN(date.getTime()))node.textContent=new Intl.DateTimeFormat(document.documentElement.lang,{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}).format(date)}};
+ const dates=page=>window.OieTime.localize(page);
  if(!window.OieRuntime){
-  if(document.querySelector('[data-message-history-native]')){let enabled=true;try{enabled=localStorage.getItem('oie.device.render-markdown.v1')!=='false'}catch{}document.documentElement.dataset.messageMarkdown=String(enabled);dates(document);}
+  if(document.querySelector('[data-message-history-native]')){let enabled=true;try{enabled=localStorage.getItem('oie.device.render-markdown.v1')!=='false'}catch{}document.documentElement.dataset.messageMarkdown=String(enabled);dates(document);document.addEventListener('oie:time-zone',()=>dates(document));}
   return;
  }
  window.OieRuntime.register('message-history', life => {

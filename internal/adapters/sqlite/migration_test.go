@@ -3,12 +3,17 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
+	"github.com/golang-migrate/migrate/v4"
+	migratesqlite "github.com/golang-migrate/migrate/v4/database/sqlite"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/google/uuid"
 )
 
@@ -19,6 +24,129 @@ func migrationID() domain.ID {
 	}
 	return domain.ID(value.String())
 }
+
+func migrateFixtureToVersion(t *testing.T, store *Store, version uint) {
+	t.Helper()
+	driver, err := migratesqlite.WithInstance(store.db, &migratesqlite.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := iofs.New(migrations, "migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = source.Close() }()
+	runner, err := migrate.NewWithInstance("iofs", source, "sqlite", driver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = runner.Migrate(version); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSchedulingPreviewMigratesWithoutDiscardingData(t *testing.T) {
+	ctx := t.Context()
+	store, engine, conversation := outboxFixture(t)
+	when := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+	const body = "Scheduled before merging main"
+	result, err := engine.SendComposition(ctx, migrationID(), conversation.ID, domain.OutgoingComposition{OriginalText: body}, &when)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const content = "retained attachment"
+	file, _, err := store.StageAttachment(ctx, conversation.ID, domain.StagedAttachment{
+		ID: migrationID(), FileName: "note.txt", MediaType: "text/plain",
+	}, strings.NewReader(content))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"000024_reaction_target_lookups", "000023_dispatch_wire_stage", "000022_scheduled_timeline", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
+		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = store.db.ExecContext(ctx, string(down)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err = store.db.ExecContext(ctx, "UPDATE schema_migrations SET version=18"); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := Open(ctx, store.dir, migrationID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = upgraded.Close() }()
+	items, err := upgraded.ScheduledMessages(ctx, application.ScheduledQuery{Limit: 10})
+	if err != nil || len(items) != 1 || items[0].Message.ID != result.Message.ID || items[0].Message.OriginalText != body ||
+		items[0].Message.ScheduledAt == nil || !items[0].Message.ScheduledAt.Equal(when) {
+		t.Fatalf("schedule changed during migration: %+v %v", items, err)
+	}
+	retained, reader, err := upgraded.OpenStagedAttachment(ctx, conversation.ID, file.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = reader.Close() }()
+	data, err := io.ReadAll(reader)
+	if err != nil || retained != file || string(data) != content {
+		t.Fatalf("staged attachment changed during migration: %+v %v", retained, err)
+	}
+	var version int
+	var dirty bool
+	if err = upgraded.db.QueryRowContext(ctx, "SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestMigration || dirty {
+		t.Fatalf("migrate journal: %d %v %v", version, dirty, err)
+	}
+}
+
+func TestReactionLookupPreviewMigratesWithoutDiscardingData(t *testing.T) {
+	ctx := t.Context()
+	store, engine, conversation := outboxFixture(t)
+	engine.SetProtocols(&reactionProtocol{max: 8})
+	message := ownSubmittedEdit(t, store, engine, conversation, "Retained preview message")
+	observeReaction(t, engine, conversation, domain.MessageReference{ID: message.ProviderID}, "bob@localhost", "retained-reaction", time.Now(), "👍")
+	before, err := store.Message(ctx, message.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrateFixtureToVersion(t, store, 20)
+	if _, err := store.db.ExecContext(ctx, `
+		CREATE INDEX reaction_command_message ON message_reaction_commands(message_id);
+		CREATE INDEX reaction_observation_command ON message_reaction_observations(command_id) WHERE command_id<>'';
+		PRAGMA user_version=21;
+		UPDATE schema_migrations SET version=21;
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := Open(ctx, store.dir, migrationID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = upgraded.Close() }()
+	retained, err := upgraded.Message(ctx, message.ID)
+	if err != nil || retained.OriginalText != before.OriginalText || retained.RevisionID != before.RevisionID {
+		t.Fatalf("message changed during upgrade: %+v %v", retained, err)
+	}
+	reactions, err := upgraded.ReadMessageReactions(ctx, message.ID)
+	if err != nil || len(reactions.Snapshot.Items) != 1 || reactions.Snapshot.Items[0].Emoji != "👍" {
+		t.Fatalf("reaction changed during upgrade: %+v %v", reactions.Snapshot, err)
+	}
+	if scheduled, err := upgraded.ScheduledMessages(ctx, application.ScheduledQuery{Limit: 10}); err != nil || len(scheduled) != 0 {
+		t.Fatalf("scheduling schema unavailable after upgrade: %+v %v", scheduled, err)
+	}
+	var version int
+	var dirty bool
+	if err = upgraded.db.QueryRowContext(ctx, "SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestMigration || dirty {
+		t.Fatalf("migrate journal: %d %v %v", version, dirty, err)
+	}
+}
+
 func TestLegacyFoundationMigratesWithoutDiscardingData(t *testing.T) {
 	dir := t.TempDir()
 	db, err := sql.Open("sqlite", filepath.Join(dir, "oie.sqlite"))
@@ -81,7 +209,7 @@ func TestLegacyFoundationMigratesWithoutDiscardingData(t *testing.T) {
 	}
 	var version int
 	var dirty bool
-	if err = store.db.QueryRow("SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestSchemaVersion || dirty {
+	if err = store.db.QueryRow("SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestMigration || dirty {
 		t.Fatalf("migrate journal: %d %v %v", version, dirty, err)
 	}
 }
@@ -91,7 +219,7 @@ func TestDirtyAndFutureMigrationsAreNotForced(t *testing.T) {
 		version int
 		dirty   bool
 		want    string
-	}{{"dirty", 2, true, "dirty"}, {"future", latestSchemaVersion + 1, false, "newer"}} {
+	}{{"dirty", 2, true, "dirty"}, {"future", latestMigration + 1, false, "newer"}} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			store, err := Open(t.Context(), dir, migrationID())

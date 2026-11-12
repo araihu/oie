@@ -71,7 +71,13 @@ func (f *liveFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		write(engineapi.Conversation{Id: testChat, RevisionId: testRevision, AccountId: testAccount, Address: "bob@localhost", Title: "Bob", Kind: "direct", UpdatedAt: time.Now().UTC()})
 	case strings.HasPrefix(r.URL.Path, "/api/v1/operations/"):
 		if f.acceptedKey != "" && strings.TrimPrefix(r.URL.Path, "/api/v1/operations/") == f.acceptedKey {
-			write(engineapi.Operation{Id: f.acceptedKey, Kind: "send_message", ResourceId: testMessage, Status: "succeeded", CreatedAt: time.Now().UTC()})
+			receipt := engineapi.Operation{Id: f.acceptedKey, Kind: "send_message", ResourceId: testMessage, Status: "succeeded", CreatedAt: time.Now().UTC()}
+			if r.URL.Query().Get("includeAcceptedMessage") == "true" {
+				accepted := f.message()
+				accepted.SendState = "queued"
+				receipt.AcceptedMessage = &accepted
+			}
+			write(receipt)
 		} else {
 			w.WriteHeader(404)
 			write(map[string]any{"code": "not_found", "status": 404})
@@ -113,7 +119,7 @@ func (f *liveFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		write(map[string]any{"code": "not_found", "status": 404})
 	}
 }
-func liveUI(t *testing.T, f *liveFixture) (*httptest.Server, *http.Client, string) {
+func liveUI(t *testing.T, f http.Handler) (*httptest.Server, *http.Client, string) {
 	t.Helper()
 	backend := httptest.NewServer(f)
 	t.Cleanup(backend.Close)

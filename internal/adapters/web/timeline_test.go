@@ -21,11 +21,30 @@ func TestTimelineHTMLIsScopedBoundedAndDirectional(t *testing.T) {
 		messages[i] = engineapi.Message{Id: fmt.Sprintf("019a5df0-0000-7000-8000-%012d", 1000+299-i), RevisionId: testRevision, AccountId: testAccount, ConversationId: testChat, OriginalText: fmt.Sprintf("Retained %d <script>", i), CreatedAt: time.Date(2026, 11, 8, 12, 0, 0, 0, time.UTC).Add(time.Duration(i/3) * time.Millisecond), Sender: engineapi.Sender{Id: testAccount, DisplayName: "Sender"}, SendState: "received"}
 	}
 	slices.SortFunc(messages, messageCompare)
+	position := messages[151].CreatedAt
+	messages[151].CreatedAt = position.Add(-24 * time.Hour)
+	messages[151].TimelineAt = &position
+	messages[151].IsOwn = true
+	hidden := messages[150]
+	due := position.Add(time.Hour)
+	hidden.ScheduledAt, hidden.SendState = &due, "queued"
 	byID := map[string]engineapi.Message{}
 	for _, m := range messages {
 		byID[m.Id] = m
 	}
 	mode := "normal"
+	releasedWhileListing := false
+	movable := func(m engineapi.Message) engineapi.Message {
+		if mode != "release_between_reads" || m.Id != messages[150].Id {
+			return m
+		}
+		m.IsOwn, m.SendState = true, "queued"
+		if releasedWhileListing {
+			at := messages[len(messages)-1].CreatedAt.Add(time.Second)
+			m.TimelineAt, m.SendState, m.RevisionId = &at, "submitted", testMessage
+		}
+		return m
+	}
 	lists, writes := 0, 0
 	var limits []int
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -59,6 +78,9 @@ func TestTimelineHTMLIsScopedBoundedAndDirectional(t *testing.T) {
 			return
 		case "/api/v1/conversations/" + testChat + "/messages":
 			lists++
+			if mode == "release_between_reads" {
+				releasedWhileListing = true
+			}
 			limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 			limits = append(limits, limit)
 			if limit < 1 || limit > 100 {
@@ -69,9 +91,14 @@ func TestTimelineHTMLIsScopedBoundedAndDirectional(t *testing.T) {
 				send(404, nil)
 				return
 			}
+			anchor = movable(anchor)
 			direction := r.URL.Query().Get("direction")
 			selected := []engineapi.Message{}
 			for _, m := range messages {
+				if mode == "hidden_schedule" && m.Id == hidden.Id {
+					continue
+				}
+				m = movable(m)
 				order := messageCompare(m, anchor)
 				if direction == "newer" && order > 0 || direction != "newer" && order < 0 {
 					selected = append(selected, m)
@@ -114,7 +141,7 @@ func TestTimelineHTMLIsScopedBoundedAndDirectional(t *testing.T) {
 			parts := strings.Split(r.URL.Path, "/")
 			target := parts[len(parts)-2]
 			m, found := byID[target]
-			if !found {
+			if !found || mode == "hidden_schedule" && target == hidden.Id {
 				send(404, nil)
 				return
 			}
@@ -148,7 +175,10 @@ func TestTimelineHTMLIsScopedBoundedAndDirectional(t *testing.T) {
 				send(404, nil)
 				return
 			}
-			send(200, m)
+			if mode == "hidden_schedule" && m.Id == hidden.Id {
+				m = hidden
+			}
+			send(200, movable(m))
 			return
 		}
 		if strings.HasSuffix(r.URL.Path, "/previews") || r.URL.Path == "/api/v1/shared-content" {
@@ -204,8 +234,11 @@ func TestTimelineHTMLIsScopedBoundedAndDirectional(t *testing.T) {
 			if count := strings.Count(html, `data-message-source=`); count != 50 {
 				t.Fatalf("rendered %d rows", count)
 			}
-			if !strings.Contains(html, `id="oie-star-data"`) || !strings.Contains(html, `id="live-timeline"`) || !strings.Contains(html, `data-created-ms="`+strconv.FormatInt(boundary.CreatedAt.UnixMilli(), 10)+`"`) {
+			if !strings.Contains(html, `id="oie-star-data"`) || !strings.Contains(html, `id="live-timeline"`) || !strings.Contains(html, `data-created-ms="`+strconv.FormatInt(messageTimelineTime(boundary).UnixMilli(), 10)+`"`) {
 				t.Fatal("missing authoritative metadata or exact millisecond boundary")
+			}
+			if direction == "newer" && (!strings.Contains(html, `data-timeline-release`) || strings.Contains(html, `data-created-ms="`+strconv.FormatInt(boundary.CreatedAt.UnixMilli(), 10)+`"`)) {
+				t.Fatal("released schedule rendered its acceptance position")
 			}
 			if strings.Contains(html, "<script>") {
 				t.Fatal("source escaped incorrectly")
@@ -218,6 +251,69 @@ func TestTimelineHTMLIsScopedBoundedAndDirectional(t *testing.T) {
 			}
 		})
 	}
+	t.Run("hidden schedule cannot be reintroduced by a stale window", func(t *testing.T) {
+		mode = "hidden_schedule"
+		defer func() { mode = "normal" }()
+		q := timelineQueryClone(base)
+		q.Set("mode", "context")
+		q.Set("cursor", hidden.Id)
+		if w := request(q); w.Code != 404 {
+			t.Fatalf("hidden context status %d", w.Code)
+		}
+		for _, low := range []int{148, 150} {
+			q := timelineQueryClone(base)
+			q.Set("mode", "window")
+			q.Set("oldest", messages[low].Id)
+			q.Set("newest", hidden.Id)
+			w := request(q)
+			html := w.Body.String()
+			if w.Code != 200 || strings.Contains(html, `data-message-id="`+hidden.Id+`"`) || strings.Count(html, `data-message-source=`) != 150-low {
+				t.Fatalf("hidden anchor in window %d: status=%d rows=%d", low, w.Code, strings.Count(html, `data-message-source=`))
+			}
+			if !strings.Contains(html, `data-hidden-newest="true"`) || !strings.Contains(html, `data-hidden-oldest="`+strconv.FormatBool(low == 150)+`"`) || !strings.Contains(html, `data-complete="true"`) {
+				t.Fatalf("hidden boundary omitted in window %d", low)
+			}
+		}
+	})
+	for _, direction := range []string{"older", "newer"} {
+		t.Run("release between anchor and page reads "+direction, func(t *testing.T) {
+			mode = "release_between_reads"
+			defer func() { mode = "normal" }()
+			releasedWhileListing = false
+			lists = 0
+			q := timelineQueryClone(base)
+			q.Set("direction", direction)
+			q.Set("cursor", messages[150].Id)
+			w := request(q)
+			if w.Code != 200 || lists != 2 || !strings.Contains(w.Body.String(), `data-timeline-release-boundary="`+messages[150].Id+`"`) {
+				t.Fatalf("release did not revalidate the page: status=%d lists=%d", w.Code, lists)
+			}
+		})
+	}
+	t.Run("release during a window read invalidates the whole interval", func(t *testing.T) {
+		mode = "release_between_reads"
+		defer func() { mode = "normal" }()
+		releasedWhileListing = false
+		q := timelineQueryClone(base)
+		q.Set("mode", "window")
+		q.Set("oldest", messages[150].Id)
+		q.Set("newest", messages[170].Id)
+		w := request(q)
+		html := w.Body.String()
+		if w.Code != 200 || !strings.Contains(html, `data-timeline-release-boundary="`+messages[150].Id+`"`) || !strings.Contains(html, `data-complete="false"`) || !strings.Contains(html, `data-oldest=""`) {
+			t.Fatalf("window used inconsistent boundaries: status=%d", w.Code)
+		}
+	})
+	t.Run("released boundary proves an obsolete window", func(t *testing.T) {
+		q := timelineQueryClone(base)
+		q.Set("mode", "window")
+		q.Set("oldest", messages[151].Id)
+		q.Set("newest", messages[150].Id)
+		w := request(q)
+		if w.Code != 200 || !strings.Contains(w.Body.String(), `data-timeline-release-boundary="`+messages[151].Id+`"`) || !strings.Contains(w.Body.String(), `data-oldest=""`) {
+			t.Fatalf("obsolete window omitted its released boundary: %d", w.Code)
+		}
+	})
 	for _, tc := range []struct {
 		name      string
 		low, high int

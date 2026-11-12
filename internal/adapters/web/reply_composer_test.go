@@ -2,6 +2,8 @@ package web
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -64,7 +66,9 @@ func TestReplyPreparationBindsCanonicalSourceAndBoundsPlainExcerpt(t *testing.T)
 		return w.Code, result
 	}
 	status, result := get()
-	if status != 200 || result.MessageID != testMessage || result.SenderName != "<sender>" || len([]rune(result.Excerpt)) != 512 || strings.Contains(result.Excerpt, "fallback") {
+	digest := sha256.Sum256([]byte(result.Excerpt))
+	if status != 200 || result.MessageID != testMessage || result.RevisionID != testRevision || result.SenderName != "<sender>" ||
+		result.Excerpt != strings.Repeat("😀", 512) || result.ExcerptSHA256 != hex.EncodeToString(digest[:]) {
 		t.Fatalf("invalid preparation: %d %+v", status, result)
 	}
 	sourceAccount = testRevision
@@ -78,6 +82,7 @@ func TestReplyPreparationBindsCanonicalSourceAndBoundsPlainExcerpt(t *testing.T)
 		t.Fatal("engine identity not bound")
 	}
 }
+
 func TestUnknownSendReceiptCannotBecomeRejectedOrRepeat(t *testing.T) {
 	writes := 0
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

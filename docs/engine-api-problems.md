@@ -59,6 +59,10 @@ revision. The response can include `currentMessage`, `currentConversation`,
 `currentStar`, or `currentRoomSession`. For an operation that requires a
 joined room, check the room session first.
 
+If `replySourceChanged` is true, the retained source is unavailable or the
+reviewed revision or excerpt no longer matches. Fetch the source and review
+the quote again before submitting.
+
 ## protocol_unavailable
 
 **Protocol unavailable · HTTP 503.** The requested protocol service is
@@ -78,7 +82,8 @@ before retrying the download.
 ## media_too_large
 
 **Media too large · HTTP 413.** The media exceeds the engine's download
-limit. Use a smaller version if one is available.
+limit or the provider's advertised upload limit. For an outgoing message,
+remove the attachment or choose a smaller file before submitting again.
 
 ## media_unsupported
 

@@ -39,7 +39,7 @@ func trackCorrectionSource(e *entry, a domain.Account, out application.Outgoing)
 	// Dispatch order is authoritative even when wall-clock timestamps move back.
 	// An unsupported latest payload must still make an earlier text ineligible.
 	e.correctionLatest[key] = out.ID
-	if out.Reply != nil || len(out.Mentions) != 0 {
+	if out.Reply != nil || len(out.Mentions) != 0 || len(out.Attachments) != 0 {
 		return
 	}
 	source := ownCorrectionSource{address: out.Address, kind: kind, bodyHash: sha256.Sum256([]byte(out.OriginalText)), sessionID: e.correctionSession}
@@ -91,7 +91,7 @@ func (m *Manager) PrepareCorrection(ctx context.Context, a domain.Account, c dom
 	if ctx.Err() != nil {
 		return domain.OutgoingCorrection{}, ctx.Err()
 	}
-	if a.Protocol != "xmpp" || c.AccountID != a.ID || target.AccountID != a.ID || target.ConversationID != c.ID || !target.IsOwn || target.Sender.ID != a.ID || target.ProviderID != string(target.ID) || target.SendState != application.Submitted || target.OutboundReply != nil || len(target.Mentions) != 0 {
+	if a.Protocol != "xmpp" || c.AccountID != a.ID || target.AccountID != a.ID || target.ConversationID != c.ID || !target.IsOwn || target.Sender.ID != a.ID || target.ProviderID != string(target.ID) || target.SendState != application.Submitted || target.OutboundReply != nil || len(target.Mentions) != 0 || len(target.Attachments) != 0 {
 		return domain.OutgoingCorrection{}, application.ErrProtocolUnavailable
 	}
 	m.mu.RLock()

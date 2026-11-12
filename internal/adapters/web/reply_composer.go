@@ -2,8 +2,11 @@ package web
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -13,10 +16,12 @@ type replyPreparation struct {
 	EngineID           string `json:"engineId"`
 	MessageID          string `json:"messageId"`
 	RequestedMessageID string `json:"requestedMessageId"`
+	RevisionID         string `json:"revisionId"`
 	AccountID          string `json:"accountId"`
 	ConversationID     string `json:"conversationId"`
 	SenderName         string `json:"senderName"`
 	Excerpt            string `json:"excerpt"`
+	ExcerptSHA256      string `json:"excerptSha256"`
 }
 
 func quoteExcerpt(m engineapi.Message) string {
@@ -26,9 +31,17 @@ func quoteExcerpt(m engineapi.Message) string {
 	}
 	runes := []rune(text)
 	if len(runes) > 512 {
-		return string(runes[:511]) + "…"
+		return string(runes[:512])
 	}
 	return text
+}
+
+func validReplyExcerptSHA256(hash string) bool {
+	if len(hash) != sha256.Size*2 || strings.ToLower(hash) != hash {
+		return false
+	}
+	_, err := hex.DecodeString(hash)
+	return err == nil
 }
 func (s *Server) retainedReplySource(ctx context.Context, conversation, account, target string) (*engineapi.Message, int) {
 	limit := 1
@@ -92,7 +105,13 @@ func (s *Server) prepareReply(w http.ResponseWriter, r *http.Request) {
 		fail(status, text.ReplyUnavailable, "not_found")
 		return
 	}
-	_ = json.NewEncoder(w).Encode(replyPreparation{EngineID: engine.JSON200.Id, MessageID: source.Id, RequestedMessageID: target, AccountID: source.AccountId, ConversationID: source.ConversationId, SenderName: source.Sender.DisplayName, Excerpt: quoteExcerpt(*source)})
+	excerpt := quoteExcerpt(*source)
+	digest := sha256.Sum256([]byte(excerpt))
+	_ = json.NewEncoder(w).Encode(replyPreparation{
+		EngineID: engine.JSON200.Id, AccountID: source.AccountId, ConversationID: source.ConversationId,
+		MessageID: source.Id, RequestedMessageID: target, RevisionID: source.RevisionId,
+		SenderName: source.Sender.DisplayName, Excerpt: excerpt, ExcerptSHA256: hex.EncodeToString(digest[:]),
+	})
 }
 func matchingSend(m engineapi.Message, conversation, account, body, target string, selected ...[]engineapi.MentionSelection) bool {
 	var mentions []engineapi.MentionSelection
@@ -114,22 +133,26 @@ func matchingSend(m engineapi.Message, conversation, account, body, target strin
 // A missing receipt is different from an unreadable receipt. Never label an
 // uncertain operation rejected just because a later room/source read changed.
 func (s *Server) sendReceipt(ctx context.Context, key string) (*engineapi.Message, string) {
-	receipt, err := s.client.GetOperationWithResponse(ctx, key)
+	include := true
+	receipt, err := s.client.GetOperationWithResponse(ctx, key, &engineapi.GetOperationParams{IncludeAcceptedMessage: &include})
 	if err != nil {
 		return nil, "unknown"
 	}
 	if receipt.StatusCode() == 404 {
 		return nil, "missing"
 	}
-	if receipt.JSON200 == nil {
+	if receipt.JSON200 == nil || receipt.JSON200.Id != key || receipt.JSON200.Status != "succeeded" || !validOperationKey(receipt.JSON200.ResourceId) {
 		return nil, "unknown"
 	}
 	if receipt.JSON200.Kind != "send_message" {
 		return nil, "conflict"
 	}
-	response, err := s.client.GetMessageWithResponse(ctx, receipt.JSON200.ResourceId)
-	if err != nil || response.JSON200 == nil {
+	accepted := receipt.JSON200.AcceptedMessage
+	if accepted == nil {
+		return nil, "legacy"
+	}
+	if accepted.Id != receipt.JSON200.ResourceId || !accepted.IsOwn || accepted.SendState != "queued" {
 		return nil, "unknown"
 	}
-	return response.JSON200, "found"
+	return accepted, "found"
 }

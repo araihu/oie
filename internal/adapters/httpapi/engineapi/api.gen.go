@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"path"
@@ -577,6 +578,27 @@ func (e DiscoveredServiceState) Valid() bool {
 	}
 }
 
+// Defines values for DraftLinkPreviewImageMediaType.
+const (
+	DraftLinkPreviewImageMediaTypeImagegif  DraftLinkPreviewImageMediaType = "image/gif"
+	DraftLinkPreviewImageMediaTypeImagejpeg DraftLinkPreviewImageMediaType = "image/jpeg"
+	DraftLinkPreviewImageMediaTypeImagepng  DraftLinkPreviewImageMediaType = "image/png"
+)
+
+// Valid indicates whether the value is a known member of the DraftLinkPreviewImageMediaType enum.
+func (e DraftLinkPreviewImageMediaType) Valid() bool {
+	switch e {
+	case DraftLinkPreviewImageMediaTypeImagegif:
+		return true
+	case DraftLinkPreviewImageMediaTypeImagejpeg:
+		return true
+	case DraftLinkPreviewImageMediaTypeImagepng:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EngineApiVersion.
 const (
 	N0110 EngineApiVersion = "0.11.0"
@@ -915,19 +937,19 @@ func (e MessagePreviewDownloadState) Valid() bool {
 
 // Defines values for MessagePreviewFileMimeType.
 const (
-	Imagegif  MessagePreviewFileMimeType = "image/gif"
-	Imagejpeg MessagePreviewFileMimeType = "image/jpeg"
-	Imagepng  MessagePreviewFileMimeType = "image/png"
+	MessagePreviewFileMimeTypeImagegif  MessagePreviewFileMimeType = "image/gif"
+	MessagePreviewFileMimeTypeImagejpeg MessagePreviewFileMimeType = "image/jpeg"
+	MessagePreviewFileMimeTypeImagepng  MessagePreviewFileMimeType = "image/png"
 )
 
 // Valid indicates whether the value is a known member of the MessagePreviewFileMimeType enum.
 func (e MessagePreviewFileMimeType) Valid() bool {
 	switch e {
-	case Imagegif:
+	case MessagePreviewFileMimeTypeImagegif:
 		return true
-	case Imagejpeg:
+	case MessagePreviewFileMimeTypeImagejpeg:
 		return true
-	case Imagepng:
+	case MessagePreviewFileMimeTypeImagepng:
 		return true
 	default:
 		return false
@@ -1696,7 +1718,7 @@ type AvatarPage struct {
 	NextCursor *ID `json:"nextCursor,omitempty"`
 }
 
-// CancelMessage Cancel only while queued and before dispatch starts. A conflict returns currentMessage with actual state.
+// CancelMessage Cancel a queued, known-unsent message using its current revision. A state conflict returns currentMessage.
 //
 // Example: {"expectedRevisionId":"019a5df0-0000-7000-8000-000000000001"}
 type CancelMessage struct {
@@ -2059,6 +2081,41 @@ type DiscoveredServiceScope string
 // DiscoveredServiceState defines model for DiscoveredService.State.
 type DiscoveredServiceState string
 
+// DraftLinkPreview Transient link metadata for a draft composition.
+type DraftLinkPreview struct {
+	// Description Example: Opening hours and directions.
+	Description *string `json:"description,omitempty"`
+
+	// Image Optional bounded raster image for a draft link preview.
+	Image *DraftLinkPreviewImage `json:"image,omitempty"`
+
+	// Title Example: Studio
+	Title *string `json:"title,omitempty"`
+
+	// Url Example: https://example.com/studio
+	Url string `json:"url"`
+}
+
+// DraftLinkPreviewImage Optional bounded raster image for a draft link preview.
+type DraftLinkPreviewImage struct {
+	// Data Base64 of at most 128 KiB of raster image bytes.
+	//
+	// Example: iVBORw0KGgo=
+	Data string `json:"data"`
+
+	// MediaType Example: image/png
+	MediaType DraftLinkPreviewImageMediaType `json:"mediaType"`
+}
+
+// DraftLinkPreviewImageMediaType Example: image/png
+type DraftLinkPreviewImageMediaType string
+
+// DraftLinkPreviewRequest Public HTTP or HTTPS URL detected in a draft.
+type DraftLinkPreviewRequest struct {
+	// Url Example: https://example.com/studio
+	Url string `json:"url"`
+}
+
 // EditMessage Immutable correction intent; changing either field requires a new operation after a definitive outcome.
 //
 // Example: {"expectedRevisionId":"019a5df0-0000-7000-8000-000000000004","originalText":"Corrected text"}
@@ -2290,6 +2347,12 @@ type Message struct {
 	// Example: 019a5df0-0000-7000-8000-000000000001
 	AccountId ID `json:"accountId"`
 
+	// Attachments Ordered metadata for retained outgoing attachments.
+	Attachments *[]StagedAttachment `json:"attachments,omitempty"`
+
+	// Composition Accepted authored input for an editable own pending message and its acceptance or mutation snapshots. Reopen the editor from this input. Reply rendering and attachment metadata are exposed on the same Message.
+	Composition *OutgoingComposition `json:"composition,omitempty"`
+
 	// ConversationId Canonical lowercase UUIDv7; IDs do not establish causal order.
 	//
 	// Example: 019a5df0-0000-7000-8000-000000000001
@@ -2298,6 +2361,11 @@ type Message struct {
 	// CreatedAt UTC timestamp.
 	CreatedAt time.Time `json:"createdAt"`
 
+	// DispatchStarted True once this intent has crossed its first dispatch claim. Queued retries with this flag cannot be edited, rescheduled, cancelled or sent now.
+	//
+	// Example: true
+	DispatchStarted *bool `json:"dispatchStarted,omitempty"`
+
 	// Edited True when a validated protocol correction supplies the current content. Omitted means false. Send-state revisions alone do not mark a message edited.
 	//
 	// Example: true
@@ -2305,6 +2373,14 @@ type Message struct {
 
 	// EditedAt UTC source timestamp of the selected protocol correction, when edited is true. Receiving or importing an old correction does not give it a new edit timestamp.
 	EditedAt *time.Time `json:"editedAt,omitempty"`
+
+	// ExpectedReplyExcerptSha256 SHA-256 of the exact UTF-8 quote excerpt, at most the first 512 Unicode code points of the displayed source body. Optional on reviewed reply mutations and requires expectedReplyRevisionId. The engine preserves it in the original acceptance when supplied.
+	//
+	// Example: 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+	ExpectedReplyExcerptSha256 *ReplyExcerptSHA256 `json:"expectedReplyExcerptSha256,omitempty"`
+
+	// ExpectedReplyRevisionId Source revision explicitly required when the reply was scheduled or the current quote was replaced. Omitted when the caller supplied no review precondition for the current quote.
+	ExpectedReplyRevisionId *ID `json:"expectedReplyRevisionId,omitempty"`
 
 	// Historical True for archive imports. Omitted means false. Clients must not treat these as new unread messages or fresh notifications.
 	Historical *bool `json:"historical,omitempty"`
@@ -2337,6 +2413,11 @@ type Message struct {
 	// Example: 019a5df0-0000-7000-8000-000000000001
 	RevisionId ID `json:"revisionId"`
 
+	// ScheduledAt Configured earliest dispatch instant in UTC, when retained. A scheduled send remains queued while waiting for that instant or for connectivity. Send now clears this field. createdAt is the original acceptance time.
+	//
+	// Example: 2026-11-12T15:30:00Z
+	ScheduledAt *time.Time `json:"scheduledAt,omitempty"`
+
 	// SendState Durable transport evidence.
 	SendState MessageSendState `json:"sendState"`
 
@@ -2344,6 +2425,9 @@ type Message struct {
 	//
 	// Example: {"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}
 	Sender Sender `json:"sender"`
+
+	// TimelineAt UTC position of a released scheduled message in the conversation. Use createdAt when omitted. The original createdAt is preserved.
+	TimelineAt *time.Time `json:"timelineAt,omitempty"`
 }
 
 // MessageSendState Durable transport evidence.
@@ -2564,7 +2648,7 @@ type MessageMention struct {
 // MessageMentionReferenceMode Frozen delivery mode; structured adds adapter-validated protocol metadata while retaining the text.
 type MessageMentionReferenceMode string
 
-// MessagePage Logical messages newest first by original UTC creation time and UUID tie-break. Validated correction sources are retained as revisions rather than additional timeline items. Use nextCursor for records in the requested direction; render each page in reverse for a chronological timeline. For newer pages, nextCursor is the newest returned UUID, while older pages use the oldest returned UUID.
+// MessagePage Visible logical messages newest first by timelineAt or createdAt at UTC millisecond precision and UUID tie-break. Unreleased schedules and scheduled sends cancelled before dispatch are excluded. Validated correction sources are retained as revisions rather than additional timeline items. Use nextCursor for records in the requested direction; render each page in reverse for a chronological timeline. For newer pages, nextCursor is the newest returned UUID, while older pages use the oldest returned UUID.
 //
 // Example: {"items":[]}
 type MessagePage struct {
@@ -2976,7 +3060,9 @@ type OpenConversation struct {
 //
 // Example: {"createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000004","kind":"register_account","resourceId":"019a5df0-0000-7000-8000-000000000001","status":"succeeded"}
 type Operation struct {
-	CreatedAt time.Time `json:"createdAt"`
+	// AcceptedMessage Immutable original message acceptance, available only when requested for a send_message receipt. Read the message resource separately for its current state.
+	AcceptedMessage *Message  `json:"acceptedMessage,omitempty"`
+	CreatedAt       time.Time `json:"createdAt"`
 
 	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
 	//
@@ -2996,6 +3082,23 @@ type OperationKind string
 
 // OperationStatus defines model for Operation.Status.
 type OperationStatus string
+
+// OutgoingComposition Complete authored content in the same form used at initial acceptance. Omit an optional field to clear it when replacing the composition.
+//
+// Example: {"attachmentIds":["019a5df0-0000-7000-8000-000000000006"],"originalText":"Studio entrance: https://example.org/studio"}
+type OutgoingComposition struct {
+	// AttachmentIds Ordered unique IDs of available staged files in the same destination scope.
+	AttachmentIds *StagedAttachmentIDs `json:"attachmentIds,omitempty"`
+	Mentions      *[]MentionSelection  `json:"mentions,omitempty"`
+
+	// OriginalText Exact UTF-8 text, including links. Empty or whitespace-only text requires at least one attachment.
+	OriginalText string `json:"originalText"`
+
+	// ReplyToMessageId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	ReplyToMessageId *ID `json:"replyToMessageId,omitempty"`
+}
 
 // PresenceObservation Observed presence from authorized traffic, without active probes or inferred offline state.
 type PresenceObservation struct {
@@ -3044,6 +3147,9 @@ type Problem struct {
 
 	// Documentation Absolute HTTPS link to human-readable guidance for this problem type. Included when Prefer requests oie-problem-documentation with no value or an empty quoted value. The URL may change independently of the type URI and code.
 	Documentation *string `json:"documentation,omitempty"`
+
+	// ReplySourceChanged True on a state conflict caused by an unavailable or changed reply source or excerpt when the request included expectedReplyRevisionId.
+	ReplySourceChanged *bool `json:"replySourceChanged,omitempty"`
 
 	// Status HTTP status code of this response.
 	Status int `json:"status"`
@@ -3117,6 +3223,11 @@ type RegisterAccount struct {
 
 // RegisterAccountProtocol defines model for RegisterAccount.Protocol.
 type RegisterAccountProtocol string
+
+// ReplyExcerptSHA256 SHA-256 of the exact UTF-8 quote excerpt, at most the first 512 Unicode code points of the displayed source body. Optional on reviewed reply mutations and requires expectedReplyRevisionId. The engine preserves it in the original acceptance when supplied.
+//
+// Example: 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+type ReplyExcerptSHA256 = string
 
 // RoomArchive Retained recovery progress for one room. Coverage describes archive pages, not isolated search hits.
 type RoomArchive struct {
@@ -3247,18 +3358,72 @@ type RoomSessionLastErrorCode string
 // RoomSessionState defines model for RoomSession.State.
 type RoomSessionState string
 
-// SendMessage Durably accept authored text with an optional source-message reply. The engine validates the retained target within the same account and conversation and snapshots the sender, excerpt, wire reference and compatibility quote. Clients submit only the target UUID, never a quoted body or protocol identifier. originalText in the resulting Message is the full transmitted body, including fallback text. Message.reply.bodyText contains the authored response. Structured references are emitted where valid protocol identifiers are available, with text fallback for legacy clients or an unavailable stable target identifier. Room sends require an active explicit join intent; dispatch waits for confirmed own membership. No room is joined by accepting or preparing a reply.
+// ScheduledMessageItem The current queued message, including scheduledAt and composition, and its destination.
+type ScheduledMessageItem struct {
+	// Conversation One account-scoped conversation. Direct conversations support text sending; saved rooms and authorized room archives are recovered read-only in this increment.
+	//
+	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","address":"bob@localhost","archived":false,"favorite":false,"id":"019a5df0-0000-7000-8000-000000000001","kind":"direct","lastMessage":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","title":"bob@localhost","unreadCount":0,"updatedAt":"2026-11-07T12:00:00Z"}
+	Conversation Conversation `json:"conversation"`
+	Message      Message      `json:"message"`
+}
+
+// ScheduledMessagePage Scheduled messages and their destinations at the selected owning engine.
+type ScheduledMessagePage struct {
+	// EngineId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	EngineId ID `json:"engineId"`
+
+	// Items Example: []
+	Items []ScheduledMessageItem `json:"items"`
+
+	// NextCursor Omitted at the end of the list.
+	//
+	// Example: opaque-schedule-cursor
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// ScheduledSendInstant An RFC 3339 instant strictly in the future when the owning engine first accepts it. Supply an explicit offset or Z, with up to nine fractional second digits. The engine normalizes to UTC. Equivalent offsets identify the same instant for idempotency.
+//
+// Example: 2026-11-12T12:30:00-03:00
+type ScheduledSendInstant = time.Time
+
+// SendMessage Authored text and optional reply, mentions and ordered staged attachments. Links are part of the authored text. Reply targets use canonical UUIDs scoped to the destination. The engine freezes reply and mention references before enqueueing. The resulting Message.originalText follows the existing retained body format, including any reply compatibility text. Message.composition contains the editable input for pending sends.
 //
 // Example: {"originalText":"Hello from Oie!"}
 type SendMessage struct {
+	// AttachmentIds Ordered unique IDs of available staged files in the same destination scope.
+	AttachmentIds *StagedAttachmentIDs `json:"attachmentIds,omitempty"`
+
+	// ExpectedReplyExcerptSha256 SHA-256 of the exact UTF-8 quote excerpt, at most the first 512 Unicode code points of the displayed source body. Optional on reviewed reply mutations and requires expectedReplyRevisionId. The engine preserves it in the original acceptance when supplied.
+	//
+	// Example: 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+	ExpectedReplyExcerptSha256 *ReplyExcerptSHA256 `json:"expectedReplyExcerptSha256,omitempty"`
+
+	// ExpectedReplyRevisionId Reviewed revision of the retained reply source. Requires replyToMessageId and scheduledAt. A changed or unavailable source rejects the new scheduled send before acceptance.
+	ExpectedReplyRevisionId *ID `json:"expectedReplyRevisionId,omitempty"`
+
 	// Mentions Selected room mentions in authored text. Sorted, nonoverlapping spans are part of the immutable send intent and idempotency fingerprint. The engine freezes references before enqueueing; clients cannot submit protocol URIs.
 	Mentions *[]MentionSelection `json:"mentions,omitempty"`
 
-	// OriginalText Original UTF-8 text. Whitespace/newlines are preserved; empty or whitespace-only bodies are rejected.
+	// OriginalText Exact authored UTF-8 text. Empty or whitespace-only text requires at least one attachment.
 	OriginalText string `json:"originalText"`
 
 	// ReplyToMessageId Retained source UUID in this conversation. Omitted for an ordinary message. Part of the immutable send intent and operation fingerprint.
 	ReplyToMessageId *ID `json:"replyToMessageId,omitempty"`
+
+	// ScheduledAt An RFC 3339 instant strictly in the future when the owning engine first accepts it. Supply an explicit offset or Z, with up to nine fractional second digits. The engine normalizes to UTC. Equivalent offsets identify the same instant for idempotency.
+	//
+	// Example: 2026-11-12T12:30:00-03:00
+	ScheduledAt *ScheduledSendInstant `json:"scheduledAt,omitempty"`
+}
+
+// SendScheduledMessageNow Revision precondition for making a scheduled message eligible now.
+type SendScheduledMessageNow struct {
+	// ExpectedRevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	ExpectedRevisionId ID `json:"expectedRevisionId"`
 }
 
 // Sender Engine-local source identity. For recovered room messages, this is the room-scoped source with an observed speaker nickname, not a verified personal identity.
@@ -3367,6 +3532,39 @@ type SharedContentPage struct {
 	NextCursor *string               `json:"nextCursor,omitempty"`
 }
 
+// StagedAttachment Immutable metadata for locally staged attachment bytes.
+//
+// Example: {"fileName":"notes.txt","id":"019a5df0-0000-7000-8000-000000000006","mediaType":"text/plain","sha256":"2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824","size":5}
+type StagedAttachment struct {
+	// FileName Display filename with no storage path.
+	//
+	// Example: notes.txt
+	FileName string `json:"fileName"`
+
+	// Id Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	Id ID `json:"id"`
+
+	// MediaType Effective content type for presentation.
+	//
+	// Example: text/plain
+	MediaType string `json:"mediaType"`
+
+	// Sha256 SHA-256 computed over the complete staged bytes.
+	//
+	// Example: 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+	Sha256 string `json:"sha256"`
+
+	// Size Exact number of staged bytes.
+	//
+	// Example: 5
+	Size int64 `json:"size"`
+}
+
+// StagedAttachmentIDs Ordered unique IDs of available staged files in the same destination scope.
+type StagedAttachmentIDs = []ID
+
 // StarredMessage Latest source message and conversation projections with their independent star state.
 //
 // Example: {"conversation":{"accountId":"019a5df0-0000-7000-8000-000000000001","address":"bob@localhost","archived":false,"favorite":false,"id":"019a5df0-0000-7000-8000-000000000001","kind":"direct","lastMessage":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","title":"bob@localhost","unreadCount":0,"updatedAt":"2026-11-07T12:00:00Z"},"message":{"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000001","isOwn":false,"originalText":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","sendState":"received","sender":{"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}},"star":{"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","messageId":"019a5df0-0000-7000-8000-000000000001","revisionId":"019a5df0-0000-7000-8000-000000000004","starred":true,"updatedAt":"2026-11-08T12:00:00Z"}}
@@ -3417,6 +3615,34 @@ type UpdateConversationPreferences struct {
 
 	// Favorite Desired conversation favorite state, separate from source-message stars.
 	Favorite *bool `json:"favorite,omitempty"`
+}
+
+// UpdatePendingMessage Supply composition, scheduledAt or both. Each omitted top-level field retains its current value. Null is invalid. Replacing the composition creates a pending revision without a sent-message correction. The frozen reply is preserved when the target is unchanged and no reply precondition is supplied. Use sendScheduledMessageNow to make an existing schedule eligible now.
+//
+// Example: {"composition":{"attachmentIds":["019a5df0-0000-7000-8000-000000000006"],"originalText":""},"expectedRevisionId":"019a5df0-0000-7000-8000-000000000002","scheduledAt":"2026-11-12T12:30:00-03:00"}
+type UpdatePendingMessage struct {
+	// Composition Complete authored content in the same form used at initial acceptance. Omit an optional field to clear it when replacing the composition.
+	//
+	// Example: {"attachmentIds":["019a5df0-0000-7000-8000-000000000006"],"originalText":"Studio entrance: https://example.org/studio"}
+	Composition *OutgoingComposition `json:"composition,omitempty"`
+
+	// ExpectedReplyExcerptSha256 SHA-256 of the exact UTF-8 quote excerpt, at most the first 512 Unicode code points of the displayed source body. Optional on reviewed reply mutations and requires expectedReplyRevisionId. The engine preserves it in the original acceptance when supplied.
+	//
+	// Example: 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+	ExpectedReplyExcerptSha256 *ReplyExcerptSHA256 `json:"expectedReplyExcerptSha256,omitempty"`
+
+	// ExpectedReplyRevisionId Requires a replacement composition with a reply target. Freezes the selected source at this reviewed revision, including when the target UUID is unchanged. A changed or unavailable source rejects the edit with state_conflict and replySourceChanged set to true.
+	ExpectedReplyRevisionId *ID `json:"expectedReplyRevisionId,omitempty"`
+
+	// ExpectedRevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	ExpectedRevisionId ID `json:"expectedRevisionId"`
+
+	// ScheduledAt An RFC 3339 instant strictly in the future when the owning engine first accepts it. Supply an explicit offset or Z, with up to nine fractional second digits. The engine normalizes to UTC. Equivalent offsets identify the same instant for idempotency.
+	//
+	// Example: 2026-11-12T12:30:00-03:00
+	ScheduledAt *ScheduledSendInstant `json:"scheduledAt,omitempty"`
 }
 
 // VideoThumbnail Cached frame metadata for one canonical retained video reference. A ready imageHash is a normalized static thumbnail; original video bytes are never retained by this operation.
@@ -3497,6 +3723,16 @@ type ConversationID = ID
 // Example: 019a5df0-0000-7000-8000-000000000001
 type MessageID = ID
 
+// ScheduledMutationKey Canonical lowercase UUIDv7; IDs do not establish causal order.
+//
+// Example: 019a5df0-0000-7000-8000-000000000001
+type ScheduledMutationKey = ID
+
+// StagedAttachmentID Canonical lowercase UUIDv7; IDs do not establish causal order.
+//
+// Example: 019a5df0-0000-7000-8000-000000000001
+type StagedAttachmentID = ID
+
 // Conflict RFC 9457 Problem Details served as application/problem+json. The type URI identifies the problem. The code extension is a stable short identifier for display and localization. The Link response header with rel="help" provides guidance for known problem types. The body includes documentation when the request applies the oie-problem-documentation preference. Responses exclude raw storage errors and credentials.
 //
 // Example: {"code":"unavailable","documentation":"https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#unavailable","status":503,"title":"Service Unavailable","type":"urn:oie:problem:unavailable"}
@@ -3511,6 +3747,21 @@ type Invalid = Problem
 //
 // Example: {"code":"unavailable","documentation":"https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#unavailable","status":503,"title":"Service Unavailable","type":"urn:oie:problem:unavailable"}
 type NotFound = Problem
+
+// PendingMessageUpdated Retained original text and actual send evidence. submitted means the stanza was written to the authenticated stream; it does not prove provider acceptance, recipient delivery, or read state. unknown is not automatically resent.
+//
+// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000001","createdAt":"2026-11-07T12:00:00Z","id":"019a5df0-0000-7000-8000-000000000001","isOwn":false,"originalText":"Hello from Oie!","revisionId":"019a5df0-0000-7000-8000-000000000001","sendState":"received","sender":{"displayName":"bob@localhost","id":"019a5df0-0000-7000-8000-000000000001"}}
+type PendingMessageUpdated = Message
+
+// SchedulingBodyTooLarge RFC 9457 Problem Details served as application/problem+json. The type URI identifies the problem. The code extension is a stable short identifier for display and localization. The Link response header with rel="help" provides guidance for known problem types. The body includes documentation when the request applies the oie-problem-documentation preference. Responses exclude raw storage errors and credentials.
+//
+// Example: {"code":"unavailable","documentation":"https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#unavailable","status":503,"title":"Service Unavailable","type":"urn:oie:problem:unavailable"}
+type SchedulingBodyTooLarge = Problem
+
+// SchedulingUnsupportedMedia RFC 9457 Problem Details served as application/problem+json. The type URI identifies the problem. The code extension is a stable short identifier for display and localization. The Link response header with rel="help" provides guidance for known problem types. The body includes documentation when the request applies the oie-problem-documentation preference. Responses exclude raw storage errors and credentials.
+//
+// Example: {"code":"unavailable","documentation":"https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#unavailable","status":503,"title":"Service Unavailable","type":"urn:oie:problem:unavailable"}
+type SchedulingUnsupportedMedia = Problem
 
 // Unavailable RFC 9457 Problem Details served as application/problem+json. The type URI identifies the problem. The code extension is a stable short identifier for display and localization. The Link response header with rel="help" provides guidance for known problem types. The body includes documentation when the request applies the oie-problem-documentation preference. Responses exclude raw storage errors and credentials.
 //
@@ -3612,7 +3863,7 @@ type ListConversationMessageStarsParams struct {
 
 // ListMessagesParams defines parameters for ListMessages.
 type ListMessagesParams struct {
-	// Cursor Retained message UUID anchoring this conversation-scoped page. Excludes the anchor. Use the oldest returned item for older and the newest returned item for newer. Required for newer.
+	// Cursor Retained message UUID anchoring this conversation-scoped page at its current position. A schedule can move to a new position at release. Excludes the anchor. Use the oldest returned item for older and the newest returned item for newer. Required for newer.
 	Cursor *ID `form:"cursor,omitempty" json:"cursor,omitempty"`
 
 	// Direction Chronological direction from the retained cursor. Newer requires a cursor.
@@ -3665,6 +3916,12 @@ type JoinRoomParams struct {
 type LeaveRoomParams struct {
 	// IdempotencyKey Stable operation UUID for this leave intent.
 	IdempotencyKey ID `json:"Idempotency-Key"`
+}
+
+// StageMessageAttachmentMultipartBody defines parameters for StageMessageAttachment.
+type StageMessageAttachmentMultipartBody struct {
+	// File Example: hello
+	File openapi_types.File `json:"file"`
 }
 
 // ResetEngineDataJSONBody defines parameters for ResetEngineData.
@@ -3735,16 +3992,49 @@ type EditMessageParams struct {
 	IdempotencyKey ID `json:"Idempotency-Key"`
 }
 
+// UpdatePendingMessageParams defines parameters for UpdatePendingMessage.
+type UpdatePendingMessageParams struct {
+	// IdempotencyKey Stable mutation key. Different input with the same key yields idempotency_conflict.
+	IdempotencyKey ScheduledMutationKey `json:"Idempotency-Key"`
+}
+
 // SetMessageReactionsParams defines parameters for SetMessageReactions.
 type SetMessageReactionsParams struct {
 	// IdempotencyKey Stable command UUID retained across retries and receipt lookup.
 	IdempotencyKey ID `json:"Idempotency-Key"`
 }
 
+// SendScheduledMessageNowParams defines parameters for SendScheduledMessageNow.
+type SendScheduledMessageNowParams struct {
+	// IdempotencyKey Stable mutation key. Different input with the same key yields idempotency_conflict.
+	IdempotencyKey ScheduledMutationKey `json:"Idempotency-Key"`
+}
+
 // SetMessageStarParams defines parameters for SetMessageStar.
 type SetMessageStarParams struct {
 	// IdempotencyKey Stable UUID for this exact star operation, retained across retries.
 	IdempotencyKey ID `json:"Idempotency-Key"`
+}
+
+// GetOperationParams defines parameters for GetOperation.
+type GetOperationParams struct {
+	// IncludeAcceptedMessage Include the original acceptance snapshot for a send_message receipt. Other receipt kinds never include a message.
+	IncludeAcceptedMessage *bool `form:"includeAcceptedMessage,omitempty" json:"includeAcceptedMessage,omitempty"`
+}
+
+// ListScheduledMessagesParams defines parameters for ListScheduledMessages.
+type ListScheduledMessagesParams struct {
+	// ConversationId Limit results to one conversation on this engine. Cannot be combined with conversationIds.
+	ConversationId *ID `form:"conversationId,omitempty" json:"conversationId,omitempty"`
+
+	// ConversationIds Limit results to any of the selected conversations on this engine. Cannot be combined with conversationId. Order does not affect results or continuation.
+	ConversationIds *[]ID `form:"conversationIds,omitempty" json:"conversationIds,omitempty"`
+
+	// Cursor Opaque continuation bound to this engine and conversation filter.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Maximum number of scheduled messages in this page.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListSharedContentParams defines parameters for ListSharedContent.
@@ -3828,8 +4118,14 @@ type JoinRoomJSONRequestBody = JoinRoom
 // LeaveRoomJSONRequestBody defines body for LeaveRoom for application/json ContentType.
 type LeaveRoomJSONRequestBody = LeaveRoom
 
+// StageMessageAttachmentMultipartRequestBody defines body for StageMessageAttachment for multipart/form-data ContentType.
+type StageMessageAttachmentMultipartRequestBody StageMessageAttachmentMultipartBody
+
 // ResetEngineDataJSONRequestBody defines body for ResetEngineData for application/json ContentType.
 type ResetEngineDataJSONRequestBody ResetEngineDataJSONBody
+
+// ResolveDraftLinkPreviewJSONRequestBody defines body for ResolveDraftLinkPreview for application/json ContentType.
+type ResolveDraftLinkPreviewJSONRequestBody = DraftLinkPreviewRequest
 
 // CancelMessageJSONRequestBody defines body for CancelMessage for application/json ContentType.
 type CancelMessageJSONRequestBody = CancelMessage
@@ -3837,8 +4133,14 @@ type CancelMessageJSONRequestBody = CancelMessage
 // EditMessageJSONRequestBody defines body for EditMessage for application/json ContentType.
 type EditMessageJSONRequestBody = EditMessage
 
+// UpdatePendingMessageJSONRequestBody defines body for UpdatePendingMessage for application/json ContentType.
+type UpdatePendingMessageJSONRequestBody = UpdatePendingMessage
+
 // SetMessageReactionsJSONRequestBody defines body for SetMessageReactions for application/json ContentType.
 type SetMessageReactionsJSONRequestBody = SetMessageReactions
+
+// SendScheduledMessageNowJSONRequestBody defines body for SendScheduledMessageNow for application/json ContentType.
+type SendScheduledMessageNowJSONRequestBody = SendScheduledMessageNow
 
 // SetMessageStarJSONRequestBody defines body for SetMessageStar for application/json ContentType.
 type SetMessageStarJSONRequestBody = SetMessageStar
@@ -4147,23 +4449,25 @@ type ClientInterface interface {
 
 	// ListMessages Read retained messages
 	//
-	// Returns a bounded page of retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages. The default direction is older; without a cursor it reads the latest page. Newer requires a cursor and reads the nearest messages after that retained conversation-scoped anchor, without skipping to the latest page. Both directions return newest-first. nextCursor continues in the requested direction. Reads never fetch provider history or mark messages as read.
+	// Returns a bounded page of retained messages newest-first by timelineAt when present and createdAt otherwise, at UTC millisecond precision with a UUID tie-break. Includes serially recovered archive messages. Pending scheduled messages are omitted until release. The default direction is older; without a cursor it reads the latest page. Newer requires a cursor and reads the nearest messages after that retained conversation-scoped anchor, without skipping to the latest page. Both directions return newest-first. nextCursor continues in the requested direction. Reads never fetch provider history or mark messages as read.
 	//
 	// Corresponds with GET /api/v1/conversations/{conversationId}/messages (the `ListMessages` operationId).
 	ListMessages(ctx context.Context, conversationId ConversationID, params *ListMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SendMessageWithBody Accept an immediate text message
+	// SendMessageWithBody Accept an immediate or scheduled message
 	//
-	// Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.
+	// Atomically commits one logical message, operation receipt and outbox intent for the complete composition, including the ordered references to staged attachments. The engine checks the destination, reply, mentions, attachment scope and effective send capabilities before acceptance. Invalid or unavailable attachments reject the whole composition. Attachment bytes are staged locally and any provider upload belongs to dispatch. Room dispatch waits for confirmed membership under an active explicit join intent.
+	// Omitting scheduledAt makes the intent immediately eligible. A future schedule never blocks another eligible send. A missed schedule dispatches when the owning engine and destination become available again. Optional expectedReplyRevisionId and expectedReplyExcerptSha256 bind a new scheduled reply to the reviewed source and excerpt. A changed source rejects acceptance with state_conflict and replySourceChanged set to true. Idempotency includes the complete composition, normalized instant and any reply preconditions. A matching replay returns the original acceptance snapshot even after the scheduled time passes, attachment availability changes or the source is corrected. Different input with the same key yields idempotency_conflict. Read the message for current state. Ambiguous transmission remains unknown.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /api/v1/conversations/{conversationId}/messages (the `SendMessage` operationId).
 	SendMessageWithBody(ctx context.Context, conversationId ConversationID, params *SendMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SendMessage Accept an immediate text message
+	// SendMessage Accept an immediate or scheduled message
 	//
-	// Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.
+	// Atomically commits one logical message, operation receipt and outbox intent for the complete composition, including the ordered references to staged attachments. The engine checks the destination, reply, mentions, attachment scope and effective send capabilities before acceptance. Invalid or unavailable attachments reject the whole composition. Attachment bytes are staged locally and any provider upload belongs to dispatch. Room dispatch waits for confirmed membership under an active explicit join intent.
+	// Omitting scheduledAt makes the intent immediately eligible. A future schedule never blocks another eligible send. A missed schedule dispatches when the owning engine and destination become available again. Optional expectedReplyRevisionId and expectedReplyExcerptSha256 bind a new scheduled reply to the reviewed source and excerpt. A changed source rejects acceptance with state_conflict and replySourceChanged set to true. Idempotency includes the complete composition, normalized instant and any reply preconditions. A matching replay returns the original acceptance snapshot even after the scheduled time passes, attachment availability changes or the source is corrected. Different input with the same key yields idempotency_conflict. Read the message for current state. Ambiguous transmission remains unknown.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -4172,7 +4476,7 @@ type ClientInterface interface {
 
 	// GetMessageContext Read a bounded timeline around a retained message
 	//
-	// Reads the target and nearest retained neighbors from the same conversation, newest first by original UTC timestamp at millisecond precision and UUID tie-break. Includes the target even with limit 1. Only local retained data is read; no provider archive queries or read receipts are triggered. Foreign or unavailable source messages return not_found. Clients should offer return to latest when hasNewer is true. A retained correction-source alias resolves to the original logical targetId with requestedTargetId identifying the requested alias. All returned items remain scoped to this conversation.
+	// Reads the target and nearest visible retained neighbors from the same conversation, newest first by timelineAt or createdAt at UTC millisecond precision and UUID tie-break. Includes the target even with limit 1. Only local retained data is read; no provider archive queries or read receipts are triggered. Foreign or unavailable source messages return not_found, including unreleased schedules and scheduled sends cancelled before dispatch. Clients should offer return to latest when hasNewer is true. A retained correction-source alias resolves to the original logical targetId with requestedTargetId identifying the requested alias. All returned items remain scoped to this conversation.
 	//
 	// Corresponds with GET /api/v1/conversations/{conversationId}/messages/{messageId}/context (the `GetMessageContext` operationId).
 	GetMessageContext(ctx context.Context, conversationId ConversationID, messageId MessageID, params *GetMessageContextParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4259,6 +4563,22 @@ type ClientInterface interface {
 	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
 	LeaveRoom(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, body LeaveRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetStagedMessageAttachment Read retained bytes of an outgoing attachment
+	//
+	// Reads local bytes in this conversation and account scope, for example when reopening an existing scheduled composition. Returns 404 when bytes are unavailable or the attachment is outside this scope.
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId}/staged-attachments/{attachmentId} (the `GetStagedMessageAttachment` operationId).
+	GetStagedMessageAttachment(ctx context.Context, conversationId ConversationID, attachmentId StagedAttachmentID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StageMessageAttachmentWithBody Stage a file for an outgoing message
+	//
+	// Store one complete file durably on the owning engine, scoped to this conversation and its account. The client assigns the ID once. A matching repeat with the same file bytes and filename returns the original receipt. Different input for that ID yields idempotency_conflict. An incomplete request leaves no usable attachment. Confirmed local staging performs no provider upload. Send and pending edit accept only available attachments in the same scope. The engine retains accepted references while their send is unresolved, including through restart, rescheduling and Send now.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/v1/conversations/{conversationId}/staged-attachments/{attachmentId} (the `StageMessageAttachment` operationId).
+	StageMessageAttachmentWithBody(ctx context.Context, conversationId ConversationID, attachmentId StagedAttachmentID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetEngine Read the persistent engine identity
 	//
 	// Read eventCursor before fetching snapshots to replay changes during the snapshot.
@@ -4303,6 +4623,24 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/health (the `GetHealth` operationId).
 	GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ResolveDraftLinkPreviewWithBody Resolve a link preview for a draft
+	//
+	// Fetches metadata and an optional bounded raster image for one public HTTP(S) URL. Uses the transient link cache and creates no message, durable preview record or original download.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/link-previews (the `ResolveDraftLinkPreview` operationId).
+	ResolveDraftLinkPreviewWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ResolveDraftLinkPreview Resolve a link preview for a draft
+	//
+	// Fetches metadata and an optional bounded raster image for one public HTTP(S) URL. Uses the transient link cache and creates no message, durable preview record or original download.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/link-previews (the `ResolveDraftLinkPreview` operationId).
+	ResolveDraftLinkPreview(ctx context.Context, body ResolveDraftLinkPreviewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetMediaImage Read a retained preview or original image
 	//
 	// Serves only local hash-verified PNG, JPEG or GIF bytes, without fetching the provider. Thumbnails are normalized static PNGs or JPEGs, up to 1024 pixels per axis; originals retain their validated media type. No remote redirects.
@@ -4326,7 +4664,7 @@ type ClientInterface interface {
 
 	// SearchMessages Search retained message text and available metadata
 	//
-	// Search the complete retained engine history before pagination, without network retrieval, enrichment or read-state changes. Matching follows shared-content accent/case folding, word prefixes and bounded typing-error tolerance. Current canonical message content is searched by default. Include edit history adds separately labelled verified earlier content revisions, never transport-state revisions or independent correction aliases. Current associated URLs, filenames and cached page titles/descriptions are searched only while their catalog source is current. Metadata coverage can lag immediate message-text coverage. Order is newest original message timestamp at UTC millisecond precision and UUID first, current hit before earlier content revisions, then newest revision timestamp and UUID. New arrivals or corrections can change subsequent results; pages are not a frozen snapshot.
+	// Search the complete retained engine history before pagination, without network retrieval, enrichment or read-state changes. Matching follows shared-content accent/case folding, word prefixes and bounded typing-error tolerance. Current canonical message content is searched by default. Include edit history adds separately labelled verified earlier content revisions, never transport-state revisions or independent correction aliases. Current associated URLs, filenames and cached page titles/descriptions are searched only while their catalog source is current. Metadata coverage can lag immediate message-text coverage. Unreleased schedules and scheduled sends cancelled before dispatch are excluded. Order is newest message position (`timelineAt`, falling back to `createdAt`) at UTC millisecond precision and UUID first, current hit before earlier content revisions, then newest revision timestamp and UUID. New arrivals or corrections can change subsequent results; pages are not a frozen snapshot.
 	//
 	// Corresponds with GET /api/v1/messages/search (the `SearchMessages` operationId).
 	SearchMessages(ctx context.Context, params *SearchMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4338,18 +4676,18 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/messages/{messageId} (the `GetMessage` operationId).
 	GetMessage(ctx context.Context, messageId MessageID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CancelMessageWithBody Cancel a queued send
+	// CancelMessageWithBody Cancel a pending send
 	//
-	// Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.
+	// Requires the current revision and a queued, known-unsent message at the owning engine, including a future schedule. Cancellation and dispatch share an atomic cutoff before any external provider attempt for that intent, including attachment upload. A stale revision or ineligible state yields state_conflict with currentMessage. Cancellation retires the send intent and preserves any independent retained references. A matching idempotent replay returns the original cancellation snapshot.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /api/v1/messages/{messageId}/cancel (the `CancelMessage` operationId).
 	CancelMessageWithBody(ctx context.Context, messageId MessageID, params *CancelMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CancelMessage Cancel a queued send
+	// CancelMessage Cancel a pending send
 	//
-	// Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.
+	// Requires the current revision and a queued, known-unsent message at the owning engine, including a future schedule. Cancellation and dispatch share an atomic cutoff before any external provider attempt for that intent, including attachment upload. A stale revision or ineligible state yields state_conflict with currentMessage. Cancellation retires the send intent and preserves any independent retained references. A matching idempotent replay returns the original cancellation snapshot.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -4388,6 +4726,26 @@ type ClientInterface interface {
 	// Corresponds with POST /api/v1/messages/{messageId}/edits (the `EditMessage` operationId).
 	EditMessage(ctx context.Context, messageId MessageID, params *EditMessageParams, body EditMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// UpdatePendingMessageWithBody Edit or reschedule a pending message
+	//
+	// Replace the full composition, change the schedule, or do both in one transaction at the owning engine. It must be an own queued, known-unsent message with the expected revision. The message ID, destination and creation time are retained. The engine validates new or changed reply, mentions and attachment references, then commits the updated composition and attachment references together. A schedule-only update preserves the accepted composition.
+	// The mutation and the dispatch claim share an atomic cutoff before any external provider attempt for this intent, including attachment upload. Stale revision, ineligible state or a winning dispatch claim yields state_conflict with currentMessage. When the mutation wins, a later claim uses the new revision and eligibility time. Matching idempotent replay returns the original result before evaluating current state, attachment availability or time preconditions.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /api/v1/messages/{messageId}/pending (the `UpdatePendingMessage` operationId).
+	UpdatePendingMessageWithBody(ctx context.Context, messageId MessageID, params *UpdatePendingMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdatePendingMessage Edit or reschedule a pending message
+	//
+	// Replace the full composition, change the schedule, or do both in one transaction at the owning engine. It must be an own queued, known-unsent message with the expected revision. The message ID, destination and creation time are retained. The engine validates new or changed reply, mentions and attachment references, then commits the updated composition and attachment references together. A schedule-only update preserves the accepted composition.
+	// The mutation and the dispatch claim share an atomic cutoff before any external provider attempt for this intent, including attachment upload. Stale revision, ineligible state or a winning dispatch claim yields state_conflict with currentMessage. When the mutation wins, a later claim uses the new revision and eligibility time. Matching idempotent replay returns the original result before evaluating current state, attachment availability or time preconditions.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /api/v1/messages/{messageId}/pending (the `UpdatePendingMessage` operationId).
+	UpdatePendingMessage(ctx context.Context, messageId MessageID, params *UpdatePendingMessageParams, body UpdatePendingMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetMessageReactions Read retained reactions and current own mutation eligibility
 	//
 	// Read-only canonical source snapshot. Missing revisions are null until an observed or submitted reaction set exists. Does not fetch provider data, mark read or allocate revisions.
@@ -4412,6 +4770,24 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /api/v1/messages/{messageId}/reactions (the `SetMessageReactions` operationId).
 	SetMessageReactions(ctx context.Context, messageId MessageID, params *SetMessageReactionsParams, body SetMessageReactionsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SendScheduledMessageNowWithBody Make a scheduled message eligible immediately
+	//
+	// With the current expected revision, atomically clears scheduledAt on the same queued, known-unsent scheduled intent and makes it eligible immediately. The message ID, destination, composition and attachments remain attached to the same intent. Acceptance records eligibility. Dispatch still requires the owning engine, connectivity and any existing destination prerequisites. This operation and dispatch share the same atomic cutoff as pending edit and cancel, including before provider attachment upload. A stale revision, ineligible state or winning dispatch claim yields state_conflict with currentMessage. Repeating the same key and input returns the original successful result even if dispatch has since started.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/messages/{messageId}/send-now (the `SendScheduledMessageNow` operationId).
+	SendScheduledMessageNowWithBody(ctx context.Context, messageId MessageID, params *SendScheduledMessageNowParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SendScheduledMessageNow Make a scheduled message eligible immediately
+	//
+	// With the current expected revision, atomically clears scheduledAt on the same queued, known-unsent scheduled intent and makes it eligible immediately. The message ID, destination, composition and attachments remain attached to the same intent. Acceptance records eligibility. Dispatch still requires the owning engine, connectivity and any existing destination prerequisites. This operation and dispatch share the same atomic cutoff as pending edit and cancel, including before provider attachment upload. A stale revision, ineligible state or winning dispatch claim yields state_conflict with currentMessage. Repeating the same key and input returns the original successful result even if dispatch has since started.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/messages/{messageId}/send-now (the `SendScheduledMessageNow` operationId).
+	SendScheduledMessageNow(ctx context.Context, messageId MessageID, params *SendScheduledMessageNowParams, body SendScheduledMessageNowJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetMessageSenderProfile Read the author's available published profile
 	//
@@ -4447,10 +4823,10 @@ type ClientInterface interface {
 
 	// GetOperation Reconcile a mutation after an ambiguous response
 	//
-	// A receipt proves the local mutation committed; send receipts prove durable engine acceptance, never recipient delivery. Unknown IDs return 404.
+	// A receipt proves the local mutation committed. Send receipts prove durable engine acceptance. Request includeAcceptedMessage to read the immutable send acceptance snapshot, including the original composition and scheduled instant. This route exposes the receipt kinds defined by Operation. An ID without an exposed receipt returns 404. Recover the result of updatePendingMessage or sendScheduledMessageNow by replaying the original request with the same key and input.
 	//
 	// Corresponds with GET /api/v1/operations/{operationId} (the `GetOperation` operationId).
-	GetOperation(ctx context.Context, operationId ID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetOperation(ctx context.Context, operationId ID, params *GetOperationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetMessagePreview Read a message preview
 	//
@@ -4473,9 +4849,16 @@ type ClientInterface interface {
 	// Corresponds with POST /api/v1/previews/{previewId}/refresh (the `RefreshMessagePreview` operationId).
 	RefreshMessagePreview(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListScheduledMessages List scheduled messages across conversations
+	//
+	// Lists the selected engine's own queued, known-unsent messages with a configured schedule, including overdue sends waiting for connectivity. Results include their destination. Successful Send now removes the item from this list even if connectivity delays dispatch. Results sort by scheduledAt ascending, then message UUID ascending. Pagination is over current data. Concurrent changes can move items across the cursor boundary.
+	//
+	// Corresponds with GET /api/v1/scheduled-messages (the `ListScheduledMessages` operationId).
+	ListScheduledMessages(ctx context.Context, params *ListScheduledMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListSharedContent Browse shared content across retained conversations
 	//
-	// Browse the local derived catalog, newest original message time first with item UUID ties at millisecond precision. Account/conversation filters apply before pagination. Metadata search covers URL, filename, visible caption, cached preview title/description, sender, conversation and account label. A background worker indexes all retained and incoming messages. Listing registers preview enrichment only for the returned image/link references; originals still follow device preferences and explicit download operations. Document/audio entries remain URL references. Video bytes are available only through the explicit content operation; listing does not fetch video metadata or bytes. Backfill or new arrivals may insert items before the current cursor; reload to include them. A conversation filter with another account is invalid.
+	// Browse the local derived catalog, newest message position (`timelineAt`, falling back to `createdAt`) first with item UUID ties at millisecond precision. Unreleased schedules and scheduled sends cancelled before dispatch are excluded. Account/conversation filters apply before pagination. Metadata search covers URL, filename, visible caption, cached preview title/description, sender, conversation and account label. A background worker indexes visible retained and incoming messages. Listing registers preview enrichment only for the returned image/link references; originals still follow device preferences and explicit download operations. Document/audio entries remain URL references. Video bytes are available only through the explicit content operation; listing does not fetch video metadata or bytes. Backfill or new arrivals may insert items before the current cursor; reload to include them. A conversation filter with another account is invalid.
 	//
 	// Corresponds with GET /api/v1/shared-content (the `ListSharedContent` operationId).
 	ListSharedContent(ctx context.Context, params *ListSharedContentParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5019,7 +5402,7 @@ func (c *Client) ListConversationMessageStars(ctx context.Context, conversationI
 
 // ListMessages Read retained messages
 //
-// Returns a bounded page of retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages. The default direction is older; without a cursor it reads the latest page. Newer requires a cursor and reads the nearest messages after that retained conversation-scoped anchor, without skipping to the latest page. Both directions return newest-first. nextCursor continues in the requested direction. Reads never fetch provider history or mark messages as read.
+// Returns a bounded page of retained messages newest-first by timelineAt when present and createdAt otherwise, at UTC millisecond precision with a UUID tie-break. Includes serially recovered archive messages. Pending scheduled messages are omitted until release. The default direction is older; without a cursor it reads the latest page. Newer requires a cursor and reads the nearest messages after that retained conversation-scoped anchor, without skipping to the latest page. Both directions return newest-first. nextCursor continues in the requested direction. Reads never fetch provider history or mark messages as read.
 //
 // Corresponds with GET /api/v1/conversations/{conversationId}/messages (the `ListMessages` operationId).
 func (c *Client) ListMessages(ctx context.Context, conversationId ConversationID, params *ListMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5034,9 +5417,10 @@ func (c *Client) ListMessages(ctx context.Context, conversationId ConversationID
 	return c.Client.Do(req)
 }
 
-// SendMessageWithBody Accept an immediate text message
+// SendMessageWithBody Accept an immediate or scheduled message
 //
-// Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.
+// Atomically commits one logical message, operation receipt and outbox intent for the complete composition, including the ordered references to staged attachments. The engine checks the destination, reply, mentions, attachment scope and effective send capabilities before acceptance. Invalid or unavailable attachments reject the whole composition. Attachment bytes are staged locally and any provider upload belongs to dispatch. Room dispatch waits for confirmed membership under an active explicit join intent.
+// Omitting scheduledAt makes the intent immediately eligible. A future schedule never blocks another eligible send. A missed schedule dispatches when the owning engine and destination become available again. Optional expectedReplyRevisionId and expectedReplyExcerptSha256 bind a new scheduled reply to the reviewed source and excerpt. A changed source rejects acceptance with state_conflict and replySourceChanged set to true. Idempotency includes the complete composition, normalized instant and any reply preconditions. A matching replay returns the original acceptance snapshot even after the scheduled time passes, attachment availability changes or the source is corrected. Different input with the same key yields idempotency_conflict. Read the message for current state. Ambiguous transmission remains unknown.
 //
 // Takes any type of body and a specified content type.
 //
@@ -5053,9 +5437,10 @@ func (c *Client) SendMessageWithBody(ctx context.Context, conversationId Convers
 	return c.Client.Do(req)
 }
 
-// SendMessage Accept an immediate text message
+// SendMessage Accept an immediate or scheduled message
 //
-// Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.
+// Atomically commits one logical message, operation receipt and outbox intent for the complete composition, including the ordered references to staged attachments. The engine checks the destination, reply, mentions, attachment scope and effective send capabilities before acceptance. Invalid or unavailable attachments reject the whole composition. Attachment bytes are staged locally and any provider upload belongs to dispatch. Room dispatch waits for confirmed membership under an active explicit join intent.
+// Omitting scheduledAt makes the intent immediately eligible. A future schedule never blocks another eligible send. A missed schedule dispatches when the owning engine and destination become available again. Optional expectedReplyRevisionId and expectedReplyExcerptSha256 bind a new scheduled reply to the reviewed source and excerpt. A changed source rejects acceptance with state_conflict and replySourceChanged set to true. Idempotency includes the complete composition, normalized instant and any reply preconditions. A matching replay returns the original acceptance snapshot even after the scheduled time passes, attachment availability changes or the source is corrected. Different input with the same key yields idempotency_conflict. Read the message for current state. Ambiguous transmission remains unknown.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5074,7 +5459,7 @@ func (c *Client) SendMessage(ctx context.Context, conversationId ConversationID,
 
 // GetMessageContext Read a bounded timeline around a retained message
 //
-// Reads the target and nearest retained neighbors from the same conversation, newest first by original UTC timestamp at millisecond precision and UUID tie-break. Includes the target even with limit 1. Only local retained data is read; no provider archive queries or read receipts are triggered. Foreign or unavailable source messages return not_found. Clients should offer return to latest when hasNewer is true. A retained correction-source alias resolves to the original logical targetId with requestedTargetId identifying the requested alias. All returned items remain scoped to this conversation.
+// Reads the target and nearest visible retained neighbors from the same conversation, newest first by timelineAt or createdAt at UTC millisecond precision and UUID tie-break. Includes the target even with limit 1. Only local retained data is read; no provider archive queries or read receipts are triggered. Foreign or unavailable source messages return not_found, including unreleased schedules and scheduled sends cancelled before dispatch. Clients should offer return to latest when hasNewer is true. A retained correction-source alias resolves to the original logical targetId with requestedTargetId identifying the requested alias. All returned items remain scoped to this conversation.
 //
 // Corresponds with GET /api/v1/conversations/{conversationId}/messages/{messageId}/context (the `GetMessageContext` operationId).
 func (c *Client) GetMessageContext(ctx context.Context, conversationId ConversationID, messageId MessageID, params *GetMessageContextParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5271,6 +5656,42 @@ func (c *Client) LeaveRoom(ctx context.Context, conversationId ConversationID, p
 	return c.Client.Do(req)
 }
 
+// GetStagedMessageAttachment Read retained bytes of an outgoing attachment
+//
+// Reads local bytes in this conversation and account scope, for example when reopening an existing scheduled composition. Returns 404 when bytes are unavailable or the attachment is outside this scope.
+//
+// Corresponds with GET /api/v1/conversations/{conversationId}/staged-attachments/{attachmentId} (the `GetStagedMessageAttachment` operationId).
+func (c *Client) GetStagedMessageAttachment(ctx context.Context, conversationId ConversationID, attachmentId StagedAttachmentID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetStagedMessageAttachmentRequest(c.Server, conversationId, attachmentId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// StageMessageAttachmentWithBody Stage a file for an outgoing message
+//
+// Store one complete file durably on the owning engine, scoped to this conversation and its account. The client assigns the ID once. A matching repeat with the same file bytes and filename returns the original receipt. Different input for that ID yields idempotency_conflict. An incomplete request leaves no usable attachment. Confirmed local staging performs no provider upload. Send and pending edit accept only available attachments in the same scope. The engine retains accepted references while their send is unresolved, including through restart, rescheduling and Send now.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/v1/conversations/{conversationId}/staged-attachments/{attachmentId} (the `StageMessageAttachment` operationId).
+func (c *Client) StageMessageAttachmentWithBody(ctx context.Context, conversationId ConversationID, attachmentId StagedAttachmentID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStageMessageAttachmentRequestWithBody(c.Server, conversationId, attachmentId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetEngine Read the persistent engine identity
 //
 // Read eventCursor before fetching snapshots to replay changes during the snapshot.
@@ -5365,6 +5786,44 @@ func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (
 	return c.Client.Do(req)
 }
 
+// ResolveDraftLinkPreviewWithBody Resolve a link preview for a draft
+//
+// Fetches metadata and an optional bounded raster image for one public HTTP(S) URL. Uses the transient link cache and creates no message, durable preview record or original download.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/link-previews (the `ResolveDraftLinkPreview` operationId).
+func (c *Client) ResolveDraftLinkPreviewWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewResolveDraftLinkPreviewRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ResolveDraftLinkPreview Resolve a link preview for a draft
+//
+// Fetches metadata and an optional bounded raster image for one public HTTP(S) URL. Uses the transient link cache and creates no message, durable preview record or original download.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/link-previews (the `ResolveDraftLinkPreview` operationId).
+func (c *Client) ResolveDraftLinkPreview(ctx context.Context, body ResolveDraftLinkPreviewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewResolveDraftLinkPreviewRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetMediaImage Read a retained preview or original image
 //
 // Serves only local hash-verified PNG, JPEG or GIF bytes, without fetching the provider. Thumbnails are normalized static PNGs or JPEGs, up to 1024 pixels per axis; originals retain their validated media type. No remote redirects.
@@ -5418,7 +5877,7 @@ func (c *Client) GetMessageReactionCommand(ctx context.Context, commandId ID, re
 
 // SearchMessages Search retained message text and available metadata
 //
-// Search the complete retained engine history before pagination, without network retrieval, enrichment or read-state changes. Matching follows shared-content accent/case folding, word prefixes and bounded typing-error tolerance. Current canonical message content is searched by default. Include edit history adds separately labelled verified earlier content revisions, never transport-state revisions or independent correction aliases. Current associated URLs, filenames and cached page titles/descriptions are searched only while their catalog source is current. Metadata coverage can lag immediate message-text coverage. Order is newest original message timestamp at UTC millisecond precision and UUID first, current hit before earlier content revisions, then newest revision timestamp and UUID. New arrivals or corrections can change subsequent results; pages are not a frozen snapshot.
+// Search the complete retained engine history before pagination, without network retrieval, enrichment or read-state changes. Matching follows shared-content accent/case folding, word prefixes and bounded typing-error tolerance. Current canonical message content is searched by default. Include edit history adds separately labelled verified earlier content revisions, never transport-state revisions or independent correction aliases. Current associated URLs, filenames and cached page titles/descriptions are searched only while their catalog source is current. Metadata coverage can lag immediate message-text coverage. Unreleased schedules and scheduled sends cancelled before dispatch are excluded. Order is newest message position (`timelineAt`, falling back to `createdAt`) at UTC millisecond precision and UUID first, current hit before earlier content revisions, then newest revision timestamp and UUID. New arrivals or corrections can change subsequent results; pages are not a frozen snapshot.
 //
 // Corresponds with GET /api/v1/messages/search (the `SearchMessages` operationId).
 func (c *Client) SearchMessages(ctx context.Context, params *SearchMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5450,9 +5909,9 @@ func (c *Client) GetMessage(ctx context.Context, messageId MessageID, reqEditors
 	return c.Client.Do(req)
 }
 
-// CancelMessageWithBody Cancel a queued send
+// CancelMessageWithBody Cancel a pending send
 //
-// Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.
+// Requires the current revision and a queued, known-unsent message at the owning engine, including a future schedule. Cancellation and dispatch share an atomic cutoff before any external provider attempt for that intent, including attachment upload. A stale revision or ineligible state yields state_conflict with currentMessage. Cancellation retires the send intent and preserves any independent retained references. A matching idempotent replay returns the original cancellation snapshot.
 //
 // Takes any type of body and a specified content type.
 //
@@ -5469,9 +5928,9 @@ func (c *Client) CancelMessageWithBody(ctx context.Context, messageId MessageID,
 	return c.Client.Do(req)
 }
 
-// CancelMessage Cancel a queued send
+// CancelMessage Cancel a pending send
 //
-// Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.
+// Requires the current revision and a queued, known-unsent message at the owning engine, including a future schedule. Cancellation and dispatch share an atomic cutoff before any external provider attempt for that intent, including attachment upload. A stale revision or ineligible state yields state_conflict with currentMessage. Cancellation retires the send intent and preserves any independent retained references. A matching idempotent replay returns the original cancellation snapshot.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5560,6 +6019,46 @@ func (c *Client) EditMessage(ctx context.Context, messageId MessageID, params *E
 	return c.Client.Do(req)
 }
 
+// UpdatePendingMessageWithBody Edit or reschedule a pending message
+//
+// Replace the full composition, change the schedule, or do both in one transaction at the owning engine. It must be an own queued, known-unsent message with the expected revision. The message ID, destination and creation time are retained. The engine validates new or changed reply, mentions and attachment references, then commits the updated composition and attachment references together. A schedule-only update preserves the accepted composition.
+// The mutation and the dispatch claim share an atomic cutoff before any external provider attempt for this intent, including attachment upload. Stale revision, ineligible state or a winning dispatch claim yields state_conflict with currentMessage. When the mutation wins, a later claim uses the new revision and eligibility time. Matching idempotent replay returns the original result before evaluating current state, attachment availability or time preconditions.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /api/v1/messages/{messageId}/pending (the `UpdatePendingMessage` operationId).
+func (c *Client) UpdatePendingMessageWithBody(ctx context.Context, messageId MessageID, params *UpdatePendingMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdatePendingMessageRequestWithBody(c.Server, messageId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdatePendingMessage Edit or reschedule a pending message
+//
+// Replace the full composition, change the schedule, or do both in one transaction at the owning engine. It must be an own queued, known-unsent message with the expected revision. The message ID, destination and creation time are retained. The engine validates new or changed reply, mentions and attachment references, then commits the updated composition and attachment references together. A schedule-only update preserves the accepted composition.
+// The mutation and the dispatch claim share an atomic cutoff before any external provider attempt for this intent, including attachment upload. Stale revision, ineligible state or a winning dispatch claim yields state_conflict with currentMessage. When the mutation wins, a later claim uses the new revision and eligibility time. Matching idempotent replay returns the original result before evaluating current state, attachment availability or time preconditions.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /api/v1/messages/{messageId}/pending (the `UpdatePendingMessage` operationId).
+func (c *Client) UpdatePendingMessage(ctx context.Context, messageId MessageID, params *UpdatePendingMessageParams, body UpdatePendingMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdatePendingMessageRequest(c.Server, messageId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetMessageReactions Read retained reactions and current own mutation eligibility
 //
 // Read-only canonical source snapshot. Missing revisions are null until an observed or submitted reaction set exists. Does not fetch provider data, mark read or allocate revisions.
@@ -5605,6 +6104,44 @@ func (c *Client) SetMessageReactionsWithBody(ctx context.Context, messageId Mess
 // Corresponds with POST /api/v1/messages/{messageId}/reactions (the `SetMessageReactions` operationId).
 func (c *Client) SetMessageReactions(ctx context.Context, messageId MessageID, params *SetMessageReactionsParams, body SetMessageReactionsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSetMessageReactionsRequest(c.Server, messageId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SendScheduledMessageNowWithBody Make a scheduled message eligible immediately
+//
+// With the current expected revision, atomically clears scheduledAt on the same queued, known-unsent scheduled intent and makes it eligible immediately. The message ID, destination, composition and attachments remain attached to the same intent. Acceptance records eligibility. Dispatch still requires the owning engine, connectivity and any existing destination prerequisites. This operation and dispatch share the same atomic cutoff as pending edit and cancel, including before provider attachment upload. A stale revision, ineligible state or winning dispatch claim yields state_conflict with currentMessage. Repeating the same key and input returns the original successful result even if dispatch has since started.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/messages/{messageId}/send-now (the `SendScheduledMessageNow` operationId).
+func (c *Client) SendScheduledMessageNowWithBody(ctx context.Context, messageId MessageID, params *SendScheduledMessageNowParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSendScheduledMessageNowRequestWithBody(c.Server, messageId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SendScheduledMessageNow Make a scheduled message eligible immediately
+//
+// With the current expected revision, atomically clears scheduledAt on the same queued, known-unsent scheduled intent and makes it eligible immediately. The message ID, destination, composition and attachments remain attached to the same intent. Acceptance records eligibility. Dispatch still requires the owning engine, connectivity and any existing destination prerequisites. This operation and dispatch share the same atomic cutoff as pending edit and cancel, including before provider attachment upload. A stale revision, ineligible state or winning dispatch claim yields state_conflict with currentMessage. Repeating the same key and input returns the original successful result even if dispatch has since started.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/messages/{messageId}/send-now (the `SendScheduledMessageNow` operationId).
+func (c *Client) SendScheduledMessageNow(ctx context.Context, messageId MessageID, params *SendScheduledMessageNowParams, body SendScheduledMessageNowJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSendScheduledMessageNowRequest(c.Server, messageId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5689,11 +6226,11 @@ func (c *Client) SetMessageStar(ctx context.Context, messageId MessageID, params
 
 // GetOperation Reconcile a mutation after an ambiguous response
 //
-// A receipt proves the local mutation committed; send receipts prove durable engine acceptance, never recipient delivery. Unknown IDs return 404.
+// A receipt proves the local mutation committed. Send receipts prove durable engine acceptance. Request includeAcceptedMessage to read the immutable send acceptance snapshot, including the original composition and scheduled instant. This route exposes the receipt kinds defined by Operation. An ID without an exposed receipt returns 404. Recover the result of updatePendingMessage or sendScheduledMessageNow by replaying the original request with the same key and input.
 //
 // Corresponds with GET /api/v1/operations/{operationId} (the `GetOperation` operationId).
-func (c *Client) GetOperation(ctx context.Context, operationId ID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOperationRequest(c.Server, operationId)
+func (c *Client) GetOperation(ctx context.Context, operationId ID, params *GetOperationParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOperationRequest(c.Server, operationId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5755,9 +6292,26 @@ func (c *Client) RefreshMessagePreview(ctx context.Context, previewId ID, reqEdi
 	return c.Client.Do(req)
 }
 
+// ListScheduledMessages List scheduled messages across conversations
+//
+// Lists the selected engine's own queued, known-unsent messages with a configured schedule, including overdue sends waiting for connectivity. Results include their destination. Successful Send now removes the item from this list even if connectivity delays dispatch. Results sort by scheduledAt ascending, then message UUID ascending. Pagination is over current data. Concurrent changes can move items across the cursor boundary.
+//
+// Corresponds with GET /api/v1/scheduled-messages (the `ListScheduledMessages` operationId).
+func (c *Client) ListScheduledMessages(ctx context.Context, params *ListScheduledMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListScheduledMessagesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListSharedContent Browse shared content across retained conversations
 //
-// Browse the local derived catalog, newest original message time first with item UUID ties at millisecond precision. Account/conversation filters apply before pagination. Metadata search covers URL, filename, visible caption, cached preview title/description, sender, conversation and account label. A background worker indexes all retained and incoming messages. Listing registers preview enrichment only for the returned image/link references; originals still follow device preferences and explicit download operations. Document/audio entries remain URL references. Video bytes are available only through the explicit content operation; listing does not fetch video metadata or bytes. Backfill or new arrivals may insert items before the current cursor; reload to include them. A conversation filter with another account is invalid.
+// Browse the local derived catalog, newest message position (`timelineAt`, falling back to `createdAt`) first with item UUID ties at millisecond precision. Unreleased schedules and scheduled sends cancelled before dispatch are excluded. Account/conversation filters apply before pagination. Metadata search covers URL, filename, visible caption, cached preview title/description, sender, conversation and account label. A background worker indexes visible retained and incoming messages. Listing registers preview enrichment only for the returned image/link references; originals still follow device preferences and explicit download operations. Document/audio entries remain URL references. Video bytes are available only through the explicit content operation; listing does not fetch video metadata or bytes. Backfill or new arrivals may insert items before the current cursor; reload to include them. A conversation filter with another account is invalid.
 //
 // Corresponds with GET /api/v1/shared-content (the `ListSharedContent` operationId).
 func (c *Client) ListSharedContent(ctx context.Context, params *ListSharedContentParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7547,6 +8101,90 @@ func NewLeaveRoomRequestWithBody(server string, conversationId ConversationID, p
 	return req, nil
 }
 
+// NewGetStagedMessageAttachmentRequest constructs an http.Request for the GetStagedMessageAttachment method
+func NewGetStagedMessageAttachmentRequest(server string, conversationId ConversationID, attachmentId StagedAttachmentID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "attachmentId", attachmentId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/conversations/%s/staged-attachments/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewStageMessageAttachmentRequestWithBody constructs an http.Request for the StageMessageAttachment method, with any body, and a specified content type
+func NewStageMessageAttachmentRequestWithBody(server string, conversationId ConversationID, attachmentId StagedAttachmentID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "attachmentId", attachmentId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/conversations/%s/staged-attachments/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetEngineRequest constructs an http.Request for the GetEngine method
 func NewGetEngineRequest(server string) (*http.Request, error) {
 	var err error
@@ -7679,6 +8317,46 @@ func NewGetHealthRequest(server string) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewResolveDraftLinkPreviewRequest calls the generic ResolveDraftLinkPreview builder with application/json body
+func NewResolveDraftLinkPreviewRequest(server string, body ResolveDraftLinkPreviewJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewResolveDraftLinkPreviewRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewResolveDraftLinkPreviewRequestWithBody constructs an http.Request for the ResolveDraftLinkPreview method, with any body, and a specified content type
+func NewResolveDraftLinkPreviewRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/link-previews")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -8171,6 +8849,66 @@ func NewEditMessageRequestWithBody(server string, messageId MessageID, params *E
 	return req, nil
 }
 
+// NewUpdatePendingMessageRequest calls the generic UpdatePendingMessage builder with application/json body
+func NewUpdatePendingMessageRequest(server string, messageId MessageID, params *UpdatePendingMessageParams, body UpdatePendingMessageJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdatePendingMessageRequestWithBody(server, messageId, params, "application/json", bodyReader)
+}
+
+// NewUpdatePendingMessageRequestWithBody constructs an http.Request for the UpdatePendingMessage method, with any body, and a specified content type
+func NewUpdatePendingMessageRequestWithBody(server string, messageId MessageID, params *UpdatePendingMessageParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "messageId", messageId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/messages/%s/pending", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: "uuid"})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
 // NewGetMessageReactionsRequest constructs an http.Request for the GetMessageReactions method
 func NewGetMessageReactionsRequest(server string, messageId MessageID) (*http.Request, error) {
 	var err error
@@ -8233,6 +8971,66 @@ func NewSetMessageReactionsRequestWithBody(server string, messageId MessageID, p
 	}
 
 	operationPath := fmt.Sprintf("/api/v1/messages/%s/reactions", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: "uuid"})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewSendScheduledMessageNowRequest calls the generic SendScheduledMessageNow builder with application/json body
+func NewSendScheduledMessageNowRequest(server string, messageId MessageID, params *SendScheduledMessageNowParams, body SendScheduledMessageNowJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSendScheduledMessageNowRequestWithBody(server, messageId, params, "application/json", bodyReader)
+}
+
+// NewSendScheduledMessageNowRequestWithBody constructs an http.Request for the SendScheduledMessageNow method, with any body, and a specified content type
+func NewSendScheduledMessageNowRequestWithBody(server string, messageId MessageID, params *SendScheduledMessageNowParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "messageId", messageId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/messages/%s/send-now", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -8394,7 +9192,7 @@ func NewSetMessageStarRequestWithBody(server string, messageId MessageID, params
 }
 
 // NewGetOperationRequest constructs an http.Request for the GetOperation method
-func NewGetOperationRequest(server string, operationId ID) (*http.Request, error) {
+func NewGetOperationRequest(server string, operationId ID, params *GetOperationParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8417,6 +9215,33 @@ func NewGetOperationRequest(server string, operationId ID) (*http.Request, error
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.IncludeAcceptedMessage != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "includeAcceptedMessage", *params.IncludeAcceptedMessage, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -8522,6 +9347,96 @@ func NewRefreshMessagePreviewRequest(server string, previewId ID) (*http.Request
 	}
 
 	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListScheduledMessagesRequest constructs an http.Request for the ListScheduledMessages method
+func NewListScheduledMessagesRequest(server string, params *ListScheduledMessagesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/scheduled-messages")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.ConversationId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "conversationId", *params.ConversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ConversationIds != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "conversationIds", *params.ConversationIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -9179,25 +10094,27 @@ type ClientWithResponsesInterface interface {
 
 	// ListMessagesWithResponse Read retained messages
 	//
-	// Returns a bounded page of retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages. The default direction is older; without a cursor it reads the latest page. Newer requires a cursor and reads the nearest messages after that retained conversation-scoped anchor, without skipping to the latest page. Both directions return newest-first. nextCursor continues in the requested direction. Reads never fetch provider history or mark messages as read.
+	// Returns a bounded page of retained messages newest-first by timelineAt when present and createdAt otherwise, at UTC millisecond precision with a UUID tie-break. Includes serially recovered archive messages. Pending scheduled messages are omitted until release. The default direction is older; without a cursor it reads the latest page. Newer requires a cursor and reads the nearest messages after that retained conversation-scoped anchor, without skipping to the latest page. Both directions return newest-first. nextCursor continues in the requested direction. Reads never fetch provider history or mark messages as read.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /api/v1/conversations/{conversationId}/messages (the `ListMessages` operationId).
 	ListMessagesWithResponse(ctx context.Context, conversationId ConversationID, params *ListMessagesParams, reqEditors ...RequestEditorFn) (*ListMessagesResponse, error)
 
-	// SendMessageWithBodyWithResponse Accept an immediate text message
+	// SendMessageWithBodyWithResponse Accept an immediate or scheduled message
 	//
-	// Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.
+	// Atomically commits one logical message, operation receipt and outbox intent for the complete composition, including the ordered references to staged attachments. The engine checks the destination, reply, mentions, attachment scope and effective send capabilities before acceptance. Invalid or unavailable attachments reject the whole composition. Attachment bytes are staged locally and any provider upload belongs to dispatch. Room dispatch waits for confirmed membership under an active explicit join intent.
+	// Omitting scheduledAt makes the intent immediately eligible. A future schedule never blocks another eligible send. A missed schedule dispatches when the owning engine and destination become available again. Optional expectedReplyRevisionId and expectedReplyExcerptSha256 bind a new scheduled reply to the reviewed source and excerpt. A changed source rejects acceptance with state_conflict and replySourceChanged set to true. Idempotency includes the complete composition, normalized instant and any reply preconditions. A matching replay returns the original acceptance snapshot even after the scheduled time passes, attachment availability changes or the source is corrected. Different input with the same key yields idempotency_conflict. Read the message for current state. Ambiguous transmission remains unknown.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/v1/conversations/{conversationId}/messages (the `SendMessage` operationId).
 	SendMessageWithBodyWithResponse(ctx context.Context, conversationId ConversationID, params *SendMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SendMessageResponse, error)
 
-	// SendMessageWithResponse Accept an immediate text message
+	// SendMessageWithResponse Accept an immediate or scheduled message
 	//
-	// Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.
+	// Atomically commits one logical message, operation receipt and outbox intent for the complete composition, including the ordered references to staged attachments. The engine checks the destination, reply, mentions, attachment scope and effective send capabilities before acceptance. Invalid or unavailable attachments reject the whole composition. Attachment bytes are staged locally and any provider upload belongs to dispatch. Room dispatch waits for confirmed membership under an active explicit join intent.
+	// Omitting scheduledAt makes the intent immediately eligible. A future schedule never blocks another eligible send. A missed schedule dispatches when the owning engine and destination become available again. Optional expectedReplyRevisionId and expectedReplyExcerptSha256 bind a new scheduled reply to the reviewed source and excerpt. A changed source rejects acceptance with state_conflict and replySourceChanged set to true. Idempotency includes the complete composition, normalized instant and any reply preconditions. A matching replay returns the original acceptance snapshot even after the scheduled time passes, attachment availability changes or the source is corrected. Different input with the same key yields idempotency_conflict. Read the message for current state. Ambiguous transmission remains unknown.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -9206,7 +10123,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetMessageContextWithResponse Read a bounded timeline around a retained message
 	//
-	// Reads the target and nearest retained neighbors from the same conversation, newest first by original UTC timestamp at millisecond precision and UUID tie-break. Includes the target even with limit 1. Only local retained data is read; no provider archive queries or read receipts are triggered. Foreign or unavailable source messages return not_found. Clients should offer return to latest when hasNewer is true. A retained correction-source alias resolves to the original logical targetId with requestedTargetId identifying the requested alias. All returned items remain scoped to this conversation.
+	// Reads the target and nearest visible retained neighbors from the same conversation, newest first by timelineAt or createdAt at UTC millisecond precision and UUID tie-break. Includes the target even with limit 1. Only local retained data is read; no provider archive queries or read receipts are triggered. Foreign or unavailable source messages return not_found, including unreleased schedules and scheduled sends cancelled before dispatch. Clients should offer return to latest when hasNewer is true. A retained correction-source alias resolves to the original logical targetId with requestedTargetId identifying the requested alias. All returned items remain scoped to this conversation.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -9303,6 +10220,24 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/v1/conversations/{conversationId}/room-session/leave (the `LeaveRoom` operationId).
 	LeaveRoomWithResponse(ctx context.Context, conversationId ConversationID, params *LeaveRoomParams, body LeaveRoomJSONRequestBody, reqEditors ...RequestEditorFn) (*LeaveRoomResponse, error)
 
+	// GetStagedMessageAttachmentWithResponse Read retained bytes of an outgoing attachment
+	//
+	// Reads local bytes in this conversation and account scope, for example when reopening an existing scheduled composition. Returns 404 when bytes are unavailable or the attachment is outside this scope.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/conversations/{conversationId}/staged-attachments/{attachmentId} (the `GetStagedMessageAttachment` operationId).
+	GetStagedMessageAttachmentWithResponse(ctx context.Context, conversationId ConversationID, attachmentId StagedAttachmentID, reqEditors ...RequestEditorFn) (*GetStagedMessageAttachmentResponse, error)
+
+	// StageMessageAttachmentWithBodyWithResponse Stage a file for an outgoing message
+	//
+	// Store one complete file durably on the owning engine, scoped to this conversation and its account. The client assigns the ID once. A matching repeat with the same file bytes and filename returns the original receipt. Different input for that ID yields idempotency_conflict. An incomplete request leaves no usable attachment. Confirmed local staging performs no provider upload. Send and pending edit accept only available attachments in the same scope. The engine retains accepted references while their send is unresolved, including through restart, rescheduling and Send now.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/conversations/{conversationId}/staged-attachments/{attachmentId} (the `StageMessageAttachment` operationId).
+	StageMessageAttachmentWithBodyWithResponse(ctx context.Context, conversationId ConversationID, attachmentId StagedAttachmentID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StageMessageAttachmentResponse, error)
+
 	// GetEngineWithResponse Read the persistent engine identity
 	//
 	// Read eventCursor before fetching snapshots to replay changes during the snapshot.
@@ -9353,6 +10288,24 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/health (the `GetHealth` operationId).
 	GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error)
 
+	// ResolveDraftLinkPreviewWithBodyWithResponse Resolve a link preview for a draft
+	//
+	// Fetches metadata and an optional bounded raster image for one public HTTP(S) URL. Uses the transient link cache and creates no message, durable preview record or original download.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/link-previews (the `ResolveDraftLinkPreview` operationId).
+	ResolveDraftLinkPreviewWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ResolveDraftLinkPreviewResponse, error)
+
+	// ResolveDraftLinkPreviewWithResponse Resolve a link preview for a draft
+	//
+	// Fetches metadata and an optional bounded raster image for one public HTTP(S) URL. Uses the transient link cache and creates no message, durable preview record or original download.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/link-previews (the `ResolveDraftLinkPreview` operationId).
+	ResolveDraftLinkPreviewWithResponse(ctx context.Context, body ResolveDraftLinkPreviewJSONRequestBody, reqEditors ...RequestEditorFn) (*ResolveDraftLinkPreviewResponse, error)
+
 	// GetMediaImageWithResponse Read a retained preview or original image
 	//
 	// Serves only local hash-verified PNG, JPEG or GIF bytes, without fetching the provider. Thumbnails are normalized static PNGs or JPEGs, up to 1024 pixels per axis; originals retain their validated media type. No remote redirects.
@@ -9382,7 +10335,7 @@ type ClientWithResponsesInterface interface {
 
 	// SearchMessagesWithResponse Search retained message text and available metadata
 	//
-	// Search the complete retained engine history before pagination, without network retrieval, enrichment or read-state changes. Matching follows shared-content accent/case folding, word prefixes and bounded typing-error tolerance. Current canonical message content is searched by default. Include edit history adds separately labelled verified earlier content revisions, never transport-state revisions or independent correction aliases. Current associated URLs, filenames and cached page titles/descriptions are searched only while their catalog source is current. Metadata coverage can lag immediate message-text coverage. Order is newest original message timestamp at UTC millisecond precision and UUID first, current hit before earlier content revisions, then newest revision timestamp and UUID. New arrivals or corrections can change subsequent results; pages are not a frozen snapshot.
+	// Search the complete retained engine history before pagination, without network retrieval, enrichment or read-state changes. Matching follows shared-content accent/case folding, word prefixes and bounded typing-error tolerance. Current canonical message content is searched by default. Include edit history adds separately labelled verified earlier content revisions, never transport-state revisions or independent correction aliases. Current associated URLs, filenames and cached page titles/descriptions are searched only while their catalog source is current. Metadata coverage can lag immediate message-text coverage. Unreleased schedules and scheduled sends cancelled before dispatch are excluded. Order is newest message position (`timelineAt`, falling back to `createdAt`) at UTC millisecond precision and UUID first, current hit before earlier content revisions, then newest revision timestamp and UUID. New arrivals or corrections can change subsequent results; pages are not a frozen snapshot.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -9398,18 +10351,18 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/messages/{messageId} (the `GetMessage` operationId).
 	GetMessageWithResponse(ctx context.Context, messageId MessageID, reqEditors ...RequestEditorFn) (*GetMessageResponse, error)
 
-	// CancelMessageWithBodyWithResponse Cancel a queued send
+	// CancelMessageWithBodyWithResponse Cancel a pending send
 	//
-	// Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.
+	// Requires the current revision and a queued, known-unsent message at the owning engine, including a future schedule. Cancellation and dispatch share an atomic cutoff before any external provider attempt for that intent, including attachment upload. A stale revision or ineligible state yields state_conflict with currentMessage. Cancellation retires the send intent and preserves any independent retained references. A matching idempotent replay returns the original cancellation snapshot.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/v1/messages/{messageId}/cancel (the `CancelMessage` operationId).
 	CancelMessageWithBodyWithResponse(ctx context.Context, messageId MessageID, params *CancelMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CancelMessageResponse, error)
 
-	// CancelMessageWithResponse Cancel a queued send
+	// CancelMessageWithResponse Cancel a pending send
 	//
-	// Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.
+	// Requires the current revision and a queued, known-unsent message at the owning engine, including a future schedule. Cancellation and dispatch share an atomic cutoff before any external provider attempt for that intent, including attachment upload. A stale revision or ineligible state yields state_conflict with currentMessage. Cancellation retires the send intent and preserves any independent retained references. A matching idempotent replay returns the original cancellation snapshot.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -9452,6 +10405,26 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/v1/messages/{messageId}/edits (the `EditMessage` operationId).
 	EditMessageWithResponse(ctx context.Context, messageId MessageID, params *EditMessageParams, body EditMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*EditMessageResponse, error)
 
+	// UpdatePendingMessageWithBodyWithResponse Edit or reschedule a pending message
+	//
+	// Replace the full composition, change the schedule, or do both in one transaction at the owning engine. It must be an own queued, known-unsent message with the expected revision. The message ID, destination and creation time are retained. The engine validates new or changed reply, mentions and attachment references, then commits the updated composition and attachment references together. A schedule-only update preserves the accepted composition.
+	// The mutation and the dispatch claim share an atomic cutoff before any external provider attempt for this intent, including attachment upload. Stale revision, ineligible state or a winning dispatch claim yields state_conflict with currentMessage. When the mutation wins, a later claim uses the new revision and eligibility time. Matching idempotent replay returns the original result before evaluating current state, attachment availability or time preconditions.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /api/v1/messages/{messageId}/pending (the `UpdatePendingMessage` operationId).
+	UpdatePendingMessageWithBodyWithResponse(ctx context.Context, messageId MessageID, params *UpdatePendingMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdatePendingMessageResponse, error)
+
+	// UpdatePendingMessageWithResponse Edit or reschedule a pending message
+	//
+	// Replace the full composition, change the schedule, or do both in one transaction at the owning engine. It must be an own queued, known-unsent message with the expected revision. The message ID, destination and creation time are retained. The engine validates new or changed reply, mentions and attachment references, then commits the updated composition and attachment references together. A schedule-only update preserves the accepted composition.
+	// The mutation and the dispatch claim share an atomic cutoff before any external provider attempt for this intent, including attachment upload. Stale revision, ineligible state or a winning dispatch claim yields state_conflict with currentMessage. When the mutation wins, a later claim uses the new revision and eligibility time. Matching idempotent replay returns the original result before evaluating current state, attachment availability or time preconditions.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /api/v1/messages/{messageId}/pending (the `UpdatePendingMessage` operationId).
+	UpdatePendingMessageWithResponse(ctx context.Context, messageId MessageID, params *UpdatePendingMessageParams, body UpdatePendingMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdatePendingMessageResponse, error)
+
 	// GetMessageReactionsWithResponse Read retained reactions and current own mutation eligibility
 	//
 	// Read-only canonical source snapshot. Missing revisions are null until an observed or submitted reaction set exists. Does not fetch provider data, mark read or allocate revisions.
@@ -9478,6 +10451,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /api/v1/messages/{messageId}/reactions (the `SetMessageReactions` operationId).
 	SetMessageReactionsWithResponse(ctx context.Context, messageId MessageID, params *SetMessageReactionsParams, body SetMessageReactionsJSONRequestBody, reqEditors ...RequestEditorFn) (*SetMessageReactionsResponse, error)
+
+	// SendScheduledMessageNowWithBodyWithResponse Make a scheduled message eligible immediately
+	//
+	// With the current expected revision, atomically clears scheduledAt on the same queued, known-unsent scheduled intent and makes it eligible immediately. The message ID, destination, composition and attachments remain attached to the same intent. Acceptance records eligibility. Dispatch still requires the owning engine, connectivity and any existing destination prerequisites. This operation and dispatch share the same atomic cutoff as pending edit and cancel, including before provider attachment upload. A stale revision, ineligible state or winning dispatch claim yields state_conflict with currentMessage. Repeating the same key and input returns the original successful result even if dispatch has since started.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/messages/{messageId}/send-now (the `SendScheduledMessageNow` operationId).
+	SendScheduledMessageNowWithBodyWithResponse(ctx context.Context, messageId MessageID, params *SendScheduledMessageNowParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SendScheduledMessageNowResponse, error)
+
+	// SendScheduledMessageNowWithResponse Make a scheduled message eligible immediately
+	//
+	// With the current expected revision, atomically clears scheduledAt on the same queued, known-unsent scheduled intent and makes it eligible immediately. The message ID, destination, composition and attachments remain attached to the same intent. Acceptance records eligibility. Dispatch still requires the owning engine, connectivity and any existing destination prerequisites. This operation and dispatch share the same atomic cutoff as pending edit and cancel, including before provider attachment upload. A stale revision, ineligible state or winning dispatch claim yields state_conflict with currentMessage. Repeating the same key and input returns the original successful result even if dispatch has since started.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/messages/{messageId}/send-now (the `SendScheduledMessageNow` operationId).
+	SendScheduledMessageNowWithResponse(ctx context.Context, messageId MessageID, params *SendScheduledMessageNowParams, body SendScheduledMessageNowJSONRequestBody, reqEditors ...RequestEditorFn) (*SendScheduledMessageNowResponse, error)
 
 	// GetMessageSenderProfileWithResponse Read the author's available published profile
 	//
@@ -9517,12 +10508,12 @@ type ClientWithResponsesInterface interface {
 
 	// GetOperationWithResponse Reconcile a mutation after an ambiguous response
 	//
-	// A receipt proves the local mutation committed; send receipts prove durable engine acceptance, never recipient delivery. Unknown IDs return 404.
+	// A receipt proves the local mutation committed. Send receipts prove durable engine acceptance. Request includeAcceptedMessage to read the immutable send acceptance snapshot, including the original composition and scheduled instant. This route exposes the receipt kinds defined by Operation. An ID without an exposed receipt returns 404. Recover the result of updatePendingMessage or sendScheduledMessageNow by replaying the original request with the same key and input.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /api/v1/operations/{operationId} (the `GetOperation` operationId).
-	GetOperationWithResponse(ctx context.Context, operationId ID, reqEditors ...RequestEditorFn) (*GetOperationResponse, error)
+	GetOperationWithResponse(ctx context.Context, operationId ID, params *GetOperationParams, reqEditors ...RequestEditorFn) (*GetOperationResponse, error)
 
 	// GetMessagePreviewWithResponse Read a message preview
 	//
@@ -9551,9 +10542,18 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/v1/previews/{previewId}/refresh (the `RefreshMessagePreview` operationId).
 	RefreshMessagePreviewWithResponse(ctx context.Context, previewId ID, reqEditors ...RequestEditorFn) (*RefreshMessagePreviewResponse, error)
 
+	// ListScheduledMessagesWithResponse List scheduled messages across conversations
+	//
+	// Lists the selected engine's own queued, known-unsent messages with a configured schedule, including overdue sends waiting for connectivity. Results include their destination. Successful Send now removes the item from this list even if connectivity delays dispatch. Results sort by scheduledAt ascending, then message UUID ascending. Pagination is over current data. Concurrent changes can move items across the cursor boundary.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/scheduled-messages (the `ListScheduledMessages` operationId).
+	ListScheduledMessagesWithResponse(ctx context.Context, params *ListScheduledMessagesParams, reqEditors ...RequestEditorFn) (*ListScheduledMessagesResponse, error)
+
 	// ListSharedContentWithResponse Browse shared content across retained conversations
 	//
-	// Browse the local derived catalog, newest original message time first with item UUID ties at millisecond precision. Account/conversation filters apply before pagination. Metadata search covers URL, filename, visible caption, cached preview title/description, sender, conversation and account label. A background worker indexes all retained and incoming messages. Listing registers preview enrichment only for the returned image/link references; originals still follow device preferences and explicit download operations. Document/audio entries remain URL references. Video bytes are available only through the explicit content operation; listing does not fetch video metadata or bytes. Backfill or new arrivals may insert items before the current cursor; reload to include them. A conversation filter with another account is invalid.
+	// Browse the local derived catalog, newest message position (`timelineAt`, falling back to `createdAt`) first with item UUID ties at millisecond precision. Unreleased schedules and scheduled sends cancelled before dispatch are excluded. Account/conversation filters apply before pagination. Metadata search covers URL, filename, visible caption, cached preview title/description, sender, conversation and account label. A background worker indexes visible retained and incoming messages. Listing registers preview enrichment only for the returned image/link references; originals still follow device preferences and explicit download operations. Document/audio entries remain URL references. Video bytes are available only through the explicit content operation; listing does not fetch video metadata or bytes. Backfill or new arrivals may insert items before the current cursor; reload to include them. A conversation filter with another account is invalid.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -11793,6 +12793,158 @@ func (r LeaveRoomResponse) ContentType() string {
 	return ""
 }
 
+type GetStagedMessageAttachmentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetStagedMessageAttachmentResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetStagedMessageAttachmentResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetStagedMessageAttachmentResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetStagedMessageAttachmentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetStagedMessageAttachmentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetStagedMessageAttachmentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetStagedMessageAttachmentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// StageMessageAttachmentResponse201Headers the declared response headers of an HTTP 201 response for StageMessageAttachment
+type StageMessageAttachmentResponse201Headers struct {
+	Location *string
+}
+
+type StageMessageAttachmentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *StagedAttachment
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *StagedAttachment
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Conflict
+	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationproblemJSON413 *Problem
+	// ApplicationproblemJSON415 the response for an HTTP 415 `application/problem+json` response
+	ApplicationproblemJSON415 *Problem
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *StageMessageAttachmentResponse201Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r StageMessageAttachmentResponse) GetJSON200() *StagedAttachment {
+	return r.JSON200
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r StageMessageAttachmentResponse) GetJSON201() *StagedAttachment {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r StageMessageAttachmentResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r StageMessageAttachmentResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r StageMessageAttachmentResponse) GetApplicationproblemJSON409() *Conflict {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r StageMessageAttachmentResponse) GetApplicationproblemJSON413() *Problem {
+	return r.ApplicationproblemJSON413
+}
+
+// GetApplicationproblemJSON415 returns the response for an HTTP 415 `application/problem+json` response
+func (r StageMessageAttachmentResponse) GetApplicationproblemJSON415() *Problem {
+	return r.ApplicationproblemJSON415
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r StageMessageAttachmentResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r StageMessageAttachmentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r StageMessageAttachmentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StageMessageAttachmentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StageMessageAttachmentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetEngineResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11993,6 +13145,61 @@ func (r GetHealthResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetHealthResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ResolveDraftLinkPreviewResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *DraftLinkPreview
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ResolveDraftLinkPreviewResponse) GetJSON200() *DraftLinkPreview {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ResolveDraftLinkPreviewResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r ResolveDraftLinkPreviewResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ResolveDraftLinkPreviewResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ResolveDraftLinkPreviewResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ResolveDraftLinkPreviewResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ResolveDraftLinkPreviewResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -12621,6 +13828,89 @@ func (r EditMessageResponse) ContentType() string {
 	return ""
 }
 
+type UpdatePendingMessageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PendingMessageUpdated
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Conflict
+	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationproblemJSON413 *SchedulingBodyTooLarge
+	// ApplicationproblemJSON415 the response for an HTTP 415 `application/problem+json` response
+	ApplicationproblemJSON415 *SchedulingUnsupportedMedia
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdatePendingMessageResponse) GetJSON200() *PendingMessageUpdated {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r UpdatePendingMessageResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r UpdatePendingMessageResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r UpdatePendingMessageResponse) GetApplicationproblemJSON409() *Conflict {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r UpdatePendingMessageResponse) GetApplicationproblemJSON413() *SchedulingBodyTooLarge {
+	return r.ApplicationproblemJSON413
+}
+
+// GetApplicationproblemJSON415 returns the response for an HTTP 415 `application/problem+json` response
+func (r UpdatePendingMessageResponse) GetApplicationproblemJSON415() *SchedulingUnsupportedMedia {
+	return r.ApplicationproblemJSON415
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r UpdatePendingMessageResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdatePendingMessageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdatePendingMessageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdatePendingMessageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdatePendingMessageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetMessageReactionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12774,6 +14064,89 @@ func (r SetMessageReactionsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r SetMessageReactionsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SendScheduledMessageNowResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PendingMessageUpdated
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Conflict
+	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationproblemJSON413 *SchedulingBodyTooLarge
+	// ApplicationproblemJSON415 the response for an HTTP 415 `application/problem+json` response
+	ApplicationproblemJSON415 *SchedulingUnsupportedMedia
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SendScheduledMessageNowResponse) GetJSON200() *PendingMessageUpdated {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r SendScheduledMessageNowResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r SendScheduledMessageNowResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r SendScheduledMessageNowResponse) GetApplicationproblemJSON409() *Conflict {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r SendScheduledMessageNowResponse) GetApplicationproblemJSON413() *SchedulingBodyTooLarge {
+	return r.ApplicationproblemJSON413
+}
+
+// GetApplicationproblemJSON415 returns the response for an HTTP 415 `application/problem+json` response
+func (r SendScheduledMessageNowResponse) GetApplicationproblemJSON415() *SchedulingUnsupportedMedia {
+	return r.ApplicationproblemJSON415
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r SendScheduledMessageNowResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r SendScheduledMessageNowResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SendScheduledMessageNowResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SendScheduledMessageNowResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SendScheduledMessageNowResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -13243,6 +14616,68 @@ func (r RefreshMessagePreviewResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RefreshMessagePreviewResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListScheduledMessagesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ScheduledMessagePage
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Invalid
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListScheduledMessagesResponse) GetJSON200() *ScheduledMessagePage {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListScheduledMessagesResponse) GetApplicationproblemJSON400() *Invalid {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListScheduledMessagesResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r ListScheduledMessagesResponse) GetApplicationproblemJSON503() *Unavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListScheduledMessagesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListScheduledMessagesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListScheduledMessagesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListScheduledMessagesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -14090,7 +15525,7 @@ func (c *ClientWithResponses) ListConversationMessageStarsWithResponse(ctx conte
 
 // ListMessagesWithResponse Read retained messages
 //
-// Returns a bounded page of retained text newest-first by original UTC timestamp at millisecond precision, with a UUID tie-break. Includes serially recovered archive messages. The default direction is older; without a cursor it reads the latest page. Newer requires a cursor and reads the nearest messages after that retained conversation-scoped anchor, without skipping to the latest page. Both directions return newest-first. nextCursor continues in the requested direction. Reads never fetch provider history or mark messages as read.
+// Returns a bounded page of retained messages newest-first by timelineAt when present and createdAt otherwise, at UTC millisecond precision with a UUID tie-break. Includes serially recovered archive messages. Pending scheduled messages are omitted until release. The default direction is older; without a cursor it reads the latest page. Newer requires a cursor and reads the nearest messages after that retained conversation-scoped anchor, without skipping to the latest page. Both directions return newest-first. nextCursor continues in the requested direction. Reads never fetch provider history or mark messages as read.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -14103,9 +15538,10 @@ func (c *ClientWithResponses) ListMessagesWithResponse(ctx context.Context, conv
 	return ParseListMessagesResponse(rsp)
 }
 
-// SendMessageWithBodyWithResponse Accept an immediate text message
+// SendMessageWithBodyWithResponse Accept an immediate or scheduled message
 //
-// Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.
+// Atomically commits one logical message, operation receipt and outbox intent for the complete composition, including the ordered references to staged attachments. The engine checks the destination, reply, mentions, attachment scope and effective send capabilities before acceptance. Invalid or unavailable attachments reject the whole composition. Attachment bytes are staged locally and any provider upload belongs to dispatch. Room dispatch waits for confirmed membership under an active explicit join intent.
+// Omitting scheduledAt makes the intent immediately eligible. A future schedule never blocks another eligible send. A missed schedule dispatches when the owning engine and destination become available again. Optional expectedReplyRevisionId and expectedReplyExcerptSha256 bind a new scheduled reply to the reviewed source and excerpt. A changed source rejects acceptance with state_conflict and replySourceChanged set to true. Idempotency includes the complete composition, normalized instant and any reply preconditions. A matching replay returns the original acceptance snapshot even after the scheduled time passes, attachment availability changes or the source is corrected. Different input with the same key yields idempotency_conflict. Read the message for current state. Ambiguous transmission remains unknown.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -14118,9 +15554,10 @@ func (c *ClientWithResponses) SendMessageWithBodyWithResponse(ctx context.Contex
 	return ParseSendMessageResponse(rsp)
 }
 
-// SendMessageWithResponse Accept an immediate text message
+// SendMessageWithResponse Accept an immediate or scheduled message
 //
-// Atomically stores the message, operation receipt, and transactional outbox intent. Queued work survives restart and waits for connectivity. No artificial send delay. Dispatch claims race atomically with cancellation. Replays return the original acceptance snapshot; read the message for current state. Ambiguous transmission becomes unknown, never a blind retry.
+// Atomically commits one logical message, operation receipt and outbox intent for the complete composition, including the ordered references to staged attachments. The engine checks the destination, reply, mentions, attachment scope and effective send capabilities before acceptance. Invalid or unavailable attachments reject the whole composition. Attachment bytes are staged locally and any provider upload belongs to dispatch. Room dispatch waits for confirmed membership under an active explicit join intent.
+// Omitting scheduledAt makes the intent immediately eligible. A future schedule never blocks another eligible send. A missed schedule dispatches when the owning engine and destination become available again. Optional expectedReplyRevisionId and expectedReplyExcerptSha256 bind a new scheduled reply to the reviewed source and excerpt. A changed source rejects acceptance with state_conflict and replySourceChanged set to true. Idempotency includes the complete composition, normalized instant and any reply preconditions. A matching replay returns the original acceptance snapshot even after the scheduled time passes, attachment availability changes or the source is corrected. Different input with the same key yields idempotency_conflict. Read the message for current state. Ambiguous transmission remains unknown.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -14135,7 +15572,7 @@ func (c *ClientWithResponses) SendMessageWithResponse(ctx context.Context, conve
 
 // GetMessageContextWithResponse Read a bounded timeline around a retained message
 //
-// Reads the target and nearest retained neighbors from the same conversation, newest first by original UTC timestamp at millisecond precision and UUID tie-break. Includes the target even with limit 1. Only local retained data is read; no provider archive queries or read receipts are triggered. Foreign or unavailable source messages return not_found. Clients should offer return to latest when hasNewer is true. A retained correction-source alias resolves to the original logical targetId with requestedTargetId identifying the requested alias. All returned items remain scoped to this conversation.
+// Reads the target and nearest visible retained neighbors from the same conversation, newest first by timelineAt or createdAt at UTC millisecond precision and UUID tie-break. Includes the target even with limit 1. Only local retained data is read; no provider archive queries or read receipts are triggered. Foreign or unavailable source messages return not_found, including unreleased schedules and scheduled sends cancelled before dispatch. Clients should offer return to latest when hasNewer is true. A retained correction-source alias resolves to the original logical targetId with requestedTargetId identifying the requested alias. All returned items remain scoped to this conversation.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -14298,6 +15735,36 @@ func (c *ClientWithResponses) LeaveRoomWithResponse(ctx context.Context, convers
 	return ParseLeaveRoomResponse(rsp)
 }
 
+// GetStagedMessageAttachmentWithResponse Read retained bytes of an outgoing attachment
+//
+// Reads local bytes in this conversation and account scope, for example when reopening an existing scheduled composition. Returns 404 when bytes are unavailable or the attachment is outside this scope.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/conversations/{conversationId}/staged-attachments/{attachmentId} (the `GetStagedMessageAttachment` operationId).
+func (c *ClientWithResponses) GetStagedMessageAttachmentWithResponse(ctx context.Context, conversationId ConversationID, attachmentId StagedAttachmentID, reqEditors ...RequestEditorFn) (*GetStagedMessageAttachmentResponse, error) {
+	rsp, err := c.GetStagedMessageAttachment(ctx, conversationId, attachmentId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetStagedMessageAttachmentResponse(rsp)
+}
+
+// StageMessageAttachmentWithBodyWithResponse Stage a file for an outgoing message
+//
+// Store one complete file durably on the owning engine, scoped to this conversation and its account. The client assigns the ID once. A matching repeat with the same file bytes and filename returns the original receipt. Different input for that ID yields idempotency_conflict. An incomplete request leaves no usable attachment. Confirmed local staging performs no provider upload. Send and pending edit accept only available attachments in the same scope. The engine retains accepted references while their send is unresolved, including through restart, rescheduling and Send now.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/conversations/{conversationId}/staged-attachments/{attachmentId} (the `StageMessageAttachment` operationId).
+func (c *ClientWithResponses) StageMessageAttachmentWithBodyWithResponse(ctx context.Context, conversationId ConversationID, attachmentId StagedAttachmentID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StageMessageAttachmentResponse, error) {
+	rsp, err := c.StageMessageAttachmentWithBody(ctx, conversationId, attachmentId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStageMessageAttachmentResponse(rsp)
+}
+
 // GetEngineWithResponse Read the persistent engine identity
 //
 // Read eventCursor before fetching snapshots to replay changes during the snapshot.
@@ -14378,6 +15845,36 @@ func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEdit
 	return ParseGetHealthResponse(rsp)
 }
 
+// ResolveDraftLinkPreviewWithBodyWithResponse Resolve a link preview for a draft
+//
+// Fetches metadata and an optional bounded raster image for one public HTTP(S) URL. Uses the transient link cache and creates no message, durable preview record or original download.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/link-previews (the `ResolveDraftLinkPreview` operationId).
+func (c *ClientWithResponses) ResolveDraftLinkPreviewWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ResolveDraftLinkPreviewResponse, error) {
+	rsp, err := c.ResolveDraftLinkPreviewWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseResolveDraftLinkPreviewResponse(rsp)
+}
+
+// ResolveDraftLinkPreviewWithResponse Resolve a link preview for a draft
+//
+// Fetches metadata and an optional bounded raster image for one public HTTP(S) URL. Uses the transient link cache and creates no message, durable preview record or original download.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/link-previews (the `ResolveDraftLinkPreview` operationId).
+func (c *ClientWithResponses) ResolveDraftLinkPreviewWithResponse(ctx context.Context, body ResolveDraftLinkPreviewJSONRequestBody, reqEditors ...RequestEditorFn) (*ResolveDraftLinkPreviewResponse, error) {
+	rsp, err := c.ResolveDraftLinkPreview(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseResolveDraftLinkPreviewResponse(rsp)
+}
+
 // GetMediaImageWithResponse Read a retained preview or original image
 //
 // Serves only local hash-verified PNG, JPEG or GIF bytes, without fetching the provider. Thumbnails are normalized static PNGs or JPEGs, up to 1024 pixels per axis; originals retain their validated media type. No remote redirects.
@@ -14425,7 +15922,7 @@ func (c *ClientWithResponses) GetMessageReactionCommandWithResponse(ctx context.
 
 // SearchMessagesWithResponse Search retained message text and available metadata
 //
-// Search the complete retained engine history before pagination, without network retrieval, enrichment or read-state changes. Matching follows shared-content accent/case folding, word prefixes and bounded typing-error tolerance. Current canonical message content is searched by default. Include edit history adds separately labelled verified earlier content revisions, never transport-state revisions or independent correction aliases. Current associated URLs, filenames and cached page titles/descriptions are searched only while their catalog source is current. Metadata coverage can lag immediate message-text coverage. Order is newest original message timestamp at UTC millisecond precision and UUID first, current hit before earlier content revisions, then newest revision timestamp and UUID. New arrivals or corrections can change subsequent results; pages are not a frozen snapshot.
+// Search the complete retained engine history before pagination, without network retrieval, enrichment or read-state changes. Matching follows shared-content accent/case folding, word prefixes and bounded typing-error tolerance. Current canonical message content is searched by default. Include edit history adds separately labelled verified earlier content revisions, never transport-state revisions or independent correction aliases. Current associated URLs, filenames and cached page titles/descriptions are searched only while their catalog source is current. Metadata coverage can lag immediate message-text coverage. Unreleased schedules and scheduled sends cancelled before dispatch are excluded. Order is newest message position (`timelineAt`, falling back to `createdAt`) at UTC millisecond precision and UUID first, current hit before earlier content revisions, then newest revision timestamp and UUID. New arrivals or corrections can change subsequent results; pages are not a frozen snapshot.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -14453,9 +15950,9 @@ func (c *ClientWithResponses) GetMessageWithResponse(ctx context.Context, messag
 	return ParseGetMessageResponse(rsp)
 }
 
-// CancelMessageWithBodyWithResponse Cancel a queued send
+// CancelMessageWithBodyWithResponse Cancel a pending send
 //
-// Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.
+// Requires the current revision and a queued, known-unsent message at the owning engine, including a future schedule. Cancellation and dispatch share an atomic cutoff before any external provider attempt for that intent, including attachment upload. A stale revision or ineligible state yields state_conflict with currentMessage. Cancellation retires the send intent and preserves any independent retained references. A matching idempotent replay returns the original cancellation snapshot.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -14468,9 +15965,9 @@ func (c *ClientWithResponses) CancelMessageWithBodyWithResponse(ctx context.Cont
 	return ParseCancelMessageResponse(rsp)
 }
 
-// CancelMessageWithResponse Cancel a queued send
+// CancelMessageWithResponse Cancel a pending send
 //
-// Requires the current revision and queued state. Once dispatch starts, returns 409 with currentMessage and makes no change. Cancelled intents never resume on ordinary restart.
+// Requires the current revision and a queued, known-unsent message at the owning engine, including a future schedule. Cancellation and dispatch share an atomic cutoff before any external provider attempt for that intent, including attachment upload. A stale revision or ineligible state yields state_conflict with currentMessage. Cancellation retires the send intent and preserves any independent retained references. A matching idempotent replay returns the original cancellation snapshot.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -14543,6 +16040,38 @@ func (c *ClientWithResponses) EditMessageWithResponse(ctx context.Context, messa
 	return ParseEditMessageResponse(rsp)
 }
 
+// UpdatePendingMessageWithBodyWithResponse Edit or reschedule a pending message
+//
+// Replace the full composition, change the schedule, or do both in one transaction at the owning engine. It must be an own queued, known-unsent message with the expected revision. The message ID, destination and creation time are retained. The engine validates new or changed reply, mentions and attachment references, then commits the updated composition and attachment references together. A schedule-only update preserves the accepted composition.
+// The mutation and the dispatch claim share an atomic cutoff before any external provider attempt for this intent, including attachment upload. Stale revision, ineligible state or a winning dispatch claim yields state_conflict with currentMessage. When the mutation wins, a later claim uses the new revision and eligibility time. Matching idempotent replay returns the original result before evaluating current state, attachment availability or time preconditions.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /api/v1/messages/{messageId}/pending (the `UpdatePendingMessage` operationId).
+func (c *ClientWithResponses) UpdatePendingMessageWithBodyWithResponse(ctx context.Context, messageId MessageID, params *UpdatePendingMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdatePendingMessageResponse, error) {
+	rsp, err := c.UpdatePendingMessageWithBody(ctx, messageId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdatePendingMessageResponse(rsp)
+}
+
+// UpdatePendingMessageWithResponse Edit or reschedule a pending message
+//
+// Replace the full composition, change the schedule, or do both in one transaction at the owning engine. It must be an own queued, known-unsent message with the expected revision. The message ID, destination and creation time are retained. The engine validates new or changed reply, mentions and attachment references, then commits the updated composition and attachment references together. A schedule-only update preserves the accepted composition.
+// The mutation and the dispatch claim share an atomic cutoff before any external provider attempt for this intent, including attachment upload. Stale revision, ineligible state or a winning dispatch claim yields state_conflict with currentMessage. When the mutation wins, a later claim uses the new revision and eligibility time. Matching idempotent replay returns the original result before evaluating current state, attachment availability or time preconditions.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /api/v1/messages/{messageId}/pending (the `UpdatePendingMessage` operationId).
+func (c *ClientWithResponses) UpdatePendingMessageWithResponse(ctx context.Context, messageId MessageID, params *UpdatePendingMessageParams, body UpdatePendingMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdatePendingMessageResponse, error) {
+	rsp, err := c.UpdatePendingMessage(ctx, messageId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdatePendingMessageResponse(rsp)
+}
+
 // GetMessageReactionsWithResponse Read retained reactions and current own mutation eligibility
 //
 // Read-only canonical source snapshot. Missing revisions are null until an observed or submitted reaction set exists. Does not fetch provider data, mark read or allocate revisions.
@@ -14586,6 +16115,36 @@ func (c *ClientWithResponses) SetMessageReactionsWithResponse(ctx context.Contex
 		return nil, err
 	}
 	return ParseSetMessageReactionsResponse(rsp)
+}
+
+// SendScheduledMessageNowWithBodyWithResponse Make a scheduled message eligible immediately
+//
+// With the current expected revision, atomically clears scheduledAt on the same queued, known-unsent scheduled intent and makes it eligible immediately. The message ID, destination, composition and attachments remain attached to the same intent. Acceptance records eligibility. Dispatch still requires the owning engine, connectivity and any existing destination prerequisites. This operation and dispatch share the same atomic cutoff as pending edit and cancel, including before provider attachment upload. A stale revision, ineligible state or winning dispatch claim yields state_conflict with currentMessage. Repeating the same key and input returns the original successful result even if dispatch has since started.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/messages/{messageId}/send-now (the `SendScheduledMessageNow` operationId).
+func (c *ClientWithResponses) SendScheduledMessageNowWithBodyWithResponse(ctx context.Context, messageId MessageID, params *SendScheduledMessageNowParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SendScheduledMessageNowResponse, error) {
+	rsp, err := c.SendScheduledMessageNowWithBody(ctx, messageId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSendScheduledMessageNowResponse(rsp)
+}
+
+// SendScheduledMessageNowWithResponse Make a scheduled message eligible immediately
+//
+// With the current expected revision, atomically clears scheduledAt on the same queued, known-unsent scheduled intent and makes it eligible immediately. The message ID, destination, composition and attachments remain attached to the same intent. Acceptance records eligibility. Dispatch still requires the owning engine, connectivity and any existing destination prerequisites. This operation and dispatch share the same atomic cutoff as pending edit and cancel, including before provider attachment upload. A stale revision, ineligible state or winning dispatch claim yields state_conflict with currentMessage. Repeating the same key and input returns the original successful result even if dispatch has since started.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/messages/{messageId}/send-now (the `SendScheduledMessageNow` operationId).
+func (c *ClientWithResponses) SendScheduledMessageNowWithResponse(ctx context.Context, messageId MessageID, params *SendScheduledMessageNowParams, body SendScheduledMessageNowJSONRequestBody, reqEditors ...RequestEditorFn) (*SendScheduledMessageNowResponse, error) {
+	rsp, err := c.SendScheduledMessageNow(ctx, messageId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSendScheduledMessageNowResponse(rsp)
 }
 
 // GetMessageSenderProfileWithResponse Read the author's available published profile
@@ -14650,13 +16209,13 @@ func (c *ClientWithResponses) SetMessageStarWithResponse(ctx context.Context, me
 
 // GetOperationWithResponse Reconcile a mutation after an ambiguous response
 //
-// A receipt proves the local mutation committed; send receipts prove durable engine acceptance, never recipient delivery. Unknown IDs return 404.
+// A receipt proves the local mutation committed. Send receipts prove durable engine acceptance. Request includeAcceptedMessage to read the immutable send acceptance snapshot, including the original composition and scheduled instant. This route exposes the receipt kinds defined by Operation. An ID without an exposed receipt returns 404. Recover the result of updatePendingMessage or sendScheduledMessageNow by replaying the original request with the same key and input.
 //
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /api/v1/operations/{operationId} (the `GetOperation` operationId).
-func (c *ClientWithResponses) GetOperationWithResponse(ctx context.Context, operationId ID, reqEditors ...RequestEditorFn) (*GetOperationResponse, error) {
-	rsp, err := c.GetOperation(ctx, operationId, reqEditors...)
+func (c *ClientWithResponses) GetOperationWithResponse(ctx context.Context, operationId ID, params *GetOperationParams, reqEditors ...RequestEditorFn) (*GetOperationResponse, error) {
+	rsp, err := c.GetOperation(ctx, operationId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14708,9 +16267,24 @@ func (c *ClientWithResponses) RefreshMessagePreviewWithResponse(ctx context.Cont
 	return ParseRefreshMessagePreviewResponse(rsp)
 }
 
+// ListScheduledMessagesWithResponse List scheduled messages across conversations
+//
+// Lists the selected engine's own queued, known-unsent messages with a configured schedule, including overdue sends waiting for connectivity. Results include their destination. Successful Send now removes the item from this list even if connectivity delays dispatch. Results sort by scheduledAt ascending, then message UUID ascending. Pagination is over current data. Concurrent changes can move items across the cursor boundary.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/scheduled-messages (the `ListScheduledMessages` operationId).
+func (c *ClientWithResponses) ListScheduledMessagesWithResponse(ctx context.Context, params *ListScheduledMessagesParams, reqEditors ...RequestEditorFn) (*ListScheduledMessagesResponse, error) {
+	rsp, err := c.ListScheduledMessages(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListScheduledMessagesResponse(rsp)
+}
+
 // ListSharedContentWithResponse Browse shared content across retained conversations
 //
-// Browse the local derived catalog, newest original message time first with item UUID ties at millisecond precision. Account/conversation filters apply before pagination. Metadata search covers URL, filename, visible caption, cached preview title/description, sender, conversation and account label. A background worker indexes all retained and incoming messages. Listing registers preview enrichment only for the returned image/link references; originals still follow device preferences and explicit download operations. Document/audio entries remain URL references. Video bytes are available only through the explicit content operation; listing does not fetch video metadata or bytes. Backfill or new arrivals may insert items before the current cursor; reload to include them. A conversation filter with another account is invalid.
+// Browse the local derived catalog, newest message position (`timelineAt`, falling back to `createdAt`) first with item UUID ties at millisecond precision. Unreleased schedules and scheduled sends cancelled before dispatch are excluded. Account/conversation filters apply before pagination. Metadata search covers URL, filename, visible caption, cached preview title/description, sender, conversation and account label. A background worker indexes visible retained and incoming messages. Listing registers preview enrichment only for the returned image/link references; originals still follow device preferences and explicit download operations. Document/audio entries remain URL references. Video bytes are available only through the explicit content operation; listing does not fetch video metadata or bytes. Backfill or new arrivals may insert items before the current cursor; reload to include them. A conversation filter with another account is invalid.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16553,6 +18127,134 @@ func ParseLeaveRoomResponse(rsp *http.Response) (*LeaveRoomResponse, error) {
 	return response, nil
 }
 
+// ParseGetStagedMessageAttachmentResponse parses an HTTP response from a GetStagedMessageAttachmentWithResponse call
+func ParseGetStagedMessageAttachmentResponse(rsp *http.Response) (*GetStagedMessageAttachmentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetStagedMessageAttachmentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStageMessageAttachmentResponse parses an HTTP response from a StageMessageAttachmentWithResponse call
+func ParseStageMessageAttachmentResponse(rsp *http.Response) (*StageMessageAttachmentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StageMessageAttachmentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest StagedAttachment
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest StagedAttachment
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers StageMessageAttachmentResponse201Headers
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: "uri-reference"}); err != nil {
+				return nil, err
+			}
+			headers.Location = &value
+		}
+		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
 // ParseGetEngineResponse parses an HTTP response from a GetEngineWithResponse call
 func ParseGetEngineResponse(rsp *http.Response) (*GetEngineResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -16689,6 +18391,49 @@ func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseResolveDraftLinkPreviewResponse parses an HTTP response from a ResolveDraftLinkPreviewWithResponse call
+func ParseResolveDraftLinkPreviewResponse(rsp *http.Response) (*ResolveDraftLinkPreviewResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ResolveDraftLinkPreviewResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DraftLinkPreview
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
 		var dest Unavailable
@@ -17210,6 +18955,74 @@ func ParseEditMessageResponse(rsp *http.Response) (*EditMessageResponse, error) 
 	return response, nil
 }
 
+// ParseUpdatePendingMessageResponse parses an HTTP response from a UpdatePendingMessageWithResponse call
+func ParseUpdatePendingMessageResponse(rsp *http.Response) (*UpdatePendingMessageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdatePendingMessageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PendingMessageUpdated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest SchedulingBodyTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest SchedulingUnsupportedMedia
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetMessageReactionsResponse parses an HTTP response from a GetMessageReactionsWithResponse call
 func ParseGetMessageReactionsResponse(rsp *http.Response) (*GetMessageReactionsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -17340,6 +19153,74 @@ func ParseSetMessageReactionsResponse(rsp *http.Response) (*SetMessageReactionsR
 			headers.Location = &value
 		}
 		response.Headers202 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseSendScheduledMessageNowResponse parses an HTTP response from a SendScheduledMessageNowWithResponse call
+func ParseSendScheduledMessageNowResponse(rsp *http.Response) (*SendScheduledMessageNowResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SendScheduledMessageNowResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PendingMessageUpdated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest SchedulingBodyTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest SchedulingUnsupportedMedia
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
 	}
 
 	return response, nil
@@ -17696,6 +19577,53 @@ func ParseRefreshMessagePreviewResponse(rsp *http.Response) (*RefreshMessagePrev
 			return nil, err
 		}
 		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListScheduledMessagesResponse parses an HTTP response from a ListScheduledMessagesWithResponse call
+func ParseListScheduledMessagesResponse(rsp *http.Response) (*ListScheduledMessagesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListScheduledMessagesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ScheduledMessagePage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Invalid
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
 		var dest Unavailable
@@ -18191,7 +20119,7 @@ type ServerInterface interface {
 	// ListMessages Read retained messages
 	// (GET /api/v1/conversations/{conversationId}/messages)
 	ListMessages(w http.ResponseWriter, r *http.Request, conversationId ConversationID, params ListMessagesParams)
-	// SendMessage Accept an immediate text message
+	// SendMessage Accept an immediate or scheduled message
 	// (POST /api/v1/conversations/{conversationId}/messages)
 	SendMessage(w http.ResponseWriter, r *http.Request, conversationId ConversationID, params SendMessageParams)
 	// GetMessageContext Read a bounded timeline around a retained message
@@ -18218,6 +20146,12 @@ type ServerInterface interface {
 	// LeaveRoom Leave a room and stop this engine's automatic rejoin
 	// (POST /api/v1/conversations/{conversationId}/room-session/leave)
 	LeaveRoom(w http.ResponseWriter, r *http.Request, conversationId ConversationID, params LeaveRoomParams)
+	// GetStagedMessageAttachment Read retained bytes of an outgoing attachment
+	// (GET /api/v1/conversations/{conversationId}/staged-attachments/{attachmentId})
+	GetStagedMessageAttachment(w http.ResponseWriter, r *http.Request, conversationId ConversationID, attachmentId StagedAttachmentID)
+	// StageMessageAttachment Stage a file for an outgoing message
+	// (PUT /api/v1/conversations/{conversationId}/staged-attachments/{attachmentId})
+	StageMessageAttachment(w http.ResponseWriter, r *http.Request, conversationId ConversationID, attachmentId StagedAttachmentID)
 	// GetEngine Read the persistent engine identity
 	// (GET /api/v1/engine)
 	GetEngine(w http.ResponseWriter, r *http.Request)
@@ -18230,6 +20164,9 @@ type ServerInterface interface {
 	// GetHealth Check engine readiness
 	// (GET /api/v1/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// ResolveDraftLinkPreview Resolve a link preview for a draft
+	// (POST /api/v1/link-previews)
+	ResolveDraftLinkPreview(w http.ResponseWriter, r *http.Request)
 	// GetMediaImage Read a retained preview or original image
 	// (GET /api/v1/media/{hash})
 	GetMediaImage(w http.ResponseWriter, r *http.Request, hash string, params GetMediaImageParams)
@@ -18245,7 +20182,7 @@ type ServerInterface interface {
 	// GetMessage Read a retained message
 	// (GET /api/v1/messages/{messageId})
 	GetMessage(w http.ResponseWriter, r *http.Request, messageId MessageID)
-	// CancelMessage Cancel a queued send
+	// CancelMessage Cancel a pending send
 	// (POST /api/v1/messages/{messageId}/cancel)
 	CancelMessage(w http.ResponseWriter, r *http.Request, messageId MessageID, params CancelMessageParams)
 	// GetMessageEditHistory Read observed content revisions of one retained message
@@ -18257,12 +20194,18 @@ type ServerInterface interface {
 	// EditMessage Accept a durable correction of a sent message
 	// (POST /api/v1/messages/{messageId}/edits)
 	EditMessage(w http.ResponseWriter, r *http.Request, messageId MessageID, params EditMessageParams)
+	// UpdatePendingMessage Edit or reschedule a pending message
+	// (PATCH /api/v1/messages/{messageId}/pending)
+	UpdatePendingMessage(w http.ResponseWriter, r *http.Request, messageId MessageID, params UpdatePendingMessageParams)
 	// GetMessageReactions Read retained reactions and current own mutation eligibility
 	// (GET /api/v1/messages/{messageId}/reactions)
 	GetMessageReactions(w http.ResponseWriter, r *http.Request, messageId MessageID)
 	// SetMessageReactions Accept a durable replacement of the own reaction set
 	// (POST /api/v1/messages/{messageId}/reactions)
 	SetMessageReactions(w http.ResponseWriter, r *http.Request, messageId MessageID, params SetMessageReactionsParams)
+	// SendScheduledMessageNow Make a scheduled message eligible immediately
+	// (POST /api/v1/messages/{messageId}/send-now)
+	SendScheduledMessageNow(w http.ResponseWriter, r *http.Request, messageId MessageID, params SendScheduledMessageNowParams)
 	// GetMessageSenderProfile Read the author's available published profile
 	// (GET /api/v1/messages/{messageId}/sender-profile)
 	GetMessageSenderProfile(w http.ResponseWriter, r *http.Request, messageId MessageID)
@@ -18274,7 +20217,7 @@ type ServerInterface interface {
 	SetMessageStar(w http.ResponseWriter, r *http.Request, messageId MessageID, params SetMessageStarParams)
 	// GetOperation Reconcile a mutation after an ambiguous response
 	// (GET /api/v1/operations/{operationId})
-	GetOperation(w http.ResponseWriter, r *http.Request, operationId ID)
+	GetOperation(w http.ResponseWriter, r *http.Request, operationId ID, params GetOperationParams)
 	// GetMessagePreview Read a message preview
 	// (GET /api/v1/previews/{previewId})
 	GetMessagePreview(w http.ResponseWriter, r *http.Request, previewId ID)
@@ -18284,6 +20227,9 @@ type ServerInterface interface {
 	// RefreshMessagePreview Refresh cached link metadata
 	// (POST /api/v1/previews/{previewId}/refresh)
 	RefreshMessagePreview(w http.ResponseWriter, r *http.Request, previewId ID)
+	// ListScheduledMessages List scheduled messages across conversations
+	// (GET /api/v1/scheduled-messages)
+	ListScheduledMessages(w http.ResponseWriter, r *http.Request, params ListScheduledMessagesParams)
 	// ListSharedContent Browse shared content across retained conversations
 	// (GET /api/v1/shared-content)
 	ListSharedContent(w http.ResponseWriter, r *http.Request, params ListSharedContentParams)
@@ -19652,6 +21598,76 @@ func (siw *ServerInterfaceWrapper) LeaveRoom(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// GetStagedMessageAttachment operation middleware
+func (siw *ServerInterfaceWrapper) GetStagedMessageAttachment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", r.PathValue("conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "attachmentId" -------------
+	var attachmentId StagedAttachmentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "attachmentId", r.PathValue("attachmentId"), &attachmentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attachmentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetStagedMessageAttachment(w, r, conversationId, attachmentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StageMessageAttachment operation middleware
+func (siw *ServerInterfaceWrapper) StageMessageAttachment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", r.PathValue("conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "attachmentId" -------------
+	var attachmentId StagedAttachmentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "attachmentId", r.PathValue("attachmentId"), &attachmentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attachmentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StageMessageAttachment(w, r, conversationId, attachmentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetEngine operation middleware
 func (siw *ServerInterfaceWrapper) GetEngine(w http.ResponseWriter, r *http.Request) {
 
@@ -19726,6 +21742,20 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResolveDraftLinkPreview operation middleware
+func (siw *ServerInterfaceWrapper) ResolveDraftLinkPreview(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResolveDraftLinkPreview(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -20150,6 +22180,60 @@ func (siw *ServerInterfaceWrapper) EditMessage(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// UpdatePendingMessage operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePendingMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "messageId" -------------
+	var messageId MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "messageId", r.PathValue("messageId"), &messageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "messageId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdatePendingMessageParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey ScheduledMutationKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePendingMessage(w, r, messageId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMessageReactions operation middleware
 func (siw *ServerInterfaceWrapper) GetMessageReactions(w http.ResponseWriter, r *http.Request) {
 
@@ -20221,6 +22305,60 @@ func (siw *ServerInterfaceWrapper) SetMessageReactions(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetMessageReactions(w, r, messageId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SendScheduledMessageNow operation middleware
+func (siw *ServerInterfaceWrapper) SendScheduledMessageNow(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "messageId" -------------
+	var messageId MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "messageId", r.PathValue("messageId"), &messageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "messageId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SendScheduledMessageNowParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey ScheduledMutationKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SendScheduledMessageNow(w, r, messageId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -20351,8 +22489,24 @@ func (siw *ServerInterfaceWrapper) GetOperation(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOperationParams
+
+	// ------------- Optional query parameter "includeAcceptedMessage" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "includeAcceptedMessage", r.URL.Query(), &params.IncludeAcceptedMessage, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "includeAcceptedMessage"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "includeAcceptedMessage", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetOperation(w, r, operationId)
+		siw.Handler.GetOperation(w, r, operationId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -20431,6 +22585,78 @@ func (siw *ServerInterfaceWrapper) RefreshMessagePreview(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RefreshMessagePreview(w, r, previewId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListScheduledMessages operation middleware
+func (siw *ServerInterfaceWrapper) ListScheduledMessages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListScheduledMessagesParams
+
+	// ------------- Optional query parameter "conversationId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "conversationId", r.URL.Query(), &params.ConversationId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "conversationId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "conversationIds" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "conversationIds", r.URL.Query(), &params.ConversationIds, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "conversationIds"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationIds", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListScheduledMessages(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -20878,6 +23104,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/conversations/{conversationId}/message-stars", wrapper.ListConversationMessageStars)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/starred-messages", wrapper.ListStarredMessages)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/conversations/{conversationId}/previews", wrapper.ListConversationPreviews)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/link-previews", wrapper.ResolveDraftLinkPreview)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/previews/{previewId}", wrapper.GetMessagePreview)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/previews/{previewId}/refresh", wrapper.RefreshMessagePreview)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/previews/{previewId}/download", wrapper.DownloadPreviewImage)
@@ -20923,6 +23150,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/messages/{messageId}/sender-profile", wrapper.GetMessageSenderProfile)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/messages/{messageId}", wrapper.GetMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/messages/{messageId}/cancel", wrapper.CancelMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/conversations/{conversationId}/staged-attachments/{attachmentId}", wrapper.GetStagedMessageAttachment)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/conversations/{conversationId}/staged-attachments/{attachmentId}", wrapper.StageMessageAttachment)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/scheduled-messages", wrapper.ListScheduledMessages)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/messages/{messageId}/pending", wrapper.UpdatePendingMessage)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/messages/{messageId}/send-now", wrapper.SendScheduledMessageNow)
 
 	return m
 }
@@ -20932,6 +23164,12 @@ type ConflictApplicationProblemPlusJSONResponse Problem
 type InvalidApplicationProblemPlusJSONResponse Problem
 
 type NotFoundApplicationProblemPlusJSONResponse Problem
+
+type PendingMessageUpdatedJSONResponse Message
+
+type SchedulingBodyTooLargeApplicationProblemPlusJSONResponse Problem
+
+type SchedulingUnsupportedMediaApplicationProblemPlusJSONResponse Problem
 
 type UnavailableApplicationProblemPlusJSONResponse Problem
 
@@ -23632,6 +25870,223 @@ func (response LeaveRoom503ApplicationProblemPlusJSONResponse) VisitLeaveRoomRes
 	return err
 }
 
+type GetStagedMessageAttachmentRequestObject struct {
+	ConversationId ConversationID     `json:"conversationId"`
+	AttachmentId   StagedAttachmentID `json:"attachmentId"`
+}
+
+type GetStagedMessageAttachmentResponseObject interface {
+	VisitGetStagedMessageAttachmentResponse(w http.ResponseWriter) error
+}
+
+type GetStagedMessageAttachment200ApplicationoctetStreamResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response GetStagedMessageAttachment200ApplicationoctetStreamResponse) VisitGetStagedMessageAttachmentResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetStagedMessageAttachment400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response GetStagedMessageAttachment400ApplicationProblemPlusJSONResponse) VisitGetStagedMessageAttachmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStagedMessageAttachment404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetStagedMessageAttachment404ApplicationProblemPlusJSONResponse) VisitGetStagedMessageAttachmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStagedMessageAttachment503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response GetStagedMessageAttachment503ApplicationProblemPlusJSONResponse) VisitGetStagedMessageAttachmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StageMessageAttachmentRequestObject struct {
+	ConversationId ConversationID     `json:"conversationId"`
+	AttachmentId   StagedAttachmentID `json:"attachmentId"`
+	Body           *multipart.Reader
+}
+
+type StageMessageAttachmentResponseObject interface {
+	VisitStageMessageAttachmentResponse(w http.ResponseWriter) error
+}
+
+type StageMessageAttachment200JSONResponse StagedAttachment
+
+func (response StageMessageAttachment200JSONResponse) VisitStageMessageAttachmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StageMessageAttachment201ResponseHeaders struct {
+	Location *string
+}
+
+type StageMessageAttachment201JSONResponse struct {
+	Body    StagedAttachment
+	Headers StageMessageAttachment201ResponseHeaders
+}
+
+func (response StageMessageAttachment201JSONResponse) VisitStageMessageAttachmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Location != nil {
+		w.Header().Set("Location", fmt.Sprint(*response.Headers.Location))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StageMessageAttachment400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response StageMessageAttachment400ApplicationProblemPlusJSONResponse) VisitStageMessageAttachmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StageMessageAttachment404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response StageMessageAttachment404ApplicationProblemPlusJSONResponse) VisitStageMessageAttachmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StageMessageAttachment409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response StageMessageAttachment409ApplicationProblemPlusJSONResponse) VisitStageMessageAttachmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StageMessageAttachment413ApplicationProblemPlusJSONResponse Problem
+
+func (response StageMessageAttachment413ApplicationProblemPlusJSONResponse) VisitStageMessageAttachmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StageMessageAttachment415ApplicationProblemPlusJSONResponse Problem
+
+func (response StageMessageAttachment415ApplicationProblemPlusJSONResponse) VisitStageMessageAttachmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(415)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StageMessageAttachment503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response StageMessageAttachment503ApplicationProblemPlusJSONResponse) VisitStageMessageAttachmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetEngineRequestObject struct {
 }
 
@@ -23858,6 +26313,68 @@ type GetHealth503ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetHealth503ApplicationProblemPlusJSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResolveDraftLinkPreviewRequestObject struct {
+	Body *ResolveDraftLinkPreviewJSONRequestBody
+}
+
+type ResolveDraftLinkPreviewResponseObject interface {
+	VisitResolveDraftLinkPreviewResponse(w http.ResponseWriter) error
+}
+
+type ResolveDraftLinkPreview200JSONResponse DraftLinkPreview
+
+func (response ResolveDraftLinkPreview200JSONResponse) VisitResolveDraftLinkPreviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResolveDraftLinkPreview204Response struct {
+}
+
+func (response ResolveDraftLinkPreview204Response) VisitResolveDraftLinkPreviewResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ResolveDraftLinkPreview400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response ResolveDraftLinkPreview400ApplicationProblemPlusJSONResponse) VisitResolveDraftLinkPreviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResolveDraftLinkPreview503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response ResolveDraftLinkPreview503ApplicationProblemPlusJSONResponse) VisitResolveDraftLinkPreviewResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -24711,6 +27228,128 @@ func (response EditMessage503ApplicationProblemPlusJSONResponse) VisitEditMessag
 	return err
 }
 
+type UpdatePendingMessageRequestObject struct {
+	MessageId MessageID `json:"messageId"`
+	Params    UpdatePendingMessageParams
+	Body      *UpdatePendingMessageJSONRequestBody
+}
+
+type UpdatePendingMessageResponseObject interface {
+	VisitUpdatePendingMessageResponse(w http.ResponseWriter) error
+}
+
+type UpdatePendingMessage200JSONResponse struct {
+	PendingMessageUpdatedJSONResponse
+}
+
+func (response UpdatePendingMessage200JSONResponse) VisitUpdatePendingMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePendingMessage400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePendingMessage400ApplicationProblemPlusJSONResponse) VisitUpdatePendingMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePendingMessage404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePendingMessage404ApplicationProblemPlusJSONResponse) VisitUpdatePendingMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePendingMessage409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePendingMessage409ApplicationProblemPlusJSONResponse) VisitUpdatePendingMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePendingMessage413ApplicationProblemPlusJSONResponse struct {
+	SchedulingBodyTooLargeApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePendingMessage413ApplicationProblemPlusJSONResponse) VisitUpdatePendingMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePendingMessage415ApplicationProblemPlusJSONResponse struct {
+	SchedulingUnsupportedMediaApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePendingMessage415ApplicationProblemPlusJSONResponse) VisitUpdatePendingMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(415)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePendingMessage503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePendingMessage503ApplicationProblemPlusJSONResponse) VisitUpdatePendingMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMessageReactionsRequestObject struct {
 	MessageId MessageID `json:"messageId"`
 }
@@ -24910,6 +27549,128 @@ type SetMessageReactions503ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response SetMessageReactions503ApplicationProblemPlusJSONResponse) VisitSetMessageReactionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendScheduledMessageNowRequestObject struct {
+	MessageId MessageID `json:"messageId"`
+	Params    SendScheduledMessageNowParams
+	Body      *SendScheduledMessageNowJSONRequestBody
+}
+
+type SendScheduledMessageNowResponseObject interface {
+	VisitSendScheduledMessageNowResponse(w http.ResponseWriter) error
+}
+
+type SendScheduledMessageNow200JSONResponse struct {
+	PendingMessageUpdatedJSONResponse
+}
+
+func (response SendScheduledMessageNow200JSONResponse) VisitSendScheduledMessageNowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendScheduledMessageNow400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response SendScheduledMessageNow400ApplicationProblemPlusJSONResponse) VisitSendScheduledMessageNowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendScheduledMessageNow404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response SendScheduledMessageNow404ApplicationProblemPlusJSONResponse) VisitSendScheduledMessageNowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendScheduledMessageNow409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response SendScheduledMessageNow409ApplicationProblemPlusJSONResponse) VisitSendScheduledMessageNowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendScheduledMessageNow413ApplicationProblemPlusJSONResponse struct {
+	SchedulingBodyTooLargeApplicationProblemPlusJSONResponse
+}
+
+func (response SendScheduledMessageNow413ApplicationProblemPlusJSONResponse) VisitSendScheduledMessageNowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendScheduledMessageNow415ApplicationProblemPlusJSONResponse struct {
+	SchedulingUnsupportedMediaApplicationProblemPlusJSONResponse
+}
+
+func (response SendScheduledMessageNow415ApplicationProblemPlusJSONResponse) VisitSendScheduledMessageNowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(415)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendScheduledMessageNow503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response SendScheduledMessageNow503ApplicationProblemPlusJSONResponse) VisitSendScheduledMessageNowResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -25175,6 +27936,7 @@ func (response SetMessageStar503ApplicationProblemPlusJSONResponse) VisitSetMess
 
 type GetOperationRequestObject struct {
 	OperationId ID `json:"operationId"`
+	Params      GetOperationParams
 }
 
 type GetOperationResponseObject interface {
@@ -25472,6 +28234,76 @@ type RefreshMessagePreview503ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response RefreshMessagePreview503ApplicationProblemPlusJSONResponse) VisitRefreshMessagePreviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScheduledMessagesRequestObject struct {
+	Params ListScheduledMessagesParams
+}
+
+type ListScheduledMessagesResponseObject interface {
+	VisitListScheduledMessagesResponse(w http.ResponseWriter) error
+}
+
+type ListScheduledMessages200JSONResponse ScheduledMessagePage
+
+func (response ListScheduledMessages200JSONResponse) VisitListScheduledMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScheduledMessages400ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response ListScheduledMessages400ApplicationProblemPlusJSONResponse) VisitListScheduledMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScheduledMessages404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListScheduledMessages404ApplicationProblemPlusJSONResponse) VisitListScheduledMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScheduledMessages503ApplicationProblemPlusJSONResponse struct {
+	UnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response ListScheduledMessages503ApplicationProblemPlusJSONResponse) VisitListScheduledMessagesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -26521,7 +29353,7 @@ type StrictServerInterface interface {
 	// ListMessages Read retained messages
 	// (GET /api/v1/conversations/{conversationId}/messages)
 	ListMessages(ctx context.Context, request ListMessagesRequestObject) (ListMessagesResponseObject, error)
-	// SendMessage Accept an immediate text message
+	// SendMessage Accept an immediate or scheduled message
 	// (POST /api/v1/conversations/{conversationId}/messages)
 	SendMessage(ctx context.Context, request SendMessageRequestObject) (SendMessageResponseObject, error)
 	// GetMessageContext Read a bounded timeline around a retained message
@@ -26548,6 +29380,12 @@ type StrictServerInterface interface {
 	// LeaveRoom Leave a room and stop this engine's automatic rejoin
 	// (POST /api/v1/conversations/{conversationId}/room-session/leave)
 	LeaveRoom(ctx context.Context, request LeaveRoomRequestObject) (LeaveRoomResponseObject, error)
+	// GetStagedMessageAttachment Read retained bytes of an outgoing attachment
+	// (GET /api/v1/conversations/{conversationId}/staged-attachments/{attachmentId})
+	GetStagedMessageAttachment(ctx context.Context, request GetStagedMessageAttachmentRequestObject) (GetStagedMessageAttachmentResponseObject, error)
+	// StageMessageAttachment Stage a file for an outgoing message
+	// (PUT /api/v1/conversations/{conversationId}/staged-attachments/{attachmentId})
+	StageMessageAttachment(ctx context.Context, request StageMessageAttachmentRequestObject) (StageMessageAttachmentResponseObject, error)
 	// GetEngine Read the persistent engine identity
 	// (GET /api/v1/engine)
 	GetEngine(ctx context.Context, request GetEngineRequestObject) (GetEngineResponseObject, error)
@@ -26560,6 +29398,9 @@ type StrictServerInterface interface {
 	// GetHealth Check engine readiness
 	// (GET /api/v1/health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
+	// ResolveDraftLinkPreview Resolve a link preview for a draft
+	// (POST /api/v1/link-previews)
+	ResolveDraftLinkPreview(ctx context.Context, request ResolveDraftLinkPreviewRequestObject) (ResolveDraftLinkPreviewResponseObject, error)
 	// GetMediaImage Read a retained preview or original image
 	// (GET /api/v1/media/{hash})
 	GetMediaImage(ctx context.Context, request GetMediaImageRequestObject) (GetMediaImageResponseObject, error)
@@ -26575,7 +29416,7 @@ type StrictServerInterface interface {
 	// GetMessage Read a retained message
 	// (GET /api/v1/messages/{messageId})
 	GetMessage(ctx context.Context, request GetMessageRequestObject) (GetMessageResponseObject, error)
-	// CancelMessage Cancel a queued send
+	// CancelMessage Cancel a pending send
 	// (POST /api/v1/messages/{messageId}/cancel)
 	CancelMessage(ctx context.Context, request CancelMessageRequestObject) (CancelMessageResponseObject, error)
 	// GetMessageEditHistory Read observed content revisions of one retained message
@@ -26587,12 +29428,18 @@ type StrictServerInterface interface {
 	// EditMessage Accept a durable correction of a sent message
 	// (POST /api/v1/messages/{messageId}/edits)
 	EditMessage(ctx context.Context, request EditMessageRequestObject) (EditMessageResponseObject, error)
+	// UpdatePendingMessage Edit or reschedule a pending message
+	// (PATCH /api/v1/messages/{messageId}/pending)
+	UpdatePendingMessage(ctx context.Context, request UpdatePendingMessageRequestObject) (UpdatePendingMessageResponseObject, error)
 	// GetMessageReactions Read retained reactions and current own mutation eligibility
 	// (GET /api/v1/messages/{messageId}/reactions)
 	GetMessageReactions(ctx context.Context, request GetMessageReactionsRequestObject) (GetMessageReactionsResponseObject, error)
 	// SetMessageReactions Accept a durable replacement of the own reaction set
 	// (POST /api/v1/messages/{messageId}/reactions)
 	SetMessageReactions(ctx context.Context, request SetMessageReactionsRequestObject) (SetMessageReactionsResponseObject, error)
+	// SendScheduledMessageNow Make a scheduled message eligible immediately
+	// (POST /api/v1/messages/{messageId}/send-now)
+	SendScheduledMessageNow(ctx context.Context, request SendScheduledMessageNowRequestObject) (SendScheduledMessageNowResponseObject, error)
 	// GetMessageSenderProfile Read the author's available published profile
 	// (GET /api/v1/messages/{messageId}/sender-profile)
 	GetMessageSenderProfile(ctx context.Context, request GetMessageSenderProfileRequestObject) (GetMessageSenderProfileResponseObject, error)
@@ -26614,6 +29461,9 @@ type StrictServerInterface interface {
 	// RefreshMessagePreview Refresh cached link metadata
 	// (POST /api/v1/previews/{previewId}/refresh)
 	RefreshMessagePreview(ctx context.Context, request RefreshMessagePreviewRequestObject) (RefreshMessagePreviewResponseObject, error)
+	// ListScheduledMessages List scheduled messages across conversations
+	// (GET /api/v1/scheduled-messages)
+	ListScheduledMessages(ctx context.Context, request ListScheduledMessagesRequestObject) (ListScheduledMessagesResponseObject, error)
 	// ListSharedContent Browse shared content across retained conversations
 	// (GET /api/v1/shared-content)
 	ListSharedContent(ctx context.Context, request ListSharedContentRequestObject) (ListSharedContentResponseObject, error)
@@ -27585,6 +30435,67 @@ func (sh *strictHandler) LeaveRoom(w http.ResponseWriter, r *http.Request, conve
 	}
 }
 
+// GetStagedMessageAttachment operation middleware
+func (sh *strictHandler) GetStagedMessageAttachment(w http.ResponseWriter, r *http.Request, conversationId ConversationID, attachmentId StagedAttachmentID) {
+	var request GetStagedMessageAttachmentRequestObject
+
+	request.ConversationId = conversationId
+	request.AttachmentId = attachmentId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetStagedMessageAttachment(ctx, request.(GetStagedMessageAttachmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetStagedMessageAttachment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetStagedMessageAttachmentResponseObject); ok {
+		if err := validResponse.VisitGetStagedMessageAttachmentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StageMessageAttachment operation middleware
+func (sh *strictHandler) StageMessageAttachment(w http.ResponseWriter, r *http.Request, conversationId ConversationID, attachmentId StagedAttachmentID) {
+	var request StageMessageAttachmentRequestObject
+
+	request.ConversationId = conversationId
+	request.AttachmentId = attachmentId
+
+	if reader, err := r.MultipartReader(); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode multipart body: %w", err))
+		return
+	} else {
+		request.Body = reader
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StageMessageAttachment(ctx, request.(StageMessageAttachmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StageMessageAttachment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StageMessageAttachmentResponseObject); ok {
+		if err := validResponse.VisitStageMessageAttachmentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetEngine operation middleware
 func (sh *strictHandler) GetEngine(w http.ResponseWriter, r *http.Request) {
 	var request GetEngineRequestObject
@@ -27683,6 +30594,37 @@ func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetHealthResponseObject); ok {
 		if err := validResponse.VisitGetHealthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResolveDraftLinkPreview operation middleware
+func (sh *strictHandler) ResolveDraftLinkPreview(w http.ResponseWriter, r *http.Request) {
+	var request ResolveDraftLinkPreviewRequestObject
+
+	var body ResolveDraftLinkPreviewJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResolveDraftLinkPreview(ctx, request.(ResolveDraftLinkPreviewRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResolveDraftLinkPreview")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResolveDraftLinkPreviewResponseObject); ok {
+		if err := validResponse.VisitResolveDraftLinkPreviewResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -27942,6 +30884,40 @@ func (sh *strictHandler) EditMessage(w http.ResponseWriter, r *http.Request, mes
 	}
 }
 
+// UpdatePendingMessage operation middleware
+func (sh *strictHandler) UpdatePendingMessage(w http.ResponseWriter, r *http.Request, messageId MessageID, params UpdatePendingMessageParams) {
+	var request UpdatePendingMessageRequestObject
+
+	request.MessageId = messageId
+	request.Params = params
+
+	var body UpdatePendingMessageJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdatePendingMessage(ctx, request.(UpdatePendingMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdatePendingMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdatePendingMessageResponseObject); ok {
+		if err := validResponse.VisitUpdatePendingMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetMessageReactions operation middleware
 func (sh *strictHandler) GetMessageReactions(w http.ResponseWriter, r *http.Request, messageId MessageID) {
 	var request GetMessageReactionsRequestObject
@@ -27995,6 +30971,40 @@ func (sh *strictHandler) SetMessageReactions(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SetMessageReactionsResponseObject); ok {
 		if err := validResponse.VisitSetMessageReactionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SendScheduledMessageNow operation middleware
+func (sh *strictHandler) SendScheduledMessageNow(w http.ResponseWriter, r *http.Request, messageId MessageID, params SendScheduledMessageNowParams) {
+	var request SendScheduledMessageNowRequestObject
+
+	request.MessageId = messageId
+	request.Params = params
+
+	var body SendScheduledMessageNowJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SendScheduledMessageNow(ctx, request.(SendScheduledMessageNowRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SendScheduledMessageNow")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SendScheduledMessageNowResponseObject); ok {
+		if err := validResponse.VisitSendScheduledMessageNowResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -28089,10 +31099,11 @@ func (sh *strictHandler) SetMessageStar(w http.ResponseWriter, r *http.Request, 
 }
 
 // GetOperation operation middleware
-func (sh *strictHandler) GetOperation(w http.ResponseWriter, r *http.Request, operationId ID) {
+func (sh *strictHandler) GetOperation(w http.ResponseWriter, r *http.Request, operationId ID, params GetOperationParams) {
 	var request GetOperationRequestObject
 
 	request.OperationId = operationId
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetOperation(ctx, request.(GetOperationRequestObject))
@@ -28185,6 +31196,32 @@ func (sh *strictHandler) RefreshMessagePreview(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RefreshMessagePreviewResponseObject); ok {
 		if err := validResponse.VisitRefreshMessagePreviewResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListScheduledMessages operation middleware
+func (sh *strictHandler) ListScheduledMessages(w http.ResponseWriter, r *http.Request, params ListScheduledMessagesParams) {
+	var request ListScheduledMessagesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListScheduledMessages(ctx, request.(ListScheduledMessagesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListScheduledMessages")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListScheduledMessagesResponseObject); ok {
+		if err := validResponse.VisitListScheduledMessagesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -28328,501 +31365,580 @@ func (sh *strictHandler) ListStarredMessages(w http.ResponseWriter, r *http.Requ
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"+c5pD5QH37mdmNcgRJ240Puf3v+/AwA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

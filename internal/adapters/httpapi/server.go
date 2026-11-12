@@ -88,12 +88,14 @@ func NewResettable(engine *application.Engine, reset func(domain.ID) error) (htt
 	})(handler)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		if r.Method == http.MethodHead && strings.HasPrefix(r.URL.Path, "/api/v1/shared-content/") && strings.HasSuffix(r.URL.Path, "/content") {
 			w.Header().Set("Allow", http.MethodGet)
 			writeProblem(w, r, http.StatusMethodNotAllowed, "invalid_request")
 			return
 		}
-		if route, _, routeErr := router.FindRoute(r); routeErr == nil && route.Operation.RequestBody != nil && r.Header.Get("Content-Type") != "" {
+		route, _, routeErr := router.FindRoute(r)
+		if routeErr == nil && route.Operation.RequestBody != nil && r.Header.Get("Content-Type") != "" {
 			mediaType, _, parseErr := mime.ParseMediaType(r.Header.Get("Content-Type"))
 			if parseErr != nil {
 				WriteProblem(w, r, application.ErrInvalid)
@@ -104,6 +106,13 @@ func NewResettable(engine *application.Engine, reset func(domain.ID) error) (htt
 				return
 			}
 		}
+		// The strict multipart handler streams the validated single file and
+		// validates the destination and attachment IDs before opening storage.
+		if routeErr == nil && route.Operation.OperationID == "stageMessageAttachment" {
+			r.Body = http.MaxBytesReader(w, r.Body, application.MaxStagedAttachmentSize+64<<10)
+			handler.ServeHTTP(w, r)
+			return
+		}
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 		validated.ServeHTTP(w, r)
 	}), nil
@@ -112,7 +121,10 @@ func NewResettable(engine *application.Engine, reset func(domain.ID) error) (htt
 // WriteProblem deliberately exposes stable codes, never raw database/input errors.
 func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 	status, code := http.StatusServiceUnavailable, "unavailable"
+	var tooLarge *http.MaxBytesError
 	switch {
+	case errors.Is(err, application.ErrAttachmentTooLarge), errors.As(err, &tooLarge):
+		status, code = http.StatusRequestEntityTooLarge, "media_too_large"
 	case errors.Is(err, application.ErrInvalid):
 		status, code = http.StatusBadRequest, "invalid_request"
 	case errors.Is(err, application.ErrNotFound):
@@ -121,7 +133,7 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 		status, code = http.StatusConflict, "idempotency_conflict"
 	case errors.Is(err, application.ErrAccountExists):
 		status, code = http.StatusConflict, "account_exists"
-	case errors.Is(err, application.ErrStateConflict), errors.Is(err, application.ErrRoomNotJoined):
+	case errors.Is(err, application.ErrStateConflict), errors.Is(err, application.ErrRoomNotJoined), errors.Is(err, application.ErrReplySourceChanged):
 		status, code = http.StatusConflict, "state_conflict"
 	case errors.Is(err, application.ErrProtocolUnavailable):
 		status, code = http.StatusServiceUnavailable, "protocol_unavailable"
@@ -159,6 +171,9 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 	var starConflict application.StarConflict
 	var conflict application.StateConflict
 	switch {
+	case errors.Is(err, application.ErrReplySourceChanged):
+		changed := true
+		problem.ReplySourceChanged = &changed
 	case errors.As(err, &roomConflict):
 		current := roomSession(roomConflict.Current)
 		problem.CurrentRoomSession = &current
@@ -354,10 +369,22 @@ func (s *Server) GetOperation(ctx context.Context, r engineapi.GetOperationReque
 	if err != nil {
 		return nil, err
 	}
-	return engineapi.GetOperation200JSONResponse{
+	if op.Kind == "update_pending_message" || op.Kind == "send_scheduled_message_now" {
+		return nil, application.ErrNotFound
+	}
+	receipt := engineapi.GetOperation200JSONResponse{
 		Id: string(op.ID), ResourceId: string(op.ResourceID), CreatedAt: op.CreatedAt,
 		Kind: engineapi.OperationKind(op.Kind), Status: "succeeded",
-	}, nil
+	}
+	if op.Kind == "send_message" && r.Params.IncludeAcceptedMessage != nil && *r.Params.IncludeAcceptedMessage {
+		accepted, err := s.engine.AcceptedSendMessage(ctx, op.ID)
+		if err != nil {
+			return nil, err
+		}
+		snapshot := message(accepted)
+		receipt.AcceptedMessage = &snapshot
+	}
+	return receipt, nil
 }
 
 func (s *Server) StreamEvents(ctx context.Context, r engineapi.StreamEventsRequestObject) (engineapi.StreamEventsResponseObject, error) {

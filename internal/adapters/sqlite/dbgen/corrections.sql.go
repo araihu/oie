@@ -176,7 +176,10 @@ func (q *Queries) InsertCorrectionFact(ctx context.Context, arg InsertCorrection
 }
 
 const latestLogicalMessage = `-- name: LatestLogicalMessage :one
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms FROM messages m WHERE m.conversation_id=? AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id) ORDER BY m.created_at_ms DESC,m.id DESC LIMIT 1
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages m WHERE m.conversation_id=?
+AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
+AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
+ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT 1
 `
 
 func (q *Queries) LatestLogicalMessage(ctx context.Context, conversationID string) (Message, error) {
@@ -192,6 +195,7 @@ func (q *Queries) LatestLogicalMessage(ctx context.Context, conversationID strin
 		&i.State,
 		&i.Payload,
 		&i.CreatedAtMs,
+		&i.TimelineAtMs,
 	)
 	return i, err
 }

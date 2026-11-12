@@ -582,17 +582,7 @@ func TestSentEditMigrationFourteenPreservesTransmissionOrderAndData(t *testing.T
 		t.Fatal(err)
 	}
 	history := editHistory(t, e, first.ID, "", 20)
-	downReactionMigration(t, s)
-	down, err := migrations.ReadFile("migrations/000015_message_edit_commands.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.db.Exec(string(down)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.db.Exec("UPDATE schema_migrations SET version=14,dirty=0"); err != nil {
-		t.Fatal(err)
-	}
+	migrateFixtureToVersion(t, s, 14)
 	var index int
 	var name, path string
 	if err = s.db.QueryRow("PRAGMA database_list").Scan(&index, &name, &path); err != nil {
@@ -624,7 +614,7 @@ func TestSentEditMigrationFourteenPreservesTransmissionOrderAndData(t *testing.T
 	}
 	var version int
 	var dirty bool
-	if err = reopened.db.QueryRow("SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestSchemaVersion || dirty {
+	if err = reopened.db.QueryRow("SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestMigration || dirty {
 		t.Fatal(version, dirty, err)
 	}
 	queuedEdit(t, upgraded, second.ID, "New correction after safe schema upgrade")

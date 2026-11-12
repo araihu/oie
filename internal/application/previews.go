@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/araihu/oie/internal/domain"
 )
@@ -57,6 +58,41 @@ func (f PreviewFailure) Error() string { return f.Code }
 func (e *Engine) SetPreviewServices(fetcher PreviewFetcher, files MediaFiles) {
 	e.previewFetcher = fetcher
 	e.mediaFiles = files
+}
+
+// DraftLinkPreview shares the transient URL cache with retained previews.
+// Drafts do not create message, preview or media-file records.
+func (e *Engine) DraftLinkPreview(ctx context.Context, address string) (PreviewMetadata, error) {
+	if address == "" || len(address) > 4096 || strings.ContainsFunc(address, func(r rune) bool {
+		return unicode.IsSpace(r) || unicode.IsControl(r)
+	}) {
+		return PreviewMetadata{}, ErrInvalid
+	}
+	u, err := url.Parse(address)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil {
+		return PreviewMetadata{}, ErrInvalid
+	}
+	if e.previewFetcher == nil {
+		return PreviewMetadata{}, ErrProtocolUnavailable
+	}
+	if knownNonPreviewFile(address) {
+		return PreviewMetadata{}, nil
+	}
+	select {
+	case e.draftPreviewSlots <- struct{}{}:
+		defer func() { <-e.draftPreviewSlots }()
+	default:
+		return PreviewMetadata{}, MediaFailure{Code: "media_busy"}
+	}
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	// Fragments never affect the remote representation or its cache identity.
+	u.Fragment, u.RawFragment = "", ""
+	metadata, err := e.previewFetcher.Link(ctx, u.String())
+	if err != nil || metadata.IsImage {
+		return PreviewMetadata{}, nil
+	}
+	return metadata, nil
 }
 func (e *Engine) previewRepo() (PreviewRepository, error) {
 	r, ok := e.repo.(PreviewRepository)

@@ -34,14 +34,20 @@ type Message struct {
 	ID, RevisionID, AccountID, ConversationID ID
 	Sender                                    Sender
 	OriginalText                              string
-	Mentions                                  []MessageMention   `json:",omitempty"`
-	MentionsYou                               bool               `json:",omitempty"`
-	MediaThumbnails                           []MediaThumbnail   `json:",omitempty"`
-	Edited                                    bool               `json:",omitempty"`
-	EditedAt                                  time.Time          `json:",omitempty"`
-	ProjectionSourceID                        ID                 `json:"-"`
-	Correction                                *MessageCorrection `json:"-"`
+	AttachmentWireText                        string               `json:",omitempty"`
+	DispatchStarted                           bool                 `json:",omitempty"`
+	ScheduledAt                               *time.Time           `json:",omitempty"`
+	Composition                               *OutgoingComposition `json:",omitempty"`
+	Attachments                               []StagedAttachment   `json:",omitempty"`
+	Mentions                                  []MessageMention     `json:",omitempty"`
+	MentionsYou                               bool                 `json:",omitempty"`
+	MediaThumbnails                           []MediaThumbnail     `json:",omitempty"`
+	Edited                                    bool                 `json:",omitempty"`
+	EditedAt                                  time.Time            `json:",omitempty"`
+	ProjectionSourceID                        ID                   `json:"-"`
+	Correction                                *MessageCorrection   `json:"-"`
 	CreatedAt                                 time.Time
+	TimelineAt                                *time.Time `json:",omitempty"`
 	IsOwn                                     bool
 	SendState                                 string
 	ProviderID                                string
@@ -53,6 +59,26 @@ type Message struct {
 	Reply                                     *MessageReply      `json:"-"`
 	// ObservedRoomNickname is internal evidence for classifying later edits.
 	ObservedRoomNickname string `json:",omitempty"`
+}
+
+type OutgoingComposition struct {
+	OriginalText  string
+	ReplyTo       ID                 `json:",omitempty"`
+	Mentions      []MentionSelection `json:",omitempty"`
+	AttachmentIDs []ID               `json:",omitempty"`
+}
+
+func (m Message) TimelineTime() time.Time {
+	if m.TimelineAt != nil {
+		return *m.TimelineAt
+	}
+	return m.CreatedAt
+}
+
+type StagedAttachment struct {
+	ID                          ID
+	FileName, MediaType, SHA256 string
+	Size                        int64
 }
 
 type HistoryStatus struct {

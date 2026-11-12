@@ -227,6 +227,8 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		result.Redirect = "/?chat=" + url.QueryEscape(c.Id) + "&account=" + url.QueryEscape(c.AccountId)
+	case "/ui/scheduling/update", "/ui/scheduling/send-now":
+		status, result = s.changeSchedule(ctx, r, text)
 	case "/ui/messages/send", "/ui/messages/reconcile":
 		status, result = s.send(ctx, r, text)
 	case "/ui/messages/cancel":
@@ -240,6 +242,9 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 func problemResult(text copy, status int, body []byte) mutationResult {
 	var p engineapi.Problem
 	_ = json.Unmarshal(body, &p)
+	if status == http.StatusConflict && p.Code == "state_conflict" && p.ReplySourceChanged != nil && *p.ReplySourceChanged {
+		return mutationResult{Code: "reply_source_changed", Message: text.ScheduleReviewChanged, Rejected: true}
+	}
 	result := mutationResult{Code: string(p.Code), Rejected: status == 400 || status == 404 || status == 422, Message: text.InvalidForm}
 	switch p.Code {
 	case "idempotency_conflict":
@@ -249,6 +254,11 @@ func problemResult(text copy, status int, body []byte) mutationResult {
 		result.Message = text.AccountExists
 	case "not_found":
 		result.Message = text.MessageUnavailable
+	case "media_too_large":
+		if status == http.StatusRequestEntityTooLarge {
+			result.Message = text.AttachmentTooLarge
+			result.Rejected = true
+		}
 	case "unavailable", "protocol_unavailable":
 		result.Message = text.UnavailableBody
 	case "state_conflict":
@@ -266,7 +276,7 @@ func problemResult(text copy, status int, body []byte) mutationResult {
 	return result
 }
 func (s *Server) reconcileMessage(ctx context.Context, key, kind string) (*engineapi.Message, bool) {
-	receipt, err := s.client.GetOperationWithResponse(ctx, key)
+	receipt, err := s.client.GetOperationWithResponse(ctx, key, nil)
 	if err != nil || receipt.JSON200 == nil {
 		return nil, false
 	}
@@ -281,20 +291,42 @@ func (s *Server) reconcileMessage(ctx context.Context, key, kind string) (*engin
 }
 func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mutationResult) {
 	key, body, conversation, account, target := r.Form.Get("operationKey"), r.Form.Get("originalText"), r.Form.Get("conversationId"), r.Form.Get("accountId"), r.Form.Get("replyToMessageId")
-	if !validOperationKey(key) || !validOperationKey(conversation) || !validOperationKey(account) || !utf8.ValidString(body) || strings.ContainsRune(body, 0) || strings.TrimSpace(body) == "" || utf8.RuneCountInString(body) > 16384 || (target != "" && !validOperationKey(target)) {
+	replyRevision, replyExcerptSHA256 := r.Form.Get("expectedReplyRevisionId"), r.Form.Get("expectedReplyExcerptSha256")
+	attachments, at, valid := scheduleInput(r)
+	if !valid || !validOperationKey(key) || !validOperationKey(conversation) || !validOperationKey(account) || !utf8.ValidString(body) || strings.ContainsRune(body, 0) || (strings.TrimSpace(body) == "" && len(attachments) == 0) || utf8.RuneCountInString(body) > 16384 || (target != "" && !validOperationKey(target)) ||
+		(replyRevision != "" && (!validOperationKey(replyRevision) || target == "" || at == nil)) ||
+		(replyExcerptSHA256 != "" && (replyRevision == "" || !validReplyExcerptSHA256(replyExcerptSHA256))) {
 		return 422, mutationResult{Message: text.InvalidMessage, Code: "invalid_request", Rejected: true}
 	}
 	mentions, mentionErr := parseMentionSelections(r.Form.Get("mentions"), body)
 	if mentionErr != nil {
 		return 422, mutationResult{Message: text.InvalidMessage, Code: "invalid_request", Rejected: true}
 	}
+	payload := sendInput(body, target, replyRevision, replyExcerptSHA256, mentions, attachments, at)
 	receipt, evidence := s.sendReceipt(ctx, key)
 	switch evidence {
 	case "found":
-		if matchingSend(*receipt, conversation, account, body, target, mentions) {
+		if matchingComposition(*receipt, conversation, account, payload) {
 			return acceptedResult(text, *receipt)
 		}
 		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
+	case "legacy":
+		if r.URL.Path == "/ui/messages/reconcile" {
+			return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
+		}
+		// Older engines expose only metadata here. An explicit retry can ask
+		// them to verify the request against the already committed operation.
+		response, err := s.client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, payload)
+		if err != nil {
+			return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
+		}
+		if response.JSON200 != nil && matchingComposition(*response.JSON200, conversation, account, payload) {
+			return acceptedResult(text, *response.JSON200)
+		}
+		if response.StatusCode() == http.StatusConflict {
+			return response.StatusCode(), problemResult(text, response.StatusCode(), response.Body)
+		}
+		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
 	case "conflict":
 		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
 	case "unknown":
@@ -338,22 +370,16 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 			return 409, mutationResult{Message: text.ReplyUnavailable, Code: "unsupported", Rejected: true}
 		}
 	}
-	var targetID *string
-	if target != "" {
+	if target != "" && replyRevision == "" {
 		source, status := s.retainedReplySource(ctx, conversation, account, target)
 		if source == nil {
 			return status, mutationResult{Message: text.ReplyUnavailable, Code: "reply_unavailable", Rejected: status == 400 || status == 404}
 		}
-		targetID = &target
 	}
-	var selected *[]engineapi.MentionSelection
-	if len(mentions) > 0 {
-		selected = &mentions
-	}
-	response, err := s.client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, engineapi.SendMessage{OriginalText: body, ReplyToMessageId: targetID, Mentions: selected})
+	response, err := s.client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, payload)
 	if err != nil {
 		message, _ := s.sendReceipt(ctx, key)
-		if message != nil && matchingSend(*message, conversation, account, body, target, mentions) {
+		if message != nil && matchingComposition(*message, conversation, account, payload) {
 			return acceptedResult(text, *message)
 		}
 		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
@@ -369,14 +395,18 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 		}
 		return response.StatusCode(), result
 	}
-	if !matchingSend(*message, conversation, account, body, target, mentions) {
+	if !matchingComposition(*message, conversation, account, payload) {
 		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
 	}
 	return acceptedResult(text, *message)
 }
 
 func acceptedResult(text copy, m engineapi.Message) (int, mutationResult) {
-	return 200, mutationResult{OK: true, Accepted: true, Message: text.MessageAccepted, MessageID: m.Id, State: string(m.SendState), NextKey: newOperationKey()}
+	message := text.MessageAccepted
+	if m.ScheduledAt != nil {
+		message = text.ScheduleSaved
+	}
+	return 200, mutationResult{OK: true, Accepted: true, Message: message, MessageID: m.Id, State: string(m.SendState), NextKey: newOperationKey()}
 }
 func (s *Server) cancelSend(ctx context.Context, r *http.Request, text copy) (int, mutationResult) {
 	key := r.Form.Get("operationKey")
@@ -457,7 +487,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 
 func isMutationPath(path string) bool {
 	switch path {
-	case "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
+	case "/ui/scheduling/update", "/ui/scheduling/send-now", "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
 		return true
 	}
 	return false

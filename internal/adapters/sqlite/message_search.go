@@ -40,6 +40,7 @@ func (s *Store) SearchMessages(ctx context.Context, query domain.MessageSearchQu
 		if err = json.Unmarshal([]byte(row.Payload), &hit.Message); err != nil {
 			return page, err
 		}
+		setTimelineTime(&hit.Message, row.TimelineAtMs)
 		var c domain.Conversation
 		if err = json.Unmarshal([]byte(row.ConversationPayload), &c); err != nil {
 			return page, err
@@ -68,7 +69,7 @@ func (s *Store) SearchMessages(ctx context.Context, query domain.MessageSearchQu
 	}
 	if more {
 		last := rows[len(rows)-1]
-		page.NextCursor = application.EncodeMessageSearchCursor(application.MessageSearchCursor{Scope: query.ScopeHash, Milliseconds: last.CreatedAtMs, ID: domain.ID(last.ID), Current: last.IsCurrent, RevisionAt: last.RevisionKeyAt, RevisionID: domain.ID(last.RevisionKeyID)})
+		page.NextCursor = application.EncodeMessageSearchCursor(application.MessageSearchCursor{Scope: query.ScopeHash, Milliseconds: last.PositionMs, ID: domain.ID(last.ID), Current: last.IsCurrent, RevisionAt: last.RevisionKeyAt, RevisionID: domain.ID(last.RevisionKeyID)})
 	}
 	status, err := q.SharedContentIndexStatus(ctx, dbgen.SharedContentIndexStatusParams{ParserVersion: application.SharedContentVersion, AccountID: string(query.AccountID), ConversationID: string(query.ConversationID), MessageIds: "[]"})
 	if err != nil {

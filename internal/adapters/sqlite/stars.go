@@ -134,6 +134,7 @@ func (s *Store) StarredMessages(ctx context.Context, in application.StarQuery) (
 			}
 		}
 		item.Star.MessageID = item.Message.ID
+		setTimelineTime(&item.Message, row.TimelineAtMs)
 		if err = hydrateMessageProjection(ctx, s.queries, &item.Message); err != nil {
 			return nil, err
 		}

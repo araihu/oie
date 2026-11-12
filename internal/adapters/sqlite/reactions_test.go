@@ -15,19 +15,6 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
-func downReactionMigration(t *testing.T, s *Store) {
-	t.Helper()
-	for _, name := range []string{"000021_reaction_target_lookups", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation", "000017_room_archives", "000016_message_reactions"} {
-		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err = s.db.Exec(string(down)); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
 func TestReactionObservationsUseTargetAndCommandIndexes(t *testing.T) {
 	s, _, c := outboxFixture(t)
 	source, err := os.ReadFile("queries/reactions.sql")
@@ -735,18 +722,7 @@ func TestRoomReactionReplayRepairsV17BackwardPageOrder(t *testing.T) {
 		}
 	}
 	// Downgrade the scratch database to the actual V17 migration state.
-	for _, name := range []string{"000021_reaction_target_lookups", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
-		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err = s.db.Exec(string(down)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := s.db.Exec("UPDATE schema_migrations SET version=17"); err != nil {
-		t.Fatal(err)
-	}
+	migrateFixtureToVersion(t, s, 17)
 	if err := migrateDatabase(t.Context(), s.db); err != nil {
 		t.Fatal(err)
 	}
@@ -923,20 +899,8 @@ func TestRoomReactionUpgradeRetiresMixedLegacyPeerSets(t *testing.T) {
 	}
 	// v18 retained observations without their identity-mode epochs. It also
 	// persisted the latest non-anonymous mode as a currently public flag.
-	for _, name := range []string{"000021_reaction_target_lookups", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode"} {
-		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err = s.db.Exec(string(down)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	var err error
-	if _, err = s.db.Exec("UPDATE schema_migrations SET version=18"); err != nil {
-		t.Fatal(err)
-	}
-	if err = s.Close(); err != nil {
+	migrateFixtureToVersion(t, s, 18)
+	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
 	s2, err := Open(ctx, s.dir, migrationID())

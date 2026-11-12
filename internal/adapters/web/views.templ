@@ -39,6 +39,9 @@ func navigation(v view, id string) sidebar.Config {
 			{ID: "favorites", Label: v.Text.Favorites, Href: v.href("section", "favorites", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidStar), Active: v.Section == "favorites", LinkAttrs: sidebarNavigationAttrs()},
 		},
 	}
+	if !v.Preview {
+		cfg.Items = append(cfg.Items, sidebar.Item{ID:"scheduled", Label:v.Text.Scheduled, Href:v.scheduleHref(""), Icon:glyph(heroicons.Icon16SolidClock), Active:v.Section=="scheduled", LinkAttrs:sidebarNavigationAttrs()})
+	}
 	if id == "mobile-navigation" {
 		cfg.Logo = brand(v)
 		cfg.LogoHref = v.href("section", "chats", "chat", "", "q", "", "filter", "all")
@@ -89,7 +92,7 @@ templ page(v view) {
 <link rel="apple-touch-icon" sizes="180x180" href={templ.URL(brandURL("apple-touch-icon-180.png"))}/>
 <link rel="manifest" href={templ.SafeURL("/manifest.webmanifest?lang="+v.Locale)}/>
 <meta name="theme-color" content="#6092ab"/>
-			<script src="/ui/runtime.js"></script>
+			<script src="/ui/runtime.js"></script><script src="/ui/presentation-time.js" defer></script>
 <script src="/ui/theme.js"></script>
 <script src="/ui/sidebar.js"></script>
 <script src="/ui/formatting.js"></script>
@@ -122,14 +125,14 @@ templ page(v view) {
 <script src="/ui/room-archive.js" defer></script>
 <script src="/ui/timeline.js" defer></script>
 <script src="/ui/reset-data.js" defer></script>
-<script src="/ui/live.js" defer></script><script src="/ui/read-state.js" defer></script>
+<script src="/ui/live.js" defer></script><script src="/ui/draft-link-preview.js" defer></script><link rel="stylesheet" href="/ui/draft-link-preview.css"/><script src="/ui/scheduling.js" defer></script><link rel="stylesheet" href="/ui/scheduling.css"/><script src="/ui/read-state.js" defer></script>
 <script src="/ui/emoji-picker.js" defer></script><script src="/ui/emoji-completion.js" defer></script><script src="/ui/mentions.js" defer></script>
 <script src="/ui/navigation.js"></script>
 if v.DevBuildID!="" {
 <script src="/ui/dev-reload.js" data-build-id={v.DevBuildID} defer></script>
 }
 <meta name="oie-csrf" content={v.CSRF}/>
-<noscript><style>.oie-cancel-form{display:flex!important}.oie-message-meta:has(>.oie-cancel-form){margin-top:4px}</style></noscript>
+<noscript><style>#composer-split{display:none}.oie-cancel-form{display:flex!important}.oie-message-meta:has(>.oie-cancel-form){margin-top:4px}</style></noscript>
 		</head>
 		<body data-reset-complete={v.Text.DeleteDataComplete} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
 @appFragment(v)
@@ -237,6 +240,8 @@ if v.NativeMessageSearch {
 @messageSearchWorkspace(v)
 }else if v.Section=="media"{
 @sharedWorkspace(v)
+}else if v.Section=="scheduled" {
+@scheduledWorkspace(v)
 }else{
 	<div id="workspace" class={ "oie-workspace",templ.KV("oie-chat-open",v.ChatOpen) }>
 		<section class="oie-list-pane" aria-label={ v.Text.Chats }>
@@ -353,7 +358,10 @@ templ chatHeader(v view) {
 		@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Details, "title": v.Text.Details,"data-open-details":""}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'details'})"})) {
 			@glyph(heroicons.Icon16SolidInformationCircle)
 		}
-{{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{Label:v.Text.Details,OnClick:"$dispatch('drawer:open', {id: 'details'})"}}},v.conversationPreferenceSection(),{Items:[]dropdown.Item{{ID:"chat-search-messages",Label:v.Text.SearchMessages,Icon:glyph(heroicons.Icon16SolidMagnifyingGlass),OnClick:"$dispatch('oie:conversation-search-open')"}}}} }}
+{{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{Label:v.Text.Details,OnClick:"$dispatch('oie:conversation-drawer-open','details')"}}},v.conversationPreferenceSection(),{Items:[]dropdown.Item{{ID:"chat-search-messages",Label:v.Text.SearchMessages,Icon:glyph(heroicons.Icon16SolidMagnifyingGlass),OnClick:"$dispatch('oie:conversation-search-open')"}}}} }}
+if v.conversationSchedulesAvailable() {
+{{ sections[0].Items=append(sections[0].Items,dropdown.Item{Label:v.Text.Scheduled,Icon:glyph(heroicons.Icon16SolidClock),OnClick:"$dispatch('oie:conversation-drawer-open','conversation-schedules')"}) }}
+}
 if v.Selected.Kind=="room" {
 {{ sections=append(sections,dropdown.Section{Items:[]dropdown.Item{{ID:"chat-leave-room",Label:v.Text.LeaveRoom,Icon:glyph(heroicons.Icon16SolidArrowTopRightOnSquare),OnClick:"$dispatch('oie:leave-room')",Disabled:v.RoomSession==nil||!v.RoomSession.Active||!v.messagingImplemented("room_messaging")}}}) }}
 }
@@ -362,7 +370,8 @@ if v.Selected.Kind=="room" {
 }
 
 templ message(v view,m messageView,grouped,groupEnd bool){
-<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-mentioned",m.mentionsYou()),templ.KV("oie-message-grouped",grouped),templ.KV("oie-message-group-end",groupEnd)} tabindex="-1" data-message-id={m.Id} data-read-eligible={strconv.FormatBool(!m.IsOwn&&(m.Historical==nil||!*m.Historical))} data-starred={strconv.FormatBool(v.StarsKnown&&v.Stars[m.Id].Starred)} data-send-state={string(m.SendState)} data-created-at={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")} data-created-ms={strconv.FormatInt(m.CreatedAt.UnixMilli(),10)} data-message-revision={m.RevisionId} data-message-previews-known={strconv.FormatBool(m.PresentationKnown&&m.VideosKnown)} data-message-account={m.AccountId} data-message-conversation={m.ConversationId} data-message-sender={m.Sender.Id} data-message-sender-name={m.Sender.DisplayName} data-message-groupable={strconv.FormatBool(m.Attachment==nil)} data-message-version={v.messageVersion(m)} data-message-source={originalMessageJSON(m.OriginalText)}>
+{{ position := messageTimelineTime(m.Message) }}
+<div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-mentioned",m.mentionsYou()),templ.KV("oie-message-grouped",grouped),templ.KV("oie-message-group-end",groupEnd)} tabindex="-1" data-message-id={m.Id} data-read-eligible={strconv.FormatBool(!m.IsOwn&&(m.Historical==nil||!*m.Historical))} data-starred={strconv.FormatBool(v.StarsKnown&&v.Stars[m.Id].Starred)} data-send-state={string(m.SendState)} data-created-at={position.Format("2006-01-02T15:04:05Z07:00")} data-created-ms={strconv.FormatInt(position.UnixMilli(),10)} data-timeline-release?={m.TimelineAt!=nil} data-message-revision={m.RevisionId} data-message-previews-known={strconv.FormatBool(m.PresentationKnown&&m.VideosKnown)} data-message-account={m.AccountId} data-message-conversation={m.ConversationId} data-message-sender={m.Sender.Id} data-message-sender-name={m.Sender.DisplayName} data-message-groupable={strconv.FormatBool(m.Attachment==nil)} data-message-version={v.messageVersion(m)} data-message-source={originalMessageJSON(m.OriginalText)}>
 @viewerSource(v,m)
 if m.Attachment!=nil {
 <div class="oie-media-message">@card.Card(card.Config{Image:m.Attachment.PreviewUrl,ImageAlt:m.Attachment.Title,Title:m.Attachment.Title,Description:m.Attachment.Description,Density:card.DensityCompact,RootClass:"oie-media-card"})</div>
@@ -378,9 +387,9 @@ if !m.IsOwn {
 if m.IsOwn {
 <div class="oie-message-meta">
 if m.Attachment!=nil {
-<time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
+<time datetime={position.Format("2006-01-02T15:04:05Z07:00")}>{position.Format("15:04")}</time>
 }
-if m.SendState=="queued" && !v.Preview {
+if pendingSendMutable(m.Message) && !v.Preview {
 @form.Form(form.Config{ID:"cancel-"+m.Id,Action:"/ui/messages/cancel",Method:"post",RootClass:"oie-cancel-form",RootAttrs:templ.Attributes{"data-oie-action":"cancel","data-cancel-message":""}}){
 @mutationFields(v,"cancel-"+m.Id,newOperationKey())
 <input type="hidden" name="messageId" value={m.Id}/><input type="hidden" name="expectedRevisionId" value={m.RevisionId}/>
@@ -404,8 +413,11 @@ func messageSide(own bool) chatbubble.Side {
 func selectedAccountID(v view)string{if v.Selected!=nil{return v.Selected.AccountId};return ""}
 
 templ composer(v view){
-<form id="send-message-form" action="/ui/messages/send" method="post" data-oie-action="send" data-send-allowed={strconv.FormatBool(v.sendAllowed())} data-compose-allowed={strconv.FormatBool(v.composeAllowed())} data-reply-allowed={strconv.FormatBool(v.replyAllowed())} data-edit-allowed={strconv.FormatBool(v.messagingImplemented("send_corrections"))} data-edit-target-url={v.editTargetHref("")} data-latest-edit-message={v.latestEditMessage()}>
-@mutationFields(v,"send",sendKey(v))
+<form id="send-message-form" action={templ.URL(composerAction(v))} method="post" data-oie-action="send" x-data="{}" data-schedule-composer?={v.scheduleAllowed()} data-editing-schedule?={v.ScheduleEdit!=nil} data-send-allowed={strconv.FormatBool(v.sendAllowed())} data-compose-allowed={strconv.FormatBool(v.composeAllowed())} data-reply-allowed={strconv.FormatBool(v.replyAllowed())} data-edit-allowed={strconv.FormatBool(v.ScheduleEdit==nil&&v.messagingImplemented("send_corrections"))} data-edit-target-url={v.editTargetHref("")} data-latest-edit-message={v.latestEditMessage()}>
+@mutationFieldsAt(v,"send",sendKey(v),composerReturn(v))
+if v.scheduleAllowed() {
+@scheduleFields(v)
+}
 <input type="hidden" name="conversationId" value={v.ChatID}/><input type="hidden" name="accountId" value={selectedAccountID(v)}/>
 <input type="hidden" name="replyToMessageId" value=""/>
 @composerEdit(v)
@@ -416,8 +428,11 @@ templ composer(v view){
 <div class="oie-composer-feedback" data-form-feedback role="status" aria-live="polite"></div>
 </div>
 @pendingSendTemplate(v)
+if v.composeAllowed() {
+@draftLinkPreview(v)
+}
 <div class="oie-composer">
-@button.Button(button.Disabled(),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Attach,"title":v.Text.MediaUnavailable})){@glyph(heroicons.Icon16SolidPlus)}
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Attach,"data-attach-file":"","disabled":!v.scheduleAllowed()||!v.messagingImplemented("file_upload")})){@glyph(heroicons.Icon16SolidPlus)}
 <div class="oie-composer-field">
 @textarea.Textarea(textarea.Config{ID:"message-composer",Name:"originalText",Value:v.field("originalText"),Rows:1,Placeholder:v.Text.Message,Disabled:!v.composeAllowed(),RootClass:"oie-composer-input",InputAttrs:templ.Attributes{"aria-label":v.Text.Message,"style":"resize:none;padding-inline-end:2.75rem;field-sizing:content;min-height:var(--oie-composer-control-size,2.75rem);line-height:1.25rem;padding-block:calc((var(--oie-composer-control-size,2.75rem) - 1.25rem - 2px)/2);max-height:min(12rem,30dvh);overflow-y:auto;background:var(--oie-raised);border-color:var(--oie-border);border-radius:1.5rem;color:var(--oie-text)"}})
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button oie-edit-cancel"),button.WithAttrs(templ.Attributes{"data-edit-cancel":"","hidden":true,"aria-label":v.Text.CancelEdit,"title":v.Text.CancelEdit})){@glyph(heroicons.Icon16SolidXMark)}
@@ -425,9 +440,22 @@ templ composer(v view){
 @mentionPicker(v)
 @emojiCompletion(v)
 @emojiPicker(v)
-@button.Button(button.WithType("submit"),button.WithRootClass("oie-icon-button oie-send"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Send,"data-send-message":"","disabled":!v.sendAllowed()})){@glyph(heroicons.Icon16SolidArrowUp)}
+if v.scheduleAllowed() {
+@scheduleControl(v)
+<noscript>
+@composerSendButton(v,false)
+</noscript>
+} else {
+@composerSendButton(v,true)
+}
 </div>
 </form>
+if v.conversationSchedulesAvailable() {
+@scheduleDialog(v)
+}
+}
+templ composerSendButton(v view,live bool) {
+@button.Button(button.WithType("submit"),button.WithRootClass("oie-icon-button oie-send"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Send,"data-send-message":live,"disabled":!v.sendAllowed()})){@glyph(heroicons.Icon16SolidArrowUp)}
 }
 func sendKey(v view)string{if v.FormTarget=="send"&&v.field("operationKey")!=""{return v.field("operationKey")};return newOperationKey()}
 
@@ -489,7 +517,10 @@ for _,a:=range v.Accounts {
 }
 }
 templ mutationFields(v view,target,key string){
-<input type="hidden" name="csrf" value={v.CSRF}/><input type="hidden" name="engineId" value={v.EngineID}/><input type="hidden" name="returnTo" value={v.href()}/><input type="hidden" name="formTarget" value={target}/><input type="hidden" name="operationKey" value={key}/>
+@mutationFieldsAt(v,target,key,v.href())
+}
+templ mutationFieldsAt(v view,target,key,destination string){
+<input type="hidden" name="csrf" value={v.CSRF}/><input type="hidden" name="engineId" value={v.EngineID}/><input type="hidden" name="returnTo" value={destination}/><input type="hidden" name="formTarget" value={target}/><input type="hidden" name="operationKey" value={key}/>
 }
 templ accountDetail(v view,a engineapi.Account){
 <section class="oie-account-detail" data-account-id={a.Id}>
@@ -579,6 +610,9 @@ templ liveCopy(v view){
 templ liveRegions(v view){
 <div id="oie-live-regions" data-edit-message={v.latestEditMessage()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
 @avatarData(v)
+if v.Section=="scheduled"&&v.SchedulePage!=nil {
+@scheduledResults(v)
+}
 if v.Section!="media"{
 @starData(v)
 }
@@ -719,6 +753,7 @@ if !m.IsOwn && !grouped {
 <div class="oie-message-heading"><strong class={v.messageAvatarBorder(m)}>{m.Sender.DisplayName}</strong></div>
 }
 @messageBody(v,m)
+@outgoingAttachments(v,m.Message)
 <div class="oie-message-stamp">
 if !m.IsOwn && v.Selected!=nil && v.Selected.Kind=="room" {
 	<span class="oie-message-mention-slot">
@@ -730,7 +765,8 @@ if !m.IsOwn && v.Selected!=nil && v.Selected.Kind=="room" {
 @messageEditIndicator(v,m)
 @messageSendIndicator(v,m)
 @messageStarIndicator(v,m.Id)
-<time data-message-time datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("15:04")}</time>
+{{ position := messageTimelineTime(m.Message) }}
+<time data-message-time datetime={position.Format("2006-01-02T15:04:05Z07:00")}>{position.Format("15:04")}</time>
 </div>
 @messageReactions(v,m)
 </div>
@@ -834,10 +870,11 @@ templ messageMenuTrigger(v view,id string){
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-menu-chevron"),button.WithAttrs(templ.Attributes{"data-message-menu-trigger":id,"aria-label":v.Text.MessageActions,"title":v.Text.MessageActions})){@glyph(heroicons.Icon16SolidChevronDown)}
 }
 templ viewerSource(v view,m messageView){
+{{ position := messageTimelineTime(m.Message) }}
 <template data-viewer-source={m.Id}>
 <div class="oie-viewer-source" data-viewer-source-id={m.Id}>
 @profileAvatar(v,m.AccountId,v.messageAvatarAddress(m),avatar.Config{Name:m.Sender.DisplayName,Initials:initials(m.Sender.DisplayName),Size:avatar.SizeXS,Border:true,BorderColor:v.messageAvatarBorder(m)})
-<div class="oie-viewer-sender"><strong title={m.Sender.DisplayName}>{m.Sender.DisplayName}</strong><time data-viewer-date datetime={m.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}>{m.CreatedAt.Format("2006-01-02 15:04")}</time></div>
+<div class="oie-viewer-sender"><strong title={m.Sender.DisplayName}>{m.Sender.DisplayName}</strong><time data-viewer-date datetime={position.Format("2006-01-02T15:04:05Z07:00")}>{position.Format("2006-01-02 15:04")}</time></div>
 </div>
 </template>
 }

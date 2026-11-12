@@ -44,6 +44,9 @@ var formattingScript []byte
 //go:embed theme.js
 var themeScript []byte
 
+//go:embed presentation-time.js
+var presentationTimeScript []byte
+
 //go:embed locales/*.json
 var localeFiles embed.FS
 
@@ -134,6 +137,13 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	SchedulePage          *engineapi.ScheduledMessagePage
+	ScheduleEdit          *engineapi.Message
+	ScheduleDestinations  []engineapi.Conversation
+	ScheduleConversations []string
+	ScheduleCursor        string
+	ScheduleUnavailable   bool
+
 	InboxOnly        bool
 	Role             engineapi.EngineRole
 	CanResetData     bool
@@ -175,6 +185,7 @@ type view struct {
 	FocusMessage                                                                                  string
 	ContextHasNewer, ContextHasOlder, ContextMissing                                              bool
 	TimelineOlder, TimelineNewer, TimelineComplete                                                bool
+	TimelineHiddenOldest, TimelineHiddenNewest                                                    bool
 	TimelineMode, TimelineDirection, TimelineCursor, TimelineRequestOldest, TimelineRequestNewest string
 	TimelineCanonicalCursor                                                                       string
 	TimelineAliases                                                                               map[string]messageView
@@ -193,6 +204,13 @@ type view struct {
 }
 
 type copy struct {
+	ScheduleSelectedConversations                           string
+	ScheduleLoading, ScheduleViewAgenda, ScheduleCancelSend string
+	ScheduleReviewChanged, AttachmentTooLarge               string
+	DismissLinkPreview                                      string
+
+	Scheduled, Schedule, Reschedule, ScheduleWhen, ScheduleEmpty, ScheduleUnavailable, ScheduleReview, ScheduleBack, ScheduleCancel, ScheduleEditMode, ScheduleSave, ScheduleSaved, SendNow, ScheduleTimeInvalid, ScheduleTimeAmbiguous, AttachmentFailed, AttachmentLimit, RemoveAttachment string
+
 	DeleteAllData, DeleteDataWarning, DeleteHostedDataWarning, DeleteDataConfirmation, DeleteDataCancel, DeleteDataFailed, DeleteDataPending, DeleteDataComplete string
 	Reactions, ReactMessage, ReactionUnavailable, ReactionPending, ReactionUnknown, ReactionFailed, ReactionCheck, ReactionRemove                                string
 	ReactionMore, ReactionThumbsUp, ReactionHeart, ReactionLaugh, ReactionSurprise, ReactionCry, ReactionPray, ReactionClap                                      string
@@ -248,6 +266,7 @@ type copy struct {
 	EmojiPicker                                                                                                                                                                                              string
 	Composition, EmojiShortcutLanguages, EmojiSuggestions                                                                                                                                                    string
 	SettingsGeneral, SearchLanguages, NoLanguagesFound, EmojiShortcutsOff, EmojiShortcutLanguageCount                                                                                                        string
+	PresentationTimeZone, SystemTimeZone                                                                                                                                                                     string
 	EmojiSearch                                                                                                                                                                                              string
 	EmojiCategories                                                                                                                                                                                          string
 	EmojiAll                                                                                                                                                                                                 string
@@ -565,6 +584,18 @@ var liveScript []byte
 var roomArchiveScript []byte
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/ui/scheduling/conversation" {
+		s.conversationSchedules(w, r)
+		return
+	}
+	if r.URL.Path == "/ui/link-preview" {
+		s.resolveDraftLinkPreview(w, r)
+		return
+	}
+	if r.URL.Path == "/ui/scheduling/stage" || r.URL.Path == "/ui/scheduling/file" {
+		s.serveStagedAttachment(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/engine/reset" {
 		s.resetData(w, r)
 		return
@@ -632,9 +663,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mime string
 		body []byte
 	}{
-		"/ui/sidebar.js":    {"text/javascript", sidebarScript},
-		"/ui/reset-data.js": {"text/javascript", resetDataScript},
-		"/ui/mentions.js":   {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
+		"/ui/draft-link-preview.js": {"text/javascript", draftLinkPreviewScript}, "/ui/draft-link-preview.css": {"text/css", draftLinkPreviewStylesheet},
+		"/ui/scheduling.js":        {"text/javascript", schedulingScript},
+		"/ui/scheduling.css":       {"text/css", schedulingStylesheet},
+		"/ui/sidebar.js":           {"text/javascript", sidebarScript},
+		"/ui/presentation-time.js": {"text/javascript", presentationTimeScript},
+		"/ui/reset-data.js":        {"text/javascript", resetDataScript},
+		"/ui/mentions.js":          {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
 		"/ui/room-archive.js": {"text/javascript", roomArchiveScript},
 		"/ui/timeline.js":     {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/cache.js": {"text/javascript", cacheScript}, "/ui/cache/LICENSE.md": {"text/plain; charset=utf-8", cacheLibraryLicense}, "/ui/cache/lru-cache.min.mjs": {"text/javascript", cacheLibrary}, "/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
@@ -761,7 +796,7 @@ func (s *Server) baseView(r *http.Request) view {
 }
 func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	fragment := ""
-	if r.URL.Path == "/" && r.Header.Get("HX-Request") == "true" && v.Section != "media" {
+	if r.URL.Path == "/" && r.Header.Get("HX-Request") == "true" && v.Section != "media" && v.Section != "scheduled" && r.URL.Query().Get("editSchedule") == "" {
 		fragment = r.Header.Get("X-Oie-Fragment")
 	}
 	listOnly := fragment == "inbox"
@@ -810,6 +845,10 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	if !listOnly && !paneOnly {
 		s.loadCapabilities(ctx, v)
 	}
+	if v.Section == "scheduled" {
+		s.loadScheduled(ctx, v)
+		return
+	}
 	if v.Section == "media" {
 		s.loadSharedContent(ctx, v)
 		return
@@ -821,6 +860,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		return
 	}
 	s.loadConversation(ctx, r, v, paneOnly, editor)
+	s.loadScheduleEdit(ctx, v, r.URL.Query().Get("editSchedule"))
 }
 
 func (s *Server) loadAccountConnection(ctx context.Context, v *view, accountID string, editor engineapi.RequestEditorFn) {

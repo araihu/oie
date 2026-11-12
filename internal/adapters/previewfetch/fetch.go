@@ -300,7 +300,8 @@ func (f *Fetcher) link(ctx context.Context, address string) (application.Preview
 	if err != nil {
 		return application.PreviewMetadata{}, err
 	}
-	defer func() { _ = response.Body.Close() }()
+	closePage := sync.OnceFunc(func() { _ = response.Body.Close() })
+	defer closePage()
 	out := application.PreviewMetadata{SiteName: plain(response.Request.URL.Hostname(), 200)}
 	mediaType, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	// A dynamic image endpoint is still an original, not an automatic thumbnail.
@@ -311,30 +312,35 @@ func (f *Fetcher) link(ctx context.Context, address string) (application.Preview
 	if mediaType != "text/html" && mediaType != "application/xhtml+xml" {
 		return out, application.PreviewFailure{Code: "unsupported"}
 	}
-	data, err := readBounded(response, 512<<10)
-	if err != nil {
-		return out, err
-	}
-	reader, err := charset.NewReader(bytes.NewReader(data), response.Header.Get("Content-Type"))
+	// Bound reads of the document head independently of the page's total size.
+	head := &io.LimitedReader{R: response.Body, N: 1 << 20}
+	reader, err := charset.NewReader(head, response.Header.Get("Content-Type"))
 	if err != nil {
 		return out, application.PreviewFailure{Code: "unsupported"}
 	}
 	metadata := map[string]string{}
-	tokenizer := html.NewTokenizer(io.LimitReader(reader, 2<<20))
+	tokenizer := html.NewTokenizer(reader)
 	inTitle := false
 	title := ""
 	icons := []string{}
+parseHead:
 	for {
 		kind := tokenizer.Next()
 		if kind == html.ErrorToken {
 			if tokenizer.Err() != io.EOF {
 				return out, application.PreviewFailure{Code: "unsupported"}
 			}
+			if head.N == 0 {
+				return out, application.PreviewFailure{Code: "too_large"}
+			}
 			break
 		}
 		token := tokenizer.Token()
 		switch kind {
 		case html.StartTagToken, html.SelfClosingTagToken:
+			if token.Data == "body" {
+				break parseHead
+			}
 			if token.Data == "title" {
 				inTitle = true
 			}
@@ -381,11 +387,16 @@ func (f *Fetcher) link(ctx context.Context, address string) (application.Preview
 				title += token.Data
 			}
 		case html.EndTagToken:
+			if token.Data == "head" {
+				break parseHead
+			}
 			if token.Data == "title" {
 				inTitle = false
 			}
 		}
 	}
+	// Images and icons can use the same host, which allows one connection at a time.
+	closePage()
 	choose := func(keys ...string) string {
 		for _, key := range keys {
 			if metadata[key] != "" {
