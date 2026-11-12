@@ -119,7 +119,9 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       let offset=0;
       if (u.searchParams.has('cursor')) {try {const cursor=JSON.parse(Buffer.from(u.searchParams.get('cursor'),'base64url'));if(cursor.scope!==fingerprint)throw Error('scope');offset=cursor.offset}catch{return send(400,{code:'invalid_cursor'})}}
       let hits=corpus.filter(matchesScope).flatMap(m=>{
-        const c=[...chats,archiveRoom].find(c=>c.id===m.conversationId),base={message:m,accountLabel:accounts.find(a=>a.id===m.accountId).label,conversationTitle:c.title,matchedAt:m.createdAt,matchKind:'text',...(m===corpus[54]?{senderAvatarHash:senderHash}:{})};
+        const c=[...chats,archiveRoom].find(c=>c.id===m.conversationId),a=accounts.find(a=>a.id===m.accountId);
+        const senderAddress=m.isOwn?a.address:c.kind==='direct'?c.address:undefined;
+        const base={message:m,accountLabel:a.label,conversationTitle:c.title,conversationAddress:c.address,senderAddress,matchedAt:m.createdAt,matchKind:'text',...(m===corpus[54]?{senderAvatarHash:senderHash}:{})};
         const rows=fold(m.originalText).includes(fold(q))?[{...base,matchedRevisionId:m===corpus[1]?id(9001):m.revisionId,historical:false,excerpt:m.originalText}]:[];
         if(history&&m===corpus[0]&&fold('Pineapple original').includes(fold(q)))rows.push(...[2,1].map(n=>({...base,matchedRevisionId:id(8000+n),matchedAt:`2026-11-09T12:00:0${n}Z`,historical:true,excerpt:'Pineapple prior version '+n})));
         return rows;
@@ -174,6 +176,11 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   const fresh=async(options={})=>{const context=await browser.newContext({viewport:{width:1440,height:950},locale:'en',...options}),page=await context.newPage();await page.addInitScript(()=>{document.addEventListener('oie:message-search-settled',event=>{const form=document.getElementById('message-search-form');window.searchSettled={q:form.elements.q.value.trim(),account:event.detail.root.dataset.searchAccount,category:event.detail.root.dataset.searchType,conversation:form.elements.conversationId.value,history:form.elements.includeEditHistory.checked};});});page.on('pageerror',e=>errors.push(e.message));return page};
   const initial=()=>base+'/?chat='+chat.id+'&account='+account+'&lang=en&theme=dark';
   const hits=page=>page.locator('#message-search-results [data-message-search-hit]');
+  const senderStyle=hit=>hit.evaluate(row=>{
+    const name=row.querySelector('.oie-search-result-copy strong');
+    const avatar=row.querySelector('.oie-search-avatar [class*="oie-avatar-user-"]');
+    return {name:getComputedStyle(name).color,border:getComputedStyle(avatar).borderTopColor,width:getComputedStyle(avatar).borderTopWidth};
+  });
   const query=page=>page.locator('#conversation-search:visible,#message-search-query:visible');
   const form=page=>page.locator('#message-search-form');
   const settled=async(page,q)=>until(async()=>await page.evaluate(q=>{const last=window.searchSettled,form=document.getElementById('message-search-form');const selected=[...form.querySelectorAll('input[name=accountId]')].map(input=>input.value).sort().join(',');return last?.q===q&&last.account===selected&&last.category===form.elements.searchType.value&&last.conversation===form.elements.conversationId.value&&last.history===form.elements.includeEditHistory.checked},q),'ready query '+q);
@@ -243,6 +250,8 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     releaseAvatar();
     await until(()=>senderAvatar.locator('img').evaluate(image=>image.complete&&image.naturalWidth>0),'sender avatar renders');
     await senderAvatar.locator('img').waitFor({state:'visible'});
+    const peerColor=await page.locator('#message-timeline .oie-message-heading strong').first().evaluate(node=>getComputedStyle(node).color);
+    assert.deepEqual(await senderStyle(senderRow),{name:peerColor,border:peerColor,width:'2px'},'photo avatar and sender name match the direct conversation');
     await page.unroute(avatarPath);
     const avatarGeometry=await page.evaluate(()=>window.finishAvatarGeometry());
     assert(avatarGeometry.frames.length>1);
@@ -492,6 +501,10 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       assert.equal(await today.locator('strong').textContent(),'bio');
       assert.equal(await previous.locator('strong').textContent(),'nanda');
       assert.equal(await previous.locator('.oie-search-result-copy small').textContent(),'usuarios.exemplo.org');
+      const roomStyle=await senderStyle(today);
+      assert.equal(roomStyle.border,roomStyle.name,'initials use the same color as the displayed room nickname');
+      assert.equal(roomStyle.width,'2px');
+      assert.notEqual((await senderStyle(previous)).name,roomStyle.name,'the fixture room nicknames use different hues');
       assert.equal((await today.locator('.oie-message-search-context').innerText()).replace(/\s+/g,' ').trim(),'Personal · brigada-layout (grupos.exemplo.org)');
       assert.deepEqual(await today.locator('a').evaluate(anchor=>[...anchor.children].map(node=>node.matches('time')?'time':node.className)),[
         'oie-search-result-identity','oie-message-search-context','oie-message-search-excerpt','time'
@@ -569,6 +582,11 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
         state.failTitles=false;
         await retry.click();await settled(layout,'brigada-layout');
         assert.equal(await room.count(),1,'conversation filter can retry a failed title read');
+        await messagesFilter.click();await settled(layout,'brigada-layout');
+        await today.locator('[data-message-search-source]').click();
+        const roomAuthor=layout.locator('[data-message-id="'+layoutMessages[0].id+'"] .oie-message-heading strong');
+        await roomAuthor.waitFor({state:'visible'});
+        assert.equal(await roomAuthor.evaluate(node=>getComputedStyle(node).color),roomStyle.name,'room initials and nickname match the source conversation');
       }
       await layout.context().close();
     }

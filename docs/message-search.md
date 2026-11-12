@@ -108,6 +108,10 @@ Conversation matches show the conversation avatar. Message matches show the
 author's avatar from the owning account when the identity and thumbnail are
 available, with initials as the fallback. Search uses retained images and does
 not request profiles from the provider.
+The avatar ring and author name use the timeline's sender palette. Search hits
+carry the source conversation address and the account or peer address when
+applicable. A room participant's color uses the room address and nickname.
+Engines that omit these fields use a fallback based on the conversation ID.
 Message results lead with the author, followed by the account and conversation,
 the excerpt, and the timestamp. Address-based labels use the local part as the
 name and show the domain separately. Browser timestamps use the local calendar

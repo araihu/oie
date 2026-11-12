@@ -68,6 +68,16 @@ func TestMessageSearchUsesAccountScopedSenderAvatars(t *testing.T) {
 		if !found || hit.SenderAvatarHash != hash {
 			t.Errorf("message %s has avatar %q, want %q", hit.Message.ID, hit.SenderAvatarHash, hash)
 		}
+		address, sender := room.Address, ""
+		switch hit.Message.ID {
+		case peer.ID:
+			address, sender = direct.Address, direct.Address
+		case own.ID:
+			address, sender = direct.Address, "alice@localhost"
+		}
+		if hit.ConversationAddress != address || hit.SenderAddress != sender {
+			t.Errorf("message %s has conversation and sender addresses %q, %q, want %q, %q", hit.Message.ID, hit.ConversationAddress, hit.SenderAddress, address, sender)
+		}
 	}
 }
 

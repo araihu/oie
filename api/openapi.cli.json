@@ -5687,6 +5687,14 @@
             "type": "string",
             "description": "Current source conversation title."
           },
+          "conversationAddress": {
+            "type": "string",
+            "description": "Canonical address of the source conversation."
+          },
+          "senderAddress": {
+            "type": "string",
+            "description": "Owning account address for own messages or peer address for received direct messages. Omitted for other senders."
+          },
           "senderAvatarHash": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$",

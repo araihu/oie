@@ -11,13 +11,13 @@ type MessageSearchQuery struct {
 }
 
 type MessageSearchHit struct {
-	Message                         Message
-	AccountLabel, ConversationTitle string
-	SenderAvatarHash                string
-	MatchedRevisionID               ID
-	MatchedAt                       time.Time
-	Historical                      bool
-	MatchKind, Excerpt              string
+	Message                                              Message
+	AccountLabel, ConversationTitle, ConversationAddress string
+	SenderAddress, SenderAvatarHash                      string
+	MatchedRevisionID                                    ID
+	MatchedAt                                            time.Time
+	Historical                                           bool
+	MatchKind, Excerpt                                   string
 }
 
 type MessageSearchPage struct {

@@ -159,7 +159,8 @@ templ messageSearchHit(v view,hit engineapi.MessageSearchHit){
 	if sender == "" {
 		sender = v.Text.UnknownParticipant
 	}
-	senderAvatar := avatar.Config{Name:sender,Initials:initials(sender),Size:avatar.SizeXS}
+	senderColor := searchSenderAvatarBorder(hit)
+	senderAvatar := avatar.Config{Name:sender,Initials:initials(sender),Size:avatar.SizeXS,Border:true,BorderColor:senderColor}
 	if hit.SenderAvatarHash != nil {
 		senderAvatar.Src = avatarImageSource(*hit.SenderAvatarHash)
 	}
@@ -169,7 +170,7 @@ templ messageSearchHit(v view,hit engineapi.MessageSearchHit){
 <div class="oie-search-result-identity">
 <div class="oie-search-avatar" aria-hidden="true">@avatar.Avatar(senderAvatar)</div>
 <div class="oie-search-result-copy">
-<strong>{sender}</strong>
+<strong class={senderColor}>{sender}</strong>
 if senderDomain != "" {
 <small>{senderDomain}</small>
 }

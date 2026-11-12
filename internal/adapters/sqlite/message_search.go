@@ -50,6 +50,7 @@ func (s *Store) SearchMessages(ctx context.Context, query domain.MessageSearchQu
 			return page, err
 		}
 		hit.ConversationTitle = c.Title
+		hit.ConversationAddress = c.Address
 		if err = hydrateMessageProjection(ctx, q, &hit.Message); err != nil {
 			return page, err
 		}
@@ -63,6 +64,9 @@ func (s *Store) SearchMessages(ctx context.Context, query domain.MessageSearchQu
 				return page, err
 			}
 			senderAddresses[hit.Message.ID] = address
+		}
+		if hit.Message.IsOwn || c.Kind == "direct" {
+			hit.SenderAddress = address
 		}
 		if address != "" {
 			key := dbgen.FindAvatarParams{AccountID: string(hit.Message.AccountID), Address: address}

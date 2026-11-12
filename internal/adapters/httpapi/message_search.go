@@ -45,6 +45,12 @@ func (s *Server) SearchMessages(ctx context.Context, r engineapi.SearchMessagesR
 	}
 	for _, hit := range page.Items {
 		item := engineapi.MessageSearchHit{Message: message(hit.Message), AccountLabel: hit.AccountLabel, ConversationTitle: hit.ConversationTitle, MatchedRevisionId: string(hit.MatchedRevisionID), MatchedAt: hit.MatchedAt, Historical: hit.Historical, MatchKind: engineapi.MessageSearchHitMatchKind(hit.MatchKind), Excerpt: hit.Excerpt}
+		if hit.ConversationAddress != "" {
+			item.ConversationAddress = &hit.ConversationAddress
+		}
+		if hit.SenderAddress != "" {
+			item.SenderAddress = &hit.SenderAddress
+		}
 		if hit.SenderAvatarHash != "" {
 			item.SenderAvatarHash = &hit.SenderAvatarHash
 		}

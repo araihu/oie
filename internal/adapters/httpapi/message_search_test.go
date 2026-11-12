@@ -18,12 +18,13 @@ import (
 )
 
 type searchHTTPHit struct {
-	Message                         engineapi.Message
-	AccountLabel, ConversationTitle string
-	MatchedRevisionID               string `json:"matchedRevisionId"`
-	MatchedAt                       time.Time
-	Historical                      bool
-	MatchKind, Excerpt              string
+	Message                                              engineapi.Message
+	AccountLabel, ConversationTitle, ConversationAddress string
+	SenderAddress                                        string
+	MatchedRevisionID                                    string `json:"matchedRevisionId"`
+	MatchedAt                                            time.Time
+	Historical                                           bool
+	MatchKind, Excerpt                                   string
 }
 type searchHTTPPage struct {
 	Query, AccountID, ConversationID string
@@ -169,6 +170,9 @@ func TestMessageSearchHTTPScopesFiltersBeforePagingAndPreservesState(t *testing.
 			t.Fatal("search context was not canonical", page)
 		}
 		for _, hit := range page.Items {
+			if hit.ConversationAddress != c.Address || hit.SenderAddress != c.Address {
+				t.Fatal("search did not carry the direct sender's address", hit)
+			}
 			if hit.Message.ConversationId != string(c.ID) || hit.Historical || hit.MatchKind != "text" || seen[hit.Message.Id] {
 				t.Fatal("scope leak or repeated canonical row", hit)
 			}
