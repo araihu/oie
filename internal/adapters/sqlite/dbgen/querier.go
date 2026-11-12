@@ -24,6 +24,7 @@ type Querier interface {
 	FindMessagePreview(ctx context.Context, arg FindMessagePreviewParams) (MessagePreview, error)
 	FindProviderMessage(ctx context.Context, arg FindProviderMessageParams) (Message, error)
 	FindReactionObservation(ctx context.Context, arg FindReactionObservationParams) ([]MessageReactionObservation, error)
+	// Look up the remote reference before checking its conversation.
 	FindReplyTargets(ctx context.Context, arg FindReplyTargetsParams) ([]FindReplyTargetsRow, error)
 	FirstContentRevisionSource(ctx context.Context, id string) (string, error)
 	GetAccount(ctx context.Context, id string) (string, error)

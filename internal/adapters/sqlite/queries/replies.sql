@@ -8,7 +8,9 @@ INSERT INTO message_replies(message_id,body_hash,payload) VALUES(?,?,?) ON CONFL
 SELECT payload FROM message_replies WHERE message_id=? AND body_hash=?;
 
 -- name: FindReplyTargets :many
-SELECT DISTINCT m.id,m.payload,r.source_hash FROM message_references r JOIN messages m ON m.id=r.message_id
+-- Look up the remote reference before checking its conversation.
+SELECT DISTINCT m.id,m.payload,r.source_hash
+FROM message_references r CROSS JOIN messages m ON m.id=r.message_id
 WHERE m.account_id=sqlc.arg(account_id) AND m.conversation_id=sqlc.arg(conversation_id)
 AND r.remote_id=sqlc.arg(remote_id)
 AND (CAST(sqlc.arg(scope) AS TEXT)='' OR r.scope=CAST(sqlc.arg(scope) AS TEXT))

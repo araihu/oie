@@ -10,7 +10,8 @@ import (
 )
 
 const findReplyTargets = `-- name: FindReplyTargets :many
-SELECT DISTINCT m.id,m.payload,r.source_hash FROM message_references r JOIN messages m ON m.id=r.message_id
+SELECT DISTINCT m.id,m.payload,r.source_hash
+FROM message_references r CROSS JOIN messages m ON m.id=r.message_id
 WHERE m.account_id=?1 AND m.conversation_id=?2
 AND r.remote_id=?3
 AND (CAST(?4 AS TEXT)='' OR r.scope=CAST(?4 AS TEXT))
@@ -32,6 +33,7 @@ type FindReplyTargetsRow struct {
 	SourceHash string
 }
 
+// Look up the remote reference before checking its conversation.
 func (q *Queries) FindReplyTargets(ctx context.Context, arg FindReplyTargetsParams) ([]FindReplyTargetsRow, error) {
 	rows, err := q.db.QueryContext(ctx, findReplyTargets,
 		arg.AccountID,
