@@ -37,7 +37,7 @@ window.OieRuntime.register('scheduling', life => {
   const previewFiles = dialog.querySelector('[data-schedule-preview-files]');
   const quote = dialog.querySelector('[data-schedule-quote]');
   const submit = dialog.querySelector('[data-schedule-submit]');
-  let activeForm, files = [], locked = false;
+  let activeForm, agendaReturnFocus, files = [], locked = false;
   const zone = () => window.OieTime.timeZone();
   const data = document.body.dataset;
 
@@ -229,16 +229,39 @@ window.OieRuntime.register('scheduling', life => {
     const original = document.getElementById('schedule-edit-data');
     open(composer, original ? JSON.parse(original.textContent).scheduledAt : '', current.text, current.reply, current.files, editing);
   });
-  life.on(document, 'click', event => {
-    const reschedule = event.target.closest('[data-reschedule]');
-    if (!reschedule) return;
-    const row = reschedule.closest('[data-scheduled-row]');
-    const form = row.querySelector('[data-schedule-update]');
-    if (form.dataset.busy === 'true') return;
-    const source = row.querySelector('[data-scheduled-quote]');
-    const reply = source ? {senderName: source.dataset.sender, excerpt: source.content.textContent} : null;
-    open(form, form.elements.namedItem('scheduledAt').value || reschedule.dataset.reschedule, row.querySelector('[data-scheduled-text]')?.textContent || '', reply, [], true);
-    previewFiles.replaceChildren(...[...(row.querySelector('[data-message-attachments]')?.children || [])].map(node => node.cloneNode(true)));
+  life.on(document, 'oie:schedule-action', ({target, detail: command}) => {
+    const row = target.closest('[data-scheduled-row]');
+    const form = Array.from(row?.querySelectorAll('form[data-schedule-command]') || []).find(item => item.dataset.scheduleCommand === command);
+    if (!form) return;
+    const trigger = row.querySelector('[data-schedule-actions-trigger]');
+    const run = () => life.raf(() => {
+      if (!row.isConnected || dialog.open || row.querySelector('form[data-busy="true"]')) return;
+      trigger.focus({preventScroll: true});
+      if (command !== 'reschedule') {
+        form.requestSubmit();
+        return;
+      }
+      agendaReturnFocus = trigger;
+      const source = row.querySelector('[data-scheduled-quote]');
+      const reply = source ? {senderName: source.dataset.sender, excerpt: source.content.textContent} : null;
+      const scheduledAt = row.querySelector('[data-scheduled-date]').dateTime;
+      open(form, form.elements.namedItem('scheduledAt').value || scheduledAt, row.querySelector('[data-scheduled-text]')?.textContent || '', reply, [], true);
+      const links = Array.from(row.querySelectorAll('[data-message-attachments] a')).map(link => link.cloneNode(true));
+      previewFiles.replaceChildren(...links);
+    });
+    const menu = target.closest('[role="menu"]');
+    // Let the menu release keyboard focus before the modal claims it.
+    if (typeof menu?.hidePopover === 'function' && menu.matches(':popover-open')) {
+      life.on(menu, 'toggle', run, {once: true});
+      trigger.click();
+    } else {
+      if (trigger.getAttribute('aria-expanded') === 'true') trigger.click();
+      run();
+    }
+  });
+  life.on(dialog, 'close', () => {
+    agendaReturnFocus?.focus({preventScroll: true});
+    agendaReturnFocus = null;
   });
   life.on(dialog.querySelector('[data-schedule-close]'), 'click', () => dialog.close());
   life.on(localTime, 'input', () => { error.hidden = true; updateTime(); });

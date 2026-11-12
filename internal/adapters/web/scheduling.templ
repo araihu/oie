@@ -15,22 +15,30 @@ import (
 
 templ scheduledWorkspace(v view) {
 	<section id="workspace" class="oie-schedule-workspace" aria-label={v.Text.Scheduled}>
-		<header class="oie-list-heading">
-			@navigationControl(v)
-			<h2>{v.Text.Scheduled}</h2>
-		</header>
-		if v.ScheduleUnavailable || v.Unavailable {
-			<p role="status">{v.Text.ScheduleUnavailable}</p>
-			@link.Link(v.scheduleHref(v.ScheduleConversation,"")) { {v.Text.Retry} }
-		} else if v.SchedulePage != nil {
-			<form method="get" action="/" class="oie-schedule-filter" data-schedule-filter={v.ScheduleConversation} hx-sync="this:replace">
-				<input type="hidden" name="section" value="scheduled"/>
-				<input type="hidden" name="lang" value={v.Locale}/>
-				<input type="hidden" name="theme" value={v.Theme}/>
-				@scheduleConversationFilter(v)
-			</form>
-			@scheduledResults(v)
-		}
+		<div class="oie-agenda">
+			<header class="oie-agenda-header">
+				<div class="oie-agenda-title">
+					@navigationControl(v)
+					<h1>{v.Text.Scheduled}</h1>
+				</div>
+				if v.SchedulePage != nil && !v.ScheduleUnavailable && !v.Unavailable {
+					<form method="get" action="/" class="oie-schedule-filter" data-schedule-filter={v.ScheduleConversation} hx-sync="this:replace">
+						<input type="hidden" name="section" value="scheduled"/>
+						<input type="hidden" name="lang" value={v.Locale}/>
+						<input type="hidden" name="theme" value={v.Theme}/>
+						@scheduleConversationFilter(v)
+					</form>
+				}
+			</header>
+			if v.ScheduleUnavailable || v.Unavailable {
+				<div class="oie-agenda-empty">
+					<p role="status">{v.Text.ScheduleUnavailable}</p>
+					@link.Link(v.scheduleHref(v.ScheduleConversation,""),link.WithAppearance(link.AppearanceButton)) { {v.Text.Retry} }
+				</div>
+			} else if v.SchedulePage != nil {
+				@scheduledResults(v)
+			}
+		</div>
 		@scheduleDialog(v)
 	</section>
 }
@@ -52,9 +60,10 @@ func scheduleConversationCombobox(v view) combobox.Config {
 		})
 	}
 	return combobox.Config{
-		ID: "schedule-conversation", Name: "scheduleConversation", Label: v.Text.Conversations,
+		ID: "schedule-conversation", Name: "scheduleConversation", Label: v.Text.SearchConversations,
 		Mode: combobox.ModeSingle, EnableSearch: true, DisablePersistence: true,
 		Source: combobox.Source{Static: options}, Selected: []string{v.ScheduleConversation},
+		TriggerAttrs: templ.Attributes{"data-agenda-filter-control": ""},
 	}
 }
 
@@ -65,60 +74,106 @@ templ scheduleFilterCheck() {
 templ scheduledResults(v view) {
 	<div id="scheduled-results" data-version={v.scheduleVersion()}>
 		if len(v.SchedulePage.Items) == 0 {
-			<p>{v.Text.ScheduleEmpty}</p>
+			<div class="oie-agenda-empty">
+				<span class="oie-agenda-empty-icon" aria-hidden="true">@glyph(heroicons.Icon16SolidClock)</span>
+				<p>{v.Text.ScheduleEmpty}</p>
+			</div>
 		} else {
-			<ul class="oie-schedule-list">
+			<ul class="oie-schedule-list" data-schedule-agenda>
+				{{ previousDay := "" }}
 				for _, item := range v.SchedulePage.Items {
-					@scheduledRow(v,item)
+					{{ day := agendaDate(item.Message.ScheduledAt,"2006-01-02") }}
+					@scheduledRow(v,item,day == previousDay)
+					{{ previousDay = day }}
 				}
 			</ul>
 		}
 		if v.SchedulePage.NextCursor != nil {
-			@link.Link(v.scheduleHref(v.ScheduleConversation,*v.SchedulePage.NextCursor)) { {v.Text.SearchMore} }
+			<div class="oie-agenda-more">
+				@link.Link(v.scheduleHref(v.ScheduleConversation,*v.SchedulePage.NextCursor),link.WithAppearance(link.AppearanceButton)) { {v.Text.SearchMore} }
+			</div>
 		}
 	</div>
 }
 
-templ scheduledRow(v view,item engineapi.ScheduledMessageItem) {
+templ scheduledRow(v view,item engineapi.ScheduledMessageItem, sameDay bool) {
 	<li class="oie-schedule-row" data-scheduled-row>
-		<div class="oie-schedule-row-header">
-			@link.Link(v.scheduleConversationHref(item.Conversation,"")) { {item.Conversation.Title} }
-			<span>{v.accountLabel(item.Conversation.AccountId)}</span>
-			<time data-scheduled-date datetime={scheduleDate(item.Message.ScheduledAt)}>{scheduleDate(item.Message.ScheduledAt)}</time>
-		</div>
-		if item.Message.Composition != nil {
-			<p data-scheduled-text>{item.Message.Composition.OriginalText}</p>
-		}
-		if item.Message.Reply != nil {
-			<template data-scheduled-quote data-sender={scheduleQuoteSender(item.Message.Reply)}>{item.Message.Reply.Excerpt}</template>
-		}
-		@outgoingAttachments(v,item.Message)
-		if pendingSendMutable(item.Message) {
-		<div class="oie-schedule-actions">
-			@link.Link(v.scheduleConversationHref(item.Conversation,item.Message.Id)) { {v.Text.EditMessage} }
-			@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-reschedule":scheduleDate(item.Message.ScheduledAt)})) { {v.Text.Reschedule} }
-			@scheduleRowForm(v,item.Message,"/ui/scheduling/send-now",v.Text.SendNow)
-			@scheduleRowForm(v,item.Message,"/ui/messages/cancel",v.Text.ScheduleCancel)
-		</div>
-		@scheduleRowForm(v,item.Message,"/ui/scheduling/update","")
-		<div data-schedule-row-status role="status"></div>
-		} else {
-			<p>{v.stateLabel(item.Message.SendState)}</p>
-		}
+		<h2 class="oie-agenda-day" hidden?={sameDay}>
+			<time data-scheduled-day datetime={scheduleDate(item.Message.ScheduledAt)}>{agendaDate(item.Message.ScheduledAt,"2006-01-02")}</time>
+		</h2>
+		<article class="oie-agenda-card">
+			<time class="oie-agenda-hour" data-scheduled-date datetime={scheduleDate(item.Message.ScheduledAt)}>{agendaDate(item.Message.ScheduledAt,"15:04")}</time>
+			<div class="oie-agenda-destination">
+				@link.Link(v.scheduleConversationHref(item.Conversation,""),link.WithRootClass("oie-agenda-chat")) { {item.Conversation.Title} }
+				<small>{v.accountLabel(item.Conversation.AccountId)}</small>
+			</div>
+			if pendingSendMutable(item.Message) {
+				@scheduledMenu(v,item)
+				@scheduleRowForm(v,item.Message,"/ui/scheduling/send-now","send-now")
+				@scheduleRowForm(v,item.Message,"/ui/messages/cancel","cancel")
+				@scheduleRowForm(v,item.Message,"/ui/scheduling/update","reschedule")
+			} else {
+				<span class="oie-agenda-state">{v.stateLabel(item.Message.SendState)}</span>
+			}
+			<div class="oie-agenda-composition">
+				if item.Message.Composition != nil && item.Message.Composition.OriginalText != "" {
+					<p data-scheduled-text>{item.Message.Composition.OriginalText}</p>
+				}
+				if item.Message.Reply != nil {
+					<template data-scheduled-quote data-sender={scheduleQuoteSender(item.Message.Reply)}>{item.Message.Reply.Excerpt}</template>
+				}
+				@agendaAttachments(v,item.Message)
+			</div>
+		</article>
 	</li>
 }
 
-templ scheduleRowForm(v view,m engineapi.Message,path,label string) {
-	<form action={templ.URL(path)} method="post" data-oie-action="schedule-row" data-schedule-update?={label==""} hidden?={label==""}>
+templ scheduledMenu(v view,item engineapi.ScheduledMessageItem) {
+	@dropdown.Dropdown(dropdown.Config{
+		ID:"agenda-actions-"+item.Message.Id, MenuAlign:dropdown.AlignEnd, RootClass:"oie-agenda-actions",
+		Trigger:agendaMenuTrigger(v.Text.More+" · "+item.Conversation.Title),
+		Sections:[]dropdown.Section{
+			{Items:[]dropdown.Item{
+				{Label:v.Text.EditMessage, Href:v.scheduleConversationHref(item.Conversation,item.Message.Id), Icon:glyph(heroicons.Icon16SolidPencilSquare)},
+				{Label:v.Text.Reschedule, OnClick:"$dispatch('oie:schedule-action','reschedule')", Icon:glyph(heroicons.Icon16SolidClock)},
+				{Label:v.Text.SendNow, OnClick:"$dispatch('oie:schedule-action','send-now')", Icon:glyph(heroicons.Icon16SolidArrowUp)},
+			}},
+			{Items:[]dropdown.Item{{Label:v.Text.ScheduleCancel, OnClick:"$dispatch('oie:schedule-action','cancel')", Icon:glyph(heroicons.Icon16SolidXMark), Danger:true}}},
+		},
+	})
+}
+
+templ agendaMenuTrigger(label string) {
+	@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button oie-agenda-menu-button"),button.WithAttrs(templ.Attributes{"aria-label":label,"data-schedule-actions-trigger":""})) {
+		@glyph(heroicons.Icon16SolidEllipsisHorizontal)
+	}
+}
+
+templ agendaAttachments(v view,m engineapi.Message) {
+	if m.Attachments != nil && len(*m.Attachments)>0 {
+		<div class="oie-agenda-attachments" data-message-attachments>
+			for _, a := range *m.Attachments {
+				@link.Link(v.stagedAttachmentHref(m.ConversationId,a.Id,true),link.WithRootClass("oie-agenda-attachment"),link.WithAttrs(templ.Attributes{"download":a.FileName})) {
+					if rasterAttachment(a.MediaType) {
+						<img src={templ.URL(v.stagedAttachmentHref(m.ConversationId,a.Id,false))} alt="" width="36" height="36" loading="lazy"/>
+					} else {
+						<span class="oie-agenda-file-icon" aria-hidden="true">@glyph(heroicons.Icon16SolidDocumentText)</span>
+					}
+					<span class="oie-agenda-filename">{a.FileName}</span>
+				}
+			}
+		</div>
+	}
+}
+
+templ scheduleRowForm(v view,m engineapi.Message,path,command string) {
+	<form action={templ.URL(path)} method="post" data-oie-action="schedule-row" data-schedule-command={command} hidden>
 		@mutationFieldsAt(v,"scheduled-"+m.Id,newOperationKey(),v.scheduleHref(v.ScheduleConversation,""))
 		<input type="hidden" name="messageId" value={m.Id}/>
 		<input type="hidden" name="expectedRevisionId" value={m.RevisionId}/>
-		if label == "" {
+		if command == "reschedule" {
 			<input type="hidden" name="scheduledAt"/>
-		} else {
-			@button.Button(button.WithType("submit"),button.WithAppearance(button.AppearancePlain)) { {label} }
 		}
-		<div data-form-feedback role="status"></div>
 	</form>
 }
 
@@ -201,10 +256,14 @@ templ outgoingAttachments(v view,m engineapi.Message) {
 }
 
 func scheduleDate(at *time.Time) string {
+	return agendaDate(at,time.RFC3339Nano)
+}
+
+func agendaDate(at *time.Time,layout string) string {
 	if at == nil {
 		return ""
 	}
-	return at.Format(time.RFC3339Nano)
+	return at.Format(layout)
 }
 
 func schedulePrimaryAction(v view) splitbutton.Action {

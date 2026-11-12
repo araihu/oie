@@ -5,6 +5,13 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   const source = '#message-composer';
   const preview = '[data-schedule-dialog]';
   const path = (conversation, account, lang) => base + '/?chat=' + conversation.id + '&account=' + account.id + '&lang=' + lang;
+  const planned = new Date(Date.now() + 2 * 86400000);
+  planned.setUTCHours(14, 0, 0, 0);
+  const fillPlannedTime = async page => {
+    const zone = await page.evaluate(() => window.OieTime.timeZone());
+    const parts = new Intl.DateTimeFormat('sv-SE', {timeZone: zone, dateStyle: 'short', timeStyle: 'short'}).format(planned);
+    await page.locator('#schedule-local-time').fill(parts.replace(' ', 'T'));
+  };
   const content = 'Scheduling review ' + randomUUID() + ' https://example.com/studio';
   const attachment = {
     name: 'reference.png',
@@ -13,6 +20,10 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   };
   const openMenu = async (page, label) => {
     await page.locator('#composer-split').getByRole('button', {name: label, exact: true}).click();
+  };
+  const agendaAction = async (row, label) => {
+    await row.locator('[data-schedule-actions-trigger]').click();
+    await row.getByRole('menuitem', {name: label, exact: true}).click();
   };
   const sample = page => page.evaluate(() => {
     const selectors = ['#message-composer', '#message-timeline', '#composer-split'];
@@ -82,6 +93,7 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   await openMenu(alicePage, 'More options');
   await alicePage.getByRole('menuitem', {name: 'Schedule message'}).click();
   await dialog.waitFor({state: 'visible'});
+  await fillPlannedTime(alicePage);
   const submitted = alicePage.waitForResponse(response => response.url().endsWith('/ui/messages/send') && response.request().method() === 'POST');
   await dialog.getByRole('button', {name: 'Schedule message', exact: true}).click();
   assert.equal((await (await submitted).json()).ok, true);
@@ -97,6 +109,7 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   await bobPage.locator(preview).waitFor({state: 'visible'});
   assert.equal(await bobPage.locator('[data-schedule-zone]').textContent(), 'Europe/Lisbon');
   assert(await bobPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'scheduling dialog fits narrow viewport');
+  await fillPlannedTime(bobPage);
   const bobSubmit = bobPage.waitForResponse(response => response.url().endsWith('/ui/messages/send') && response.request().method() === 'POST');
   await bobPage.locator(preview).getByRole('button', {name: 'Agendar mensagem', exact: true}).click();
   assert.equal((await (await bobSubmit).json()).ok, true);
@@ -104,15 +117,26 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   await alicePage.locator('#desktop-navigation').getByRole('link', {name: 'Scheduled', exact: true}).click();
   await alicePage.locator('[data-scheduled-row]').first().waitFor();
   assert.equal(await alicePage.locator('[data-scheduled-row]').count(), 2);
+  assert.equal(await alicePage.locator('[data-scheduled-day]:visible').count(), 1, 'one heading for schedules on the same local day');
   const filter = alicePage.locator('#schedule-conversation');
   await filter.getByRole('combobox').click();
   await filter.getByRole('textbox', {name: 'Search conversations'}).fill(aliceConversation.title);
   await filter.locator('[role="option"][data-value="' + aliceConversation.id + '"]').click();
   await alicePage.waitForURL(url => url.searchParams.get('scheduleConversation') === aliceConversation.id);
   const row = alicePage.locator('[data-scheduled-row]').filter({hasText: content});
-  const previous = await row.locator('time').getAttribute('datetime');
-  await row.getByRole('button', {name: 'Reschedule', exact: true}).click();
+  const scheduledTime = row.locator('[data-scheduled-date]');
+  const previous = await scheduledTime.getAttribute('datetime');
+  const menuTrigger = row.locator('[data-schedule-actions-trigger]');
+  await menuTrigger.press('Enter');
+  await row.getByRole('menuitem', {name: 'Reschedule', exact: true}).waitFor();
+  await alicePage.keyboard.press('Escape');
+  await row.getByRole('menu').waitFor({state:'hidden'});
   const reschedule = alicePage.locator(preview);
+  await agendaAction(row, 'Reschedule');
+  await reschedule.waitFor({state:'visible'});
+  await reschedule.getByRole('button', {name:'Back',exact:true}).click();
+  await until(() => menuTrigger.evaluate(node => node === document.activeElement), 'agenda restores focus after closing the scheduling dialog');
+  await agendaAction(row, 'Reschedule');
   await reschedule.waitFor({state:'visible'});
   const field = reschedule.locator('input[type="datetime-local"]');
   const [date, time] = (await field.inputValue()).split('T');
@@ -123,10 +147,10 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   await reschedule.getByRole('button', {name:'Reschedule',exact:true}).click();
   assert.equal((await updated).ok(), true);
   await until(async () => {
-    const current = await row.locator('time').getAttribute('datetime').catch(() => '');
+    const current = await scheduledTime.getAttribute('datetime').catch(() => '');
     return current && current !== previous;
   }, 'new date appears on the same scheduled message');
-  await row.getByRole('link', {name: 'Edit message', exact: true}).click();
+  await agendaAction(row, 'Edit message');
   await alicePage.locator('[data-editing-schedule]').waitFor();
   assert.equal(await alicePage.locator(source).inputValue(), content);
   assert.equal(await alicePage.locator('[data-composer-attachments] a').textContent(), attachment.name);
@@ -138,13 +162,13 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
 
   await alicePage.locator('#desktop-navigation').getByRole('link', {name: 'Scheduled', exact: true}).click();
   const edited = alicePage.locator('[data-scheduled-row]').filter({hasText: edit});
-  await edited.getByRole('button', {name: 'Send now', exact: true}).click();
+  await agendaAction(edited, 'Send now');
   await until(async () => {
     const page = await api('/api/v1/conversations/' + bobConversation.id + '/messages?limit=50');
     return page.items.some(message => message.originalText.startsWith(edit + '\nhttps://'));
   }, 'same scheduled composition delivered through XMPP after Send now');
   await until(async () => (await api('/api/v1/scheduled-messages')).items.length === 1, 'Send now clears exactly one row');
-  await alicePage.locator('[data-scheduled-row]').filter({hasText: 'Mensagem agendada em outro destino'}).getByRole('button', {name: 'Cancel scheduled message', exact: true}).click();
+  await agendaAction(alicePage.locator('[data-scheduled-row]').filter({hasText: 'Mensagem agendada em outro destino'}), 'Cancel scheduled message');
   await until(async () => (await api('/api/v1/scheduled-messages')).items.length === 0, 'second schedule cancelled');
 }
 

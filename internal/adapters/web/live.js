@@ -281,7 +281,8 @@ window.OieRuntime.register('live', life => {
       return;
     }
     if(error&&form.matches('[data-cancel-message]')){errorToast(message);return;}
-    const region = (form.hidden?form.closest('[data-scheduled-row]')?.querySelector('[data-schedule-row-status]'):null) || form.querySelector('[data-form-feedback]');
+    if(form.dataset.oieAction==='schedule-row'){if(error)errorToast(message);return;}
+    const region = form.querySelector('[data-form-feedback]');
     if(form===composer&&journal?.pending&&!journal.scheduledAt&&!editingSchedule){if(region)region.textContent='';renderPendingSend(error?'uncertain':'sending');announce(message,true);return;}
     if (region) { region.textContent = message; region.dataset.error = String(error);region.setAttribute('role',error?'alert':'status'); if(error&&form.dataset.oieAction!=='send'){region.tabIndex=-1;region.focus({preventScroll:true});} }
     if (error && !region) errorToast(message);
