@@ -503,7 +503,7 @@
   "RoomMessageModerated": "Message removed by moderation.",
   "RoomUserAddress": "User address",
   "RoomPassword": "Room password (optional)",
-  "RoomActions": "Room actions",
+  "RoomSessionTitle": "Room session",
   "EmojiPicker": "Choose emoji",
   "Composition": "Composition",
   "SettingsGeneral": "General",

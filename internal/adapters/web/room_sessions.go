@@ -46,6 +46,14 @@ func (v view) composeAllowed() bool {
 func (v view) replyAllowed() bool {
 	return v.composeAllowed() && v.messagingImplemented("send_replies")
 }
+func (v view) canJoinRoom() bool {
+	return v.RoomSession != nil && !v.RoomSession.Active && v.messagingImplemented("room_messaging")
+}
+
+func (v view) canLeaveRoom() bool {
+	return v.RoomSession != nil && v.RoomSession.Active && v.messagingImplemented("room_messaging")
+}
+
 func (v view) roomLabel() string {
 	if v.RoomSession == nil {
 		return v.Text.RoomReadOnly

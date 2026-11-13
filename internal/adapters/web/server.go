@@ -293,7 +293,7 @@ type copy struct {
 	RoomMessageModerated                                                                                                                                                                                     string
 	RoomUserAddress                                                                                                                                                                                          string
 	RoomPassword                                                                                                                                                                                             string
-	RoomActions                                                                                                                                                                                              string
+	RoomSessionTitle                                                                                                                                                                                         string
 	DocumentOpen                                                                                                                                                                                             string
 	DocumentViewer                                                                                                                                                                                           string
 	DocumentDownload                                                                                                                                                                                         string
@@ -1171,7 +1171,7 @@ func (v view) headerVersion() string {
 	if v.Selected == nil {
 		return ""
 	}
-	return v.Selected.Id + v.Selected.RevisionId + strconv.FormatBool(v.Selected.Archived) + strconv.FormatBool(v.Selected.Favorite) + v.Selected.Title + v.accountLabel(v.Selected.AccountId) + v.connectionLabel(v.Selected.AccountId)
+	return v.Selected.Id + v.Selected.RevisionId + strconv.FormatBool(v.Selected.Archived) + strconv.FormatBool(v.Selected.Favorite) + v.Selected.Title + v.accountLabel(v.Selected.AccountId) + v.connectionLabel(v.Selected.AccountId) + strconv.FormatBool(v.canJoinRoom()) + strconv.FormatBool(v.canLeaveRoom())
 }
 func (v view) accountVersion() string {
 	var out strings.Builder

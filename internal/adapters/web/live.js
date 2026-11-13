@@ -514,6 +514,24 @@ window.OieRuntime.register('live', life => {
     document.getElementById('chat-leave-room')?.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
     form.dataset.roomMenuSubmit='true';try{form.requestSubmit()}finally{delete form.dataset.roomMenuSubmit}
   });
+  function openRoomSession() {
+    window.dispatchEvent(new CustomEvent('modal:open', {detail: {id: 'room-session-dialog'}}));
+  }
+  life.on(window, 'oie:join-saved-room', () => {
+    if (mock || stopped || !document.querySelector('[data-room-command=join]')) return;
+    const trigger = document.querySelector('#chat-options [aria-controls="chat-options-panel"]');
+    const menu = document.getElementById('chat-options-panel');
+    if (trigger?.getAttribute('aria-expanded') === 'true') trigger.click();
+    const openAfterMenu = () => {
+      if (menu?.isConnected && menu.getClientRects().length) {
+        life.raf(openAfterMenu);
+        return;
+      }
+      trigger?.focus({preventScroll: true});
+      openRoomSession();
+    };
+    life.raf(openAfterMenu);
+  });
   life.on(document, 'oie:conversation-drawer-open', ({target, detail: id}) => {
     const menu = target.closest('#chat-options-panel');
     const trigger = document.querySelector('#chat-options [aria-controls="chat-options-panel"]');
@@ -533,6 +551,10 @@ window.OieRuntime.register('live', life => {
     life.raf(openAfterMenu);
   });
   restoreRoomOperation();syncRoomLeave();
+  if (roomOperation && document.getElementById('room-session-dialog')) {
+    if (window.Alpine) life.timeout(openRoomSession, 0);
+    else life.on(document, 'alpine:initialized', openRoomSession, {once: true});
+  }
   function mutateDOM(target, html) {
     if (!target) return;
     if(window.OieVideos?.swap(target,html))return;
@@ -788,6 +810,7 @@ window.OieRuntime.register('live', life => {
           const replacement = nextHeader.firstElementChild.cloneNode(true);
           const apply = () => { window.Alpine?.destroyTree(header); header.replaceWith(replacement); window.Alpine?.initTree(replacement); };
           if (window.Alpine?.mutateDom) window.Alpine.mutateDom(apply); else apply();
+          syncRoomLeave();
         }
       }
       if(preferencesCurrent)document.dispatchEvent(new CustomEvent('oie:conversation-preferences-refreshed',{detail:{page}}));

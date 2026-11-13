@@ -113,7 +113,7 @@ func composerReplyBody() templ.Component {
 }
 
 // Room controls stay mounted for live state and pending-operation recovery.
-// The conversation's action menu opens them only on demand.
+// Explicit entry and uncertain commands open the dialog.
 func roomSessionDialog(v view) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -132,7 +132,7 @@ func roomSessionDialog(v view) templ.Component {
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
 		if v.Selected != nil && v.Selected.Kind == "room" {
-			templ_7745c5c3_Err = modal.Dialog(modal.DialogConfig{ID: "room-session-dialog", Title: v.Text.RoomActions, Content: roomSessionStatus(v), FullscreenMobile: true}).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = modal.Dialog(modal.DialogConfig{ID: "room-session-dialog", Title: v.Text.RoomSessionTitle, Content: roomSessionStatus(v), FullscreenMobile: true}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

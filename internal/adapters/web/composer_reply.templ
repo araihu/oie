@@ -19,10 +19,10 @@ templ composerReply(v view){
 templ composerReplyBody(){<strong data-composer-reply-sender></strong><p data-composer-reply-excerpt></p>}
 
 // Room controls stay mounted for live state and pending-operation recovery.
-// The conversation's action menu opens them only on demand.
+// Explicit entry and uncertain commands open the dialog.
 templ roomSessionDialog(v view){
 if v.Selected!=nil&&v.Selected.Kind=="room" {
-@modal.Dialog(modal.DialogConfig{ID:"room-session-dialog",Title:v.Text.RoomActions,Content:roomSessionStatus(v),FullscreenMobile:true})
+@modal.Dialog(modal.DialogConfig{ID:"room-session-dialog",Title:v.Text.RoomSessionTitle,Content:roomSessionStatus(v),FullscreenMobile:true})
 }
 }
 
