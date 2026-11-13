@@ -94,10 +94,11 @@ func resolveDataDir(path string) (string, error) {
 }
 
 const nativeAppID = "org.araihu.oie"
+const flatpakAppID = "com.araihu.oie"
 
 func desktopAppID() string {
-	if runtime.GOOS == "linux" && os.Getenv("FLATPAK_ID") == "com.araihu.oie" {
-		return "com.araihu.oie"
+	if runtime.GOOS == "linux" && os.Getenv("FLATPAK_ID") == flatpakAppID {
+		return flatpakAppID
 	}
 	return nativeAppID
 }
@@ -111,18 +112,19 @@ func instanceID(dataDir string) string {
 var nativeCatalogs embed.FS
 
 type labels struct {
-	SaveFile   string `json:"saveFile"`
-	SaveFailed string `json:"saveFailed"`
-	Show       string `json:"show"`
-	Quit       string `json:"quit"`
-	File       string `json:"file"`
-	Edit       string `json:"edit"`
-	Undo       string `json:"undo"`
-	Redo       string `json:"redo"`
-	Cut        string `json:"cut"`
-	Copy       string `json:"copy"`
-	Paste      string `json:"paste"`
-	SelectAll  string `json:"selectAll"`
+	AttachFiles string `json:"attachFiles"`
+	SaveFile    string `json:"saveFile"`
+	SaveFailed  string `json:"saveFailed"`
+	Show        string `json:"show"`
+	Quit        string `json:"quit"`
+	File        string `json:"file"`
+	Edit        string `json:"edit"`
+	Undo        string `json:"undo"`
+	Redo        string `json:"redo"`
+	Cut         string `json:"cut"`
+	Copy        string `json:"copy"`
+	Paste       string `json:"paste"`
+	SelectAll   string `json:"selectAll"`
 }
 
 func localizedLabels(language string) (labels, error) {
@@ -134,7 +136,7 @@ func localizedLabels(language string) (labels, error) {
 	if err = json.Unmarshal(data, &value); err != nil {
 		return labels{}, err
 	}
-	if value.SaveFile == "" || value.SaveFailed == "" || value.Show == "" || value.Quit == "" || value.File == "" || value.Edit == "" || value.Undo == "" || value.Redo == "" || value.Cut == "" || value.Copy == "" || value.Paste == "" || value.SelectAll == "" {
+	if value.AttachFiles == "" || value.SaveFile == "" || value.SaveFailed == "" || value.Show == "" || value.Quit == "" || value.File == "" || value.Edit == "" || value.Undo == "" || value.Redo == "" || value.Cut == "" || value.Copy == "" || value.Paste == "" || value.SelectAll == "" {
 		return labels{}, fmt.Errorf("incomplete desktop language catalog %q", language)
 	}
 	return value, nil

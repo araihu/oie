@@ -389,7 +389,25 @@ window.OieRuntime.register('scheduling', life => {
     if (changed) renderFiles();
   });
   if (composer) { files = snapshot().files || []; renderFiles(); }
-  life.on(attach, 'click', () => picker?.click());
+  life.on(attach, 'click', () => {
+    const choose = window.OieDesktop?.attachFiles;
+    if (!choose) {
+      picker?.click();
+      return;
+    }
+    if (locked || composer.dataset.staging === 'true') return;
+    if (files.length >= 16) {
+      errorToast(dialog.dataset.attachmentLimit);
+      return;
+    }
+    void stageFiles(async next => {
+      const result = await choose(data.engineId, data.conversationId, csrf, 16 - next.length);
+      next.push(...(result.files || []));
+      if (life.signal.aborted) return;
+      if (result.limit) errorToast(dialog.dataset.attachmentLimit);
+      if (result.error) errorToast(dialog.dataset.attachmentFailed);
+    });
+  });
   life.on(attachments, 'click', event => {
     const remove = event.target.closest('[data-remove-attachment]');
     if (!remove || locked) return;
@@ -404,11 +422,7 @@ window.OieRuntime.register('scheduling', life => {
       errorToast(dialog.dataset.attachmentLimit);
       return;
     }
-    composer.dataset.staging = 'true';
-    composer.dispatchEvent(new Event('oie:attachment-staging'));
-    renderFiles();
-    const next = [...files];
-    try {
+    await stageFiles(async next => {
       for (const file of picked) {
         const id = newID(), form = new FormData();
         form.set('file', file);
@@ -420,6 +434,16 @@ window.OieRuntime.register('scheduling', life => {
         if (metadata.id !== id || typeof metadata.fileName !== 'string' || metadata.size !== file.size) throw Error('staging');
         next.push(metadata);
       }
+    });
+  });
+
+  async function stageFiles(stage) {
+    composer.dataset.staging = 'true';
+    composer.dispatchEvent(new Event('oie:attachment-staging'));
+    renderFiles();
+    const next = [...files];
+    try {
+      await stage(next);
     } catch {
       if (!life.signal.aborted) errorToast(dialog.dataset.attachmentFailed);
     } finally {
@@ -429,7 +453,7 @@ window.OieRuntime.register('scheduling', life => {
         renderFiles();
       }
     }
-  });
+  }
 
   function open(form, initial, text, reply, links, reschedule) {
     activeForm = form;

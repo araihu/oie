@@ -9,6 +9,7 @@
   "copy": "Copiar",
   "paste": "Colar",
   "selectAll": "Selecionar tudo",
+  "attachFiles": "Selecionar arquivos",
   "saveFile": "Salvar arquivo",
   "saveFailed": "Não foi possível salvar o arquivo."
 }

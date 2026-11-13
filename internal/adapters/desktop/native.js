@@ -3,6 +3,10 @@
   const runtime = await import('/wails/runtime.js');
   const saveFailed = '__OIE_SAVE_FAILED__';
   window.OieDesktop = Object.freeze({
+    attachFiles: '__OIE_FLATPAK__' ? (engineID, conversationID, csrf, remaining) => runtime.Call.ByName(
+      'github.com/araihu/oie/internal/adapters/desktop.runtimeService.AttachFiles',
+      engineID, conversationID, csrf, remaining
+    ) : undefined,
     saveFile: (address, name) => {
       const url = new URL(address, location.href);
       if (url.origin !== location.origin) return Promise.reject(new Error('invalid_download'));
