@@ -21,7 +21,7 @@ flatpak build --unshare=network \
   '
 
 flatpak build --runtime --unshare=network "$scratch/build" sh -ec '
-  ldd -r /app/bin/oie-desktop >/tmp/oie-linkage
+  ldd -r /app/bin/oie-desktop >/tmp/oie-linkage 2>&1
   if grep -E "not found|undefined symbol" /tmp/oie-linkage; then
     exit 1
   fi
