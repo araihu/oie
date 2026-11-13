@@ -258,7 +258,23 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
     await request.getByRole('heading', {name:'Solicitação de mensagem'}).waitFor();
     assert(await bobPage.evaluate(()=>document.documentElement.scrollWidth<=innerWidth), 'request fits the mobile viewport');
     await bobPage.screenshot({path:'artifacts/'+prefix+'-request-mobile-pt.png'});
-    await request.getByRole('button', {name:'Aceitar', exact:true}).click();
+    const mobileAccept = request.getByRole('button', {name:'Aceitar', exact:true});
+    const beforeRetry = [await request.boundingBox(), await mobileAccept.boundingBox()];
+    let firstAcceptOperation;
+    await bobPage.route('**/ui/conversations/preferences', route => {
+      firstAcceptOperation = new URLSearchParams(route.request().postData()).get('operationKey');
+      return route.fulfill({json: {}});
+    }, {times:1});
+    await mobileAccept.click();
+    await request.getByRole('status').filter({hasText:'Não foi possível confirmar a alteração'}).waitFor();
+    assert.equal(await mobileAccept.getAttribute('aria-describedby'), 'conversation-preference-status');
+    assert.deepEqual([await request.boundingBox(), await mobileAccept.boundingBox()], beforeRetry, 'the retry keeps the mobile banner and action in place');
+    const [accepted] = await Promise.all([
+      bobPage.waitForResponse(response => response.url().endsWith('/ui/conversations/preferences') && response.request().method() === 'POST'),
+      mobileAccept.click(),
+    ]);
+    assert(firstAcceptOperation);
+    assert.equal(new URLSearchParams(accepted.request().postData()).get('operationKey'), firstAcceptOperation);
     await request.waitFor({state:'detached'});
     await bobPage.setViewportSize({width:1440,height:900});
     await bobPage.goto(base+'/?chat='+bobConversation.id+'&account='+bob.id+'&theme=dark&lang=en');

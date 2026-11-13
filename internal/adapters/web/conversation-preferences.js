@@ -31,8 +31,8 @@ window.OieRuntime.register('conversation-preferences',life=>{
    if(current){form.elements.expectedRevisionId.value=pending?intent.expectedRevisionId:current.revisionId;form.elements[name].value=String(pending?intent.desired:desired(name));if(pending)form.elements.operationKey.value=intent.operationKey}
    const requestButton=form.querySelector('[data-request-action]');
    if(requestButton){
-    const label=requestButton.querySelector('[data-request-action-label]');
-    label.textContent=pending&&!busy?copy.retry:label.dataset.label;
+    if(pending&&!busy)requestButton.setAttribute('aria-describedby','conversation-preference-status');
+    else requestButton.removeAttribute('aria-describedby');
     requestButton.disabled=blocked||busy||!current||!!intent&&!pending;
     form.hidden=name==='archived'&&!!current?.archived&&!pending;
    }
