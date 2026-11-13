@@ -131,6 +131,10 @@ Open Oiê from the applications menu or run `oie-desktop`. Updates arrive
 through APT. The archive includes prereleases as well as stable releases.
 `sudo apt remove oie` removes the application and keeps its user profile.
 
+The public archive was verified with APT on fresh x86_64 installations of
+Trisquel 12 and Ubuntu 24.04 under emulation. Both installed `0.0.1~rc.3-1`,
+resolved the executable's shared libraries and ran `oie-desktop --help`.
+
 The desktop release workflow rebuilds and signs the APT index after publishing
 each SemVer desktop tag. GitHub Pages serves the three most recent indexed
 releases, ranked by SemVer. The first publication can bootstrap from a public
