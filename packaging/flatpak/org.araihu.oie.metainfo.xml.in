@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.araihu.oie</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <name>Oiê</name>
+  <summary>Desktop messenger for XMPP accounts</summary>
+  <summary xml:lang="pt-BR">Mensageiro para contas XMPP</summary>
+  <description>
+    <p>Read and send messages, join public rooms and search retained conversations. Use Oiê with your existing XMPP accounts.</p>
+    <p xml:lang="pt-BR">Leia e envie mensagens, entre em salas públicas e pesquise no histórico. Use o Oiê com suas contas XMPP existentes.</p>
+  </description>
+  <developer id="org.araihu">
+    <name>Arai Hû</name>
+  </developer>
+  <url type="homepage">https://github.com/araihu/oie</url>
+  <url type="bugtracker">https://github.com/araihu/oie/issues</url>
+  <launchable type="desktop-id">org.araihu.oie.desktop</launchable>
+  <content_rating type="oars-1.1">
+    <content_attribute id="social-chat">intense</content_attribute>
+  </content_rating>
+  <releases>
+    <release version="@VERSION@" date="@DATE@" type="@RELEASE_TYPE@"/>
+  </releases>
+</component>

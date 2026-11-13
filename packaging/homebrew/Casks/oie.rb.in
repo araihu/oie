@@ -1,0 +1,14 @@
+cask "oie" do
+  version "@VERSION@"
+  sha256 "@MACOS_SHA256@"
+
+  url "https://github.com/araihu/oie/releases/download/v#{version}/oie_v#{version}_darwin_arm64.tar.gz"
+  name "Oiê"
+  desc "Desktop messenger for XMPP accounts"
+  homepage "https://github.com/araihu/oie"
+
+  depends_on arch: :arm64
+  depends_on macos: :ventura
+
+  app "Oie.app"
+end

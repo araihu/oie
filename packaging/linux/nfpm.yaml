@@ -1,0 +1,74 @@
+name: oie
+arch: amd64
+version: ${OIE_PACKAGE_VERSION}
+version_schema: none
+prerelease: ${OIE_PACKAGE_PRERELEASE}
+release: "1"
+section: net
+maintainer: Arai Hû <https://github.com/araihu>
+description: Desktop messenger for XMPP accounts
+homepage: https://github.com/araihu/oie
+license: GPL-3.0-only
+
+rpm:
+  group: Applications/Internet
+
+overrides:
+  deb:
+    depends:
+      - ca-certificates
+      - libc6 (>= 2.34)
+      - libglib2.0-0t64 | libglib2.0-0
+      - libgtk-4-1 (>= 4.10)
+      - libjavascriptcoregtk-6.0-1
+      - libsoup-3.0-0
+      - libwebkitgtk-6.0-4
+      - libx11-6
+    suggests:
+      - ffmpeg
+  rpm:
+    depends:
+      - ca-certificates
+      - libc.so.6(GLIBC_2.34)(64bit)
+      - libglib-2.0.so.0()(64bit)
+      - libgtk-4.so.1()(64bit)
+      - libjavascriptcoregtk-6.0.so.1()(64bit)
+      - libsoup-3.0.so.0()(64bit)
+      - libwebkitgtk-6.0.so.4()(64bit)
+      - libX11.so.6()(64bit)
+    suggests:
+      - ffmpeg
+  archlinux:
+    depends:
+      - ca-certificates
+      - glibc>=2.34
+      - glib2
+      - gtk4>=4.10
+      - libsoup3
+      - libx11
+      - webkitgtk-6.0
+    suggests:
+      - "ffmpeg: generate local video thumbnails"
+
+contents:
+  - src: payload/bin/oie-desktop
+    dst: /usr/bin/oie-desktop
+  - src: payload/share/applications/org.araihu.oie.desktop
+    dst: /usr/share/applications/org.araihu.oie.desktop
+  - src: payload/share/icons/hicolor/512x512/apps/org.araihu.oie.png
+    dst: /usr/share/icons/hicolor/512x512/apps/org.araihu.oie.png
+  - src: payload/share/metainfo/org.araihu.oie.metainfo.xml
+    dst: /usr/share/metainfo/org.araihu.oie.metainfo.xml
+  - src: payload/share/doc/oie
+    dst: /usr/share/doc/oie
+    type: tree
+  - src: payload/share/doc/oie/LICENSE
+    dst: /usr/share/doc/oie/copyright
+    packager: deb
+  - src: payload/share/doc/oie/LICENSE
+    dst: /usr/share/licenses/oie/LICENSE
+    packager: rpm
+    type: license
+  - src: payload/share/doc/oie/LICENSE
+    dst: /usr/share/licenses/oie/LICENSE
+    packager: archlinux
