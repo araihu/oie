@@ -78,7 +78,12 @@ def linux_packages(stage, linux_archive, release, prerelease, date, nfpm, format
     native = stage / "native"
     native.mkdir()
     env = os.environ.copy()
-    env["SOURCE_DATE_EPOCH"] = str(int(date.timestamp()))
+    epoch = int(date.timestamp())
+    env["SOURCE_DATE_EPOCH"] = str(epoch)
+    # nFPM keeps source file times for tree entries. Normalize those too so
+    # regenerating the same package version keeps its checksum.
+    for path in payload.rglob("*"):
+        os.utime(path, (epoch, epoch))
     config = ROOT / "packaging/linux/nfpm.yaml"
     for packager in formats:
         # nFPM's Arch metadata omits its prerelease field unless there is

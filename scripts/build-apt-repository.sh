@@ -17,9 +17,11 @@ done
 dpkg-scanpackages --multiversion pool /dev/null > "$index/Packages"
 gzip -n -9 -c "$index/Packages" > "$index/Packages.gz"
 for file in "$index/Packages" "$index/Packages.gz"; do
-  hash=$(sha256sum "$file" | cut -d ' ' -f 1)
-  mkdir -p "$index/by-hash/SHA256"
-  cp "$file" "$index/by-hash/SHA256/$hash"
+  for algorithm in SHA256 SHA512; do
+    hash=$("${algorithm,,}sum" "$file" | cut -d ' ' -f 1)
+    mkdir -p "$index/by-hash/$algorithm"
+    cp "$file" "$index/by-hash/$algorithm/$hash"
+  done
 done
 apt-ftparchive \
   -o APT::FTPArchive::Release::Origin='Arai Hû' \
