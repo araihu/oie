@@ -125,7 +125,7 @@ templ starredBubbleBody(v view, m messageView, position time.Time) {
 }
 
 templ favoriteMenuTrigger(v view) {
-	@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-shared-menu-trigger oie-favorite-menu-trigger"), button.WithAttrs(templ.Attributes{"data-favorite-menu-trigger": "", "aria-label": v.Text.MessageActions, "title": v.Text.MessageActions})){
+	@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-shared-menu-trigger"), button.WithAttrs(templ.Attributes{"data-favorite-menu-trigger": "", "aria-label": v.Text.MessageActions, "title": v.Text.MessageActions})){
 		@glyph(heroicons.Icon16SolidChevronDown)
 	}
 }

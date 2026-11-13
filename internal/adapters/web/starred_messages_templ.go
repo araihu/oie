@@ -827,7 +827,7 @@ func favoriteMenuTrigger(v view) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-shared-menu-trigger oie-favorite-menu-trigger"), button.WithAttrs(templ.Attributes{"data-favorite-menu-trigger": "", "aria-label": v.Text.MessageActions, "title": v.Text.MessageActions})).Render(templ.WithChildren(ctx, templ_7745c5c3_Var41), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-shared-menu-trigger"), button.WithAttrs(templ.Attributes{"data-favorite-menu-trigger": "", "aria-label": v.Text.MessageActions, "title": v.Text.MessageActions})).Render(templ.WithChildren(ctx, templ_7745c5c3_Var41), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

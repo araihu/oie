@@ -571,15 +571,24 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-room-invitation-copy p{font-size:.8125rem;margin:4px 0 0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .oie-room-invitation-action{display:inline-flex;align-items:center;gap:5px;min-block-size:28px}
 
-#favorites-scroll { scrollbar-gutter: stable; }
-#favorites-results { max-inline-size: 48rem; margin-inline: auto; }
-.oie-favorites-search { inline-size: min(48rem, calc(100% - 3.5rem)); align-self: center; padding-block: .5rem 1rem; }
-@media (max-width: 720px) { .oie-favorites-search { inline-size: calc(100% - 1.5rem); } }
-#favorites-results .oie-info-star:first-of-type { padding-block-start: 0; }
+#favorites-scroll { scrollbar-gutter: stable both-edges; padding-inline: 1.25rem; }
+#favorites-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  gap: 1rem;
+  max-inline-size: 84rem;
+  margin-inline: auto;
+}
+#favorites-results > :not([data-favorite-source]) { grid-column: 1 / -1; }
+#favorites-results > .oie-info-star { min-inline-size: 0; padding-block-start: 0; }
+#favorites-results .oie-starred-bubble .oie-image-frame { width: clamp(0px, calc(80cqi - 2rem), 340px); }
+.oie-favorites-search { inline-size: min(84rem, calc(100% - 3.5rem)); align-self: center; padding-block: .5rem 1rem; }
+@media (max-width: 720px) {
+  #favorites-scroll { padding-inline: .5rem; }
+  .oie-favorites-search { inline-size: calc(100% - 1.5rem); }
+}
 .oie-favorite-source { margin: 4px 0 0; color: var(--oie-muted); font-size: .75rem; overflow-wrap: anywhere; }
-.oie-favorites-pagination { display: flex; flex-wrap: wrap; gap: 1rem; margin-block-start: 1rem; }
-
-.oie-info-star .oie-favorite-menu-trigger { opacity: 1; }
+.oie-favorites-pagination { display: flex; flex-wrap: wrap; gap: 1rem; }
 [data-forward-form] { display: grid; gap: 1rem; }
 .oie-forward-preview { max-block-size: min(34dvh, 19rem); min-inline-size: 0; overflow: auto; }
 .oie-forward-preview .oie-starred-bubble { margin-block-start: 0; }
