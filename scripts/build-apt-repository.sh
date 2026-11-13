@@ -15,6 +15,16 @@ for package in "${packages[@]}"; do
   [[ $(dpkg-deb -f "$package" Architecture) == amd64 ]]
 done
 dpkg-scanpackages --multiversion pool /dev/null > "$index/Packages"
+# Index content-addressed paths so a CDN cache cannot serve different bytes
+# at the same URL if a historical bootstrap package has to be regenerated.
+for package in "${packages[@]}"; do
+  hash=$(sha256sum "$package" | cut -d ' ' -f 1)
+  target="${package%/*}/$hash/${package##*/}"
+  mkdir -p "${target%/*}"
+  mv "$package" "$target"
+  awk -v old="Filename: $package" -v new="Filename: $target"     '$0 == old {$0 = new} {print}' "$index/Packages" > "$index/Packages.next"
+  mv "$index/Packages.next" "$index/Packages"
+done
 gzip -n -9 -c "$index/Packages" > "$index/Packages.gz"
 for file in "$index/Packages" "$index/Packages.gz"; do
   for algorithm in SHA256 SHA512; do
