@@ -1,0 +1,16 @@
+name: Notify OpenAPI catalog
+
+on:
+  push:
+    tags: ['openapi/engine/v*']
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  notify:
+    if: github.repository == 'araihu/oie' && (github.event_name == 'workflow_dispatch' || github.event.created)
+    uses: araihu/oapi/.github/workflows/notify-producer.yml@f0617f0d52e1459e2429dee704ec891bc420c13e
+    secrets:
+      app_id: ${{ secrets.ARAIHU_ASSETS_APP_ID }}
+      private_key: ${{ secrets.ARAIHU_ASSETS_APP_PRIVATE_KEY }}

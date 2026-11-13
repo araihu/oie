@@ -8,7 +8,9 @@
 
 The `openapi/engine/` namespace is read by the [Arai Hû OpenAPI catalog](https://oapi.araihu.com).
 Push an immutable spec tag on the commit containing the reviewed contract and
-its CLI overlay. The tag itself publishes the spec version in the catalog.
+its CLI overlay. A new tag triggers the [catalog notification workflow](../.github/workflows/notify-oapi.yml),
+which asks `araihu/oapi` to reconcile the published versions immediately. Run
+**Notify OpenAPI catalog** manually to retry the notification.
 The same tag starts the [oiectl release workflow](../.github/workflows/release-oiectl.yml).
 
 ```sh
