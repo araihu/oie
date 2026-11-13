@@ -98,7 +98,7 @@ func roomManagementInput(c domain.RoomManagementCommand) bool {
 		return c.Target == "" && c.Value == "" && c.Reason == "" && c.MessageID == "" &&
 			(c.Name != nil || c.Topic != nil) &&
 			(c.Name == nil || *c.Name != "" && validRoomLabel(*c.Name)) &&
-			(c.Topic == nil || roomManagementText(*c.Topic, 2000))
+			(c.Topic == nil || validRoomTopic(*c.Topic))
 	}
 	if c.Name != nil || c.Topic != nil {
 		return false
@@ -107,7 +107,7 @@ func roomManagementInput(c domain.RoomManagementCommand) bool {
 	case "rename":
 		return c.MessageID == "" && c.Target == "" && c.Reason == "" && c.Value != "" && validRoomLabel(c.Value)
 	case "topic":
-		return c.MessageID == "" && c.Target == "" && c.Reason == "" && roomManagementText(c.Value, 2000)
+		return c.MessageID == "" && c.Target == "" && c.Reason == "" && validRoomTopic(c.Value)
 	case "invite":
 		return c.MessageID == "" && c.Target != "" && c.Value == ""
 	case "role":
@@ -125,6 +125,13 @@ func roomManagementText(value string, max int) bool {
 	return utf8.ValidString(value) && utf8.RuneCountInString(value) <= max && strings.IndexFunc(value, unicode.IsControl) < 0
 }
 
+func validRoomTopic(value string) bool {
+	return utf8.ValidString(value) && utf8.RuneCountInString(value) <= 2000 &&
+		strings.IndexFunc(value, func(r rune) bool { return r != '\n' && r != '\t' && unicode.IsControl(r) }) < 0
+}
+
+var roomTopicLineEndings = strings.NewReplacer("\r\n", "\n", "\r", "\n")
+
 func (e *Engine) ManageRoom(ctx context.Context, key, id domain.ID, cmd domain.RoomManagementCommand) (string, error) {
 	cmd.Target, cmd.Value, cmd.Reason = strings.TrimSpace(cmd.Target), strings.TrimSpace(cmd.Value), strings.TrimSpace(cmd.Reason)
 	if cmd.Name != nil {
@@ -132,8 +139,11 @@ func (e *Engine) ManageRoom(ctx context.Context, key, id domain.ID, cmd domain.R
 		cmd.Name = &value
 	}
 	if cmd.Topic != nil {
-		value := strings.TrimSpace(*cmd.Topic)
+		value := roomTopicLineEndings.Replace(strings.TrimSpace(*cmd.Topic))
 		cmd.Topic = &value
+	}
+	if cmd.Action == "topic" {
+		cmd.Value = roomTopicLineEndings.Replace(cmd.Value)
 	}
 	if !validID(key) || !validID(id) || !roomManagementInput(cmd) {
 		return "", ErrInvalid

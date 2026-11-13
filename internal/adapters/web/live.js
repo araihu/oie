@@ -908,6 +908,7 @@ window.OieRuntime.register('live', life => {
   });
   life.on(document,'oie:timeline-focus',event=>{focusMessage(event.detail.id,event.detail.focus!==false);showJump(true);});
   life.on(document,'oie:timeline-alias',event=>{if(highlightedMessage===event.detail.requested)highlightedMessage=event.detail.canonical;});
+  life.on(document,'oie:room-management-content',event=>applyAvatars(event.detail.root));
   life.on(document,'oie:info-content',()=>{applyAvatars();localizeTimes();});
   life.on(document,'oie:accounts-content',()=>{applyAvatars();localizeTimes();});
   life.on(document,'oie:shared-account',event=>{

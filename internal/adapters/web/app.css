@@ -554,6 +554,8 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-room-management{padding:16px}
 .oie-room-management [data-room-management-content]{display:grid;gap:14px}
 .oie-room-management [data-room-management-content]>form{border-bottom:1px solid var(--oie-border);padding-bottom:12px}
+.oie-room-management-tabs [role="tabpanel"]:not([x-cloak]){display:grid;gap:14px}
+.oie-room-management-avatar{display:grid;justify-items:center;margin-block:4px}
 .oie-room-management form{display:grid;gap:8px}
 .oie-room-management form>button{justify-self:start}
 .oie-room-management form [data-form-feedback]{min-height:1.4em}

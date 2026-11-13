@@ -22,6 +22,8 @@ window.OieRuntime.register('room-management', life => {
       if (!response.ok) throw new Error();
       const markup = await response.text();
       if (request !== current || !active || life.signal.aborted) return;
+      const template = document.createElement('template');
+      template.innerHTML = markup;
       if (replace) {
         for (const form of content.querySelectorAll('form')) {
           if (form.dataset.busy === 'true' || pending.has(form)) {
@@ -30,7 +32,7 @@ window.OieRuntime.register('room-management', life => {
           }
           drafts.set(identity(form), new FormData(form));
         }
-        content.innerHTML = markup;
+        render(template);
         for (const form of content.querySelectorAll('form')) {
           const draft = drafts.get(identity(form));
           if (!draft) continue;
@@ -45,11 +47,9 @@ window.OieRuntime.register('room-management', life => {
           }
         }
       } else {
-        const template = document.createElement('template');
-        template.innerHTML = markup;
         const revision = template.content.querySelector('[name=expectedRevision]')?.value;
         if (!revision) {
-          content.innerHTML = markup;
+          render(template);
         } else {
           const fresh = new Map([...template.content.querySelectorAll('form')].map(form => [identity(form), form]));
           for (const form of content.querySelectorAll('form')) {
@@ -78,6 +78,24 @@ window.OieRuntime.register('room-management', life => {
     } finally {
       if (request === current) root.removeAttribute('aria-busy');
     }
+  }
+
+  function render(template) {
+    const currentTabs = content.querySelector('.oie-room-management-tabs');
+    const incomingTabs = template.content.querySelector('.oie-room-management-tabs');
+    if (currentTabs && incomingTabs) {
+      const focusedList = document.activeElement?.dataset.roomAffiliationList;
+      for (const panel of currentTabs.querySelectorAll('[role=tabpanel]')) {
+        const incoming = template.content.getElementById(panel.id);
+        panel.replaceChildren(...incoming.childNodes);
+      }
+      if (focusedList) {
+        currentTabs.querySelector(`[data-room-affiliation-list="${CSS.escape(focusedList)}"]`)?.focus({preventScroll:true});
+      }
+    } else {
+      content.replaceChildren(template.content);
+    }
+    document.dispatchEvent(new CustomEvent('oie:room-management-content', {detail: {root: content}}));
   }
 
   function identity(form) {

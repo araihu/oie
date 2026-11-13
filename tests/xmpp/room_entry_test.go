@@ -215,7 +215,7 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 		}
 	}
 	manage(joinedBob.Conversation.ID, "rename", "", "Forged", "denied")
-	name, topic := "Renamed Garden", "Reading plans"
+	name, topic := "Renamed Garden", "Reading plans\r\nBring a book"
 	for _, check := range []struct {
 		room domain.ID
 		want string
@@ -275,7 +275,7 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 
 	eventually(t, func() bool {
 		info, err := engine.ConversationDetails(ctx, created.Conversation.ID)
-		return err == nil && info.Name == "Renamed Garden" && info.Topic == "Reading plans"
+		return err == nil && info.Name == "Renamed Garden" && info.Topic == "Reading plans\nBring a book"
 	})
 	var reader string
 	eventually(t, func() bool {

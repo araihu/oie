@@ -1,13 +1,15 @@
 # XMPP room management
 
 Open **More → Manage room** in a joined room. The available actions depend on
-the account's room permissions. The details form offers the name and topic
-fields the account can edit, with one Save changes button. Owners can change
+the account's room permissions. **Details** shows the room image and offers
+editable name and multiline topic fields with one **Save changes** button.
+Owners can change
 the name. Moderators can change the topic and adjust current occupants' roles.
 **More → Invite people** opens the invitation form when the room permits it.
 The room may let other occupants edit the topic or invite people. Administrators and owners
 can manage affiliations, including bans, and read the access lists the
-service returns. The participant list shows occupants seen in this session.
+service returns. The **Participants** tab shows occupants seen in this session and the available
+access controls.
 A room can omit personal addresses even when it publishes nicknames.
 
 Room creation keeps the service's defaults with persistence enabled. Enter an

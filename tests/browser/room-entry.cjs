@@ -84,7 +84,12 @@ async function apiHandler(req, res) {
   if (u.pathname.endsWith('/capabilities')) return send(200, {accountId: u.pathname.split('/')[4], state: 'known',
     features: [{id: 'room_messaging', appSupport: 'partial', protocolSupport: 'supported', serverSupport: 'scope_dependent'}]});
   if (u.pathname.endsWith('/history')) return send(200, {state: 'complete', retainedMessages: 1, conversations: 1, updatedAt: at});
-  if (u.pathname.endsWith('/avatars') || u.pathname.endsWith('/previews') || u.pathname.endsWith('/message-stars')) return send(200, {items: []});
+  if (u.pathname.endsWith('/avatars')) {
+    const accountId = u.pathname.split('/')[4];
+    return send(200, {items: destination?.accountId === accountId
+      ? [{accountId, address:destination.address, imageHash:avatarHash, updatedAt:at}] : []});
+  }
+  if (u.pathname.endsWith('/previews') || u.pathname.endsWith('/message-stars')) return send(200, {items: []});
   if (u.pathname === '/api/v1/conversations') return send(200, {items: [source, destination].filter(c => c && (!u.searchParams.has('accountId') || c.accountId === u.searchParams.get('accountId')))});
   if (u.pathname === '/api/v1/conversations/' + chat) return send(200, source);
   if (u.pathname === '/api/v1/conversations/' + room && destination) return send(200, destination);
@@ -258,6 +263,26 @@ async function waitFor(predicate) {
       const management = page.locator('[data-room-management]');
       await management.getByRole('button', {name:'Salvar alterações'}).waitFor();
       const topic = management.getByRole('textbox', {name:'Tópico', exact:true});
+      assert.equal(await topic.evaluate(input => input.tagName), 'TEXTAREA');
+      const detailsTab = management.getByRole('tab', {name:'Detalhes', exact:true});
+      const participantsTab = management.getByRole('tab', {name:'Participantes', exact:true});
+      const participant = management.getByRole('button', {name:'Leitora · Participante'});
+      await management.locator('.oie-room-management-avatar [data-avatar-ready=true]').waitFor();
+      assert.equal(await detailsTab.getAttribute('aria-selected'), 'true');
+      assert.equal(await participant.isVisible(), false);
+      await detailsTab.focus();
+      await page.keyboard.press('ArrowRight');
+      await page.keyboard.press('Enter');
+      await participant.waitFor();
+      assert.equal(await participantsTab.getAttribute('aria-selected'), 'true');
+      assert.equal(await topic.isVisible(), false);
+      const accessList = management.getByRole('button', {name:'Membro', exact:true});
+      await accessList.click();
+      await management.getByText('Nenhum endereço nesta lista.', {exact:true}).waitFor();
+      assert.equal(await accessList.evaluate(button => button === document.activeElement), true);
+      assert.equal(await participantsTab.getAttribute('aria-selected'), 'true');
+      await detailsTab.click();
+
       if (width === 1440 && process.env.OIE_ROOM_MANAGEMENT_SCREENSHOT) {
         await management.screenshot({path:process.env.OIE_ROOM_MANAGEMENT_SCREENSHOT});
       }
@@ -269,7 +294,7 @@ async function waitFor(predicate) {
           await route.continue();
         }, {times:1});
         await management.getByRole('textbox',{name:'Nome da sala',exact:true}).fill('Leituras de sábado');
-        await topic.fill('Próxima leitura');
+        await topic.fill('Próxima leitura\nTraga um conto');
         const geometry = () => page.locator('#send-message-form').evaluate(element => {
           const {x,y,width,height} = element.getBoundingClientRect();
           return [x,y,width,height];
@@ -284,7 +309,7 @@ async function waitFor(predicate) {
         assert.equal(managementCommands.length, 1);
         assert.equal(managementCommands[0].action, 'update_details');
         assert.equal(managementCommands[0].name, 'Leituras de sábado');
-        assert.equal(managementCommands[0].topic, 'Próxima leitura');
+        assert.equal(managementCommands[0].topic, 'Próxima leitura\nTraga um conto');
         assert.equal(await management.getByRole('button',{name:'Enviar convite'}).count(),0);
         assert.deepEqual(await geometry(), before);
       } else {

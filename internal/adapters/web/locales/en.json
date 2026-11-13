@@ -482,6 +482,8 @@
   "RoomRoleLabel": "Role",
   "RoomSaveDetails": "Save changes",
   "RoomDetailsPartial": "Name saved. The topic could not be confirmed.",
+  "RoomDetailsTab": "Details",
+  "RoomNoVisibleParticipants": "No participants to show.",
   "RoomTopic": "Topic",
   "RoomInvitePeople": "Invite people",
   "RoomDetailsUnchanged": "No changes to save.",

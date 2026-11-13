@@ -116,8 +116,13 @@ func changedRoomField(r *http.Request, field, original string) *string {
 	if !r.Form.Has(field) {
 		return nil
 	}
-	value := strings.TrimSpace(r.Form.Get(field))
-	if r.Form.Has(original) && value == strings.TrimSpace(r.Form.Get(original)) {
+	normalize := strings.TrimSpace
+	if field == "topic" {
+		lineEndings := strings.NewReplacer("\r\n", "\n", "\r", "\n")
+		normalize = func(value string) string { return lineEndings.Replace(strings.TrimSpace(value)) }
+	}
+	value := normalize(r.Form.Get(field))
+	if r.Form.Has(original) && value == normalize(r.Form.Get(original)) {
 		return nil
 	}
 	return &value

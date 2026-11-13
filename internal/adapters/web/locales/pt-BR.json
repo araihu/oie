@@ -482,6 +482,8 @@
   "RoomRoleLabel": "Função",
   "RoomSaveDetails": "Salvar alterações",
   "RoomDetailsPartial": "Nome salvo. Não foi possível confirmar o tópico.",
+  "RoomDetailsTab": "Detalhes",
+  "RoomNoVisibleParticipants": "Nenhum participante para mostrar.",
   "RoomTopic": "Tópico",
   "RoomInvitePeople": "Convidar pessoas",
   "RoomDetailsUnchanged": "Nenhuma alteração para salvar.",

@@ -272,6 +272,8 @@ type copy struct {
 	RoomRoleLabel                                                                                                                                                                                            string
 	RoomSaveDetails                                                                                                                                                                                          string
 	RoomDetailsPartial                                                                                                                                                                                       string
+	RoomDetailsTab                                                                                                                                                                                           string
+	RoomNoVisibleParticipants                                                                                                                                                                                string
 	RoomTopic                                                                                                                                                                                                string
 	RoomDetailsUnchanged                                                                                                                                                                                     string
 	RoomInvitePeople                                                                                                                                                                                         string
