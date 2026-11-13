@@ -763,6 +763,9 @@ type RenderWorkspaceParams struct {
 
 	// XOieInboxFirst First conversation in the tab's cached default inbox, used as a candidate for implicit desktop selection when the scope matches. The server checks current visibility.
 	XOieInboxFirst *externalRef0.ID `json:"X-Oie-Inbox-First,omitempty"`
+
+	// XOieInboxCursor Engine event cursor through which the tab's inbox is current. Implicit conversation selection uses the cached first row only when this cursor matches the current engine cursor.
+	XOieInboxCursor *string `json:"X-Oie-Inbox-Cursor,omitempty"`
 }
 
 // RenderWorkspaceParamsHXRequest defines parameters for RenderWorkspace.

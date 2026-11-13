@@ -31,28 +31,31 @@ still update its preview or unread count.
 ## Returning from another sidebar section
 
 The tab retains one detached conversation-list node, including its scroll
-position. A matching Conversations route tells the BFF the inbox scope and
-the first row's ID. The BFF verifies the scope and uses that ID as a candidate
-for the implicit desktop conversation. It sends the rest of the app fragment
-without fetching or rendering the list. The browser restores the list and its
-scroll synchronously during the swap, before the first frame. The scope covers
-engine, account, section, filter, query, locale and theme. Native navigation
-loads the full view.
+position. A matching Conversations route sends the inbox scope, its current
+event cursor and the first row's ID. For implicit desktop selection, the BFF
+uses that ID only when the cursor matches and the conversation remains eligible.
+Otherwise it loads the current list once and selects from that result. The
+browser reconciles those rows into the retained list during the swap and keeps
+the visible scroll anchor. The scope covers engine, account, section, filter,
+query, locale and theme. Native navigation loads the full view.
 
 One EventSource remains connected across fragment swaps. Route-owned handlers
 are disposed and reattached as the workspace changes. Conversation and message
 events invalidate the list, including while another section is visible.
-Returning shows the retained list and coalesces pending updates into a live
-refresh. The BFF omits the list on other refreshes when the current inbox scope
-and engine cursor match. A disconnected stream triggers recovery through
-reconnection or the existing polling fallback. Engine changes and data reset
-discard the retained list.
+An explicit conversation or inbox-only route can restore the retained list and
+refresh it if the destination cursor is newer, including when SSE is buffered.
+If an event invalidates the list while a response that reused the first row is
+in flight, navigation retries with a fresh list before swapping the workspace.
+The BFF omits the list on live refreshes when the current inbox scope and engine
+cursor match. A disconnected stream triggers recovery through reconnection or
+the existing polling fallback. Engine changes and data reset discard the
+retained list.
 
-The fragment navigation fixture delays both the sidebar response and the
-changed list refresh. It checks the original node and scroll on the first frame,
-the preview, ordering and unread badge after refresh, engine inbox reads and
-the identity of the event stream on desktop in English and mobile in
-Brazilian Portuguese.
+The fragment navigation fixture delays the sidebar response. It checks the
+original node and scroll anchor, the selected conversation, ordering, preview
+and unread badge. It counts visible inbox reads with delivered, buffered, and
+in-flight SSE events, and exercises an explicit conversation route, an
+archived first row, and an empty inbox receiving its first conversation.
 
 The fragment root is a flex column occupying one workspace grid cell. The chat
 fills that column and the details drawer stays inside it. Using `display:contents`

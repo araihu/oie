@@ -42,6 +42,10 @@ paths:
         in: header
         description: First conversation in the tab's cached default inbox, used as a candidate for implicit desktop selection when the scope matches. The server checks current visibility.
         schema: {$ref: './openapi.yaml#/components/schemas/ID'}
+      - name: X-Oie-Inbox-Cursor
+        in: header
+        description: Engine event cursor through which the tab's inbox is current. Implicit conversation selection uses the cached first row only when this cursor matches the current engine cursor.
+        schema: {type: string}
       responses:
         '200':
           description: Localized HTML document or fragment.

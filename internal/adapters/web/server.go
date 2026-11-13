@@ -903,14 +903,17 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	}
 	cacheScope := r.Header.Get("X-Oie-Inbox-Scope")
 	cacheMatches := cacheScope != "" && cacheScope == v.inboxCacheScope()
-	reuseOnNavigation := fragment == "app" && v.Section == "chats" && !v.GlobalMessageSearch && cacheMatches
-	reuseOnRefresh := r.URL.Path == "/ui/refresh" && cacheMatches && v.EventCursor != "" &&
-		r.Header.Get("X-Oie-Inbox-Cursor") == v.EventCursor && (v.ChatID != "" || v.InboxOnly)
+	cursorMatches := v.EventCursor != "" && r.Header.Get("X-Oie-Inbox-Cursor") == v.EventCursor
+	explicitSelection := v.ChatID != "" || v.InboxOnly
+	first := r.Header.Get("X-Oie-Inbox-First")
+	// A query can match retained content outside the first row's fields.
+	canReuseImplicit := cursorMatches && v.Query == "" && (first == "" || validOperationKey(first))
+	reuseOnNavigation := fragment == "app" && v.Section == "chats" && !v.GlobalMessageSearch && cacheMatches &&
+		(explicitSelection || canReuseImplicit)
+	reuseOnRefresh := r.URL.Path == "/ui/refresh" && cacheMatches && cursorMatches && explicitSelection
 	v.ReuseInbox = reuseOnNavigation || reuseOnRefresh
-	if reuseOnNavigation {
-		if first := r.Header.Get("X-Oie-Inbox-First"); validOperationKey(first) {
-			v.CachedInboxFirst = first
-		}
+	if reuseOnNavigation && !explicitSelection {
+		v.CachedInboxFirst = first
 	}
 	if !paneOnly && !v.ReuseInbox && !s.loadInbox(ctx, v, editor) {
 		return
@@ -987,22 +990,30 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		v.Unavailable = true
 		return
 	}
-	if conversation.JSON200 == nil {
+	c := conversation.JSON200
+	if fromCache && ((c == nil && (conversation.StatusCode() == 400 || conversation.StatusCode() == 404)) ||
+		(c != nil && (c.Archived || v.AccountFilter != "" && c.AccountId != v.AccountFilter ||
+			v.Filter == "unread" && c.UnreadCount == 0 || v.Filter == "favorites" && !c.Favorite ||
+			v.Filter == "groups" && c.Kind != "room"))) {
+		v.ReuseInbox = false
+		if s.loadInbox(ctx, v, editor) {
+			s.loadConversation(ctx, r, v, paneOnly, editorOnly, infoOnly, editor)
+		}
+		return
+	}
+	if c == nil {
 		if conversation.StatusCode() == 400 || conversation.StatusCode() == 404 {
-			v.NotFound = !fromCache
+			v.NotFound = true
 		} else {
 			v.Unavailable = true
 		}
 		return
 	}
-	if v.AccountFilter != "" && conversation.JSON200.AccountId != v.AccountFilter {
-		v.NotFound = !fromCache
+	if v.AccountFilter != "" && c.AccountId != v.AccountFilter {
+		v.NotFound = true
 		return
 	}
-	if fromCache && conversation.JSON200.Archived {
-		return
-	}
-	v.Selected = conversation.JSON200
+	v.Selected = c
 	v.ChatID = selected
 	if v.requestKind() != "" {
 		s.loadAccountConnection(ctx, v, v.Selected.AccountId, editor)
@@ -1226,7 +1237,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Vary", "HX-Request, X-Oie-Fragment, X-Oie-Inbox-Scope, X-Oie-Inbox-First")
+	w.Header().Set("Vary", "HX-Request, X-Oie-Fragment, X-Oie-Inbox-Scope, X-Oie-Inbox-First, X-Oie-Inbox-Cursor")
 	if v.NotFound {
 		w.WriteHeader(http.StatusNotFound)
 	} else if v.Unavailable {
