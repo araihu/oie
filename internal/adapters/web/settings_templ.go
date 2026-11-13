@@ -188,7 +188,7 @@ func timeZoneSettings(v view) templ.Component {
 			Mode: combobox.ModeSingle, EnableSearch: true, DisablePersistence: true, Disabled: true,
 			Source:       combobox.Source{Static: []combobox.Option{{Value: "", Label: v.Text.SystemTimeZone}}},
 			Selected:     []string{""},
-			TriggerAttrs: templ.Attributes{"data-unsaved": v.Text.DevicePreferenceUnavailable},
+			TriggerAttrs: templ.Attributes{"data-unsaved": v.Text.DevicePreferenceUnavailable, "data-system-label": v.Text.SystemTimeZone},
 		}
 		templ_7745c5c3_Err = combobox.Combobox(config, config.InitialState()).WithExpressions(expressions.Combobox{
 			SearchPlaceholder: v.Text.SearchTimeZones, EmptyText: v.Text.NoTimeZonesFound,

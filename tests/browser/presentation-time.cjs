@@ -55,6 +55,7 @@ async function assertDisplay(page, value) {
           viewport:{width, height:900}, locale, reducedMotion:'reduce',
         });
         const page = await context.newPage();
+        await page.clock.setFixedTime(new Date('2026-01-15T12:00:00Z'));
         const session = await context.newCDPSession(page);
         await session.send('Emulation.setTimezoneOverride', {timezoneId:'America/New_York'});
         page.on('pageerror', error => errors.push(error.message));
@@ -65,6 +66,7 @@ async function assertDisplay(page, value) {
         await dialog.waitFor();
         const trigger = dialog.getByRole('combobox', {name:locale === 'en' ? 'Display time zone' : 'Fuso horário de exibição'});
         assert.equal(await zoneValue(page).inputValue(), '');
+        assert.match(await trigger.textContent(), /\(UTC-05:00\)/);
         const system = await expected(page, 'America/New_York');
         const preferred = await expected(page, explicitZone);
         assert.notEqual(system.day, preferred.day, 'fixture crosses midnight in the preferred zone');
@@ -74,6 +76,12 @@ async function assertDisplay(page, value) {
         await trigger.focus();
         await trigger.click();
         const search=dialog.getByRole('textbox',{name:locale==='en'?'Search time zones':'Buscar fusos horários'});
+        await search.fill('UTC+09:00');
+        await dialog.getByRole('option',{name:'Yakutsk · Asia (UTC+09:00)',exact:true}).waitFor();
+        await search.fill('UTC+05:45');
+        await dialog.getByRole('option',{name:/Kat(h)?mandu.*\(UTC\+05:45\)/}).waitFor();
+        await search.fill('UTC+00:00');
+        await dialog.getByRole('option',{name:'UTC (UTC+00:00)',exact:true}).waitFor();
         await search.fill('no matching zone');
         await dialog.getByText(locale==='en'?'No time zones found':'Nenhum fuso horário encontrado',{exact:true}).waitFor();
         await search.press('Escape');
@@ -96,6 +104,7 @@ async function assertDisplay(page, value) {
         });
         await chooseZone(page, explicitZone, 'Kiritimati');
         await assertDisplay(page, preferred);
+        assert.match(await trigger.textContent(), /\(UTC\+14:00\)/);
         assert(await trigger.evaluate(node => node === document.activeElement));
         const drift = await page.evaluate(async () => {
           await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -108,6 +117,7 @@ async function assertDisplay(page, value) {
         const peer = await context.newPage();
         await peer.goto(url);
         await assertDisplay(peer, preferred);
+        await peer.locator('#settings-body input[name="theme"]:checked:focus').waitFor({state:'attached'});
         await chooseZone(peer, '', locale === 'en' ? 'System time zone' : 'Fuso horário do sistema');
         await assertDisplay(page, system);
         assert.equal(await zoneValue(page).inputValue(), '');
@@ -116,12 +126,14 @@ async function assertDisplay(page, value) {
         await session.send('Emulation.setTimezoneOverride', {timezoneId:'Europe/Lisbon'});
         await page.evaluate(() => window.dispatchEvent(new Event('focus')));
         await assertDisplay(page, await expected(page, 'Europe/Lisbon'));
+        assert.match(await trigger.textContent(), /\(UTC\+00:00\)/);
 
         await chooseZone(page, explicitZone, 'Kiritimati');
         await page.reload();
         await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
         await assertDisplay(page, preferred);
         assert.equal(await zoneValue(page).inputValue(), explicitZone);
+        assert.match(await trigger.textContent(), /\(UTC\+14:00\)/);
         await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
         const result = await dialog.evaluate(node => axe.run(node, {
           runOnly:{type:'tag', values:['wcag2a','wcag2aa','wcag21aa']},
@@ -129,7 +141,7 @@ async function assertDisplay(page, value) {
         assert.deepEqual(result.violations.map(item => item.id), []);
         await trigger.click();
         await search.fill('Kiritimati');
-        const option=dialog.getByRole('option',{name:'Kiritimati · Pacific'});
+        const option=dialog.getByRole('option',{name:'Kiritimati · Pacific (UTC+14:00)',exact:true});
         await option.waitFor();
         const bounds=await option.boundingBox();
         assert(bounds.x>=0 && bounds.y>=0 && bounds.x+bounds.width<=width && bounds.y+bounds.height<=900);
@@ -144,6 +156,14 @@ async function assertDisplay(page, value) {
         const languageResult=await dialog.evaluate(node=>axe.run(node,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));
         assert.deepEqual(languageResult.violations.map(item=>item.id),[]);
         await page.screenshot({path:path.join(artifacts, 'language-settings-' + width + '-' + theme + '-' + mode + '.png')});
+        if (width === 1440 && theme === 'goshtoso' && mode === 'light') {
+          await dialog.getByRole('textbox',{name:'Search languages'}).press('Escape');
+          await page.clock.setFixedTime(new Date('2026-07-15T12:00:00Z'));
+          await page.evaluate(() => window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'settings'}})));
+          await trigger.click();
+          await search.fill('New York');
+          await dialog.getByRole('option',{name:'New York · America (UTC-04:00)',exact:true}).waitFor();
+        }
         await context.close();
       }
     }
@@ -164,7 +184,7 @@ async function assertDisplay(page, value) {
     await page.reload();
     await assertDisplay(page, await expected(page, 'America/New_York'));
     assert.deepEqual(errors, []);
-    console.log('PASS: system default, time and day grouping across midnight, stable layout, per-profile persistence, cross-tab reset, storage refusal, EN/PT and accessibility');
+    console.log('PASS: searchable UTC offsets, fractional offsets and daylight saving, system default, stable layout, persistence, cross-tab reset, storage refusal and EN/PT accessibility');
   } finally {
     await browser.close();
   }

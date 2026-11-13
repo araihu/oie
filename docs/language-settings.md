@@ -5,7 +5,9 @@ language and display time zone. The language options and selected value show
 decorative flags alongside their native names. The time-zone list comes from
 the browser and includes an option to follow the system. Selecting a time zone
 updates displayed dates and times immediately and saves the preference on the
-device.
+device. Each option shows its current UTC offset, including the system time
+zone. The offset reflects daylight saving time when it applies and can be used
+in the search.
 
 The initial value follows the browser language and the existing device cookie.
 Initializing the control and choosing its existing value do not save an

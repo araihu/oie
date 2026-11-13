@@ -51,7 +51,7 @@ templ timeZoneSettings(v view) {
 		Mode: combobox.ModeSingle, EnableSearch: true, DisablePersistence: true, Disabled: true,
 		Source: combobox.Source{Static: []combobox.Option{{Value: "", Label: v.Text.SystemTimeZone}}},
 		Selected: []string{""},
-		TriggerAttrs: templ.Attributes{"data-unsaved": v.Text.DevicePreferenceUnavailable},
+		TriggerAttrs: templ.Attributes{"data-unsaved": v.Text.DevicePreferenceUnavailable, "data-system-label": v.Text.SystemTimeZone},
 	} }}
 	@combobox.Combobox(config, config.InitialState()).WithExpressions(expressions.Combobox{
 		SearchPlaceholder: v.Text.SearchTimeZones, EmptyText: v.Text.NoTimeZonesFound,

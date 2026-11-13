@@ -2,6 +2,7 @@
   'use strict';
   const storageKey = 'oie.device.time-zone.v1';
   const formatters = new Map();
+  const offsetFormatters = new Map();
   const deviceTimeZone = () => new Intl.DateTimeFormat().resolvedOptions().timeZone;
   let timeZone = '';
   let systemTimeZone = deviceTimeZone();
@@ -14,6 +15,14 @@
     } catch {
       return '';
     }
+  }
+
+  function utcOffset(zone, date) {
+    if (!offsetFormatters.has(zone)) {
+      offsetFormatters.set(zone, new Intl.DateTimeFormat('en-US', {timeZone: zone, timeZoneName: 'longOffset'}));
+    }
+    const offset = offsetFormatters.get(zone).formatToParts(date).find(part => part.type === 'timeZoneName').value;
+    return offset === 'GMT' ? 'UTC+00:00' : offset.replace('GMT', 'UTC');
   }
 
   try { timeZone = validZone(localStorage.getItem(storageKey)); } catch {}
@@ -86,6 +95,7 @@
     if (nextSystemTimeZone === systemTimeZone) return;
     systemTimeZone = nextSystemTimeZone;
     if (!timeZone) refreshTimes();
+    else document.dispatchEvent(new Event('oie:system-time-zone'));
   });
   window.addEventListener('storage', event => {
     if (event.key === storageKey || event.key === null) change(validZone(event.newValue));
@@ -95,36 +105,48 @@
     const picker = document.getElementById('settings-time-zone');
     if (!picker) return;
     const trigger = picker.querySelector('[role="combobox"]');
-    const systemLabel = picker.querySelector('[data-combobox-option-label]').textContent;
+    const systemLabel = trigger.dataset.systemLabel;
 
     const zones = Intl.supportedValuesOf?.('timeZone') ?? [
       'America/Los_Angeles', 'America/Mexico_City', 'America/New_York', 'America/Sao_Paulo',
       'Asia/Kolkata', 'Asia/Tokyo', 'Australia/Sydney', 'Europe/Lisbon', 'Europe/London', 'Europe/Paris',
     ];
-    function option(zone) {
+    function zoneLabel(zone) {
       const parts = zone.replaceAll('_', ' ').split('/');
       const city = parts.pop();
-      return {value: zone, label: parts.length ? city + ' · ' + parts.join('/') : city};
+      return parts.length ? city + ' · ' + parts.join('/') : city;
     }
     const collator = new Intl.Collator(document.documentElement.lang);
-    let available;
-    function syncPicker() {
-      const values = [timeZone];
-      let options;
+    let available, labels;
+    function syncPicker(refreshOffsets = false) {
       const systemZone = validZone(systemTimeZone);
-      if (!available || !available.has(timeZone) || !available.has(systemZone)) {
-        available = new Set(['', 'UTC', ...zones, systemZone, timeZone]);
-        options = [...available].filter(Boolean).map(option).sort((a, b) => collator.compare(a.label, b.label));
-        options.unshift({value: '', label: systemLabel});
+      let options;
+      if (!available || timeZone && !available.has(timeZone) || systemZone && !available.has(systemZone)) {
+        available = new Set(['UTC', ...zones, systemZone, timeZone].filter(Boolean));
+        refreshOffsets = true;
+      }
+      if (refreshOffsets) {
+        const now = new Date();
+        const next = [...available].map(value => ({value, label: zoneLabel(value)}))
+          .sort((a, b) => collator.compare(a.label, b.label));
+        next.unshift({value: '', label: systemLabel});
+        for (const item of next) item.label += ' (' + utcOffset(item.value || systemZone || 'UTC', now) + ')';
+        if (!labels || next.some((item, index) => item.label !== labels[index]?.label || item.value !== labels[index]?.value)) {
+          options = labels = next;
+        }
       }
       picker.dispatchEvent(new CustomEvent('combobox:load', {
-        bubbles: true, detail: {id: picker.id, options, values},
+        bubbles: true, detail: {id: picker.id, options, values: [timeZone]},
       }));
     }
     syncPicker();
     trigger.disabled = false;
 
-    life.on(document, 'oie:time-zone', syncPicker);
+    life.on(document, 'oie:time-zone', () => syncPicker(true));
+    life.on(document, 'oie:system-time-zone', () => syncPicker(true));
+    life.on(window, 'drawer:open', ({detail}) => {
+      if (detail?.id === 'settings') syncPicker(true);
+    });
     life.on(picker, 'combobox:change', ({detail}) => {
       if (detail.id !== picker.id) return;
       const value = validZone(detail.values[0]);
