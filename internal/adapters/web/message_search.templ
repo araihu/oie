@@ -1,6 +1,7 @@
 package web
 
 import (
+ "regexp"
  "slices"
  "strconv"
  "strings"
@@ -159,8 +160,9 @@ if len(v.MessageSearch.Conversations)==0 {
 }else if len(v.MessageSearch.Page.Items)==0 {
 @emptystate.EmptyState(emptystate.Config{Title:v.Text.SearchEmptyTitle,Description:v.Text.SearchEmptyBody})
 }else{
+{{ searchPattern := searchHighlightPattern(v.MessageSearch.Query) }}
 for _,hit:=range v.MessageSearch.Page.Items {
-@messageSearchHit(v,hit)
+@messageSearchHit(v,hit,searchPattern)
 }
 }
 </div>
@@ -174,7 +176,7 @@ if next:=v.messageSearchNext();next!="" {
 </div>
 </div>
 }
-templ messageSearchHit(v view,hit engineapi.MessageSearchHit){
+templ messageSearchHit(v view,hit engineapi.MessageSearchHit,searchPattern *regexp.Regexp){
 {{
 	sender, senderDomain := searchNameParts(hit.Message.Sender.DisplayName)
 	conversation, conversationDomain := searchNameParts(hit.ConversationTitle)
@@ -214,10 +216,10 @@ if hit.Historical {
 }
 {{ excerpt, sharedURL := searchResultText(hit) }}
 if excerpt!="" {
-<p class="oie-message-search-excerpt">{excerpt}</p>
+<p class="oie-message-search-excerpt">@highlightSearchText(excerpt,searchPattern)</p>
 }
 if sharedURL!="" {
-<p class="oie-message-search-url">{sharedURL}</p>
+<p class="oie-message-search-url">@highlightSearchText(sharedURL,searchPattern)</p>
 }
 </div>
 if hit.Preview != nil && !hit.Historical {
@@ -227,6 +229,16 @@ if hit.Preview != nil && !hit.Historical {
 <time data-message-search-time datetime={hit.Message.CreatedAt.Format(time.RFC3339)}>{hit.Message.CreatedAt.Format("2006-01-02 15:04")}</time>
 }
 </article>
+}
+
+templ highlightSearchText(text string,searchPattern *regexp.Regexp){
+for _, part := range searchTextParts(text,searchPattern) {
+if part.match {
+<mark class="oie-search-highlight">{part.text}</mark>
+} else {
+{part.text}
+}
+}
 }
 
 templ messageSearchPreview(p engineapi.MessageSearchPreview){

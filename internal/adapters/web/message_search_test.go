@@ -32,7 +32,7 @@ func TestMessageSearchRendersTheMessageForMetadataMatches(t *testing.T) {
 			hit.Preview = &engineapi.MessageSearchPreview{Kind: "link"}
 			v := view{Locale: "pt-BR", EngineID: testEngine}
 			var rendered bytes.Buffer
-			if err := messageSearchHit(v, hit).Render(t.Context(), &rendered); err != nil {
+			if err := messageSearchHit(v, hit, nil).Render(t.Context(), &rendered); err != nil {
 				t.Fatal(err)
 			}
 			html := rendered.String()
@@ -42,6 +42,25 @@ func TestMessageSearchRendersTheMessageForMetadataMatches(t *testing.T) {
 				t.Fatal(html)
 			}
 		})
+	}
+}
+
+func TestMessageSearchHighlightsVisibleTextAndURL(t *testing.T) {
+	hit := searchTestPage().Items[0]
+	hit.MatchKind = "metadata"
+	hit.Message.OriginalText = "Cafe\u0301 e CAFÉ <script>\nhttps://example.test/cafe"
+	var rendered bytes.Buffer
+	if err := messageSearchHit(view{}, hit, searchHighlightPattern("café <script>")).Render(t.Context(), &rendered); err != nil {
+		t.Fatal(err)
+	}
+	html := rendered.String()
+	for _, value := range []string{"Cafe\u0301", "CAFÉ &lt;script&gt;", "cafe"} {
+		if !strings.Contains(html, `<mark class="oie-search-highlight">`+value+"</mark>") {
+			t.Fatalf("missing highlight for %q in %s", value, html)
+		}
+	}
+	if strings.Contains(html, "<script>") {
+		t.Fatal("message text was interpreted as HTML")
 	}
 }
 

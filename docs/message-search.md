@@ -103,6 +103,8 @@ Enter and Shift+Enter do.
 
 When link or file details match, the result shows a snippet of the original
 message, including the link and any accompanying text in the snippet.
+The sidebar and floating dialog highlight visible query terms in the message
+and URL, ignoring case and accents.
 
 Each current message result can show one compact preview of indexed shared
 content. Link results show cached page artwork when available, then the cached
