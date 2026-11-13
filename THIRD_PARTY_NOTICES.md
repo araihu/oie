@@ -70,6 +70,8 @@ Goshtoso embeds the Heroicons 2.2.0 sprite under MIT, HTMX 4.0.0 under 0BSD,
 and Alpine.js 3.17.2 and its plugins under MIT. Its embedded files include
 the Heroicons and runtime license texts. Desktop archives also include the
 notices for Alpine's bundled Vue code, focus-trap and tabbable.
+Oiê's additional Heroicons sprite uses the same MIT license. The source and
+license text are recorded in `internal/adapters/web/appicons`.
 
 The desktop archives include the notices for Nano ID in the Wails runtime and
 for the JavaScript bundled by Margo, including Mermaid 11.16.1, KaTeX and the
