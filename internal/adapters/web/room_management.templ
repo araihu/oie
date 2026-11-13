@@ -1,0 +1,161 @@
+package web
+
+import (
+	"slices"
+	"strings"
+	"github.com/araihu/goshtoso/components/accordion"
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/drawer"
+	"github.com/araihu/goshtoso/components/form"
+	selectfield "github.com/araihu/goshtoso/components/select"
+	"github.com/araihu/goshtoso/components/textinput"
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+)
+
+templ roomManagementDrawer(v view) {
+	if v.Selected != nil && v.Selected.Kind == "room" && v.requestKind() == "" && !v.Preview {
+		@drawer.Drawer(drawer.Config{ID:"room-management",Title:v.Text.RoomManage,PanelClass:"oie-conversation-details-drawer"}) {
+			<div class="oie-settings oie-room-management" data-room-management data-chat={v.Selected.Id} data-account={v.Selected.AccountId} data-engine={v.EngineID} data-lang={v.Locale} data-loading={v.Text.RoomManagementLoading} data-unavailable={v.Text.RoomManagementUnavailable}>
+				@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-room-management-refresh":""})){ {v.Text.DetailsRefresh} }
+				<div role="status" aria-live="polite" data-room-management-status></div>
+				<div data-room-management-content></div>
+			</div>
+		}
+	}
+}
+
+templ roomManagementContent(v view, state engineapi.RoomManagement, messageID, affiliation string) {
+	if state.State != "available" || state.Revision == nil {
+		if state.State == "not_joined" {
+			<p>{v.Text.RoomJoinRequired}</p>
+		} else if state.State == "not_connected" {
+			<p>{v.Text.NotConnected}</p>
+		} else {
+			<p>{v.Text.RoomManagementUnavailable}</p>
+		}
+	} else if messageID != "" {
+		if slices.Contains(state.Actions,engineapi.RoomManagementAction("moderate_message")) {
+			@roomManagementForm(v,*state.Revision,"moderate_message",messageID,v.Text.RoomModerateMessage,"",nil)
+		} else {
+			<p>{v.Text.RoomManagementDenied}</p>
+		}
+	} else {
+		if len(state.Actions)==0 {
+			<p>{v.Text.RoomManagementDenied}</p>
+		}
+		if slices.Contains(state.Actions,engineapi.RoomManagementAction("rename")) {
+			@roomManagementForm(v,*state.Revision,"rename","",v.Text.RoomRename,v.infoTitle(),nil)
+		}
+		if slices.Contains(state.Actions,engineapi.RoomManagementAction("topic")) {
+			@roomManagementForm(v,*state.Revision,"topic","",v.Text.RoomEditTopic,v.managementTopic(),nil)
+		}
+		if slices.Contains(state.Actions,engineapi.RoomManagementAction("invite")) {
+			@roomManagementForm(v,*state.Revision,"invite","",v.Text.RoomInvite,"",nil)
+		}
+		if len(state.Occupants)>0 {
+			<h3>{v.Text.Participants}</h3>
+			@accordion.Accordion(accordion.AccordionConfig{ID:"room-managed-occupants",Items:roomOccupantItems(v,*state.Revision,state.Occupants)})
+		}
+		if slices.Contains(state.Actions,engineapi.RoomManagementAction("affiliation")) {
+			<h3>{v.Text.RoomAccess}</h3>
+			@roomManagementForm(v,*state.Revision,"affiliation","",v.Text.RoomSetAffiliation,"",roomOptions(v.Text,[]string{"member","admin","owner","outcast","none"}))
+			<div class="oie-room-entry-links" aria-label={v.Text.RoomAccess}>
+				for _, value := range []string{"member","admin","owner","outcast"} {
+					@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-room-affiliation-list":value,"aria-pressed":affiliation==value})){ {roomManagementLabel(v.Text,value)} }
+				}
+			</div>
+			if affiliation!="" {
+				<h4>{roomManagementLabel(v.Text,affiliation)}</h4>
+				if len(state.Affiliations)==0 {
+					<p>{v.Text.RoomNoAddresses}</p>
+				} else {
+					<ul>
+						for _, address := range state.Affiliations {
+							<li>{address}</li>
+						}
+					</ul>
+				}
+			}
+		}
+	}
+}
+
+func roomOptionLabel(text copy, action string) string {
+	if action == "role" {
+		return text.RoomRoleLabel
+	}
+	return text.RoomAccess
+}
+
+func (v view) managementTopic() string {
+	if v.ConversationInfo != nil && v.ConversationInfo.Topic != nil {
+		return *v.ConversationInfo.Topic
+	}
+	return ""
+}
+
+func roomOptions[T ~string](text copy, values []T) []selectfield.Option {
+	out := make([]selectfield.Option,0,len(values))
+	for _, value := range values {
+		out=append(out,selectfield.Option{Value:string(value),Label:roomManagementLabel(text,string(value))})
+	}
+	return out
+}
+
+func roomOccupantItems(v view, revision string, occupants []engineapi.RoomManagedOccupant) []accordion.AccordionItem {
+	items := make([]accordion.AccordionItem,0,len(occupants))
+	for _, item := range occupants {
+		items=append(items,accordion.AccordionItem{ID:"manage-"+strings.TrimPrefix(item.Id,"occupant:"),Title:item.Nickname,Content:roomOccupantControls(v,revision,item)})
+	}
+	return items
+}
+
+templ roomOccupantControls(v view, revision string, item engineapi.RoomManagedOccupant) {
+	<p>{roomManagementLabel(v.Text,string(item.Role))} · {roomManagementLabel(v.Text,string(item.Affiliation))}</p>
+	if len(item.Roles)>0 {
+		{{ roles := roomOptions(v.Text,item.Roles) }}
+		for i := range roles {
+			if roles[i].Value=="none" {
+				{{ roles[i].Label=v.Text.RoomKick }}
+			}
+		}
+		@roomManagementForm(v,revision,"role",item.Id,v.Text.RoomSetRole,"",roles)
+	}
+	if len(item.Affiliations)>0 {
+		@roomManagementForm(v,revision,"affiliation",item.Id,v.Text.RoomSetAffiliation,"",roomOptions(v.Text,item.Affiliations))
+	}
+}
+
+templ roomManagementForm(v view, revision, action, target, label, initial string, options []selectfield.Option) {
+	{{ key := newOperationKey(); id := "manage-room-"+key }}
+	@form.Form(form.Config{ID:id,Action:"/ui/rooms/manage",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"room-management"}}) {
+		@mutationFields(v,"room-management",key)
+		<input type="hidden" name="conversationId" value={v.Selected.Id}/>
+		<input type="hidden" name="accountId" value={v.Selected.AccountId}/>
+		<input type="hidden" name="lang" value={v.Locale}/>
+		<input type="hidden" name="managementAction" value={action}/>
+		<input type="hidden" name="expectedRevision" value={revision}/>
+		switch action {
+			case "rename":
+				@textinput.TextInput(textinput.Config{ID:id+"-value",Name:"value",Label:v.Text.RoomManagedName,Value:initial,Required:true,InputAttrs:templ.Attributes{"maxlength":"100"}})
+			case "topic":
+				@textinput.TextInput(textinput.Config{ID:id+"-value",Name:"value",Label:v.Text.RoomTopic,Value:initial,InputAttrs:templ.Attributes{"maxlength":"2000"}})
+			case "moderate_message":
+				<input type="hidden" name="messageId" value={target}/>
+			default:
+				if target=="" {
+					@textinput.TextInput(textinput.Config{ID:id+"-address",Name:"target",Label:v.Text.RoomUserAddress,Required:true,InputAttrs:templ.Attributes{"maxlength":"2047","spellcheck":"false","autocapitalize":"none"}})
+				} else {
+					<input type="hidden" name="target" value={target}/>
+				}
+				if len(options)>0 {
+					@selectfield.Select(selectfield.Config{ID:id+"-value",Name:"value",Label:roomOptionLabel(v.Text,action),Options:options,Required:true,Placeholder:v.Text.RoomSelectAction})
+				}
+		}
+		if action=="invite" || action=="moderate_message" || action=="role" || action=="affiliation" {
+			@textinput.TextInput(textinput.Config{ID:id+"-reason",Name:"reason",Label:v.Text.RoomReason,InputAttrs:templ.Attributes{"maxlength":"500"}})
+		}
+		@button.Button(button.WithType("submit")){ {label} }
+		<div data-form-feedback role="status" aria-live="polite"></div>
+	}
+}

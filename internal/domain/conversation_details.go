@@ -17,6 +17,7 @@ type ConversationParticipants struct {
 	CheckedAt    time.Time
 }
 type ConversationInfo struct {
+	CanModerateMessages                          bool
 	State, Name, Description, Topic, RoomSession string
 	CheckedAt                                    time.Time
 	OccupantCount                                *int

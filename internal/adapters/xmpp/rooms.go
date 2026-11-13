@@ -21,6 +21,7 @@ const maxRoomSessions = 256
 const maxOwnRoomMessages = 512
 
 type roomSlot struct {
+	management               roomManagement
 	conversation             domain.Conversation
 	snapshot                 domain.RoomSession
 	session                  *mx.Session
@@ -432,6 +433,9 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 			created = created || status.Code == 201
 		}
 	}
+	if !self && p.From.Resourcepart() != slot.snapshot.Nickname {
+		observeRoomManagement(slot, p, false)
+	}
 	if p.From.Resourcepart() != slot.snapshot.Nickname {
 		if self && renamed && slot.snapshot.State == "joining" && p.From.Resourcepart() != "" {
 			slot.snapshot.Nickname = p.From.Resourcepart()
@@ -454,6 +458,9 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 	if p.Type == stanza.UnavailablePresence && slot.snapshot.State == "joining" && !confirmedRemoval {
 		e.mu.Unlock()
 		return true, nil
+	}
+	if self {
+		observeRoomManagement(slot, p, true)
 	}
 	if p.Type == stanza.ErrorPresence {
 		if slot.snapshot.State != "joining" {

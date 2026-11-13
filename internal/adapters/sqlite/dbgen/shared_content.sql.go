@@ -227,6 +227,11 @@ func (q *Queries) PutSharedContent(ctx context.Context, arg PutSharedContentPara
 const sharedContentCandidates = `-- name: SharedContentCandidates :many
 SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
 WHERE (s.message_id IS NULL OR s.parser_version<?1)
+AND NOT EXISTS (
+ SELECT 1 FROM message_references ref JOIN room_message_moderation moderation
+ ON moderation.account_id=m.account_id AND ref.scope='room:'||moderation.room_address AND ref.remote_id=moderation.stanza_id
+ WHERE ref.message_id=m.id OR ref.message_id IN (SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
+)
 AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)

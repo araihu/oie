@@ -84,6 +84,10 @@ func (m *Manager) ConversationInfo(_ context.Context, a domain.Account, c domain
 	info := cloneConversationInfo(slot.info)
 	if room := e.rooms[c.Address]; room != nil && room.session == e.session {
 		info.RoomSession = room.snapshot.State
+		if activeManagementSlot(e, c) != nil && room.management.topic != nil {
+			info.Topic = *room.management.topic
+		}
+		info.CanModerateMessages = activeManagementSlot(e, c) != nil && room.management.self.role == "moderator" && room.management.flags.moderate
 	}
 	return info, nil
 }

@@ -12,6 +12,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -186,9 +187,111 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 	if current, err := engine.RoomSession(ctx, absent.Conversation.ID); err != nil || current.Active || current.State == "joined" {
 		t.Fatalf("preview changed membership: %+v %v", current, err)
 	}
-	joinedBob, err := engine.OpenRoom(ctx, id(), bob, address, "Reader", "", false)
+	if err := ownerIQ(`<query xmlns="http://jabber.org/protocol/muc#owner"><x xmlns="jabber:x:data" type="submit"><field var="FORM_TYPE"><value>http://jabber.org/protocol/muc#roomconfig</value></field><field var="muc#roomconfig_passwordprotectedroom"><value>1</value></field><field var="muc#roomconfig_roomsecret"><value>fixture password</value></field></x></query>`); err != nil {
+		t.Fatal("configure password:", err)
+	}
+	joinedBob, err := engine.OpenRoom(ctx, id(), bob, address, "Reader", "", false, "fixture password")
 	if err != nil || joinedBob.Conversation.ID != absent.Conversation.ID {
 		t.Fatalf("entry did not reuse room: %+v %v", joinedBob, err)
+	}
+	waitRoom(joinedBob.Conversation.ID, "joined")
+	directory, err := engine.DiscoverRooms(ctx, bob, "conference.localhost")
+	if err != nil || !slices.ContainsFunc(directory.Rooms, func(item domain.RoomDirectoryItem) bool { return item.Address == address }) {
+		t.Fatalf("public room missing: %+v %v", directory, err)
+	}
+	manage := func(accountRoom domain.ID, action, target, value, want string) {
+		t.Helper()
+		info, err := engine.RoomManagement(ctx, accountRoom, "")
+		if err != nil || info.Revision == "" {
+			t.Fatalf("management snapshot: %+v %v", info, err)
+		}
+		key := id()
+		cmd := domain.RoomManagementCommand{Action: action, Target: target, Value: value, ExpectedRevision: info.Revision}
+		for range 2 {
+			state, err := engine.ManageRoom(ctx, key, accountRoom, cmd)
+			if err != nil || state != want {
+				t.Fatalf("%s: wanted %s, got %s %v (%+v)", action, want, state, err, info)
+			}
+		}
+	}
+	manage(joinedBob.Conversation.ID, "rename", "", "Forged", "denied")
+	manage(created.Conversation.ID, "rename", "", "Renamed Garden", "confirmed")
+	manage(created.Conversation.ID, "topic", "", "Reading plans", "submitted")
+	manage(created.Conversation.ID, "invite", "bob@localhost", "", "submitted")
+	if os.Getenv("OIE_XMPP_MODERATION_INTEGRATION") == "1" {
+		info, err := engine.RoomManagement(ctx, created.Conversation.ID, "")
+		if err != nil || !slices.Contains(info.Actions, "moderate_message") {
+			t.Fatalf("moderation not advertised: %+v %v", info, err)
+		}
+		sent, err := engine.SendMessage(ctx, id(), joinedBob.Conversation.ID, "Moderation fixture")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var target domain.ID
+		eventually(t, func() bool {
+			items, err := engine.Messages(ctx, created.Conversation.ID, "", 20)
+			if err != nil {
+				return false
+			}
+			for _, item := range items {
+				if item.OriginalText != sent.Message.OriginalText {
+					continue
+				}
+				check, err := engine.RoomManagementForMessage(ctx, created.Conversation.ID, "", item.ID)
+				if err == nil && slices.Contains(check.Actions, "moderate_message") {
+					info, target = check, item.ID
+					return true
+				}
+			}
+			return false
+		})
+		state, err := engine.ManageRoom(ctx, id(), created.Conversation.ID, domain.RoomManagementCommand{
+			Action: "moderate_message", ExpectedRevision: info.Revision, MessageID: target, Reason: "Room rules",
+		})
+		if err != nil || state != "confirmed" {
+			t.Fatalf("moderation: %s %v", state, err)
+		}
+		eventually(t, func() bool {
+			item, err := engine.Message(ctx, target)
+			return err == nil && item.Moderation != nil && item.OriginalText == "" && item.Moderation.Reason == "Room rules"
+		})
+	}
+
+	eventually(t, func() bool {
+		info, err := engine.ConversationDetails(ctx, created.Conversation.ID)
+		return err == nil && info.Name == "Renamed Garden" && info.Topic == "Reading plans"
+	})
+	var reader string
+	eventually(t, func() bool {
+		info, err := engine.RoomManagement(ctx, created.Conversation.ID, "")
+		for _, occupant := range info.Occupants {
+			if occupant.Nickname == "Reader" {
+				reader = occupant.ID
+			}
+		}
+		return err == nil && reader != ""
+	})
+	manage(created.Conversation.ID, "role", reader, "none", "confirmed")
+	kicked := waitRoom(joinedBob.Conversation.ID, "failed")
+	if kicked.LastErrorCode != "removed" || kicked.Active {
+		t.Fatalf("kick must revoke rejoin: %+v", kicked)
+	}
+	manage(created.Conversation.ID, "affiliation", "bob@localhost", "outcast", "confirmed")
+	bans, err := engine.RoomManagement(ctx, created.Conversation.ID, "outcast")
+	if err != nil || !slices.Contains(bans.Affiliations, "bob@localhost") {
+		t.Fatalf("ban list: %+v %v", bans, err)
+	}
+	manage(created.Conversation.ID, "affiliation", "bob@localhost", "none", "confirmed")
+	if _, err := engine.OpenRoom(ctx, id(), bob, address, "Reader", "", false); err != nil {
+		t.Fatal(err)
+	}
+	waitRoom(joinedBob.Conversation.ID, "joined")
+	if _, err := engine.Disconnect(ctx, bob); err != nil {
+		t.Fatal(err)
+	}
+	waitRoom(joinedBob.Conversation.ID, "not_joined")
+	if _, err := engine.ConfigureConnection(ctx, bob, application.ConnectionInput{Password: "bob-local-only", Endpoint: xmppEndpoint()}); err != nil {
+		t.Fatal(err)
 	}
 	waitRoom(joinedBob.Conversation.ID, "joined")
 	if _, err := engine.Disconnect(ctx, alice); err != nil {
@@ -196,6 +299,14 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 	}
 	waitRoom(created.Conversation.ID, "not_joined")
 	if _, err := engine.ConfigureConnection(ctx, alice, application.ConnectionInput{Password: "alice-local-only", Endpoint: xmppEndpoint()}); err != nil {
+		t.Fatal(err)
+	}
+	// The creator was already present when the room password was set.
+	eventually(t, func() bool {
+		session, err := engine.RoomSession(ctx, created.Conversation.ID)
+		return err == nil && !session.Active && session.LastErrorCode == "not_authorized"
+	})
+	if _, err := engine.OpenRoom(ctx, id(), alice, address, "Host", "", false, "fixture password"); err != nil {
 		t.Fatal(err)
 	}
 	joined = waitRoom(created.Conversation.ID, "joined")

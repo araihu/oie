@@ -98,6 +98,7 @@ templ page(v view) {
 <script src="/ui/sidebar.js"></script>
 <script src="/ui/formatting.js"></script>
 <script src="/ui/room-entry.js"></script>
+<script src="/ui/room-management.js"></script>
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href="/ui/app.css"/>
 <link rel="stylesheet" href={templ.URL(messageSearchStylesheetURL())}/>
@@ -388,7 +389,7 @@ if v.conversationSchedulesAvailable() {
 {{ sections[0].Items=append(sections[0].Items,dropdown.Item{Label:v.Text.Scheduled,Icon:glyph(heroicons.Icon16SolidClock),OnClick:"$dispatch('oie:conversation-drawer-open','conversation-schedules')"}) }}
 }
 if v.Selected.Kind=="room" {
-{{ sections=append(sections,dropdown.Section{Items:[]dropdown.Item{{ID:"chat-leave-room",Label:v.Text.LeaveRoom,Icon:glyph(heroicons.Icon16SolidArrowTopRightOnSquare),OnClick:"$dispatch('oie:leave-room')",Disabled:v.RoomSession==nil||!v.RoomSession.Active||!v.messagingImplemented("room_messaging")}}}) }}
+{{ sections=append(sections,dropdown.Section{Items:[]dropdown.Item{{ID:"chat-room-session",Label:v.Text.RoomActions,OnClick:"$dispatch('modal:open', {id: 'room-session-dialog'})"},{ID:"chat-manage-room",Label:v.Text.RoomManage,Icon:glyph(heroicons.Icon16SolidCog6Tooth),OnClick:"void 0"},{ID:"chat-leave-room",Label:v.Text.LeaveRoom,Icon:glyph(heroicons.Icon16SolidArrowTopRightOnSquare),OnClick:"$dispatch('oie:leave-room')",Disabled:v.RoomSession==nil||!v.RoomSession.Active||!v.messagingImplemented("room_messaging")}}}) }}
 }
 		@dropdown.Dropdown(dropdown.Config{ID:"chat-options",Label:v.Text.More,Trigger:menuTrigger(v.Text.More),MenuAlign:dropdown.AlignEnd,Sections:sections})
 }
@@ -777,15 +778,24 @@ for identity,hash:=range v.Avatars {
 // positioning never depends on ChatBubble's private row or bubble selectors.
 templ messageBubbleBody(v view,m messageView,grouped bool){
 <div class={"oie-message-body",templ.KV("oie-message-body-compact",m.IsOwn||grouped)} data-message-bubble={m.Id}>
+if m.Moderation==nil {
 @messageReactionShortcut(v,m)
 <div class="oie-message-menu-slot" data-message-menu-slot={m.Id}>
 @dropdown.Dropdown(dropdown.Config{ID:"message-menu-"+m.Id,Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,m.Id),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:messageActions(v,m.Id)})
 </div>
+}
 if !m.IsOwn && !grouped {
 <div class="oie-message-heading"><strong class={v.messageAvatarBorder(m)}>{m.Sender.DisplayName}</strong></div>
 }
+if m.Moderation!=nil {
+<p data-message-moderated><em>{v.Text.RoomMessageModerated}</em></p>
+if m.Moderation.Reason!=nil {
+<p>{*m.Moderation.Reason}</p>
+}
+}else{
 @messageBody(v,m)
 @outgoingAttachments(v,m.Message)
+}
 <div class="oie-message-stamp">
 @messageLeadingIndicators(v,m)
 @messageSendIndicator(v,m)
@@ -793,7 +803,9 @@ if !m.IsOwn && !grouped {
 {{ position := messageTimelineTime(m.Message) }}
 <time data-message-time datetime={position.Format("2006-01-02T15:04:05Z07:00")}>{position.Format("15:04")}</time>
 </div>
+if m.Moderation==nil {
 @messageReactions(v,m)
+}
 </div>
 }
 

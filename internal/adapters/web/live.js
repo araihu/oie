@@ -410,7 +410,8 @@ window.OieRuntime.register('live', life => {
   let roomOperation=null;
   if(roomDraftKey){try{roomOperation=JSON.parse(localStorage.getItem(roomDraftKey)||'null')||inMemory.get(roomDraftKey)||null}catch{roomOperation=inMemory.get(roomDraftKey)||null}}
   if(roomOperation&&(!canonicalID(roomOperation.operationKey)||!['join','leave'].includes(roomOperation.command)||roomOperation.conversationId!==body.dataset.conversationId||roomOperation.accountId!==body.dataset.accountId))roomOperation=null;
-  function keepRoomOperation(value){if(!value&&roomOperation){const region=document.querySelector('#room-session-status');if(region)region.dataset.version='';}roomOperation=value;if(!roomDraftKey)return;if(value)inMemory.set(roomDraftKey,value);else inMemory.delete(roomDraftKey);try{if(value)localStorage.setItem(roomDraftKey,JSON.stringify(value));else localStorage.removeItem(roomDraftKey)}catch{storageWarning()}}
+  let roomCommandPassword = "";
+  function keepRoomOperation(value){if(!value)roomCommandPassword="";if(!value&&roomOperation){const region=document.querySelector('#room-session-status');if(region)region.dataset.version='';}roomOperation=value;if(!roomDraftKey)return;if(value)inMemory.set(roomDraftKey,value);else inMemory.delete(roomDraftKey);try{if(value)localStorage.setItem(roomDraftKey,JSON.stringify(value));else localStorage.removeItem(roomDraftKey)}catch{storageWarning()}}
   function restoreRoomOperation(){
     if(!roomOperation)return;
     const form=document.querySelector('[data-room-command]');if(!form)return;
@@ -420,6 +421,7 @@ window.OieRuntime.register('live', life => {
     const button=form.querySelector('[data-room-action]');if(button){button.dataset.roomAction=roomOperation.command;button.textContent=text('retry');button.title=text('retry');}
     const region=form.querySelector('[data-form-feedback]');if(region){region.textContent=text('roomCommandUnknown');region.dataset.error='true';region.setAttribute('role','alert');}
   }
+  const roomEntryPasswords = new WeakMap();
   const roomEntryFields = ['operationKey','accountId','address','name','nickname'];
   function roomEntryStorage(form, account, address) {
     const scope = ['oie.room-entry.v1', body.dataset.engineId, form.dataset.roomEntry].join(':');
@@ -450,6 +452,7 @@ window.OieRuntime.register('live', life => {
     if (submit) submit.textContent = saved ? text('retry') : submit.dataset.roomEntryLabel;
   }
   function saveRoomEntry(form, saved) {
+    if (!saved) roomEntryPasswords.delete(form);
     const prior = pendingRoomEntry(form);
     const command = saved || prior;
     const scopes = [roomEntryStorage(form)];
@@ -955,18 +958,30 @@ window.OieRuntime.register('live', life => {
       const mentions=journal?.pending?(journal.mentions||[]):readMentions();
       saveDraft({text:value,key:submissionKey.value,pending:true,reply:journal?.reply||null,mentions,attachments:journal?.attachments||[],scheduledAt});if(!scheduledAt&&!editingSchedule)input.value='';restoreMentions(mentions);lockComposer(true);renderReply();
     }
-    const values = new URLSearchParams(new FormData(form));
+    let values = new URLSearchParams(new FormData(form));
+    const roomManagement = form.dataset.oieAction === 'room-management';
+    const managementKey = roomManagement ? values.get('operationKey') : '';
+    if (managementKey) {
+      const key = 'oie.room-management:' + managementKey;
+      const previous = inMemory.get(key);
+      if (previous) values = new URLSearchParams(previous);
+      else inMemory.set(key, values.toString());
+    }
     const roomEntry = !!form.dataset.roomEntry;
     if (roomEntry) {
       const saved = pendingRoomEntry(form);
       if (saved) {
         for (const name of roomEntryFields) values.set(name, saved[name] || '');
+        if (!values.get('password') && roomEntryPasswords.has(form)) values.set('password', roomEntryPasswords.get(form));
       } else if (canonicalID(values.get('accountId')) && values.get('address')) {
         saveRoomEntry(form, Object.fromEntries(roomEntryFields.map(name => [name, values.get(name) || ''])));
       }
     }
+    if (roomEntry && values.get('password')) roomEntryPasswords.set(form, values.get('password'));
     const roomCommand=form.dataset.roomCommand;
     const roomMenuSubmit=roomCommand==='leave'&&form.dataset.roomMenuSubmit==='true';
+    if(roomCommand==='join'&&values.get('password'))roomCommandPassword=values.get('password');
+    if(roomCommand==='join'&&roomCommandPassword)values.set('password',roomCommandPassword);
     if(roomCommand){if(roomOperation){for(const key of ['operationKey','expectedRevisionId','expectedConversationRevisionId','nickname','conversationId','accountId'])values.set(key,roomOperation[key]||'')}else keepRoomOperation({command:roomCommand,operationKey:values.get('operationKey'),expectedRevisionId:values.get('expectedRevisionId'),expectedConversationRevisionId:values.get('expectedConversationRevisionId')||'',nickname:values.get('nickname')||'',conversationId:values.get('conversationId'),accountId:values.get('accountId')})}
 
     if(sending){values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');values.set('mentions',JSON.stringify(journal.mentions||[]));setScheduledValues(values);}
@@ -981,6 +996,13 @@ window.OieRuntime.register('live', life => {
       const response = await life.fetch(form.action,{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-Token':csrf},body:values,signal:controller.signal});
       const result = await response.json();
       if(life.signal.aborted)return;
+      if (roomManagement) {
+        if (result.ok || result.rejected) {
+          inMemory.delete('oie.room-management:' + managementKey);
+          form.elements.operationKey.value = roomOperationKey();
+        }
+        document.dispatchEvent(new CustomEvent('oie:room-management-result', {detail: {form, result}}));
+      }
       if (!result.ok) {
         if(result.code==='engine_changed'){stopped=true;source?.close();}
         if (sending && result.rejected) {
@@ -1033,6 +1055,9 @@ window.OieRuntime.register('live', life => {
       }
     } catch {
       if(life.signal.aborted)return;
+      if (roomManagement) {
+        document.dispatchEvent(new CustomEvent('oie:room-management-result', {detail: {form, result: {ok:false}}}));
+      }
       feedback(form,sending ? text('pending') : text('liveRetry'),true);
       if (sending) input.focus({preventScroll:true});
     } finally {

@@ -341,6 +341,14 @@ type RoomInvitationCredential struct {
 	Password       string
 }
 
+type RoomMessageModeration struct {
+	AccountID   string
+	RoomAddress string
+	StanzaID    string
+	ModeratedAt string
+	Reason      string
+}
+
 type RoomReactionPrivacy struct {
 	AccountID    string
 	Address      string

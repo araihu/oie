@@ -87,6 +87,9 @@ func recordReplyMetadata(ctx context.Context, q *dbgen.Queries, id string, in do
 }
 
 func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) error {
+	if m.Moderation != nil {
+		return nil
+	}
 	if m.OutboundReply != nil {
 		domain.ProjectOutboundReply(m)
 		targetID, err := resolveMessageAlias(ctx, q, m.OutboundReply.TargetID)
@@ -102,6 +105,13 @@ func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) erro
 		}
 		m.Reply.MessageID = targetID
 		m.Reply.Available = target.AccountID == string(m.AccountID) && target.ConversationID == string(m.ConversationID)
+		if m.Reply.Available {
+			if _, err := q.GetRoomMessageModeration(ctx, target.ID); err == nil {
+				m.Reply.Excerpt = ""
+			} else if !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+		}
 		return nil
 	}
 	sourceID := m.ID
@@ -163,6 +173,13 @@ func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) erro
 	var target domain.Message
 	for _, candidate := range candidates {
 		target = candidate
+	}
+	if target.Moderation != nil {
+		m.Reply.Available = true
+		m.Reply.MessageID = target.ID
+		m.Reply.SenderName = boundedText(target.Sender.DisplayName, 300)
+		m.Reply.Excerpt = ""
+		return nil
 	}
 	excerpt := target.OriginalText
 	metadataID := target.ID

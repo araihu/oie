@@ -55,6 +55,7 @@ type Querier interface {
 	GetRoomArchive(ctx context.Context, conversationID string) (GetRoomArchiveRow, error)
 	GetRoomIntent(ctx context.Context, conversationID string) (RoomIntent, error)
 	GetRoomInvitationCredential(ctx context.Context, conversationID string) (string, error)
+	GetRoomMessageModeration(ctx context.Context, messageID string) (GetRoomMessageModerationRow, error)
 	GetRoomReactionPrivacy(ctx context.Context, arg GetRoomReactionPrivacyParams) (GetRoomReactionPrivacyRow, error)
 	GetSharedContentItem(ctx context.Context, arg GetSharedContentItemParams) (GetSharedContentItemRow, error)
 	GetStagedAttachment(ctx context.Context, id string) (StagedAttachment, error)
@@ -91,6 +92,7 @@ type Querier interface {
 	InsertReactionObservation(ctx context.Context, arg InsertReactionObservationParams) error
 	InsertReadRevision(ctx context.Context, arg InsertReadRevisionParams) error
 	InsertRoomInvitationCredential(ctx context.Context, arg InsertRoomInvitationCredentialParams) error
+	InsertRoomModeration(ctx context.Context, arg InsertRoomModerationParams) (int64, error)
 	InsertStagedAttachment(ctx context.Context, arg InsertStagedAttachmentParams) error
 	InsertVisibleMessageChange(ctx context.Context, arg InsertVisibleMessageChangeParams) (int64, error)
 	InterruptedMessageEditCommands(ctx context.Context) ([]MessageEditCommand, error)
@@ -124,6 +126,7 @@ type Querier interface {
 	MarkSharedContentIndexed(ctx context.Context, arg MarkSharedContentIndexedParams) error
 	MessagesAfterTarget(ctx context.Context, arg MessagesAfterTargetParams) ([]Message, error)
 	MessagesAtOrBeforeTarget(ctx context.Context, arg MessagesAtOrBeforeTargetParams) ([]Message, error)
+	ModeratedRoomMessageSources(ctx context.Context, arg ModeratedRoomMessageSourcesParams) ([]string, error)
 	OriginalSendReceipt(ctx context.Context, resourceID string) (Operation, error)
 	PendingDirectHistoryChecks(ctx context.Context, accountID string) ([]Conversation, error)
 	PendingMessageEditCommands(ctx context.Context, nextAttemptAt string) ([]MessageEditCommand, error)
@@ -149,6 +152,7 @@ type Querier interface {
 	ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error
 	ReconcileReactionObservation(ctx context.Context, arg ReconcileReactionObservationParams) error
 	RecordOriginalTransmission(ctx context.Context, id string) error
+	RemoveModeratedSharedContent(ctx context.Context, messageID string) error
 	ResetAllRoomReactionPrivacy(ctx context.Context) error
 	ResetRoomReactionPrivacy(ctx context.Context, accountID string) error
 	ResolveMessageAlias(ctx context.Context, aliasID string) (string, error)
@@ -171,6 +175,7 @@ type Querier interface {
 	UpdateMessagePreview(ctx context.Context, arg UpdateMessagePreviewParams) (int64, error)
 	UpdateMessageReactionCommand(ctx context.Context, arg UpdateMessageReactionCommandParams) error
 	UpdateOutbox(ctx context.Context, arg UpdateOutboxParams) error
+	UpsertRoomInvitationCredential(ctx context.Context, arg UpsertRoomInvitationCredentialParams) error
 }
 
 var _ Querier = (*Queries)(nil)

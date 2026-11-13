@@ -20,7 +20,8 @@ const accounts = [
   {id: alice, revisionId: revision, label: 'Alice', address: 'alice@fixture', protocol: 'xmpp', createdAt: at},
   {id: bob, revisionId: revision, label: 'Bob', address: 'bob@fixture', protocol: 'xmpp', createdAt: at}
 ];
-const previews = [], commands = [], streams = new Set();
+const previews = [], commands = [], managementCommands = [], streams = new Set();
+let managementRevision = 'first-room-revision', managementBlocked = false;
 let destination, roomState = 'joining', cursor = 0, conflict = false, trustedService = true;
 
 async function apiHandler(req, res) {
@@ -49,6 +50,24 @@ async function apiHandler(req, res) {
     previews.push({account: u.pathname.split('/')[4], address: u.searchParams.get('address'), scoped});
     if (u.searchParams.get('address') === 'missing@fixture') return send(200, {address: 'missing@fixture', state: 'not_found'});
     return send(200, {address, state: 'known', name: 'Saberes <script>', description: 'Bem-vindos!', topic: 'Encontro', occupantCount: 17, avatarHash});
+  }
+  if (req.method === 'GET' && u.pathname.endsWith('/rooms')) {
+    return send(200, {state: 'known', rooms: [{address, name: 'Trilha de livros'}]});
+  }
+  if (u.pathname.endsWith('/room-management')) {
+    if (req.method === 'GET') {
+      return send(200, {state:'available', revision:managementRevision,
+        actions:managementBlocked ? ['invite'] : ['rename','topic','invite','role','affiliation'],
+        occupants:[{id:'occupant:reader',nickname:'Leitora',role:'participant',affiliation:'none',roles:['none','visitor'],affiliations:['member','outcast']}],
+        affiliations:[]});
+    }
+    let data = '';
+    for await (const chunk of req) data += chunk;
+    const command = JSON.parse(data);
+    managementCommands.push({...command, key:req.headers['idempotency-key']});
+    if (managementBlocked || command.expectedRevision !== managementRevision) return send(200, {state:'stale'});
+    managementRevision = 'next-room-revision';
+    return send(200, {state:'confirmed'});
   }
   if (req.method === 'POST' && u.pathname.endsWith('/rooms')) {
     let data = '';
@@ -226,7 +245,54 @@ async function waitFor(predicate) {
     cursor++;
     for (const stream of streams) stream.write('id: ' + engine + ':' + cursor + '\nevent: conversation.room_session_changed\ndata: {}\n\n');
     await page.locator('#room-session-status').waitFor({state: 'hidden'});
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({width, height: 900});
+      await page.getByRole('button', {name: 'Mais opções', exact:true}).click();
+      await page.locator('#chat-manage-room').click();
+      const management = page.locator('[data-room-management]');
+      await management.getByRole('button', {name:'Salvar tópico'}).waitFor();
+      const topic = management.getByRole('textbox', {name:'Tópico', exact:true});
+      if (width === 1440 && process.env.OIE_ROOM_MANAGEMENT_SCREENSHOT) {
+        await management.screenshot({path:process.env.OIE_ROOM_MANAGEMENT_SCREENSHOT});
+      }
+      if (width === 1440) {
+        const releaseRequest = {};
+        const held = new Promise(resolve => {releaseRequest.send = resolve;});
+        await page.route('**/ui/rooms/manage', async route => {
+          await held;
+          await route.continue();
+        }, {times:1});
+        await topic.fill('Próxima leitura');
+        const geometry = () => page.locator('#send-message-form').evaluate(element => {
+          const {x,y,width,height} = element.getBoundingClientRect();
+          return [x,y,width,height];
+        });
+        const before = await geometry();
+        const button = management.getByRole('button', {name:'Salvar tópico'});
+        await button.click();
+        assert.equal(await button.isDisabled(), true);
+        assert.deepEqual(await geometry(), before);
+        releaseRequest.send();
+        await management.getByText('Alteração confirmada.').waitFor();
+        assert.equal(managementCommands.length, 1);
+        assert.equal(managementCommands[0].value, 'Próxima leitura');
+        assert.deepEqual(await geometry(), before);
+      } else {
+        await topic.fill('Rascunho do tópico');
+        managementBlocked = true;
+        const submit = management.getByRole('button', {name:'Salvar tópico'});
+        await submit.click();
+        await management.getByText('O estado da sala mudou. Atualize antes de tentar novamente.', {exact:true}).waitFor();
+        await waitFor(() => managementCommands.length === 2);
+        assert.equal(managementCommands[1].value, 'Rascunho do tópico');
+        assert.equal(await topic.inputValue(), 'Rascunho do tópico');
+        await waitFor(() => submit.isDisabled());
+      }
+      await page.keyboard.press('Escape');
+      await management.waitFor({state:'hidden'});
+    }
 
+    await page.setViewportSize({width:1440,height:950});
     conflict = true;
     await page.goto(base + '/?' + new URLSearchParams({chat, account: alice, lang: 'en'}));
     await page.locator('body[data-oie-live-ready=true]').waitFor();
@@ -249,6 +315,13 @@ async function waitFor(predicate) {
     await page.goto(base + '/?' + new URLSearchParams({chat, account: alice, open: 'join-room', lang: 'en'}));
     await form.waitFor();
     const previewButton = form.getByRole('button', {name: 'Preview room'});
+    const directory = form.locator('[data-room-directory]');
+    await directory.locator('summary').click();
+    await directory.getByRole('button', {name:'Browse public rooms'}).click();
+    await directory.getByRole('button', {name:'Trilha de livros'}).click();
+    assert.equal(await form.locator('[name=address]').inputValue(), address);
+    assert.equal(commands.length, 4);
+    await directory.locator('summary').click();
     await form.locator('[name=address]').fill('missing@fixture');
     await previewButton.click();
     await preview.getByText('Room not found.', {exact: true}).waitFor();

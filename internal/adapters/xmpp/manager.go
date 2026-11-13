@@ -620,6 +620,8 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			replyMetadata
 			correctionMetadata
 			reactionMetadata
+			roomModerationMetadata
+			Subject     *string        `xml:"jabber:client subject"`
 			Body        string         `xml:"jabber:client body"`
 			Archive     *archiveResult `xml:"urn:xmpp:mam:2 result"`
 			AvatarEvent *struct {
@@ -686,6 +688,13 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 				}
 			}
 			return m.host.Reject(ctx, application.Rejected{AccountID: e.account.ID, MessageID: msg.ID, Address: address, FromServer: fromServer, FromParticipant: msg.From.Resourcepart() != ""})
+		}
+		if len(msg.Retractions) != 0 || len(msg.Tombstones) != 0 {
+			return m.receiveRoomModeration(ctx, e, msg.Message, msg.roomModerationMetadata, msg.Delay.Stamp, msg.Delay.From)
+		}
+		if msg.Type == stanza.GroupChatMessage && msg.Subject != nil && strings.TrimSpace(msg.Body) == "" {
+			m.observeRoomTopic(e, msg.Message, *msg.Subject)
+			return nil
 		}
 		if len(msg.Reactions) != 0 {
 			return m.receiveReaction(ctx, e, msg.Message, msg.reactionMetadata, msg.replyMetadata, msg.Occupants, msg.Delay.Stamp, msg.Delay.From)

@@ -134,6 +134,9 @@ func (s *Server) changeRoom(ctx context.Context, r *http.Request, text copy, lea
 			nick = &nickname
 		}
 		join := engineapi.JoinRoom{ExpectedRevisionId: revision, Nickname: nick}
+		if password := r.Form.Get("password"); password != "" {
+			join.Password = &password
+		}
 		if expectedChat := r.Form.Get("expectedConversationRevisionId"); expectedChat != "" {
 			if !validOperationKey(expectedChat) || len(r.Form["expectedConversationRevisionId"]) != 1 {
 				return 422, mutationResult{Message: text.InvalidForm, Rejected: true}

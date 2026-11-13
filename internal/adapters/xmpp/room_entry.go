@@ -32,7 +32,17 @@ func sameRoomEntry(slot *roomSlot, name *string, revision domain.ID) bool {
 }
 
 func (m *Manager) roomEntryAvailability(ctx context.Context, e *entry, session *mx.Session, room jid.JID, create bool) string {
-	info, err := m.queryInfo(ctx, e, session, room.String())
+	revision := currentRoomConfiguration(e, room.String()).revision
+	payload, err := m.readHistoryIQ(ctx, e, session, room.String(), stanza.GetIQ, discoInfoQuery)
+	var info disco.Info
+	if err == nil {
+		info, err = parseDiscoInfo(payload)
+		if err == nil && !create {
+			// Room metadata may be invalidated by a subject or presence change
+			// during lookup. That must not erase a valid existence response.
+			_ = m.recordDiscoInfo(ctx, e, session, room.String(), revision, info)
+		}
+	}
 	switch {
 	case err == nil && create:
 		return "room_exists"
@@ -242,6 +252,10 @@ type roomConfigForm struct {
 }
 
 func roomConfigSubmission(payload, name string) (string, error) {
+	return roomConfigSubmit(payload, name, true)
+}
+
+func roomConfigSubmit(payload, name string, create bool) (string, error) {
 	var document struct {
 		Owner struct {
 			Form roomConfigForm `xml:"jabber:x:data x"`
@@ -261,8 +275,10 @@ func roomConfigSubmission(payload, name string) (string, error) {
 		case "FORM_TYPE":
 			formType = field.Type == "hidden" && len(field.Values) == 1 && field.Values[0] == "http://jabber.org/protocol/muc#roomconfig"
 		case "muc#roomconfig_persistentroom":
-			persistent = field.Type == "boolean"
-			field.Values = []string{"1"}
+			if create {
+				persistent = field.Type == "boolean"
+				field.Values = []string{"1"}
+			}
 		case "muc#roomconfig_roomname":
 			if name != "" {
 				named = true
@@ -275,7 +291,7 @@ func roomConfigSubmission(payload, name string) (string, error) {
 		field.Type = ""
 		submit.Form.Fields = append(submit.Form.Fields, field)
 	}
-	if !formType || !persistent || !named {
+	if !formType || create && !persistent || !named {
 		return "", errArchive
 	}
 	data, err := xml.Marshal(submit)

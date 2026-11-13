@@ -112,6 +112,11 @@ func (s *Store) SetRoomIntent(ctx context.Context, in application.RoomIntentMuta
 	if err = putRoomIntent(ctx, q, in.Session); err != nil {
 		return application.RoomIntentResult{}, err
 	}
+	if in.Password != "" {
+		if err := q.UpsertRoomInvitationCredential(ctx, dbgen.UpsertRoomInvitationCredentialParams{ConversationID: string(c.ID), Password: in.Password}); err != nil {
+			return application.RoomIntentResult{}, err
+		}
+	}
 	if !in.Session.Active {
 		if err := q.ClearRoomReactionVisibility(ctx, dbgen.ClearRoomReactionVisibilityParams{AccountID: string(c.AccountID), Address: c.Address}); err != nil {
 			return application.RoomIntentResult{}, err
@@ -246,7 +251,7 @@ func (s *Store) ClaimRoomMessage(ctx context.Context, id, intentRevision, revisi
 }
 
 // The conversation, operation receipt and first room intent share the same transaction.
-func openRoomIntent(ctx context.Context, q *dbgen.Queries, id domain.ID, intent domain.RoomSession) error {
+func openRoomIntent(ctx context.Context, q *dbgen.Queries, id domain.ID, intent domain.RoomSession, updateCredential bool) error {
 	intent.ConversationID = id
 	old, err := q.GetRoomIntent(ctx, string(id))
 	if err == nil {
@@ -254,7 +259,7 @@ func openRoomIntent(ctx context.Context, q *dbgen.Queries, id domain.ID, intent 
 			if intent.CreationName != nil || old.CreationName != nil {
 				return application.ErrStateConflict
 			}
-			if intent.Nickname == "" || intent.Nickname == old.Nickname {
+			if !updateCredential && (intent.Nickname == "" || intent.Nickname == old.Nickname) {
 				return nil
 			}
 		}
