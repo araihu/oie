@@ -164,7 +164,9 @@ jobs:
             dist/flatpak-repo "dist/release/oie-$OIE_RELEASE_VERSION-x86_64.flatpak" org.araihu.oie
       - name: Assemble the release assets
         run: |
-          cp dist/packages/native/* dist/release/
+          # GitHub renames '~' in upload filenames. Keep it in Debian metadata.
+          cp dist/packages/native/*.deb "dist/release/oie_${OIE_RELEASE_VERSION}_linux_amd64.deb"
+          cp dist/packages/native/*.rpm dist/packages/native/*.pkg.tar.zst dist/release/
           tar -czf "dist/release/oie-$OIE_RELEASE_VERSION-homebrew.tar.gz" -C dist/packages/homebrew Casks Formula
           python3 scripts/release_desktop.py checksums dist/release
       - uses: actions/upload-artifact@v4

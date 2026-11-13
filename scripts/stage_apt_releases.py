@@ -4,7 +4,6 @@
 import argparse
 import json
 from pathlib import Path
-import re
 import shutil
 import subprocess
 from tempfile import TemporaryDirectory
@@ -14,14 +13,13 @@ from release_desktop import digest, version_key
 
 REPOSITORY = "araihu/oie"
 POOL = "apt/pool/main/o/oie"
-PACKAGE = re.compile(r"oie_[0-9A-Za-z.+~:-]+_amd64\.deb")
 
 
 def gh(*args):
     return subprocess.check_output(["gh", *args], text=True)
 
 
-def stage_release(tag, asset, directory):
+def stage_release(tag, asset, version, directory):
     with TemporaryDirectory() as temporary:
         download = Path(temporary)
         gh("release", "download", tag, "--repo", REPOSITORY, "--dir", temporary,
@@ -30,10 +28,11 @@ def stage_release(tag, asset, directory):
         checksums = [entry[0] for entry in entries if len(entry) == 2 and entry[1] == asset]
         if checksums != [digest(download / asset)]:
             raise ValueError(f"release checksum mismatch for {asset}")
-        version = subprocess.check_output(["dpkg-deb", "-f", str(download / asset), "Version"], text=True).strip()
-        if asset != f"oie_{version}_amd64.deb":
+        package_version = subprocess.check_output(["dpkg-deb", "-f", str(download / asset), "Version"],
+                                                  text=True).strip()
+        if package_version != version:
             raise ValueError(f"unexpected version in {asset}")
-        shutil.copyfile(download / asset, directory / asset)
+        shutil.copyfile(download / asset, directory / f"oie_{version}_amd64.deb")
 
 
 def published_packages():
@@ -47,11 +46,13 @@ def published_packages():
                 precedence = version_key(tag)
             except ValueError:
                 continue
-            debs = [asset["name"] for asset in release["assets"] if PACKAGE.fullmatch(asset["name"])]
+            version = tag[1:].replace("-", "~", 1) + "-1"
+            filenames = {f"oie_{tag}_linux_amd64.deb", f"oie_{version}_amd64.deb"}
+            debs = [asset["name"] for asset in release["assets"] if asset["name"] in filenames]
             if len(debs) > 1:
                 raise ValueError(f"multiple Oiê amd64 packages in {tag}")
             if debs:
-                yield precedence, tag, debs[0]
+                yield precedence, tag, debs[0], version
 
 
 def main():
@@ -61,8 +62,8 @@ def main():
     directory = args.output / POOL
     directory.mkdir(parents=True)
     releases = sorted(published_packages(), reverse=True)[:3]
-    for _, tag, asset in releases:
-        stage_release(tag, asset, directory)
+    for _, tag, asset, version in releases:
+        stage_release(tag, asset, version, directory)
 
 
 if __name__ == "__main__":
