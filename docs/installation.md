@@ -128,13 +128,21 @@ curl -fL -o oie.sources https://araihu.github.io/oie/apt/oie.sources && \
   sudo apt update && sudo apt install oie
 ```
 
-Open Oiê from the applications menu or run `oie-desktop`. Updates arrive
-through APT. The archive includes prereleases as well as stable releases.
+Open Oiê from the applications menu or run `oie-desktop`. The archive includes
+prereleases as well as stable releases. To update after adding the repository,
+quit Oiê and run:
+
+```sh
+sudo apt update && sudo apt upgrade oie
+```
+
 `sudo apt remove oie` removes the application and keeps its user profile.
 
 The public archive was verified with APT on fresh x86_64 installations of
 Trisquel 12 and Ubuntu 24.04 under emulation. Both installed `0.0.1~rc.3-1`,
 resolved the executable's shared libraries and ran `oie-desktop --help`.
+Both distributions also upgraded directly from `0.0.1~rc.5-1` to
+`0.0.1~rc.7-1` using the existing APT source on emulated x86_64 systems.
 
 After publishing a SemVer desktop tag, the release workflow automatically starts
 the APT workflow on the default branch. That workflow signs the index, deploys
