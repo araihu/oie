@@ -21,7 +21,7 @@ if [ -f "$root/docs/releases/$version.md" ]; then
 fi
 flags=()
 if [ "$prerelease" = true ]; then
-  flags+=(--prerelease --latest=false)
+  flags+=(--latest=false)
 fi
 
 if release=$(gh release view "$version" --json isDraft,url); then
@@ -34,7 +34,7 @@ if release=$(gh release view "$version" --json isDraft,url); then
     exit 0
   fi
 else
-  gh release create "$version" --verify-tag --draft --title "Oiê $version" "${flags[@]}" "${notes[@]}"
+  gh release create "$version" --verify-tag --draft --title "Oiê $version" "--prerelease=$prerelease" "${flags[@]}" "${notes[@]}"
 fi
 
 # Retrying a draft may replace these assets. Published releases are immutable.
