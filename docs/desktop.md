@@ -46,16 +46,22 @@ The [installation guide](installation.md#platforms-and-verified-scope) and
 ### Rebuild the release archives
 
 Use the packaging revision in the release receipt as the tooling checkout.
-`OIE_RELEASE_VERSION=v0.0.1-rc.2 make package-linux` obtains the tagged source
+`OIE_RELEASE_VERSION=v0.0.1-rc.3 make package-linux` obtains the tagged source
 and runs the Ubuntu amd64 build and installation checks through Dagger. Its
 output is under the selected CI artifact directory's `release` folder.
+
+The packaging recipe also produces a `_source.tar.gz` and SHA-256 file for
+each desktop target. Publish the binary and its source archive together.
+See [corresponding source](release-source.md) for the archive layout and build
+commands. Release packaging uses Python 3 and retrieves the browser source
+archives pinned in `packaging/browser-source.json`.
 
 On native Apple Silicon with the build dependencies installed, obtain the
 application tree separately from the tooling checkout:
 
 ```sh
 release_inputs=$(mktemp -d)
-release_version=v0.0.1-rc.2
+release_version=v0.0.1-rc.3
 release_revision=$(git rev-parse "$release_version^{commit}")
 mkdir "$release_inputs/source"
 git archive --format=tar --output="$release_inputs/source.tar" "$release_revision"

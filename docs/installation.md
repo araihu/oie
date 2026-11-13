@@ -36,11 +36,11 @@ Oiê's desktop package includes the Go engine, SQLite store and web interface in
 one application. Add an existing XMPP account after launching. An external XMPP
 server is still required for messaging.
 
-The current release candidate is **v0.0.1-rc.2**. See the
-[release notes](releases/v0.0.1-rc.2.md) for changes since rc.1.
+The current release candidate is **v0.0.1-rc.3**. See the
+[release notes](releases/v0.0.1-rc.3.md) for changes since rc.2.
 
 Download packages and the installer from
-[v0.0.1-rc.2 on GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.2).
+[v0.0.1-rc.3 on GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.3).
 Source installation from the same immutable tag remains available.
 
 ## Install a release package
@@ -63,8 +63,8 @@ Save the release installer, then run it as your current user:
 ```sh
 curl --fail --location --proto '=https' --proto-redir '=https' \
   --output oie-install.sh \
-  https://github.com/araihu/oie/releases/download/v0.0.1-rc.2/install.sh &&
-sh ./oie-install.sh --version v0.0.1-rc.2
+  https://github.com/araihu/oie/releases/download/v0.0.1-rc.3/install.sh &&
+sh ./oie-install.sh --version v0.0.1-rc.3
 ```
 
 You can inspect `oie-install.sh` before running the second command. Do not use
@@ -78,13 +78,13 @@ than installing system packages. It does not remove macOS quarantine attributes.
 | Ubuntu Linux x86_64 | Executable under `~/.local/bin`, desktop entry/icon/docs under `~/.local/share` | Applications menu or `~/.local/bin/oie-desktop` |
 | macOS Apple Silicon | `~/Applications/Oie.app` | Finder or `open "$HOME/Applications/Oie.app"` |
 
-The installer defaults to rc.2. Use `--version VERSION` for another published
+The installer defaults to rc.3. Use `--version VERSION` for another published
 release and `--prefix DIR` to choose a different install root. On macOS the
 prefix is the parent of `Oie.app`; on Linux it contains `bin` and `share`.
 For example:
 
 ```sh
-sh ./oie-install.sh --version v0.0.1-rc.2 --prefix "$HOME/Apps/Oie desktop"
+sh ./oie-install.sh --version v0.0.1-rc.3 --prefix "$HOME/Apps/Oie desktop"
 sh ./oie-install.sh --help
 ```
 
@@ -92,15 +92,19 @@ The release assets are:
 
 | Asset | Contents |
 | --- | --- |
-| `oie_v0.0.1-rc.2_darwin_arm64.tar.gz` | `Oie.app` bundle with executable, resources and licenses |
-| `oie_v0.0.1-rc.2_linux_amd64.tar.gz` | Executable, desktop entry, icon and documentation in `bin`/`share` |
+| `oie_v0.0.1-rc.3_darwin_arm64.tar.gz` | `Oie.app` bundle with executable, resources and licenses |
+| `oie_v0.0.1-rc.3_linux_amd64.tar.gz` | Executable, desktop entry, icon and documentation in `bin`/`share` |
+| `oie_v0.0.1-rc.3_<platform>_source.tar.gz` | Corresponding source and build instructions for each binary |
 | `install.sh` | Per-user installer for both targets |
 | `SHA256SUMS` | SHA-256 checksums for the archives, installer and receipt |
 | `packaging-receipt.json` | Source/tooling revisions, archive hashes, platform build metadata and verification scope |
 
-Both archives are built from the immutable `v0.0.1-rc.2` tag. The receipt
+Both archives are built from the immutable `v0.0.1-rc.3` tag. The receipt
 records the application and packaging revisions, and `build-info.json` inside
 each package identifies its application source.
+
+The current packaging recipe produces a platform-specific archive of the
+[corresponding source](release-source.md) for publication with each binary.
 
 ### macOS first open
 
@@ -183,7 +187,7 @@ Install for the current user:
 mkdir -p "$HOME/.local/bin"
 GOBIN="$HOME/.local/bin" GOFLAGS= GOWORK=off CGO_ENABLED=1 \
   GONOPROXY=github.com/araihu/oie \
-  go install -tags production github.com/araihu/oie/cmd/oie-desktop@v0.0.1-rc.2
+  go install -tags production github.com/araihu/oie/cmd/oie-desktop@v0.0.1-rc.3
 ```
 
 Do not run `go install` with `sudo`. The application and its data belong to
@@ -239,7 +243,7 @@ GOBIN="$HOME/.local/bin" GOFLAGS= GOWORK=off CGO_ENABLED=1 \
   CGO_CFLAGS="-O2 -g -mmacosx-version-min=13.0" \
   CGO_LDFLAGS="-O2 -g -mmacosx-version-min=13.0" \
   go install -tags production -ldflags='-extldflags=-mmacosx-version-min=13.0' \
-  github.com/araihu/oie/cmd/oie-desktop@v0.0.1-rc.2
+  github.com/araihu/oie/cmd/oie-desktop@v0.0.1-rc.3
 ```
 
 These flags avoid the observed mismatch between macOS compilation targets and
@@ -280,12 +284,12 @@ instance. The desktop profile is separate from the browser live preview.
 For development, or when editing the source:
 
 ```sh
-git clone --single-branch --branch v0.0.1-rc.2 https://github.com/araihu/oie.git
+git clone --single-branch --branch v0.0.1-rc.3 https://github.com/araihu/oie.git
 cd oie
 ```
 
 Use the installation command for your platform above, replacing its final
-`github.com/araihu/oie/cmd/oie-desktop@v0.0.1-rc.2` argument with
+`github.com/araihu/oie/cmd/oie-desktop@v0.0.1-rc.3` argument with
 `./cmd/oie-desktop`. Keep the macOS compilation/linker flags. A checkout install
 does not need the `GONOPROXY` exception for Oiê itself.
 

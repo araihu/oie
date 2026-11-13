@@ -17,7 +17,7 @@ import struct
 
 ROOT = Path(__file__).resolve().parents[2]
 INSTALLER = ROOT / "scripts/install.sh"
-VERSION = "v0.0.1-rc.2"
+VERSION = "v0.0.1-rc.3"
 RELEASES = "https://github.com/araihu/oie/releases/download/"
 EXECUTABLE = b"#!/bin/sh\nprintf '%s\\n' 'Oie installer fixture one'\n"
 DESKTOP = b"[Desktop Entry]\nType=Application\nName=Oi\xc3\xaa\nExec=oie-desktop\nIcon=org.araihu.oie\nTerminal=false\nCategories=Network;InstantMessaging;\n"
