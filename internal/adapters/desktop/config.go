@@ -93,9 +93,18 @@ func resolveDataDir(path string) (string, error) {
 	}
 }
 
+const nativeAppID = "org.araihu.oie"
+
+func desktopAppID() string {
+	if runtime.GOOS == "linux" && os.Getenv("FLATPAK_ID") == "com.araihu.oie" {
+		return "com.araihu.oie"
+	}
+	return nativeAppID
+}
+
 func instanceID(dataDir string) string {
 	sum := sha256.Sum256([]byte(dataDir))
-	return fmt.Sprintf("org.araihu.oie.profile-%x", sum[:12])
+	return fmt.Sprintf("%s.profile-%x", desktopAppID(), sum[:12])
 }
 
 //go:embed locales/*.json

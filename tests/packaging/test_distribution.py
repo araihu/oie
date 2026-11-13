@@ -7,6 +7,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from xml.etree import ElementTree
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -62,11 +63,15 @@ class DistributionTest(unittest.TestCase):
         cask = (self.output / "homebrew/Casks/oie.rb").read_text()
         self.assertIn('version "0.0.1-rc.1"', cask)
         self.assertIn(hashlib.sha256(self.macos.read_bytes()).hexdigest(), cask)
-        manifest = json.loads((self.output / "flatpak/org.araihu.oie.json").read_text())
+        manifest = json.loads((self.output / "flatpak/com.araihu.oie.json").read_text())
+        self.assertEqual(manifest["app-id"], "com.araihu.oie")
         source = manifest["modules"][0]["sources"][0]
         self.assertTrue(source["url"].endswith(f"/{VERSION}/{self.linux.name}"))
         self.assertEqual(source["sha256"], hashlib.sha256(self.linux.read_bytes()).hexdigest())
-        self.assertIn('type="development"', (self.output / "flatpak/org.araihu.oie.metainfo.xml").read_text())
+        metadata = ElementTree.parse(self.output / "flatpak/com.araihu.oie.metainfo.xml")
+        self.assertEqual(metadata.findtext("id"), manifest["app-id"])
+        self.assertEqual(metadata.findtext("launchable"), f'{manifest["app-id"]}.desktop')
+        self.assertEqual(metadata.find("releases/release").get("type"), "development")
 
     def test_modified_archive_leaves_no_output(self):
         self.macos.write_bytes(b"modified")
@@ -99,6 +104,7 @@ import stat
 import sys
 
 assert Path("payload/share/applications/org.araihu.oie.desktop").read_text() == "Exec=/usr/bin/oie-desktop\\n"
+assert "<id>org.araihu.oie</id>" in Path("payload/share/metainfo/org.araihu.oie.metainfo.xml").read_text()
 assert stat.S_IMODE(Path("payload/share/doc/oie/LICENSE").stat().st_mode) == 0o644
 assert stat.S_IMODE(Path("payload/bin/oie-desktop").stat().st_mode) == 0o755
 Path("native", sys.argv[5]).write_text(os.environ["OIE_PACKAGE_VERSION"] + "/" + os.environ["OIE_PACKAGE_PRERELEASE"])

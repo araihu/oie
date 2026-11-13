@@ -184,11 +184,25 @@ for your user, add it before installing:
 flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 ```
 
-After installation, run `flatpak run org.araihu.oie` or open Oiê from the
-applications menu. Flatpak keeps its profile under
-`~/.var/app/org.araihu.oie/data/oie`. Native Linux packages and Homebrew on
-Linux use the normal XDG data location. When switching to Flatpak, quit Oiê and
-copy your existing profile to that location if you want to keep using it.
+After installing a bundle built with `com.araihu.oie`, run
+`flatpak run com.araihu.oie` or open Oiê from the applications menu. Its profile
+is in `~/.var/app/com.araihu.oie/data/oie`. Bundles through `v0.0.1-rc.8` use
+`org.araihu.oie` and `~/.var/app/org.araihu.oie/data/oie`.
+
+To move from the older Flatpak, quit both copies of Oiê. If the new profile
+directory does not exist, copy the complete old profile before first launch:
+
+```sh
+old_profile="$HOME/.var/app/org.araihu.oie/data/oie"
+new_data="$HOME/.var/app/com.araihu.oie/data"
+if [ -d "$old_profile" ] && [ ! -e "$new_data/oie" ]; then
+  mkdir -p "$new_data" && cp -a "$old_profile" "$new_data/oie"
+fi
+```
+
+For a native Linux or Homebrew installation, the existing profile is under the
+normal XDG data location. Copy the complete profile with Oiê closed if you
+want to use it with Flatpak.
 The Flatpak uses FFmpeg from the GNOME runtime for local video thumbnails.
 
 Homebrew needs the generated `Casks/` and `Formula/` directories at the root of
@@ -211,8 +225,9 @@ The macOS cask follows the same [first-open procedure](#macos-first-open).
 Quit Oiê before installing an update. For a local package or bundle, install
 the newer file with the same manager. To remove the app, use
 `sudo apt remove oie`, `sudo dnf remove oie`, `sudo pacman -R oie`,
-`flatpak uninstall --user org.araihu.oie` or `brew uninstall oie` for the
-channel you used. These commands retain the user profile.
+`flatpak uninstall --user com.araihu.oie` or `brew uninstall oie` for the
+channel you used. For older Flatpak bundles, use `org.araihu.oie`. These commands
+retain the user profile.
 
 ### Build and distribute
 
@@ -257,9 +272,9 @@ with `flatpak-builder` and `appstreamcli` installed and Flathub enabled:
 packages="dist/packages/$version"
 flatpak-builder --user --install-deps-from=flathub --disable-rofiles-fuse \
   --state-dir=dist/flatpak-state --repo=dist/flatpak-repo \
-  --force-clean dist/flatpak-build "$packages/flatpak/org.araihu.oie.json"
+  --force-clean dist/flatpak-build "$packages/flatpak/com.araihu.oie.json"
 flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
-  dist/flatpak-repo "$packages/oie-$version-x86_64.flatpak" org.araihu.oie
+  dist/flatpak-repo "$packages/oie-$version-x86_64.flatpak" com.araihu.oie
 ```
 
 The Flatpak and pacman packages can be installed directly with the commands
@@ -282,13 +297,13 @@ installed, verify the source archive against `SHA256SUMS` and run:
 bash tests/packaging/smoke_flatpak_source.sh oie_v0.0.1-rc.7_linux_amd64_source.tar.gz
 ```
 
-The initial Flathub submission needs a stable release, a maintainer-authored
-manifest that builds from source, AppStream screenshots, and review by Flathub.
-Review the sources of the embedded JavaScript and WebAssembly assets as part of
-the offline build. The existing bundle ID `org.araihu.oie` points to
-`araihu.org`. The project's live website uses
-`araihu.com`, so `com.araihu.oie` is a candidate for a verifiable ID. Changing
-the Flatpak ID also changes the profile directory under `~/.var/app/`.
+The Flatpak ID is `com.araihu.oie`. The first Flathub submission needs a stable
+release and a maintainer-authored manifest that builds from source. Use the
+stable tag and checksum when writing that manifest. The upstream AppStream
+template includes the release version, date and release notes link from the
+package build. The CI check compiles the Go application with vendored modules
+and uses the embedded browser assets from the release source archive. Review
+how those JavaScript and WebAssembly assets are built for the submission.
 [Flathub submission requirements](https://docs.flathub.org/docs/for-app-authors/requirements)
 
 Once the app is accepted, Flathub's External Data Checker can track the

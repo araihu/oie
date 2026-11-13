@@ -15,6 +15,7 @@ from release_desktop import digest, version_key
 
 ROOT = Path(__file__).resolve().parent.parent
 APP_ID = "org.araihu.oie"
+FLATPAK_ID = "com.araihu.oie"
 
 
 def verify_archive(assets, name, sums):
@@ -47,7 +48,7 @@ def render(source, destination, values):
     destination.write_text(content, encoding="utf-8")
 
 
-def linux_packages(stage, linux_archive, release, prerelease, date, nfpm, formats):
+def linux_packages(stage, linux_archive, release, prerelease, date, nfpm, formats, values):
     payload = stage / "payload"
     payload.mkdir()
     with tarfile.open(linux_archive) as archive:
@@ -71,8 +72,8 @@ def linux_packages(stage, linux_archive, release, prerelease, date, nfpm, format
     desktop.write_text(desktop.read_text(encoding="utf-8").replace("@OIE_EXEC@", "/usr/bin/oie-desktop"),
                        encoding="utf-8")
     metainfo_dir = payload / "share/metainfo"
-    metainfo_dir.mkdir()
-    shutil.copyfile(stage / f"flatpak/{APP_ID}.metainfo.xml", metainfo_dir / f"{APP_ID}.metainfo.xml")
+    render(ROOT / "packaging/linux/oie.metainfo.xml.in", metainfo_dir / f"{APP_ID}.metainfo.xml",
+           dict(values, APP_ID=APP_ID))
     (metainfo_dir / f"{APP_ID}.metainfo.xml").chmod(0o644)
 
     native = stage / "native"
@@ -143,14 +144,16 @@ def generate(args):
         if not args.deb_only:
             for source in sorted((ROOT / "packaging/homebrew").glob("*/*.rb.in")):
                 render(source, stage / "homebrew" / source.parent.name / source.stem, values)
-        for source in sorted((ROOT / "packaging/flatpak").glob("*.in")):
-            render(source, stage / "flatpak" / source.stem, values)
+        if not args.deb_only:
+            render(ROOT / f"packaging/flatpak/{FLATPAK_ID}.json.in", stage / f"flatpak/{FLATPAK_ID}.json", values)
+            render(ROOT / "packaging/linux/oie.metainfo.xml.in", stage / f"flatpak/{FLATPAK_ID}.metainfo.xml",
+                   dict(values, APP_ID=FLATPAK_ID))
         if not args.recipes_only:
             nfpm = shutil.which(args.nfpm)
             if not nfpm:
                 raise ValueError(f"nFPM executable not found: {args.nfpm}")
             formats = ("deb",) if args.deb_only else ("deb", "rpm", "archlinux")
-            linux_packages(stage, linux_archive, release, prerelease, date, nfpm, formats)
+            linux_packages(stage, linux_archive, release, prerelease, date, nfpm, formats, values)
             shutil.rmtree(stage / "payload")
         stage.rename(output)
     print(output)

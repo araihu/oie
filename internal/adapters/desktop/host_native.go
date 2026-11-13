@@ -158,11 +158,12 @@ func Run(ctx context.Context, c Config) error {
 			window.Focus()
 		}
 	}
+	appID := desktopAppID()
 	app = application.New(application.Options{
 		Name: "Oiê", Icon: icon, LogLevel: slog.LevelWarn,
 		DisableDefaultSignalHandler: true,
 		Mac:                         application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: false},
-		Linux:                       application.LinuxOptions{DisableQuitOnLastWindowClosed: true, ApplicationID: "org.araihu.oie", ProgramName: "org.araihu.oie"},
+		Linux:                       application.LinuxOptions{DisableQuitOnLastWindowClosed: true, ApplicationID: appID, ProgramName: appID},
 		Services:                    []application.Service{application.NewService(service)},
 		SingleInstance:              &application.SingleInstanceOptions{UniqueID: instanceID(config.DataDir), ExitCode: 0, OnSecondInstanceLaunch: func(application.SecondInstanceData) { reopen() }},
 		Assets:                      application.AssetOptions{Handler: cookies.handler(http.HandlerFunc(service.serve)), DisableLogging: true},

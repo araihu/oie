@@ -7,7 +7,7 @@ scratch=$(mktemp -d)
 trap 'rm -r "$scratch"' EXIT
 
 tar -xf "$archive" -C "$scratch" --strip-components=1 --wildcards '*/oie/*'
-flatpak build-init --arch=x86_64 "$scratch/build" org.araihu.oie org.gnome.Sdk org.gnome.Platform 50
+flatpak build-init --arch=x86_64 "$scratch/build" com.araihu.oie org.gnome.Sdk org.gnome.Platform 50
 flatpak build --unshare=network \
   --bind-mount="/run/oie-source=$scratch/oie" \
   --bind-mount="/run/oie-go=$toolchain" "$scratch/build" sh -ec '

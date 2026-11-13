@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>@APP_ID@</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <name>Oiê</name>
+  <summary>Desktop messenger for XMPP accounts</summary>
+  <summary xml:lang="pt-BR">Mensageiro para contas XMPP</summary>
+  <description>
+    <p>Read and send messages, join public rooms and search retained conversations. You need an XMPP account to connect and start chatting.</p>
+    <p xml:lang="pt-BR">Leia e envie mensagens, entre em salas públicas e pesquise no histórico. Você precisa de uma conta XMPP para se conectar e começar a conversar.</p>
+  </description>
+  <developer id="com.araihu">
+    <name>Arai Hû</name>
+  </developer>
+  <url type="homepage">https://oie.araihu.com/</url>
+  <url type="bugtracker">https://github.com/araihu/oie/issues</url>
+  <url type="vcs-browser">https://github.com/araihu/oie</url>
+  <url type="help">https://oie.araihu.com/docs/</url>
+  <launchable type="desktop-id">@APP_ID@.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/araihu/oie-site/75255365b8bddc578995a0fcaf38a6fca19ac827/content/brand/conversa.webp</image>
+      <caption>Conversation list and an open room</caption>
+      <caption xml:lang="pt-BR">Lista de conversas e uma sala aberta</caption>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1">
+    <content_attribute id="social-chat">intense</content_attribute>
+  </content_rating>
+  <releases>
+    <release version="@VERSION@" date="@DATE@" type="@RELEASE_TYPE@">
+      <url type="details">https://github.com/araihu/oie/releases/tag/v@VERSION@</url>
+    </release>
+  </releases>
+</component>
