@@ -838,7 +838,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	listOnly := fragment == "inbox"
 	editorOnly := fragment == "schedule-editor" && v.ChatID != ""
 	infoOnly := fragment == "info" && v.ChatID != ""
-	paneOnly := (fragment == "conversation" || fragment == "timeline") && v.ChatID != "" || editorOnly || infoOnly
+	paneOnly := (fragment == "conversation" || fragment == "timeline" || fragment == "source-pane") && v.ChatID != "" || editorOnly || infoOnly
 	accountsOnly := fragment == "accounts"
 	scheduledOnly := fragment == "scheduled" && v.Section == "scheduled"
 	if fragment == "appearance" {
@@ -908,7 +908,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	first := r.Header.Get("X-Oie-Inbox-First")
 	// A query can match retained content outside the first row's fields.
 	canReuseImplicit := cursorMatches && v.Query == "" && (first == "" || validOperationKey(first))
-	reuseOnNavigation := fragment == "app" && v.Section == "chats" && !v.GlobalMessageSearch && cacheMatches &&
+	reuseOnNavigation := (fragment == "app" || fragment == "source") && v.Section == "chats" && !v.GlobalMessageSearch && cacheMatches &&
 		(explicitSelection || canReuseImplicit)
 	reuseOnRefresh := r.URL.Path == "/ui/refresh" && cacheMatches && cursorMatches && explicitSelection
 	v.ReuseInbox = reuseOnNavigation || reuseOnRefresh
@@ -1041,7 +1041,11 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		return
 	}
 	s.latestEditTarget(ctx, v)
-	items, usedContext := s.contextMessages(ctx, v, v.Selected.AccountId)
+	contextLimit := timelinePageSize
+	if r.Header.Get("HX-Request") == "true" && (r.Header.Get("X-Oie-Fragment") == "source" || r.Header.Get("X-Oie-Fragment") == "source-pane") {
+		contextLimit = sourceContextPageSize
+	}
+	items, usedContext := s.contextMessages(ctx, v, v.Selected.AccountId, contextLimit)
 	if v.Unavailable {
 		return
 	}
@@ -1065,7 +1069,11 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		v.TimelineOlder = v.ContextHasOlder
 		v.TimelineNewer = v.ContextHasNewer
 	}
-	if !validTimelineMessages(items, v.Selected.AccountId, v.ChatID, 50) {
+	limit := timelinePageSize
+	if usedContext {
+		limit = contextLimit
+	}
+	if !validTimelineMessages(items, v.Selected.AccountId, v.ChatID, limit) {
 		v.Unavailable = true
 		return
 	}
@@ -1201,7 +1209,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 			if r.URL.Path == "/" && v.Section != "media" && v.Section != "scheduled" {
 				component = inboxList(v)
 			}
-		case "conversation":
+		case "conversation", "source-pane":
 			if v.Section != "media" && v.Section != "scheduled" {
 				component = conversationPane(v)
 			}

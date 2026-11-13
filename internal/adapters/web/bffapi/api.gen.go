@@ -131,6 +131,8 @@ const (
 	ScheduleEditor RenderWorkspaceParamsXOieFragment = "schedule-editor"
 	Scheduled      RenderWorkspaceParamsXOieFragment = "scheduled"
 	Shared         RenderWorkspaceParamsXOieFragment = "shared"
+	Source         RenderWorkspaceParamsXOieFragment = "source"
+	SourcePane     RenderWorkspaceParamsXOieFragment = "source-pane"
 	Timeline       RenderWorkspaceParamsXOieFragment = "timeline"
 )
 
@@ -154,6 +156,10 @@ func (e RenderWorkspaceParamsXOieFragment) Valid() bool {
 	case Scheduled:
 		return true
 	case Shared:
+		return true
+	case Source:
+		return true
+	case SourcePane:
 		return true
 	case Timeline:
 		return true
@@ -755,10 +761,10 @@ type RenderWorkspaceParams struct {
 	// HXRequest Set to true to request an HTML fragment.
 	HXRequest *RenderWorkspaceParamsHXRequest `json:"HX-Request,omitempty"`
 
-	// XOieFragment Selects the HTML region. With HX-Request and no fragment selector, the app region is returned. The app fragment includes the workspace region used for sidebar navigation.
+	// XOieFragment Selects the HTML region. With HX-Request and no fragment selector, the app region is returned. The app fragment includes the workspace region used for sidebar navigation. The source fragment uses a smaller initial timeline window around an explicit message target, with paging in both directions. The source-pane fragment returns only the conversation panel with that same smaller window.
 	XOieFragment *RenderWorkspaceParamsXOieFragment `json:"X-Oie-Fragment,omitempty"`
 
-	// XOieInboxScope Scope of the conversation list held in the current tab. An app fragment for Conversations may omit the list contents when the scope matches the current engine and requested inbox.
+	// XOieInboxScope Scope of the conversation list held in the current tab. An app or source fragment for Conversations may omit the list contents when the scope matches the current engine and requested inbox.
 	XOieInboxScope *string `json:"X-Oie-Inbox-Scope,omitempty"`
 
 	// XOieInboxFirst First conversation in the tab's cached default inbox, used as a candidate for implicit desktop selection when the scope matches. The server checks current visibility.

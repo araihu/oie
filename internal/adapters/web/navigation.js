@@ -409,8 +409,11 @@
   if(url.origin!==location.origin||!['/','/search'].includes(url.pathname)||(!form&&(node.getAttribute('href')||'').startsWith('#')))continue;
   const pane=!form&&node.matches('#conversation-list a[data-conversation-id],.oie-back-button')&&conversationRoute(url);
   const scoped=node.id==='shared-content-search'?'shared-search-results':form&&node.matches('[data-info-search]')?'chat-info-content':scopedKind(url,node);
-  const kind=node.matches('a[data-oie-navigation-item]')?routeID:scoped||(pane?'conversation-pane':!form&&node.matches('a[data-filter]')?inboxID:'oie-app');
-  node.setAttribute('hx-boost','true');node.setAttribute('hx-target','#'+kind);node.setAttribute('hx-select',selectFor(kind));node.setAttribute('hx-swap',swapFor(kind));node.setAttribute('hx-push-url','true');node.setAttribute('hx-headers',JSON.stringify({'X-Oie-Fragment':fragment(kind)}));
+  const source=!form&&node.matches('[data-shared-actions] a[id^="shared-source-"],[data-info-source]')&&
+   url.searchParams.has('message')&&url.searchParams.has('chat');
+  const sourceInPane=source&&conversationRoute(url);
+  const kind=sourceInPane?'conversation-pane':node.matches('a[data-oie-navigation-item]')||source?routeID:scoped||(pane?'conversation-pane':!form&&node.matches('a[data-filter]')?inboxID:'oie-app');
+  node.setAttribute('hx-boost','true');node.setAttribute('hx-target','#'+kind);node.setAttribute('hx-select',selectFor(kind));node.setAttribute('hx-swap',swapFor(kind));node.setAttribute('hx-push-url','true');node.setAttribute('hx-headers',JSON.stringify({'X-Oie-Fragment':sourceInPane?'source-pane':source?'source':fragment(kind)}));
  }window.htmx?.process(root);}
  // The dependency loader can expose HTMX before Alpine finishes loading.
  // Process the clicked navigation link before the event reaches its target,
@@ -489,7 +492,7 @@
    ctx.oieScope=ctx.target.dataset.conversationScope;
    const url=new URL(ctx.request.action,location.href);
    ctx.oieChat=url.searchParams.get('chat')||'';
-   if(ctx.oieChat&&(ctx.oieChat!==ctx.target.dataset.conversationId||!ctx.target.getClientRects().length))startConversationLoading(ctx);
+   if(ctx.oieChat&&(ctx.oieChat!==ctx.target.dataset.conversationId||url.searchParams.has('message')||!ctx.target.getClientRects().length))startConversationLoading(ctx);
   }
   if(ctx.oieKind==='schedule-editor'&&!ctx.sourceElement?.matches('[data-conversation-schedule-edit]')){
    const snapshot={};

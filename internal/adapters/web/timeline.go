@@ -115,6 +115,7 @@ func (v view) timelinePageHref(direction string) string {
 }
 
 const timelinePageSize = 50
+const sourceContextPageSize = 16
 
 func timelineInitialParams(v view) *engineapi.ListMessagesParams {
 	limit := timelinePageSize

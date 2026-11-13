@@ -32,11 +32,11 @@ paths:
         schema: {type: string, enum: ['true']}
       - name: X-Oie-Fragment
         in: header
-        description: Selects the HTML region. With HX-Request and no fragment selector, the app region is returned. The app fragment includes the workspace region used for sidebar navigation.
-        schema: {type: string, enum: [app, inbox, conversation, info, scheduled, schedule-editor, accounts, shared, appearance, timeline]}
+        description: Selects the HTML region. With HX-Request and no fragment selector, the app region is returned. The app fragment includes the workspace region used for sidebar navigation. The source fragment uses a smaller initial timeline window around an explicit message target, with paging in both directions. The source-pane fragment returns only the conversation panel with that same smaller window.
+        schema: {type: string, enum: [app, inbox, conversation, info, scheduled, schedule-editor, accounts, shared, appearance, timeline, source, source-pane]}
       - name: X-Oie-Inbox-Scope
         in: header
-        description: Scope of the conversation list held in the current tab. An app fragment for Conversations may omit the list contents when the scope matches the current engine and requested inbox.
+        description: Scope of the conversation list held in the current tab. An app or source fragment for Conversations may omit the list contents when the scope matches the current engine and requested inbox.
         schema: {type: string, pattern: '^[0-9a-f]{64}$'}
       - name: X-Oie-Inbox-First
         in: header
