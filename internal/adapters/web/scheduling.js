@@ -468,16 +468,23 @@ window.OieRuntime.register('scheduling', life => {
       file.request = controller;
       const timeout = life.timeout(() => controller.abort(), 90000);
       try {
-        const form = new FormData();
-        form.set('file', file.file);
+        if (/[\x00-\x1f\x7f]/.test(file.fileName)) throw Error('invalid filename');
+        // Encode the multipart quoted string directly so quotes and literal %22 stay distinct.
+        const boundary = 'oie-' + newID();
+        const filename = file.fileName.replace(/["\\]/g, '\\$&');
+        const mediaType = file.file.type || 'application/octet-stream';
+        const header = '--' + boundary + '\r\n' +
+          'Content-Disposition: form-data; name="file"; filename="' + filename + '"\r\n' +
+          'Content-Type: ' + mediaType + '\r\n\r\n';
+        const body = new Blob([header, file.file, '\r\n--' + boundary + '--\r\n']);
         const response = await life.fetch(fileURL(file.id).replace('/file?', '/stage?'), {
-          method: 'POST', headers: {'X-CSRF-Token': csrf}, body: form, signal: controller.signal,
+          method: 'POST', headers: {'X-CSRF-Token': csrf, 'Content-Type': 'multipart/form-data; boundary=' + boundary},
+          body, signal: controller.signal,
         });
         if (!response.ok) throw Error('staging');
         const metadata = await response.json();
-        // Browsers may escape filename quotes in multipart. Use the name stored by the engine.
         if (metadata?.id !== file.id || metadata.size !== file.file.size ||
-          typeof metadata.fileName !== 'string' || !metadata.fileName.trim() ||
+          metadata.fileName !== file.fileName ||
           typeof metadata.mediaType !== 'string' || !/^[a-f0-9]{64}$/.test(metadata.sha256)) throw Error('staging');
         if (life.signal.aborted || pending.get(file.id) !== file) return;
         if (controller.signal.aborted || !available()) throw Error('staging unavailable');

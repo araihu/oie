@@ -10,8 +10,8 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
     name: 'planta-do-estudio.png', mimeType: 'image/png',
     buffer: readFileSync(join(__dirname, 'fixtures', 'video-poster.png')),
   };
-  const file = {name:'notas.txt', mimeType:'text/plain', buffer:Buffer.from('Notes')};
-  const quotedFile = {...file, name:'relatório "final".txt'};
+  const file = {name:'relatório "final".txt', mimeType:'text/plain', buffer:Buffer.from('Notes')};
+  const percentFile = {...file, name:'relatório %22final%22.txt'};
   const longFile = {...file, name:'roteiro-da-sessao-de-gravacao-e-notas-de-producao.txt'};
   const stagePath = '**/ui/scheduling/stage?*';
   const requestPaths = [];
@@ -154,12 +154,19 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
       for (const frame of frames) assert(frame.every((value,i) => Math.abs(value-before[i]) <= 1), JSON.stringify({frame,before}));
       assert.deepEqual(requestPaths.splice(0), ['/ui/scheduling/stage']);
       assert(await scheduleMenu.isEnabled());
-      await page.locator('[data-attachment-picker]').setInputFiles(quotedFile);
-      const quoted = draftFiles.getByRole('link', {name:'relatório %22final%22.txt', exact:true});
-      await quoted.waitFor();
+      await page.locator('[data-attachment-picker]').setInputFiles([file, percentFile]);
+      for (const name of [file.name, percentFile.name]) {
+        const link = draftFiles.getByRole('link', {name, exact:true});
+        await link.waitFor();
+        assert.equal(await link.getAttribute('download'), name);
+      }
+      await page.reload();
+      await draftFiles.getByRole('link', {name:file.name, exact:true}).waitFor();
+      await draftFiles.getByRole('link', {name:percentFile.name, exact:true}).waitFor();
       assert(await send.isEnabled());
-      await remove('relatório %22final%22.txt').click();
-      assert.deepEqual(requestPaths.splice(0), ['/ui/scheduling/stage']);
+      await remove(file.name).click();
+      await remove(percentFile.name).click();
+      assert.deepEqual(requestPaths.splice(0), ['/ui/scheduling/stage','/ui/scheduling/stage']);
       if (expectTransportFailure) expectTransportFailure(true);
       try {
         let lostURL;
