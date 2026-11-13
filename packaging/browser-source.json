@@ -2,15 +2,8 @@
   "inputs": {
     "internal/adapters/web/brand/SOURCE.json": "0bcdd90f39a8d794dc74fa29552c792c864242b374359ba7d99d3472c75da2bf",
     "internal/adapters/web/cache_vendor/manifest.json": "d5f93763d96f0b961ec57b11d71729cd9cec0c0535622ec8066a14ef1584f9ad",
-    "internal/adapters/web/location_map/LICENSE.txt": "ee5fc05a0677eaf69601d2c7db0d9ecd6cc27c3abc1d0733bc9ed34707cf8ef2",
-    "internal/adapters/web/location_map/NOTICE-MAPLIBRE-DEPENDENCIES.txt": "5f5f3927e1b6e83cca577d04725331da1cb9a2794119bd0c4928ba7125242fb2",
-    "internal/adapters/web/location_map/NOTICE-OSM.txt": "2b75e720a1a88e72c2f1b0b0db6092a141ecffb876a8fd9c176ea3f0d62512e6",
-    "internal/adapters/web/location_map/maplibre-gl-worker.mjs": "c8998a2616612ebc7afc3a6f83e31ad1c5f6187550a018b4fd0561779c33015b",
-    "internal/adapters/web/location_map/maplibre-gl.css": "a90798a1953017790e590f7e1bd35ff103a8a4263972cb47290b78adf86f8c20",
-    "internal/adapters/web/location_map/maplibre-gl.mjs": "1e0a68844041aec6621a10d4725c9970c3b19cf7e1605d98b01dbc993e1058b2",
-    "internal/adapters/web/location_map/paulista.geojson": "a8561b87a4793ef46d164b04dff4fb0f7a5234e100b72697e6b52ae920fb5a65",
     "internal/adapters/web/pdfjs/manifest.json": "852a64b04dbcd2daaf6707892ad03c13609da8a1f81c233f56382b8e51017519",
-    "tools/icons/.iconpack.lock.yaml": "5a273030b3a3a546dfe50ccb90522b2992c2798eb84310331b89437fd80530d7",
+    "tools/icons/.iconpack.lock.yaml": "54e0f030225e372f3bb58571a46afd24f7a4e261c8d844dc810702a951c1db43",
     "vendor/github.com/araihu/goshtoso/assets/favicon.svg": "56e8b185f2572ad4c7ea6fa8e715aa7dacd7381422b431ce07c35965ab05b3b7",
     "vendor/github.com/araihu/goshtoso/assets/icons/heroicons.svg": "75e282de7a19efba9cf0285b44af0641c1527361f921b7d7f8020efc1f1f0fb7",
     "vendor/github.com/araihu/goshtoso/assets/images/goshtoso-logo.svg": "5801b31fc6b1f54cde98b1a3f3f5e57553f6e67aa3fa0318879e5e2603cd540e",
@@ -148,30 +141,6 @@
       ],
       "packaged_name": "lru-cache-11.2.6-source.tar",
       "packaged_sha256": "015ed00329d29aa5c580129b96ca6c5ff8d057db62a237e2460b20e597a44f29"
-    },
-    {
-      "name": "maplibre-gl-6.18.0.tgz",
-      "url": "https://registry.npmjs.org/maplibre-gl/-/maplibre-gl-6.18.0.tgz",
-      "sha256": "9486aea5ae37e47b32ce356ad1ff1d1ab3274e908a562cc61e668c3c8cc60243"
-    },
-    {
-      "name": "maplibre-gl-js-6.18.0.tar.gz",
-      "url": "https://codeload.github.com/maplibre/maplibre-gl-js/tar.gz/refs/tags/v6.18.0",
-      "sha256": "da64d42a7ae3aab026ec5e0bf6a75724314663ff49cb92158063d3666f13cfae",
-      "include": [
-        "LICENSE.txt",
-        "README.md",
-        "package.json",
-        "package-lock.json",
-        "rolldown.config.ts",
-        "postcss.config.js",
-        "tsconfig.json",
-        "tsconfig.dist.json",
-        "build",
-        "src"
-      ],
-      "packaged_name": "maplibre-gl-js-6.18.0-source.tar",
-      "packaged_sha256": "bd280f5189292284f9d6e034787c46a7e4f0540207ff2cac6e66a88b72cd8b35"
     },
     {
       "name": "mermaid-11.16.1.tar.gz",

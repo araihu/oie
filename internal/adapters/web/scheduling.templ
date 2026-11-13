@@ -10,7 +10,6 @@ import (
 	"github.com/araihu/goshtoso/components/drawer"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/link"
-	"github.com/araihu/goshtoso/components/modal"
 	"github.com/araihu/goshtoso/components/splitbutton"
 	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -291,50 +290,12 @@ templ attachmentMenu(v view) {
 		Sections: []dropdown.Section{{Items: []dropdown.Item{
 			{ID:"composer-attach-image", Label:v.Text.AttachImage, Icon:appicons.Icon(appicons.Config{Symbol:appicons.IconHeroiconsPhoto16SolidPhoto, Decorative:true, RootClass:"oie-icon"}), OnClick:"$dispatch('oie:compose-add','image')"},
 			{ID:"composer-attach-file", Label:v.Text.AttachFile, Icon:glyph(heroicons.Icon16SolidPaperClip), OnClick:"$dispatch('oie:compose-add','file')"},
-			{ID:"composer-attach-location", Label:v.Text.AttachLocation, Icon:appicons.Icon(appicons.Config{Symbol:appicons.IconHeroiconsMapPin16SolidMapPin, Decorative:true, RootClass:"oie-icon"}), OnClick:"$dispatch('oie:compose-add','location')"},
 		}}},
 	})
 }
 
 templ attachmentMenuTrigger(v view) {
 	@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Attach,"data-attach-menu":""})) { @glyph(heroicons.Icon16SolidPlus) }
-}
-
-templ locationDraftDialog(v view) {
-	@modal.Dialog(modal.DialogConfig{ID:"oie-location-draft",Title:v.Text.AttachLocation,Content:locationDraftForm(v)})
-}
-
-templ locationDraftForm(v view) {
-	<form class="oie-location-draft" method="dialog" data-location-draft data-invalid={v.Text.LocationInvalid} data-unavailable={v.Text.LocationUnavailable} data-finding={v.Text.LocationFinding} data-too-long={v.Text.InvalidMessage} data-map-label={v.Text.AttachLocation} data-zoom-in={v.Text.LocationZoomIn} data-zoom-out={v.Text.LocationZoomOut}>
-		<div class="oie-location-map" data-location-map data-location-map-state="loading"
-			data-style-url={v.LocationMapStyle} aria-describedby="location-map-hint">
-			<div data-location-map-canvas></div>
-			<span class="oie-location-map-center" aria-hidden="true">+</span>
-			<div class="oie-location-map-attribution">
-				if v.LocationMapStyle != "" {
-					<span>{v.LocationMapAttribution}</span>
-				}
-				<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a>
-			</div>
-			<p data-location-map-status role="status" data-loading={v.Text.LocationMapLoading} data-unavailable={v.Text.LocationMapUnavailable}>{v.Text.LocationMapLoading}</p>
-		</div>
-		<p id="location-map-hint">{v.Text.LocationMapHint}</p>
-		<div class="oie-location-map-actions">
-			@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-location-center":"","disabled":true})) { <span>{v.Text.LocationMarkCenter}</span> }
-			@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-locate":""})) { <span>{v.Text.LocationUseCurrent}</span> }
-		</div>
-		<div class="oie-location-coordinates">
-			<div><label for="location-latitude">{v.Text.LocationLatitude}</label>
-			<input id="location-latitude" name="latitude" type="number" inputmode="decimal" min="-90" max="90" step="any" required autofocus/></div>
-			<div><label for="location-longitude">{v.Text.LocationLongitude}</label>
-			<input id="location-longitude" name="longitude" type="number" inputmode="decimal" min="-180" max="180" step="any" required/></div>
-		</div>
-		<p data-location-status role="status"></p>
-		<footer>
-			@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-location-cancel":""})) { <span>{v.Text.DeleteDataCancel}</span> }
-			@button.Button(button.WithType("submit")) { <span>{v.Text.AttachmentAddToDraft}</span> }
-		</footer>
-	</form>
 }
 
 templ composerAttachments(v view) {

@@ -14,10 +14,3 @@ sources:
     license: MIT
     licensePath: LICENSE
     licenseUrl: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
-  - id: heroicons-map-pin
-    kind: file
-    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/map-pin.svg
-    path: 16/solid/map-pin.svg
-    license: MIT
-    licensePath: LICENSE
-    licenseUrl: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE

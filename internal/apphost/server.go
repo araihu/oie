@@ -127,7 +127,6 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 	}
 	host.presentation = host.track(http.NotFoundHandler())
 	if !cfg.DataOnly {
-		options = append(options, web.WithLocationMapStyle(os.Getenv("OIE_MAP_STYLE_URL"), os.Getenv("OIE_MAP_ATTRIBUTION")))
 		ui, err := web.New(engineURL, options...)
 		if err != nil {
 			return nil, err

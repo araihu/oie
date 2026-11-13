@@ -70,68 +70,12 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
 
     for (const [label, accept] of [[pt ? 'Imagem' : 'Image', 'image/*'], [pt ? 'Arquivo' : 'File', '']]) {
       await attach.click();
+      assert.deepEqual(await page.getByRole('menuitem').allTextContents().then(items => items.map(item => item.trim())),
+        pt ? ['Imagem', 'Arquivo'] : ['Image', 'File']);
       const chooser = page.waitForEvent('filechooser');
       await page.getByRole('menuitem', {name:label, exact:true}).click();
       assert.equal(await (await chooser).element().getAttribute('accept'), accept);
     }
-    await attach.click();
-    await page.getByRole('menuitem', {name:pt ? 'Localização' : 'Location', exact:true}).click();
-    const location = page.locator('#oie-location-draft');
-    const latitude = location.locator('[name="latitude"]');
-    const longitude = location.locator('[name="longitude"]');
-    let position = 'geo:-23.55,-46.63';
-    if (pt) {
-      await page.context().grantPermissions(['geolocation']);
-      await page.context().setGeolocation({latitude:-23.55, longitude:-46.63});
-      await location.getByRole('button', {name:'Usar localização atual'}).click();
-      await until(async () => Number(await latitude.inputValue()) === -23.55, 'browser coordinates populate latitude');
-      assert.equal(Number(await longitude.inputValue()), -46.63);
-    } else {
-      const refused = [];
-      await page.route('**/*', async route => {
-        const url = new URL(route.request().url());
-        if (url.origin === new URL(base).origin) return route.fallback();
-        refused.push(url.href);
-        await route.abort();
-      });
-      const map = location.locator('[data-location-map]');
-      await location.locator('canvas.maplibregl-canvas').waitFor();
-      await until(async () => await map.getAttribute('data-location-map-state') === 'ready', 'local OpenStreetMap data renders');
-      await location.getByRole('button', {name:'Mark map center'}).click();
-      await location.locator('canvas.maplibregl-canvas').click({position:{x:180, y:116}});
-      const lat = Number(await latitude.inputValue()), lng = Number(await longitude.inputValue());
-      assert(lat >= -23.564 && lat <= -23.551);
-      assert(lng >= -46.662 && lng <= -46.649);
-      assert.deepEqual(refused, []);
-      position = 'geo:' + lat + ',' + lng;
-      await page.unroute('**/*');
-    }
-    await location.getByRole('button', {name:pt ? 'Adicionar ao rascunho' : 'Add to draft', exact:true}).click();
-    await location.waitFor({state:'hidden'});
-    assert.equal(await composer.inputValue(), original + '\n' + position);
-    await page.reload();
-    await until(async () => await composer.inputValue() === original + '\n' + position, 'coordinates remain in draft after reload');
-    assert.equal(await page.locator('[data-draft-link-preview]').isVisible(), false);
-    assert.equal(requestPaths.length, 0, 'location does not send or stage an attachment');
-    await composer.fill(original);
-    if (!pt) {
-      await page.route('**/ui/location_map/paulista.geojson', route => route.abort('failed'), {times:1});
-      if (expectTransportFailure) expectTransportFailure(true);
-      try {
-        await attach.click();
-        await page.getByRole('menuitem', {name:'Location', exact:true}).click();
-        await location.getByText('Map unavailable. You can still enter coordinates.').waitFor();
-        await latitude.fill('-23.55');
-        await longitude.fill('-46.63');
-        await location.getByRole('button', {name:'Add to draft', exact:true}).click();
-        await location.waitFor({state:'hidden'});
-        assert.equal(await composer.inputValue(), original + '\ngeo:-23.55,-46.63');
-        await composer.fill(original);
-      } finally {
-        if (expectTransportFailure) expectTransportFailure(false);
-      }
-    }
-
     assert.equal(await dataEvent(page, 'paste', [], 'ordinary pasted text'), false);
     assert.equal(await draftFiles.isVisible(), false);
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);

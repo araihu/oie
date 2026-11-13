@@ -698,17 +698,6 @@ window.OieRuntime.register('live', life => {
     detail.applied = true;
     renderReply();
   });
-  life.on(composer,'oie:location-draft',event=>{
-    if(journal?.pending||editSession||editPreparing||stopped||composer.dataset.busy==='true'||input.disabled||input.readOnly)return;
-    const {text:position} = event.detail;
-    if (typeof position !== 'string') return;
-    const separator = !input.value || /\s$/.test(input.value) ? '' : '\n';
-    const draft = input.value + separator + position;
-    if (Array.from(draft).length > 16384) return;
-    input.value = draft;
-    input.dispatchEvent(new Event('input', {bubbles:true}));
-    event.detail.applied = true;
-  });
   life.on(composer,'oie:attachment-staging',renderReply);
   life.on(composer,'oie:schedule-snapshot',event=>{
     const draft = draftRecord();

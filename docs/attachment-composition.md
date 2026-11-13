@@ -7,49 +7,6 @@ images have a thumbnail in the draft. Previews wrap onto new rows when space
 is limited. Use the composer to send or schedule
 the message.
 
-## Location
-
-Choose a point on the map or use **Mark map center** after panning and zooming
-with the keyboard. You can also enter latitude and longitude or ask the device
-for its current position. **Add to draft** appends an editable
-[RFC 5870 geo URI](https://www.rfc-editor.org/rfc/rfc5870) to the message box.
-Coordinates remain readable on clients without a geo URI handler.
-Device positioning uses the browser or operating system and its permissions.
-
-### Map sources
-
-By default, Oiê serves MapLibre GL JS, its worker, stylesheet and a GeoJSON
-extract of the Avenida Paulista area of São Paulo from the app itself. Map
-labels use local fonts. The picker bounds panning to that extract. Outside
-the extract, enter coordinates or use device positioning. Manual entry also
-works if WebGL or the map data is unavailable.
-
-A self-hosted presentation can opt into a different HTTPS MapLibre style with
-`OIE_MAP_STYLE_URL`. For example, launch a BFF with the optional OpenFreeMap
-public style:
-
-```sh
-OIE_MAP_STYLE_URL=https://tiles.openfreemap.org/styles/liberty \
-  OIE_MAP_ATTRIBUTION='OpenFreeMap © OpenMapTiles' \
-  bin/oie --role bff --listen 127.0.0.1:8080 --engine-url http://127.0.0.1:18084
-```
-
-To use your own map service, supply a style served from an HTTPS origin that
-permits the browser to load it and its referenced assets. Set the credits for
-the external map with `OIE_MAP_ATTRIBUTION`. The picker displays this plain
-text alongside the OpenStreetMap attribution. In external mode, the
-browser requests the style, tiles, sprites and glyphs from the style's URLs.
-The requested tiles reveal the viewed area to their providers. An empty or
-unset variable selects the bundled extract. The external provider is contacted
-when the map is opened.
-
-[OpenFreeMap](https://openfreemap.org/) distributes a public service and
-a self-hostable stack. The source manifest pins the MapLibre release, assets
-and source archives. The bundled [data notice](../internal/adapters/web/location_map/NOTICE-OSM.txt)
-records OpenStreetMap attribution, ODbL terms and the reproducible extract
-command. The [GNU FSDG](https://www.gnu.org/distros/free-system-distribution-guidelines.html)
-provides guidance on licensing software and functional data.
-
 ## State and effects
 
 | State and action | Result | Draft and focus | Outgoing messages |
@@ -60,7 +17,6 @@ provides guidance on licensing software and functional data.
 | Stage fails or its response is lost | Offer Retry and Remove in that file’s row | Keep the caption and file selection | 0 |
 | Retry staging | Reuse the file’s staging ID | Keep the caption editable | 0 |
 | Staging succeeds | Retain the file in the scoped draft | Preserve text typed during the request | 0 |
-| Select a point or add coordinates | Append the geo URI | Keep the existing text and files | 0 |
 | Send from the composer | Use the ordinary outbox and receipt | Preserve the normal send recovery behavior | 1 logical send |
 | Navigation or scheduled-draft switch during staging | Cancel the outstanding selections | A late response cannot apply to another draft | 0 |
 

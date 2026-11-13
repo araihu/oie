@@ -49,18 +49,6 @@ Run `python3 tools/vendor-pdfjs.py` to verify the assets without network access.
 Use `python3 tools/vendor-pdfjs.py --update` to restore the exact pinned package.
 The tool verifies its SHA-512 package integrity before writing selected assets.
 
-## MapLibre GL JS and OpenStreetMap
-
-The location picker serves the MapLibre GL JS 6.18.0 browser module, worker and
-stylesheet with their [BSD notices](internal/adapters/web/location_map/LICENSE.txt)
-and [dependency notices](internal/adapters/web/location_map/NOTICE-MAPLIBRE-DEPENDENCIES.txt).
-The upstream source and npm distribution, including its source maps, are
-pinned in `packaging/browser-source.json`.
-
-The bundled Paulista GeoJSON extract is © OpenStreetMap contributors and
-available under the Open Database License 1.0. See the
-[extract notice](internal/adapters/web/location_map/NOTICE-OSM.txt).
-
 ## lru-cache browser runtime
 
 `lru-cache` 11.2.6 is distributed under the Blue Oak Model License 1.0.0.
