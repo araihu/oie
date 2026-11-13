@@ -245,6 +245,7 @@ jobs:
           python3 scripts/release_desktop.py checksums dist/release --release-version "$OIE_RELEASE_VERSION"
       - run: bash scripts/publish-desktop-release.sh "$OIE_RELEASE_VERSION" dist/release "$OIE_RELEASE_REVISION"
   publish-apt:
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
     needs: publish
     permissions:
       contents: read
