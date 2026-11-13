@@ -231,11 +231,11 @@ func (s *Store) MessageContext(ctx context.Context, conversation, target domain.
 	}
 	olderLimit := (limit-1)/2 + 1
 	newerLimit := limit - olderLimit
-	before, err := q.MessagesAtOrBeforeTarget(ctx, dbgen.MessagesAtOrBeforeTargetParams{ConversationID: string(conversation), TargetID: string(target), TargetMs: targetMS, PageLimit: int64(olderLimit + 1)})
+	before, err := q.MessagesAtOrBeforeTarget(ctx, dbgen.MessagesAtOrBeforeTargetParams{ConversationID: string(conversation), TargetID: string(target), TargetMs: &targetMS, PageLimit: int64(olderLimit + 1)})
 	if err != nil {
 		return window, err
 	}
-	after, err := q.MessagesAfterTarget(ctx, dbgen.MessagesAfterTargetParams{ConversationID: string(conversation), TargetID: string(target), TargetMs: targetMS, PageLimit: int64(newerLimit + 1)})
+	after, err := q.MessagesAfterTarget(ctx, dbgen.MessagesAfterTargetParams{ConversationID: string(conversation), TargetID: string(target), TargetMs: &targetMS, PageLimit: int64(newerLimit + 1)})
 	if err != nil {
 		return window, err
 	}

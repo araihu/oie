@@ -172,14 +172,14 @@ const messagesAfterTarget = `-- name: MessagesAfterTarget :many
 SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages m WHERE m.conversation_id=?1
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
-AND COALESCE(m.timeline_at_ms,m.created_at_ms)>=CAST(?2 AS INTEGER)
+AND COALESCE(m.timeline_at_ms,m.created_at_ms)>=?2
 AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)>(CAST(?2 AS INTEGER),CAST(?3 AS TEXT))
 ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms),m.id LIMIT ?4
 `
 
 type MessagesAfterTargetParams struct {
 	ConversationID string
-	TargetMs       int64
+	TargetMs       *int64
 	TargetID       string
 	PageLimit      int64
 }
@@ -228,14 +228,14 @@ const messagesAtOrBeforeTarget = `-- name: MessagesAtOrBeforeTarget :many
 SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages m WHERE m.conversation_id=?1
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
-AND COALESCE(m.timeline_at_ms,m.created_at_ms)<=CAST(?2 AS INTEGER)
+AND COALESCE(m.timeline_at_ms,m.created_at_ms)<=?2
 AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)<=(CAST(?2 AS INTEGER),CAST(?3 AS TEXT))
 ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT ?4
 `
 
 type MessagesAtOrBeforeTargetParams struct {
 	ConversationID string
-	TargetMs       int64
+	TargetMs       *int64
 	TargetID       string
 	PageLimit      int64
 }
