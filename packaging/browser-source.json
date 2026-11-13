@@ -46,8 +46,8 @@
   },
   {
     "name": "pdfium-bb1f9f7.tar.gz",
-    "url": "https://pdfium.googlesource.com/pdfium/+archive/bb1f9f71e7b15afdd5937adf8cfe5807522b882f.tar.gz",
-    "sha256": "74e4914e4b768de6689425845e7352d5cb5340500f47c79b834072daeeaa2712"
+    "url": "https://codeload.github.com/chromium/pdfium/tar.gz/bb1f9f71e7b15afdd5937adf8cfe5807522b882f",
+    "sha256": "58098e1d4c63647c7bd8292b5f204bd0b633f8f4c9d4db6bc372445397371342"
   },
   {
     "name": "pdfjs-6.5.438.tar.gz",
