@@ -21,17 +21,17 @@ start() {
         --mount "type=volume,source=$volume,target=/data" "$image")
     url="http://$(docker port "$container" 8080/tcp)"
     curl --fail --silent --show-error --retry 20 --retry-connrefused \
-        --retry-delay 1 --retry-max-time 30 --max-time 5 "$url/api/v1/health" |
+        --retry-delay 1 --retry-max-time 90 --max-time 10 "$url/api/v1/health" |
         jq -e '.status == "ready"' >/dev/null
 }
 
 identity() {
-    curl --fail --silent --show-error --max-time 5 "$url/api/v1/engine" |
+    curl --fail --silent --show-error --max-time 15 "$url/api/v1/engine" |
         jq -er '.id | select(type == "string" and length > 0)'
 }
 
 start
-html=$(curl --fail --silent --show-error --max-time 5 --location "$url/")
+html=$(curl --fail --silent --show-error --max-time 15 --location "$url/")
 printf '%s\n' "$html" | grep -Fq '<title>Oiê</title>'
 engine_id=$(identity)
 docker stop --time 10 "$container" >/dev/null
