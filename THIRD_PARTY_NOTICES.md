@@ -88,5 +88,5 @@ and visual identity remain subject to the upstream Arai Hû brand terms.
 
 The runtime and templates copied into `oiectl` by `araihu/oapi-cli-gen`
 are available under MIT. The desktop archives carry its license at
-`licenses/oapi-cli-gen/LICENSE`. The source tree keeps the same text in
-[`packaging/licenses/oapi-cli-gen/LICENSE`](packaging/licenses/oapi-cli-gen/LICENSE).
+`licenses/oapi-cli-gen/LICENSE`. The standalone CLI module carries the same text in
+[`cli/internal/cliruntime/LICENSE`](cli/internal/cliruntime/LICENSE).

@@ -62,7 +62,7 @@ GOWORK=off go -C "$root/tools/ci" test -tags=http2legacy ./...
 GOWORK=off go -C "$root/tools/ci" build -tags=http2legacy -o "$task_tmp/oie-ci" .
 python3 "$root/tools/ci/materialize.py" "$root" "$task_tmp/source"
 if [ "$mode" = release ]; then
-  release_version=${OIE_RELEASE_VERSION:-v0.0.1-rc.2}
+  release_version=${OIE_RELEASE_VERSION:-v0.0.1-rc.3}
   case "$release_version" in v[0-9]*) ;; *) echo 'OIE_RELEASE_VERSION must be a version tag beginning with v and a digit' >&2; exit 2;; esac
   release_revision=$(git -C "$root" rev-parse --verify "$release_version^{commit}")
   git -C "$root" archive --format=tar --output="$task_tmp/release-source.tar" "$release_revision"

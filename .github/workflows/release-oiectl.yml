@@ -1,0 +1,50 @@
+name: Release oiectl
+
+on:
+  push:
+    tags: ['openapi/engine/v*']
+  workflow_dispatch:
+    inputs:
+      spec_tag:
+        description: Published engine spec tag (openapi/engine/vX.Y.Z)
+        required: true
+        type: string
+      cli_patch:
+        description: Release a CLI-only patch from the selected branch or tag
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: oiectl-release
+  queue: max
+
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || (!github.event.deleted && !github.event.forced)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            cli/go.sum
+            tools/go.sum
+            tools/vacuum/go.sum
+      - name: Generate and publish oiectl
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPEC_TAG: ${{ inputs.spec_tag || github.ref_name }}
+          CLI_PATCH: ${{ inputs.cli_patch }}
+        run: |
+          patch=()
+          if [[ "$CLI_PATCH" == true ]]; then
+            patch=(--patch "$GITHUB_RUN_ID")
+          fi
+          python3 scripts/release-oiectl.py --publish "$GITHUB_REPOSITORY" \
+            --output "$RUNNER_TEMP/oiectl-release" "${patch[@]}" -- "$SPEC_TAG"

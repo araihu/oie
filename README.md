@@ -9,14 +9,12 @@ provenance are documented in [Branding](docs/branding.md).
 The alpha targets one owner with multiple protocol accounts. Device sync remains
 planned.
 
-The current release candidate is **v0.0.1-rc.2**. It adds scheduled messages,
-conversation requests, XMPP room creation and previews, and improved search.
-macOS Apple Silicon and Ubuntu Linux x86_64 packages and
-the per-user installer are available on
-[GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.2).
-See the [release notes](docs/releases/v0.0.1-rc.2.md).
+The current release candidate is **v0.0.1-rc.3**. Desktop downloads include
+corresponding source archives and updated third-party license notices.
+See the [release notes](docs/releases/v0.0.1-rc.3.md) and
+[GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.3).
 
-- [Desktop installation on macOS and Linux](docs/installation.md)
+- [Desktop installation on macOS and Linux](docs/installation.md#desktop-installation-on-macos-and-linux)
 - [Live browser setup and development accounts](docs/live-preview.md)
 - [Local CI loop](docs/local-ci.md)
 - [Native desktop build and lifecycle](docs/desktop.md)
@@ -82,6 +80,8 @@ rooms. See [reaction API and persistence scope](docs/message-reactions.md) and
 [reaction controls](docs/reactions.md).
 
 ## Run
+
+To run the browser version with Docker, see [Run with Docker](docs/installation.md#run-with-docker).
 
 Requirements: Go 1.27.4+, Make, and Docker Compose v2 for the development server.
 Browser checks additionally use Node 24+.
