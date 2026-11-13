@@ -283,7 +283,8 @@
   cancelConversationLoading();
  },true);
  function infoReady(starGeneration){const root=document.getElementById('chat-info-content');if(!root)return;upgrade(root);document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root,generation:starGeneration}}));const body=document.getElementById('details-body');if(root.dataset.infoView){if(body)body.scrollTop=0;root.querySelector('[data-info-heading]')?.focus({preventScroll:true})}else{if(body)body.scrollTop=infoReturnScroll;const kind=new URL(location.href).searchParams.get('infoFocus');root.querySelector(`[data-info-entry="${CSS.escape(kind||'media')}"]`)?.focus({preventScroll:true})}}
- function closeOverlays(){for(const id of ['oie-image-viewer','oie-document-viewer']){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id}}));const dialog=document.getElementById(id);if(dialog?.open)dialog.close()}for(const id of ['details','accounts','settings','about','newchat','sender','message-history'])window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id}}));}
+ function closeMediaViewers(){for(const id of ['oie-image-viewer','oie-document-viewer']){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id}}));const dialog=document.getElementById(id);if(dialog?.open)dialog.close()}}
+ function closeOverlays(){closeMediaViewers();for(const id of ['details','accounts','settings','about','newchat','sender','message-history'])window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id}}));}
  document.addEventListener('htmx:before:request',event=>{
   const ctx=event.detail.ctx;if(ctx?.target?.id==='shared-search-results')document.getElementById('shared-content-scroll')?.removeAttribute('aria-busy');if(!ctx||!kinds.includes(ctx.target?.id))return;
   const previousConversation=pendingConversation?.ctx;
@@ -347,7 +348,7 @@
    restoreFilterFocus=filters.contains(document.activeElement);
    filterScroll=filters.scrollLeft;
   }
-  if(ctx.oieSharedPage){window.OieVideos?.release(ctx.target);ctx.target.dataset.sharedChanging='true';}
+  if(ctx.oieSharedPage){closeMediaViewers();window.OieVideos?.release(ctx.target);ctx.target.dataset.sharedChanging='true';}
   settling=ctx;
   if(ctx.oieKind==='message-timeline'){
    document.dispatchEvent(new Event('oie:timeline-replacing'));
