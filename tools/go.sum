@@ -166,8 +166,8 @@ github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be h1:9AeTilPcZAjCFI
 github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be/go.mod h1:ySMOLuWl6zY27l47sB3qLNK6tF2fkHG55UZxx8oIVo4=
 github.com/antlr4-go/antlr/v4 v4.13.1 h1:SqQKkuVZ+zWkMMNkjy5FZe5mr5WURWnlpmOuzYWrPrQ=
 github.com/antlr4-go/antlr/v4 v4.13.1/go.mod h1:GKmUxMtwp6ZgGwZSva4eWPC5mS6vUAmOABFgjdkM7Nw=
-github.com/araihu/oapi-cli-gen v0.0.0-20261113034014-24fed9919247 h1:MteL/Tm/tdEDOSpq16/HNzkImJvGvBGz9LOvRUfb8Os=
-github.com/araihu/oapi-cli-gen v0.0.0-20261113034014-24fed9919247/go.mod h1:BpdyfgfJjuaJsII9fwS8Ad9rer581rdqX2QEkegqSz0=
+github.com/araihu/oapi-cli-gen v0.1.0 h1:9NVSfiNUsv0rncE0srAZ+2iDYwB54oFmN+T2Fr420eQ=
+github.com/araihu/oapi-cli-gen v0.1.0/go.mod h1:BpdyfgfJjuaJsII9fwS8Ad9rer581rdqX2QEkegqSz0=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
 github.com/ashanbrown/forbidigo/v2 v2.3.1 h1:KAZijvQ7zeIBKbhikT4jCm0TLYXC4u78bTiLh/8JROI=
