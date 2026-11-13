@@ -9,11 +9,73 @@ import (
 	"context"
 )
 
+const searchMessagePreviews = `-- name: SearchMessagePreviews :many
+WITH candidates AS (
+ SELECT sc.id,sc.message_id,sc.url,
+ CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,
+ CAST(COALESCE(NULLIF(json_extract(p.payload,'$.ImageHash'),''),NULLIF(json_extract(p.payload,'$.FaviconHash'),''),'') AS TEXT) AS image_hash,
+ CAST(COALESCE(json_extract(p.payload,'$.FaviconHash'),'') AS TEXT) AS favicon_hash,
+ oie_search_match(sc.url||' '||sc.file_name||' '||COALESCE(json_extract(p.payload,'$.Title'),'')||' '||COALESCE(json_extract(p.payload,'$.Description'),''),CAST(?1 AS TEXT)) AS matches_query,
+ CASE WHEN NULLIF(json_extract(p.payload,'$.ImageHash'),'') IS NOT NULL THEN 0
+      WHEN NULLIF(json_extract(p.payload,'$.FaviconHash'),'') IS NOT NULL THEN 1 ELSE 2 END AS priority
+ FROM shared_content AS sc
+ JOIN shared_content_state AS s ON s.message_id=sc.message_id AND s.parser_version>=?2
+ LEFT JOIN message_previews AS p ON p.message_id=sc.message_id AND p.url=sc.url
+ WHERE sc.message_id IN (SELECT value FROM json_each(CAST(?3 AS TEXT)))
+), ranked AS (
+ SELECT id, message_id, url, kind, image_hash, favicon_hash, matches_query, priority,row_number() OVER (PARTITION BY message_id ORDER BY matches_query DESC,priority,id) AS position FROM candidates
+)
+SELECT message_id,url,kind,image_hash,favicon_hash FROM ranked WHERE position=1
+`
+
+type SearchMessagePreviewsParams struct {
+	Search        string
+	ParserVersion int64
+	MessageIds    string
+}
+
+type SearchMessagePreviewsRow struct {
+	MessageID   string
+	Url         string
+	Kind        string
+	ImageHash   string
+	FaviconHash string
+}
+
+func (q *Queries) SearchMessagePreviews(ctx context.Context, arg SearchMessagePreviewsParams) ([]SearchMessagePreviewsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchMessagePreviews, arg.Search, arg.ParserVersion, arg.MessageIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchMessagePreviewsRow{}
+	for rows.Next() {
+		var i SearchMessagePreviewsRow
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.Url,
+			&i.Kind,
+			&i.ImageHash,
+			&i.FaviconHash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const searchMessages = `-- name: SearchMessages :many
 WITH initial_revisions AS (
  SELECT entity_id,min(rowid) AS revision_row FROM message_revisions GROUP BY entity_id
 ), roots AS (
- SELECT m.id,CAST(COALESCE(m.timeline_at_ms,m.created_at_ms) AS INTEGER) AS position_ms,m.timeline_at_ms,m.payload,a.label AS account_label,c.payload AS conversation_payload,
+ SELECT m.id,CAST(COALESCE(m.timeline_at_ms,m.created_at_ms) AS INTEGER) AS position_ms,m.timeline_at_ms,m.payload,a.label AS account_label,a.address AS account_address,c.payload AS conversation_payload,
  CAST(COALESCE(h.payload,m.payload) AS TEXT) AS content_payload,
  CAST(COALESCE(head_source.id,first_source.id) AS TEXT) AS matched_revision_id,
  CAST(COALESCE(head_source.created_at,first_source.created_at) AS TEXT) AS matched_at,
@@ -28,25 +90,26 @@ WITH initial_revisions AS (
  AND json_extract(c.payload,'$.Request') IS NULL
  AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
  AND (CAST(?8 AS TEXT)='' OR m.account_id=CAST(?8 AS TEXT))
- AND (CAST(?9 AS TEXT)='' OR m.conversation_id=CAST(?9 AS TEXT))
+ AND (CAST(?9 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?9 AS TEXT))))
+ AND (CAST(?10 AS TEXT)='' OR m.conversation_id=CAST(?10 AS TEXT))
 ), variants AS (
- SELECT roots.id, roots.position_ms, roots.timeline_at_ms, roots.payload, roots.account_label, roots.conversation_payload, roots.content_payload, roots.matched_revision_id, roots.matched_at, roots.metadata,CAST(json_extract(content_payload,'$.OriginalText') AS TEXT) AS body,1 AS is_current,'' AS revision_key_at,'' AS revision_key_id FROM roots
+ SELECT roots.id, roots.position_ms, roots.timeline_at_ms, roots.payload, roots.account_label, roots.account_address, roots.conversation_payload, roots.content_payload, roots.matched_revision_id, roots.matched_at, roots.metadata,CAST(json_extract(content_payload,'$.OriginalText') AS TEXT) AS body,1 AS is_current,'' AS revision_key_at,'' AS revision_key_id FROM roots
  UNION ALL
- SELECT roots.id,roots.position_ms,roots.timeline_at_ms,roots.payload,roots.account_label,roots.conversation_payload,source.payload,source.id,source.created_at,'',CAST(json_extract(source.payload,'$.OriginalText') AS TEXT),0,source.created_at,source.id
+ SELECT roots.id,roots.position_ms,roots.timeline_at_ms,roots.payload,roots.account_label,roots.account_address,roots.conversation_payload,source.payload,source.id,source.created_at,'',CAST(json_extract(source.payload,'$.OriginalText') AS TEXT),0,source.created_at,source.id
  FROM roots JOIN message_content_heads h ON h.canonical_id=roots.id
  JOIN message_correction_facts f ON f.message_id=roots.id OR f.message_id IN (SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=roots.id)
  JOIN message_revisions r ON r.id=f.source_revision_id
  JOIN initial_revisions first ON first.entity_id=f.message_id
  JOIN message_revisions source ON source.rowid=first.revision_row
- WHERE CAST(?10 AS INTEGER)=1 AND source.id<>roots.matched_revision_id
+ WHERE CAST(?11 AS INTEGER)=1 AND source.id<>roots.matched_revision_id
  AND f.source_hash=oie_source_hash(json_extract(r.payload,'$.OriginalText'))
  AND f.source_hash=oie_source_hash(json_extract(source.payload,'$.OriginalText'))
  GROUP BY roots.id,source.id
 ), matched AS (
- SELECT id, position_ms, timeline_at_ms, payload, account_label, conversation_payload, content_payload, matched_revision_id, matched_at, metadata, body, is_current, revision_key_at, revision_key_id,CAST(oie_search_match(body,CAST(?11 AS TEXT)) AS INTEGER) AS text_match FROM variants
- WHERE oie_search_match(body||' '||metadata,CAST(?11 AS TEXT))=1
+ SELECT id, position_ms, timeline_at_ms, payload, account_label, account_address, conversation_payload, content_payload, matched_revision_id, matched_at, metadata, body, is_current, revision_key_at, revision_key_id,CAST(oie_search_match(body,CAST(?12 AS TEXT)) AS INTEGER) AS text_match FROM variants
+ WHERE oie_search_match(body||' '||metadata,CAST(?12 AS TEXT))=1
 )
-SELECT id,position_ms,timeline_at_ms,payload,account_label,conversation_payload,matched_revision_id,matched_at,body,metadata,is_current,revision_key_at,revision_key_id,text_match FROM matched
+SELECT id,position_ms,timeline_at_ms,payload,account_label,account_address,conversation_payload,matched_revision_id,matched_at,body,metadata,is_current,revision_key_at,revision_key_id,text_match FROM matched
 WHERE (CAST(?1 AS TEXT)='' OR (position_ms,id,is_current,revision_key_at,revision_key_id)<(CAST(?2 AS INTEGER),CAST(?1 AS TEXT),CAST(?3 AS INTEGER),CAST(?4 AS TEXT),CAST(?5 AS TEXT)))
 ORDER BY position_ms DESC,id DESC,is_current DESC,revision_key_at DESC,revision_key_id DESC LIMIT ?6
 `
@@ -60,6 +123,7 @@ type SearchMessagesParams struct {
 	PageLimit        int64
 	ParserVersion    int64
 	AccountID        string
+	AccountIds       string
 	ConversationID   string
 	IncludeHistory   int64
 	Search           string
@@ -71,6 +135,7 @@ type SearchMessagesRow struct {
 	TimelineAtMs        *int64
 	Payload             string
 	AccountLabel        string
+	AccountAddress      string
 	ConversationPayload string
 	MatchedRevisionID   string
 	MatchedAt           string
@@ -92,6 +157,7 @@ func (q *Queries) SearchMessages(ctx context.Context, arg SearchMessagesParams) 
 		arg.PageLimit,
 		arg.ParserVersion,
 		arg.AccountID,
+		arg.AccountIds,
 		arg.ConversationID,
 		arg.IncludeHistory,
 		arg.Search,
@@ -109,6 +175,7 @@ func (q *Queries) SearchMessages(ctx context.Context, arg SearchMessagesParams) 
 			&i.TimelineAtMs,
 			&i.Payload,
 			&i.AccountLabel,
+			&i.AccountAddress,
 			&i.ConversationPayload,
 			&i.MatchedRevisionID,
 			&i.MatchedAt,

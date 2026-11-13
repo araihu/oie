@@ -19,12 +19,16 @@ import (
 	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/cachehttp"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/adapters/web/appicons"
 
 	"golang.org/x/text/language"
 )
 
 //go:embed app.css
 var stylesheet []byte
+
+//go:embed appicons/sprite.svg
+var appIconSprite []byte
 
 //go:embed chat-pattern.svg
 var chatPattern []byte
@@ -170,6 +174,7 @@ type view struct {
 	InfoStars                                                                                     *engineapi.StarredMessagePage
 	InfoInvalid, SharedInDetails                                                                  bool
 	SharedType, SharedCursor, SharedConversation                                                  string
+	SharedAccountIDs                                                                              []string
 	SharedContent                                                                                 *engineapi.SharedContentPage
 	SharedInvalid                                                                                 bool
 	SharedCard                                                                                    bool
@@ -228,10 +233,10 @@ type copy struct {
 	SenderInfo, OpenSenderInfo, SenderInfoLoading, SenderInfoUnavailable, SenderConversation, SenderAccount                                                                                                         string
 	SearchContactsCoverage, SearchContacts, SearchContactsPartial, SearchContactsLimited                                                                                                                            string
 
-	SearchEverything, SearchConversations, SearchMessagesGroup, SearchConversationsLimited                                         string
-	ConversationSearchOlder, ConversationSearchNewer, ConversationSearchClose, ConversationSearchResult, ConversationSearchMissing string
+	SearchEverything, SearchCancel, SearchConversations, SearchMessagesGroup, SearchConversationsLimited, SearchAllResults, SearchResultCategories, SearchConversationsEmpty, SearchResultsLoading, SearchResultsFailed string
+	ConversationSearchOlder, ConversationSearchNewer, ConversationSearchClose, ConversationSearchResult, ConversationSearchMissing                                                                                      string
 
-	SearchMessages, SearchSavedMessages, SearchQuery, IncludeEditHistory, SearchHistoryHelp, SearchPriorVersion, SearchMetadata, SearchBlankTitle, SearchBlankBody, SearchEmptyTitle, SearchEmptyBody, SearchLoading, SearchFailed, SearchInvalid, SearchMissing, SearchRestart, SearchScope, SearchAllConversations, SearchMetadataPending, SearchMore string
+	SearchMessages, SearchSavedMessages, SearchQuery, IncludeEditHistory, SearchHistoryHelp, SearchPriorVersion, SearchBlankTitle, SearchBlankBody, SearchEmptyTitle, SearchEmptyBody, SearchLoading, SearchFailed, SearchInvalid, SearchMissing, SearchRestart, SearchScope, SearchAllConversations, SearchMetadataPending, SearchMore string
 
 	ArchiveConversation, UnarchiveConversation, FavoriteConversation, UnfavoriteConversation                                                                                                                 string
 	RetryConversationPreference, ConversationPreferenceUpdated, ConversationPreferenceConflict, ConversationPreferenceUncertain, ConversationPreferenceUnavailable, ConversationPreferenceStorageUnavailable string
@@ -339,7 +344,7 @@ type copy struct {
 	InfoStarsEmpty                                                                                                                                                                                           string
 	InfoNavigationFailed                                                                                                                                                                                     string
 	SharedAccount                                                                                                                                                                                            string
-	SearchAccounts                                                                                                                                                                                           string
+	SearchAccounts, SearchAccountSelected, SearchAccountsSelected, SearchClearAccounts                                                                                                                       string
 	NoAccountsFound                                                                                                                                                                                          string
 	SharedTools                                                                                                                                                                                              string
 	SharedContentTypes                                                                                                                                                                                       string
@@ -683,6 +688,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/reset-data.js":        {"text/javascript", resetDataScript},
 		"/ui/mentions.js":          {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
 		"/ui/room-entry.js":   {"text/javascript", roomEntryScript},
+		appicons.SpriteURL:    {"image/svg+xml", appIconSprite},
 		"/ui/room-archive.js": {"text/javascript", roomArchiveScript},
 		"/ui/timeline.js":     {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/cache.js": {"text/javascript", cacheScript}, "/ui/cache/LICENSE.md": {"text/plain; charset=utf-8", cacheLibraryLicense}, "/ui/cache/lru-cache.min.mjs": {"text/javascript", cacheLibrary}, "/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
@@ -802,7 +808,7 @@ func (s *Server) baseView(r *http.Request) view {
 		v.Section = "search"
 	}
 	v.configureMessageSearch(r)
-	v.GlobalMessageSearch = r.URL.Query().Get("searchMode") == "messages"
+	v.GlobalMessageSearch = r.URL.Query().Get("searchMode") == "messages" && v.MessageSearch.Query != ""
 	v.ConversationSearchOpen = r.URL.Query().Get("chatSearch") == "1"
 	v.ConversationSearchQuery = strings.TrimSpace(r.URL.Query().Get("chatQuery"))
 	v.ConversationSearchHistory = r.URL.Query().Get("chatIncludeHistory") == "true"

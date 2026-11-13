@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,21 +18,78 @@ import (
 )
 
 type searchHTTPHit struct {
-	Message                         engineapi.Message
-	AccountLabel, ConversationTitle string
-	MatchedRevisionID               string `json:"matchedRevisionId"`
-	MatchedAt                       time.Time
-	Historical                      bool
-	MatchKind, Excerpt              string
+	Message                                              engineapi.Message
+	AccountLabel, ConversationTitle, ConversationAddress string
+	SenderAddress                                        string
+	MatchedRevisionID                                    string `json:"matchedRevisionId"`
+	MatchedAt                                            time.Time
+	Historical                                           bool
+	MatchKind, Excerpt                                   string
 }
 type searchHTTPPage struct {
 	Query, AccountID, ConversationID string
+	AccountIDs                       []string
 	IncludeEditHistory               bool
 	Items                            []searchHTTPHit
 	NextCursor                       string
 	MetadataIndexing                 struct {
 		State                          string
 		IndexedMessages, TotalMessages int
+	}
+}
+
+func TestSearchAccountSelectionAppliesBeforePagination(t *testing.T) {
+	e, store, server := newMessagingEngine(t, t.TempDir(), &protocolStub{})
+	conversations := []domain.Conversation{
+		openTestConversation(t, e, "personal@localhost"),
+		openTestConversation(t, e, "work@localhost"),
+		openTestConversation(t, e, "other@localhost"),
+	}
+	for i, c := range conversations {
+		at := time.Now().Add(time.Duration(i) * time.Minute).UTC()
+		m := domain.Message{ID: id(), RevisionID: id(), AccountID: c.AccountID, ConversationID: c.ID, Sender: domain.Sender{ID: c.PeerID, DisplayName: "Peer"}, OriginalText: "Search scope marker", CreatedAt: at, SendState: "received"}
+		if err := store.ReceiveMessage(t.Context(), c, m, id()); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.ContactsReceived(t.Context(), c.AccountID, []application.ContactInput{{Address: "bob@localhost", DisplayName: "Search scope marker", Subscription: "both"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	personal, work, other := string(conversations[0].AccountID), string(conversations[1].AccountID), string(conversations[2].AccountID)
+	selected := []string{personal, work}
+	slices.Sort(selected)
+	query := url.Values{"q": {"search scope marker"}, "accountIds": {selected[1], selected[0]}, "limit": {"1"}}
+	first := searchHTTP(t, server.URL, query)
+	if !slices.Equal(first.AccountIDs, selected) || first.AccountID != "" || len(first.Items) != 1 || first.Items[0].Message.AccountId != work || first.NextCursor == "" || first.MetadataIndexing.TotalMessages != 2 {
+		t.Fatal("selected accounts must be applied before both paging and coverage", first)
+	}
+	query["accountIds"] = selected
+	query.Set("cursor", first.NextCursor)
+	second := searchHTTP(t, server.URL, query)
+	if len(second.Items) != 1 || second.Items[0].Message.AccountId != personal || second.NextCursor != "" {
+		t.Fatal("reordering the selected accounts changed the result scope", second)
+	}
+	query["accountIds"] = []string{work, other}
+	status, _ := request(t, server.URL, http.MethodGet, "/api/v1/messages/search?"+query.Encode(), "", "")
+	if status != http.StatusBadRequest {
+		t.Fatalf("a different account selection accepted the cursor: %d", status)
+	}
+
+	query = url.Values{"q": {"search scope marker"}, "accountIds": selected, "limit": {"1"}}
+	status, body := request(t, server.URL, http.MethodGet, "/api/v1/conversations?"+query.Encode(), "", "")
+	var titles engineapi.ConversationPage
+	if status != http.StatusOK || json.Unmarshal(body, &titles) != nil || len(titles.Items) != 1 || titles.Items[0].AccountId == other || titles.NextCursor == nil {
+		t.Fatalf("conversation matches were not scoped before pagination: %d %s", status, body)
+	}
+	status, body = request(t, server.URL, http.MethodGet, "/api/v1/contacts?"+query.Encode(), "", "")
+	var contacts engineapi.ContactPage
+	if status != http.StatusOK || json.Unmarshal(body, &contacts) != nil || len(contacts.Items) != 1 || contacts.Items[0].AccountId == other || len(contacts.Sources) != 2 || contacts.NextCursor == nil {
+		t.Fatalf("contact matches or coverage were not scoped: %d %s", status, body)
+	}
+	for _, source := range contacts.Sources {
+		if !slices.Contains(selected, source.AccountId) {
+			t.Fatal("contact coverage included an unselected account", source)
+		}
 	}
 }
 
@@ -112,6 +170,9 @@ func TestMessageSearchHTTPScopesFiltersBeforePagingAndPreservesState(t *testing.
 			t.Fatal("search context was not canonical", page)
 		}
 		for _, hit := range page.Items {
+			if hit.ConversationAddress != c.Address || hit.SenderAddress != c.Address {
+				t.Fatal("search did not carry the direct sender's address", hit)
+			}
 			if hit.Message.ConversationId != string(c.ID) || hit.Historical || hit.MatchKind != "text" || seen[hit.Message.Id] {
 				t.Fatal("scope leak or repeated canonical row", hit)
 			}

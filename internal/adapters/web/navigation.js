@@ -61,7 +61,7 @@
  }
  function shellKey(url){
   const q=new URLSearchParams(url.search);
-  for(const key of ['chat','inbox','message','open','infoView','infoType','infoCursor','infoQuery','infoFocus','searchQuery','searchAccount','searchConversation','searchCursor','searchEngine','includeEditHistory','searchMode','chatSearch','chatQuery','chatIncludeHistory'])q.delete(key);
+  for(const key of ['chat','inbox','message','open','infoView','infoType','infoCursor','infoQuery','infoFocus','searchQuery','searchAccount','searchType','searchConversation','searchCursor','searchEngine','includeEditHistory','searchMode','chatSearch','chatQuery','chatIncludeHistory'])q.delete(key);
   for(const key of [...q.keys()])if(!q.get(key))q.delete(key);
   q.set('section',q.get('section')||'chats');q.set('filter',q.get('filter')||'all');q.set('lang',q.get('lang')||document.documentElement.lang);q.set('theme',q.get('theme')||app()?.dataset.routeTheme||'system');q.sort();return q.toString();
  }
@@ -129,7 +129,10 @@
   const key=value=>{const q=new URLSearchParams(shellKey(value));q.delete('contentType');q.delete('contentCursor');return q.toString()};
   return key(url)===key(current);
  }
- function sharedFields(){const form=document.getElementById('shared-content-search');return form?JSON.stringify(['q','account'].map(name=>new FormData(form).get(name)||'')):''}
+ function sharedFields(){
+  const form=document.getElementById('shared-content-search');if(!form)return '';
+  const fields=new FormData(form);return JSON.stringify([fields.get('q'),fields.get('account'),fields.getAll('contentAccount').sort()]);
+ }
  function swapFor(kind){
   if(kind==='shared-content-scroll')return 'innerHTML swap:'+(reducedMotion.matches?'0ms':'75ms')+' settle:0ms show:none';
   if(kind==='conversation-pane')return 'outerHTML settle:0ms show:none';
@@ -155,7 +158,7 @@
   window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:root.dataset.routeError}}));
  }
  function upgrade(root=document){if(!root)return;for(const node of root.querySelectorAll('a[href],form')){
-  if(node.matches('[data-global-search-form],[data-open-sender],[data-room-invitation],[data-room-entry-open],a[download],a[target]:not([target="_self"])')||node.hasAttribute('hx-get')||node.hasAttribute('hx-post'))continue;
+  if(node.closest('[data-quick-search]')||node.matches('[data-global-search-form],[data-message-search-filter],[data-conversation-search-close],[data-open-sender],[data-room-invitation],[data-room-entry-open],a[download],a[target]:not([target="_self"])')||node.hasAttribute('hx-get')||node.hasAttribute('hx-post'))continue;
   const form=node.tagName==='FORM';if(form&&(node.method||'get').toLowerCase()!=='get')continue;
   let url;try{url=new URL(form?node.action:node.href,location.href)}catch{continue}
   if(url.origin!==location.origin||!['/','/search'].includes(url.pathname)||(!form&&(node.getAttribute('href')||'').startsWith('#')))continue;

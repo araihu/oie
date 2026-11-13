@@ -1,6 +1,9 @@
 .oie-message-stamp{display:flex;justify-content:flex-end;align-items:center;gap:4px;margin-top:3px;font-size:10px;line-height:1.4;color:var(--oie-muted);white-space:nowrap}
 .oie-message-body-compact>.oie-message-stamp{margin-inline-end:-22px}
 .oie-message-stamp time{font-variant-numeric:tabular-nums}
-.oie-message-stamp .oie-message-star-indicator{display:inline-flex;align-items:center;justify-content:center;align-self:center;flex-shrink:0;width:10px;height:10px;margin:0;padding:0;color:inherit;font-size:10px}
-.oie-message-stamp .oie-message-star-indicator .oie-icon{width:100%;height:100%}
-.oie-message-stamp .oie-message-star-indicator[hidden],.oie-message-meta:empty{display:none}
+.oie-message-stamp :is(.oie-message-edit-symbol,.oie-message-edited,.oie-send-state-slot,.oie-send-state-slot>span,.oie-send-retry,.oie-message-star-indicator){
+ display:inline-flex;align-items:center;justify-content:center;flex:none;
+ width:16px;min-width:16px;height:14px;min-height:14px;padding:0;line-height:1
+}
+.oie-message-stamp :is(.oie-icon,.oie-send-spinner,.oie-edit-spinner){width:12px;height:12px}
+.oie-message-stamp [hidden]{display:none!important}

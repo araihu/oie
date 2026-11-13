@@ -2,11 +2,12 @@ package web
 
 import (
 	_ "embed"
-	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"net/http"
 	"net/url"
 	"slices"
 	"strings"
+
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
 //go:embed preview-landscape.svg
@@ -28,6 +29,10 @@ func (v *view) configureWorkspace(r *http.Request) {
 	case "favorites", "archived", "media", "scheduled":
 	default:
 		v.Section = "chats"
+	}
+	if v.Section == "media" {
+		v.SharedAccountIDs = append([]string(nil), q["contentAccount"]...)
+		slices.Sort(v.SharedAccountIDs)
 	}
 	v.Filter = q.Get("filter")
 	switch v.Filter {
@@ -68,6 +73,7 @@ func (v *view) configureWorkspace(r *http.Request) {
 }
 func (v view) href(pairs ...string) string {
 	q := url.Values{}
+	sharedAccounts := v.SharedAccountIDs
 	if v.AccountFilter != "" {
 		q.Set("account", v.AccountFilter)
 	}
@@ -119,7 +125,10 @@ func (v view) href(pairs ...string) string {
 	if v.GlobalMessageSearch && !v.NativeMessageSearch {
 		q.Set("searchMode", "messages")
 		q.Set("searchQuery", v.MessageSearch.Query)
-		q.Set("searchAccount", v.MessageSearch.AccountID)
+		q["searchAccount"] = v.MessageSearch.accounts()
+		if v.MessageSearch.Category != "" {
+			q.Set("searchType", v.MessageSearch.Category)
+		}
 		q.Set("searchEngine", v.EngineID)
 		if v.MessageSearch.IncludeHistory {
 			q.Set("includeEditHistory", "true")
@@ -134,7 +143,7 @@ func (v view) href(pairs ...string) string {
 	}
 	for i := 0; i+1 < len(pairs); i += 2 {
 		if pairs[i] == "section" && (pairs[i+1] == "media" || pairs[i+1] == "scheduled") {
-			for _, key := range []string{"searchMode", "searchQuery", "searchAccount", "searchEngine", "includeEditHistory", "chatSearch", "chatQuery", "chatIncludeHistory"} {
+			for _, key := range []string{"searchMode", "searchQuery", "searchAccount", "searchType", "searchEngine", "includeEditHistory", "chatSearch", "chatQuery", "chatIncludeHistory"} {
 				q.Del(key)
 			}
 		}
@@ -147,8 +156,11 @@ func (v view) href(pairs ...string) string {
 			q.Del("scheduleConversation")
 			q.Del("scheduleCursor")
 		}
-		if pairs[i] == "account" && pairs[i+1] != v.AccountFilter {
-			q.Del("contentCursor")
+		if pairs[i] == "account" {
+			if pairs[i+1] != v.AccountFilter || len(sharedAccounts) > 0 {
+				q.Del("contentCursor")
+			}
+			sharedAccounts = nil
 		}
 		if pairs[i] == "chat" && pairs[i+1] != v.ChatID {
 			q.Del("chatSearch")
@@ -167,6 +179,9 @@ func (v view) href(pairs ...string) string {
 		} else {
 			q.Set(pairs[i], pairs[i+1])
 		}
+	}
+	if q.Get("section") == "media" && len(sharedAccounts) > 0 {
+		q["contentAccount"] = sharedAccounts
 	}
 	if len(q) == 0 {
 		return "/"

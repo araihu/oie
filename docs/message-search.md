@@ -23,7 +23,7 @@ Public `search.Search` provides a client-ranked command palette and JSON item
 loading, which does not own the engine-scoped history cursor contract. Compose
 `textinput`, searchable `combobox`, `checkbox`, `link`, `button`,
 `badge`, `spinner` and `emptystate` instead. Native account selection uses public
-Radio inputs inside a noscript fieldset. No dependency internals or copied
+checkboxes inside a noscript fieldset. No dependency internals or copied
 component DOM are used. App-owned code owns debounce, request scope, history and
 bounded result pagination.
 
@@ -31,7 +31,7 @@ bounded result pagination.
 
 | State | Action | Response and preserved context | Effect count |
 |---|---|---|---|
-| Blank query | Open or clear search | Local empty state; no search operation or enrichment; workspace/draft stay mounted | 0 |
+| Blank query | Focus or clear the global field | Show the conversation list; workspace and draft stay mounted | 0 |
 | Valid query | Type, submit or change scope | Scoped retained results; initiating input/caret and one live stream remain | 0 |
 | History off | Search a corrected message | Only current retained content matches | 0 |
 | History on | Search a retained earlier version | Prior-version label and matched excerpt; link opens canonical message UUID | 0 |
@@ -49,6 +49,11 @@ default and independent of archive provenance. Excerpts are escaped plain text,
 not trusted HTML or pre-highlighted fragments. Retraction/deletion controls are
 outside this increment; no Include retracted control is introduced.
 
+The sidebar and floating search highlight visible literal and typo-tolerant
+matches. A metadata hit shows the source message and the URL represented by
+its thumbnail. The Media, Links and Documents shortcuts carry the query and
+selected accounts into the catalog, where the scope applies before pagination.
+
 ## Validation record
 
 Required checks include scoped BFF/HTTP tests, independent browser fixtures,
@@ -62,10 +67,10 @@ after sending or cancellation. The explicit historical flag identifies earlier
 content. Result ordering follows engine UTC millisecond precision, then UUID.
 
 The browser keeps search request state separate from inbox `q`. Account selection
-uses the public `combobox:load` event. The native account radio fieldset is disabled
+uses the public `combobox:load` event. The native account fieldset is disabled
 when JavaScript initializes, including after HTMX parses a full application
-fragment. Only `/search` accepts `nativeAccountId`; fragments always use the
-explicit `accountId` contract.
+fragment. Only `/search` accepts `nativeAccountId`. Fragments use `accountId`
+for one account and repeated `accountIds` values for a set.
 
 Source navigation carries an engine-bound pending search intent through a pane
 swap when the user immediately reopens search. New typing and scope choices win.
@@ -86,10 +91,61 @@ The coordinator records whole-pipeline Dagger evidence separately.
 
 ## Unified global field and conversation toolbar
 
-The existing `conversation-search` field opens global search on focus or typing.
+Ctrl+K or Cmd+K opens a compact global dialog in the workspace. It searches
+all accounts using the same retained result groups and bounded source links as
+the sidebar. The dialog query is temporary and independent of the sidebar
+query and filters. Escape closes the dialog and returns focus to the previous
+control. The dialog uses Goshtoso's public compact Dialog and the existing
+search response because the public SearchModal ranks a client-side result set.
+
+In the dialog and sidebar, Down and Up move focus between results. Up from the
+first result returns to the field. Enter opens the focused result or the first
+result when the field has focus. Tab also reaches the results and controls.
+Escape cancels the active sidebar search and returns focus to the field. An
+open account picker or help tooltip handles Escape first when it has focus.
+Within a conversation, Down and Up jump to older and newer matches, just as
+Enter and Shift+Enter do.
+
+When link or file details match, the result shows a snippet of the original
+message, including the link and any accompanying text in the snippet.
+The sidebar and floating dialog highlight visible query terms in the message
+and URL, ignoring case and accents.
+
+Each current message result can show one compact preview of indexed shared
+content. Link results show cached page artwork when available, then the cached
+favicon fitted inside the tile, then the generic link icon. Search reads
+existing previews and does not enqueue downloads.
+
+The existing `conversation-search` field opens global search when the user enters
+a non-blank query. Focusing the field keeps the conversation list visible.
+The X at the right of the field cancels the search and returns focus to the field.
+Clearing the query also returns to the list and cancels pending search requests.
+Closing clears the search from the current URL and the mounted workspace links
+so selecting another conversation or inbox filter keeps search closed.
+The edit-history help closes on outside interaction or Escape without changing
+the query or the checkbox.
+The searchable account picker filters conversation, contact, and message matches
+to the checked accounts before pagination. With no boxes checked, search covers
+all accounts. The selection belongs to the search URL. Category links pass the
+query and a single checked account to the shared-content gallery. With multiple
+accounts checked, the gallery opens with all accounts.
+The All, Conversations, and Messages filters switch result types in place and
+keep the query and account selection. The All view includes contacts.
 It uses the native unified `/search` GET page as its fallback. Global mode
 shows categories for the existing media, links and documents catalog, matching
 saved roster contacts, bounded conversation-title matches and saved messages.
+Conversation matches show the conversation avatar. Message matches show the
+author's avatar from the owning account when the identity and thumbnail are
+available, with initials as the fallback. Search uses retained images and does
+not request profiles from the provider.
+The avatar ring and author name use the timeline's sender palette. Search hits
+carry the source conversation address and the account or peer address when
+applicable. A room participant's color uses the room address and nickname.
+Engines that omit these fields use a fallback based on the conversation ID.
+Message results lead with the author, followed by the account and conversation,
+the excerpt, and the timestamp. Address-based labels use the local part as the
+name and show the domain separately. Browser timestamps use the local calendar
+day and show Today or the date before the time.
 It leaves the original conversation list, title query, filter controls and scroll
 mounted behind the results. Closing restores that list and query without
 reopening search through its own focus restoration.
@@ -116,7 +172,7 @@ subscribe to presence or infer contacts from room occupants. An existing contact
 conversation opens directly. A contact without one opens the existing new-chat
 form with its account and address prefilled; creation still needs explicit form
 submission. Category links use the existing catalog and its device preferences.
-Search itself does not fetch thumbnails or enrich remote previews.
+Search does not fetch shared-content thumbnails or enrich remote previews.
 
 Whole-pipeline validation completed on `ef9a9a6` with exit 0 and all 39 browser
 workflows, including the isolated real-engine XMPP workflow. Native `make check`

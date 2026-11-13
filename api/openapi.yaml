@@ -50,6 +50,7 @@ paths:
         description: Restrict contacts to one owning account.
         schema:
           $ref: '#/components/schemas/ID'
+      - $ref: '#/components/parameters/SearchAccountIDs'
       - name: cursor
         in: query
         description: Opaque position bound to the engine, account and trimmed query.
@@ -111,9 +112,10 @@ paths:
         description: Restrict to one owning account, or omit for all accounts.
         schema:
           $ref: '#/components/schemas/ID'
+      - $ref: '#/components/parameters/SearchAccountIDs'
       - name: conversationId
         in: query
-        description: Restrict to one conversation. A supplied account must own it.
+        description: Restrict to one conversation. Its owning account must be included in any supplied account filter.
         schema:
           $ref: '#/components/schemas/ID'
       - name: includeEditHistory
@@ -166,7 +168,7 @@ paths:
         Document/audio entries remain URL references. Video bytes are available only through
         the explicit content operation; listing does not fetch video metadata or bytes.
         Backfill or new arrivals may insert items before the current cursor; reload
-        to include them. A conversation filter with another account is invalid.
+        to include them. A conversation filter outside the selected accounts is invalid.
       parameters:
       - name: type
         description: Content category; media combines image, audio and video references; video restricts to video before pagination.
@@ -176,10 +178,11 @@ paths:
           enum: [media, links, documents, video]
           default: media
       - name: accountId
-        description: Restrict to one owning account, or omit for all accounts.
+        description: Restrict to one owning account. Omit both account filters to list all accounts.
         in: query
         schema:
           $ref: '#/components/schemas/ID'
+      - $ref: '#/components/parameters/SearchAccountIDs'
       - name: conversationId
         description: Restrict to one source conversation, or omit for all conversations.
         in: query
@@ -1675,6 +1678,7 @@ paths:
         description: Stable accountId reference.
         schema:
           $ref: '#/components/schemas/ID'
+      - $ref: '#/components/parameters/SearchAccountIDs'
       - name: q
         in: query
         description: Conversation address/title/latest-preview substring.
@@ -2941,6 +2945,20 @@ paths:
           $ref: '#/components/responses/Unavailable'
 components:
   parameters:
+    SearchAccountIDs:
+      name: accountIds
+      in: query
+      style: form
+      explode: true
+      description: Restrict results to the selected owning accounts before pagination. Mutually exclusive with accountId.
+      example: ['019a5df0-0000-7000-8000-000000000001', '019a5df0-0000-7000-8000-000000000002']
+      schema:
+        type: array
+        minItems: 1
+        maxItems: 100
+        uniqueItems: true
+        items:
+          $ref: '#/components/schemas/ID'
     AccountID:
       name: accountId
       in: path
@@ -3959,6 +3977,18 @@ components:
         conversationTitle:
           type: string
           description: Current source conversation title.
+        conversationAddress:
+          type: string
+          description: Canonical address of the source conversation.
+        senderAddress:
+          type: string
+          description: Owning account address for own messages or peer address for received direct messages. Omitted for other senders.
+        senderAvatarHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 of the retained sender avatar PNG in the owning account, when the sender identity and image are available. Use getAvatarImage to retrieve it.
+        preview:
+          $ref: '#/components/schemas/MessageSearchPreview'
         matchedRevisionId:
           $ref: '#/components/schemas/ID'
         matchedAt:
@@ -3976,6 +4006,28 @@ components:
           type: string
           maxLength: 512
           description: Bounded plain text from matching content or metadata. Never HTML; clients must escape it. Earlier content is represented here, rather than by the current message text.
+    MessageSearchPreview:
+      type: object
+      description: One indexed shared item from the matching current message. Prefer an item matching the query, then cached artwork.
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [image, video, audio, link, document]
+          description: Category of the shared item.
+        url:
+          type: string
+          format: uri
+          description: Source URL of the item represented by this preview.
+        imageHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Digest of a locally cached thumbnail, or the site icon when it is the only artwork. Use getMediaImage to retrieve it.
+        faviconHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Digest of the locally cached site icon for a link. Use getMediaImage to retrieve it.
     MessageSearchPage:
       type: object
       description: Retained message search results. Message text is immediate; metadata indexing coverage is reported separately.
@@ -3996,6 +4048,14 @@ components:
           description: Search query after trimming surrounding whitespace.
         accountId:
           $ref: '#/components/schemas/ID'
+        accountIds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          description: Applied account set in ascending UUID order, present when accountIds was supplied.
+          items:
+            $ref: '#/components/schemas/ID'
         conversationId:
           $ref: '#/components/schemas/ID'
         includeEditHistory:

@@ -436,7 +436,14 @@ func (s *Server) searchMessages(w http.ResponseWriter, r *http.Request) {
 			if len(excerpt) > 512 {
 				excerpt = excerpt[:512]
 			}
-			page.Items = append(page.Items, engineapi.MessageSearchHit{Message: message, AccountLabel: "Personal", ConversationTitle: chat.Title, MatchedRevisionId: source.RevisionId, MatchedAt: source.CreatedAt, MatchKind: kind, Excerpt: string(excerpt)})
+			hit := engineapi.MessageSearchHit{Message: message, AccountLabel: "Personal", ConversationTitle: chat.Title, ConversationAddress: &chat.Address, MatchedRevisionId: source.RevisionId, MatchedAt: source.CreatedAt, MatchKind: kind, Excerpt: string(excerpt)}
+			if source.IsOwn {
+				address := "alice@localhost"
+				hit.SenderAddress = &address
+			} else if chat.Kind == "direct" {
+				hit.SenderAddress = &chat.Address
+			}
+			page.Items = append(page.Items, hit)
 		}
 	}
 	slices.SortFunc(page.Items, func(a, b engineapi.MessageSearchHit) int {

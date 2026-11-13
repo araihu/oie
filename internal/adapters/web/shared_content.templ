@@ -47,6 +47,9 @@ templ sharedSearch(v view){
 @textinput.TextInput(textinput.Config{ID:"shared-search",Name:"q",Value:v.Query,Type:textinput.TypeSearch,Placeholder:v.Text.SharedSearch,InputAttrs:templ.Attributes{"hx-get":"/","hx-trigger":"oie:shared-search","hx-include":"#shared-content-search","hx-target":"#shared-search-results","hx-select":"#shared-search-results","hx-swap":"outerHTML show:none","hx-sync":"closest form:replace","hx-push-url":"false","hx-replace-url":"true","aria-controls":"shared-search-results"}})
 }
 templ sharedAccountFilter(v view){
+if len(v.SharedAccountIDs)>0 {
+{{ ctx=expressions.With(ctx,expressions.Set{Combobox:expressions.Combobox{ClearLabel:v.Text.SearchClearAccounts,SelectedLabel:v.messageSearchAccountCount}}) }}
+}
 {{ cfg:=sharedAccountCombobox(v) }}
 @combobox.Combobox(cfg,cfg.InitialState())
 }

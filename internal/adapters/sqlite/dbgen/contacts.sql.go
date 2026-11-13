@@ -89,8 +89,14 @@ const listContactSources = `-- name: ListContactSources :many
 SELECT a.id AS account_id,CAST(COALESCE(s.state,'unknown') AS TEXT) AS state,CAST(COALESCE(s.checked_at,'') AS TEXT) AS checked_at
 FROM accounts a LEFT JOIN contact_sources s ON s.account_id=a.id
 WHERE (CAST(?1 AS TEXT)='' OR a.id=CAST(?1 AS TEXT))
+AND (CAST(?2 AS TEXT)='[]' OR a.id IN (SELECT value FROM json_each(CAST(?2 AS TEXT))))
 ORDER BY a.id
 `
+
+type ListContactSourcesParams struct {
+	AccountID  string
+	AccountIds string
+}
 
 type ListContactSourcesRow struct {
 	AccountID string
@@ -98,8 +104,8 @@ type ListContactSourcesRow struct {
 	CheckedAt string
 }
 
-func (q *Queries) ListContactSources(ctx context.Context, accountID string) ([]ListContactSourcesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listContactSources, accountID)
+func (q *Queries) ListContactSources(ctx context.Context, arg ListContactSourcesParams) ([]ListContactSourcesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listContactSources, arg.AccountID, arg.AccountIds)
 	if err != nil {
 		return nil, err
 	}
@@ -182,16 +188,18 @@ FROM contacts co JOIN accounts a ON a.id=co.account_id
 LEFT JOIN conversations c ON c.account_id=co.account_id AND c.address=co.address
 WHERE co.active=1
 AND (CAST(?1 AS TEXT)='' OR co.account_id=CAST(?1 AS TEXT))
-AND co.id>CAST(?2 AS TEXT)
-AND (CAST(?3 AS TEXT)='' OR oie_search_match(co.address||' '||co.display_name||' '||co.groups_json||' '||a.label,CAST(?3 AS TEXT))=1)
-ORDER BY co.id LIMIT ?4
+AND (CAST(?2 AS TEXT)='[]' OR co.account_id IN (SELECT value FROM json_each(CAST(?2 AS TEXT))))
+AND co.id>CAST(?3 AS TEXT)
+AND (CAST(?4 AS TEXT)='' OR oie_search_match(co.address||' '||co.display_name||' '||co.groups_json||' '||a.label,CAST(?4 AS TEXT))=1)
+ORDER BY co.id LIMIT ?5
 `
 
 type SearchContactsParams struct {
-	AccountID string
-	CursorID  string
-	Search    string
-	PageLimit int64
+	AccountID  string
+	AccountIds string
+	CursorID   string
+	Search     string
+	PageLimit  int64
 }
 
 type SearchContactsRow struct {
@@ -203,6 +211,7 @@ type SearchContactsRow struct {
 func (q *Queries) SearchContacts(ctx context.Context, arg SearchContactsParams) ([]SearchContactsRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchContacts,
 		arg.AccountID,
+		arg.AccountIds,
 		arg.CursorID,
 		arg.Search,
 		arg.PageLimit,

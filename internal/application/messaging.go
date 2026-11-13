@@ -93,6 +93,7 @@ type OriginalWireAttemptProtocol interface {
 type ConversationQuery struct {
 	Cursor                              int64
 	AccountID                           domain.ID
+	AccountIDs                          []domain.ID
 	Query, Kind                         string
 	Archived, FavoritesOnly, UnreadOnly bool
 	Limit                               int
@@ -259,9 +260,14 @@ func (e *Engine) Conversation(ctx context.Context, id domain.ID) (domain.Convers
 	return repo.Conversation(ctx, id)
 }
 func (e *Engine) Conversations(ctx context.Context, cursor string, q ConversationQuery) ([]domain.Conversation, error) {
-	if q.Limit < 1 || q.Limit > 100 || utf8.RuneCountInString(q.Query) > 200 || (q.AccountID != "" && !validID(q.AccountID)) || (q.Kind != "" && q.Kind != "direct" && q.Kind != "room") {
+	if q.Limit < 1 || q.Limit > 100 || utf8.RuneCountInString(q.Query) > 200 || (q.Kind != "" && q.Kind != "direct" && q.Kind != "room") {
 		return nil, ErrInvalid
 	}
+	accountIDs, err := normalizeSearchAccountIDs(q.AccountID, q.AccountIDs)
+	if err != nil {
+		return nil, err
+	}
+	q.AccountIDs = accountIDs
 	q.Cursor = math.MaxInt64
 	if cursor != "" {
 		state, err := e.Snapshot(ctx)

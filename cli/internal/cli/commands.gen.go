@@ -202,6 +202,9 @@ func build12(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("query", "accountId", &params.AccountId); err != nil {
 		return nil, err
 	}
+	if err := input.Decode("query", "accountIds", &params.AccountIds); err != nil {
+		return nil, err
+	}
 	if err := input.Decode("query", "cursor", &params.Cursor); err != nil {
 		return nil, err
 	}
@@ -219,6 +222,9 @@ func build13(server string, input cliruntime.Input) (*http.Request, error) {
 		return nil, err
 	}
 	if err := input.Decode("query", "accountId", &params.AccountId); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "accountIds", &params.AccountIds); err != nil {
 		return nil, err
 	}
 	if err := input.Decode("query", "q", &params.Q); err != nil {
@@ -505,6 +511,9 @@ func build44(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("query", "accountId", &params.AccountId); err != nil {
 		return nil, err
 	}
+	if err := input.Decode("query", "accountIds", &params.AccountIds); err != nil {
+		return nil, err
+	}
 	if err := input.Decode("query", "conversationId", &params.ConversationId); err != nil {
 		return nil, err
 	}
@@ -688,6 +697,9 @@ func build62(server string, input cliruntime.Input) (*http.Request, error) {
 		return nil, err
 	}
 	if err := input.Decode("query", "accountId", &params.AccountId); err != nil {
+		return nil, err
+	}
+	if err := input.Decode("query", "accountIds", &params.AccountIds); err != nil {
 		return nil, err
 	}
 	if err := input.Decode("query", "conversationId", &params.ConversationId); err != nil {

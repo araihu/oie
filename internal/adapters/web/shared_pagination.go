@@ -10,13 +10,15 @@ import (
 // receive it. Drawer navigation keeps the surrounding inbox filters intact.
 func (v view) sharedPageScope() string {
 	account, conversation, query := v.AccountFilter, v.SharedConversation, v.Query
+	accounts := v.SharedAccountIDs
 	if v.SharedInDetails {
+		accounts = nil
 		query = v.InfoQuery
 		if v.Selected != nil {
 			account, conversation = v.Selected.AccountId, v.Selected.Id
 		}
 	}
-	data, _ := json.Marshal([]any{v.EngineID, v.SharedInDetails, account, conversation, v.SharedType, query, v.Locale, v.Theme})
+	data, _ := json.Marshal([]any{v.EngineID, v.SharedInDetails, account, accounts, conversation, v.SharedType, query, v.Locale, v.Theme})
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:])
 }

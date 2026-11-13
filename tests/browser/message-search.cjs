@@ -6,22 +6,31 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const {spawn} = require('node:child_process');
 const {once} = require('node:events');
+const {createHash} = require('node:crypto');
 const {chromium} = require('playwright');
 const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
 (async () => {
-  const account = id(2), work = id(3), streams = new Set();
-  const state = {engine:id(1), writes:0, searchReads:[], titleReads:[], contactReads:[], contexts:[], mode:'normal'};
+  const conversationPhoto=await fs.readFile(path.join(__dirname,'fixtures/video-poster.png'));
+  const senderPhoto=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64');
+  const photoHash=photo=>createHash('sha256').update(photo).digest('hex');
+  const conversationHash=photoHash(conversationPhoto),senderHash=photoHash(senderPhoto);
+  const account = id(2), work = id(3), other = id(8), streams = new Set();
+  const state = {engine:id(1), writes:0, searchReads:[], catalogReads:[], titleReads:[], contactReads:[], contexts:[], mode:'normal'};
   const accounts = [
     {id:account,address:'alice@fixture',label:'Personal'},
     {id:work,address:'work@fixture',label:'Work'},
+    {id:other,address:'other@fixture',label:'Other account'},
   ].map(a => ({...a,revisionId:id(4),protocol:'xmpp',connectionState:'connected',createdAt:'2026-11-09T12:00:00Z'}));
   const chats = [
     {id:id(10),accountId:account,title:'Family'},
     {id:id(11),accountId:work,title:'Team'},
     {id:id(12),accountId:account,title:'Other conversation'},
+    {id:id(14),accountId:other,title:'Other account conversation'},
   ].map(c => ({...c,revisionId:id(15),kind:'direct',address:'peer@fixture',lastMessage:'Retained text',updatedAt:'2026-11-09T14:00:00Z',unreadCount:0,archived:false,favorite:false}));
   const [chat] = chats;
   for(let n=0;n<26;n++)chats.push({...chat,id:id(100+n),title:'Spare conversation '+n,address:'spare'+n+'@fixture'});
+  const layoutRoom={...chat,id:id(15),kind:'room',title:'brigada-layout@grupos.exemplo.org',address:'brigada-layout@grupos.exemplo.org'};
+  chats.push(layoutRoom);
   const corpus = Array.from({length:57}, (_, n) => {
     const c = chats[n % 3];
     return {id:id(1000+n),revisionId:id(2000+n),accountId:c.accountId,conversationId:c.id,sender:{id:id(9),displayName:'Peer'},originalText:'Telescope retained message '+n,createdAt:new Date(Date.UTC(2026,10,9,12,n)).toISOString(),isOwn:false,sendState:'received',historical:true};
@@ -41,6 +50,21 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   let releaseSearch, finishArchiveMode;
   const archiveModes=[];
   corpus.push(savedMatch);
+  const scopeMessages=[chats[0],chats[1],chats[3]].map((c,index)=>({
+    ...corpus[0],id:id(6050+index),revisionId:id(6150+index),accountId:c.accountId,conversationId:c.id,
+    originalText:'Account scope marker '+index,createdAt:new Date(Date.UTC(2026,10,9,16,index)).toISOString()
+  }));
+  corpus.push(...scopeMessages);
+  const layoutMessages=[
+    {id:id(6060),revisionId:id(6160),displayName:'bio',createdAt:'2026-11-10T03:05:00Z'},
+    {id:id(6061),revisionId:id(6161),displayName:'nanda@usuarios.exemplo.org',createdAt:'2026-11-10T02:50:00Z'}
+  ].map(({displayName,...message})=>({
+    ...corpus[0],...message,conversationId:layoutRoom.id,sender:{id:id(9),displayName},originalText:'brigada-layout message'
+  }));
+  corpus.push(...layoutMessages);
+  const matchURL='https://match.fixture/plataformas', otherURL='https://other.fixture/notice';
+  const previewMessage={...layoutMessages[0],id:id(6062),revisionId:id(6162),originalText:'Conheça as plataformas disponíveis '+otherURL+'\n'+matchURL};
+  corpus.push(previewMessage);
   const all = [...corpus,...fillers];
   const chronological = c => all.filter(m => m.conversationId===c.id).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
   const fold = value => value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
@@ -81,26 +105,59 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     if (a) return send(200,a);
     if (u.pathname.endsWith('/connection')) return send(200,{accountId:u.pathname.includes(work)?work:account,state:'connected',updatedAt:chat.updatedAt});
     if (u.pathname.endsWith('/history')) return send(200,{accountId:account,state:'complete',retainedMessages:all.length,conversations:3,updatedAt:chat.updatedAt});
-    if (u.pathname.endsWith('/avatars')||u.pathname.endsWith('/previews')||u.pathname.endsWith('/message-stars')||u.pathname==='/api/v1/shared-content') return send(200,{items:[]});
+    if(u.pathname==='/api/v1/accounts/'+account+'/avatars')return send(200,{items:[{id:id(62),revisionId:id(63),accountId:account,address:chat.address,imageHash:conversationHash,updatedAt:chat.updatedAt}]});
+    if(u.pathname.startsWith('/api/v1/avatars/')){
+      const hash=u.pathname.split('/').at(-1),photo=hash===conversationHash?conversationPhoto:hash===senderHash?senderPhoto:null;
+      if(!photo)return send(404,{code:'not_found'});
+      res.setHeader('Content-Type','image/png');return res.end(photo);
+    }
+    if(u.pathname==='/api/v1/media/'+conversationHash||u.pathname==='/api/v1/media/'+senderHash){
+      const hash=u.pathname.split('/').at(-1);
+      res.setHeader('Content-Type','image/png');res.setHeader('ETag','"'+hash+'"');return res.end(hash===conversationHash?conversationPhoto:senderPhoto);
+    }
+    if (u.pathname.endsWith('/avatars')||u.pathname.endsWith('/previews')||u.pathname.endsWith('/message-stars')) return send(200,{items:[]});
+    if (u.pathname==='/api/v1/shared-content') {
+      state.catalogReads.push({type:u.searchParams.get('type'),q:u.searchParams.get('q'),accountId:u.searchParams.get('accountId'),accountIds:u.searchParams.getAll('accountIds')});
+      return send(200,{items:[],indexing:{state:'complete',indexedMessages:0,totalMessages:0}});
+    }
     if (u.pathname === '/api/v1/messages/search') {
-      state.searchReads.push(Object.fromEntries(u.searchParams));
+      const accountIds=u.searchParams.getAll('accountIds').sort();
+      state.searchReads.push({...Object.fromEntries(u.searchParams),accountIds});
       if (state.mode==='unavailable') return send(503,{code:'unavailable'});
       const q=u.searchParams.get('q')?.trim(), selectedAccount=u.searchParams.get('accountId')||'', conversation=u.searchParams.get('conversationId')||'', history=u.searchParams.get('includeEditHistory')==='true';
-      const fingerprint=JSON.stringify([state.engine,q,selectedAccount,conversation,history]);
+      const matchesScope=m=>(!selectedAccount||m.accountId===selectedAccount)&&(!accountIds.length||accountIds.includes(m.accountId))&&(!conversation||m.conversationId===conversation);
+      const fingerprint=JSON.stringify([state.engine,q,selectedAccount,accountIds,conversation,history]);
       let offset=0;
       if (u.searchParams.has('cursor')) {try {const cursor=JSON.parse(Buffer.from(u.searchParams.get('cursor'),'base64url'));if(cursor.scope!==fingerprint)throw Error('scope');offset=cursor.offset}catch{return send(400,{code:'invalid_cursor'})}}
-      let hits=corpus.filter(m=>(!selectedAccount||m.accountId===selectedAccount)&&(!conversation||m.conversationId===conversation)).flatMap(m=>{
-        const c=[...chats,archiveRoom].find(c=>c.id===m.conversationId),base={message:m,accountLabel:accounts.find(a=>a.id===m.accountId).label,conversationTitle:c.title,matchedAt:m.createdAt,matchKind:'text'};
+      let hits=corpus.filter(matchesScope).flatMap(m=>{
+        const c=[...chats,archiveRoom].find(c=>c.id===m.conversationId),a=accounts.find(a=>a.id===m.accountId);
+        const senderAddress=m.isOwn?a.address:c.kind==='direct'?c.address:undefined;
+        const base={message:m,accountLabel:a.label,conversationTitle:c.title,conversationAddress:c.address,senderAddress,matchedAt:m.createdAt,matchKind:'text',...(m===corpus[54]?{senderAvatarHash:senderHash}:{})};
+        if(m===layoutMessages[0])base.preview={kind:'link',imageHash:conversationHash,faviconHash:senderHash};
+        if(m===layoutMessages[1])base.preview={kind:'link'};
         const rows=fold(m.originalText).includes(fold(q))?[{...base,matchedRevisionId:m===corpus[1]?id(9001):m.revisionId,historical:false,excerpt:m.originalText}]:[];
+        if(m===previewMessage&&q==='platafromas')rows.push({...base,matchedRevisionId:m.revisionId,historical:false,matchKind:'metadata',excerpt:otherURL+' cached description',preview:{kind:'link',url:matchURL,faviconHash:senderHash}});
         if(history&&m===corpus[0]&&fold('Pineapple original').includes(fold(q)))rows.push(...[2,1].map(n=>({...base,matchedRevisionId:id(8000+n),matchedAt:`2026-11-09T12:00:0${n}Z`,historical:true,excerpt:'Pineapple prior version '+n})));
         return rows;
       }).sort((a,b)=>new Date(b.message.createdAt).getTime()-new Date(a.message.createdAt).getTime()||b.message.id.localeCompare(a.message.id)||Number(a.historical)-Number(b.historical)||b.matchedAt.localeCompare(a.matchedAt));
       const limit=conversation===chat.id?Math.min(7,Number(u.searchParams.get('limit')||50)):Number(u.searchParams.get('limit')||50),items=hits.slice(offset,offset+limit);
-      return send(200,{query:q,...(selectedAccount?{accountId:selectedAccount}:{}),...(conversation?{conversationId:conversation}:{}),includeEditHistory:history,items,nextCursor:offset+limit<hits.length?Buffer.from(JSON.stringify({scope:fingerprint,offset:offset+limit})).toString('base64url'):undefined,metadataIndexing:{state:all.filter(m=>(!selectedAccount||m.accountId===selectedAccount)&&(!conversation||m.conversationId===conversation)).length===corpus.filter(m=>(!selectedAccount||m.accountId===selectedAccount)&&(!conversation||m.conversationId===conversation)).length?'complete':'pending',indexedMessages:corpus.filter(m=>(!selectedAccount||m.accountId===selectedAccount)&&(!conversation||m.conversationId===conversation)).length,totalMessages:all.filter(m=>(!selectedAccount||m.accountId===selectedAccount)&&(!conversation||m.conversationId===conversation)).length}});
+      const indexedMessages=corpus.filter(matchesScope).length,totalMessages=all.filter(matchesScope).length;
+      return send(200,{query:q,...(selectedAccount?{accountId:selectedAccount}:{}),...(accountIds.length?{accountIds}:{}),...(conversation?{conversationId:conversation}:{}),includeEditHistory:history,items,nextCursor:offset+limit<hits.length?Buffer.from(JSON.stringify({scope:fingerprint,offset:offset+limit})).toString('base64url'):undefined,metadataIndexing:{state:totalMessages===indexedMessages?'complete':'pending',indexedMessages,totalMessages}});
     }
-    if(u.pathname.endsWith('/contacts')){state.contactReads.push(Object.fromEntries(u.searchParams));return send(404,{code:'unsupported'})}
+    if(u.pathname.endsWith('/contacts')){
+      state.contactReads.push(Object.fromEntries(u.searchParams));
+      if(u.searchParams.get('q')==='brigada-layout'){
+        const address='brigada-layout@usuarios.exemplo.org';
+        return send(200,{items:[{id:id(6062),revisionId:id(6162),accountId:account,accountLabel:'Personal',address,displayName:address,groups:[],subscription:'both'}],sources:[{accountId:account,state:'known'}]});
+      }
+      return send(404,{code:'unsupported'});
+    }
     if(u.pathname==='/api/v1/conversations'&&u.searchParams.get('q'))state.titleReads.push(Object.fromEntries(u.searchParams));
-    if (u.pathname === '/api/v1/conversations') return send(200,{items:chats.filter(c=>(!u.searchParams.get('accountId')||c.accountId===u.searchParams.get('accountId'))&&c.archived===(u.searchParams.get('archived')==='true')&&(!u.searchParams.get('q')||fold(c.title).includes(fold(u.searchParams.get('q'))))).slice(0,Number(u.searchParams.get('limit')||100))});
+    if (u.pathname === '/api/v1/conversations') {
+      if(state.failTitles&&u.searchParams.get('q')==='brigada-layout')return send(503,{code:'unavailable'});
+      const accountIds=u.searchParams.getAll('accountIds');
+      return send(200,{items:chats.filter(c=>(!u.searchParams.get('accountId')||c.accountId===u.searchParams.get('accountId'))&&(!accountIds.length||accountIds.includes(c.accountId))&&c.archived===(u.searchParams.get('archived')==='true')&&(!u.searchParams.get('q')||fold(c.title).includes(fold(u.searchParams.get('q'))))).slice(0,Number(u.searchParams.get('limit')||100))});
+    }
     for (const c of [...chats,archiveRoom]) {
       const prefix='/api/v1/conversations/'+c.id, messages=chronological(c),limit=Number(u.searchParams.get('limit')||50);
       if (u.pathname===prefix) return send(200,c);
@@ -130,18 +187,34 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   let stderr='';child.stderr.on('data',c=>stderr+=c);
   const browser=await chromium.launch({headless:true}),base='http://127.0.0.1:'+port,errors=[],findings=[],screenshots=[];
   const until=async(fn,label)=>{for(let n=0;n<240;n++){if(await fn())return;await new Promise(r=>setTimeout(r,50))}throw Error('Timed out: '+label+'\n'+stderr)};
-  const fresh=async(options={})=>{const context=await browser.newContext({viewport:{width:1440,height:950},locale:'en',...options}),page=await context.newPage();await page.addInitScript(()=>{document.addEventListener('oie:message-search-settled',()=>{const form=document.getElementById('message-search-form');window.searchSettled={q:form.elements.q.value.trim(),account:form.querySelector('input[name=accountId]')?.value||'',conversation:form.elements.conversationId.value,history:form.elements.includeEditHistory.checked};});});page.on('pageerror',e=>errors.push(e.message));return page};
+  const fresh=async(options={})=>{const context=await browser.newContext({viewport:{width:1440,height:950},locale:'en',...options}),page=await context.newPage();await page.addInitScript(()=>{document.addEventListener('oie:message-search-settled',event=>{if(!event.detail.root.matches('[data-message-search-root]'))return;const form=document.getElementById('message-search-form');window.searchSettled={q:form.elements.q.value.trim(),account:event.detail.root.dataset.searchAccount,category:event.detail.root.dataset.searchType,conversation:form.elements.conversationId.value,history:form.elements.includeEditHistory.checked};});});page.on('pageerror',e=>errors.push(e.message));return page};
   const initial=()=>base+'/?chat='+chat.id+'&account='+account+'&lang=en&theme=dark';
   const hits=page=>page.locator('#message-search-results [data-message-search-hit]');
+  const senderStyle=hit=>hit.evaluate(row=>{
+    const name=row.querySelector('.oie-search-result-copy strong');
+    const avatar=row.querySelector('.oie-search-avatar [class*="oie-avatar-user-"]');
+    return {name:getComputedStyle(name).color,border:getComputedStyle(avatar).borderTopColor,width:getComputedStyle(avatar).borderTopWidth};
+  });
   const query=page=>page.locator('#conversation-search:visible,#message-search-query:visible');
   const form=page=>page.locator('#message-search-form');
-  const settled=async(page,q)=>until(async()=>await page.evaluate(q=>{const last=window.searchSettled,form=document.getElementById('message-search-form');return last?.q===q&&last.account===(form.querySelector('input[name=accountId]')?.value||'')&&last.conversation===form.elements.conversationId.value&&last.history===form.elements.includeEditHistory.checked},q),'ready query '+q);
+  const settled=async(page,q)=>until(async()=>await page.evaluate(q=>{const last=window.searchSettled,form=document.getElementById('message-search-form');const selected=[...form.querySelectorAll('input[name=accountId]')].map(input=>input.value).sort().join(',');return last?.q===q&&last.account===selected&&last.category===form.elements.searchType.value&&last.conversation===form.elements.conversationId.value&&last.history===form.elements.includeEditHistory.checked},q),'ready query '+q);
   const openGlobal=async page=>{await query(page).waitFor({state:'visible'});await query(page).focus()};
-  const chooseAccount=async(page,label)=>{await page.locator('#message-search-account-trigger').click();await page.getByRole('option').filter({hasText:label}).click()};
+  const chooseAccount=async(page,label)=>{
+    const picker=page.locator('#message-search-account'),trigger=picker.getByRole('combobox'),clear=picker.locator('[data-combobox-clear-all]');
+    await trigger.click();
+    await picker.getByRole('listbox').waitFor({state:'visible'});
+    if(await picker.locator('input[name=accountId]').count())await clear.click();
+    if(label!=='All accounts')await picker.getByRole('option').filter({hasText:label}).click();
+    await trigger.press('Escape');
+    await picker.getByRole('listbox').waitFor({state:'hidden'});
+  };
   let page;
   try {
     await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
-    page=await fresh();await page.goto(initial());await page.locator('#message-composer').waitFor({state:'visible'});
+    page=await fresh();await page.goto(initial()+'&searchMode=messages&searchQuery=%20&searchEngine='+state.engine);await page.locator('#message-composer').waitFor({state:'visible'});
+    await page.waitForFunction(()=>window.OieRuntime?.generation>0);
+    await page.locator('#conversation-list-default').waitFor({state:'visible'});
+    assert.equal(new URL(page.url()).searchParams.has('searchMode'),false,'an old blank search address restores the inbox');
     // Full app fragments are parsed with scripting disabled. Native fallback
     // controls must not override the enhanced search's selected account after it.
     const beforeSectionSwap=await page.evaluate(()=>window.OieRuntime?.generation||0);
@@ -152,8 +225,53 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     const draft='Retain this exact device draft 😀';await page.locator('#message-composer').fill(draft);
     await page.waitForFunction(()=>window.OieRuntime?.generation>0);await until(async()=>await page.locator('#message-timeline').evaluate(n=>n.scrollHeight-n.scrollTop-n.clientHeight<80),'initial timeline reaches latest before reading');
     const before=await page.evaluate(()=>{const timeline=document.getElementById('message-timeline');timeline.scrollTop=(timeline.scrollHeight-timeline.clientHeight)/2;document.getElementById('conversation-list').scrollTop=240;window.searchNodes={pane:document.getElementById('conversation-pane'),list:document.getElementById('conversation-list'),timeline,composer:document.getElementById('message-composer')};window.searchDocument=Math.random();return{token:window.searchDocument,generation:window.OieRuntime.generation,scroll:timeline.scrollTop,history:history.length,listScroll:document.getElementById('conversation-list').scrollTop,chat:new URL(location.href).searchParams.get('chat')}});
-    const blankReads=state.searchReads.length,blankTitles=state.titleReads.length,blankContacts=state.contactReads.length;await openGlobal(page);assert.equal(state.searchReads.length,blankReads,'blank search does not query saved messages');assert.equal(state.titleReads.length,blankTitles,'blank search does not query conversation titles');assert.equal(state.contactReads.length,blankContacts,'blank search does not query protocol contacts');
-    await query(page).fill('Telescope');await settled(page,'Telescope');assert.equal(await query(page).evaluate(node=>document.activeElement===node),true,'results retain typing focus');await chooseAccount(page,'Personal');await settled(page,'Telescope');assert.equal(await hits(page).count(),30);assert.equal(await page.locator('[data-message-search-contacts]').count(),0,'an unsupported contacts endpoint does not produce a fabricated contacts group');
+    const blankReads=state.searchReads.length,blankTitles=state.titleReads.length,blankContacts=state.contactReads.length;
+    const field=query(page),list=page.locator('#conversation-list-default'),slot=page.locator('#message-search-slot');
+    const searchBox=await field.boundingBox(),composerBox=await page.locator('#message-composer').boundingBox();
+    await openGlobal(page);
+    assert(await list.isVisible(),'keyboard focus keeps the conversation list visible');
+    await field.click();
+    assert(await list.isVisible(),'clicking the field keeps the conversation list visible');
+    await field.fill('   ');await field.press('Enter');
+    assert(await list.isVisible(),'submitting whitespace keeps the conversation list visible');
+    assert(await slot.isHidden());
+    assert.equal(new URL(page.url()).searchParams.has('searchMode'),false);
+    assert.equal(await page.evaluate(()=>history.length),before.history);
+    assert.deepEqual(await field.boundingBox(),searchBox);
+    assert.deepEqual(await page.locator('#message-composer').boundingBox(),composerBox);
+    assert.equal(state.searchReads.length,blankReads,'blank search does not query saved messages');
+    assert.equal(state.titleReads.length,blankTitles,'blank search does not query conversation titles');
+    assert.equal(state.contactReads.length,blankContacts,'blank search does not query protocol contacts');
+    let releaseAvatar;
+    const avatarPath='**/ui/avatars/'+senderHash;
+    await page.route(avatarPath,async route=>{
+      const response=await route.fetch();
+      await new Promise(resolve=>releaseAvatar=resolve);
+      await route.fulfill({response});
+    });
+    await query(page).fill('Telescope');await settled(page,'Telescope');
+    const senderRow=page.locator('[data-search-message="'+corpus[54].id+'"]');
+    const senderAvatar=senderRow.locator('.oie-search-avatar');
+    await until(()=>releaseAvatar,'cached sender avatar request');
+    await senderRow.evaluate(row=>{
+      const nodes=[row,row.querySelector('.oie-search-avatar'),document.getElementById('message-composer')];
+      const sample=()=>nodes.flatMap(node=>{const {x,y,width,height}=node.getBoundingClientRect();return [x,y,width,height]});
+      const baseline=sample(),frames=[];
+      let handle=requestAnimationFrame(function paint(){frames.push(sample());handle=requestAnimationFrame(paint)});
+      window.finishAvatarGeometry=()=>{cancelAnimationFrame(handle);return {baseline,frames:[...frames,sample()]}};
+    });
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    releaseAvatar();
+    await until(()=>senderAvatar.locator('img').evaluate(image=>image.complete&&image.naturalWidth>0),'sender avatar renders');
+    await senderAvatar.locator('img').waitFor({state:'visible'});
+    const peerColor=await page.locator('#message-timeline .oie-message-heading strong').first().evaluate(node=>getComputedStyle(node).color);
+    assert.deepEqual(await senderStyle(senderRow),{name:peerColor,border:peerColor,width:'2px'},'photo avatar and sender name match the direct conversation');
+    await page.unroute(avatarPath);
+    const avatarGeometry=await page.evaluate(()=>window.finishAvatarGeometry());
+    assert(avatarGeometry.frames.length>1);
+    assert(avatarGeometry.frames.every(frame=>frame.every((value,index)=>Math.abs(value-avatarGeometry.baseline[index])<=1)),'sender photo preserves result and composer geometry on every painted frame');
+    assert.equal(await query(page).evaluate(node=>document.activeElement===node),true,'results retain typing focus');
+    await chooseAccount(page,'Personal');await settled(page,'Telescope');assert.equal(await hits(page).count(),30);assert.equal(await page.locator('[data-message-search-contacts]').count(),0,'an unsupported contacts endpoint does not produce a fabricated contacts group');
     assert.equal(await page.locator('#message-search-pagination [data-message-search-indexing]').count(),1,'metadata coverage is explicit while indexing is incomplete');
     const inbox=new URL(page.url());assert.equal(inbox.searchParams.get('account'),account);assert.equal(inbox.searchParams.get('chat'),before.chat);assert.equal(inbox.searchParams.get('q'),null);assert.equal(inbox.searchParams.get('searchQuery'),'Telescope');
     assert.equal(await page.evaluate(()=>history.length),before.history+1,'typing replaces the single search history entry');
@@ -165,18 +283,41 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     assert.equal(new Set(await hits(page).evaluateAll(nodes=>nodes.map(n=>n.dataset.searchMessage))).size,38,'current results are not duplicated across pages');
     findings.push('Live search owns a separate URL/history scope, loads scoped pages, and preserves draft, inbox/timeline nodes, focus, stream runtime and scroll');
 
-    await page.locator('[data-message-search-close]:visible').click();await page.locator('#conversation-list-default').waitFor({state:'visible'});
+    const cancelSearch=page.getByRole('button',{name:'Cancel search',exact:true});
+    const historyHelp=page.getByRole('button',{name:'Include edit history',exact:true});
+    const historyTip=page.locator('#message-search-history-help');
+    await cancelSearch.click();await page.locator('#conversation-list-default').waitFor({state:'visible'});
     assert(await page.evaluate(()=>window.searchNodes.list===document.getElementById('conversation-list')),'closing restores the same conversation-list node');assert.equal(await page.locator('#conversation-list').evaluate(node=>node.scrollTop),before.listScroll);assert.equal(await query(page).inputValue(),'','closing restores the original title filter');assert.equal(await page.locator('#message-composer').inputValue(),draft);
     await query(page).fill('Telescope');await settled(page,'Telescope');
     await chooseAccount(page,'All accounts');await settled(page,'Telescope');await until(async()=>await hits(page).count()===30,'global first page');
     await page.locator('#message-search-scroll').evaluate(node=>node.scrollTop=node.scrollHeight);await until(async()=>await hits(page).count()===57,'all-account second page');
     assert(await page.locator('[data-search-message="'+corpus[1].id+'"] [data-message-search-source]').count(),'current cancelled source with prior content revision renders normally');
     assert.equal(await page.locator('[data-search-message="'+corpus[1].id+'"]').getAttribute('data-search-historical'),'false');
-    await query(page).fill('Family');await settled(page,'Family');assert.equal(await hits(page).count(),0);assert.equal(await page.locator('[data-message-search-conversation="'+chat.id+'"]').count(),1,'conversation titles form a distinct group');await query(page).fill('Telescope');await settled(page,'Telescope');
+    await query(page).fill('Family');await settled(page,'Family');assert.equal(await hits(page).count(),0);
+    const conversationResult=page.locator('[data-message-search-conversation="'+chat.id+'"]');
+    assert.equal(await conversationResult.count(),1,'conversation titles form a distinct group');
+    assert.equal(await conversationResult.locator('strong').textContent(),'Family');
+    const conversationAvatar=conversationResult.locator('img[src="/ui/avatars/'+conversationHash+'"]');
+    await conversationAvatar.waitFor({state:'attached'});
+    await until(()=>conversationAvatar.evaluate(image=>image.complete&&image.naturalWidth>0),'conversation thumbnail renders from the owning account');
+    await conversationResult.locator('[data-avatar-ready="true"]').waitFor({state:'visible'});
+    await query(page).fill('Telescope');await settled(page,'Telescope');
     await chooseAccount(page,'Work');await settled(page,'Telescope');await until(async()=>await hits(page).count()===19,'account scope before pagination');
     assert((await hits(page).evaluateAll(nodes=>nodes.map(n=>n.textContent))).every(text=>text.includes('Work')));
     await chooseAccount(page,'All accounts');await query(page).fill('CAFÉ 😀');await settled(page,'CAFÉ 😀');assert.equal(await hits(page).count(),1);assert.equal(await page.evaluate(()=>window.searchInjection),undefined);assert.equal(await hits(page).locator('img').count(),0);
-    const readCount=state.searchReads.length;await query(page).fill('');await until(async()=>await hits(page).count()===0,'blank clears results');assert.equal(state.searchReads.length,readCount,'clearing does not send an invalid blank API query');
+    assert.equal(await hits(page).locator('mark.oie-search-highlight').textContent(),'Café 😀');
+    assert.equal((await hits(page).locator('.oie-search-avatar').textContent()).trim(),'P','a sender without a retained photo has initials');
+    await query(page).fill('platafromas');await settled(page,'platafromas');
+    assert.equal(await hits(page).locator('.oie-message-search-url').textContent(),matchURL);
+    assert.deepEqual(await hits(page).locator('mark').allTextContents(),['plataformas','plataformas']);
+    assert((await hits(page).locator('.oie-message-search-preview-favicon').getAttribute('src')).includes(senderHash));
+    const readCount=state.searchReads.length;await field.fill('');
+    assert(await list.isVisible(),'clearing the query restores the conversation list');
+    assert(await slot.isHidden());
+    assert.equal(await hits(page).count(),0);
+    assert.equal(await field.evaluate(node=>node===document.activeElement),true,'clearing retains search focus');
+    assert.equal(new URL(page.url()).searchParams.has('searchMode'),false);
+    assert.equal(state.searchReads.length,readCount,'clearing does not send an invalid blank API query');
     findings.push('Global/account filters apply before pagination, distinct transport revisions stay current, Unicode matches and hostile excerpts remain inert text');
 
     await query(page).fill('Pineapple');await settled(page,'Pineapple');assert.equal(await hits(page).count(),0);
@@ -201,16 +342,33 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     await openGlobal(page);
     let closeRelease,closeHeld=false,closedDone;const closedResponse=new Promise(resolve=>closedDone=resolve);
     await page.route('**/ui/message-search?**',async route=>{if(new URL(route.request().url()).searchParams.get('q')==='Telescope'){const response=await route.fetch();closeHeld=true;await new Promise(resolve=>closeRelease=resolve);await route.fulfill({response}).catch(()=>{});closedDone();return}await route.continue()});
-    await query(page).fill('Telescope');await until(()=>closeHeld,'pending query after reopening source global list search');await page.locator('[data-message-search-close]:visible').click();await page.locator('#message-search-slot').waitFor({state:'hidden'});
+    await query(page).fill('Telescope');await until(()=>closeHeld,'pending query after reopening source global list search');
+    await historyHelp.click();await historyTip.waitFor({state:'visible'});
+    await page.evaluate(()=>{
+      const nodes=['conversation-search','message-composer','message-timeline'].map(id=>document.getElementById(id));
+      const sample=()=>nodes.flatMap(node=>{const {x,y,width,height}=node.getBoundingClientRect();return [x,y,width,height,node.scrollTop]});
+      const baseline=sample(),frames=[];
+      let handle=requestAnimationFrame(function paint(){frames.push(sample());handle=requestAnimationFrame(paint)});
+      window.finishCancelGeometry=()=>{cancelAnimationFrame(handle);return {baseline,frames:[...frames,sample()]}};
+    });
+    await cancelSearch.click();await page.locator('#message-search-slot').waitFor({state:'hidden'});
+    await page.waitForFunction(()=>!document.getElementById('message-search-history-help').matches(':popover-open'));
     await until(async()=>new URL(page.url()).searchParams.get('searchMode')===null,'closing a reopened search restores the conversation-list route');const readsAtClose=state.searchReads.length;
     closeRelease();await closedResponse;await page.unroute('**/ui/message-search?**');await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    const {baseline,frames}=await page.evaluate(()=>window.finishCancelGeometry());
+    assert(frames.length>1,'cancel geometry includes painted frames');
+    assert(frames.every(frame=>frame.every((value,index)=>Math.abs(value-baseline[index])<=1)),'cancel and a late response preserve field, composer and timeline geometry');
+    assert(await field.evaluate(node=>node===document.activeElement),'cancelling restores focus to the search field');
     assert.equal(state.searchReads.length,readsAtClose,'closed global list search cannot continue background pagination');assert.equal(await hits(page).count(),0,'closed pending response cannot resurrect results');
     await openGlobal(page);await query(page).fill('CAFÉ 😀');await settled(page,'CAFÉ 😀');assert.equal(await hits(page).count(),1);
     findings.push('After a source jump, reopening and closing cancels the pending read, clears the overlay route, rejects the late response and prevents hidden pagination; reopening works again');
 
     let sourceHeld=false,sourceRelease,sourceReleased;const pendingSource=new Promise(resolve=>sourceReleased=resolve);
     await page.route('**/*',async route=>{const url=new URL(route.request().url());if(url.origin===base&&url.pathname==='/'&&url.searchParams.get('message')===corpus[2].id){const response=await route.fetch();sourceHeld=true;await new Promise(resolve=>sourceRelease=resolve);await route.fulfill({response}).catch(()=>{});sourceReleased();return}await route.continue()});
-    await hits(page).first().locator('[data-message-search-source]').click();await until(()=>sourceHeld,'held canonical source fragment');await openGlobal(page);await query(page).fill('Telescope');await chooseAccount(page,'Work');await settled(page,'Telescope');assert.equal(await hits(page).count(),19);
+    await historyHelp.click();await historyTip.waitFor({state:'visible'});
+    await hits(page).first().locator('[data-message-search-source]').press('Enter');await until(()=>sourceHeld,'held canonical source fragment');
+    await historyTip.waitFor({state:'hidden'});
+    await openGlobal(page);await query(page).fill('Telescope');await chooseAccount(page,'Work');await settled(page,'Telescope');assert.equal(await hits(page).count(),19);
     sourceRelease();await pendingSource;await page.unroute('**/*');await until(async()=>await query(page).isVisible()&&await query(page).inputValue()==='Telescope'&&await form(page).locator('[name=accountId]').inputValue()===work&&await hits(page).count()===19,'latest search intent survives the older source fragment');
     assert.equal(await page.locator('#message-composer').inputValue(),draft);assert.equal(new URL(page.url()).searchParams.get('searchQuery'),'Telescope');assert.equal(new URL(page.url()).searchParams.get('searchAccount'),work);
     findings.push('A held source fragment cannot erase a later reopened search query/account intent or its device draft');
@@ -228,10 +386,29 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     assert.equal(await hits(page).count(),1);assert.equal(await page.evaluate(()=>window.searchSettled?.q),'CAFÉ 😀');
     findings.push('HTTP and transport failures recover through visible retry actions; an older held response cannot overwrite a newer query');
 
-    const globalSearchNodes=await page.evaluate(()=>{window.concurrentSearchNodes={input:document.getElementById('conversation-search'),results:document.getElementById('message-search-results'),composer:document.getElementById('message-composer')};return{query:document.getElementById('conversation-search').value,account:document.querySelector('#message-search-form input[name=accountId]').value}});
+    let releaseClearedSource;
+    await page.route('**/*',async route=>{
+      const url=new URL(route.request().url());
+      if(url.origin!==base||url.pathname!=='/'||url.searchParams.get('message')!==corpus[2].id)return route.continue();
+      const response=await route.fetch();
+      await new Promise(resolve=>releaseClearedSource=resolve);
+      await route.fulfill({response});
+    });
+    const generationBeforeClear=await page.evaluate(()=>window.OieRuntime.generation);
+    await hits(page).first().locator('[data-message-search-source]').click();
+    await until(()=>releaseClearedSource,'held source before clearing global search');
+    await field.fill('');
+    releaseClearedSource();
+    await page.waitForFunction(generation=>window.OieRuntime.generation>generation,generationBeforeClear);
+    await page.unroute('**/*');
+    assert(await list.isVisible(),'an older source fragment cannot reopen a cleared search');
+    assert.equal(new URL(page.url()).searchParams.has('searchMode'),false);
+    await field.fill('CAFÉ 😀');await settled(page,'CAFÉ 😀');await until(async()=>await hits(page).count()===1,'reopen search after clearing during source navigation');
+
+    const globalSearchNodes=await page.evaluate(()=>{window.concurrentSearchNodes={input:document.getElementById('conversation-search'),results:document.getElementById('message-search-results'),composer:document.getElementById('message-composer')};return{query:document.getElementById('conversation-search').value}});
     await page.locator('#chat-options button').first().click();await page.locator('#chat-search-messages:visible').click();
     const chatSearch=page.locator('[data-conversation-search]'),chatQuery=page.locator('#conversation-search-query');await chatQuery.waitFor({state:'visible'});await page.locator('#chat-options [role=menu]').waitFor({state:'hidden'});
-    const orderedMatches=corpus.filter(message=>message.conversationId===chat.id).sort((a,b)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime()||b.id.localeCompare(a.id));
+    const orderedMatches=corpus.filter(message=>message.conversationId===chat.id&&message.originalText.includes('Telescope')).sort((a,b)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime()||b.id.localeCompare(a.id));
     const selected=()=>chatSearch.getAttribute('data-search-selected');
     await chatQuery.fill('Telescope');await until(async()=>await selected()===orderedMatches[0].id,'per-chat search starts at newest matching source');
     assert.equal(await chatQuery.evaluate(node=>document.activeElement===node),true,'initial chat search preserves typing focus');
@@ -249,7 +426,8 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     }
     assert.equal(await chatSearch.getAttribute('data-search-complete'),'true');assert.equal(await chatSearch.getAttribute('data-search-loaded'),String(orderedMatches.length));assert(await chatSearch.locator('[data-conversation-search-older]').isDisabled(),'oldest matching source does not wrap');
     assert(state.searchReads.slice(readsBeforeOlder).filter(read=>read.conversationId===chat.id&&read.cursor).length>=2,'older navigation loads subsequent short scoped search pages');
-    await chatSearch.locator('[data-conversation-search-newer]').click();await until(async()=>await selected()===orderedMatches.at(-2).id,'newer matching source moves back one hit');
+    await chatQuery.press('ArrowUp');await until(async()=>await selected()===orderedMatches.at(-2).id,'Up moves to a newer conversation match');
+    await chatQuery.press('ArrowDown');await until(async()=>await selected()===orderedMatches.at(-1).id,'Down moves to an older conversation match');
     assert((await page.locator('mark[data-conversation-search-highlight]:visible').count())>0,'current literal matching text is highlighted');
     await chatQuery.fill('Pineapple');await chatSearch.locator('#conversation-search-history').check();await until(async()=>await selected()===corpus[0].id&&await chatSearch.getAttribute('data-search-loaded')==='2','chat edit-history search');
     assert((await chatSearch.locator('[data-conversation-search-excerpt]').textContent()).includes('Pineapple'));assert.equal(await page.locator('[data-message-id="'+corpus[0].id+'"] mark[data-conversation-search-highlight]').count(),0,'prior content is not invented as a highlight in the current bubble');
@@ -257,20 +435,428 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     await page.route('**/ui/message-search?**',async route=>{const url=new URL(route.request().url());if(url.searchParams.get('q')==='Telescope'&&url.searchParams.get('conversationId')===chat.id){const response=await route.fetch();chatHeld=true;await new Promise(resolve=>chatRelease=resolve);await route.fulfill({response}).catch(()=>{});chatReleased();return}await route.continue()});
     const sourceBeforeStale=await page.locator('body').getAttribute('data-focus-message');await chatQuery.fill('Telescope');await until(()=>chatHeld,'held old chat-search query');await chatQuery.fill('No matching source');await until(async()=>await chatSearch.getAttribute('data-search-complete')==='true'&&await chatSearch.getAttribute('data-search-loaded')==='0','new empty chat query');chatRelease();await chatStaleResponse;await page.unroute('**/ui/message-search?**');assert.equal(await chatQuery.inputValue(),'No matching source');assert.equal(await chatSearch.getAttribute('data-search-loaded'),'0');assert.equal(await page.locator('body').getAttribute('data-focus-message'),sourceBeforeStale,'old chat query cannot refocus its source');
     state.mode='unavailable';await chatQuery.fill('Chat transport failure');await chatSearch.locator('[data-conversation-search-retry]').waitFor({state:'visible'});assert.equal(await query(page).inputValue(),globalSearchNodes.query);state.mode='normal';await chatSearch.locator('[data-conversation-search-retry]').click();await until(async()=>await chatSearch.getAttribute('data-search-complete')==='true'&&await chatSearch.getAttribute('data-search-loaded')==='0','chat search retry recovers without a synthetic match');
-    await chatSearch.locator('[data-conversation-search-close]').click();await chatSearch.waitFor({state:'hidden'});assert.equal(await page.locator('body').getAttribute('data-focus-message'),corpus[0].id,'closing chat search keeps its selected source');assert.equal(await query(page).inputValue(),globalSearchNodes.query);assert.equal(await hits(page).count(),1);
+    const generationBeforeChatSearchClose=await page.evaluate(()=>window.OieRuntime.generation);
+    await chatSearch.locator('[data-conversation-search-close]').click();await chatSearch.waitFor({state:'hidden'});
+    await until(async()=>await query(page).inputValue()===globalSearchNodes.query&&await hits(page).count()===1,'closing chat search restores the independently scoped global results');
+    assert.equal(await page.evaluate(()=>window.OieRuntime.generation),generationBeforeChatSearchClose,'closing chat search does not navigate the workspace');
+    assert.equal(await page.locator('body').getAttribute('data-focus-message'),corpus[0].id,'closing chat search keeps its selected source');
     findings.push('Global and per-chat queries coexist independently; next/previous traverse scoped pages without wrapping, preserve draft/global DOM/focus, highlight only current literal content and keep timeline bounded to200 rows');
 
-    const native=await fresh({javaScriptEnabled:false});await native.goto(base+'/search?q=Telescope&accountId='+work+'&lang=en&theme=light');assert.equal(await hits(native).count(),19);assert.equal(await native.locator('form[role="search"] input[name="q"]').inputValue(),'Telescope');await native.context().close();
+    const native=await fresh({javaScriptEnabled:false});await native.goto(base+'/search?q=Telescope&accountId='+work+'&lang=en&theme=light');assert.equal(await hits(native).count(),19);assert.equal(await form(native).locator('input[name="q"]').inputValue(),'Telescope');
+    await native.goto(initial()+'&searchMode=messages&searchQuery=%20');
+    assert(await native.locator('#conversation-list-default').isVisible(),'server renders the inbox for a blank global search');
+    assert(await native.locator('#message-search-slot').isHidden());
+    await native.goto(base+'/search?'+new URLSearchParams([['q','Account scope marker'],['accountIds',account],['accountIds',work],['lang','en']]));
+    assert.equal(await hits(native).count(),2);
+    await native.locator('#message-search-native-'+account).uncheck();
+    await native.locator('#message-search-native-'+work).uncheck();
+    await native.getByRole('button',{name:'Search messages',exact:true}).click();
+    await native.waitForURL(url=>url.searchParams.has('nativeAccountFilter'));
+    assert.equal(await hits(native).count(),3,'clearing the native checkboxes searches all accounts');
+    await native.goto(base+'/search?q=brigada-layout&searchType=conversations&lang=en');
+    assert.equal(await native.locator('[data-message-search-conversation]').count(),1);
+    assert.equal(await hits(native).count(),0);
+    await native.getByRole('navigation',{name:'Search categories'}).getByRole('link',{name:'Messages'}).click();
+    await native.waitForURL(url=>url.searchParams.get('searchType')==='messages');
+    assert.equal(await hits(native).count(),2);
+    await native.goto(initial()+'&'+new URLSearchParams([['searchMode','messages'],['searchQuery','Account scope marker'],['searchAccount',account],['searchAccount',work],['searchEngine',state.engine]]));
+    const nativeCatalog=await native.locator('[data-message-search-category="links"]').getAttribute('href');
+    assert.deepEqual(new URL(nativeCatalog,base).searchParams.getAll('contentAccount'),[account,work]);
+    await native.context().close();
+
+    const multi=await fresh();
+    await multi.goto(initial());
+    await multi.waitForFunction(()=>window.OieRuntime?.generation>0);
+    await query(multi).fill('Account scope marker');await settled(multi,'Account scope marker');
+    const picker=multi.locator('#message-search-account'),trigger=picker.getByRole('combobox');
+    const option=id=>picker.locator('[data-combobox-option][data-value="'+id+'"]');
+    await trigger.click();
+    let pickerSearchReads=0;
+    multi.on('request',request=>{if(request.url().includes('/ui/message-search?'))pickerSearchReads++});
+    const pickerSearch=picker.locator('[data-combobox-search]');
+    await pickerSearch.fill('work@fixture');
+    assert(await option(work).isVisible());
+    assert(await option(account).isHidden());
+    assert.equal(pickerSearchReads,0,'typing in the combobox filters its options only');
+    await option(work).click();await settled(multi,'Account scope marker');
+    assert(await option(work).locator('input[type=checkbox]').isChecked());
+    assert.equal(await trigger.getAttribute('aria-expanded'),'true','selecting one account keeps the picker open');
+    await pickerSearch.fill('Personal');
+    assert(await option(account).isVisible());
+    const fieldBounds=await query(multi).boundingBox(),composerBounds=await multi.locator('#message-composer').boundingBox();
+    await option(account).click();await settled(multi,'Account scope marker');
+    assert(await option(account).locator('input[type=checkbox]').isChecked());
+    assert(await option(work).locator('input[type=checkbox]').isChecked());
+    assert.equal(await trigger.innerText(),'2 accounts selected');
+    assert.deepEqual(new URL(multi.url()).searchParams.getAll('searchAccount'),[account,work]);
+    assert.deepEqual(await hits(multi).evaluateAll(nodes=>nodes.map(node=>node.dataset.searchMessage)),[scopeMessages[1].id,scopeMessages[0].id]);
+    assert.deepEqual(await query(multi).boundingBox(),fieldBounds);
+    assert.deepEqual(await multi.locator('#message-composer').boundingBox(),composerBounds);
+    await trigger.press('Escape');await picker.getByRole('listbox').waitFor({state:'hidden'});
+    await multi.locator('[data-message-search-filter="messages"]').click();
+    await settled(multi,'Account scope marker');
+    const selectedURL=multi.url(),sourceId=scopeMessages[1].id;
+    await hits(multi).first().locator('[data-message-search-source]').click();
+    await multi.waitForURL(url=>url.searchParams.get('message')===sourceId);
+    await multi.goBack();await multi.waitForURL(selectedURL);
+    await until(async()=>await hits(multi).count()===2,'Back restores both selected accounts');
+    assert.equal(await multi.locator('[data-message-search-filter="messages"]').getAttribute('aria-current'),'true');
+    assert.deepEqual(await form(multi).locator('input[name=accountId]').evaluateAll(inputs=>inputs.map(input=>input.value).sort()),[account,work]);
+    await multi.locator('[data-message-search-category="links"]').click();
+    await multi.waitForURL(url=>url.searchParams.get('contentType')==='links');
+    assert.deepEqual(new URL(multi.url()).searchParams.getAll('contentAccount'),[account,work]);
+    const catalogPicker=multi.locator('#shared-account').getByRole('combobox');
+    assert.equal(await catalogPicker.innerText(),'2 accounts selected');
+    await until(()=>state.catalogReads.some(read=>read.type==='links'&&read.q==='Account scope marker'&&read.accountIds.join(',')===[account,work].join(',')&&!read.accountId),'links request preserves account scope');
+    await multi.locator('[data-shared-tab="documents"]').click();
+    await multi.waitForURL(url=>url.searchParams.get('contentType')==='documents');
+    assert.deepEqual(new URL(multi.url()).searchParams.getAll('contentAccount'),[account,work]);
+    await multi.locator('#shared-search').fill('Edited catalog query');
+    await multi.waitForURL(url=>url.searchParams.get('q')==='Edited catalog query');
+    await multi.locator('#shared-search-results[data-search-query="Edited catalog query"]').waitFor();
+    assert.deepEqual(new URL(multi.url()).searchParams.getAll('contentAccount').sort(),[account,work]);
+    await until(()=>state.catalogReads.some(read=>read.type==='documents'&&read.q==='Edited catalog query'&&read.accountIds.join(',')===[account,work].join(',')),'edited query retains the same account scope');
+    await multi.goBack();await multi.waitForURL(url=>url.searchParams.get('contentType')==='links');
+    await multi.locator('#shared-content-results[data-content-type="links"]').waitFor();
+    await multi.goBack();await multi.waitForURL(selectedURL);
+    await until(async()=>await hits(multi).count()===2,'Back restores search from the catalog');
+    await chooseAccount(multi,'All accounts');await settled(multi,'Account scope marker');
+    assert.equal(await hits(multi).count(),3);
+    assert.equal(await trigger.innerText(),'All accounts');
+    await multi.goto(base+'/?'+new URLSearchParams([['section','media'],['contentType','links'],['contentAccount',account],['contentAccount',work],['lang','en']]));
+    await catalogPicker.click();
+    await multi.locator('#shared-account [data-combobox-option][data-value="'+work+'"]').click();
+    await multi.waitForURL(url=>url.searchParams.getAll('contentAccount').join(',')===account);
+    assert.equal(await catalogPicker.innerText(),'Personal · alice@fixture');
+    assert.equal(await catalogPicker.getAttribute('aria-expanded'),'true');
+    await multi.locator('#shared-account [data-combobox-clear-all]').click();
+    await multi.waitForURL(url=>!url.searchParams.has('contentAccount'));
+    await until(async()=>await catalogPicker.innerText()==='All accounts','clearing the inherited set restores All accounts');
+    await multi.context().close();
+    findings.push('Searchable account checkboxes preserve selected accounts and query, apply before pagination, restore via Back, and clear to all accounts');
+
+    for(const [width,lang] of [[390,'pt-BR'],[1440,'en']]){
+      const layout=await fresh({viewport:{width,height:900},locale:lang,timezoneId:'America/Sao_Paulo'});
+      await layout.clock.setFixedTime(new Date('2026-11-10T03:15:00Z'));
+      await layout.goto(base+'/?lang='+lang);
+      await layout.waitForFunction(()=>window.OieRuntime?.generation>0);
+      let releasePreview;
+      await layout.route('**/ui/media/'+conversationHash,async route=>{
+        await new Promise(resolve=>releasePreview=resolve);
+        if(width===390)await route.fulfill({status:404});
+        else await route.continue();
+      });
+      await query(layout).fill('brigada-layout');await settled(layout,'brigada-layout');
+      const room=layout.locator('[data-message-search-conversation="'+layoutRoom.id+'"]');
+      assert.equal(await room.locator('strong').textContent(),'brigada-layout');
+      assert.equal(await room.locator('small').textContent(),'grupos.exemplo.org');
+      const contact=layout.locator('[data-message-search-contact="'+id(6062)+'"]');
+      assert.equal(await contact.locator('strong').textContent(),'brigada-layout');
+      assert.equal((await contact.locator('small').innerText()).trim(),'Personal · usuarios.exemplo.org');
+      const today=hits(layout).first(),previous=hits(layout).nth(1);
+      assert.equal(await today.locator('strong').textContent(),'bio');
+      assert.equal(await previous.locator('strong').textContent(),'nanda');
+      assert.equal(await previous.locator('.oie-search-result-copy small').textContent(),'usuarios.exemplo.org');
+      const roomStyle=await senderStyle(today);
+      assert.equal(roomStyle.border,roomStyle.name,'initials use the same color as the displayed room nickname');
+      assert.equal(roomStyle.width,'2px');
+      assert.notEqual((await senderStyle(previous)).name,roomStyle.name,'the fixture room nicknames use different hues');
+      assert.equal((await today.locator('.oie-message-search-context').innerText()).replace(/\s+/g,' ').trim(),'Personal · brigada-layout (grupos.exemplo.org)');
+      assert.deepEqual(await today.locator('.oie-message-search-text').evaluate(text=>[...text.children].map(node=>node.className)),[
+        'oie-search-result-identity','oie-message-search-context','oie-message-search-excerpt'
+      ]);
+      const thumbnail=today.locator('[data-search-preview=link]'),excerpt=today.locator('.oie-message-search-excerpt');
+      await until(()=>releasePreview,'held search thumbnail');
+      const beforeImage=await thumbnail.boundingBox();
+      assert(beforeImage.x>=(await excerpt.boundingBox()).x+(await excerpt.boundingBox()).width,'the thumbnail is on the right of the excerpt');
+      assert.equal(beforeImage.width,beforeImage.height);
+      const imageResponse=layout.waitForResponse(response=>response.url().endsWith('/ui/media/'+conversationHash));
+      const favicon=thumbnail.locator('.oie-message-search-preview-favicon[data-loaded]');
+      await favicon.waitFor({state:'visible'});
+      releasePreview();assert.equal((await imageResponse).status(),width===390?404:200);
+      await thumbnail.locator('.oie-message-search-preview-image'+(width===390?'[hidden]':'[data-loaded]')).waitFor({state:'attached'});
+      await layout.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      assert.deepEqual(await thumbnail.boundingBox(),beforeImage,'loading the image preserves its rectangle');
+      const fallback=previous.locator('[data-search-preview=link]');
+      assert.equal(await fallback.locator('img').count(),0);
+      assert.equal(await fallback.locator('svg use').getAttribute('href').then(href=>href.split('#').at(-1)),'hi-16-solid-link');
+      await layout.unroute('**/ui/media/'+conversationHash);
+      const todayText=lang==='pt-BR'?'Hoje 00:05':'Today 12:05 AM';
+      const previousText=lang==='pt-BR'?'9 de nov. de 2026 23:50':'Nov 9, 2026 11:50 PM';
+      assert.equal(await today.locator('time').textContent(),todayText);
+      assert.equal(await previous.locator('time').textContent(),previousText);
+      await layout.evaluate(()=>document.dispatchEvent(new CustomEvent('oie:inbox-filtered',{detail:{root:document.getElementById('workspace')}})));
+      assert.equal(await today.locator('time').textContent(),todayText,'the live clock refresh preserves the date');
+      assert.equal(await previous.locator('time').textContent(),previousText);
+      assert(await layout.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+      await chooseAccount(layout,'Personal');await settled(layout,'brigada-layout');
+      const filters=layout.getByRole('navigation',{name:lang==='pt-BR'?'Categorias da pesquisa':'Search categories'});
+      const allFilter=filters.getByRole('link',{name:lang==='pt-BR'?'Tudo':'All',exact:true});
+      const conversationsFilter=filters.getByRole('link',{name:lang==='pt-BR'?'Conversas':'Conversations',exact:true});
+      const messagesFilter=filters.getByRole('link',{name:lang==='pt-BR'?'Mensagens':'Messages',exact:true});
+      const messageReads=state.searchReads.length,contactReads=state.contactReads.length;
+      await conversationsFilter.click();await settled(layout,'brigada-layout');
+      assert.equal(await conversationsFilter.getAttribute('aria-current'),'true');
+      assert.equal(await room.count(),1);
+      assert.equal(await hits(layout).count(),0);
+      assert.equal(await contact.count(),0);
+      assert.equal(state.searchReads.length,messageReads);
+      assert.equal(state.contactReads.length,contactReads);
+      await query(layout).fill('brigada-layout no matches');await settled(layout,'brigada-layout no matches');
+      assert(await layout.getByText(lang==='pt-BR'?'Nenhuma conversa encontrada':'No conversations found',{exact:true}).isVisible());
+      await query(layout).fill('brigada-layout');await settled(layout,'brigada-layout');
+      const titleReads=state.titleReads.length;
+      await messagesFilter.focus();await messagesFilter.press('Enter');await settled(layout,'brigada-layout');
+      assert.equal(await messagesFilter.getAttribute('aria-current'),'true');
+      assert.equal(await hits(layout).count(),2);
+      assert.equal(await room.count(),0);
+      assert.equal(await contact.count(),0);
+      assert.equal(state.titleReads.length,titleReads);
+      assert.equal(state.contactReads.length,contactReads);
+      assert.equal(new URL(layout.url()).searchParams.get('searchAccount'),account);
+      assert.equal(new URL(layout.url()).searchParams.get('searchType'),'messages');
+      await allFilter.click();await settled(layout,'brigada-layout');
+      assert.equal(await allFilter.getAttribute('aria-current'),'true');
+      assert.equal(await hits(layout).count(),2);
+      assert.equal(await room.count(),1);
+      assert.equal(await contact.count(),1);
+      if(width===1440){
+        let releaseFilter,finishFilter;
+        const delayedFilter=new Promise(resolve=>finishFilter=resolve);
+        await layout.route('**/ui/message-search?**',async route=>{
+          if(new URL(route.request().url()).searchParams.get('searchType')!=='conversations')return route.continue();
+          const response=await route.fetch();
+          await new Promise(resolve=>releaseFilter=resolve);
+          await route.fulfill({response}).catch(()=>{});
+          finishFilter();
+        });
+        await layout.evaluate(()=>{
+          const nodes=['conversation-search','message-composer','message-timeline'].map(id=>document.getElementById(id));
+          const measure=()=>nodes.flatMap(node=>{const {x,y,width,height}=node.getBoundingClientRect();return [x,y,width,height,node.scrollTop]});
+          const baseline=measure(),frames=[];
+          let handle=requestAnimationFrame(function sample(){frames.push(measure());handle=requestAnimationFrame(sample)});
+          window.finishFilterGeometry=()=>{cancelAnimationFrame(handle);return {baseline,frames:[...frames,measure()]}};
+        });
+        await conversationsFilter.click();
+        await until(()=>releaseFilter,'held conversations category response');
+        await messagesFilter.click();await settled(layout,'brigada-layout');
+        releaseFilter();await delayedFilter;await layout.unroute('**/ui/message-search?**');
+        await layout.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+        assert.equal(await room.count(),0,'a stale conversation response cannot replace selected message results');
+        assert.equal(await hits(layout).count(),2);
+        assert.equal(await query(layout).inputValue(),'brigada-layout');
+        const {baseline,frames}=await layout.evaluate(()=>window.finishFilterGeometry());
+        assert(frames.length>1&&frames.every(frame=>frame.every((value,index)=>Math.abs(value-baseline[index])<=1)),'switching filters keeps the field, composer and timeline stable');
+        state.failTitles=true;
+        await conversationsFilter.click();
+        const retry=layout.locator('button[data-message-search-retry]');
+        await retry.waitFor({state:'visible'});
+        state.failTitles=false;
+        await retry.click();await settled(layout,'brigada-layout');
+        assert.equal(await room.count(),1,'conversation filter can retry a failed title read');
+        await messagesFilter.click();await settled(layout,'brigada-layout');
+        await today.locator('[data-message-search-source]').click();
+        const roomAuthor=layout.locator('[data-message-id="'+layoutMessages[0].id+'"] .oie-message-heading strong');
+        await roomAuthor.waitFor({state:'visible'});
+        assert.equal(await roomAuthor.evaluate(node=>getComputedStyle(node).color),roomStyle.name,'room initials and nickname match the source conversation');
+      }
+      await layout.context().close();
+    }
+    findings.push('Conversation and message filters preserve the query and accounts, request only the selected type, and restore all results');
+    findings.push('Search results separate address names from domains, lead with the author, and show local Today or the date before the time');
+
+    for(const width of [390,1440]){
+      const mobile=width===390,lang=mobile?'pt-BR':'en';
+      const navigation=await fresh({viewport:{width,height:900},locale:lang,hasTouch:mobile});
+      const params=new URLSearchParams({
+        account,chat:chat.id,lang,theme:'dark',searchMode:'messages',
+        searchQuery:'Telescope',searchEngine:state.engine,searchAccount:account,
+        searchType:'messages',includeEditHistory:'true',
+      });
+      if(mobile)params.set('inbox','1');
+      await navigation.goto(base+'/?'+params);
+      await navigation.waitForFunction(()=>window.OieRuntime?.generation>0);
+      await hits(navigation).first().waitFor({state:'visible'});
+      const inbox=navigation.locator('#conversation-list-default');
+      const field=navigation.locator('#conversation-search');
+      const row=inbox.locator('a[data-conversation-id="'+chats[2].id+'"]');
+      const groups=inbox.locator('a[data-filter="groups"]');
+      const cancel=navigation.getByRole('button',{name:mobile?'Cancelar pesquisa':'Cancel search',exact:true});
+      if(mobile)await cancel.tap();
+      else await field.press('Escape');
+      await inbox.waitFor({state:'visible'});
+      const searchKeys=['searchMode','searchQuery','searchEngine','searchAccount','searchType','searchConversation','searchCursor','includeEditHistory'];
+      const assertClosedURL=href=>{
+        const url=new URL(href,base);
+        for(const key of searchKeys)assert(!url.searchParams.has(key),key+' survived cancellation in '+url.pathname);
+      };
+      assertClosedURL(navigation.url());
+      assertClosedURL(await row.getAttribute('href'));
+      assertClosedURL(await groups.getAttribute('href'));
+      const generation=await navigation.evaluate(()=>window.OieRuntime.generation);
+      if(mobile)await row.tap();
+      else await row.click();
+      await navigation.waitForFunction(({id,generation})=>document.body.dataset.conversationId===id&&window.OieRuntime.generation>generation,{id:chats[2].id,generation});
+      assertClosedURL(navigation.url());
+      assert.equal(await field.inputValue(),'');
+      assert.equal(await navigation.locator('#message-search-slot').getAttribute('hidden'),'');
+      await navigation.goBack();
+      await inbox.waitFor({state:'visible'});
+      await navigation.waitForFunction(id=>document.body.dataset.conversationId===id,chat.id);
+      assertClosedURL(navigation.url());
+      await groups.click();
+      await navigation.waitForURL(url=>url.searchParams.get('filter')==='groups');
+      assertClosedURL(navigation.url());
+      assert.equal(await field.inputValue(),'');
+      await navigation.context().close();
+    }
+    findings.push('After closing a server-rendered search, conversation links, Back and inbox filters stay outside search on desktop and mobile');
+
+    for(const [width,lang,shortcut] of [[1440,'en','Control+k'],[390,'pt-BR','Meta+k']]){
+      const mobile=width===390;
+      const keyboard=await fresh({viewport:{width,height:900},locale:lang,hasTouch:mobile});
+      await keyboard.goto(base+'/?account='+account+'&chat='+chat.id+'&lang='+lang+(mobile?'&inbox=1':''));
+      await keyboard.waitForFunction(()=>window.OieRuntime?.generation>0);
+      const sidebar=query(keyboard),sidebarFirst=hits(keyboard).first().locator('[data-message-search-source]');
+      await sidebar.fill('Telescope');await settled(keyboard,'Telescope');
+      await sidebar.press('ArrowDown');
+      assert(await sidebarFirst.evaluate(link=>link===document.activeElement),'sidebar Down focuses its first match');
+      await keyboard.keyboard.press('ArrowDown');
+      const sidebarSecond=hits(keyboard).nth(1).locator('[data-message-search-source]');
+      assert(await sidebarSecond.evaluate(link=>link===document.activeElement),'sidebar Down advances');
+      await keyboard.keyboard.press('ArrowUp');
+      assert(await sidebarFirst.evaluate(link=>link===document.activeElement),'sidebar Up returns to the previous result');
+      await keyboard.keyboard.press('ArrowUp');
+      assert(await sidebar.evaluate(input=>input===document.activeElement),'sidebar Up returns to the field');
+
+      const previous=mobile?sidebar:keyboard.locator('#message-composer');
+      if(!mobile)await previous.fill('Draft during quick search');
+      await previous.focus();
+      const originalURL=keyboard.url();
+      const quick=keyboard.getByRole('dialog',{name:mobile?'Pesquisar':'Search',exact:true});
+      const quickQuery=quick.locator('#oie-quick-search-query');
+      const quickHits=quick.locator('[data-message-search-hit]'),quickMessage=quickHits.first().locator('[data-message-search-source]');
+      await keyboard.keyboard.press(shortcut);await quick.waitFor({state:'visible'});
+      await keyboard.waitForFunction(()=>document.activeElement?.id==='oie-quick-search-query');
+      assert.equal(await quickQuery.inputValue(),'');
+      assert.equal(keyboard.url(),originalURL);
+
+      let releaseQuick,finishQuick;
+      const delayedQuick=new Promise(resolve=>finishQuick=resolve);
+      await keyboard.route('**/ui/message-search?**',async route=>{
+        if(new URL(route.request().url()).searchParams.get('q')!=='Unrelated delayed shortcut')return route.continue();
+        const response=await route.fetch();
+        await new Promise(resolve=>releaseQuick=resolve);
+        await route.fulfill({response}).catch(()=>{});finishQuick();
+      });
+      await quickQuery.fill('Unrelated delayed shortcut');await until(()=>releaseQuick,'held quick search response');
+      await quickQuery.fill('brigada-layout');await quickMessage.waitFor({state:'visible'});
+      assert.equal(await quickMessage.locator('[data-search-preview=link]').count(),1);
+      releaseQuick();await delayedQuick;await keyboard.unroute('**/ui/message-search?**');
+      assert.equal(await quickHits.count(),2);
+      assert.equal(await sidebar.inputValue(),'Telescope');
+      assert.equal(keyboard.url(),originalURL);
+      assert(await quickQuery.evaluate(input=>input===document.activeElement),'results preserve the modal caret');
+      await quickQuery.press('ArrowDown');
+      assert(await quick.locator('[data-message-search-contact]').first().evaluate(link=>link===document.activeElement),'modal starts with the first result group');
+      await keyboard.keyboard.press('ArrowDown');
+      assert(await quick.locator('[data-message-search-conversation]').first().evaluate(link=>link===document.activeElement),'modal crosses result groups');
+      await keyboard.keyboard.press('ArrowDown');
+      assert(await quickMessage.evaluate(link=>link===document.activeElement),'modal reaches messages');
+      await keyboard.keyboard.press('Escape');await quick.waitFor({state:'hidden'});
+      await until(()=>previous.evaluate(node=>node===document.activeElement),'quick search restores focus');
+      assert.equal(await sidebar.inputValue(),'Telescope');
+      if(!mobile)assert.equal(await previous.inputValue(),'Draft during quick search');
+
+      await sidebar.press('ArrowDown');
+      assert(await sidebarFirst.evaluate(link=>link===document.activeElement),'sidebar focus is on a result before cancelling');
+      await keyboard.keyboard.press('Escape');
+      await keyboard.locator('#message-search-slot').waitFor({state:'hidden'});
+      assert(await sidebar.evaluate(input=>input===document.activeElement));
+      assert.equal(new URL(keyboard.url()).searchParams.has('searchMode'),false);
+
+      await sidebar.fill('Telescope');await settled(keyboard,'Telescope');
+      const accountTrigger=keyboard.locator('#message-search-account-trigger');
+      await accountTrigger.press('Enter');
+      await keyboard.locator('#message-search-account [role=listbox]').waitFor({state:'visible'});
+      await accountTrigger.press('Escape');
+      await keyboard.locator('#message-search-account [role=listbox]').waitFor({state:'hidden'});
+      assert.equal(await sidebar.inputValue(),'Telescope');
+      await accountTrigger.press('Escape');
+      await keyboard.locator('#message-search-slot').waitFor({state:'hidden'});
+      assert(await sidebar.evaluate(input=>input===document.activeElement));
+
+      await sidebar.fill('Telescope');await settled(keyboard,'Telescope');
+      await keyboard.keyboard.press(shortcut);await quick.waitFor({state:'visible'});
+      await quickQuery.fill('platafromas');await quickMessage.waitFor({state:'visible'});
+      assert.equal(await quickMessage.locator('.oie-message-search-url').textContent(),matchURL);
+      assert.deepEqual(await quickMessage.locator('mark').allTextContents(),['plataformas','plataformas']);
+      await quickQuery.fill('CAFÉ 😀');await until(async()=>await quickMessage.locator('mark').allTextContents().then(parts=>parts.join('')==='Café 😀'),'modal shows accent-insensitive literal match');
+      assert.equal(await quickMessage.locator('mark.oie-search-highlight').textContent(),'Café 😀');
+      await quickQuery.press('Enter');await quick.waitFor({state:'hidden'});
+      await keyboard.waitForURL(url=>url.searchParams.get('message')===corpus[2].id);
+      await keyboard.locator('[data-message-id="'+corpus[2].id+'"]').waitFor({state:'visible'});
+      assert.equal(new URL(keyboard.url()).searchParams.get('searchQuery'),'Telescope');
+      await keyboard.context().close();
+    }
+    const mediaQuick=await fresh();
+    await mediaQuick.goto(base+'/?section=media&lang=en');
+    await mediaQuick.waitForFunction(()=>window.OieRuntime?.generation>0);
+    await mediaQuick.keyboard.press('Control+k');
+    const mediaDialog=mediaQuick.getByRole('dialog',{name:'Search',exact:true});
+    await mediaDialog.locator('#oie-quick-search-query').fill('brigada-layout');
+    await mediaDialog.locator('[data-message-search-conversation]').waitFor({state:'visible'});
+    await mediaQuick.keyboard.press('Escape');await mediaDialog.waitFor({state:'hidden'});
+    assert.equal(new URL(mediaQuick.url()).searchParams.get('section'),'media');
+    await mediaQuick.context().close();
+    findings.push('Ctrl/Cmd+K opens the independent global dialog in chats or media; arrows cross result groups, Enter opens a bounded source and Escape restores focus');
+
     await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});
     for(const width of [390,1440])for(const design of ['goshtoso','minimal'])for(const theme of ['light','dark']){
-      const variant=await fresh({viewport:{width,height:900},locale:width===390?'pt-BR':'en'}),lang=width===390?'pt-BR':'en';
-      await variant.goto(base+'/?account='+work+'&lang='+lang+'&theme='+theme);await variant.waitForFunction(()=>window.OieRuntime?.generation>0);await openGlobal(variant);await query(variant).fill('Telescope');await settled(variant,'Telescope');await chooseAccount(variant,'Work');await settled(variant,'Telescope');
+      const variant=await fresh({viewport:{width,height:900},locale:width===390?'pt-BR':'en',hasTouch:width===390}),lang=width===390?'pt-BR':'en';
+      await variant.goto(base+'/?account='+work+'&lang='+lang+'&theme='+theme);await variant.waitForFunction(()=>window.OieRuntime?.generation>0);
+      await variant.evaluate(design=>document.documentElement.dataset.theme=design,design);
+      if(width===390)await query(variant).tap();
+      else await query(variant).click();
+      assert(await variant.locator('#conversation-list-default').isVisible());
+      const cancel=variant.getByRole('button',{name:lang==='pt-BR'?'Cancelar pesquisa':'Cancel search',exact:true});
+      assert(await cancel.isHidden(),'cancel appears only for an active search');
+      const idleField=await query(variant).boundingBox();
+      await query(variant).fill('Telescope');await settled(variant,'Telescope');await chooseAccount(variant,'Work');await settled(variant,'Telescope');
+      const help=variant.getByRole('button',{name:lang==='pt-BR'?'Incluir histórico de edições':'Include edit history',exact:true});
+      const tip=variant.locator('#message-search-history-help'),outside=variant.locator('.oie-list-heading h2');
+      assert(await tip.isHidden());
+      if(width===390)await help.tap();
+      else await help.click();
+      await tip.waitFor({state:'visible'});
+      assert.equal(await help.getAttribute('aria-expanded'),'true');
+      if(width===390)await outside.tap();
+      else await outside.click();
+      await tip.waitFor({state:'hidden'});
+      assert.equal(await help.getAttribute('aria-expanded'),'false');
+      if(width===1440){
+        await help.press('Enter');await tip.waitFor({state:'visible'});
+        await help.press('Escape');await tip.waitFor({state:'hidden'});
+        assert(await help.evaluate(node=>node===document.activeElement));
+      }
+      assert.equal(await query(variant).inputValue(),'Telescope');
+      assert.equal(await variant.locator('#message-search-history').isChecked(),false);
       await hits(variant).first().waitFor({state:'visible'});await variant.evaluate(design=>document.documentElement.dataset.theme=design,design);assert.equal(await variant.locator('html').getAttribute('data-theme'),design);
       if(width===1440){await variant.locator('#chat-options button').first().click();await variant.locator('#chat-search-messages:visible').click();await variant.locator('#chat-options [role=menu]').waitFor({state:'hidden'});await variant.locator('#conversation-search-query').fill(corpus[55].originalText);await until(async()=>await variant.locator('[data-conversation-search]').getAttribute('data-search-selected')===corpus[55].id,'independent desktop queries in '+design+'/'+theme);assert.equal(await query(variant).inputValue(),'Telescope');assert.equal(await hits(variant).count(),19)}
-      await query(variant).focus();await variant.keyboard.press('Tab');assert.notEqual(await variant.evaluate(()=>document.activeElement.tagName),'BODY');
+      const activeField=await query(variant).boundingBox(),cancelBox=await cancel.boundingBox();
+      assert.deepEqual(activeField,idleField,'opening search does not move or resize the field');
+      assert(cancelBox.x>activeField.x+activeField.width/2&&cancelBox.x+cancelBox.width<=activeField.x+activeField.width&&cancelBox.y>=activeField.y&&cancelBox.y+cancelBox.height<=activeField.y+activeField.height,'cancel is inside the right side of the field');
+      assert(cancelBox.width>=24&&cancelBox.height>=24,'cancel has a touch target of at least 24px');
+      await query(variant).focus();await variant.keyboard.press('Tab');assert(await cancel.evaluate(node=>node===document.activeElement),'cancel is the next keyboard stop');
       assert(await variant.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'search has no horizontal page overflow '+width+'/'+design+'/'+theme);
       await variant.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const audit=await variant.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(audit.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);
-      const screenshot='message-search-'+width+'-'+design+'-'+theme+'.png';await variant.screenshot({path:path.join(__dirname,'artifacts',screenshot),fullPage:true});screenshots.push({width,design,theme,lang,screenshot,axe:audit.violations.length});await variant.context().close();
+      const screenshot='message-search-'+width+'-'+design+'-'+theme+'.png';await variant.screenshot({path:path.join(__dirname,'artifacts',screenshot),fullPage:true});screenshots.push({width,design,theme,lang,screenshot,axe:audit.violations.length});
+      if(width===390)await cancel.tap();
+      else await variant.keyboard.press('Enter');
+      assert(await variant.locator('#conversation-list-default').isVisible());
+      assert(await cancel.isHidden());
+      assert(await query(variant).evaluate(node=>node===document.activeElement));
+      await variant.context().close();
     }
     for(const width of [390,1440]){
       const lang=width===390?'pt-BR':'en',roomPage=await fresh({viewport:{width,height:900},locale:lang,reducedMotion:'reduce'});

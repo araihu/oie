@@ -192,6 +192,21 @@ func (e SearchBrowserMessagesParamsLang) Valid() bool {
 	}
 }
 
+// Defines values for SearchBrowserMessagesParamsPresentation.
+const (
+	Compact SearchBrowserMessagesParamsPresentation = "compact"
+)
+
+// Valid indicates whether the value is a known member of the SearchBrowserMessagesParamsPresentation enum.
+func (e SearchBrowserMessagesParamsPresentation) Valid() bool {
+	switch e {
+	case Compact:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PrepareBrowserReplyParamsLang.
 const (
 	PrepareBrowserReplyParamsLangEn   PrepareBrowserReplyParamsLang = "en"
@@ -828,10 +843,16 @@ type SearchBrowserMessagesParams struct {
 
 	// Lang Result locale.
 	Lang *SearchBrowserMessagesParamsLang `form:"lang,omitempty" json:"lang,omitempty"`
+
+	// Presentation Use compact excerpts that start near the first visible match in the floating search dialog.
+	Presentation *SearchBrowserMessagesParamsPresentation `form:"presentation,omitempty" json:"presentation,omitempty"`
 }
 
 // SearchBrowserMessagesParamsLang defines parameters for SearchBrowserMessages.
 type SearchBrowserMessagesParamsLang string
+
+// SearchBrowserMessagesParamsPresentation defines parameters for SearchBrowserMessages.
+type SearchBrowserMessagesParamsPresentation string
 
 // PrepareBrowserReplyParams defines parameters for PrepareBrowserReply.
 type PrepareBrowserReplyParams struct {

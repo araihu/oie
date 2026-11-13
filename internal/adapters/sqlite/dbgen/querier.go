@@ -105,7 +105,7 @@ type Querier interface {
 	ListCanonicalSenderIdentities(ctx context.Context, arg ListCanonicalSenderIdentitiesParams) ([]ListCanonicalSenderIdentitiesRow, error)
 	ListChanges(ctx context.Context, arg ListChangesParams) ([]Change, error)
 	ListContactRecords(ctx context.Context, accountID string) ([]Contact, error)
-	ListContactSources(ctx context.Context, accountID string) ([]ListContactSourcesRow, error)
+	ListContactSources(ctx context.Context, arg ListContactSourcesParams) ([]ListContactSourcesRow, error)
 	ListConversationMessageStars(ctx context.Context, arg ListConversationMessageStarsParams) ([]ListConversationMessageStarsRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListMessageHistoryProofs(ctx context.Context, arg ListMessageHistoryProofsParams) ([]ListMessageHistoryProofsRow, error)
@@ -151,6 +151,7 @@ type Querier interface {
 	ResetRoomReactionPrivacy(ctx context.Context, accountID string) error
 	ResolveMessageAlias(ctx context.Context, aliasID string) (string, error)
 	SearchContacts(ctx context.Context, arg SearchContactsParams) ([]SearchContactsRow, error)
+	SearchMessagePreviews(ctx context.Context, arg SearchMessagePreviewsParams) ([]SearchMessagePreviewsRow, error)
 	SearchMessages(ctx context.Context, arg SearchMessagesParams) ([]SearchMessagesRow, error)
 	SetMessageTimelineAt(ctx context.Context, arg SetMessageTimelineAtParams) error
 	SetOperationResult(ctx context.Context, arg SetOperationResultParams) error

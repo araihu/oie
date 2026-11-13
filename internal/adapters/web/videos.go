@@ -212,10 +212,10 @@ func validSatisfiedVideoRange(value string, length, maximum int64) bool {
 
 func (v view) messageVideos(id string) []engineapi.SharedContentItem { return v.MessageVideos[id] }
 
-var videoBodyURLs = regexp.MustCompile(`https?://[^\s<>"\x00-\x1f]+`)
+var messageBodyURLs = regexp.MustCompile(`https?://[^\s<>"\x00-\x1f]+`)
 
 func hasVideoReference(body, address string) bool {
-	for _, candidate := range videoBodyURLs.FindAllString(body, 128) {
+	for _, candidate := range messageBodyURLs.FindAllString(body, 128) {
 		if strings.TrimRight(candidate, ".,;!)]}") == address {
 			return true
 		}

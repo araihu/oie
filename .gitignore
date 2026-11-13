@@ -12,4 +12,7 @@ test-results/
 /tests/browser/artifacts/
 /tests/desktop/artifacts/
 /.codegen-check.*/
+/internal/adapters/web/.appicons.goshtoso-iconpack.lock
+/tools/icons/.iconpack/
+/tools/icons/.iconpack-cache/
 __pycache__/

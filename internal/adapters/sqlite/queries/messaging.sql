@@ -17,6 +17,7 @@ UPDATE conversations SET revision_id=?,payload=?,activity_sequence=?,unread_coun
 SELECT * FROM conversations
 WHERE activity_sequence < sqlc.arg(cursor)
 AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR account_id=CAST(sqlc.arg(account_id) AS TEXT))
+AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))
 AND archived=sqlc.arg(archived)
 AND (CAST(sqlc.arg(favorites_only) AS INTEGER)=0 OR favorite=1)
 AND (CAST(sqlc.arg(unread_only) AS INTEGER)=0 OR unread_count>0)

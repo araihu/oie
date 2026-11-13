@@ -24,6 +24,63 @@ func searchMessages(t *testing.T, e *application.Engine, q domain.MessageSearchQ
 	}
 	return p
 }
+
+func TestMessageSearchUsesAccountScopedSenderAvatars(t *testing.T) {
+	s, e, direct := outboxFixture(t)
+	room := domain.Conversation{ID: migrationID(), RevisionID: migrationID(), AccountID: direct.AccountID, PeerID: migrationID(), Kind: "room", Address: "room@conference.localhost", Title: "Room", UpdatedAt: time.Now().UTC()}
+	foreign, err := e.Register(t.Context(), migrationID(), application.RegisterInput{Protocol: "xmpp", Address: "foreign@localhost", Label: "Foreign"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	save := func(account domain.ID, address, hash string) {
+		t.Helper()
+		if err := s.SaveAvatar(t.Context(), domain.Avatar{ID: migrationID(), RevisionID: migrationID(), AccountID: account, Address: address, ImageHash: hash, UpdatedAt: time.Now().UTC()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	peerHash, authorHash, ownHash := strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("c", 64)
+	save(direct.AccountID, direct.Address, peerHash)
+	save(room.AccountID, "author@localhost", authorHash)
+	save(room.AccountID, "alice@localhost", ownHash)
+	save(room.AccountID, room.Address, strings.Repeat("d", 64))
+	save(foreign.Account.ID, "foreign-peer@localhost", strings.Repeat("e", 64))
+
+	peer := senderSeed(t, s, direct, "")
+	known := senderSeed(t, s, room, "author@localhost")
+	anonymous := senderSeed(t, s, room, "")
+	foreignOnly := senderSeed(t, s, room, "foreign-peer@localhost")
+	disputed := senderSeed(t, s, room, "author@localhost")
+	disputed.Sender.PersonalAddress = "foreign-peer@localhost"
+	if err = s.ReceiveMessage(t.Context(), room, disputed, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+	own := domain.Message{ID: migrationID(), RevisionID: migrationID(), AccountID: direct.AccountID, ConversationID: direct.ID, Sender: domain.Sender{ID: direct.AccountID, DisplayName: "Alice"}, IsOwn: true, OriginalText: "retained source", CreatedAt: time.Now().UTC(), SendState: "received"}
+	if err = s.ReceiveMessage(t.Context(), direct, own, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+	page := searchMessages(t, e, domain.MessageSearchQuery{Search: "retained source", AccountID: direct.AccountID})
+	want := map[domain.ID]string{peer.ID: peerHash, own.ID: ownHash, known.ID: authorHash, anonymous.ID: "", foreignOnly.ID: "", disputed.ID: ""}
+	if len(page.Items) != len(want) {
+		t.Fatalf("got %d matches, want %d", len(page.Items), len(want))
+	}
+	for _, hit := range page.Items {
+		hash, found := want[hit.Message.ID]
+		if !found || hit.SenderAvatarHash != hash {
+			t.Errorf("message %s has avatar %q, want %q", hit.Message.ID, hit.SenderAvatarHash, hash)
+		}
+		address, sender := room.Address, ""
+		switch hit.Message.ID {
+		case peer.ID:
+			address, sender = direct.Address, direct.Address
+		case own.ID:
+			address, sender = direct.Address, "alice@localhost"
+		}
+		if hit.ConversationAddress != address || hit.SenderAddress != sender {
+			t.Errorf("message %s has conversation and sender addresses %q, %q, want %q, %q", hit.Message.ID, hit.ConversationAddress, hit.SenderAddress, address, sender)
+		}
+	}
+}
+
 func TestMessageSearchFiltersBeforePagingAndPreservesIngestPosition(t *testing.T) {
 	s, e, c := outboxFixture(t)
 	base := time.Now().Add(-time.Hour).UTC()
@@ -120,7 +177,7 @@ func TestMessageSearchCurrentMetadataIsLocalAndInvalidatesOnCorrection(t *testin
 	s, e, c := outboxFixture(t)
 	at := time.Now().Add(-time.Hour).UTC()
 	e.SetProtocols(&outboundProtocol{})
-	receiveCorrection(t, e, c, "first", "source https://example.test/first.pdf", "", "proof:bob", "bob", at)
+	receiveCorrection(t, e, c, "first", "source https://example.test/first-page https://other.test/second-page", "", "proof:bob", "bob", at)
 	m := correctionMessages(t, e, c)[0]
 	refs := application.SharedReferences(m.OriginalText)
 	for i := range refs {
@@ -130,8 +187,14 @@ func TestMessageSearchCurrentMetadataIsLocalAndInvalidatesOnCorrection(t *testin
 	if err := s.IndexSharedContent(t.Context(), []domain.SharedContentMutation{{Message: m, References: refs, ParserVersion: application.SharedContentVersion}}); err != nil {
 		t.Fatal(err)
 	}
-	preview := domain.MessagePreview{ID: migrationID(), RevisionID: migrationID(), MessageID: m.ID, AccountID: c.AccountID, ConversationID: c.ID, URL: refs[0].URL, Title: "Orçamento especial", Description: "annual projection", State: "ready", Kind: "link", DownloadState: "not_downloaded", UpdatedAt: time.Now().UTC()}
+	preview := domain.MessagePreview{ID: migrationID(), RevisionID: migrationID(), MessageID: m.ID, AccountID: c.AccountID, ConversationID: c.ID, URL: refs[1].URL, Title: "Orçamento especial", Description: "annual projection", State: "ready", Kind: "link", DownloadState: "not_downloaded", FaviconHash: strings.Repeat("b", 64), UpdatedAt: time.Now().UTC()}
 	if _, err := s.EnsurePreview(t.Context(), preview); err != nil {
+		t.Fatal(err)
+	}
+	other := preview
+	other.ID, other.RevisionID, other.URL = migrationID(), migrationID(), refs[0].URL
+	other.Title, other.Description, other.ImageHash = "Unrelated", "", strings.Repeat("a", 64)
+	if _, err := s.EnsurePreview(t.Context(), other); err != nil {
 		t.Fatal(err)
 	}
 	before, err := e.Snapshot(t.Context())
@@ -141,6 +204,9 @@ func TestMessageSearchCurrentMetadataIsLocalAndInvalidatesOnCorrection(t *testin
 	page := searchMessages(t, e, domain.MessageSearchQuery{Search: "orcamento", Limit: 10})
 	if len(page.Items) != 1 || page.Items[0].MatchKind != "metadata" || !strings.Contains(page.Items[0].Excerpt, "Orçamento especial") || page.MetadataIndexing.State != "complete" {
 		t.Fatal(page)
+	}
+	if p := page.Items[0].Preview; p == nil || p.Kind != "link" || p.URL != preview.URL || p.ImageHash != preview.FaviconHash || p.FaviconHash != preview.FaviconHash {
+		t.Fatalf("missing cached preview: %+v", p)
 	}
 	after, _ := e.Snapshot(t.Context())
 	if before.Sequence != after.Sequence {
@@ -157,8 +223,12 @@ func TestMessageSearchCurrentMetadataIsLocalAndInvalidatesOnCorrection(t *testin
 	}
 	// Immediate current text does not wait for the metadata worker.
 	current := searchMessages(t, e, domain.MessageSearchQuery{Search: "next.pdf", Limit: 10})
-	if len(current.Items) != 1 || current.Items[0].Historical {
+	if len(current.Items) != 1 || current.Items[0].Historical || current.Items[0].Preview != nil {
 		t.Fatal(current)
+	}
+	history := searchMessages(t, e, domain.MessageSearchQuery{Search: "first-page", IncludeEditHistory: true, Limit: 10})
+	if len(history.Items) != 1 || !history.Items[0].Historical || history.Items[0].Preview != nil {
+		t.Fatal(history)
 	}
 }
 func TestMessageSearchValidationAndPlainBoundedExcerpts(t *testing.T) {

@@ -118,7 +118,8 @@ func (s *Store) Contacts(ctx context.Context, in domain.ContactQuery) (domain.Co
 		return page, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	rows, err := q.SearchContacts(ctx, dbgen.SearchContactsParams{AccountID: string(in.AccountID), CursorID: string(cursor.ID), Search: in.Search, PageLimit: int64(in.Limit + 1)})
+	accountIDs := jsonText(nonNilIDs(in.AccountIDs))
+	rows, err := q.SearchContacts(ctx, dbgen.SearchContactsParams{AccountID: string(in.AccountID), AccountIds: accountIDs, CursorID: string(cursor.ID), Search: in.Search, PageLimit: int64(in.Limit + 1)})
 	if err != nil {
 		return page, err
 	}
@@ -138,7 +139,7 @@ func (s *Store) Contacts(ctx context.Context, in domain.ContactQuery) (domain.Co
 	if more {
 		page.NextCursor = application.EncodeContactCursor(application.ContactCursor{Scope: in.ScopeHash, ID: page.Items[len(page.Items)-1].ID})
 	}
-	sources, err := q.ListContactSources(ctx, string(in.AccountID))
+	sources, err := q.ListContactSources(ctx, dbgen.ListContactSourcesParams{AccountID: string(in.AccountID), AccountIds: accountIDs})
 	if err != nil {
 		return page, err
 	}

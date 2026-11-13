@@ -6,6 +6,8 @@ const base = process.env.OIE_BROWSER_URL || "http://127.0.0.1:8080";
 const pane = "#desktop-navigation";
 const toggle = "[data-sidebar-toggle]";
 const splitter = "[data-sidebar-splitter]";
+const menuIcon = "/assets/icons/heroicons.svg#hi-16-solid-bars-3";
+const chatIcon = "/ui/icons/heroicons-extra.svg#heroicons-16-solid-chat-bubble-left";
 
 async function width(page) {
   return Math.round((await page.locator(pane).boundingBox())?.width || 0);
@@ -31,6 +33,8 @@ async function assertToggle(page, expanded, label) {
   const control = page.getByRole("button", { name: label, exact: true });
   await control.waitFor();
   assert.equal(await control.getAttribute("aria-expanded"), String(expanded));
+  assert.equal(await control.locator("use").getAttribute("href"), menuIcon);
+  assert.equal(await control.locator("svg").evaluate(icon => getComputedStyle(icon).transform), "none");
   assert.equal(await page.locator(pane).isVisible(), expanded);
 }
 
@@ -65,6 +69,14 @@ async function assertAccessibleControls(page) {
     watch(page);
     await open(page, "/?lang=en&theme=light");
     await assertToggle(page, true, "Collapse sidebar");
+    const desktopChats = page.locator(pane).getByRole("link", { name: /^Chats\b/ });
+    assert.equal(await desktopChats.locator("use").getAttribute("href"), chatIcon);
+    const [spriteURL, symbol] = chatIcon.split("#");
+    const sprite = await page.request.get(base + spriteURL);
+    assert.equal(sprite.status(), 200);
+    const contents = await sprite.text();
+    assert(contents.includes('id="' + symbol + '"'));
+    assert(contents.includes('fill="currentColor"'));
     assert.equal(await width(page), 208);
     await drag(page, 75);
     assert.equal(await width(page), 283);
@@ -125,9 +137,12 @@ async function assertAccessibleControls(page) {
     assert.equal(await page.locator(splitter).isVisible(), false);
     const mobile = page.getByRole("button", { name: "Abrir navegação", exact: true });
     assert.equal(await mobile.count(), 1);
+    assert.equal(await mobile.locator("use").getAttribute("href"), menuIcon);
     await mobile.click();
     const overlay = page.locator("#mobile-navigation-panel");
     await overlay.waitFor();
+    const mobileChats = overlay.getByRole("link", { name: /^Conversas\b/ });
+    assert.equal(await mobileChats.locator("use").getAttribute("href"), chatIcon);
     const box = await overlay.boundingBox();
     assert(box.width > 0 && box.height > 0 && box.x < 390 && box.y < 844);
     await page.screenshot({ path: "artifacts/sidebar-mobile-overlay.png" });

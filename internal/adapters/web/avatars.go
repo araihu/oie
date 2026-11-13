@@ -29,7 +29,10 @@ func validAvatarHash(hash string) bool {
 }
 
 func (v view) avatarSource(account, address string) string {
-	hash := v.Avatars[avatarIdentity{account, address}]
+	return avatarImageSource(v.Avatars[avatarIdentity{account, address}])
+}
+
+func avatarImageSource(hash string) string {
 	if !validAvatarHash(hash) {
 		return ""
 	}
@@ -51,13 +54,30 @@ func (v view) messageAvatarAddress(m messageView) string {
 	return ""
 }
 
-// Room nicknames are scoped to their room for color only, never photo lookup.
 func (v view) messageAvatarBorder(m messageView) string {
-	identity := v.messageAvatarAddress(m)
+	var scope string
+	if v.Selected != nil {
+		scope = v.Selected.Address
+	}
+	return senderAvatarBorder(m.Message, v.messageAvatarAddress(m), scope)
+}
+
+func searchSenderAvatarBorder(hit engineapi.MessageSearchHit) string {
+	var identity, scope string
+	if hit.SenderAddress != nil {
+		identity = *hit.SenderAddress
+	}
+	if hit.ConversationAddress != nil {
+		scope = *hit.ConversationAddress
+	}
+	return senderAvatarBorder(hit.Message, identity, scope)
+}
+
+// Room nicknames are scoped to their room for color only, never photo lookup.
+func senderAvatarBorder(m engineapi.Message, identity, scope string) string {
 	if identity == "" {
-		scope := m.ConversationId
-		if v.Selected != nil {
-			scope = v.Selected.Address
+		if scope == "" {
+			scope = m.ConversationId
 		}
 		identity = scope + "/" + m.Sender.DisplayName
 	}

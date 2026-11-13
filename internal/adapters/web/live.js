@@ -26,15 +26,20 @@ window.OieRuntime.register('live', life => {
       if (loaded.has(accountId) && /^[0-9a-f]{64}$/.test(hash)) avatarSources.set(avatarKey(accountId,address),'/ui/avatars/'+hash);
     }
   }
-  function applyAvatars() {
-    for (const scope of document.querySelectorAll('[data-avatar-account]')) {
+  function applyAvatars(root = document) {
+    for (const scope of root.querySelectorAll('[data-avatar-account]')) {
       const src = avatarSources.get(avatarKey(scope.dataset.avatarAccount,scope.dataset.avatarAddress)) || '';
       scope.dataset.avatarSrc = src;
-      if (window.Alpine?.$data) window.Alpine.$data(scope).oieAvatarSrc = src;
+      const data = window.Alpine?.$data?.(scope);
+      if (data && 'oieAvatarSrc' in data) data.oieAvatarSrc = src;
     }
   }
   readAvatars(document);
-  life.on(document,'alpine:initialized',applyAvatars);life.raf(applyAvatars);
+  life.on(document,'alpine:initialized',()=>applyAvatars());life.raf(()=>applyAvatars());
+  life.on(document,'oie:message-search-settled',event=>{
+    applyAvatars(event.detail.root);
+    localizeTimes(event.detail.root);
+  });
   const memoryKey='device-drafts';
   if(!window.OieRuntime.memory.has(memoryKey))window.OieRuntime.memory.set(memoryKey,new Map());
   const inMemory=window.OieRuntime.memory.get(memoryKey);

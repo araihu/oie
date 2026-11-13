@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,94 @@ import (
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	nethtml "golang.org/x/net/html"
 )
+
+func TestMessageSearchRendersTheMessageForMetadataMatches(t *testing.T) {
+	const address = "https://example.test/notice"
+	const metadata = "Example site title and description"
+	for _, tc := range []struct {
+		name, body, excerpt string
+	}{
+		{"caption and link", "Read this notice\n" + address, "Read this notice"},
+		{"only the link", address, ""},
+		{"long caption", strings.Repeat("a", 550) + "\n" + address, strings.Repeat("a", 511) + "…"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			hit := searchTestPage().Items[0]
+			hit.MatchKind = "metadata"
+			hit.Excerpt = metadata
+			hit.Message.OriginalText = tc.body
+			hit.Preview = &engineapi.MessageSearchPreview{Kind: "link"}
+			v := view{Locale: "pt-BR", EngineID: testEngine}
+			var rendered bytes.Buffer
+			if err := messageSearchHit(v, hit, nil).Render(t.Context(), &rendered); err != nil {
+				t.Fatal(err)
+			}
+			html := rendered.String()
+			if strings.Contains(html, metadata) || (tc.excerpt != "" && !strings.Contains(html, ">"+tc.excerpt+"</p>")) ||
+				(tc.excerpt == "" && strings.Contains(html, `class="oie-message-search-excerpt"`)) ||
+				strings.Count(html, address) != 1 || !strings.Contains(html, `data-search-preview="link"`) {
+				t.Fatal(html)
+			}
+		})
+	}
+}
+
+func TestMessageSearchHighlightsVisibleTextAndURL(t *testing.T) {
+	hit := searchTestPage().Items[0]
+	hit.MatchKind = "metadata"
+	hit.Message.OriginalText = "Cafe\u0301 e CAFÉ <script>\nhttps://example.test/cafe"
+	var rendered bytes.Buffer
+	if err := messageSearchHit(view{}, hit, searchHighlightPattern("café <script>")).Render(t.Context(), &rendered); err != nil {
+		t.Fatal(err)
+	}
+	html := rendered.String()
+	for _, value := range []string{"Cafe\u0301", "CAFÉ &lt;script&gt;", "cafe"} {
+		if !strings.Contains(html, `<mark class="oie-search-highlight">`+value+"</mark>") {
+			t.Fatalf("missing highlight for %q in %s", value, html)
+		}
+	}
+	if strings.Contains(html, "<script>") {
+		t.Fatal("message text was interpreted as HTML")
+	}
+}
+
+func TestMessageSearchBindsMetadataURLAndHighlightsTypos(t *testing.T) {
+	const address = "https://match.test/plataformas"
+	const unrelated = "https://other.test/notice"
+	hash := strings.Repeat("a", 64)
+	hit := searchTestPage().Items[0]
+	hit.MatchKind = "metadata"
+	hit.Excerpt = unrelated + " unrelated catalog excerpt"
+	hit.Message.OriginalText = "Conheça as plataformas disponíveis " + unrelated + "\n" + address
+	hit.Preview = &engineapi.MessageSearchPreview{Kind: "link", Url: new(address), FaviconHash: &hash}
+	for _, compact := range []bool{false, true} {
+		var rendered bytes.Buffer
+		v := view{MessageSearch: messageSearchView{Compact: compact}}
+		if err := messageSearchHit(v, hit, searchHighlightPattern("platafromas")).Render(t.Context(), &rendered); err != nil {
+			t.Fatal(err)
+		}
+		html := rendered.String()
+		if strings.Count(html, `<mark class="oie-search-highlight">plataformas</mark>`) != 2 ||
+			!strings.Contains(html, `class="oie-message-search-url">https://match.test/`) ||
+			!strings.Contains(html, unrelated) || !strings.Contains(html, hash) {
+			t.Fatal(html)
+		}
+	}
+	hit.Preview.Url = nil
+	_, _, fallback := searchResultText(hit)
+	if fallback == nil || fallback.FaviconHash != nil {
+		t.Fatal("legacy preview associated unverified artwork with one of multiple links")
+	}
+}
+
+func TestCompactSearchStartsNearFirstHighlight(t *testing.T) {
+	query := "plataformas"
+	text := "An earlier line\n" + strings.Repeat("long caption ", 10) + "https://plataformas.example/test"
+	parts := searchTextParts(text, searchHighlightPattern(query), true)
+	if len(parts) < 3 || parts[0].text != "…" || len(parts[1].text) > 12 || !parts[2].match || parts[2].text != query {
+		t.Fatalf("first match is too far into the compact excerpt: %+v", parts)
+	}
+}
 
 func searchTestPage() engineapi.MessageSearchPage {
 	at := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)

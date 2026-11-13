@@ -8,7 +8,7 @@ import (
 )
 
 func (s *Server) ListContacts(ctx context.Context, r engineapi.ListContactsRequestObject) (engineapi.ListContactsResponseObject, error) {
-	query := domain.ContactQuery{Limit: 50}
+	query := domain.ContactQuery{Limit: 50, AccountIDs: searchAccountIDs(r.Params.AccountIds)}
 	if r.Params.Q != nil {
 		query.Search = *r.Params.Q
 	}

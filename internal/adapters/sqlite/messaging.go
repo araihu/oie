@@ -132,7 +132,7 @@ func (s *Store) Conversation(ctx context.Context, id domain.ID) (domain.Conversa
 	return decodeConversation(row)
 }
 func (s *Store) Conversations(ctx context.Context, in application.ConversationQuery) ([]domain.Conversation, error) {
-	rows, err := s.queries.ListConversations(ctx, dbgen.ListConversationsParams{Cursor: in.Cursor, AccountID: string(in.AccountID), Archived: number(in.Archived), FavoritesOnly: number(in.FavoritesOnly), UnreadOnly: number(in.UnreadOnly), Kind: in.Kind, Query: in.Query, PageLimit: int64(in.Limit)})
+	rows, err := s.queries.ListConversations(ctx, dbgen.ListConversationsParams{Cursor: in.Cursor, AccountID: string(in.AccountID), AccountIds: jsonText(nonNilIDs(in.AccountIDs)), Archived: number(in.Archived), FavoritesOnly: number(in.FavoritesOnly), UnreadOnly: number(in.UnreadOnly), Kind: in.Kind, Query: in.Query, PageLimit: int64(in.Limit)})
 	if err != nil {
 		return nil, err
 	}
