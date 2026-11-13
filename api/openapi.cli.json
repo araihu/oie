@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.30.0",
+    "version": "0.30.1",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel=\"help\". Send Prefer: oie-problem-documentation to include the URL in the Problem Details body.",
     "contact": {
       "name": "Arai Hû",
@@ -1582,7 +1582,7 @@
         ],
         "operationId": "getEngine",
         "summary": "Read the persistent engine identity",
-        "description": "Read eventCursor before fetching snapshots to replay changes during the snapshot.",
+        "description": "Read eventCursor before fetching snapshots. After fetching them, pass that cursor as Last-Event-ID to GET /api/v1/events to replay changes that occurred while the snapshots were being read.",
         "responses": {
           "200": {
             "description": "Engine identity and current event boundary",
@@ -1594,7 +1594,7 @@
                 "example": {
                   "id": "019a5df0-0000-7000-8000-000000000003",
                   "role": "local",
-                  "apiVersion": "0.30.0",
+                  "apiVersion": "0.30.1",
                   "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
                 }
               }
@@ -5243,7 +5243,7 @@
         "example": {
           "id": "019a5df0-0000-7000-8000-000000000003",
           "role": "local",
-          "apiVersion": "0.30.0",
+          "apiVersion": "0.30.1",
           "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
         },
         "additionalProperties": false,
@@ -5272,7 +5272,8 @@
               "0.11.0",
               "0.12.0",
               "0.29.0",
-              "0.30.0"
+              "0.30.0",
+              "0.30.1"
             ]
           },
           "eventCursor": {
