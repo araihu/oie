@@ -28,8 +28,8 @@ RUN set -eu; \
     test "$(dpkg-query -W -f='${Version}' ca-certificates)" = '20250419~deb12u2'; \
     mkdir -p /licenses/ca-certificates; \
     cp /usr/share/doc/ca-certificates/copyright /licenses/ca-certificates/; \
-    if [ -n "$OIE_RELEASE_VERSION" ]; then \
-        test -n "$OIE_RELEASE_REVISION" && test -n "$OIE_SOURCE_URL" && test -n "$OIE_SOURCE_SHA256"; \
+    if [ -n "${OIE_RELEASE_VERSION:-}" ]; then \
+        test -n "$OIE_RELEASE_REVISION"; test -n "$OIE_SOURCE_URL"; test -n "$OIE_SOURCE_SHA256"; \
         printf '%s\n' "Oiê $OIE_RELEASE_VERSION" "Source revision: $OIE_RELEASE_REVISION" \
           "Corresponding source: $OIE_SOURCE_URL" "Source SHA-256: $OIE_SOURCE_SHA256" \
           "Target: $TARGETOS/$TARGETARCH" > /licenses/SOURCE.txt; \
