@@ -44,6 +44,21 @@ def digest(path):
     return checksum.hexdigest()
 
 
+def normalize_asset_names(directory, version):
+    for path in directory.iterdir():
+        if not path.is_file():
+            continue
+        name = path.name.replace("~", ".")
+        if path.suffix == ".deb":
+            name = f"oie_{version}_linux_amd64.deb"
+        if name == path.name:
+            continue
+        destination = path.with_name(name)
+        if destination.exists():
+            raise ValueError(f"release asset name collision for {name}")
+        path.rename(destination)
+
+
 def write_checksums(directory):
     files = sorted(path for path in directory.iterdir() if path.is_file() and path.name != "SHA256SUMS")
     (directory / "SHA256SUMS").write_text("".join(f"{digest(path)}  {path.name}\n" for path in files))
@@ -160,6 +175,7 @@ def main():
     validate.add_argument("version")
     checksums = commands.add_parser("checksums")
     checksums.add_argument("directory", type=Path)
+    checksums.add_argument("--release-version")
     verify = commands.add_parser("verify-assets")
     verify.add_argument("version")
     verify.add_argument("revision")
@@ -173,6 +189,9 @@ def main():
     args = parser.parse_args()
     try:
         if args.command == "checksums":
+            if args.release_version:
+                version_key(args.release_version)
+                normalize_asset_names(args.directory, args.release_version)
             write_checksums(args.directory)
         else:
             key = version_key(args.version)
