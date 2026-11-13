@@ -6,7 +6,8 @@ import gzip
 import hashlib
 import io
 import json
-from pathlib import Path
+import os
+from pathlib import Path, PurePosixPath
 import re
 import subprocess
 import tarfile
@@ -14,8 +15,8 @@ from tempfile import TemporaryDirectory, TemporaryFile
 from urllib.request import urlopen
 
 
-def go(cwd, *args):
-    return subprocess.check_output(["go", *args], cwd=cwd, text=True)
+def go(cwd, *args, env=None):
+    return subprocess.check_output(["go", *args], cwd=cwd, env=env, text=True)
 
 
 def modules(source):
@@ -29,6 +30,10 @@ def modules(source):
     for cwd, packages in targets:
         linked.update(go(cwd, "list", "-buildvcs=false", "-mod=readonly",
                          "-deps", "-f", package_template, *packages).split())
+    for arch in ("amd64", "arm64"):
+        env = dict(os.environ, GOOS="linux", GOARCH=arch, CGO_ENABLED="0")
+        linked.update(go(source, "list", "-buildvcs=false", "-mod=readonly", "-deps",
+                         "-f", package_template, "-tags=server", "./cmd/oie", env=env).split())
     for module in sorted(linked):
         yield json.loads(go(source, "mod", "download", "-json", module))
 
@@ -42,19 +47,54 @@ def proxy_path(path):
     return re.sub(r"[A-Z]", lambda m: "!" + m[0].lower(), path)
 
 
-def browser_sources(archive, manifest, prefix):
+def filtered_tar(data, output, exclude, include=()):
+    """Keep editable inputs and their notices, dropping unrelated upstream assets."""
+    with tarfile.open(fileobj=data, mode="r|gz") as original:
+        with tarfile.open(fileobj=output, mode="w|") as selected:
+            for member in original:
+                path = PurePosixPath(member.name)
+                if path.is_absolute() or ".." in path.parts:
+                    raise ValueError(f"unsafe upstream source path {member.name}")
+                relative = "/".join(path.parts[1:])
+                if member.isdir():
+                    continue
+                if include and not any(relative == part or relative.startswith(part + "/") for part in include):
+                    continue
+                if any(relative == part or relative.startswith(part + "/") for part in exclude):
+                    continue
+                if not member.isfile():
+                    raise ValueError(f"unexpected upstream source entry {member.name}")
+                entry = tarfile.TarInfo(member.name)
+                entry.size = member.size
+                entry.mode = 0o755 if member.mode & 0o111 else 0o644
+                selected.addfile(entry, original.extractfile(member))
+
+
+def upstream_sources(archive, manifest, prefix):
     for item in json.loads(manifest.read_text())["archives"]:
-        with urlopen(item["url"], timeout=60) as response, TemporaryFile() as data:
+        with urlopen(item["url"], timeout=60) as response, TemporaryFile() as data, TemporaryFile() as selected:
             checksum = hashlib.sha256()
             while chunk := response.read(1024 * 1024):
                 checksum.update(chunk)
                 data.write(chunk)
             if checksum.hexdigest() != item["sha256"]:
-                raise ValueError(f"browser source checksum mismatch for {item['name']}")
-            entry = tarfile.TarInfo(f"{prefix}/browser-sources/{item['name']}")
-            entry.size = data.tell()
+                raise ValueError(f"upstream source checksum mismatch for {item['name']}")
             data.seek(0)
-            archive.addfile(entry, data)
+            directory = item.get("directory", "browser-sources")
+            name = item.get("packaged_name", item["name"])
+            entry = tarfile.TarInfo(f"{prefix}/{directory}/{name}")
+            if "packaged_sha256" in item:
+                filtered_tar(data, selected, item.get("exclude", ()), item.get("include", ()))
+                entry.size = selected.tell()
+                selected.seek(0)
+                if hashlib.file_digest(selected, "sha256").hexdigest() != item["packaged_sha256"]:
+                    raise ValueError(f"filtered source checksum mismatch for {item['name']}")
+                selected.seek(0)
+                archive.addfile(entry, selected)
+            else:
+                entry.size = data.seek(0, os.SEEK_END)
+                data.seek(0)
+                archive.addfile(entry, data)
 
 
 def package(source, tooling, version, revision, output):
@@ -69,16 +109,17 @@ def package(source, tooling, version, revision, output):
                 archive.add(vendors / "app", arcname=f"{prefix}/oie/vendor")
                 archive.add(vendors / "cli", arcname=f"{prefix}/oie/cli/vendor")
                 for path in ("scripts/package-desktop.sh", "scripts/package-source.py",
-                             "scripts/verify-source-package.py", "scripts/install.sh", "packaging", "tests/packaging"):
+                             "scripts/verify-source-package.py", "scripts/collect-licenses.sh",
+                             "scripts/install.sh", "packaging", "tests/packaging"):
                     archive.add(tooling / path, arcname=f"{prefix}/release-tooling/{path}",
                                 filter=lambda m: None if "__pycache__" in Path(m.name).parts else m)
                 # Module archives retain generation inputs omitted by go mod vendor,
-                # including Wails TypeScript, Goshtoso's asset recipe and SQLite inputs.
+                # including Wails TypeScript, Goshtoso's asset recipe and SQLite translations.
                 for module in modules(source):
                     file = Path(module["Zip"])
                     path = proxy_path(module["Path"])
                     archive.add(file, arcname=f"{prefix}/go-sources/{path}/{file.name}")
-                browser_sources(archive, tooling / "packaging/browser-source.json", prefix)
+                upstream_sources(archive, tooling / "packaging/browser-source.json", prefix)
                 archive.add(tooling / "docs/release-source.md", arcname=f"{prefix}/README.md")
                 identity = json.dumps({"version": version, "revision": revision}).encode()
                 member = tarfile.TarInfo(f"{prefix}/source-info.json")

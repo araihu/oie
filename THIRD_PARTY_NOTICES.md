@@ -37,7 +37,7 @@ package source, integrity and individual file checksums are recorded in
 assets and is available at `/ui/pdfjs/LICENSE`.
 
 The PDF.js worker includes the MIT-licensed Brotli JavaScript decoder.
-The desktop archives include the decoder's notice and license.
+The release packages and OCI image include the decoder's MIT notice.
 
 The distribution also includes Adobe character maps, PDFium/Foxit font data,
 image decoders and an ICC profile. Their notices are included in the respective
@@ -68,21 +68,35 @@ served at `/ui/emoji/LICENSE.txt`. Regenerate the validation base table with
 
 Goshtoso embeds the Heroicons 2.2.0 sprite under MIT, HTMX 4.0.0 under 0BSD,
 and Alpine.js 3.17.2 and its plugins under MIT. Its embedded files include
-the Heroicons and runtime license texts. Desktop archives also include the
-notices for Alpine's bundled Vue code, focus-trap and tabbable.
+the Heroicons and runtime license texts. The release packages and OCI image
+include the notices for Alpine's bundled Vue code, focus-trap and tabbable.
+The focus-trap 8.0.0 build includes Babel 7.28.6 helpers and Regenerator.
+Their MIT notice is in `javascript/@babel/helpers/LICENSE` under the packaged
+license directory.
 Oiê's additional Heroicons sprite uses the same MIT license. The source and
 license text are recorded in `internal/adapters/web/appicons`.
 
-The desktop archives include the notices for Nano ID in the Wails runtime and
-for the JavaScript bundled by Margo, including Mermaid 11.16.1, KaTeX and the
+The desktop archives include the notice for Nano ID in the Wails runtime.
+The release packages and OCI image carry notices for the JavaScript bundled
+by Margo, including Mermaid 11.16.1, KaTeX and the
 libraries identified in the Mermaid source maps. DOMPurify 3.4.0 is distributed
 under its Apache-2.0 option.
 
 The Oiê logo and platform icons adapt Noto Emoji SVG artwork under Apache-2.0.
 Their provenance and modifications are recorded in
 `internal/adapters/web/brand/NOTICE.txt` and `SOURCE.json`.
-The third-party artwork permissions apply to the Noto material. The Oiê name
-and visual identity remain subject to the upstream Arai Hû brand terms.
+Arai Hû also grants Apache-2.0 rights for its Oiê and Goshtoso artwork,
+including the Goshtoso v0.6.2 icons from Assets v0.2.6. See
+`internal/adapters/web/brand/NOTICE-ARAIHU.txt` for the upstream grant and
+trademark terms. The Noto attribution and upstream license are retained.
+
+## OCI image certificates
+
+The server image ships the CA bundle from Debian's `ca-certificates`
+20250419~deb12u2, built from Mozilla certificate data under MPL-2.0. The
+image includes the Debian copyright file at
+`/licenses/ca-certificates/copyright`. The exact Debian source is in
+`native-sources/` of the Linux corresponding-source archive.
 
 ## Generated command-line client
 

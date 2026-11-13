@@ -1,5 +1,6 @@
 import hashlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import tarfile
@@ -15,6 +16,22 @@ SPEC.loader.exec_module(PACKAGE)
 
 
 class SourcePackageTest(unittest.TestCase):
+    def test_filtered_archive_keeps_source_and_drops_fixtures(self):
+        original = io.BytesIO()
+        with tarfile.open(fileobj=original, mode="w:gz") as archive:
+            for path in ("LICENSE", "src/core.js", "test/pdfs/freeculture.pdf"):
+                member = tarfile.TarInfo(f"upstream/{path}")
+                data = path.encode()
+                member.size = len(data)
+                archive.addfile(member, io.BytesIO(data))
+        original.seek(0)
+        selected = io.BytesIO()
+        PACKAGE.filtered_tar(original, selected, ("test",))
+        selected.seek(0)
+        with tarfile.open(fileobj=selected) as archive:
+            self.assertEqual(archive.getnames(), ["upstream/LICENSE", "upstream/src/core.js"])
+            self.assertEqual(archive.extractfile("upstream/src/core.js").read(), b"src/core.js")
+
     def test_archive_retains_build_inputs_and_upstream_sources(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
@@ -38,7 +55,7 @@ class SourcePackageTest(unittest.TestCase):
 
             output = directory / "source.tar.gz"
             dependency = {"Path": "example.com/SomeModule", "Zip": dep}
-            add_sources = PACKAGE.browser_sources
+            add_sources = PACKAGE.upstream_sources
 
             def vendor(cwd, *args):
                 self.assertEqual(args[:-1], ("mod", "vendor", "-o"))
@@ -46,7 +63,7 @@ class SourcePackageTest(unittest.TestCase):
                 directory.mkdir()
                 (directory / "modules.txt").write_text(cwd.relative_to(app).as_posix())
             with patch.object(PACKAGE, "go", side_effect=vendor), patch.object(PACKAGE, "modules", return_value=[dependency]):
-                with patch.object(PACKAGE, "browser_sources", side_effect=lambda archive, _, prefix:
+                with patch.object(PACKAGE, "upstream_sources", side_effect=lambda archive, _, prefix:
                                   add_sources(archive, manifest, prefix)):
                     PACKAGE.package(app, ROOT, "v0.0.1", "a" * 40, output)
 
@@ -75,4 +92,4 @@ class SourcePackageTest(unittest.TestCase):
             }]}))
             with tarfile.open(directory / "source.tar", "w") as archive:
                 with self.assertRaisesRegex(ValueError, "checksum mismatch"):
-                    PACKAGE.browser_sources(archive, manifest, "source")
+                    PACKAGE.upstream_sources(archive, manifest, "source")

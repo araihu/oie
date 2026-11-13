@@ -9,27 +9,31 @@ COPY api/ api/
 COPY cmd/oie/ cmd/oie/
 COPY internal/ internal/
 COPY LICENSE THIRD_PARTY_NOTICES.md ./
+COPY scripts/collect-licenses.sh scripts/
+COPY packaging/licenses/ packaging/licenses/
 
 ARG TARGETOS
 ARG TARGETARCH
 ENV GOOS=$TARGETOS GOARCH=$TARGETARCH
 RUN go build -mod=readonly -tags=server -trimpath -buildvcs=false -ldflags="-s -w" -o /out/oie ./cmd/oie
 
+ARG OIE_RELEASE_VERSION
+ARG OIE_RELEASE_REVISION
+ARG OIE_SOURCE_URL
+ARG OIE_SOURCE_SHA256
 RUN set -eu; \
     install -d -m 0700 /runtime/data; install -d -m 1777 /runtime/tmp; \
-    mkdir -p /licenses/go; cp LICENSE THIRD_PARTY_NOTICES.md /licenses/; \
-    cp "$(go env GOROOT)/LICENSE" /licenses/go/; \
-    find internal/adapters/web -type f \( -name 'LICENSE*' -o -name 'NOTICE*' -o \
-        -name 'Apache-2.0.txt' -o -name 'GPL-3.0.txt' -o -name 'Noto-upstream-OFL.txt' \) \
-        -exec cp --parents -t /licenses {} +; \
-    go list -mod=readonly -tags=server -deps -f '{{with .Module}}{{if not .Main}}{{.Path}} {{.Dir}}{{end}}{{end}}' ./cmd/oie > /tmp/oie-modules; \
-    sort -u /tmp/oie-modules | while read -r module directory; do \
-        [ -n "$module" ] || continue; \
-        for notice in "$directory"/LICENSE* "$directory"/LICENCE* "$directory"/COPYING* "$directory"/NOTICE*; do \
-            [ -f "$notice" ] || continue; \
-            install -D -m 0644 "$notice" "/licenses/go-modules/$module/${notice##*/}"; \
-        done; \
-    done
+    sh scripts/collect-licenses.sh /src /src/packaging /licenses "$(go env GOROOT)/LICENSE" server ./cmd/oie; \
+    cp LICENSE THIRD_PARTY_NOTICES.md /licenses/; \
+    test "$(dpkg-query -W -f='${Version}' ca-certificates)" = '20250419~deb12u2'; \
+    mkdir -p /licenses/ca-certificates; \
+    cp /usr/share/doc/ca-certificates/copyright /licenses/ca-certificates/; \
+    if [ -n "$OIE_RELEASE_VERSION" ]; then \
+        test -n "$OIE_RELEASE_REVISION" && test -n "$OIE_SOURCE_URL" && test -n "$OIE_SOURCE_SHA256"; \
+        printf '%s\n' "Oiê $OIE_RELEASE_VERSION" "Source revision: $OIE_RELEASE_REVISION" \
+          "Corresponding source: $OIE_SOURCE_URL" "Source SHA-256: $OIE_SOURCE_SHA256" \
+          "Target: $TARGETOS/$TARGETARCH" > /licenses/SOURCE.txt; \
+    fi
 
 FROM scratch
 LABEL org.opencontainers.image.title="Oiê" \

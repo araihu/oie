@@ -156,17 +156,6 @@ printf '%s\n' "Building $version ($revision) for $target_os/$target_arch" >&2
 chmod 0755 "$executable"
 copy_file "$source_dir/LICENSE" "$source_dir/THIRD_PARTY_NOTICES.md" "$doc_dir/"
 mkdir -p "$doc_dir/licenses"
-# Retain the audited notices for code bundled inside third-party runtimes.
-copy_file -R "$tooling_dir/packaging/licenses/." "$doc_dir/licenses/"
-# Retain the embedded browser/artwork notices in a browsable relative tree.
-find "$source_dir/internal/adapters/web" "$source_dir/internal/adapters/desktop/assets" -type f | while IFS= read -r file; do
-  relative=${file#"$source_dir/"}
-  case "${file##*/}:$relative" in
-    LICENSE*:*|LICENCE*:*|COPYING*:*|NOTICE*:*|Apache-2.0.txt:*|GPL-3.0.txt:*|Noto-upstream-OFL.txt:*|*:internal/adapters/web/appicons/LICENSES/*)
-      mkdir -p "$doc_dir/licenses/$(dirname "$relative")"
-      copy_file "$file" "$doc_dir/licenses/$relative" ;;
-  esac
-done
 go_root=$(cd "$source_dir" && go env GOROOT)
 go_license="$go_root/LICENSE"
 # Homebrew keeps the Go SDK under libexec but relocates its license to the
@@ -176,30 +165,8 @@ if [ ! -f "$go_license" ] && [ "$target_os" = darwin ] && [ "$(basename "$go_roo
   [ -f "$go_license" ] && grep -q '^Copyright 2009 The Go Authors\.' "$go_license" || fail 'the Homebrew Go SDK license is missing or unrecognized'
 fi
 [ -f "$go_license" ] || fail "the Go SDK license is missing: $go_root/LICENSE"
-mkdir -p "$doc_dir/licenses/go"
-copy_file "$go_license" "$doc_dir/licenses/go/LICENSE"
-(cd "$source_dir" && go list -mod=readonly -tags production -deps -f '{{if .Module}}{{.Module.Path}}{{"\t"}}{{.Module.Dir}}{{end}}' ./cmd/oie-desktop) > "$stage/modules-raw.tsv"
-LC_ALL=C sort -u "$stage/modules-raw.tsv" > "$stage/modules.tsv"
-tab=$(printf '\t')
-while IFS="$tab" read -r module_path module_dir; do
-  [ -n "$module_path" ] && [ -n "$module_dir" ] || continue
-  for file in "$module_dir"/LICENSE* "$module_dir"/LICENCE* "$module_dir"/COPYING* "$module_dir"/NOTICE* "$module_dir"/PATENTS*; do
-    [ -f "$file" ] || continue
-    destination="$doc_dir/licenses/go-modules/$module_path"
-    mkdir -p "$destination"
-    copy_file "$file" "$destination/$(basename "$file")"
-  done
-  case "$module_path" in
-    github.com/araihu/goshtoso)
-      for file in "$module_dir"/assets/icons/HEROICONS_LICENSE.txt "$module_dir"/assets/fonts/README.txt \
-        "$module_dir"/assets/js/runtime/*/*/LICENSE.txt "$module_dir"/assets/licenses/*/*/LICENSE.txt; do
-        relative=${file#"$module_dir/"}
-        destination="$doc_dir/licenses/go-modules/$module_path/$relative"
-        mkdir -p "$(dirname "$destination")"
-        copy_file "$file" "$destination"
-      done ;;
-  esac
-done < "$stage/modules.tsv"
+sh "$script_dir/collect-licenses.sh" "$source_dir" "$tooling_dir/packaging" "$doc_dir/licenses" \
+  "$go_license" production ./cmd/oie-desktop
 # Include the resolved dependency versions without leaking builder paths.
 (cd "$source_dir" && go list -mod=readonly -m all) > "$doc_dir/go-modules.txt"
 python3 "$script_dir/package-source.py" "$source_dir" "$tooling_dir" "$version" "$revision" "$stage/$source_archive"

@@ -1,24 +1,107 @@
 {
   "inputs": {
-    "internal/adapters/web/pdfjs/manifest.json": "852a64b04dbcd2daaf6707892ad03c13609da8a1f81c233f56382b8e51017519",
+    "internal/adapters/web/brand/SOURCE.json": "0bcdd90f39a8d794dc74fa29552c792c864242b374359ba7d99d3472c75da2bf",
     "internal/adapters/web/cache_vendor/manifest.json": "d5f93763d96f0b961ec57b11d71729cd9cec0c0535622ec8066a14ef1584f9ad",
-    "internal/adapters/web/brand/SOURCE.json": "85822e40451c55d4c1c8de61b218c9705620c4c981c0f4dae729c47332d7e144",
+    "internal/adapters/web/pdfjs/manifest.json": "852a64b04dbcd2daaf6707892ad03c13609da8a1f81c233f56382b8e51017519",
     "tools/icons/.iconpack.lock.yaml": "5a273030b3a3a546dfe50ccb90522b2992c2798eb84310331b89437fd80530d7",
-    "vendor/github.com/araihu/goshtoso/assets/muamba_gen.go": "9adf4ccc1d259d346486f7bb95eb66d553703fa86c1ef926828f283eeabe52f7",
+    "vendor/github.com/araihu/goshtoso/assets/favicon.svg": "56e8b185f2572ad4c7ea6fa8e715aa7dacd7381422b431ce07c35965ab05b3b7",
     "vendor/github.com/araihu/goshtoso/assets/icons/heroicons.svg": "75e282de7a19efba9cf0285b44af0641c1527361f921b7d7f8020efc1f1f0fb7",
+    "vendor/github.com/araihu/goshtoso/assets/images/goshtoso-logo.svg": "5801b31fc6b1f54cde98b1a3f3f5e57553f6e67aa3fa0318879e5e2603cd540e",
+    "vendor/github.com/araihu/goshtoso/assets/images/goshtoso-mark.svg": "56e8b185f2572ad4c7ea6fa8e715aa7dacd7381422b431ce07c35965ab05b3b7",
+    "vendor/github.com/araihu/goshtoso/assets/muamba_gen.go": "9adf4ccc1d259d346486f7bb95eb66d553703fa86c1ef926828f283eeabe52f7",
     "vendor/github.com/araihu/margo/assets/mermaid_gen.go": "e75fdffb43e7d07c3d08d9ee48868e1b478d8d0a3e34187cc1fffcef4fd98f6e",
-    "vendor/github.com/wailsapp/wails/v3/internal/assetserver/bundledassets/runtime.js": "243f2d6815dce5281716cc3f8605300e2840c3f8f694fedf4d67316ff742371a"
+    "vendor/github.com/wailsapp/wails/v3/internal/assetserver/bundledassets/runtime.js": "243f2d6815dce5281716cc3f8605300e2840c3f8f694fedf4d67316ff742371a",
+    "vendor/modernc.org/libc/builder.json": "fddd398fddbb3bb9a85444491d29ba3033ed47363444d8dfdaa3e1fa74df096b"
   },
   "archives": [
     {
       "name": "alpine-3.17.2.tar.gz",
       "url": "https://codeload.github.com/alpinejs/alpine/tar.gz/refs/tags/v3.17.2",
-      "sha256": "2945117fd0dd7bec64b0ba8a7bdbdf3ff616ea621cbc9fd17ff1c3def9246c38"
+      "sha256": "2945117fd0dd7bec64b0ba8a7bdbdf3ff616ea621cbc9fd17ff1c3def9246c38",
+      "exclude": [
+        "benchmarks",
+        "tests"
+      ],
+      "packaged_name": "alpine-3.17.2-source.tar",
+      "packaged_sha256": "e51a93149eb4856fe0be9443a64dab52ba9f8cdc4d942546edcb652549151dc5"
     },
     {
-      "name": "araihu-oie-artwork-342a1c8.tar.gz",
-      "url": "https://codeload.github.com/araihu/assets/tar.gz/342a1c87a1f3784521cd6efc58820a1bd44b84b7",
-      "sha256": "ebf9add46afc9efddcaaf0be7fda17f6a4362fe44978aa9a9dac1c4f9a3f7f31"
+      "name": "araihu-artwork-1f21ee9.tar.gz",
+      "url": "https://codeload.github.com/araihu/assets/tar.gz/1f21ee95578b2e2cb2cf487542664e20624828f7",
+      "sha256": "a8d2267382142737433d3d1c0f29819c5cfb28a39df15efe8af3efd6be37b3b2",
+      "include": [
+        "LICENSE",
+        "NOTICE",
+        "LICENSES/brand",
+        "Makefile",
+        "go.mod",
+        "go.sum",
+        "cmd/araihu-assets",
+        "internal",
+        "assetmeta",
+        "manifests",
+        "scripts",
+        "source/brand/oie",
+        "source/brand/original/oie-icon-background.svg",
+        "source/brand/original/oie-icon-monochrome.svg",
+        "source/brand/original/oie-icon-transparent.svg",
+        "source/brand/original/oie-logo-background.svg",
+        "source/brand/original/oie-logo-monochrome.svg",
+        "source/brand/original/oie-logo-transparent.svg",
+        "source/brand/original/goshtoso-icon-background.svg",
+        "source/brand/original/goshtoso-icon-monochrome.svg",
+        "source/brand/original/goshtoso-icon-transparent.svg",
+        "source/brand/original/goshtoso-logo-background.svg",
+        "source/brand/original/goshtoso-logo-monochrome.svg",
+        "source/brand/original/goshtoso-logo-transparent.svg",
+        "dist/licenses/brand",
+        "dist/catalog.json",
+        "dist/brand/goshtoso/logo/adaptive-transparent-optical.svg",
+        "dist/icons/brand/goshtoso-icon-adaptive-transparent-optical.svg",
+        "dist/platform/web/goshtoso/favicon.svg"
+      ],
+      "packaged_name": "araihu-artwork-1f21ee9-source.tar",
+      "packaged_sha256": "4051bb11e9cc3c9847c36a73d8f1af727b0cff7434724c33fe867d5e67414745"
+    },
+    {
+      "name": "babel-7.28.6.tar.gz",
+      "url": "https://codeload.github.com/babel/babel/tar.gz/refs/tags/v7.28.6",
+      "sha256": "aa05510698ab4a1a38313c7202f3f8b002068117acb6abde18ce97afd5cfd69a",
+      "include": [
+        "LICENSE",
+        "README.md",
+        "package.json",
+        "packages/babel-helpers/LICENSE",
+        "packages/babel-helpers/package.json",
+        "packages/babel-helpers/README.md",
+        "packages/babel-helpers/scripts",
+        "packages/babel-helpers/src"
+      ],
+      "packaged_name": "babel-7.28.6-source.tar",
+      "packaged_sha256": "addefb563113ea9e5a8e53edaf1e0edd89594f791b60e3fa31378e3eef3f4855"
+    },
+    {
+      "name": "brotli-3499acb.tar.gz",
+      "url": "https://codeload.github.com/google/brotli/tar.gz/3499acbb7ac7818c1b929a8c9c5c5f8a634751da",
+      "sha256": "6b534694273ba24623c97bf47330e34101257ecc0157378d6e443f9c6b3af124",
+      "exclude": [
+        "tests"
+      ],
+      "packaged_name": "brotli-3499acb-source.tar",
+      "packaged_sha256": "09cf200011c795b4956b25a97825c095c157a50b71579d6f60a61a9d55ff3108"
+    },
+    {
+      "name": "focus-trap-8.0.0.tar.gz",
+      "url": "https://codeload.github.com/focus-trap/focus-trap/tar.gz/refs/tags/v8.0.0",
+      "sha256": "7439e6817f500ba8534e2bbf4d0681ae86ddd01b1a1db663c556bdb4b0dfd876",
+      "exclude": [
+        "docs",
+        "cypress",
+        "test",
+        ".prettierignore"
+      ],
+      "packaged_name": "focus-trap-8.0.0-source.tar",
+      "packaged_sha256": "2c439ac0b53bfc70dd9e237917149d847938d1f257ba1be183a17faa30b449ee"
     },
     {
       "name": "heroicons-2.2.0.tar.gz",
@@ -28,22 +111,52 @@
     {
       "name": "htmx-4.0.0.tar.gz",
       "url": "https://codeload.github.com/bigskysoftware/htmx/tar.gz/refs/tags/v4.0.0",
-      "sha256": "1c9c6a54f24aa1a25475030fd346946b8644545b0718ddeab5fdcb305ac6a77a"
+      "sha256": "1c9c6a54f24aa1a25475030fd346946b8644545b0718ddeab5fdcb305ac6a77a",
+      "exclude": [
+        "www",
+        "test"
+      ],
+      "packaged_name": "htmx-4.0.0-source.tar",
+      "packaged_sha256": "614f029985425b24beab19889c60e0e28bc85b87ddfc9200fa89976c0fc7e426"
     },
     {
       "name": "katex-0.19.1.tar.gz",
       "url": "https://codeload.github.com/KaTeX/KaTeX/tar.gz/8000fbd4e29cca2c0cb1e88b745af3ed2f436b66",
-      "sha256": "ce1f12db7e012926ae6e0e1d6356277cb5d80139d94d32862a3b3fd3df2acfc8"
+      "sha256": "ce1f12db7e012926ae6e0e1d6356277cb5d80139d94d32862a3b3fd3df2acfc8",
+      "exclude": [
+        "test",
+        "website"
+      ],
+      "packaged_name": "katex-0.19.1-source.tar",
+      "packaged_sha256": "6d8f695fe6bc64a6e98df9d8d3d349989fed24483108136a79eb371122023e22"
     },
     {
       "name": "lru-cache-11.2.6.tar.gz",
       "url": "https://codeload.github.com/isaacs/node-lru-cache/tar.gz/refs/tags/v11.2.6",
-      "sha256": "aa7b17b81c17ed054bfdd678e7c0a77b9e6001ed4ca53fd011f388d9e188db54"
+      "sha256": "aa7b17b81c17ed054bfdd678e7c0a77b9e6001ed4ca53fd011f388d9e188db54",
+      "exclude": [
+        "test",
+        "benchmark",
+        "tap-snapshots"
+      ],
+      "packaged_name": "lru-cache-11.2.6-source.tar",
+      "packaged_sha256": "015ed00329d29aa5c580129b96ca6c5ff8d057db62a237e2460b20e597a44f29"
     },
     {
       "name": "mermaid-11.16.1.tar.gz",
       "url": "https://codeload.github.com/mermaid-js/mermaid/tar.gz/refs/tags/mermaid@11.16.1",
-      "sha256": "0ee99b3bb82766e5d6c34b8cc768b8530ce8f1aaa13790ae368aebeef3de9d11"
+      "sha256": "0ee99b3bb82766e5d6c34b8cc768b8530ce8f1aaa13790ae368aebeef3de9d11",
+      "exclude": [
+        "docs",
+        "cypress",
+        "demos",
+        "img",
+        "tests",
+        ".esbuild/dev-explorer",
+        "CHANGELOG.md"
+      ],
+      "packaged_name": "mermaid-11.16.1-source.tar",
+      "packaged_sha256": "f6ae0501fa37841ba91bfbe7a794303ff34d0076590af7aa083d7319736f37f8"
     },
     {
       "name": "mermaid-maps-11.16.1.tgz",
@@ -53,17 +166,34 @@
     {
       "name": "openjpeg-8314119.tar.gz",
       "url": "https://codeload.github.com/uclouvain/openjpeg/tar.gz/8314119b067c0fc77834731168daaebd379fdb12",
-      "sha256": "e723e8babb2188e8743308842bb1bfc9809f0375cd964cfeac2fb17285094321"
+      "sha256": "e723e8babb2188e8743308842bb1bfc9809f0375cd964cfeac2fb17285094321",
+      "exclude": [
+        "tests"
+      ],
+      "packaged_name": "openjpeg-8314119-source.tar",
+      "packaged_sha256": "5659ab4b6dd50a7836e92fe4e3d9d39880ee9437c10c5d6cad9d209fe0e96e83"
     },
     {
       "name": "pdfium-bb1f9f7.tar.gz",
       "url": "https://codeload.github.com/chromium/pdfium/tar.gz/bb1f9f71e7b15afdd5937adf8cfe5807522b882f",
-      "sha256": "58098e1d4c63647c7bd8292b5f204bd0b633f8f4c9d4db6bc372445397371342"
+      "sha256": "58098e1d4c63647c7bd8292b5f204bd0b633f8f4c9d4db6bc372445397371342",
+      "exclude": [
+        "testing"
+      ],
+      "packaged_name": "pdfium-bb1f9f7-source.tar",
+      "packaged_sha256": "8e1f92ec4027bcb2e64f2520ead542f863403d2d1daaabff1061b9c415cdaafa"
     },
     {
       "name": "pdfjs-6.5.438.tar.gz",
       "url": "https://codeload.github.com/mozilla/pdf.js/tar.gz/refs/tags/v6.5.438",
-      "sha256": "eead5ce4cdc7682a791cb5661de089f1f89b6679593f11d6240e20186ac051ae"
+      "sha256": "eead5ce4cdc7682a791cb5661de089f1f89b6679593f11d6240e20186ac051ae",
+      "exclude": [
+        "test",
+        "examples",
+        "web/compressed.tracemonkey-pldi-09.pdf"
+      ],
+      "packaged_name": "pdfjs-6.5.438-source.tar",
+      "packaged_sha256": "49ec0aa2ce5f901e0bbb1192cbf640b01120c8c64cc1cdff234550cb50cde1cf"
     },
     {
       "name": "pdfjs-jbig2-15f6f93.tar.gz",
@@ -91,9 +221,72 @@
       "sha256": "edecfcd5d755a5e5d98e24cf43113e7cdaec5a070edd0f6b250c03a573da30fa"
     },
     {
+      "name": "tabbable-6.4.0.tar.gz",
+      "url": "https://codeload.github.com/focus-trap/tabbable/tar.gz/refs/tags/v6.4.0",
+      "sha256": "abd43f6ff55a174f01391d875eb0129a627370be40c57425cab4f6fd6aae07da",
+      "exclude": [
+        "docs",
+        "cypress",
+        "test",
+        ".prettierignore"
+      ],
+      "packaged_name": "tabbable-6.4.0-source.tar",
+      "packaged_sha256": "cb3286553edcfb712036b45b2d76cda1d698698ecc51a6cc68529247e9dcaf42"
+    },
+    {
       "name": "tailwindcss-4.3.3.tar.gz",
       "url": "https://codeload.github.com/tailwindlabs/tailwindcss/tar.gz/refs/tags/v4.3.3",
       "sha256": "e702ce2493505287e8f6cab2dd1e0c14f154e57c296854d4ded38bde5da2be6e"
+    },
+    {
+      "name": "vue-3.5.41.tar.gz",
+      "url": "https://codeload.github.com/vuejs/core/tar.gz/refs/tags/v3.5.41",
+      "sha256": "9bd61c0c08d968f6d1689599a67eb39f00c6676b83af76477bb0147aca9367f5",
+      "exclude": [
+        "packages/vue/examples",
+        "packages/vue-compat/__tests__",
+        "packages-private/sfc-playground"
+      ],
+      "packaged_name": "vue-3.5.41-source.tar",
+      "packaged_sha256": "8578e0883894e700fec7b31e31ea67b8de2097cc6c5deb6a766a6ffdcb67cae5"
+    },
+    {
+      "name": "ca-certificates_20250419~deb12u2.tar.xz",
+      "url": "https://deb.debian.org/debian-security/pool/updates/main/c/ca-certificates/ca-certificates_20250419~deb12u2.tar.xz",
+      "sha256": "934942a985b2efd7a8c122cb1d42cd87911cf6ac365c545938619fcf268ea8f4",
+      "directory": "native-sources"
+    },
+    {
+      "name": "musl-7ada6dd.tar.gz",
+      "url": "https://git.musl-libc.org/cgit/musl/snapshot/musl-7ada6dde6f9dc6a2836c3d92c2f762d35fd229e0.tar.gz",
+      "sha256": "b65b3c7ca604a839ecb5abcdb7454e2e7d11db2b8e08df668c7fee45e8e50fbf",
+      "directory": "native-sources"
+    },
+    {
+      "name": "sqlite-amalgamation-3540100.zip",
+      "url": "https://www.sqlite.org/2026/sqlite-amalgamation-3540100.zip",
+      "sha256": "0a9c8e34352dad46006aa82836d5383bff9dc6bc9ce5a60553c05aa30e6ad1f9",
+      "directory": "native-sources"
+    },
+    {
+      "name": "sqlite-src-3540100.zip",
+      "url": "https://www.sqlite.org/2026/sqlite-src-3540100.zip",
+      "sha256": "387e7f6cad4797b17848c07d453dc6606917bb356a6cfe5a3abafd38c240c71b",
+      "directory": "native-sources"
+    },
+    {
+      "name": "sqlite-vec-0.1.9.tar.gz",
+      "url": "https://codeload.github.com/asg017/sqlite-vec/tar.gz/refs/tags/v0.1.9",
+      "sha256": "9823e737d9934dcbe85dff75d3fca81018a9beee803d70fa77b16faab5d61dc9",
+      "directory": "native-sources",
+      "exclude": [
+        "tests",
+        "site",
+        "examples",
+        "benchmarks"
+      ],
+      "packaged_name": "sqlite-vec-0.1.9-source.tar",
+      "packaged_sha256": "1609e36533987bfff5489da4dd588cfcedccdb03ca99f93ff7ff7f3789fae2ed"
     }
   ]
 }

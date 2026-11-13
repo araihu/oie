@@ -1,9 +1,9 @@
 {
   "repository": "https://github.com/araihu/assets",
-  "revision": "342a1c87a1f3784521cd6efc58820a1bd44b84b7",
+  "revision": "1f21ee95578b2e2cb2cf487542664e20624828f7",
   "candidateRelease": "v0.2.7",
   "publishedRelease": false,
-  "catalogSha256": "72efbb3a9c6cadf03f255d16aaa4f0aa061e6113dc68ee75147037691fc52a18",
+  "catalogSha256": "3ef5be348290d5bcf98213a661fc96f0b0699e0fc883864a3d4ebc553f02f521",
   "product": "oie",
   "displayName": "Oiê",
   "files": [

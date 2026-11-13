@@ -10,7 +10,7 @@ volume to retain accounts, SQLite history, and media across container updates.
 docker run -d --name oie \
   --publish 127.0.0.1:8080:8080 \
   --volume oie-data:/data \
-  ghcr.io/araihu/oie:main
+  ghcr.io/araihu/oie:v0.0.1-rc.8
 ```
 
 Open [Oiê in your browser](http://127.0.0.1:8080) and add an existing XMPP
@@ -26,7 +26,8 @@ CI builds and tests both architectures on pull requests and pushes to
 `main`. When both container tests pass on `main`, CI publishes
 `sha-<commit>` and updates
 `:main` if the commit is still the branch tip. Application tags such as
-`v0.0.1-rc.3` publish a versioned image. `:latest` follows the highest
+`v0.0.1-rc.8` publish a versioned image after the corresponding source is available on GitHub
+Releases. The image carries its source URL and checksum in `/licenses/SOURCE.txt`. `:latest` follows the highest
 canonical application version by SemVer, including prereleases. Use the
 published digest from the workflow summary to pin an exact image.
 
@@ -36,11 +37,11 @@ Oiê's desktop package includes the Go engine, SQLite store and web interface in
 one application. Add an existing XMPP account after launching. An external XMPP
 server is still required for messaging.
 
-The current release candidate is **v0.0.1-rc.3**. See the
-[release notes](releases/v0.0.1-rc.3.md) for changes since rc.2.
+The current release candidate is **v0.0.1-rc.8**. See the
+[release notes](releases/v0.0.1-rc.8.md) for changes since rc.7.
 
 Download packages and the installer from
-[v0.0.1-rc.3 on GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.3).
+[v0.0.1-rc.8 on GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.8).
 Source installation from the same immutable tag remains available.
 
 ## Install a release package
@@ -63,8 +64,8 @@ Save the release installer, then run it as your current user:
 ```sh
 curl --fail --location --proto '=https' --proto-redir '=https' \
   --output oie-install.sh \
-  https://github.com/araihu/oie/releases/download/v0.0.1-rc.3/install.sh &&
-sh ./oie-install.sh --version v0.0.1-rc.3
+  https://github.com/araihu/oie/releases/download/v0.0.1-rc.8/install.sh &&
+sh ./oie-install.sh --version v0.0.1-rc.8
 ```
 
 You can inspect `oie-install.sh` before running the second command. Do not use
@@ -78,13 +79,13 @@ than installing system packages. It does not remove macOS quarantine attributes.
 | Ubuntu Linux x86_64 | Executable under `~/.local/bin`, desktop entry/icon/docs under `~/.local/share` | Applications menu or `~/.local/bin/oie-desktop` |
 | macOS Apple Silicon | `~/Applications/Oie.app` | Finder or `open "$HOME/Applications/Oie.app"` |
 
-The installer defaults to rc.3. Use `--version VERSION` for another published
+The release installer defaults to its own version. Use `--version VERSION` for another published
 release and `--prefix DIR` to choose a different install root. On macOS the
 prefix is the parent of `Oie.app`; on Linux it contains `bin` and `share`.
 For example:
 
 ```sh
-sh ./oie-install.sh --version v0.0.1-rc.3 --prefix "$HOME/Apps/Oie desktop"
+sh ./oie-install.sh --version v0.0.1-rc.8 --prefix "$HOME/Apps/Oie desktop"
 sh ./oie-install.sh --help
 ```
 
@@ -92,14 +93,14 @@ The release assets are:
 
 | Asset | Contents |
 | --- | --- |
-| `oie_v0.0.1-rc.3_darwin_arm64.tar.gz` | `Oie.app` bundle with executable, resources and licenses |
-| `oie_v0.0.1-rc.3_linux_amd64.tar.gz` | Executable, desktop entry, icon and documentation in `bin`/`share` |
-| `oie_v0.0.1-rc.3_<platform>_source.tar.gz` | Corresponding source and build instructions for each binary |
+| `oie_v0.0.1-rc.8_darwin_arm64.tar.gz` | `Oie.app` bundle with executable, resources and licenses |
+| `oie_v0.0.1-rc.8_linux_amd64.tar.gz` | Executable, desktop entry, icon and documentation in `bin`/`share` |
+| `oie_v0.0.1-rc.8_<platform>_source.tar.gz` | Corresponding source and build instructions for each binary |
 | `install.sh` | Per-user installer for both targets |
 | `SHA256SUMS` | SHA-256 checksums for the archives, installer and receipt |
 | `packaging-receipt.json` | Source/tooling revisions, archive hashes, platform build metadata and verification scope |
 
-Both archives are built from the immutable `v0.0.1-rc.3` tag. The receipt
+Both archives are built from the immutable `v0.0.1-rc.8` tag. The receipt
 records the application and packaging revisions, and `build-info.json` inside
 each package identifies its application source.
 

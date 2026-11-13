@@ -248,6 +248,16 @@ jobs:
           python3 scripts/release_desktop.py verify-assets "$OIE_RELEASE_VERSION" "$OIE_RELEASE_REVISION" dist/release
           python3 scripts/release_desktop.py checksums dist/release --release-version "$OIE_RELEASE_VERSION"
       - run: bash scripts/publish-desktop-release.sh "$OIE_RELEASE_VERSION" dist/release "$OIE_RELEASE_REVISION"
+  publish-image:
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    needs: [tag, publish]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/release-image.yml
+    with:
+      version: ${{ needs.tag.outputs.version }}
+
   publish-apt:
     if: ${{ !cancelled() && needs.publish.result == 'success' }}
     needs: [tag, publish]

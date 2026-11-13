@@ -30,8 +30,9 @@ def verify(archive, version, revision, report):
             if digest(root / "oie" / path) != expected:
                 raise ValueError(f"update packaging/browser-source.json for changed asset input {path}")
         for item in manifest["archives"]:
-            if digest(root / "browser-sources" / item["name"]) != item["sha256"]:
-                raise ValueError(f"browser source checksum mismatch for {item['name']}")
+            path = root / item.get("directory", "browser-sources") / item.get("packaged_name", item["name"])
+            if digest(path) != item.get("packaged_sha256", item["sha256"]):
+                raise ValueError(f"upstream source checksum mismatch for {path.name}")
 
         # A fresh module/build cache and disabled module resolution prove that
         # the extracted vendor trees supply the Go build on this platform.
@@ -51,10 +52,18 @@ def verify(archive, version, revision, report):
         subprocess.run(["go", "-C", str(root / "oie/cli"), *build, "./cmd/oiectl"], env=env, check=True)
         if {path.name for path in commands.iterdir()} != {"oie", "oie-desktop", "oiectl"}:
             raise ValueError("offline build did not produce all three commands")
+        server_targets = []
+        if goos == "linux":
+            for arch in ("amd64", "arm64"):
+                server_env = dict(env, CGO_ENABLED="0", GOARCH=arch)
+                subprocess.run(["go", "-C", str(root / "oie"), *build, "-tags=server",
+                                "-ldflags=-s -w", "./cmd/oie"], env=server_env, check=True)
+                server_targets.append(f"linux/{arch}")
     report.write_text(json.dumps({
         "status": "passed", "platform": f"{goos}/{goarch}", "version": version,
         "revision": revision, "sourceArchiveSHA256": digest(archive),
         "commands": ["oie", "oie-desktop", "oiectl"],
+        "serverTargets": server_targets,
     }, indent=2) + "\n")
 
 

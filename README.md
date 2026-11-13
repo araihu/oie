@@ -9,10 +9,10 @@ provenance are documented in [Branding](docs/branding.md).
 The alpha targets one owner with multiple protocol accounts. Device sync remains
 planned.
 
-The current release candidate is **v0.0.1-rc.3**. Desktop downloads include
+The current release candidate is **v0.0.1-rc.8**. Desktop downloads include
 corresponding source archives and updated third-party license notices.
-See the [release notes](docs/releases/v0.0.1-rc.3.md) and
-[GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.3).
+See the [release notes](docs/releases/v0.0.1-rc.8.md) and
+[GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.8).
 
 - [Desktop installation on macOS and Linux](docs/installation.md#desktop-installation-on-macos-and-linux)
 - [Live browser setup and development accounts](docs/live-preview.md)

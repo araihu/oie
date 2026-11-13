@@ -1,0 +1,17 @@
+Oiê and Goshtoso artwork
+Copyright 2026 Arai Hû
+
+Arai Hû licenses its copyright in the Oiê and Goshtoso icons, logos and
+derived platform artwork in this repository under the Apache License,
+Version 2.0. This grant also covers the same artwork in earlier Arai Hû
+revisions and distributions, including the Oiê v0.2.7 candidate at
+342a1c87a1f3784521cd6efc58820a1bd44b84b7 and the Goshtoso artwork in
+Assets v0.2.6. It supersedes earlier Arai Hu Brand Terms catalog entries
+for that artwork.
+
+The Oiê artwork incorporates Noto Emoji SVG artwork. Retain the separate
+noto-emoji-NOTICE.txt and applicable upstream license information.
+
+Use, modification and redistribution of the artwork are permitted under
+the Apache License, Version 2.0. Section 6 governs use of trade names,
+trademarks, service marks and product names.
