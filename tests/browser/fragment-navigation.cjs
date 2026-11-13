@@ -26,8 +26,11 @@ async function assertMobileControlOwnership(page) {
   const chats=[{id:chatA,accountId:alpha,title:'Family',address:'family@fixture'},{id:chatB,accountId:beta,title:'Team',address:'team@fixture'}].map(c=>({...c,revisionId:revision,kind:'direct',updatedAt:'2026-11-08T12:00:00Z',unreadCount:1,archived:false,favorite:true,lastMessage:'Retained fixture'}));
   const messages=chats.map((c,n)=>({id:id(100+n),revisionId:revision,accountId:c.accountId,conversationId:c.id,sender:{id:id(20+n),displayName:n?'Sam':'Bob'},originalText:'Retained source '+n+' https://example.test/item.png',createdAt:'2026-11-08T12:00:00Z',isOwn:false,sendState:'received'}));
   const catalog=Array.from({length:57},(_,n)=>{const kind=n<53?'image':n<55?'link':'document',m=messages[n%2];return {id:id(500+n),revisionId:revision,kind,url:'https://example.test/'+n+(kind==='image'?'.png':kind==='document'?'.pdf':''),fileName:kind==='document'?n+'.pdf':'',accountLabel:accounts[n%2].label,conversationTitle:chats[n%2].title,message:m};});
-  const streams=new Set(),operations=new Map(),state={effects:0,seq:0,reads:[],searchReads:[]};let releaseDelayedSearch;
-  const emit=()=>{state.seq++;for(const stream of streams)stream.write(`id: ${engine}:${state.seq}\nevent: message.created\ndata: {}\n\n`);};
+  const streams=new Set(),operations=new Map(),state={effects:0,seq:0,reads:[],searchReads:[],inboxReads:0};let releaseDelayedSearch;
+  const emit=(type='message.created',data={})=>{
+    state.seq++;
+    for(const stream of streams)stream.write(`id: ${engine}:${state.seq}\nevent: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
   const api=http.createServer(async (req,res)=>{
     const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');
     const send=(status,data)=>{res.statusCode=status;res.end(JSON.stringify(data));};
@@ -38,7 +41,9 @@ async function assertMobileControlOwnership(page) {
     if(u.pathname.endsWith('/history'))return send(200,{accountId:u.pathname.includes(beta)?beta:alpha,state:'complete',retainedMessages:2,conversations:1,updatedAt:'2026-11-08T12:00:00Z'});
     if(u.pathname.endsWith('/avatars'))return send(200,{items:[]});
     if(u.pathname==='/api/v1/conversations'){
-      const matched=chats.filter(c=>(!u.searchParams.get('accountId')||c.accountId===u.searchParams.get('accountId'))&&c.archived===(u.searchParams.get('archived')==='true')&&(!u.searchParams.get('q')||c.title.toLowerCase().includes(u.searchParams.get('q').toLowerCase()))),limit=Number(u.searchParams.get('limit')||100);return send(200,{items:matched.slice(0,limit),nextCursor:matched.length>limit?matched[limit-1].id:undefined});
+      const unreadOnly=u.searchParams.get('unreadOnly')==='true';
+      if(!unreadOnly)state.inboxReads++;
+      const matched=chats.filter(c=>(!unreadOnly||c.unreadCount>0)&&(!u.searchParams.get('accountId')||c.accountId===u.searchParams.get('accountId'))&&c.archived===(u.searchParams.get('archived')==='true')&&(!u.searchParams.get('q')||c.title.toLowerCase().includes(u.searchParams.get('q').toLowerCase()))).sort((a,b)=>Date.parse(b.updatedAt)-Date.parse(a.updatedAt)),limit=Number(u.searchParams.get('limit')||100);return send(200,{items:matched.slice(0,limit),nextCursor:matched.length>limit?matched[limit-1].id:undefined});
     }
     if(u.pathname==='/api/v1/contacts')return send(200,{items:[],sources:accounts.filter(a=>!u.searchParams.get('accountId')||a.id===u.searchParams.get('accountId')).map(a=>({accountId:a.id,state:'known'}))});
     if(u.pathname==='/api/v1/messages/search'){
@@ -118,6 +123,198 @@ async function assertMobileControlOwnership(page) {
     } finally {
       releaseStartup();await startup.close();await until(()=>streams.size===0,'startup stream disposed');
     }
+    const inboxChecks=[];
+    const initialChats=chats.length;
+    for(let index=0;index<40;index++)chats.push({
+      ...chats[0],id:id(2000+index),title:'Inbox conversation '+index,
+      address:'contact'+index+'@fixture',unreadCount:0
+    });
+    const incomingChat=chats.at(-1),beforeIncoming={...incomingChat};
+    for(const {width,height,lang,theme,chatsLabel,mediaLabel} of [
+      {width:1440,height:1000,lang:'en',theme:'dark',chatsLabel:'Chats',mediaLabel:'Media & links'},
+      {width:390,height:844,lang:'pt-BR',theme:'light',chatsLabel:'Conversas',mediaLabel:'Mídia e links'}
+    ]){
+      const context=await browser.newContext({viewport:{width,height},locale:lang});
+      const inboxPage=await context.newPage(),errors=[];
+      inboxPage.setDefaultTimeout(15000);
+      debuggingPage=inboxPage;
+      let subscriptions=0,releaseNavigation,heldNavigation,holdResponse;
+      const resetIncoming=()=>Object.assign(incomingChat,beforeIncoming);
+      inboxPage.on('pageerror',error=>errors.push(error.message));
+      inboxPage.on('request',request=>{if(request.resourceType()==='eventsource')subscriptions++;});
+      const navigate=async label=>{
+        const navigation=width<500?'#mobile-navigation-panel':'.oie-sidebar';
+        if(width<500){
+          await inboxPage.locator('[aria-controls=mobile-navigation-panel]:visible').click();
+          await inboxPage.locator(navigation).waitFor({state:'visible'});
+        }
+        await inboxPage.locator(navigation+' a').filter({hasText:label}).click({noWaitAfter:true});
+      };
+      try {
+        const initialRefresh=inboxPage.waitForResponse(response=>new URL(response.url()).pathname==='/ui/refresh');
+        await inboxPage.goto(base+'/?section=chats&lang='+lang+'&theme='+theme);
+        await (await initialRefresh).finished();
+        await until(()=>streams.size===1,'inbox event stream');
+        const stream=[...streams][0];
+        await inboxPage.evaluate(()=>{window.htmx.config.defaultSettleDelay=250;});
+        await inboxPage.route('**/?**',async route=>{
+          const request=route.request();
+          if(releaseNavigation&&request.headers()['x-oie-fragment']==='app'&&new URL(request.url()).searchParams.get('section')==='chats'){
+            const response=holdResponse?await route.fetch():undefined;
+            heldNavigation=true;
+            await new Promise(resolve=>{releaseNavigation=resolve;});
+            if(response){await route.fulfill({response});return;}
+          }
+          await route.continue().catch(()=>{});
+        });
+        for(const change of ['none','delivered','buffered','in-flight','explicit','archived','empty']){
+          const changed=change!=='none';
+          resetIncoming();
+          chats[0].archived=false;
+          if(change==='empty')for(const chat of chats)chat.archived=true;
+          if(change==='empty'){
+            await inboxPage.goto(base+'/?section=chats&lang='+lang+'&theme='+theme);
+            await inboxPage.waitForFunction(()=>window.OieEvents?.connected);
+          }
+          await inboxPage.evaluate(width=>{
+            const desktop=document.getElementById('desktop-navigation'),mobile=document.querySelector('.oie-mobile-nav');
+            const navigation=width<500?mobile:desktop;
+            const controls=[navigation,...navigation.querySelectorAll('a[data-oie-navigation-item],[data-account-switcher]')];
+            window.sidebarBefore={desktop,mobile,controls};
+            window.sidebarIdentity=()=>desktop===document.getElementById('desktop-navigation')&&
+              mobile===document.querySelector('.oie-mobile-nav')&&controls.every(node=>node.isConnected);
+          },width);
+          const generation=await inboxPage.evaluate(()=>window.OieRuntime.generation);
+          const before=await inboxPage.locator('#conversation-list').evaluate(list=>{
+            list.scrollTop=360;
+            window.inboxBefore=list;
+            const anchor=[...list.querySelectorAll('[data-conversation-row]')].find(row=>row.getBoundingClientRect().bottom>=list.getBoundingClientRect().top);
+            window.inboxAnchor=anchor;
+            return {top:list.scrollTop,anchorTop:anchor?.getBoundingClientRect().top};
+          });
+          if(change!=='empty')assert(before.top>0);
+          await navigate(mediaLabel);
+          await inboxPage.waitForFunction(generation=>!!document.getElementById('shared-content-results')&&window.OieRuntime.generation>generation,generation);
+          assert(await inboxPage.evaluate(()=>window.sidebarIdentity()),'sidebar survives the switch to Media');
+          const styles=await inboxPage.evaluate(()=>{
+            const style=section=>{
+              const link=document.querySelector('#desktop-navigation a[data-oie-navigation-item][href*="section='+section+'"]');
+              const {color,fontWeight}=getComputedStyle(link);
+              const icon=getComputedStyle(link.firstElementChild);
+              return {color,fontWeight,iconColor:icon.color,iconBackground:icon.backgroundColor};
+            };
+            return {chats:style('chats'),archived:style('archived'),media:style('media')};
+          });
+          assert.deepEqual(styles.chats,styles.archived,'Chats loses all active colors when Media opens');
+          assert.notEqual(styles.media.color,styles.chats.color);
+          assert.notEqual(styles.media.iconBackground,styles.chats.iconBackground);
+          const reads=state.inboxReads;
+          const mediaGeneration=await inboxPage.evaluate(()=>window.OieRuntime.generation);
+          const incoming=()=>{
+            incomingChat.archived=false;
+            incomingChat.lastMessage='Incoming message while browsing media';
+            incomingChat.unreadCount=1;
+            incomingChat.updatedAt='2026-11-08T13:00:00Z';
+            if(change==='buffered'||change==='explicit')state.seq++;
+            else emit('message.created',{conversationId:incomingChat.id});
+          };
+          if(changed){
+            if(change==='archived'){
+              chats[0].archived=true;
+              emit('conversation.updated',{conversation:chats[0]});
+            }else if(change!=='in-flight')incoming();
+            assert.equal(state.inboxReads,reads,'media does not prefetch the inbox');
+          }
+          await inboxPage.evaluate(()=>{
+            window.firstInboxFrame=undefined;
+            window.sidebarFrames=[];
+            const sidebar=window.sidebarBefore.desktop,links=[...sidebar.querySelectorAll('a[data-oie-navigation-item]')];
+            const rects=()=>[sidebar,...links].map(node=>{
+              const {x,y,width,height}=node.getBoundingClientRect();
+              return [x,y,width,height];
+            });
+            const before=rects();
+            function sample(){
+              const returned=!!document.querySelector('.oie-workspace');
+              const movement=Math.max(...rects().flatMap((rect,index)=>rect.map((value,axis)=>Math.abs(value-before[index][axis]))));
+              window.sidebarFrames.push({retained:window.sidebarIdentity(),movement,active:links.find(link=>link.getAttribute('aria-current')==='page')?.title});
+              if(!returned){requestAnimationFrame(sample);return;}
+              const list=document.getElementById('conversation-list');
+              window.firstInboxFrame={top:list?.scrollTop,retained:list===window.inboxBefore,rows:list?.querySelectorAll('[data-conversation-row]').length,anchorTop:window.inboxAnchor?.getBoundingClientRect().top,chat:document.querySelector('#conversation-pane')?.dataset.conversationId};
+            }
+            requestAnimationFrame(sample);
+          });
+          holdResponse=change==='in-flight';heldNavigation=false;releaseNavigation=()=>{};
+          if(change==='explicit'){
+            await inboxPage.evaluate(chat=>{
+              const target=document.querySelector('#desktop-navigation a[href*="section=chats"]');
+              const url=new URL(target.href);
+              url.searchParams.set('chat',chat);
+              window.OieNavigation.go(url.href);
+            },chatA);
+          }else await navigate(chatsLabel);
+          await until(()=>heldNavigation,'delayed return request');
+          await inboxPage.waitForFunction(()=>window.sidebarFrames.length>=5);
+          assert(await inboxPage.locator('#shared-content-results').isVisible());
+          assert.equal(await inboxPage.locator('#conversation-list').count(),0);
+          if(holdResponse){
+            const generation=await inboxPage.evaluate(()=>window.OieInbox.generation);
+            incoming();
+            await inboxPage.waitForFunction(generation=>window.OieInbox.generation>generation,generation);
+          }
+          releaseNavigation();releaseNavigation=undefined;
+          await inboxPage.waitForFunction(()=>!!window.firstInboxFrame);
+          const firstFrame=await inboxPage.evaluate(()=>window.firstInboxFrame);
+          assert.equal(firstFrame.retained,true);
+          assert.equal(firstFrame.rows,chats.filter(chat=>!chat.archived).length);
+          if(change==='none')assert.equal(firstFrame.top,before.top);
+          if(change!=='empty'&&(change!=='explicit'||width>=500))assert.equal(firstFrame.anchorTop,before.anchorTop,JSON.stringify({width,change,before,firstFrame}));
+          const expectedChat=change==='archived'?chatB:changed&&change!=='explicit'?incomingChat.id:chatA;
+          assert.equal(firstFrame.chat,expectedChat,'first painted pane follows current inbox ordering');
+          const frames=await inboxPage.evaluate(()=>window.sidebarFrames);
+          assert(frames.every(frame=>frame.retained&&frame.movement<=1),JSON.stringify(frames));
+          assert(frames.slice(0,-1).every(frame=>frame.active===mediaLabel),JSON.stringify(frames));
+          assert.equal(frames.at(-1).active,chatsLabel);
+          if(width>=500&&change!=='explicit')assert(await inboxPage.evaluate(()=>document.activeElement?.matches('#desktop-navigation a[aria-current="page"]')));
+          if(changed&&change!=='archived'){
+            const updated=inboxPage.locator('[data-conversation-row="'+incomingChat.id+'"]');
+            await updated.getByText(incomingChat.lastMessage).waitFor({state:'attached'});
+            assert.equal(await updated.locator('.oie-unread-count').textContent(),'1');
+            assert.equal(await inboxPage.locator('[data-conversation-row]').first().getAttribute('data-conversation-row'),incomingChat.id);
+          } else if(!changed){
+            await inboxPage.waitForFunction(generation=>window.OieRuntime.generation>generation,mediaGeneration);
+            const recovery=inboxPage.waitForResponse(response=>new URL(response.url()).pathname==='/ui/refresh');
+            await inboxPage.evaluate(()=>document.dispatchEvent(new Event('oie:refresh-request')));
+            assert(!(await (await recovery).text()).includes('id="live-list"'),'other live regions do not reload the current inbox');
+          }
+          await wait(450);
+          assert.equal(state.inboxReads-reads,Number(changed),`engine inbox reads after returning from media (${width}, ${change})`);
+          if(change!=='empty'){
+            assert.equal(subscriptions,1);
+            assert.deepEqual([...streams],[stream]);
+          }
+          inboxChecks.push({lang,width,change,firstFrameScroll:firstFrame.top,inboxReads:state.inboxReads-reads,subscriptions,sidebarFrames:frames.length,maxSidebarMovement:Math.max(...frames.map(frame=>frame.movement))});
+          if(change==='explicit'&&width<500){
+            await inboxPage.locator('.oie-back-button').click();
+            await until(()=>inboxPage.locator('#conversation-list').evaluate(list=>list.scrollTop===360),'inbox scroll after closing the mobile conversation');
+          }
+          resetIncoming();
+          for(const chat of chats)chat.archived=false;
+          if(changed&&change!=='empty'){
+            emit('conversation.updated',{conversation:incomingChat});
+            await until(()=>inboxPage.locator('#conversation-list').getAttribute('data-inbox-cursor').then(cursor=>cursor?.endsWith(':'+state.seq)),'fresh inbox cursor after fixture reset');
+          }
+        }
+        assert.deepEqual(errors,[]);
+      } finally {
+        releaseNavigation?.();
+        resetIncoming();
+        for(const chat of chats)chat.archived=false;
+        await context.close();await until(()=>streams.size===0,'inbox stream disposed');
+      }
+    }
+    chats.splice(initialChats);
+    findings.push('Returning from Media restores the inbox DOM and scroll on the first frame, with zero inbox reads when unchanged and one after an incoming message');
     {
     const retainedCount=messages.length;
     for(let index=0;index<24;index++)messages.push({
@@ -132,7 +329,9 @@ async function assertMobileControlOwnership(page) {
       if(request.resourceType()==='eventsource')subscriptions++;
       if(request.resourceType()==='document')documents.push(request.url());
     });
+    const scopedRefresh=scoped.waitForResponse(response=>new URL(response.url()).pathname==='/ui/refresh');
     await scoped.goto(base+'/?chat='+chatA+'&lang=en&theme=dark',{waitUntil:'domcontentloaded'});
+    await (await scopedRefresh).finished();
     await until(()=>streams.size===1&&subscriptions===1,'initial scoped stream connected');
     const streamBefore=[...streams][0],subscriptionsBefore=subscriptions;
     await scoped.locator('#message-composer').fill('Draft kept through scoped swaps');
@@ -205,14 +404,50 @@ async function assertMobileControlOwnership(page) {
       assert.equal(current.generation,previous.generation,'shared tabs must retain the application runtime');assert.equal(current.generation,settledGeneration);assert.deepEqual(current.context,previous.context);assert.equal(current.retained,true);assert.equal(current.type,kind);assert.equal(hx.length,beforeRequests+1,'one HTMX request per tab change');await until(()=>streams.size===1,'one live stream after tab partial');assert.equal(await page.evaluate(()=>window.documentToken),token);assert.equal(documents.length,1);
     };
     const choose=async(account,label)=>{await page.locator('[data-account-switcher]:visible').first().click();await page.locator('[data-switch-account="'+account+'"]:visible').click();await route(async()=>(new URL(page.url()).searchParams.get('account')||'')===account&&await page.locator('[data-account-switcher]:visible').first().textContent().then(t=>t.includes(label)));};
-    const sidebarDestinations=[['media','Media & links'],['archived','Archived'],['favorites','Favorites'],['chats','Chats']];
+    const sidebarDestinations=[['media','Media & links'],['archived','Archived'],['favorites','Favorites'],['scheduled','Scheduled'],['chats','Chats']];
+    const desktopSidebar=await page.locator('#desktop-navigation').elementHandle();
     for(const [section,label]of sidebarDestinations){await page.locator('.oie-sidebar a').filter({hasText:label}).click();await route(async()=>new URL(page.url()).searchParams.get('section')===section);assert.equal(await page.locator('.oie-sidebar a[aria-current=page]').count(),1);assert((await page.locator('.oie-sidebar a[aria-current=page]').textContent()).includes(label))}
-    await page.goBack();await route(async()=>new URL(page.url()).searchParams.get('section')==='favorites');assert((await page.locator('.oie-sidebar a[aria-current=page]').textContent()).includes('Favorites'));await page.goForward();await route(async()=>new URL(page.url()).searchParams.get('section')==='chats');
+    await page.goBack();await route(async()=>new URL(page.url()).searchParams.get('section')==='scheduled');assert((await page.locator('.oie-sidebar a[aria-current=page]').textContent()).includes('Scheduled'));await page.goForward();await route(async()=>new URL(page.url()).searchParams.get('section')==='chats');
+    assert(await desktopSidebar.evaluate(node=>node===document.getElementById('desktop-navigation')),'sidebar survives all section changes and history');
     for(const gesture of [{modifiers:['Control']},{button:'middle'}]){const original=page.url(),requests=hx.length,popupEvent=context.waitForEvent('page');await page.locator('.oie-sidebar a').filter({hasText:'Media & links'}).click(gesture);const popup=await popupEvent;await popup.waitForURL(url=>url.searchParams.get('section')==='media',{waitUntil:'domcontentloaded'});assert.equal(new URL(popup.url()).searchParams.get('section'),'media');assert.equal(await popup.locator('#oie-app').count(),1);assert.equal(page.url(),original);assert.equal(hx.length,requests);assert.equal(await page.evaluate(()=>window.documentToken),token);await popup.close();await until(()=>streams.size===1,'modifier popup stream disposed')}
-    await page.locator('a[data-conversation-id="'+chatA+'"]').click();await route(async()=>await page.locator('#message-composer').count()===1);findings.push('All four desktop sidebar destinations and Back/Forward use same-document fragments with the active link updated; Control and middle clicks retain native new-tab behavior');
+    await page.locator('a[data-conversation-id="'+chatA+'"]').click();await route(async()=>await page.locator('#message-composer').count()===1);findings.push('All desktop sidebar destinations and Back/Forward use same-document fragments with the active link updated; Control and middle clicks retain native new-tab behavior');
     const draft='Unsaved local draft 👋';await page.locator('#message-composer').fill(draft);
     await choose(beta,'Work');assert.equal(await page.locator('#message-composer').inputValue(),'');
     await choose(alpha,'Personal');await until(async()=>await page.locator('#message-composer').inputValue()===draft,'account draft restored');
+    const disconnectPath='**/ui/accounts/disconnect';
+    let disconnectStarted=false, releaseDisconnect;
+    const disconnectGate=new Promise(resolve=>releaseDisconnect=resolve);
+    await page.route(disconnectPath,async intercepted=>{
+      disconnectStarted=true;
+      await disconnectGate;
+      await intercepted.abort().catch(()=>{});
+    });
+    const sidebar=page.locator('#desktop-navigation');
+    const disconnect=sidebar.locator('form[data-oie-action="disconnect"]');
+    await sidebar.locator('[data-account-switcher]').click();
+    await disconnect.getByRole('button',{name:'Disconnect',exact:true}).click();
+    await until(()=>disconnectStarted,'disconnect request held');
+    assert(await disconnect.locator('button').isDisabled());
+    const retainedDisconnect=await disconnect.elementHandle();
+    await page.keyboard.press('Escape');
+    try{
+      await sidebar.locator('a[data-oie-navigation-item]').filter({hasText:'Media & links'}).click();
+      await route(async()=>await page.locator('#shared-content-results').count()===1);
+      await until(()=>disconnect.locator('button').isEnabled(),'retained disconnect control is usable after navigation');
+      assert(await retainedDisconnect.evaluate(node=>node.isConnected));
+    }finally{
+      releaseDisconnect();
+      await page.unroute(disconnectPath);
+    }
+    assert.equal(await page.locator('[data-shared-item]').count(),27);
+    await page.locator('#shared-account [role=combobox]').click();
+    await page.getByRole('option').filter({hasText:'Work'}).click();
+    await until(async()=>new URL(page.url()).searchParams.get('account')===beta&&
+      (await sidebar.locator('[data-account-switcher]').textContent()).includes('Work'),'media picker switches to Work');
+    await sidebar.locator('a[data-oie-navigation-item]').filter({hasText:'Chats'}).click();
+    await route(async()=>new URL(page.url()).searchParams.get('section')==='chats');
+    assert.equal(new URL(page.url()).searchParams.get('account'),beta,'Chats uses the account chosen in Media');
+    await choose(alpha,'Personal');
     await page.locator('.oie-sidebar a').filter({hasText:'Media & links'}).click();await route(async()=>await page.locator('#shared-content-results').count()===1);assert.equal(await page.locator('[data-shared-item]').count(),27);
     await choose('','All accounts');assert.equal(await page.locator('[data-shared-item]').count(),50);
     const beforePage=await page.evaluate(()=>window.OieRuntime.generation);
@@ -268,10 +503,20 @@ async function assertMobileControlOwnership(page) {
     const denied=await browser.newContext({viewport:{width:390,height:844},locale:'en'});await denied.addInitScript(()=>{if(location.origin==='null')return;window.documentToken=Math.random();window.navTrace=[];for(const name of ['htmx:before:request','htmx:after:request','htmx:before:swap','htmx:after:settle','htmx:error'])document.addEventListener(name,event=>{const ctx=event.detail.ctx;window.navTrace.push({event:name,action:ctx?.request?.action,target:ctx?.target?.id,kind:ctx?.oieKind,response:ctx?.response?.status,location:location.href,generation:window.OieRuntime?.generation,pane:document.querySelector('#conversation-pane')?.dataset.openChat,workspace:document.querySelector('#workspace')?.className});});for(const name of ['getItem','setItem','removeItem'])Object.defineProperty(Storage.prototype,name,{configurable:true,value(){throw new DOMException('Denied','SecurityError');}});});const mobile=await denied.newPage(),mobileDocuments=[],mobileHX=[],mobileErrors=[];debuggingPage=mobile;mobile.on('pageerror',error=>mobileErrors.push(error.message));mobile.on('request',request=>{if(request.resourceType()==='document')mobileDocuments.push(request.url());if(request.headers()['hx-request']==='true')mobileHX.push(request.url())});await mobile.goto(base+'/?chat='+chatA+'&lang=en&theme=light');await until(async()=>mobile.evaluate(()=>!!window.OieRuntime?.generation),'mobile runtime');await assertMobileControlOwnership(mobile);
     await mobile.locator('#message-composer').fill('Session fallback draft');await mobile.locator('.oie-back-button').click();await until(async()=>await mobile.locator('[data-account-switcher]:visible').count()>0,'mobile conversation list');await assertMobileControlOwnership(mobile);await mobile.locator('[data-account-switcher]:visible').first().click();await mobile.locator('[data-switch-account="'+beta+'"]:visible').click();await until(async()=>mobile.locator('[data-account-switcher]:visible').textContent().then(t=>t.includes('Work')),'mobile Work');await mobile.locator('[data-account-switcher]:visible').first().click();await mobile.locator('[data-switch-account="'+alpha+'"]:visible').click();await mobile.locator('a[data-conversation-id="'+chatA+'"]').click();await until(async()=>await mobile.locator('#message-composer').inputValue()==='Session fallback draft','denied-storage draft survives route');const mobileToken=await mobile.evaluate(()=>window.documentToken);let mobileGeneration=await mobile.evaluate(()=>window.OieRuntime.generation);await mobile.locator('.oie-back-button').click();
     const mobileRoute=async section=>{await until(async()=>new URL(mobile.url()).searchParams.get('section')===section&&await mobile.evaluate(()=>window.OieRuntime.generation)>mobileGeneration,'mobile sidebar '+section);await assertMobileControlOwnership(mobile);mobileGeneration=await mobile.evaluate(()=>window.OieRuntime.generation);assert.equal(await mobile.evaluate(()=>window.documentToken),mobileToken);assert.equal(mobileDocuments.length,1);await until(()=>streams.size===1,'one mobile stream')};
+    await mobile.locator('[aria-controls=mobile-navigation-panel]:visible').click();
+    await mobile.locator('#mobile-navigation-panel a[data-oie-navigation-item]').filter({hasText:'Scheduled'}).click();
+    await mobileRoute('scheduled');
+    await mobile.locator('#mobile-navigation-panel').waitFor({state:'hidden'});
+    await mobile.locator('[aria-controls=mobile-navigation-panel]:visible').click();
+    const mobileBrand=mobile.locator('#mobile-navigation-panel a').filter({has:mobile.locator('.oie-brand')});
+    assert.equal(new URL(await mobileBrand.getAttribute('href'),base).searchParams.get('account'),null,'mobile logo follows the all-accounts schedule');
+    await mobileBrand.click();
+    await mobileRoute('chats');
+    assert.equal(new URL(mobile.url()).searchParams.get('account'),null);
     for(const [section,label]of sidebarDestinations){await mobile.locator('[aria-controls=mobile-navigation-panel]:visible').click();await mobile.locator('#mobile-navigation-panel').waitFor({state:'visible'});await mobile.locator('#mobile-navigation-panel a').filter({hasText:label}).click();await mobileRoute(section);await mobile.locator('#mobile-navigation-panel').waitFor({state:'hidden'});assert((await mobile.locator('#mobile-navigation-panel a[aria-current=page]').textContent()).includes(label))}
-    await mobile.goBack();await mobileRoute('favorites');await mobile.goForward();await mobileRoute('chats');assert(mobileHX.length>=6);assert.deepEqual(mobileErrors,[]);findings.push('Mobile overlay routes all four destinations, closes after each fragment, updates active state and preserves the document through Back/Forward');assert(await mobile.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await mobile.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await mobile.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);await denied.close();findings.push('Mobile light layout preserves denied-storage session draft and has no horizontal overflow or WCAG A/AA violations');
+    await mobile.goBack();await mobileRoute('scheduled');await mobile.goForward();await mobileRoute('chats');assert(mobileHX.length>=6);assert.deepEqual(mobileErrors,[]);findings.push('Mobile overlay routes all sidebar destinations, closes after each fragment, updates active state and preserves the document through Back/Forward');assert(await mobile.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await mobile.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await mobile.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);await denied.close();findings.push('Mobile light layout preserves denied-storage session draft and has no horizontal overflow or WCAG A/AA violations');
     const native=await browser.newContext({javaScriptEnabled:false,viewport:{width:1440,height:1000}}),fallback=await native.newPage();await fallback.goto(base+'/?chat='+chatA+'&lang=en');for(const [section,label]of sidebarDestinations){await fallback.locator('.oie-sidebar a').filter({hasText:label}).click();assert.equal(new URL(fallback.url()).searchParams.get('section'),section);assert.equal(await fallback.locator('#oie-app').count(),1);assert((await fallback.locator('.oie-sidebar a[aria-current=page]').textContent()).includes(label));if(section==='media')assert.equal(await fallback.locator('[data-shared-item]').count(),50)}await native.close();findings.push('Direct native links remain usable when JavaScript is disabled');
-    const artifact=path.join(__dirname,'artifacts');await fs.mkdir(artifact,{recursive:true});await fs.writeFile(path.join(artifact,'fragment-navigation-report.json'),JSON.stringify({findings,fragmentRequests:hx.length,documentRequests:documents.length,completedFragmentShapes:completedFragments.length,mobileDocumentRequests:mobileDocuments.length,mobileFragmentRequests:mobileHX.length,earlyDocumentRequests:earlyDocuments.length,intents:2,mutations:state.effects,pageErrors:errors},null,2));console.log('PASS: HTMX fragment navigation, scoped drafts, Back/Forward, stale-response/failure recovery, one stream and one effect per intent, mobile accessibility and native fallback');
+    const artifact=path.join(__dirname,'artifacts');await fs.mkdir(artifact,{recursive:true});await fs.writeFile(path.join(artifact,'fragment-navigation-report.json'),JSON.stringify({findings,inboxChecks,fragmentRequests:hx.length,documentRequests:documents.length,completedFragmentShapes:completedFragments.length,mobileDocumentRequests:mobileDocuments.length,mobileFragmentRequests:mobileHX.length,earlyDocumentRequests:earlyDocuments.length,intents:2,mutations:state.effects,pageErrors:errors},null,2));console.log('PASS: HTMX fragment navigation, cached inbox first frame and request counts, scoped drafts, Back/Forward, stale-response/failure recovery, one stream and one effect per intent, mobile accessibility and native fallback');
   } catch(error) {
     if(debuggingPage&&!debuggingPage.isClosed())console.error('Fragment failure evidence',JSON.stringify(await debuggingPage.evaluate(()=>({url:location.href,ready:document.readyState,generation:window.OieRuntime?.generation,account:document.body.dataset.accountId,chat:document.body.dataset.conversationId,status:document.querySelector('[data-navigation-status]')?.textContent,labels:[...document.querySelectorAll('[data-account-switcher]')].map(e=>e.textContent),boosted:document.querySelectorAll('[hx-boost]').length,form:document.querySelector('form.oie-search')?.outerHTML,trace:window.navTrace?.slice(-30),workspace:document.querySelector('#workspace')?.className,paneOpen:document.querySelector('#conversation-pane')?.dataset.openChat,navigationControls:[...document.querySelectorAll('button[aria-label="Open navigation"]')].map(node=>({controls:node.getAttribute('aria-controls'),expanded:node.getAttribute('aria-expanded')}))})).catch(()=>({unavailable:true}))), 'streams',streams.size, 'BFF log',log);
     throw error;

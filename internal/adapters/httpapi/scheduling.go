@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"mime/multipart"
 	"slices"
 	"strings"
@@ -125,7 +126,12 @@ func (s *Server) GetStagedMessageAttachment(ctx context.Context, r engineapi.Get
 	if err != nil {
 		return nil, err
 	}
-	return engineapi.GetStagedMessageAttachment200ApplicationoctetStreamResponse{Body: body, ContentLength: file.Size}, nil
+	return engineapi.GetStagedMessageAttachment200ApplicationoctetStreamResponse{
+		Body: body, ContentLength: file.Size,
+		Headers: engineapi.GetStagedMessageAttachment200ResponseHeaders{
+			ContentDisposition: mime.FormatMediaType("attachment", map[string]string{"filename": file.FileName}),
+		},
+	}, nil
 }
 
 type scheduleCursor struct {

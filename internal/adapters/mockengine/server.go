@@ -185,6 +185,14 @@ func (s *Server) ListConversations(ctx context.Context, r previewapi.ListConvers
 		cursor := id(1) + ":" + strconv.Itoa(indices[limit-1]+1)
 		page.NextCursor = &cursor
 	}
+	if yes(r.Params.IncludeLatestMessagePageCount) {
+		for i := range page.Items {
+			chat := &page.Items[i]
+			messages := s.sampleMessages(ctx, *chat, indices[i])
+			count := min(len(messages), pageLimit(nil))
+			chat.LatestMessagePageCount = &count
+		}
+	}
 	return previewapi.ListConversations200JSONResponse(page), nil
 }
 func pageLimit(v *int) int {
@@ -213,6 +221,25 @@ func (s *Server) ListMessages(ctx context.Context, r previewapi.ListMessagesRequ
 	if c == nil {
 		return previewapi.ListMessages404ApplicationProblemPlusJSONResponse{NotFoundApplicationProblemPlusJSONResponse: previewapi.NotFoundApplicationProblemPlusJSONResponse(problem(404, "not_found"))}, nil
 	}
+	out := s.sampleMessages(ctx, *c, chatIndex)
+	items := []previewapi.Message{}
+	for _, m := range out {
+		if r.Params.Cursor != nil && m.Id >= *r.Params.Cursor {
+			continue
+		}
+		items = append(items, m)
+	}
+	page := previewapi.MessagePage{Items: items}
+	limit := pageLimit(r.Params.Limit)
+	if len(items) > limit {
+		page.Items = items[:limit]
+		last := page.Items[limit-1].Id
+		page.NextCursor = &last
+	}
+	return previewapi.ListMessages200JSONResponse(page), nil
+}
+
+func (s *Server) sampleMessages(ctx context.Context, c previewapi.Conversation, chatIndex int) []previewapi.Message {
 	t := s.text(ctx)
 	type line struct {
 		name, text string
@@ -245,21 +272,7 @@ func (s *Server) ListMessages(ctx context.Context, r previewapi.ListMessagesRequ
 		out = append(out, m)
 	}
 	slices.Reverse(out)
-	items := []previewapi.Message{}
-	for _, m := range out {
-		if r.Params.Cursor != nil && m.Id >= *r.Params.Cursor {
-			continue
-		}
-		items = append(items, m)
-	}
-	page := previewapi.MessagePage{Items: items}
-	limit := pageLimit(r.Params.Limit)
-	if len(items) > limit {
-		page.Items = items[:limit]
-		last := page.Items[limit-1].Id
-		page.NextCursor = &last
-	}
-	return previewapi.ListMessages200JSONResponse(page), nil
+	return out
 }
 
 // These read-only routes implement the engine contracts for sample data. They do

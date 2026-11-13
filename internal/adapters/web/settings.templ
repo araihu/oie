@@ -35,12 +35,7 @@ templ generalSettings(v view) {
 	<div class="oie-settings-section">
 		@appearanceSettings(v)
 		@languageSettings(v)
-		<div class="oie-time-zone-setting">
-			<label for="settings-time-zone">{ v.Text.PresentationTimeZone }</label>
-			<select id="settings-time-zone" disabled data-unsaved={ v.Text.DevicePreferenceUnavailable }>
-				<option value="">{ v.Text.SystemTimeZone }</option>
-			</select>
-		</div>
+		@timeZoneSettings(v)
 		if v.Preview {
 			<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
 		}
@@ -48,6 +43,19 @@ templ generalSettings(v view) {
 			@resetDataEntry(v)
 		}
 	</div>
+}
+
+templ timeZoneSettings(v view) {
+	{{ config := combobox.Config{
+		ID: "settings-time-zone", Name: "time-zone", Label: v.Text.PresentationTimeZone,
+		Mode: combobox.ModeSingle, EnableSearch: true, DisablePersistence: true, Disabled: true,
+		Source: combobox.Source{Static: []combobox.Option{{Value: "", Label: v.Text.SystemTimeZone}}},
+		Selected: []string{""},
+		TriggerAttrs: templ.Attributes{"data-unsaved": v.Text.DevicePreferenceUnavailable, "data-system-label": v.Text.SystemTimeZone},
+	} }}
+	@combobox.Combobox(config, config.InitialState()).WithExpressions(expressions.Combobox{
+		SearchPlaceholder: v.Text.SearchTimeZones, EmptyText: v.Text.NoTimeZonesFound,
+	})
 }
 
 func emojiLanguageCombobox(v view) combobox.Config {

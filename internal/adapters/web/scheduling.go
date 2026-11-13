@@ -252,12 +252,19 @@ func (s *Server) serveStagedAttachment(w http.ResponseWriter, r *http.Request) {
 	contentType := http.DetectContentType(prefix)
 	if q.Has("download") || !rasterAttachment(contentType) {
 		contentType = "application/octet-stream"
-		w.Header().Set("Content-Disposition", "attachment")
+		disposition := response.Header.Get("Content-Disposition")
+		kind, params, err := mime.ParseMediaType(disposition)
+		if err != nil || kind != "attachment" || params["filename"] == "" {
+			// Older engines returned only the bytes. The download link still supplies the draft filename.
+			disposition = "attachment"
+		}
+		w.Header().Set("Content-Disposition", disposition)
 	}
 	if size := response.Header.Get("Content-Length"); size != "" {
 		w.Header().Set("Content-Length", size)
 	}
 	w.Header().Set("Content-Type", contentType)
+	w.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(w, body)
 }
 

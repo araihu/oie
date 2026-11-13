@@ -1,10 +1,13 @@
 # Language settings
 
-The settings drawer uses Goshtoso's public Select with `Option.Leading` for
-decorative flag emojis. English uses 🇺🇸 and Brazilian Portuguese uses 🇧🇷,
-alongside the existing native language names. Margo's locale selector provides
-the reference for explicit locale-to-flag mapping. No dependency change or
-upstream component work is needed.
+General settings uses Goshtoso's searchable single-select Combobox for
+language and display time zone. The language options and selected value show
+decorative flags alongside their native names. The time-zone list comes from
+the browser and includes an option to follow the system. Selecting a time zone
+updates displayed dates and times immediately and saves the preference on the
+device. Each option shows its current UTC offset, including the system time
+zone. The offset reflects daylight saving time when it applies and can be used
+in the search.
 
 The initial value follows the browser language and the existing device cookie.
 Initializing the control and choosing its existing value do not save an
@@ -15,8 +18,8 @@ negotiation. The engine and other devices keep their own locale resolution.
 
 The drawer stays open after changing language. An explicit `settingsFocus`
 marker restores focus to the language control after the drawer's initial focus
-event. This uses public DOM events and Select attributes, without accessing
-component internals or delaying focus by an arbitrary timeout.
+event. The selected language follows the applied fragment, so a failed request
+leaves the previous language selected.
 
 An explicit `settingsFocus=language` route takes priority over restoring focus
 to the checked appearance radio. This prevents the appearance control from

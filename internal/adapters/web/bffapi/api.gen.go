@@ -755,8 +755,17 @@ type RenderWorkspaceParams struct {
 	// HXRequest Set to true to request an HTML fragment.
 	HXRequest *RenderWorkspaceParamsHXRequest `json:"HX-Request,omitempty"`
 
-	// XOieFragment Selects the HTML region. With HX-Request and no fragment selector, the app region is returned.
+	// XOieFragment Selects the HTML region. With HX-Request and no fragment selector, the app region is returned. The app fragment includes the workspace region used for sidebar navigation.
 	XOieFragment *RenderWorkspaceParamsXOieFragment `json:"X-Oie-Fragment,omitempty"`
+
+	// XOieInboxScope Scope of the conversation list held in the current tab. An app fragment for Conversations may omit the list contents when the scope matches the current engine and requested inbox.
+	XOieInboxScope *string `json:"X-Oie-Inbox-Scope,omitempty"`
+
+	// XOieInboxFirst First conversation in the tab's cached default inbox, used as a candidate for implicit desktop selection when the scope matches. The server checks current visibility.
+	XOieInboxFirst *externalRef0.ID `json:"X-Oie-Inbox-First,omitempty"`
+
+	// XOieInboxCursor Engine event cursor through which the tab's inbox is current. Implicit conversation selection uses the cached first row only when this cursor matches the current engine cursor.
+	XOieInboxCursor *string `json:"X-Oie-Inbox-Cursor,omitempty"`
 }
 
 // RenderWorkspaceParamsHXRequest defines parameters for RenderWorkspace.
@@ -925,6 +934,15 @@ type SearchBrowserMessagesParamsLang string
 
 // SearchBrowserMessagesParamsPresentation defines parameters for SearchBrowserMessages.
 type SearchBrowserMessagesParamsPresentation string
+
+// RefreshWorkspaceParams defines parameters for RefreshWorkspace.
+type RefreshWorkspaceParams struct {
+	// XOieInboxScope Scope of the list mounted in the current tab.
+	XOieInboxScope *string `json:"X-Oie-Inbox-Scope,omitempty"`
+
+	// XOieInboxCursor Engine event cursor through which the mounted inbox is current. A matching scope and current cursor omit the conversation list from the live regions.
+	XOieInboxCursor *string `json:"X-Oie-Inbox-Cursor,omitempty"`
+}
 
 // PrepareBrowserReplyParams defines parameters for PrepareBrowserReply.
 type PrepareBrowserReplyParams struct {

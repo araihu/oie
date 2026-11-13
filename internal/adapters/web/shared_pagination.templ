@@ -1,9 +1,19 @@
 package web
 
 import "github.com/araihu/goshtoso/components/link"
+import "strconv"
 
 templ sharedPageControls(v view){
-<div data-shared-page data-shared-page-engine={v.EngineID} data-shared-page-scope={v.sharedPageScope()} data-shared-page-cursor={v.SharedCursor} data-shared-page-next={v.sharedPageNext()} data-shared-page-state={v.sharedPageState()} data-shared-loading={v.Text.SharedLoadingOlder} data-shared-load-failed={v.Text.SharedLoadFailed} data-shared-retry-label={v.Text.Retry}>
+<div data-shared-page data-shared-page-engine={v.EngineID} data-shared-page-scope={v.sharedPageScope()} data-shared-page-cursor={v.SharedCursor} data-shared-page-next={v.sharedPageNext()} data-shared-page-state={v.sharedPageState()} data-shared-loading={v.Text.SharedLoadingOlder} data-shared-load-failed={v.Text.SharedLoadFailed} data-shared-retry-label={v.Text.Retry}
+ if counts := v.sharedFirstPageCounts(); counts != nil {
+  data-shared-first-page-media={strconv.Itoa(counts.Media)}
+  data-shared-first-page-links={strconv.Itoa(counts.Links)}
+  data-shared-first-page-documents={strconv.Itoa(counts.Documents)}
+ }
+ if v.SharedCursor=="" && v.sharedPageState()=="ready" {
+  data-shared-page-count={strconv.Itoa(len(v.SharedContent.Items))}
+ }
+>
 <p data-shared-page-status role="status" aria-live="polite"></p>
 {{ cursor:=v.sharedPageNext(); if cursor=="" {cursor=v.SharedCursor} }}
 @link.Link(v.sharedHref("contentCursor",cursor),link.WithAppearance(link.AppearanceButton),link.WithRootClass("oie-shared-next"),link.WithAttrs(templ.Attributes{"data-shared-next":"","hidden":v.sharedPageNext()==""})){ {v.Text.SharedNext} }

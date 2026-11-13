@@ -42,7 +42,7 @@ func TestSharedContentReadsRemainScopedAndPreviewBound(t *testing.T) {
 				t.Fatal(err)
 			}
 			v := view{SharedType: "media", AccountFilter: testAccount, SharedConversation: testChat, Query: "café 😀", SharedCursor: "opaque:cursor", Accounts: []engineapi.Account{{Id: testAccount, Address: "alice@example.test"}}}
-			ui.loadSharedContent(context.Background(), &v)
+			ui.loadSharedContent(context.Background(), &v, false)
 			if (v.SharedContent != nil) != (variant == "valid") {
 				t.Fatal("unscoped or unsafe catalog projection accepted")
 			}

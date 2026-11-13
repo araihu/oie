@@ -96,6 +96,7 @@ type ConversationQuery struct {
 	AccountIDs                          []domain.ID
 	Query, Kind                         string
 	Archived, FavoritesOnly, UnreadOnly bool
+	IncludeLatestMessagePageCount       bool
 	Limit                               int
 }
 type ConversationMutation struct {

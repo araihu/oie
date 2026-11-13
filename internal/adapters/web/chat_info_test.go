@@ -14,7 +14,7 @@ import (
 func TestInfoSharedScopeIgnoresInboxFilters(t *testing.T) {
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		if r.Method != "GET" || r.URL.Path != "/api/v1/shared-content" || q.Get("accountId") != testAccount || q.Get("conversationId") != testChat || q.Get("q") != "scoped café" || q.Get("type") != "links" || q.Get("cursor") != "scoped-cursor" {
+		if r.Method != "GET" || r.URL.Path != "/api/v1/shared-content" || q.Get("accountId") != testAccount || q.Get("conversationId") != testChat || q.Get("q") != "scoped café" || q.Get("type") != "links" || q.Get("cursor") != "scoped-cursor" || q.Get("includeFirstPageCounts") != "true" {
 			t.Errorf("wrong info scope: %s %s", r.Method, r.URL)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -26,7 +26,7 @@ func TestInfoSharedScopeIgnoresInboxFilters(t *testing.T) {
 		t.Fatal(err)
 	}
 	v := view{InfoView: "shared", InfoType: "links", InfoCursor: "scoped-cursor", InfoQuery: "scoped café", Query: "main chat query", AccountFilter: testRevision, Selected: &engineapi.Conversation{Id: testChat, AccountId: testAccount}, Accounts: []engineapi.Account{{Id: testAccount, Address: "alice@example.test"}}}
-	ui.loadChatInfo(context.Background(), &v)
+	ui.loadChatInfo(context.Background(), &v, true)
 	if v.InfoShared == nil || v.Query != "main chat query" || v.AccountFilter != testRevision {
 		t.Fatal("scoped read changed main inbox context")
 	}
@@ -67,7 +67,7 @@ func TestInfoStarsScopeAndInvalidCursor(t *testing.T) {
 				t.Fatal(err)
 			}
 			v := view{InfoView: "stars", InfoCursor: testMessage, Selected: &engineapi.Conversation{Id: testChat, AccountId: testAccount}}
-			ui.loadChatInfo(context.Background(), &v)
+			ui.loadChatInfo(context.Background(), &v, false)
 			if (v.InfoStars != nil) != (mode == "valid") || v.InfoInvalid != (mode == "stale cursor") {
 				t.Fatal("invalid star projection/cursor accepted")
 			}

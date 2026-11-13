@@ -383,6 +383,7 @@ window.OieRuntime.register('scheduling', life => {
     let sequence = 0;
     let dragDepth = 0;
     let uploading = false;
+    let nativeSelection = null;
     files = snapshot().files || [];
     locked = snapshot().editBlocked;
 
@@ -435,17 +436,18 @@ window.OieRuntime.register('scheduling', life => {
     }
 
     function syncAttachmentControls() {
-      const disabled = !available() || locked;
+      const disabled = !available() || locked || !!nativeSelection ||
+        (!!window.OieDesktop?.attachFiles && pending.size > 0);
       attachTrigger.disabled = disabled;
       for (const item of composer.querySelectorAll('#composer-attachments [role="menuitem"]')) {
         item.disabled = disabled;
       }
-      for (const remove of items.querySelectorAll('[data-remove-attachment]')) remove.disabled = locked;
+      for (const remove of items.querySelectorAll('[data-remove-attachment]')) remove.disabled = locked || !!nativeSelection;
       for (const retry of items.querySelectorAll('[data-retry-attachment]')) retry.disabled = !available() || locked;
     }
 
     function syncPending() {
-      composer.toggleAttribute('data-attachments-pending', pending.size > 0);
+      composer.toggleAttribute('data-attachments-pending', pending.size > 0 || !!nativeSelection);
       composer.dispatchEvent(new Event('oie:attachment-staging'));
       renderFiles();
     }
@@ -512,7 +514,7 @@ window.OieRuntime.register('scheduling', life => {
 
     function addFiles(picked) {
       if (!picked.length || !chat.getClientRects().length) return;
-      if (!available() || locked || document.querySelector('dialog[open]')) {
+      if (!available() || locked || nativeSelection || document.querySelector('dialog[open]')) {
         errorToast(labels.unavailable);
         return;
       }
@@ -543,6 +545,7 @@ window.OieRuntime.register('scheduling', life => {
       stageNext();
     });
     function discardPending() {
+      nativeSelection = null;
       for (const file of pending.values()) forget(file);
     }
     life.cleanup(discardPending);
@@ -551,9 +554,45 @@ window.OieRuntime.register('scheduling', life => {
       selectionOrder.clear();
       syncPending();
     });
+    async function chooseNativeFiles(choose, imagesOnly) {
+      if (pending.size) return;
+      const remaining = 16 - files.length;
+      if (remaining <= 0) {
+        errorToast(labels.limit);
+        return;
+      }
+      const selection = nativeSelection = {};
+      syncPending();
+      try {
+        const result = await choose(data.engineId, data.conversationId, csrf, remaining, imagesOnly);
+        if (nativeSelection !== selection) return;
+        if (result.files?.length) {
+          const detail = {files: [...files, ...result.files]};
+          composer.dispatchEvent(new CustomEvent('oie:attachments-change', {detail}));
+          if (!detail.applied) throw Error('draft unavailable');
+        }
+        if (result.limit) errorToast(labels.limit);
+        if (result.error) errorToast(labels.failed);
+      } catch {
+        if (nativeSelection === selection) errorToast(labels.failed);
+      } finally {
+        if (nativeSelection === selection) {
+          nativeSelection = null;
+          syncPending();
+          if (!locked && document.activeElement === document.body) input.focus({preventScroll:true});
+        }
+      }
+    }
+
     life.on(composer, 'oie:compose-add', event => {
-      if (!['image', 'file'].includes(event.detail) || !available() || locked) return;
-      picker.accept = event.detail === 'image' ? 'image/*' : '';
+      if (!['image', 'file'].includes(event.detail) || !available() || locked || nativeSelection) return;
+      const choose = window.OieDesktop?.attachFiles;
+      const imagesOnly = event.detail === 'image';
+      if (choose) {
+        void chooseNativeFiles(choose, imagesOnly);
+        return;
+      }
+      picker.accept = imagesOnly ? 'image/*' : '';
       picker.click();
     });
     life.on(picker, 'change', () => {
@@ -571,12 +610,12 @@ window.OieRuntime.register('scheduling', life => {
       if (!fileDrag(event)) return;
       event.preventDefault();
       dragDepth++;
-      chat.toggleAttribute('data-file-drag', available() && !locked);
+      chat.toggleAttribute('data-file-drag', available() && !locked && !nativeSelection);
     });
     life.on(chat, 'dragover', event => {
       if (!fileDrag(event)) return;
       event.preventDefault();
-      event.dataTransfer.dropEffect = available() && !locked ? 'copy' : 'none';
+      event.dataTransfer.dropEffect = available() && !locked && !nativeSelection ? 'copy' : 'none';
     });
     life.on(chat, 'dragleave', event => {
       if (!fileDrag(event)) return;
@@ -596,7 +635,7 @@ window.OieRuntime.register('scheduling', life => {
     life.on(items, 'click', event => {
       const button = event.target.closest('button');
       const id = button?.closest('[data-draft-attachment]')?.dataset.draftAttachment;
-      if (!id || locked) return;
+      if (!id || locked || nativeSelection) return;
       const file = pending.get(id);
       if (button.hasAttribute('data-retry-attachment')) {
         if (!file?.failed || !available()) return;

@@ -17,8 +17,9 @@ LEFT JOIN message_content_heads h ON h.canonical_id=m.id
 WHERE m.conversation_id=? AND m.is_own=0 AND COALESCE(json_extract(m.payload,'$.Historical'),0)=0
 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
 AND NOT EXISTS(SELECT 1 FROM message_correction_facts f WHERE f.message_id=m.id AND f.target_id<>'')
-AND NOT EXISTS(SELECT 1 FROM message_reads r LEFT JOIN message_canonical_aliases a ON a.alias_id=r.message_id
- WHERE COALESCE(a.canonical_id,r.message_id)=m.id)
+AND NOT EXISTS(SELECT 1 FROM message_reads r WHERE r.message_id=m.id)
+AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a JOIN message_reads r ON r.message_id=a.alias_id
+ WHERE a.canonical_id=m.id)
 `
 
 type ConversationUnreadSummaryRow struct {
@@ -50,8 +51,12 @@ func (q *Queries) GetConversationReadHead(ctx context.Context, conversationID st
 }
 
 const hasMessageRead = `-- name: HasMessageRead :one
-SELECT EXISTS(SELECT 1 FROM message_reads r LEFT JOIN message_canonical_aliases a ON a.alias_id=r.message_id
-WHERE COALESCE(a.canonical_id,r.message_id)=?)
+SELECT EXISTS(
+ SELECT 1 FROM message_reads r WHERE r.message_id=?1
+ UNION ALL
+ SELECT 1 FROM message_canonical_aliases a JOIN message_reads r ON r.message_id=a.alias_id
+ WHERE a.canonical_id=?1
+)
 `
 
 func (q *Queries) HasMessageRead(ctx context.Context, canonicalID string) (bool, error) {
@@ -59,6 +64,47 @@ func (q *Queries) HasMessageRead(ctx context.Context, canonicalID string) (bool,
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const insertConversationMessageReads = `-- name: InsertConversationMessageReads :many
+INSERT INTO message_reads(message_id,revision_id)
+SELECT m.id,?1 FROM messages m
+WHERE m.conversation_id=?2 AND m.is_own=0 AND COALESCE(json_extract(m.payload,'$.Historical'),0)=0
+AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
+AND NOT EXISTS(SELECT 1 FROM message_correction_facts f WHERE f.message_id=m.id AND f.target_id<>'')
+AND NOT EXISTS(SELECT 1 FROM message_reads r WHERE r.message_id=m.id)
+AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a JOIN message_reads r ON r.message_id=a.alias_id
+ WHERE a.canonical_id=m.id)
+RETURNING message_id
+`
+
+type InsertConversationMessageReadsParams struct {
+	RevisionID     string
+	ConversationID string
+}
+
+// Use the same eligibility and canonical read evidence as ConversationUnreadSummary.
+func (q *Queries) InsertConversationMessageReads(ctx context.Context, arg InsertConversationMessageReadsParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, insertConversationMessageReads, arg.RevisionID, arg.ConversationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var message_id string
+		if err := rows.Scan(&message_id); err != nil {
+			return nil, err
+		}
+		items = append(items, message_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const insertMessageRead = `-- name: InsertMessageRead :execrows

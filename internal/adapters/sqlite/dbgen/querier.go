@@ -69,6 +69,8 @@ type Querier interface {
 	InsertChange(ctx context.Context, arg InsertChangeParams) (int64, error)
 	InsertContactRevision(ctx context.Context, arg InsertContactRevisionParams) error
 	InsertConversation(ctx context.Context, arg InsertConversationParams) error
+	// Use the same eligibility and canonical read evidence as ConversationUnreadSummary.
+	InsertConversationMessageReads(ctx context.Context, arg InsertConversationMessageReadsParams) ([]string, error)
 	InsertConversationRevision(ctx context.Context, arg InsertConversationRevisionParams) error
 	InsertCorrectionFact(ctx context.Context, arg InsertCorrectionFactParams) (int64, error)
 	InsertEngineIdentity(ctx context.Context, id string) error
@@ -107,7 +109,7 @@ type Querier interface {
 	ListContactRecords(ctx context.Context, accountID string) ([]Contact, error)
 	ListContactSources(ctx context.Context, arg ListContactSourcesParams) ([]ListContactSourcesRow, error)
 	ListConversationMessageStars(ctx context.Context, arg ListConversationMessageStarsParams) ([]ListConversationMessageStarsRow, error)
-	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
+	ListConversations(ctx context.Context, arg ListConversationsParams) ([]ListConversationsRow, error)
 	ListMessageHistoryProofs(ctx context.Context, arg ListMessageHistoryProofsParams) ([]ListMessageHistoryProofsRow, error)
 	ListMessageHistorySources(ctx context.Context, arg ListMessageHistorySourcesParams) ([]ListMessageHistorySourcesRow, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)

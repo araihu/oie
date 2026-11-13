@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -29,13 +30,13 @@ var icon []byte
 var nativeJS string
 
 type runtimeService struct {
-	config  Config
-	outer   context.Context
-	server  atomic.Pointer[apphost.Server]
-	app     *application.App
-	cookies *nativeCookies
-	labels  labels
-	saveMu  sync.Mutex
+	config   Config
+	outer    context.Context
+	server   atomic.Pointer[apphost.Server]
+	app      *application.App
+	cookies  *nativeCookies
+	labels   labels
+	dialogMu sync.Mutex
 }
 
 func (s *runtimeService) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
@@ -87,8 +88,8 @@ func (s *runtimeService) SaveFile(ctx context.Context, address, filename string)
 	if server == nil {
 		return false, errors.New("desktop runtime unavailable")
 	}
-	s.saveMu.Lock()
-	defer s.saveMu.Unlock()
+	s.dialogMu.Lock()
+	defer s.dialogMu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
@@ -158,11 +159,13 @@ func Run(ctx context.Context, c Config) error {
 			window.Focus()
 		}
 	}
+	appID := desktopAppID()
+	initialJS = strings.Replace(initialJS, "'__OIE_FLATPAK__'", strconv.FormatBool(appID == flatpakAppID), 1)
 	app = application.New(application.Options{
 		Name: "Oiê", Icon: icon, LogLevel: slog.LevelWarn,
 		DisableDefaultSignalHandler: true,
 		Mac:                         application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: false},
-		Linux:                       application.LinuxOptions{DisableQuitOnLastWindowClosed: true, ApplicationID: "org.araihu.oie", ProgramName: "org.araihu.oie"},
+		Linux:                       application.LinuxOptions{DisableQuitOnLastWindowClosed: true, ApplicationID: appID, ProgramName: appID},
 		Services:                    []application.Service{application.NewService(service)},
 		SingleInstance:              &application.SingleInstanceOptions{UniqueID: instanceID(config.DataDir), ExitCode: 0, OnSecondInstanceLaunch: func(application.SecondInstanceData) { reopen() }},
 		Assets:                      application.AssetOptions{Handler: cookies.handler(http.HandlerFunc(service.serve)), DisableLogging: true},

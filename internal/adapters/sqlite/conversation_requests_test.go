@@ -28,6 +28,17 @@ func TestDirectRequestRequiresDecisionAndPreservesArchive(t *testing.T) {
 		if err != nil || len(messages) != 0 {
 			t.Fatal("pending timeline exposed content", messages, err)
 		}
+		for _, archived := range []bool{false, true} {
+			listed, err := e.Conversations(ctx, "", application.ConversationQuery{Limit: 10, Archived: archived, IncludeLatestMessagePageCount: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, conversation := range listed {
+				if conversation.ID == chat.ID && conversation.LatestMessagePageCount != nil {
+					t.Fatal("pending conversation exposed its message count")
+				}
+			}
+		}
 		results, err := e.SearchMessages(ctx, domain.MessageSearchQuery{Search: incoming.OriginalText, Limit: 10})
 		if err != nil || len(results.Items) != 0 {
 			t.Fatal("pending content appeared in search", results, err)

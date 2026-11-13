@@ -25,9 +25,20 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(u.pathname==='/api/v1/shared-content'){
    const held=state.heldCatalog;if(held&&u.searchParams.get('type')===held.type){held.started();await held.wait}
    const video=u.searchParams.get('type')==='video';state.catalogReads.push(Object.fromEntries(u.searchParams));assert.equal(u.searchParams.get('limit'),video?'100':'50');if(state.mode==='unavailable')return send(503,{status:503});if(u.searchParams.get('cursor')&&!['page-2'].includes(u.searchParams.get('cursor')))return send(400,{status:400});
-   let selected=items.filter(i=>video?i.kind==='video':u.searchParams.get('type')==='links'?i.kind==='link':u.searchParams.get('type')==='documents'?i.kind==='document':['image','audio','video'].includes(i.kind));if(u.searchParams.get('accountId'))selected=selected.filter(i=>i.message.accountId===u.searchParams.get('accountId'));if(u.searchParams.get('conversationId'))selected=selected.filter(i=>i.message.conversationId===u.searchParams.get('conversationId'));const ids=u.searchParams.getAll('messageId');if(ids.length){assert(u.searchParams.get('conversationId'));assert(ids.length<=100);selected=selected.filter(i=>ids.includes(i.message.id))}if(u.searchParams.get('q'))selected=selected.filter(i=>[i.url,i.fileName,i.message.originalText,i.preview?.title,i.preview?.description,i.message.sender.displayName,i.conversationTitle,i.accountLabel].join(' ').toLocaleLowerCase().includes(u.searchParams.get('q').toLocaleLowerCase()));selected.sort((a,b)=>Date.parse(b.message.createdAt)-Date.parse(a.message.createdAt)||b.id.localeCompare(a.id));const start=u.searchParams.get('cursor')?50:0,page=selected.slice(start,start+50);
+   const belongs=(item,type)=>type==='video'?item.kind==='video':type==='links'?item.kind==='link':type==='documents'?item.kind==='document':['image','audio','video'].includes(item.kind);
+   const account=u.searchParams.get('accountId'),accounts=u.searchParams.getAll('accountIds');
+   const conversation=u.searchParams.get('conversationId'),q=u.searchParams.get('q');
+   const ids=u.searchParams.getAll('messageId');if(ids.length){assert(conversation);assert(ids.length<=100)}
+   const scoped=items.filter(item=>(!account||item.message.accountId===account)&&(!accounts.length||accounts.includes(item.message.accountId))&&
+    (!conversation||item.message.conversationId===conversation)&&(!ids.length||ids.includes(item.message.id))&&
+    (!q||[item.url,item.fileName,item.message.originalText,item.preview?.title,item.preview?.description,item.message.sender.displayName,item.conversationTitle,item.accountLabel].join(' ').toLocaleLowerCase().includes(q.toLocaleLowerCase())));
+   const selected=scoped.filter(item=>belongs(item,u.searchParams.get('type')));
+   selected.sort((a,b)=>Date.parse(b.message.createdAt)-Date.parse(a.message.createdAt)||b.id.localeCompare(a.id));
+   const start=u.searchParams.get('cursor')?50:0,page=selected.slice(start,start+50);
+   const firstPageCounts=u.searchParams.get('includeFirstPageCounts')==='true'?
+    Object.fromEntries(['media','links','documents'].map(type=>[type,Math.min(50,scoped.filter(item=>belongs(item,type)).length)])):undefined;
    if(state.mode==='foreign'&&page.length)return send(200,{items:[{...page[0],message:{...page[0].message,accountId:id(99)}}],indexing:{state:'complete',indexedMessages:600,totalMessages:600}});
-   return send(200,{items:page,nextCursor:selected.length>start+50?'page-2':undefined,indexing:{state:state.pending?'pending':'complete',indexedMessages:state.pending?250:600,totalMessages:600}});
+   return send(200,{items:page,firstPageCounts,nextCursor:selected.length>start+50?'page-2':undefined,indexing:{state:state.pending?'pending':'complete',indexedMessages:state.pending?250:600,totalMessages:600}});
   }
   if(u.pathname==='/api/v1/conversations')return send(200,{items:chats});
   for(const chat of chats){if(u.pathname===`/api/v1/conversations/${chat.id}`)return send(200,chat);if(u.pathname===`/api/v1/conversations/${chat.id}/messages`)return send(200,{items:[...new Map(items.filter(i=>i.message.conversationId===chat.id).map(i=>[i.message.id,i.message])).values()].slice(0,50)});const context=u.pathname.match(new RegExp('^/api/v1/conversations/'+chat.id+'/messages/([^/]+)/context$'));if(context){const source=items.find(i=>i.message.id===context[1]&&i.message.conversationId===chat.id);return source?send(200,{targetId:source.message.id,items:[source.message],hasOlder:false,hasNewer:true}):send(404,{status:404})}}
@@ -41,21 +52,49 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const child=spawn(process.env.OIE_WEB_BINARY||path.resolve(__dirname,'../../bin/oie-shared-content-ui'),['--role','bff','--listen','127.0.0.1:'+port,'--engine-url','http://127.0.0.1:'+api.address().port],{stdio:['ignore','ignore','pipe']});let stderr='';child.stderr.on('data',chunk=>stderr+=chunk);
  const base='http://127.0.0.1:'+port,browser=await chromium.launch({headless:true}),errors=[],external=[],findings=[],preference='oie.device.auto-image-downloads.v1';
  const until=async(fn,label)=>{for(let n=0;n<240;n++){if(await fn())return;await new Promise(r=>setTimeout(r,50))}throw Error('Timed out: '+label+' '+stderr.slice(-1800))};const tile=(page,n)=>page.locator('[data-shared-item="'+items[n].id+'"]');
+ async function holdFirstPage(page,match){
+  let release;
+  const gate=new Promise(resolve=>release=resolve);
+  const handler=async route=>{await gate;await route.continue();};
+  await page.route(match,handler);
+  return {release,handler};
+ }
  const watch=async context=>{await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==base){external.push(route.request().url());route.abort()}else route.continue()});context.on('page',page=>page.on('pageerror',e=>errors.push(e.message)))};
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
   const context=await browser.newContext({viewport:{width:1440,height:1000},locale:'en',timezoneId:'America/Sao_Paulo'});await watch(context);await context.addInitScript(key=>{if(location.origin!=='null')localStorage.setItem(key,'false');window.copied=[];Object.defineProperty(navigator,'clipboard',{value:{writeText:async text=>copied.push(text)}})},preference);const page=await context.newPage(),accountRequests=[];let pageDocuments=0;page.on('request',request=>{const url=new URL(request.url());if(request.isNavigationRequest()&&request.resourceType()==='document')pageDocuments++;if(url.origin===base&&url.pathname==='/'&&url.searchParams.has('q'))accountRequests.push({q:url.searchParams.get('q'),account:url.searchParams.get('account'),cursor:url.searchParams.get('contentCursor')})});
   const chatURL=`${base}/?chat=${chatA}&account=${alpha}&lang=en&theme=dark`;await page.goto(chatURL);const draft='Draft survives gallery and source navigation 😀';await page.evaluate(value=>localStorage.setItem(['oie.draft.v1',document.body.dataset.engineId,document.body.dataset.accountId,document.body.dataset.conversationId].join(':'),JSON.stringify({text:value,key:'',pending:false})),draft);
-  const query=new URLSearchParams({section:'media',lang:'en',theme:'dark'});await page.goto(base+'/?'+query);assert.equal(await page.locator('#conversation-list').count(),0);assert.equal(await page.locator('#shared-content-search button[type=submit]').count(),0);assert.equal(await page.locator('[data-shared-item]').count(),50);assert(await page.locator('[data-shared-indexing]').isVisible());assert.equal(state.downloads.size,0);assert((await tile(page,2).locator('xpath=..').locator('xpath=..').locator('h3.oie-shared-month').textContent()).includes('October'));
+  const query=new URLSearchParams({section:'media',lang:'en',theme:'dark'});
+  const mediaEntry=url=>url.pathname==='/'&&url.searchParams.get('section')==='media'&&!url.searchParams.get('contentType');
+  const heldEntry=await holdFirstPage(page,mediaEntry);
+  await page.locator('#desktop-navigation').getByRole('link',{name:'Media & links',exact:true}).click();
+  const entrySkeleton=page.locator('[data-shared-entry-skeleton]');
+  try{
+   await entrySkeleton.waitFor({state:'visible'});
+   assert.equal(await entrySkeleton.getAttribute('data-content-type'),'media');
+   assert.equal(await entrySkeleton.locator('.oie-shared-placeholder').count(),6);
+   assert.deepEqual(await entrySkeleton.boundingBox(),await page.locator('.oie-main').boundingBox());
+   assert(await page.locator('#desktop-navigation').isVisible());
+  }finally{heldEntry.release();}
+  await page.locator('#shared-content-scroll').waitFor({state:'visible'});
+  await page.unroute(mediaEntry,heldEntry.handler);
+  await page.goto(base+'/?'+query);assert.equal(await page.locator('#conversation-list').count(),0);assert.equal(await page.locator('#shared-content-search button[type=submit]').count(),0);assert.equal(await page.locator('[data-shared-item]').count(),50);assert(await page.locator('[data-shared-indexing]').isVisible());assert.equal(state.downloads.size,0);assert((await tile(page,2).locator('xpath=..').locator('xpath=..').locator('h3.oie-shared-month').textContent()).includes('October'));
+  assert.equal(await page.locator('#shared-content-pagination [data-shared-page]').getAttribute('data-shared-first-page-documents'),'4');
   await tile(page,2).evaluate(node=>{window.timeZoneBoundaryTile=node;});
   await page.locator('[data-navigation-settings]:visible').click();
   const settings=page.getByRole('dialog',{name:'Settings',exact:true});
-  const timeZone=settings.getByLabel('Display time zone');
+  const timeZone=settings.getByRole('combobox',{name:'Display time zone'});
+  const chooseTimeZone=async(query,value)=>{
+   await timeZone.click();
+   const picker=settings.locator('#settings-time-zone');
+   await picker.locator('[data-combobox-search]').fill(query);
+   await picker.getByRole('option').and(picker.locator('[data-value="'+value+'"]')).click();
+  };
   const month=tile(page,2).locator('xpath=../..').locator('.oie-shared-month');
-  await timeZone.selectOption('UTC');
+  await chooseTimeZone('UTC','UTC');
   await until(async()=> (await month.textContent()).includes('November'),'display time zone moves the tile across the month boundary');
   assert(await tile(page,2).evaluate(node=>node===window.timeZoneBoundaryTile));
-  await timeZone.selectOption('');
+  await chooseTimeZone('System time zone','');
   await until(async()=> (await month.textContent()).includes('October'),'system time zone restores the grouping');
   await settings.getByRole('button',{name:'Close',exact:true}).click();
   await settings.waitFor({state:'hidden'});
@@ -65,18 +104,33 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const beforeOlder=page.url();await page.locator('#shared-content-scroll').evaluate(scroll=>scroll.scrollTop=scroll.scrollHeight);await until(async()=>await page.locator('[data-shared-item]').count()===56,'older cards appended');assert.equal(page.url(),beforeOlder);assert.equal(new URL(page.url()).searchParams.get('contentCursor'),null);assert.equal(await page.locator('audio').count(),0);assert.equal(await page.locator('video[src],video source').count(),0);assert.equal(await tile(page,55).locator('video[controls][playsinline][preload=none]').count(),1);assert.equal(state.videoReads,0);assert.equal(await tile(page,54).locator('[data-shared-reference]').getAttribute('href'),items[54].url);// A pending tab request keeps the shell, old cards and viewport intact.
   await page.locator('#shared-content-scroll').evaluate(scroll=>scroll.scrollTop=800);
   const viewport=await page.evaluate(()=>{const ids=['oie-app','shared-content-search','shared-search','shared-search-results','shared-content-scroll'];window.tabNodes=ids.map(id=>document.getElementById(id));return{rect:document.getElementById('shared-content-scroll').getBoundingClientRect().toJSON(),scroll:document.getElementById('shared-content-scroll').scrollTop}});
+  // Refresh Links while Media is open, before Links has ever been visited.
+  const addedLink={...items[56],id:id(5000),url:'https://social.example.test/post/added',preview:undefined};
+  await page.evaluate(()=>document.addEventListener('oie:shared-refresh',event=>{
+   window.refreshedLinkCount=event.detail.querySelector('#live-shared-pagination [data-shared-page]')?.dataset.sharedFirstPageLinks;
+  }));
+  items.push(addedLink);emit();
+  await page.waitForFunction(()=>window.refreshedLinkCount==='4');
   let releaseTab,startedTab;const tabGate=new Promise(resolve=>releaseTab=resolve),tabStarted=new Promise(resolve=>startedTab=resolve);
   const linksRoute=url=>url.pathname==='/'&&url.searchParams.get('contentType')==='links',holdLinks=async route=>{startedTab();await tabGate;await route.continue()};await page.route(linksRoute,holdLinks);
   await page.locator('[data-shared-tab=links]').click();await tabStarted;
   assert.equal(await page.locator('[data-shared-item]').count(),56);assert.equal(await page.locator('#shared-content-scroll').getAttribute('aria-busy'),'true');
+  const catalogSkeleton=page.locator('[data-shared-skeleton]');
+  await catalogSkeleton.waitFor({state:'visible'});
+  assert.equal(await catalogSkeleton.getAttribute('data-content-type'),'links');
+  assert.equal(await catalogSkeleton.locator('.oie-shared-placeholder').count(),4,'first switch uses the refreshed count for the unvisited tab');
+  assert(await catalogSkeleton.locator('.oie-shared-placeholder').evaluateAll(cards=>cards.every(card=>card.getBoundingClientRect().x===cards[0].getBoundingClientRect().x)));
   assert.deepEqual(await page.locator('#shared-content-scroll').evaluate(node=>node.getBoundingClientRect().toJSON()),viewport.rect);assert.equal(await page.locator('#shared-content-scroll').evaluate(node=>node.scrollTop),viewport.scroll);
   releaseTab();
-  await until(async()=>await page.locator('[data-shared-tab=links]').getAttribute('aria-current')==='true'&&await page.locator('[data-shared-item]').count()===3,'partial links settle');
+  await until(async()=>await page.locator('[data-shared-tab=links]').getAttribute('aria-current')==='true'&&await page.locator('[data-shared-item]').count()===4,'partial links settle');
   await page.unroute(linksRoute,holdLinks);
   assert(await page.evaluate(()=>tabNodes.every(node=>node===document.getElementById(node.id))),'tab navigation replaced persistent shell nodes');assert.equal(await page.locator('#shared-content-search input[name=contentType]').inputValue(),'links');assert.deepEqual(await page.locator('#shared-content-scroll').evaluate(node=>node.getBoundingClientRect().toJSON()),viewport.rect);
   await page.goBack();await until(async()=>await page.locator('[data-shared-item]').count()===56&&await page.locator('#shared-content-scroll').evaluate(node=>node.scrollTop)===viewport.scroll,'Back restores media window and scroll');
-  await page.goForward();await until(async()=>await page.locator('[data-shared-tab=links]').getAttribute('aria-current')==='true'&&await page.locator('[data-shared-item]').count()===3,'Forward restores links');
+  await page.goForward();await until(async()=>await page.locator('[data-shared-tab=links]').getAttribute('aria-current')==='true'&&await page.locator('[data-shared-item]').count()===4,'Forward restores links');
   assert(await page.evaluate(()=>tabNodes.every(node=>node===document.getElementById(node.id))),'tab history replaced persistent shell nodes');
+  await catalogSkeleton.waitFor({state:'hidden'});
+  items.pop();emit();
+  await until(async()=>await page.locator('[data-shared-item]').count()===3,'link snapshot returns to three cards');
   await page.emulateMedia({reducedMotion:'reduce'});await until(async()=>(await page.locator('[data-shared-tab=media]').getAttribute('hx-swap')).includes('swap:0ms'),'reduced motion removes swap delay');assert.equal(await page.locator('#shared-content-scroll').evaluate(node=>getComputedStyle(node).transitionDuration),'0s');await page.emulateMedia({reducedMotion:'no-preference'});
   findings.push('Category tabs preserve shell/input/viewport DOM identity and dimensions during delayed requests, retain old cards until arrival, restore paginated media scroll with Back/Forward, align hidden form and active tab, and remove fade/delay for reduced motion');
   assert.equal(new URL(page.url()).searchParams.get('contentCursor'),null);await until(async()=>await page.locator('[data-shared-item]').count()===3,'links page ready');assert.equal(await page.locator('[data-shared-item]').count(),3);assert.equal(await page.locator('#shared-content-results script').count(),0);assert((await page.locator('#shared-content-results').textContent()).includes('Article <script>safe</script> café'));
@@ -93,7 +147,15 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await page.keyboard.press('ArrowDown');await until(async()=>await picker.getByRole('option',{name:'Work · work@fixture',exact:true}).evaluate(option=>document.activeElement===option),'keyboard focuses filtered Work option');await page.keyboard.press('Enter');await until(async()=>await selected()===beta&&new URL(page.url()).searchParams.get('account')===beta,'keyboard account choice applies immediately');assert.equal(accountRequests.length,beforeSelectionRequests+1);assert.equal(pageDocuments,beforeSelectionDocuments);assert.equal(new URL(page.url()).searchParams.get('contentCursor'),null);assert.equal(new URL(page.url()).searchParams.get('contentType'),'links');
   assert((await trigger.textContent()).includes('Work · work@fixture'));assert((await page.locator('[data-account-switcher]').first().textContent()).includes('Work'));assert.equal(await page.locator('body').getAttribute('data-account-id'),'');
   assert.deepEqual(new URL(page.url()).searchParams.getAll('q'),['CAFÉ']);assert.deepEqual(state.catalogReads.at(-1).q,'CAFÉ');await until(async()=>await page.locator('[data-shared-item]').count()===1,'filtered Work link');assert.equal(await page.locator('[data-shared-conversation="'+chatA+'"]').count(),0);
-  await Promise.all([page.waitForURL(url=>url.searchParams.get('contentType')==='documents'),page.locator('[data-shared-tab=documents]').click()]);await until(async()=>await page.locator('[data-document-item]').count()===2&&await selected()===beta,'document fragment retains account');assert((await trigger.textContent()).includes('Work · work@fixture'));
+  const filteredDocs=url=>url.pathname==='/'&&url.searchParams.get('contentType')==='documents'&&url.searchParams.get('account')===beta;
+  const heldDocs=await holdFirstPage(page,filteredDocs);
+  await page.locator('[data-shared-tab=documents]').click();
+  try{
+   await catalogSkeleton.waitFor({state:'visible'});
+   assert.equal(await catalogSkeleton.locator('.oie-shared-placeholder').count(),2,'first switch uses the current search and account');
+  }finally{heldDocs.release();}
+  await page.waitForURL(filteredDocs);
+  await page.unroute(filteredDocs,heldDocs.handler);await until(async()=>await page.locator('[data-document-item]').count()===2&&await selected()===beta,'document fragment retains account');assert((await trigger.textContent()).includes('Work · work@fixture'));
   await page.goBack();await until(async()=>new URL(page.url()).searchParams.get('contentType')==='links'&&await selected()===beta,'Back retains URL account');await page.goForward();await until(async()=>new URL(page.url()).searchParams.get('contentType')==='documents'&&await selected()===beta,'Forward retains URL account');
   await page.reload();await until(async()=>await selected()===beta,'reload ignores stale stored account');assert((await trigger.textContent()).includes('Work · work@fixture'));assert.equal(await page.evaluate(key=>sessionStorage.getItem(key),storageKey),JSON.stringify([alpha]));
   assert.deepEqual(new URL(page.url()).searchParams.getAll('q'),['CAFÉ']);assert.equal(await page.locator('audio,video,[data-preview-download]').count(),0);

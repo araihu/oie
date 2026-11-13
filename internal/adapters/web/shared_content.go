@@ -29,10 +29,15 @@ func sharedAccountCombobox(v view) combobox.Config {
 	}
 }
 
-func (s *Server) loadSharedContent(ctx context.Context, v *view) {
-	limit := 50
+const sharedContentPageSize = 50
+
+func (s *Server) loadSharedContent(ctx context.Context, v *view, includeFirstPageCounts bool) {
+	limit := sharedContentPageSize
 	kind := engineapi.ListSharedContentParamsType(v.SharedType)
 	params := &engineapi.ListSharedContentParams{Type: &kind, Limit: &limit}
+	if includeFirstPageCounts {
+		params.IncludeFirstPageCounts = &includeFirstPageCounts
+	}
 	if v.AccountFilter != "" {
 		params.AccountId = &v.AccountFilter
 	}

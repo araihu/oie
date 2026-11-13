@@ -31,6 +31,7 @@ func (s *Server) ListSharedContent(ctx context.Context, r engineapi.ListSharedCo
 	if r.Params.Limit != nil {
 		q.Limit = *r.Params.Limit
 	}
+	q.IncludeFirstPageCounts = r.Params.IncludeFirstPageCounts != nil && *r.Params.IncludeFirstPageCounts
 	page, err := s.engine.SharedContent(ctx, q)
 	if err != nil {
 		return nil, err
@@ -51,6 +52,11 @@ func (s *Server) ListSharedContent(ctx context.Context, r engineapi.ListSharedCo
 	}
 	if page.NextCursor != "" {
 		out.NextCursor = &page.NextCursor
+	}
+	if counts := page.FirstPageCounts; counts != nil {
+		out.FirstPageCounts = &engineapi.SharedContentFirstPageCounts{
+			Media: counts.Media, Links: counts.Links, Documents: counts.Documents,
+		}
 	}
 	return engineapi.ListSharedContent200JSONResponse(out), nil
 }

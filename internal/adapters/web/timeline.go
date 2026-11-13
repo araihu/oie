@@ -113,8 +113,11 @@ func (v view) timelineEdgeMS(direction string) string {
 func (v view) timelinePageHref(direction string) string {
 	return v.href("chat", v.ChatID, "account", selectedAccountID(v), "message", "", "timelineCursor", v.timelineEdge(direction), "timelineDirection", direction, "lang", v.Locale, "theme", v.Theme)
 }
+
+const timelinePageSize = 50
+
 func timelineInitialParams(v view) *engineapi.ListMessagesParams {
-	limit := 50
+	limit := timelinePageSize
 	p := &engineapi.ListMessagesParams{Limit: &limit}
 	if validOperationKey(v.TimelineCursor) {
 		p.Cursor = &v.TimelineCursor
@@ -133,6 +136,20 @@ func (v view) messageVersion(m messageView) string {
 
 func (m messageView) mentionsYou() bool {
 	return !m.IsOwn && m.MentionsYou != nil && *m.MentionsYou
+}
+
+func (v view) timelineConversationRevision() string {
+	if v.Selected == nil {
+		return ""
+	}
+	return v.Selected.RevisionId
+}
+
+func (v view) timelineUnread() int {
+	if v.Selected == nil {
+		return 0
+	}
+	return v.Selected.UnreadCount
 }
 
 func (s *Server) formatTimeline(ctx context.Context, v *view, items []engineapi.Message, extras map[string]*mediaView) {

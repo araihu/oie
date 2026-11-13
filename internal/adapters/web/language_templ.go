@@ -9,20 +9,21 @@ package web
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import selectfield "github.com/araihu/goshtoso/components/select"
+import (
+	"github.com/araihu/goshtoso/components/combobox"
+	"github.com/araihu/goshtoso/expressions"
+)
 
-func languageSelect(v view) selectfield.Config {
-	return selectfield.Config{
+func languageCombobox(v view) combobox.Config {
+	return combobox.Config{
 		ID: "settings-language", Name: "lang", Label: v.Text.Languages,
-		Options: []selectfield.Option{
-			{Value: "en", Label: v.Text.English, Selected: v.Locale == "en", Leading: languageFlag("🇺🇸")},
-			{Value: "pt-BR", Label: v.Text.Portuguese, Selected: v.Locale == "pt-BR", Leading: languageFlag("🇧🇷")},
-		},
+		Mode: combobox.ModeSingle, EnableSearch: true, DisablePersistence: true,
+		Source: combobox.Source{Static: []combobox.Option{
+			{Value: "en", Label: v.Text.English, LabelAttrs: templ.Attributes{"data-language-flag": "🇺🇸"}},
+			{Value: "pt-BR", Label: v.Text.Portuguese, LabelAttrs: templ.Attributes{"data-language-flag": "🇧🇷"}},
+		}},
+		Selected:     []string{v.Locale},
 		TriggerAttrs: templ.Attributes{"data-language-trigger": ""},
-		InputAttrs: templ.Attributes{
-			"data-language-select": "",
-			"x-on:change":          "if (['en','pt-BR'].includes($event.target.value)) { const url = new URL(location.href); url.searchParams.set('lang', $event.target.value); url.searchParams.set('open','settings'); url.searchParams.set('settingsFocus','language'); if (window.OieNavigation) window.OieNavigation.go(url.pathname + url.search); else location.assign(url.pathname + url.search); }",
-		},
 	}
 }
 
@@ -47,49 +48,14 @@ func languageSettings(v view) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = selectfield.Select(languageSelect(v)).Render(ctx, templ_7745c5c3_Buffer)
+		config := languageCombobox(v)
+		templ_7745c5c3_Err = combobox.Combobox(config, config.InitialState()).WithExpressions(expressions.Combobox{
+			SearchPlaceholder: v.Text.SearchLanguages, EmptyText: v.Text.NoLanguagesFound,
+		}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		return nil
-	})
-}
-
-func languageFlag(flag string) templ.Component {
-	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
-			return templ_7745c5c3_CtxErr
-		}
-		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-		if !templ_7745c5c3_IsBuffer {
-			defer func() {
-				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err == nil {
-					templ_7745c5c3_Err = templ_7745c5c3_BufErr
-				}
-			}()
-		}
-		ctx = templ.InitializeContext(ctx)
-		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<span aria-hidden=\"true\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var3 string
-		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(flag)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/language.templ`, Line: 27, Col: 32}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

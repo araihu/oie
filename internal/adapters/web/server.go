@@ -153,6 +153,8 @@ type view struct {
 	ScheduleUnavailable   bool
 
 	InboxOnly        bool
+	ReuseInbox       bool
+	CachedInboxFirst string
 	Role             engineapi.EngineRole
 	CanResetData     bool
 	LatestEditTarget *engineapi.MessageEditTarget
@@ -279,6 +281,7 @@ type copy struct {
 	Composition, EmojiShortcutLanguages, EmojiSuggestions                                                                                                                                                    string
 	SettingsGeneral, SearchLanguages, NoLanguagesFound, EmojiShortcutsOff, EmojiShortcutLanguageCount                                                                                                        string
 	PresentationTimeZone, SystemTimeZone                                                                                                                                                                     string
+	SearchTimeZones, NoTimeZonesFound                                                                                                                                                                        string
 	EmojiSearch                                                                                                                                                                                              string
 	EmojiCategories                                                                                                                                                                                          string
 	EmojiAll                                                                                                                                                                                                 string
@@ -298,6 +301,7 @@ type copy struct {
 	EmojiFlags                                                                                                                                                                                               string
 	RefreshPreview                                                                                                                                                                                           string
 	RefreshPreviewFailed                                                                                                                                                                                     string
+	SharedLoading                                                                                                                                                                                            string
 	SharedLoadingOlder                                                                                                                                                                                       string
 	SharedLoadFailed                                                                                                                                                                                         string
 	VideoPlay                                                                                                                                                                                                string
@@ -595,6 +599,12 @@ var videosStylesheet []byte
 //go:embed live.js
 var liveScript []byte
 
+//go:embed event-stream.js
+var eventStreamScript []byte
+
+//go:embed inbox-cache.js
+var inboxCacheScript []byte
+
 //go:embed room-archive.js
 var roomArchiveScript []byte
 
@@ -688,6 +698,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/sidebar.js":           {"text/javascript", sidebarScript},
 		"/ui/presentation-time.js": {"text/javascript", presentationTimeScript},
 		"/ui/reset-data.js":        {"text/javascript", resetDataScript},
+		"/ui/event-stream.js":      {"text/javascript", eventStreamScript},
+		"/ui/inbox-cache.js":       {"text/javascript", inboxCacheScript},
 		"/ui/mentions.js":          {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
 		"/ui/room-entry.js":   {"text/javascript", roomEntryScript},
 		appicons.SpriteURL:    {"image/svg+xml", appIconSprite},
@@ -888,10 +900,24 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		return
 	}
 	if v.Section == "media" {
-		s.loadSharedContent(ctx, v)
+		s.loadSharedContent(ctx, v, v.SharedCursor == "" || r.URL.Path == "/ui/refresh")
 		return
 	}
-	if !paneOnly && !s.loadInbox(ctx, v, editor) {
+	cacheScope := r.Header.Get("X-Oie-Inbox-Scope")
+	cacheMatches := cacheScope != "" && cacheScope == v.inboxCacheScope()
+	cursorMatches := v.EventCursor != "" && r.Header.Get("X-Oie-Inbox-Cursor") == v.EventCursor
+	explicitSelection := v.ChatID != "" || v.InboxOnly
+	first := r.Header.Get("X-Oie-Inbox-First")
+	// A query can match retained content outside the first row's fields.
+	canReuseImplicit := cursorMatches && v.Query == "" && (first == "" || validOperationKey(first))
+	reuseOnNavigation := fragment == "app" && v.Section == "chats" && !v.GlobalMessageSearch && cacheMatches &&
+		(explicitSelection || canReuseImplicit)
+	reuseOnRefresh := r.URL.Path == "/ui/refresh" && cacheMatches && cursorMatches && explicitSelection
+	v.ReuseInbox = reuseOnNavigation || reuseOnRefresh
+	if reuseOnNavigation && !explicitSelection {
+		v.CachedInboxFirst = first
+	}
+	if !paneOnly && !v.ReuseInbox && !s.loadInbox(ctx, v, editor) {
 		return
 	}
 	if listOnly {
@@ -910,7 +936,8 @@ func (s *Server) loadAccountConnection(ctx context.Context, v *view, accountID s
 
 func (s *Server) loadInbox(ctx context.Context, v *view, editor engineapi.RequestEditorFn) bool {
 	limit := 100
-	params := &engineapi.ListConversationsParams{Limit: &limit}
+	includeCount := true
+	params := &engineapi.ListConversationsParams{Limit: &limit, IncludeLatestMessagePageCount: &includeCount}
 	archived := v.Section == "archived"
 	params.Archived = &archived
 	if v.AccountFilter != "" {
@@ -948,8 +975,14 @@ func (s *Server) loadInbox(ctx context.Context, v *view, editor engineapi.Reques
 
 func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view, paneOnly, editorOnly, infoOnly bool, editor engineapi.RequestEditorFn) {
 	selected := v.ChatID
-	if selected == "" && !v.InboxOnly && len(v.Chats) > 0 {
-		selected = v.Chats[0].Id
+	fromCache := false
+	if selected == "" && !v.InboxOnly {
+		if len(v.Chats) > 0 {
+			selected = v.Chats[0].Id
+		} else if v.ReuseInbox {
+			selected = v.CachedInboxFirst
+			fromCache = true
+		}
 	}
 	if selected == "" {
 		return
@@ -959,7 +992,18 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		v.Unavailable = true
 		return
 	}
-	if conversation.JSON200 == nil {
+	c := conversation.JSON200
+	if fromCache && ((c == nil && (conversation.StatusCode() == 400 || conversation.StatusCode() == 404)) ||
+		(c != nil && (c.Archived || v.AccountFilter != "" && c.AccountId != v.AccountFilter ||
+			v.Filter == "unread" && c.UnreadCount == 0 || v.Filter == "favorites" && !c.Favorite ||
+			v.Filter == "groups" && c.Kind != "room"))) {
+		v.ReuseInbox = false
+		if s.loadInbox(ctx, v, editor) {
+			s.loadConversation(ctx, r, v, paneOnly, editorOnly, infoOnly, editor)
+		}
+		return
+	}
+	if c == nil {
 		if conversation.StatusCode() == 400 || conversation.StatusCode() == 404 {
 			v.NotFound = true
 		} else {
@@ -967,11 +1011,11 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		}
 		return
 	}
-	if v.AccountFilter != "" && conversation.JSON200.AccountId != v.AccountFilter {
+	if v.AccountFilter != "" && c.AccountId != v.AccountFilter {
 		v.NotFound = true
 		return
 	}
-	v.Selected = conversation.JSON200
+	v.Selected = c
 	v.ChatID = selected
 	if v.requestKind() != "" {
 		s.loadAccountConnection(ctx, v, v.Selected.AccountId, editor)
@@ -994,7 +1038,7 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		}
 	}
 	s.loadMessaging(ctx, v)
-	s.loadChatInfo(ctx, v)
+	s.loadChatInfo(ctx, v, r.URL.Path == "/ui/refresh")
 	if infoOnly || r.URL.Path == "/ui/info" {
 		return
 	}
@@ -1195,7 +1239,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Vary", "HX-Request, X-Oie-Fragment")
+	w.Header().Set("Vary", "HX-Request, X-Oie-Fragment, X-Oie-Inbox-Scope, X-Oie-Inbox-First, X-Oie-Inbox-Cursor")
 	if v.NotFound {
 		w.WriteHeader(http.StatusNotFound)
 	} else if v.Unavailable {

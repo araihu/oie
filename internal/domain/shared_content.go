@@ -14,10 +14,14 @@ type SharedContentIndex struct {
 	State                          string
 	IndexedMessages, TotalMessages int64
 }
+type SharedContentFirstPageCounts struct {
+	Media, Links, Documents int
+}
 type SharedContentPage struct {
-	Items      []SharedContentItem
-	NextCursor string
-	Indexing   SharedContentIndex
+	Items           []SharedContentItem
+	NextCursor      string
+	Indexing        SharedContentIndex
+	FirstPageCounts *SharedContentFirstPageCounts
 }
 type SharedContentMutation struct {
 	Message       Message
@@ -29,4 +33,5 @@ type SharedContentQuery struct {
 	AccountID, ConversationID ID
 	Type, Search, Cursor      string
 	Limit                     int
+	IncludeFirstPageCounts    bool
 }

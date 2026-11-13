@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.30.1
+  version: 0.31.0
   description: >-
     Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
@@ -228,6 +228,12 @@ paths:
           minimum: 1
           maximum: 100
           default: 50
+      - name: includeFirstPageCounts
+        in: query
+        description: Include first-page item counts for Media, Links, and Documents with the same filters and search. Each count is capped at limit and independent of the requested type and cursor.
+        schema:
+          type: boolean
+          default: false
       responses:
         '200':
           description: Shared items and catalog indexing progress in the selected account/conversation scope
@@ -651,13 +657,15 @@ paths:
     post:
       operationId: markConversationMessagesRead
       tags: [Conversations]
-      summary: Mark specifically observed incoming messages read
+      summary: Mark incoming messages read
       description: Atomically merges the listed retained message identities into app-owned read state. Other
         messages, including later arrivals, remain unread. Lists are bounded and must belong to this conversation.
         Own and historical messages are ignored. Repeated batches are safe; retries with the same key return the
         original committed snapshot. Read revisions and operation receipts are durable. Reading does not bump
         conversation activity, edit content or send protocol receipts. This alpha operation records local engine
         read evidence; receipt emission and independent-engine synchronization remain deferred.
+        With If-Match, the single message ID must be the latest retained timeline message in the
+        specified conversation revision. The operation then marks all unread messages in that snapshot read.
       parameters:
       - name: Idempotency-Key
         in: header
@@ -665,6 +673,14 @@ paths:
         description: Stable UUID for this exact read batch, reused after an uncertain response.
         schema:
           $ref: '#/components/schemas/ID'
+      - name: If-Match
+        in: header
+        required: false
+        description: Quoted conversation revision UUID for a read at the latest end of the timeline.
+        schema:
+          type: string
+          pattern: '^"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"$'
+          example: '"019a5df0-0000-7000-8000-000000000004"'
       requestBody:
         required: true
         description: Message identities observed in the active focused conversation.
@@ -695,6 +711,11 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '412':
+          description: The supplied conversation revision or latest timeline message is stale.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
         '503':
           $ref: '#/components/responses/Unavailable'
   /api/v1/conversations/{conversationId}/message-stars:
@@ -1035,7 +1056,7 @@ paths:
               example:
                 id: 019a5df0-0000-7000-8000-000000000003
                 role: local
-                apiVersion: 0.30.1
+                apiVersion: 0.31.0
                 eventCursor: 019a5df0-0000-7000-8000-000000000003:1
         '503':
           $ref: '#/components/responses/Unavailable'
@@ -1672,6 +1693,12 @@ paths:
           minimum: 1
           maximum: 100
           default: 50
+      - name: includeLatestMessagePageCount
+        in: query
+        description: Include a bounded estimate of the latest visible message page for each listed conversation.
+        schema:
+          type: boolean
+          default: false
       - name: accountId
         in: query
         required: false
@@ -2816,6 +2843,11 @@ paths:
       responses:
         '200':
           description: Retained attachment bytes
+          headers:
+            Content-Disposition:
+              description: Attachment disposition with the original filename.
+              required: true
+              schema: {type: string}
           content:
             application/octet-stream:
               schema: {type: string, format: binary}
@@ -3110,6 +3142,9 @@ components:
         unreadCount:
           type: integer
           minimum: 0
+        canMarkLatestRead:
+          type: boolean
+          description: Advertises support for the If-Match latest-timeline read on GET responses.
       example:
         conversationId: 019a5df0-0000-7000-8000-000000000003
         accountId: 019a5df0-0000-7000-8000-000000000002
@@ -3218,7 +3253,7 @@ components:
       example:
         id: 019a5df0-0000-7000-8000-000000000003
         role: local
-        apiVersion: 0.30.1
+        apiVersion: 0.31.0
         eventCursor: 019a5df0-0000-7000-8000-000000000003:1
       additionalProperties: false
       required:
@@ -3244,6 +3279,7 @@ components:
           - 0.29.0
           - 0.30.0
           - 0.30.1
+          - 0.31.0
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -4142,8 +4178,29 @@ components:
         nextCursor:
           type: string
           maxLength: 512
+        firstPageCounts:
+          $ref: '#/components/schemas/SharedContentFirstPageCounts'
         indexing:
           $ref: '#/components/schemas/SharedContentIndexing'
+    SharedContentFirstPageCounts:
+      type: object
+      description: Item counts for the three catalog tabs from the same snapshot. Each value is bounded by the requested page size.
+      additionalProperties: false
+      required: [media, links, documents]
+      properties:
+        media:
+          type: integer
+          minimum: 0
+          maximum: 100
+        links:
+          type: integer
+          minimum: 0
+          maximum: 100
+        documents:
+          type: integer
+          minimum: 0
+          maximum: 100
+      example: {media: 50, links: 2, documents: 0}
     PreviewPage:
       type: object
       description: At most three preview references for each selected retained message, up to three hundred items.
@@ -4438,6 +4495,11 @@ components:
           type: string
           format: date-time
           description: UTC timestamp.
+        latestMessagePageCount:
+          type: integer
+          minimum: 0
+          maximum: 50
+          description: Snapshot count of canonical messages visible in the latest 50-message timeline page. Included only when requested on the conversation list and a timeline is visible.
         unreadCount:
           type: integer
           minimum: 0

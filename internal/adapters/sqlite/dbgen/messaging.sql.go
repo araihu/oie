@@ -351,32 +351,55 @@ func (q *Queries) InterruptedMessages(ctx context.Context) ([]Message, error) {
 }
 
 const listConversations = `-- name: ListConversations :many
-SELECT id, revision_id, account_id, address, peer_id, payload, activity_sequence, unread_count, archived, favorite FROM conversations
-WHERE activity_sequence < ?1
-AND (CAST(?2 AS TEXT)='' OR account_id=CAST(?2 AS TEXT))
-AND (CAST(?3 AS TEXT)='[]' OR account_id IN (SELECT value FROM json_each(CAST(?3 AS TEXT))))
-AND archived=?4
-AND (CAST(?5 AS INTEGER)=0 OR favorite=1)
-AND (CAST(?6 AS INTEGER)=0 OR unread_count>0)
-AND (CAST(?7 AS TEXT)='' OR json_extract(payload,'$.Kind')=CAST(?7 AS TEXT))
-AND (CAST(?8 AS TEXT)='' OR instr(lower(address || ' ' || json_extract(payload,'$.Title') || ' ' || CASE WHEN json_extract(payload,'$.Request') IS NULL THEN json_extract(payload,'$.LastMessage') ELSE '' END), lower(CAST(?8 AS TEXT)))>0)
-ORDER BY activity_sequence DESC LIMIT ?9
+SELECT conversations.id, conversations.revision_id, conversations.account_id, conversations.address, conversations.peer_id, conversations.payload, conversations.activity_sequence, conversations.unread_count, conversations.archived, conversations.favorite, CAST(CASE
+    WHEN CAST(?1 AS INTEGER) = 0
+        OR json_extract(conversations.payload,'$.Request') IS NOT NULL THEN -1
+    ELSE (SELECT COUNT(*) FROM (
+        SELECT 1 FROM messages AS m WHERE m.conversation_id=conversations.id
+        AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
+        AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
+        ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC
+        LIMIT ?2
+    )) END AS INTEGER) AS latest_message_page_count
+FROM conversations
+JOIN (
+    SELECT c.id FROM conversations AS c
+    WHERE c.activity_sequence < ?3
+    AND (CAST(?4 AS TEXT)='' OR c.account_id=CAST(?4 AS TEXT))
+    AND (CAST(?5 AS TEXT)='[]' OR c.account_id IN (SELECT value FROM json_each(CAST(?5 AS TEXT))))
+    AND c.archived=?6
+    AND (CAST(?7 AS INTEGER)=0 OR c.favorite=1)
+    AND (CAST(?8 AS INTEGER)=0 OR c.unread_count>0)
+    AND (CAST(?9 AS TEXT)='' OR json_extract(c.payload,'$.Kind')=CAST(?9 AS TEXT))
+    AND (CAST(?10 AS TEXT)='' OR instr(lower(c.address || ' ' || json_extract(c.payload,'$.Title') || ' ' || CASE WHEN json_extract(c.payload,'$.Request') IS NULL THEN json_extract(c.payload,'$.LastMessage') ELSE '' END), lower(CAST(?10 AS TEXT)))>0)
+    ORDER BY c.activity_sequence DESC LIMIT ?11
+) AS conversation_page ON conversation_page.id=conversations.id
+ORDER BY conversations.activity_sequence DESC
 `
 
 type ListConversationsParams struct {
-	Cursor        int64
-	AccountID     string
-	AccountIds    string
-	Archived      int64
-	FavoritesOnly int64
-	UnreadOnly    int64
-	Kind          string
-	Query         string
-	PageLimit     int64
+	IncludeLatestMessagePageCount int64
+	MessagePageLimit              int64
+	Cursor                        int64
+	AccountID                     string
+	AccountIds                    string
+	Archived                      int64
+	FavoritesOnly                 int64
+	UnreadOnly                    int64
+	Kind                          string
+	Query                         string
+	PageLimit                     int64
 }
 
-func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error) {
+type ListConversationsRow struct {
+	Conversation           Conversation
+	LatestMessagePageCount int64
+}
+
+func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsParams) ([]ListConversationsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listConversations,
+		arg.IncludeLatestMessagePageCount,
+		arg.MessagePageLimit,
 		arg.Cursor,
 		arg.AccountID,
 		arg.AccountIds,
@@ -391,20 +414,21 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Conversation{}
+	items := []ListConversationsRow{}
 	for rows.Next() {
-		var i Conversation
+		var i ListConversationsRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.RevisionID,
-			&i.AccountID,
-			&i.Address,
-			&i.PeerID,
-			&i.Payload,
-			&i.ActivitySequence,
-			&i.UnreadCount,
-			&i.Archived,
-			&i.Favorite,
+			&i.Conversation.ID,
+			&i.Conversation.RevisionID,
+			&i.Conversation.AccountID,
+			&i.Conversation.Address,
+			&i.Conversation.PeerID,
+			&i.Conversation.Payload,
+			&i.Conversation.ActivitySequence,
+			&i.Conversation.UnreadCount,
+			&i.Conversation.Archived,
+			&i.Conversation.Favorite,
+			&i.LatestMessagePageCount,
 		); err != nil {
 			return nil, err
 		}

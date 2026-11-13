@@ -144,6 +144,7 @@ func (s *Server) GetConversation(ctx context.Context, r engineapi.GetConversatio
 func (s *Server) ListConversations(ctx context.Context, r engineapi.ListConversationsRequestObject) (engineapi.ListConversationsResponseObject, error) {
 	in := application.ConversationQuery{Limit: 50, AccountIDs: searchAccountIDs(r.Params.AccountIds)}
 	p := r.Params
+	in.IncludeLatestMessagePageCount = p.IncludeLatestMessagePageCount != nil && *p.IncludeLatestMessagePageCount
 	cursorValue := ""
 	if p.Limit != nil {
 		in.Limit = *p.Limit
@@ -184,7 +185,9 @@ func (s *Server) ListConversations(ctx context.Context, r engineapi.ListConversa
 		list = list[:in.Limit]
 	}
 	for _, c := range list {
-		page.Items = append(page.Items, conversation(c))
+		item := conversation(c)
+		item.LatestMessagePageCount = c.LatestMessagePageCount
+		page.Items = append(page.Items, item)
 	}
 	return engineapi.ListConversations200JSONResponse(page), nil
 }
@@ -232,7 +235,7 @@ func (s *Server) GetMessage(ctx context.Context, r engineapi.GetMessageRequestOb
 	return engineapi.GetMessage200JSONResponse(message(m)), nil
 }
 func (s *Server) ListMessages(ctx context.Context, r engineapi.ListMessagesRequestObject) (engineapi.ListMessagesResponseObject, error) {
-	limit := 50
+	limit := domain.LatestMessagePageSize
 	var cursor domain.ID
 	if r.Params.Limit != nil {
 		limit = *r.Params.Limit

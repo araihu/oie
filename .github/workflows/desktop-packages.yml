@@ -182,7 +182,7 @@ jobs:
           if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
-          appstreamcli validate --no-net dist/packages/flatpak/org.araihu.oie.metainfo.xml
+          appstreamcli validate --no-net dist/packages/flatpak/com.araihu.oie.metainfo.xml
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
           archive="oie_${OIE_RELEASE_VERSION}_linux_amd64.tar.gz"
@@ -192,11 +192,12 @@ jobs:
           flatpak-builder --user --install-deps-from=flathub --assumeyes --disable-rofiles-fuse \
             --disable-download --extra-sources="$PWD/dist/flatpak-sources" \
             --state-dir=dist/flatpak-state --repo=dist/flatpak-repo \
-            dist/flatpak-build dist/packages/flatpak/org.araihu.oie.json
+            dist/flatpak-build dist/packages/flatpak/com.araihu.oie.json
           flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
-            dist/flatpak-repo "dist/release/oie-$OIE_RELEASE_VERSION-x86_64.flatpak" org.araihu.oie
+            dist/flatpak-repo "dist/release/oie-$OIE_RELEASE_VERSION-x86_64.flatpak" com.araihu.oie
       - name: Rebuild the corresponding source offline inside Flatpak
         run: |
+          flatpak install --user --noninteractive --assumeyes flathub org.freedesktop.Sdk.Extension.golang//26.08
           bash tests/packaging/smoke_flatpak_source.sh \
             "dist/release/oie_${OIE_RELEASE_VERSION}_linux_amd64_source.tar.gz"
       - name: Assemble the release assets

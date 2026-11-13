@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
 // A cursor identifies one page; the scope identifies the collection that may
@@ -34,6 +36,22 @@ func (v view) sharedPageState() string {
 		return "unavailable"
 	}
 	return "ready"
+}
+
+func (v view) sharedFirstPageCounts() *engineapi.SharedContentFirstPageCounts {
+	if v.sharedPageState() != "ready" {
+		return nil
+	}
+	counts := v.SharedContent.FirstPageCounts
+	if counts == nil {
+		return nil
+	}
+	for _, count := range []int{counts.Media, counts.Links, counts.Documents} {
+		if count < 0 || count > sharedContentPageSize {
+			return nil
+		}
+	}
+	return counts
 }
 
 func (v view) sharedPageNext() string {

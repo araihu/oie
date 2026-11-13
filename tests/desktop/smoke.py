@@ -4,6 +4,7 @@
 Uses Wails' build-tagged MCP driver. No provider account or XMPP traffic is used.
 """
 import contextlib
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -32,6 +33,9 @@ def uid(n):
 
 ENGINE, ACCOUNT, CHAT, MESSAGE, ITEM = (uid(n) for n in range(1, 6))
 NOW = "2026-11-10T12:00:00Z"
+STAGED = uid(10)
+STAGED_NAME = 'relatório "final".txt'
+STAGED_BYTES = b"draft attachment original bytes"
 
 
 def require(condition, message):
@@ -77,6 +81,14 @@ class Fixture(BaseHTTPRequestHandler):
             return self.reply(200, {"id": ENGINE, "role": "hosted", "apiVersion": "0.2.0", "eventCursor": ENGINE + ":0"})
         if path == "/api/v1/accounts":
             return self.reply(200, {"items": [account]})
+        if path == "/api/v1/accounts/" + ACCOUNT + "/capabilities":
+            return self.reply(200, {"accountId": ACCOUNT, "state": "known", "reason": "discovered",
+                                    "discovery": {"services": [], "state": "complete"}, "features": [
+                {"id": "schedules", "appSupport": "supported", "protocolSupport": "not_required",
+                 "serverSupport": "not_required", "scope": "account"},
+                {"id": "file_upload", "appSupport": "supported", "protocolSupport": "supported",
+                 "serverSupport": "supported", "scope": "account"},
+            ]})
         if path == "/api/v1/accounts/" + ACCOUNT:
             return self.reply(200, account)
         if path.endswith("/connection"):
@@ -118,6 +130,9 @@ class Fixture(BaseHTTPRequestHandler):
             except (BrokenPipeError, ConnectionResetError):
                 pass
             return
+        if path == "/api/v1/conversations/" + CHAT + "/staged-attachments/" + STAGED:
+            disposition = "attachment; filename*=UTF-8''" + urllib.parse.quote(STAGED_NAME)
+            return self.reply(200, STAGED_BYTES, "application/octet-stream", {"Content-Disposition": disposition})
         if path == "/api/v1/shared-content/" + ITEM + "/content":
             Fixture.content_reads += 1
             data = b"0123456789"
@@ -271,7 +286,7 @@ def linux_dialog_diagnostics(stage, app, target):
     prefix.with_suffix(".json").write_text(json.dumps(state, indent=2) + "\n")
 
 
-def linux_save_dialog(app, target, cancel=False):
+def linux_save_dialog(app, target, cancel=False, draft=False):
     """Drive GTK in this test's private Xvfb. Never sends input on a host display."""
     if sys.platform != "linux":
         return
@@ -280,6 +295,8 @@ def linux_save_dialog(app, target, cancel=False):
     previous_reads = Fixture.content_reads
     if cancel:
         app.js("window.__nativeSaveResult='pending';window.OieDesktop.saveFile(%s,'native-fixture.txt').then(value=>window.__nativeSaveResult=value).catch(error=>window.__nativeSaveResult=String(error));return true;" % json.dumps(source))
+    elif draft:
+        app.js("document.querySelector('[data-file-download]:not([hidden])').click();return true;")
     else:
         app.js("const a=document.createElement('a');a.href=%s;a.download='native-fixture.txt';document.body.append(a);a.click();a.remove();return true;" % json.dumps(source))
 
@@ -314,7 +331,7 @@ def linux_save_dialog(app, target, cancel=False):
     except BaseException:
         linux_dialog_diagnostics("failed", app, target)
         raise
-    require(target.read_bytes() == b"0123456789", "native chooser saved different bytes")
+    require(target.read_bytes() == (STAGED_BYTES if draft else b"0123456789"), "native chooser saved different bytes")
     app.wait(lambda: not dialog_window(), "native GTK chooser closed")
 
 
@@ -365,6 +382,25 @@ def main():
                     linux_save_dialog(app, root / "saved-native-fixture.txt")
                     linux_save_dialog(app, root / "cancelled-native-fixture.txt", cancel=True)
                     findings.append("actual GTK Save chooser writes exact original bytes; Cancel creates no file")
+                    app.wait(lambda: app.js("""return document.body.hasAttribute('data-oie-live-ready') &&
+                        document.querySelector('[data-attach-menu]')?.disabled === false;"""), "live attachment composer")
+                    draft_attachment = {
+                        "id": STAGED, "fileName": STAGED_NAME, "size": len(STAGED_BYTES),
+                        "sha256": hashlib.sha256(STAGED_BYTES).hexdigest(), "mediaType": "text/plain",
+                    }
+                    app.js("""const form=document.querySelector('#send-message-form');
+                    form.dispatchEvent(new CustomEvent('oie:attachments-change',{detail:{files:[%s]}}));return true;""" % json.dumps(draft_attachment))
+                    app.wait(lambda: app.js("return !!document.querySelector('[data-file-download]:not([hidden])');") is True,
+                             "draft attachment download link")
+                    link = app.js("""const a=document.querySelector('[data-file-download]:not([hidden])');
+                    return {name:a.download,href:a.getAttribute('href')};""")
+                    require(link["name"] == STAGED_NAME and link["href"].startswith("/ui/scheduling/file?"), "incorrect draft download link")
+                    staged = app.js("""const r=await fetch(%s);
+                    return {status:r.status,disposition:r.headers.get('content-disposition')};""" % json.dumps(link["href"]))
+                    require(staged == {"status": 200, "disposition": "attachment; filename*=UTF-8''" + urllib.parse.quote(STAGED_NAME)}, "staged download disposition: " + str(staged))
+                    linux_save_dialog(app, root / STAGED_NAME, draft=True)
+                    app.js("document.querySelector('[data-remove-attachment]').click();return true;")
+                    findings.append("actual GTK Save chooser downloads a draft attachment with the original quoted filename and bytes")
                 draft = "Native persistent draft 👋"
                 app.js("const c=document.querySelector('#message-composer');c.value=%s;c.dispatchEvent(new Event('input',{bubbles:true}));localStorage.setItem('oie.native.smoke','persistent');return true;" % json.dumps(draft))
                 app.wait(lambda: app.js("return Object.keys(localStorage).some(k=>k.startsWith('oie.draft.v1')&&localStorage.getItem(k).includes('Native persistent draft'));"), "draft committed")

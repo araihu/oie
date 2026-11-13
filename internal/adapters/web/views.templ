@@ -93,7 +93,7 @@ templ page(v view) {
 <link rel="apple-touch-icon" sizes="180x180" href={templ.URL(brandURL("apple-touch-icon-180.png"))}/>
 <link rel="manifest" href={templ.SafeURL("/manifest.webmanifest?lang="+v.Locale)}/>
 <meta name="theme-color" content="#6092ab"/>
-			<script src="/ui/runtime.js"></script><script src="/ui/presentation-time.js" defer></script>
+			<script src="/ui/runtime.js"></script><script src="/ui/inbox-cache.js"></script><script src="/ui/event-stream.js"></script><script src="/ui/presentation-time.js" defer></script>
 <script src="/ui/theme.js"></script>
 <script src="/ui/sidebar.js"></script>
 <script src="/ui/formatting.js"></script>
@@ -146,6 +146,13 @@ if v.DevBuildID!="" {
 templ appFragment(v view) {
 <div id="oie-app" hx-history-elt data-shared-account={v.AccountFilter} data-route-error={v.Text.NavFailed} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
 @toast.ToastContainer(toast.ContainerConfig{}).WithExpressions(expressions.Toast{DismissLabel:v.Text.Close,DismissAriaLabel:v.Text.Close})
+<h1 class="sr-only">{v.Text.AppName}</h1>
+@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: desktopNavigation(v), SidebarAttrs: templ.Attributes{"id": "desktop-navigation"}, Content: routeContent(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
+</div>
+}
+
+templ routeContent(v view) {
+<div id="oie-route" class="oie-route" data-open-chat={strconv.FormatBool(v.ChatOpen)}>
 @liveCopy(v)
 <p class="sr-only" data-read-status data-read-failed={v.Text.ReadFailed} role="status" aria-live="polite" hidden></p>
 <div data-shared-action-copy hidden data-failed={v.Text.SharedActionFailed} data-copied={v.Text.SharedLinkCopied} data-downloading={v.Text.SharedDownloading}></div>
@@ -164,8 +171,7 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 }
 </div>
 }
-			<h1 class="sr-only">{v.Text.AppName}</h1>
-			@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: desktopNavigation(v), SidebarAttrs: templ.Attributes{"id": "desktop-navigation"}, Content: workspace(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
+			@workspaceWithLoading(v)
 			@settings(v)
 			if v.CanResetData {
 				@resetDataDialog(v)
@@ -242,6 +248,13 @@ if v.AccountFilter!="" && connectionState(v,v.AccountFilter)!="not_connected" &&
 </div>
 }
 
+templ workspaceWithLoading(v view) {
+@workspace(v)
+if v.Section!="media" {
+@sharedSkeleton(v,true)
+}
+}
+
 templ workspace(v view) {
 if v.NativeMessageSearch {
 @messageSearchWorkspace(v)
@@ -312,8 +325,10 @@ templ inboxList(v view) {
 				@filterLink(v, "favorites", v.Text.Favorites)
 				@filterLink(v, "groups", v.Text.Groups)
 			</nav>
-<div class="oie-conversation-scroll" id="conversation-list" data-version={v.conversationListVersion()}>
+<div class="oie-conversation-scroll" id="conversation-list" data-inbox-cache-scope={v.inboxCacheScope()} data-inbox-cursor={v.EventCursor} data-inbox-reuse?={v.ReuseInbox} data-version={v.conversationListVersion()}>
+if !v.ReuseInbox {
 @conversationList(v)
+}
 </div>
 </div>
 }
@@ -328,7 +343,11 @@ templ conversationRow(v view, c engineapi.Conversation) {
 	{{ attrs := navigationAttrs("conversation-pane", "conversation", "outerHTML settle:0ms show:none") }}
 	{{ attrs["data-conversation-id"] = c.Id }}
 	{{ attrs["aria-current"] = strconv.FormatBool(v.ChatID == c.Id) }}
-	<li data-conversation-row={c.Id} data-version={v.conversationRowVersion(c)}>
+	<li data-conversation-row={c.Id} data-version={v.conversationRowVersion(c)}
+		if c.Request == nil && c.LatestMessagePageCount != nil && *c.LatestMessagePageCount >= 0 && *c.LatestMessagePageCount <= timelinePageSize {
+			data-latest-message-page-count={strconv.Itoa(*c.LatestMessagePageCount)}
+		}
+	>
 		@link.Link(v.href("chat", c.Id,"message","","infoView","","infoType","","infoCursor","","infoQuery","","infoFocus","","lang",v.Locale,"theme",v.Theme), link.WithRootClass("oie-chat-link"), link.WithAttrs(attrs)) {
 			@profileAvatar(v,c.AccountId,c.Address,avatar.Config{Name: c.Title, Initials: chatInitials(c), Size: avatar.SizeSM, RootClass: "oie-chat-avatar"})
 			<div class="oie-row-content">
@@ -661,7 +680,9 @@ if v.InfoView=="shared" || v.InfoView=="stars" {
 if v.Section=="media"{
 <div id="live-shared-content"><div id="live-shared-status">@sharedStatus(v)</div><div id="live-shared-results" data-version={v.sharedVersion()}>@sharedItems(v)</div><div id="live-shared-pagination">@sharedPagination(v)</div></div>
 }
+if !v.ReuseInbox && v.Section!="media" && v.Section!="scheduled" {
 <div id="live-list" data-version={v.conversationListVersion()}>@conversationList(v)</div>
+}
 <div id="live-timeline" data-version={v.timelineVersion()}>@timeline(v)</div>
 <div id="live-header" data-version={v.headerVersion()}>
 if v.Selected!=nil {

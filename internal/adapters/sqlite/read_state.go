@@ -71,39 +71,30 @@ func (s *Store) MarkMessagesRead(ctx context.Context, in application.ReadMutatio
 	if err != nil {
 		return application.ReadResult{}, err
 	}
-	ids := make([]domain.ID, 0, len(in.MessageIDs))
-	for _, id := range in.MessageIDs {
-		canonical, resolveErr := resolveMessageAlias(ctx, q, id)
-		if resolveErr != nil {
-			return application.ReadResult{}, resolveErr
+	var ids []domain.ID
+	if in.Latest.MessageID != "" {
+		if c.Request != "" || c.RevisionID != in.Latest.ConversationRevisionID {
+			return application.ReadResult{}, application.ErrStateConflict
 		}
-		mrow, getErr := q.GetMessage(ctx, string(canonical))
-		if getErr != nil {
-			return application.ReadResult{}, notFound(getErr)
+		latest, lookupErr := q.LatestLogicalMessage(ctx, string(c.ID))
+		if lookupErr != nil && !errors.Is(lookupErr, sql.ErrNoRows) {
+			return application.ReadResult{}, lookupErr
 		}
-		if mrow.ConversationID != string(c.ID) || mrow.AccountID != string(c.AccountID) {
-			return application.ReadResult{}, application.ErrInvalid
+		if latest.ID != string(in.Latest.MessageID) {
+			return application.ReadResult{}, application.ErrStateConflict
 		}
-		m, decodeErr := decodeMessage(mrow)
-		if decodeErr != nil {
-			return application.ReadResult{}, decodeErr
+		marked, markErr := q.InsertConversationMessageReads(ctx, dbgen.InsertConversationMessageReadsParams{ConversationID: string(c.ID), RevisionID: string(in.RevisionID)})
+		if markErr != nil {
+			return application.ReadResult{}, markErr
 		}
-		if m.IsOwn || m.Historical {
-			continue
+		ids = make([]domain.ID, 0, len(marked))
+		for _, id := range marked {
+			ids = append(ids, domain.ID(id))
 		}
-		read, readErr := q.HasMessageRead(ctx, string(canonical))
-		if readErr != nil {
-			return application.ReadResult{}, readErr
-		}
-		if read {
-			continue
-		}
-		count, insertErr := q.InsertMessageRead(ctx, dbgen.InsertMessageReadParams{MessageID: string(canonical), RevisionID: string(in.RevisionID)})
-		if insertErr != nil {
-			return application.ReadResult{}, insertErr
-		}
-		if count > 0 {
-			ids = append(ids, canonical)
+	} else {
+		ids, err = insertObservedReads(ctx, q, c, in)
+		if err != nil {
+			return application.ReadResult{}, err
 		}
 	}
 	summary, err := q.ConversationUnreadSummary(ctx, string(c.ID))
@@ -146,4 +137,43 @@ func (s *Store) MarkMessagesRead(ctx context.Context, in application.ReadMutatio
 		return application.ReadResult{}, err
 	}
 	return application.ReadResult{State: state}, nil
+}
+
+func insertObservedReads(ctx context.Context, q *dbgen.Queries, c domain.Conversation, in application.ReadMutation) ([]domain.ID, error) {
+	ids := make([]domain.ID, 0, len(in.MessageIDs))
+	for _, id := range in.MessageIDs {
+		canonical, err := resolveMessageAlias(ctx, q, id)
+		if err != nil {
+			return nil, err
+		}
+		row, err := q.GetMessage(ctx, string(canonical))
+		if err != nil {
+			return nil, notFound(err)
+		}
+		if row.ConversationID != string(c.ID) || row.AccountID != string(c.AccountID) {
+			return nil, application.ErrInvalid
+		}
+		m, err := decodeMessage(row)
+		if err != nil {
+			return nil, err
+		}
+		if m.IsOwn || m.Historical {
+			continue
+		}
+		read, err := q.HasMessageRead(ctx, string(canonical))
+		if err != nil {
+			return nil, err
+		}
+		if read {
+			continue
+		}
+		count, err := q.InsertMessageRead(ctx, dbgen.InsertMessageReadParams{MessageID: string(canonical), RevisionID: string(in.RevisionID)})
+		if err != nil {
+			return nil, err
+		}
+		if count > 0 {
+			ids = append(ids, canonical)
+		}
+	}
+	return ids, nil
 }

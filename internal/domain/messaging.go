@@ -9,11 +9,15 @@ type Connection struct {
 	LastErrorCode string
 }
 
+// LatestMessagePageSize is the default message page and the inbox estimate limit.
+const LatestMessagePageSize = 50
+
 type Conversation struct {
 	ID, RevisionID, AccountID, PeerID ID
 	Kind, Address, Title, LastMessage string
 	UpdatedAt                         time.Time
 	UnreadCount                       int
+	LatestMessagePageCount            *int `json:"-"`
 	UnreadMention                     bool `json:",omitempty"`
 	Archived, Favorite                bool
 	ActivitySequence                  int64

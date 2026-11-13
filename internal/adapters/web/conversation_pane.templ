@@ -81,13 +81,10 @@ templ conversationSkeleton(v view) {
    @skeleton.Skeleton(skeleton.Config{Count:2,RootClass:"oie-chat-skeleton-title"})
   </div>
  </div>
- <div class="oie-chat-skeleton-timeline" aria-hidden="true">
+ <div class="oie-chat-skeleton-timeline" data-conversation-placeholders aria-hidden="true"></div>
+ <template data-conversation-placeholder>
   @skeleton.Skeleton(skeleton.Config{Shape:skeleton.ShapeRectangle,RootClass:"oie-chat-skeleton-message"})
-  @skeleton.Skeleton(skeleton.Config{Shape:skeleton.ShapeRectangle,RootClass:"oie-chat-skeleton-message oie-chat-skeleton-outgoing"})
-  @skeleton.Skeleton(skeleton.Config{Shape:skeleton.ShapeRectangle,RootClass:"oie-chat-skeleton-message"})
-  @skeleton.Skeleton(skeleton.Config{Shape:skeleton.ShapeRectangle,RootClass:"oie-chat-skeleton-message"})
-  @skeleton.Skeleton(skeleton.Config{Shape:skeleton.ShapeRectangle,RootClass:"oie-chat-skeleton-message oie-chat-skeleton-outgoing"})
- </div>
+ </template>
  <div class="oie-chat-skeleton-composer" aria-hidden="true">
   @skeleton.Skeleton(skeleton.Config{Shape:skeleton.ShapeRectangle,ItemClass:"oie-chat-skeleton-input"})
  </div>

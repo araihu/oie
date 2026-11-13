@@ -484,6 +484,27 @@ Provide searchable **Media, Files, and Links** views. Catalog shared URLs automa
 
 **AGREED:** the main Media and Links destination aggregates all conversations in the selected engine, with account filtering and Media, Links, and Documents tabs. The account filter uses a searchable single-selection combobox, matching account names and addresses and retaining an All accounts option. Entering from global search with multiple selected accounts carries the full selection into the catalog and uses the searchable checkbox combobox for that selection. Account selection follows the URL. Show date groups and the source of each item, and provide navigation to its original message. Opening an image keeps the viewer's previous/next navigation scoped to its conversation. Load older catalog items automatically near the end of the scroll area, both globally and in a conversation. Append them without a full-page navigation, preserving the active filters, visible position and video playback. Provide an explicit retry after a failed page load.
 
+**AGREED:** when opening Media and Links through in-app navigation or replacing
+its first results page, show a skeleton after 250 ms. On the catalog screen,
+cover the results area while keeping search and filter controls usable. Media
+uses the responsive card grid. Links and Documents use full-width rows. Use
+first-page counts supplied for all three tabs when the catalog opens, when
+its first page changes, and in the existing live snapshot. Each count uses the
+same account selection, conversation filter, and search as the active catalog
+and is capped at the page size. Refresh these estimates without loading the
+other tabs' cards or registering their previews. A scope without an estimate
+uses a small default that fits the viewport. A known empty page shows
+loading status without placeholder cards. Keep these estimates in bounded tab
+memory. Discard superseded responses and preserve the current scroll position
+when appending older items with the existing edge loading indicator.
+
+**AGREED:** shared-content tabs in conversation details use the same first-page
+estimates and loading behavior. Scope the estimates to the owning account,
+conversation, and the drawer search. Provide all three counts when opening the
+shared-content subview, replacing its first page, and refreshing its live
+snapshot. During a slow tab or search request, cover only the results and keep
+the drawer controls available.
+
 Provide WhatsApp-like rich link cards using structured engine metadata. Preview enrichment must not require a provider client in the browser.
 
 **AGREED:** link-card fallbacks prefer the available preview image. Without an image, use a compact card with page title, available description and the domain once. Use a cached site icon when available; otherwise use a local link icon. When metadata is unavailable, show a readable URL path and domain, preserving the full URL as the destination. Do not reserve an empty image column. Keep message cards compact and catalog cards full-width. Metadata failures leave the basic card usable; More options offers an explicit metadata refresh without changing the message.
@@ -576,9 +597,9 @@ Without app sync, independent engines can diverge. Configured sync can also dive
 
 ### 10.1 Read and typing
 
-Automatically mark incoming messages read only when visible in the active, focused conversation. Receipt, indexing, fetching, and background tabs are not automatic read triggers.
+Automatically mark visible incoming messages read in the active, focused conversation. At the latest end of the timeline, mark its earlier unread messages read as well, including messages outside the loaded history page. Receipt, indexing, fetching, and background tabs are not automatic read triggers.
 
-Implemented alpha scope: record exact visible incoming message identities in the owning engine, with durable independent UUID revisions and idempotent read batches. Reading does not alter message content or conversation activity ordering, and it does not clear other messages or subsequent arrivals. Hosted clients observe the shared counter through conversation events. Independent-engine read replication, manual unread reminders and provider receipt emission remain separate work.
+Implemented alpha scope: record read identities in the owning engine with durable independent UUID revisions and idempotent read batches. Away from the latest end, only visible incoming messages qualify. At the latest end, the engine verifies the displayed conversation revision and latest message before clearing unread state in that snapshot. Reading preserves subsequent arrivals, message content and conversation activity ordering. Hosted clients observe the shared counter through conversation events. Independent-engine read replication, manual unread reminders and provider receipt emission remain separate work.
 
 **AGREED:** highlight received room messages that mention the account's room nickname, with or without `@`. Show an `@` indicator on the conversation while it has any unread mentions. Reading clears the conversation indicator once all matching messages have been read. See [room mentions](mentions.md).
 
@@ -627,6 +648,16 @@ Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screen
 **AGREED:** show a reaction shortcut beside the message bubble on hover and keyboard focus, on the right of received messages and the left of sent messages. The React action opens a compact row of common emojis beside the message. Choosing an emoji applies it immediately. The plus button opens the full searchable catalog above the row when space allows. Existing reactions use a compact capsule slightly overlapping the bubble's bottom border. Opening its summary and filtering by emoji are read-only actions. Clicking the capsule lists verified actors with name, cached avatar or initials and their emoji set. Emoji filters narrow that list. Own emoji actions remove only the current account's reaction. Show participant identities only when the API provides authoritative identity data. On touch devices, double-tapping a message opens the reaction selector; holding opens the existing message actions. Scrolling, canceled touches and navigation must cancel pending gestures without affecting the composer or sending a reaction. Preserve native links and playback controls. See [reaction interactions](reaction-interactions.md).
 
 **AGREED:** ordinary in-app navigation and filtering should use HTMX fragment swaps rather than full-document reloads. Changing an inbox filter updates only the filter controls and conversation list. Keep the open conversation, timeline position and draft even when the filtered list excludes that conversation. Selecting a different conversation within the same inbox replaces only the conversation region, preserving the navigation and conversation-list DOM, unfinished search input and list scroll. Show a conversation-shaped skeleton while a different conversation is loading. Skip the skeleton when the fragment arrives quickly and keep it static when reduced motion is enabled. Preserve addressable URLs, browser Back/Forward, account/conversation isolation, drafts and meaningful focus/scroll. Keep native links/forms as a fallback. Dispose obsolete listeners, timers and live subscriptions when a fragment replaces their owning screen; stale responses must not overwrite a newer screen or repeat a mutation. Keep the inbox free of history status banners and visible navigation progress text. Use a dismissible notification when a view fails to open.
+
+**AGREED:** the initial inbox and `/ui/refresh` include an optional first-page
+message count for each listed conversation with a visible timeline. The engine
+counts up to the 50 most recent visible canonical messages in the same bounded
+list query. Pending requests omit the count. SSE-triggered and periodic refreshes
+update the hint through the existing inbox response. When opening the latest
+page of a conversation, show at most the number of placeholder bubbles that fit
+in the timeline viewport. Use five as the fallback when the estimate is absent
+or the route requests historical context. A zero estimate shows the loading
+status without bubbles. The timeline response determines the actual content.
 
 Alpha is responsive: on phones, show one primary panel at a time with access to the other views. The screenshots do not require native window controls or add stories, calls, AI, communities, or recording features.
 
@@ -715,7 +746,7 @@ Device preferences remain meaningful with a hosted engine. Browser/site-data rem
 
 Internationalization is required from the start. Ship **English (`en`) and Brazilian Portuguese (`pt-BR`)**. Follow device/browser language unless explicitly overridden on that device; fall back to English when no supported language matches.
 
-**AGREED:** settings use a language selector with a leading flag emoji in each option and in the selected value.
+**AGREED:** General settings uses searchable comboboxes for language and display time zone. The language selector shows a leading flag emoji in each option and in the selected value.
 
 **AGREED:** the settings drawer groups preferences into General, Composition,
 and This device tabs. Composition uses a searchable multi-select for emoji
@@ -881,7 +912,7 @@ included in v0.0.1-rc.1. IDs remain stable and do not imply order.
 | **B19** | Sticker selection, packs and sending. |
 | **B20** | GIF search, selection and sending. Existing ordinary media behavior does not imply a GIF discovery service. |
 | **B21** | Returning to Conversations from another navigation section restores the previously selected conversation in the same engine/account context, if it still exists and is accessible. |
-| **B22** | Package-manager distribution. The initial [packaging tooling](installation.md#package-manager-builds) prepares Homebrew, Flatpak, DEB, RPM and pacman packages from GitHub release archives. The signed Arai Hû APT archive targets Trisquel 12 and Ubuntu 24.04 x86_64. Other package repositories and additional formats remain open. |
+| **B22** | Package-manager distribution. The signed Arai Hû APT archive serves Trisquel 12 and Ubuntu 24.04 x86_64. The public Homebrew tap serves macOS Apple Silicon and Linux x86_64. The desktop release workflow also builds Flatpak bundles, RPM and pacman packages. See [remaining packaging work](#162-remaining-packaging-work-b22). |
 | **B23** | Automatic in-app updates. The first alpha updates manually through the same release installer, or through `go install` for source installations, while preserving user data. |
 | **B24** | Native desktop icon variants, generated by `araihu/assets`: a macOS Dock/application icon with a platform-appropriate background, shape and optical margins, high-resolution and smaller exports, and a separate monochrome menu-bar icon. Retain the approved flat mascot and palette. Include the Finder icon when packaging the macOS `.app`. Background color and final composition remain recommendations to review. |
 | **B34** | Location sharing. Revisit a local map, address and place search, and explicit addition to the draft before sending. An optional external map source can be configured independently of location search. The MapLibre prototype is available in revision `d084fd7`. |
@@ -899,6 +930,15 @@ A separate native daemon is an accepted future option. Wails desktop packaging i
 | **B29** | Organize chats across accounts. Start with filtering by existing contact groups. Explore user-defined workspaces that can contain direct chats and rooms from several accounts. |
 | **B30** | Start a private chat with a room occupant when the room does not disclose the occupant's personal address. Use the identity exposed by the room and respect room permissions. |
 | **B31** | Moderate messages sent by other room participants where the protocol and the user's permissions allow it. Represent received moderation events in the timeline. See section 6 for retraction of one's own messages and B04 for participant moderation. |
+
+### 16.2 Remaining packaging work (B22)
+
+- **Flathub submission.** Use the first stable tag and its source archive checksum. The maintainer will write the `com.araihu.oie` manifest and open the submission. Validate the manifest's offline build, including regeneration of the embedded JavaScript and WebAssembly assets. The [current CI check](installation.md#flathub-distribution) compiles Go offline and uses the assets in the source archive. Add an English screenshot from the Linux app and test installation and upgrade from Flathub once the app is accepted. [Flathub submission requirements](https://docs.flathub.org/docs/for-app-authors/requirements)
+- **Flathub updates.** After acceptance, configure the External Data Checker to open update PRs when a stable desktop SemVer tag publishes a verified source archive. Match the desktop source asset and exclude prereleases and `cli/` tags. Verify that the next stable tag reaches `flatpak update com.araihu.oie` after the update PR merges. Request automerge if eligible. [Flathub maintenance](https://docs.flathub.org/docs/for-app-authors/maintenance#automating-updates)
+- **Homebrew tap updates.** Trigger the public tap sync after the desktop release workflow publishes verified assets from a SemVer tag. Verify that the cask on macOS and the formula on Linux offer the released version after `brew update`, and that `brew upgrade` preserves the profile. The tap currently checks for releases on a schedule. [Tap sync workflow](https://github.com/araihu/homebrew-oie/blob/main/.github/workflows/sync.yml)
+- **macOS signing and notarization.** Obtain an Apple Developer ID Application certificate for Arai Hû. Add signing with Hardened Runtime, notarization and ticket stapling to the macOS release job before computing release checksums. Verify Gatekeeper on a clean Mac using the published archive and Homebrew cask. [Apple notarization guide](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
+- **Fedora and Arch Linux.** Choose a Fedora repository channel for the RPM, with COPR as a candidate. Prepare and submit an Arch `PKGBUILD` for the AUR. For each selected channel, automate updates from desktop SemVer releases where the channel allows it. Verify fresh installs and upgrades with the channel's package manager and check that the Oiê profile survives the upgrade.
+- **Other catalogs.** Evaluate official distro repositories and additional formats as separate distribution choices. Record the maintainer, submission path and update policy for each selected channel before implementing it. See the [current installation channels](installation.md#package-manager-builds).
 
 ## 17. Recommended delivery sequence and validation
 
@@ -936,7 +976,7 @@ These scenarios validate **AGREED** behavior; proposed mechanisms such as a part
 | Downloaded files | Small previews default automatic, originals on demand, preferences per device. Downloads persist until explicit deletion under the default. Optional file removal preserves shared references. A supported digest mismatch is not shown as verified success. |
 | Forwarding | Destination account/capabilities govern the new outgoing message. Source attribution is opt-in. Media is obtained/uploaded with progress/errors; unavailable files do not silently become forwarded source links. |
 | Rooms | Discover/join/create/invite and name/topic changes follow support/permissions. Reconnect rejoins active rooms except explicit leave/revoked access. Leaving preserves saved history. |
-| Read and presence | Background/unseen messages do not automatically become read. Explicit Mark as read sends enabled/supported receipts; unread reminders do not reverse them. Account DND suppresses alerts while reception/counts continue. |
+| Read and presence | Automatic reads require the active, focused conversation. At the latest end, earlier unread messages clear too. Explicit Mark as read sends enabled/supported receipts; unread reminders do not reverse them. Account DND suppresses alerts while reception/counts continue. |
 | Notifications | Focused active chat is silent. Cooperating same-profile tabs/PWA windows issue at most one alert/sound. Independent devices notify under their own effective policies. Backlogged Web Push is not required. |
 | Presentation | Desktop/mobile layouts, send-key preferences, first-unread opening, Jump to latest, and follow-bottom behavior work without losing drafts/scroll on ordinary updates. |
 | PWA storage | Recently viewed history respects the configured device limit; protected cached conversations report insufficient space. Drafts and pending sends are not ordinary eviction candidates. Media-file retention is independent. |
