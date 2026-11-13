@@ -6,6 +6,7 @@ window.OieRuntime.register('timeline',life=>{
  const identity={engine:document.body.dataset.engineId,account:document.body.dataset.accountId,conversation:document.body.dataset.conversationId};
  let disposed=false,busy=false,epoch=0,controller,observer,resizer,anchor,restoring=false,follow=false,failed='',retryDirection='',refreshAgain=false,refreshPage,refreshStartedAt=0,liveAttached=false,older=false,newer=false,retryMode='page',retryTarget='',forceFollow=false,focusEpoch=0,focusPending=false;
  let exhaustedArchiveEdge='';
+ let latestSnapshot=null;
  const hiddenChecks=new Set(),hiddenRevisions=new Map();
  function rememberHidden(id,revision){
   hiddenRevisions.set(id,revision);
@@ -25,6 +26,16 @@ window.OieRuntime.register('timeline',life=>{
   return {data,entries,scope};
  }
  function current(){return rows().map(node=>({id:node.dataset.messageId,ms:Number(node.dataset.createdMs),version:node.dataset.messageVersion,node}))}
+ function rememberLatest({data},id=data.newest){
+  if(data.hasNewer==='false'&&uuid(id)&&uuid(data.conversationRevision)){
+   latestSnapshot={id,revision:data.conversationRevision,unread:Number(data.unread)};
+  }
+ }
+ function latestReadTarget(){
+  if(busy||focusPending||newer||!(latestSnapshot?.unread>0))return null;
+  if(root.scrollHeight-root.scrollTop-root.clientHeight>2||rows().at(-1)?.dataset.messageId!==latestSnapshot.id)return null;
+  return latestSnapshot;
+ }
  function avatarGroups(){
   const entries=rows();for(let i=0;i<entries.length;i++){const node=entries[i],next=entries[i+1];
    const continues=next&&node.dataset.messageGroupable==='true'&&next.dataset.messageGroupable==='true'&&['messageAccount','messageConversation','messageSender','messageSenderName'].every(key=>node.dataset[key]===next.dataset[key])&&node.classList.contains('oie-message-own')===next.classList.contains('oie-message-own');
@@ -138,7 +149,7 @@ window.OieRuntime.register('timeline',life=>{
    if(mode==='context'){
     if(!page.entries.some(item=>item.id===page.data.canonicalCursor))throw Error('context_target');
     const selection=getSelection(),locked=rows().some(row=>!!row.querySelector('[aria-expanded="true"]')||[...row.querySelectorAll('video,audio')].some(media=>!media.paused&&!media.ended)||selection&&!selection.isCollapsed&&(row.contains(selection.anchorNode)||row.contains(selection.focusNode)));if(locked){failed='paused';return}
-    if(merge(page,{direction:'context',reset:true,starGeneration})){older=page.data.hasOlder==='true';newer=page.data.hasNewer==='true';liveAttached=false;document.body.dataset.focusMessage=page.data.canonicalCursor;document.dispatchEvent(new CustomEvent('oie:timeline-focus',{detail:{id:page.data.canonicalCursor,focus:focusOptions.focus!==false}}));capture();return true}return false;
+    if(merge(page,{direction:'context',reset:true,starGeneration})){older=page.data.hasOlder==='true';newer=page.data.hasNewer==='true';rememberLatest(page);liveAttached=false;document.body.dataset.focusMessage=page.data.canonicalCursor;document.dispatchEvent(new CustomEvent('oie:timeline-focus',{detail:{id:page.data.canonicalCursor,focus:focusOptions.focus!==false}}));capture();return true}return false;
    }
    const far=aliases.filter(plan=>!before.some(item=>item.id===plan.record.id)&&(tuple(plan.record,before[0])<0||tuple(plan.record,before.at(-1))>0));
    if(far.length){
@@ -159,7 +170,7 @@ window.OieRuntime.register('timeline',life=>{
    }
    const active=document.activeElement,focusInTimeline=before.some(item=>item.node.contains(active));
    if(merge(page,{direction:mode==='page'?direction:'update',authoritative:mode==='window',followEnd:mode==='page'&&direction==='newer'&&liveAttached&&wasBottom,starGeneration,aliases,retired})){
-    if(mode==='page'){if(direction==='older')older=page.data.hasOlder==='true';else{newer=page.data.hasNewer==='true';if(!newer&&!window.document.body.dataset.focusMessage)liveAttached=true}}
+    if(mode==='page'){if(direction==='older')older=page.data.hasOlder==='true';else{newer=page.data.hasNewer==='true';rememberLatest(page,page.data.newest||page.data.canonicalCursor);if(!newer&&!window.document.body.dataset.focusMessage)liveAttached=true}}
     for(const item of before)if(retired.has(item.id))rememberHidden(item.id,item.node.dataset.messageRevision);
     const focused=document.body.dataset.focusMessage;
     if(mode==='window'&&page.data.complete==='true'&&before.some(item=>item.id===focused)&&!current().some(item=>item.id===focused))document.body.dataset.focusMessage='';
@@ -197,6 +208,7 @@ window.OieRuntime.register('timeline',life=>{
  }
  function refresh(page,force=false,startedAt=performance.now()){forceFollow=forceFollow||force;
   if(disposed)return;let snapshot;try{snapshot=parse(page.querySelector('#live-timeline')||page)}catch{return}if(!snapshot)return;snapshot.startedAt=startedAt;refreshPage=page;refreshStartedAt=startedAt;if(busy){refreshAgain=true;return}
+  rememberLatest(snapshot);
   const before=current();if(!before.length){if(snapshot.entries.length){older=snapshot.data.hasOlder==='true';newer=snapshot.data.hasNewer==='true';merge(snapshot,{direction:'newer',followEnd:liveAttached});controls()}return}
   // A snapshot may update overlapping rows, but never bridge a historical gap.
   const mounted=new Map(before.map(item=>[item.id,item])),overlap=snapshot.entries.filter(item=>mounted.has(item.id));
@@ -212,6 +224,7 @@ window.OieRuntime.register('timeline',life=>{
   if(!completeCoverage&&!failed)request('window','older');controls();
  }
  let initial;try{initial=parse(root,50)}catch{return}if(!initial)return;older=initial.data.hasOlder==='true';newer=initial.data.hasNewer==='true';liveAttached=!newer&&!document.body.dataset.focusMessage;
+ rememberLatest(initial);
  // Search uses the same bounded context parser/merge path as reply navigation.
  // A newer target invalidates an unfinished request before it can mount rows.
  function cancelFocus(){focusEpoch++;if(focusPending){epoch++;controller?.abort()}focusPending=false}
@@ -228,7 +241,7 @@ window.OieRuntime.register('timeline',life=>{
   if(generation!==focusEpoch||disposed)return false;
   focusPending=false;controls();observe();retryRefresh();return found;
  }
- const api={refresh,focus,cancelFocus,scrollLatest,hideScheduled,get hasNewer(){return newer},get liveAttached(){return liveAttached},get size(){return rows().length}};window.OieTimeline=api;
+ const api={refresh,focus,cancelFocus,scrollLatest,hideScheduled,latestReadTarget,get hasNewer(){return newer},get liveAttached(){return liveAttached},get size(){return rows().length}};window.OieTimeline=api;
  if(typeof IntersectionObserver==='function')observer=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){const direction=entry.target.dataset.timelineEdge;if(direction==='older'&&older||direction==='newer'&&newer){request('page',direction);break}}},{root,rootMargin:'70px 0px'});
  if(typeof ResizeObserver==='function')resizer=new ResizeObserver(()=>correct());
  life.on(document,'click',event=>{const button=event.target.closest('[data-timeline-load]');if(button&&root.contains(button)&&!event.defaultPrevented&&event.button===0&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey){event.preventDefault();event.stopPropagation();request(failed?retryMode:'page',button.dataset.timelineLoad,true,failed?retryTarget:'')}},true);
@@ -251,6 +264,7 @@ window.OieRuntime.register('timeline',life=>{
   const page=parse(root,50);if(!page)return;
   anchor=null;failed='';forceFollow=false;refreshAgain=false;refreshPage=null;
   older=page.data.hasOlder==='true';newer=page.data.hasNewer==='true';liveAttached=true;
+  latestSnapshot=null;rememberLatest(page);
   hooks(event.detail.page||document,event.detail.generation,performance.now());
   scrollLatest();controls();observe();
  });

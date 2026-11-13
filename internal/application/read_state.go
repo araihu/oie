@@ -2,8 +2,9 @@ package application
 
 import (
 	"context"
-	"github.com/araihu/oie/internal/domain"
 	"slices"
+
+	"github.com/araihu/oie/internal/domain"
 )
 
 type ReadMutation struct {
@@ -11,6 +12,11 @@ type ReadMutation struct {
 	Fingerprint                                        string
 	ConversationID, RevisionID, ConversationRevisionID domain.ID
 	MessageIDs                                         []domain.ID
+	Latest                                             ReadLatest
+}
+
+type ReadLatest struct {
+	MessageID, ConversationRevisionID domain.ID
 }
 type ReadResult struct {
 	State    domain.ReadState
@@ -43,6 +49,25 @@ func (e *Engine) MarkMessagesRead(ctx context.Context, key, conversation domain.
 	}
 	slices.Sort(ids)
 	ids = slices.Compact(ids)
+	intent := struct {
+		ConversationID domain.ID
+		MessageIDs     []domain.ID
+	}{conversation, ids}
+	return e.markRead(ctx, key, "mark_messages_read", intent, ReadMutation{ConversationID: conversation, MessageIDs: ids})
+}
+
+func (e *Engine) MarkLatestRead(ctx context.Context, key, conversation domain.ID, latest ReadLatest) (ReadResult, error) {
+	if !validID(key) || !validID(conversation) || !validID(latest.MessageID) || !validID(latest.ConversationRevisionID) {
+		return ReadResult{}, ErrInvalid
+	}
+	intent := struct {
+		ConversationID domain.ID
+		ReadLatest
+	}{conversation, latest}
+	return e.markRead(ctx, key, "mark_latest_read", intent, ReadMutation{ConversationID: conversation, Latest: latest})
+}
+
+func (e *Engine) markRead(ctx context.Context, key domain.ID, kind string, intent any, in ReadMutation) (ReadResult, error) {
 	r, ok := e.repo.(ReadRepository)
 	if !ok {
 		return ReadResult{}, ErrProtocolUnavailable
@@ -55,8 +80,9 @@ func (e *Engine) MarkMessagesRead(ctx context.Context, key, conversation domain.
 	if err != nil {
 		return ReadResult{}, err
 	}
-	return r.MarkMessagesRead(ctx, ReadMutation{Operation: Operation{ID: key, ResourceID: conversation, Kind: "mark_messages_read", CreatedAt: e.now().UTC()}, Fingerprint: fingerprint("mark_messages_read", struct {
-		ConversationID domain.ID
-		MessageIDs     []domain.ID
-	}{conversation, ids}), ConversationID: conversation, RevisionID: revision, ConversationRevisionID: conversationRevision, MessageIDs: ids})
+	in.Operation = Operation{ID: key, ResourceID: in.ConversationID, Kind: kind, CreatedAt: e.now().UTC()}
+	in.Fingerprint = fingerprint(kind, intent)
+	in.RevisionID = revision
+	in.ConversationRevisionID = conversationRevision
+	return r.MarkMessagesRead(ctx, in)
 }

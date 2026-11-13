@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.30.1",
+    "version": "0.31.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel=\"help\". Send Prefer: oie-problem-documentation to include the URL in the Problem Details body.",
     "contact": {
       "name": "Arai Hû",
@@ -988,8 +988,8 @@
         "tags": [
           "Conversations"
         ],
-        "summary": "Mark specifically observed incoming messages read",
-        "description": "Atomically merges the listed retained message identities into app-owned read state. Other messages, including later arrivals, remain unread. Lists are bounded and must belong to this conversation. Own and historical messages are ignored. Repeated batches are safe; retries with the same key return the original committed snapshot. Read revisions and operation receipts are durable. Reading does not bump conversation activity, edit content or send protocol receipts. This alpha operation records local engine read evidence; receipt emission and independent-engine synchronization remain deferred.",
+        "summary": "Mark incoming messages read",
+        "description": "Atomically merges the listed retained message identities into app-owned read state. Other messages, including later arrivals, remain unread. Lists are bounded and must belong to this conversation. Own and historical messages are ignored. Repeated batches are safe; retries with the same key return the original committed snapshot. Read revisions and operation receipts are durable. Reading does not bump conversation activity, edit content or send protocol receipts. This alpha operation records local engine read evidence; receipt emission and independent-engine synchronization remain deferred. With If-Match, the single message ID must be the latest retained timeline message in the specified conversation revision. The operation then marks all unread messages in that snapshot read.",
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -998,6 +998,17 @@
             "description": "Stable UUID for this exact read batch, reused after an uncertain response.",
             "schema": {
               "$ref": "#/components/schemas/ID"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "description": "Quoted conversation revision UUID for a read at the latest end of the timeline.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\"$",
+              "example": "\"019a5df0-0000-7000-8000-000000000004\""
             }
           }
         ],
@@ -1051,6 +1062,16 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "description": "The supplied conversation revision or latest timeline message is stale.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           },
           "503": {
             "$ref": "#/components/responses/Unavailable"
@@ -1594,7 +1615,7 @@
                 "example": {
                   "id": "019a5df0-0000-7000-8000-000000000003",
                   "role": "local",
-                  "apiVersion": "0.30.1",
+                  "apiVersion": "0.31.0",
                   "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
                 }
               }
@@ -4992,6 +5013,10 @@
           "unreadCount": {
             "type": "integer",
             "minimum": 0
+          },
+          "canMarkLatestRead": {
+            "type": "boolean",
+            "description": "Advertises support for the If-Match latest-timeline read on GET responses."
           }
         },
         "example": {
@@ -5243,7 +5268,7 @@
         "example": {
           "id": "019a5df0-0000-7000-8000-000000000003",
           "role": "local",
-          "apiVersion": "0.30.1",
+          "apiVersion": "0.31.0",
           "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
         },
         "additionalProperties": false,
@@ -5273,7 +5298,8 @@
               "0.12.0",
               "0.29.0",
               "0.30.0",
-              "0.30.1"
+              "0.30.1",
+              "0.31.0"
             ]
           },
           "eventCursor": {

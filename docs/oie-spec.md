@@ -576,9 +576,9 @@ Without app sync, independent engines can diverge. Configured sync can also dive
 
 ### 10.1 Read and typing
 
-Automatically mark incoming messages read only when visible in the active, focused conversation. Receipt, indexing, fetching, and background tabs are not automatic read triggers.
+Automatically mark visible incoming messages read in the active, focused conversation. At the latest end of the timeline, mark its earlier unread messages read as well, including messages outside the loaded history page. Receipt, indexing, fetching, and background tabs are not automatic read triggers.
 
-Implemented alpha scope: record exact visible incoming message identities in the owning engine, with durable independent UUID revisions and idempotent read batches. Reading does not alter message content or conversation activity ordering, and it does not clear other messages or subsequent arrivals. Hosted clients observe the shared counter through conversation events. Independent-engine read replication, manual unread reminders and provider receipt emission remain separate work.
+Implemented alpha scope: record read identities in the owning engine with durable independent UUID revisions and idempotent read batches. Away from the latest end, only visible incoming messages qualify. At the latest end, the engine verifies the displayed conversation revision and latest message before clearing unread state in that snapshot. Reading preserves subsequent arrivals, message content and conversation activity ordering. Hosted clients observe the shared counter through conversation events. Independent-engine read replication, manual unread reminders and provider receipt emission remain separate work.
 
 **AGREED:** highlight received room messages that mention the account's room nickname, with or without `@`. Show an `@` indicator on the conversation while it has any unread mentions. Reading clears the conversation indicator once all matching messages have been read. See [room mentions](mentions.md).
 
@@ -944,7 +944,7 @@ These scenarios validate **AGREED** behavior; proposed mechanisms such as a part
 | Downloaded files | Small previews default automatic, originals on demand, preferences per device. Downloads persist until explicit deletion under the default. Optional file removal preserves shared references. A supported digest mismatch is not shown as verified success. |
 | Forwarding | Destination account/capabilities govern the new outgoing message. Source attribution is opt-in. Media is obtained/uploaded with progress/errors; unavailable files do not silently become forwarded source links. |
 | Rooms | Discover/join/create/invite and name/topic changes follow support/permissions. Reconnect rejoins active rooms except explicit leave/revoked access. Leaving preserves saved history. |
-| Read and presence | Background/unseen messages do not automatically become read. Explicit Mark as read sends enabled/supported receipts; unread reminders do not reverse them. Account DND suppresses alerts while reception/counts continue. |
+| Read and presence | Automatic reads require the active, focused conversation. At the latest end, earlier unread messages clear too. Explicit Mark as read sends enabled/supported receipts; unread reminders do not reverse them. Account DND suppresses alerts while reception/counts continue. |
 | Notifications | Focused active chat is silent. Cooperating same-profile tabs/PWA windows issue at most one alert/sound. Independent devices notify under their own effective policies. Backlogged Web Push is not required. |
 | Presentation | Desktop/mobile layouts, send-key preferences, first-unread opening, Jump to latest, and follow-bottom behavior work without losing drafts/scroll on ordinary updates. |
 | PWA storage | Recently viewed history respects the configured device limit; protected cached conversations report insufficient space. Drafts and pending sends are not ordinary eviction candidates. Media-file retention is independent. |

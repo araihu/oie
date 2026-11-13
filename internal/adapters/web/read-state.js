@@ -6,24 +6,37 @@ window.OieRuntime.register('read-state',life=>{
  if(!timeline||root.dataset.mock==='true'||![engine,account,conversation].every(uuid))return;
  const path='/ui/api/v1/conversations/'+conversation+'/read-state',csrf=document.querySelector('meta[name="oie-csrf"]')?.content||'';
  const headers={'X-Oie-Engine-ID':engine,'X-Oie-Account-ID':account};
- const seen=new Map(),acknowledged=new Set();let supported=false,busy=false,pending=null,nextKey='',retryAt=0,delay=1000;
+ const seen=new Map(),acknowledged=new Set();let supported=false,canMarkLatest=false,busy=false,pending=null,nextKey='',retryAt=0,delay=1000;
+ let endSeen='',endSince=0,settledEnd='';
+ const eligibleRows=()=>timeline.querySelectorAll('[data-message-id][data-read-eligible="true"]');
  const status=root.querySelector('[data-read-status]');
  function feedback(failed){if(status){status.textContent=failed?status.dataset.readFailed:'';status.hidden=!failed;}}
  function focused(){return !document.querySelector('[data-message-search-root][data-search-open="true"],[data-conversation-search][data-search-open="true"]')&&!document.hidden&&document.hasFocus()&&document.getElementById('oie-app')===root&&document.body.dataset.conversationId===conversation&&timeline.getClientRects().length>0&&![...document.querySelectorAll('dialog[open],[role="dialog"][aria-modal="true"]')].some(node=>node.getClientRects().length>0);}
  function valid(state){return state?.conversationId===conversation&&state.accountId===account&&Number.isInteger(state.unreadCount)&&state.unreadCount>=0;}
  async function initialize(){
-  try{const response=await life.fetch(path,{credentials:'same-origin',cache:'no-store',headers});if(life.signal.aborted)return;if(response.status===404||response.status===405)return;if(!response.ok||!valid(await response.json()))throw Error('read_state_unavailable');nextKey=response.headers.get('X-Oie-Next-Operation-Key')||'';supported=uuid(nextKey);}
+  try{const response=await life.fetch(path,{credentials:'same-origin',cache:'no-store',headers});if(life.signal.aborted)return;if(response.status===404||response.status===405)return;if(!response.ok)throw Error('read_state_unavailable');const state=await response.json();if(!valid(state))throw Error('read_state_unavailable');nextKey=response.headers.get('X-Oie-Next-Operation-Key')||'';supported=uuid(nextKey);canMarkLatest=state.canMarkLatestRead===true;}
   catch{if(!life.signal.aborted)life.timeout(initialize,5000);}
  }
  async function submit(){
   if(!pending||busy||!focused()||Date.now()<retryAt)return;
   busy=true;
   try{
-   const response=await life.fetch(path,{method:'POST',credentials:'same-origin',headers:{...headers,'Content-Type':'application/json','X-CSRF-Token':csrf,'Idempotency-Key':pending.key},body:JSON.stringify({messageIds:pending.ids})});
+   const requestHeaders={...headers,'Content-Type':'application/json','X-CSRF-Token':csrf,'Idempotency-Key':pending.key};
+   if(pending.latest)requestHeaders['If-Match']='"'+pending.latest.revision+'"';
+   const response=await life.fetch(path,{method:'POST',credentials:'same-origin',headers:requestHeaders,body:JSON.stringify({messageIds:pending.ids})});
    if(life.signal.aborted)return;
+   if(pending.latest&&response.status===412){
+    settledEnd=pending.end;pending=null;nextKey=response.headers.get('X-Oie-Next-Operation-Key')||'';
+    if(!uuid(nextKey))initialize();
+    delay=1000;retryAt=0;feedback(false);
+    document.dispatchEvent(new CustomEvent('oie:refresh-request'));
+    return;
+   }
    if([400,403,404,409].includes(response.status)){supported=false;pending=null;feedback(true);return;}
    if(!response.ok||!valid(await response.json()))throw Error('read_failed');
-   for(const id of pending.ids)acknowledged.add(id);while(acknowledged.size>2000)acknowledged.delete(acknowledged.values().next().value);pending=null;nextKey=response.headers.get('X-Oie-Next-Operation-Key')||'';if(!uuid(nextKey))initialize();delay=1000;retryAt=0;feedback(false);
+   if(pending.latest)settledEnd=pending.end;
+   for(const id of pending.rendered||pending.ids)acknowledged.add(id);
+   while(acknowledged.size>2000)acknowledged.delete(acknowledged.values().next().value);pending=null;nextKey=response.headers.get('X-Oie-Next-Operation-Key')||'';if(!uuid(nextKey))initialize();delay=1000;retryAt=0;feedback(false);
    // An operation replay can contain an older count. Refresh engine truth rather
    // than replacing a newer badge with the receipt's snapshot.
    document.dispatchEvent(new CustomEvent('oie:refresh-request'));
@@ -32,9 +45,20 @@ window.OieRuntime.register('read-state',life=>{
  }
  function scan(){
   if(!supported||life.signal.aborted)return;
-  if(!focused()){seen.clear();return;}
-  const now=performance.now(),viewport=timeline.getBoundingClientRect(),current=new Set(),ready=[];
-  for(const row of timeline.querySelectorAll('[data-message-id][data-read-eligible="true"]')){
+  if(!focused()){resetObservation();return;}
+  const now=performance.now(),latest=canMarkLatest&&window.OieTimeline?.latestReadTarget();
+  if(latest){
+   const end=latest.id+':'+latest.revision;
+   if(end!==endSeen){endSeen=end;endSince=now;}
+   if(!pending&&end!==settledEnd&&now-endSince>=500&&uuid(nextKey)){
+    const rendered=Array.from(eligibleRows(),row=>row.dataset.messageId);
+    pending={key:nextKey,ids:[latest.id],latest,end,rendered};nextKey='';
+   }
+   seen.clear();submit();return;
+  }
+  endSeen='';
+  const viewport=timeline.getBoundingClientRect(),current=new Set(),ready=[];
+  for(const row of eligibleRows()){
    const id=row.dataset.messageId;if(!uuid(id)||acknowledged.has(id))continue;
    const box=row.getBoundingClientRect(),visible=Math.max(0,Math.min(box.bottom,viewport.bottom,innerHeight)-Math.max(box.top,viewport.top,0));
    const width=Math.max(0,Math.min(box.right,viewport.right,innerWidth)-Math.max(box.left,viewport.left,0));
@@ -45,6 +69,8 @@ window.OieRuntime.register('read-state',life=>{
   if(!pending&&ready.length&&uuid(nextKey)){pending={key:nextKey,ids:ready.slice(0,100)};nextKey='';}
   submit();
  }
- life.on(window,'blur',()=>seen.clear());life.on(document,'visibilitychange',()=>{if(document.hidden)seen.clear();});
+ function resetObservation(){seen.clear();endSeen='';}
+ life.on(timeline,'scroll',()=>{if(!window.OieTimeline?.latestReadTarget())endSeen='';});
+ life.on(window,'blur',resetObservation);life.on(document,'visibilitychange',()=>{if(document.hidden)resetObservation();});
  life.interval(scan,250);initialize();
 });

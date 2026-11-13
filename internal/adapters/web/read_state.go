@@ -3,11 +3,12 @@ package web
 import (
 	"context"
 	"encoding/json"
-	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
 // The BFF exposes the engine's read-state contract with its browser CSRF and
@@ -98,12 +99,24 @@ func (s *Server) readState(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		response, callErr := s.client.MarkConversationMessagesReadWithResponse(ctx, id, &engineapi.MarkConversationMessagesReadParams{IdempotencyKey: key}, body)
+		params := &engineapi.MarkConversationMessagesReadParams{IdempotencyKey: key}
+		if match := r.Header.Get("If-Match"); match != "" {
+			revision := strings.Trim(match, `"`)
+			if len(body.MessageIds) != 1 || !validOperationKey(revision) || match != `"`+revision+`"` {
+				fail(400)
+				return
+			}
+			params.IfMatch = &match
+		}
+		response, callErr := s.client.MarkConversationMessagesReadWithResponse(ctx, id, params, body)
 		if callErr != nil {
 			fail(503)
 			return
 		}
 		if response.JSON200 == nil {
+			if response.StatusCode() == http.StatusPreconditionFailed {
+				w.Header().Set("X-Oie-Next-Operation-Key", newOperationKey())
+			}
 			fail(response.StatusCode())
 			return
 		}

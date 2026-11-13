@@ -406,6 +406,9 @@ func build30(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("header", "Idempotency-Key", &params.IdempotencyKey); err != nil {
 		return nil, err
 	}
+	if err := input.Decode("header", "If-Match", &params.IfMatch); err != nil {
+		return nil, err
+	}
 	return api.NewMarkConversationMessagesReadRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
 func build31(server string, input cliruntime.Input) (*http.Request, error) {

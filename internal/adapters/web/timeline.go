@@ -135,6 +135,20 @@ func (m messageView) mentionsYou() bool {
 	return !m.IsOwn && m.MentionsYou != nil && *m.MentionsYou
 }
 
+func (v view) timelineConversationRevision() string {
+	if v.Selected == nil {
+		return ""
+	}
+	return v.Selected.RevisionId
+}
+
+func (v view) timelineUnread() int {
+	if v.Selected == nil {
+		return 0
+	}
+	return v.Selected.UnreadCount
+}
+
 func (s *Server) formatTimeline(ctx context.Context, v *view, items []engineapi.Message, extras map[string]*mediaView) {
 	slices.Reverse(items)
 	for _, m := range items {

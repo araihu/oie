@@ -5,26 +5,27 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn,label){for(let i=0;i<240;i++){if(await fn())return;await wait(50)}throw Error('Timed out: '+label)}
 (async()=>{
  const engine=id(1),account=id(2),chat=id(3),other=id(4),revision=id(5),streams=new Set(),read=new Set(),operations=new Map(),posts=[];
- const messages=Array.from({length:40},(_,n)=>({id:id(100+n),revisionId:revision,accountId:account,conversationId:chat,sender:{id:id(9),displayName:'Bob'},originalText:'Retained message '+n,createdAt:new Date(Date.UTC(2026,10,8,12,n)).toISOString(),isOwn:false,historical:n>0&&n<37,sendState:'received'}));
+ const messages=Array.from({length:60},(_,n)=>({id:id(100+n),revisionId:revision,accountId:account,conversationId:chat,sender:{id:id(9),displayName:'Bob'},originalText:'Retained message '+n,createdAt:new Date(Date.UTC(2026,10,8,12,n)).toISOString(),isOwn:false,historical:n>0&&n<57,sendState:'received'}));
  messages.push({...messages[0],id:id(200),conversationId:other,originalText:'Other chat unread'});
  Object.assign(messages[0],{originalText:'Alice, hello',mentionsYou:true});
- Object.assign(messages[39],{originalText:'Hello @Alice!',mentionsYou:true});
+ Object.assign(messages[59],{originalText:'Hello @Alice!',mentionsYou:true});
  let seq=0,effects=0,lost=false,hold=null;
  const unread=c=>messages.filter(m=>m.conversationId===c&&!m.historical&&!m.isOwn&&!read.has(m.id));
  const count=c=>unread(c).length;
- const state=c=>({conversationId:c,accountId:account,revisionId:effects?id(500+effects):null,updatedAt:effects?'2026-11-08T13:00:00Z':null,unreadCount:count(c)});
+ const state=c=>({conversationId:c,accountId:account,revisionId:effects?id(500+effects):null,updatedAt:effects?'2026-11-08T13:00:00Z':null,unreadCount:count(c),canMarkLatestRead:true});
+ const chatRevision=()=>id(1000+seq);
  function emit(){seq++;for(const stream of streams)stream.write(`id: ${engine}:${seq}\nevent: conversation.updated\ndata: {}\n\n`)}
  function incoming(text='New incoming',mentionsYou=false){const m={...messages[0],id:id(300+messages.length),originalText:text,mentionsYou,createdAt:new Date(Date.UTC(2026,10,8,14,messages.length)).toISOString()};messages.push(m);emit();return m}
  const api=http.createServer(async(req,res)=>{
   const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(status,data)=>{res.statusCode=status;res.end(JSON.stringify(data))};let raw='';for await(const c of req)raw+=c;
-  if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.17.0',eventCursor:engine+':'+seq});
+  if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.31.0',eventCursor:engine+':'+seq});
   if(u.pathname==='/api/v1/accounts')return send(200,{items:[{id:account,revisionId:revision,address:'alice@fixture',label:'Alice',protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z'}]});
   if(u.pathname==='/api/v1/accounts/'+account)return send(200,{id:account,revisionId:revision,address:'alice@fixture',label:'Alice',protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z'});
   if(u.pathname.startsWith('/api/v1/messages/')){const message=messages.find(m=>m.id===u.pathname.split('/').at(-1));return send(message?200:404,message||{status:404,code:'not_found'})}
   if(u.pathname.endsWith('/connection'))return send(200,{accountId:account,state:'connected',updatedAt:'2026-11-08T12:00:00Z'});
   if(u.pathname.endsWith('/history'))return send(200,{accountId:account,state:'complete',retainedMessages:messages.length,conversations:2,updatedAt:'2026-11-08T12:00:00Z'});
   if(u.pathname.endsWith('/avatars'))return send(200,{items:[]});
-  const chats=[chat,other].map(c=>({id:c,revisionId:revision,accountId:account,kind:c===chat?'room':'direct',address:c===chat?'room@rooms.fixture':'carol@fixture',title:c===chat?'Room':'Carol',lastMessage:'Latest retained',updatedAt:'2026-11-08T13:00:00Z',unreadCount:count(c),unreadMention:c===chat&&unread(c).some(m=>m.mentionsYou),archived:false,favorite:false}));
+  const chats=[chat,other].map(c=>({id:c,revisionId:chatRevision(),accountId:account,kind:c===chat?'room':'direct',address:c===chat?'room@rooms.fixture':'carol@fixture',title:c===chat?'Room':'Carol',lastMessage:'Latest retained',updatedAt:'2026-11-08T13:00:00Z',unreadCount:count(c),unreadMention:c===chat&&unread(c).some(m=>m.mentionsYou),archived:false,favorite:false}));
   if(u.pathname==='/api/v1/conversations')return send(200,{items:chats.filter(c=>u.searchParams.get('archived')!=='true'&&(u.searchParams.get('unreadOnly')!=='true'||c.unreadCount>0))});
   for(const c of chats){
    if(u.pathname==='/api/v1/conversations/'+c.id)return send(200,c);
@@ -37,8 +38,13 @@ async function until(fn,label){for(let i=0;i<240;i++){if(await fn())return;await
    if(u.pathname===`/api/v1/conversations/${c.id}/message-stars`)return send(200,{items:[]});
    if(u.pathname===`/api/v1/conversations/${c.id}/read-state`){
     if(req.method==='GET')return send(200,state(c.id));
-    assert.equal(req.method,'POST');const body=JSON.parse(raw),key=req.headers['idempotency-key'];posts.push({key,raw,conversation:c.id});let snapshot=operations.get(key);
-    if(!snapshot){let changed=false;for(const mid of body.messageIds){const m=messages.find(m=>m.id===mid);assert(m&&m.conversationId===c.id);if(!m.historical&&!m.isOwn&&!read.has(mid)){read.add(mid);changed=true}}if(changed){effects++;emit()}snapshot=state(c.id);operations.set(key,snapshot)}
+    assert.equal(req.method,'POST');const body=JSON.parse(raw),key=req.headers['idempotency-key'],match=req.headers['if-match'];posts.push({key,raw,match,conversation:c.id});let snapshot=operations.get(key);
+    if(!snapshot){
+     const latest=messages.filter(m=>m.conversationId===c.id).at(-1);
+     if(match&&(match!==JSON.stringify(chatRevision())||body.messageIds.length!==1||body.messageIds[0]!==latest.id))return send(412,{status:412,code:'state_conflict'});
+     const ids=match?unread(c.id).map(m=>m.id):body.messageIds;
+     let changed=false;for(const mid of ids){const m=messages.find(m=>m.id===mid);assert(m&&m.conversationId===c.id);if(!m.historical&&!m.isOwn&&!read.has(mid)){read.add(mid);changed=true}}if(changed){effects++;emit()}snapshot=state(c.id);operations.set(key,snapshot);
+    }
     if(hold){const gate=hold;hold=null;gate.accepted();await gate.release}
     if(lost){lost=false;return send(503,{status:503,code:'unavailable'})}return send(200,snapshot);
    }
@@ -58,14 +64,29 @@ async function until(fn,label){for(let i=0;i<240;i++){if(await fn())return;await
   await page.goto(base+'/?chat='+chat+'&lang=en');await until(async()=>page.evaluate(()=>!!window.OieRuntime?.generation),'runtime');
   await wait(1500);assert.equal(posts.length,0,'background/focusless view was read');assert.equal(count(chat),4);
   const roomMark=page.locator('[data-conversation-id="'+chat+'"] [data-unread-mention]');
-  const highlighted=page.locator('[data-message-id="'+messages[0].id+'"] [data-message-mention]');
+  const highlighted=page.locator('[data-message-id="'+messages[59].id+'"] [data-message-mention]');
   assert.equal(await roomMark.getAttribute('aria-label'),'Unread mention');
   assert.equal(await highlighted.getAttribute('aria-label'),'You were mentioned');
-  assert.equal(await page.locator('[data-message-mention]').count(),2);
+  assert.equal(await page.locator('[data-message-mention]').count(),1);
+  assert.equal(await page.locator('[data-message-id="'+messages[0].id+'"]').count(),0,'earlier unread message is outside the loaded page');
+  await page.locator('#message-timeline').evaluate(n=>n.scrollTop=n.scrollHeight-n.clientHeight-180);
   await page.evaluate(()=>{window.testFocus=true;window.dispatchEvent(new Event('focus'))});
-  await until(()=>count(chat)===1,'visible latest messages read');assert(!read.has(messages[0].id),'offscreen older message read');await until(async()=>await page.locator('a[data-conversation-id="'+chat+'"] .oie-unread-count').textContent()==='1','partial unread badge');
+  await wait(1200);
+  assert(!posts.some(post=>post.match),'scrolling away from the end must preserve unread history');
+  assert(!read.has(messages[0].id));
   assert.equal(await roomMark.count(),1,'offscreen mention keeps the room marked');
-  await page.locator('#message-timeline').evaluate(n=>n.scrollTop=0);await until(()=>count(chat)===0,'older visible message read');await until(async()=>await page.locator('a[data-conversation-id="'+chat+'"] .oie-unread-count').count()===0,'badge cleared');await until(async()=>await page.locator('[data-account-unread="'+account+'"]').first().textContent()==='1','account unread aggregate');
+  let stale=false;
+  await page.route(url=>url.pathname.endsWith('/read-state'),async route=>{
+   const request=route.request();
+   if(!stale&&request.method()==='POST'&&request.headers()['if-match']){stale=true;emit();}
+   await route.continue();
+  });
+  await page.locator('#message-timeline').evaluate(n=>n.scrollTop=n.scrollHeight);
+  await until(()=>count(chat)===0,'reaching latest clears unloaded unread history after a stale snapshot');
+  const latestPosts=posts.filter(post=>post.match);
+  assert(stale&&latestPosts.length===2&&latestPosts[0].match!==latestPosts[1].match&&latestPosts[0].key!==latestPosts[1].key);
+  assert(read.has(messages[0].id));
+  await until(async()=>await page.locator('a[data-conversation-id="'+chat+'"] .oie-unread-count').count()===0,'badge cleared');await until(async()=>await page.locator('[data-account-unread="'+account+'"]').first().textContent()==='1','account unread aggregate');
   assert.equal(await roomMark.count(),0);
   assert.equal(await highlighted.count(),1,'reading keeps the message highlight');
   await page.evaluate(()=>window.testFocus=false);const next=incoming();await until(async()=>await page.locator('#message-timeline [data-message-id="'+next.id+'"]').count()===1,'incoming row');await wait(1200);assert.equal(count(chat),1);
@@ -108,6 +129,6 @@ async function until(fn,label){for(let i=0;i<240;i++){if(await fn())return;await
    await viewport.close();racing.mentionsYou=true;
   }
   assert.deepEqual(errors,[]);
-  console.log('PASS: visible-only read batches, incoming mentions and stable localized markers, later arrivals, same-key uncertain retries, conversation isolation, HTMX and accessibility');
+  console.log('PASS: visible read batches and latest-timeline reads across unloaded pages, stale snapshots, mentions, later arrivals, same-key retries, conversation isolation, HTMX and accessibility');
  }catch(error){console.error('Fixture state',JSON.stringify({streams:streams.size,posts,effects,messages:messages.length,errors}));if(debugPage)console.error('DOM state',await debugPage.evaluate(()=>({url:location.href,version:document.querySelector('#message-timeline')?.dataset.version,ids:[...document.querySelectorAll('#message-timeline [data-message-id]')].map(n=>n.dataset.messageId),live:document.querySelector('[data-live-status]')?.textContent})));throw error;}finally{await browser.close();for(const stream of streams)stream.end();child.kill('SIGTERM');await once(child,'exit').catch(()=>{});await new Promise(r=>api.close(r))}
 })().catch(e=>{console.error(e);process.exitCode=1});
