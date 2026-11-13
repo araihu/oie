@@ -38,7 +38,7 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 	if !roots.AppendCertsFromPEM(pem) {
 		t.Fatal("fixture CA")
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
 	dir := t.TempDir()
 	store, err := sqlite.Open(ctx, dir, id())
@@ -332,4 +332,52 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 	if err != nil || preview.Name != "Garden vCard" {
 		t.Fatalf("creation collision changed room: %+v %v", preview, err)
 	}
+
+	invitedAddress := "invited-" + string(id()) + "@conference.localhost"
+	invitedRoom, err := engine.OpenRoom(ctx, id(), alice, invitedAddress, "Host", "Invitation fixture", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		target, _ := jid.Parse(invitedAddress)
+		response, err := publisher.SendIQ(ctx, stanza.IQ{To: target, Type: stanza.SetIQ}.Wrap(xml.NewDecoder(strings.NewReader(`<query xmlns="http://jabber.org/protocol/muc#owner"><destroy/></query>`))))
+		if err == nil {
+			_ = response.Close()
+		}
+	}()
+	waitRoom(invitedRoom.Conversation.ID, "joined")
+	manage(invitedRoom.Conversation.ID, "invite", "bob@localhost", "", "submitted")
+	var invitation domain.Conversation
+	eventually(t, func() bool {
+		chats, err := engine.Conversations(ctx, "", application.ConversationQuery{AccountID: bob, Kind: "room", Limit: 10})
+		if err != nil {
+			return false
+		}
+		for _, chat := range chats {
+			if chat.Address == invitedAddress && chat.Request == domain.RoomInvitation {
+				invitation = chat
+				return true
+			}
+		}
+		return false
+	})
+	invitedSession := waitRoom(invitation.ID, "not_joined")
+	if invitedSession.Active {
+		t.Fatalf("invitation implicitly joined: %+v", invitedSession)
+	}
+	archived := true
+	decision, err := engine.UpdateConversationPreferences(ctx, id(), invitation.ID, application.ConversationPreferencesInput{
+		AccountID: bob, ExpectedRevisionID: invitation.RevisionID, Archived: &archived,
+	})
+	if err != nil || !decision.Conversation.Archived || decision.Conversation.Request != domain.RoomInvitation {
+		t.Fatalf("archive invitation: %+v %v", decision, err)
+	}
+	if _, err := engine.JoinRoomInvitation(ctx, id(), invitation.ID, "Reader", invitedSession.IntentRevisionID, decision.Conversation.RevisionID); err != nil {
+		t.Fatal(err)
+	}
+	waitRoom(invitation.ID, "joined")
+	eventually(t, func() bool {
+		chat, err := engine.Conversation(ctx, invitation.ID)
+		return err == nil && chat.Request == "" && chat.Archived
+	})
 }

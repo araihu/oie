@@ -281,6 +281,11 @@ const sharedContentIndexStatus = `-- name: SharedContentIndexStatus :one
 SELECT COUNT(*) AS total_messages,COUNT(CASE WHEN s.parser_version>=?1 THEN 1 END) AS indexed_messages
 FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
 WHERE (CAST(?2 AS TEXT)='' OR m.account_id=CAST(?2 AS TEXT))
+AND NOT EXISTS (
+ SELECT 1 FROM message_references ref JOIN room_message_moderation moderation
+ ON moderation.account_id=m.account_id AND ref.scope='room:'||moderation.room_address AND ref.remote_id=moderation.stanza_id
+ WHERE ref.message_id=m.id OR ref.message_id IN (SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
+)
 AND (CAST(?3 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?3 AS TEXT))))
 AND (CAST(?4 AS TEXT)='' OR m.conversation_id=CAST(?4 AS TEXT))
 AND (CAST(?5 AS TEXT)='[]' OR m.id IN (SELECT value FROM json_each(CAST(?5 AS TEXT))))
