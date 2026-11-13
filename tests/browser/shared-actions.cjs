@@ -84,6 +84,8 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
   const shell=await page.locator('#oie-app').elementHandle();
   await watchSnapshot();
   await menu(0).getByRole('menuitem',{name:'Go to message',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#message-timeline'));assert.equal(documents.length,1);assert.equal(new URL(page.url()).searchParams.get('message'),items[0].message.id);
+  await until(()=>streams.size===1,'live stream retained across source navigation');
+  emit();
   // Network completion is earlier than application consumption. Wait for the
   // actual source-route settlement and its scoped SSE snapshot to be applied.
   await until(async()=>await snapshotApplied()&&await page.evaluate(()=>{const s=window.catalogActionSettlement,generation=window.OieRuntime.generation;return s.routeGeneration===generation&&s.swapGeneration===generation&&generation===s.previousGeneration+1&&document.querySelector('#message-timeline')?.dataset.timelineBusy==='false'}),'source route and initial live snapshot applied');
