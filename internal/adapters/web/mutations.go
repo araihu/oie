@@ -90,7 +90,7 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 		s.mutationResponse(w, r, 400, mutationResult{Message: text.InvalidForm, Code: "invalid_request", Rejected: true})
 		return
 	}
-	if r.URL.Path == "/ui/conversations/preferences" || r.URL.Path == "/ui/rooms/join" {
+	if r.URL.Path == "/ui/conversations/preferences" || r.URL.Path == "/ui/rooms/open" || r.URL.Path == "/ui/rooms/join" {
 		if localized, ok := s.catalogs[r.Form.Get("lang")]; ok {
 			text = localized
 		}
@@ -128,6 +128,8 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 	result := mutationResult{OK: true, NextKey: newOperationKey()}
 	status := 200
 	switch r.URL.Path {
+	case "/ui/rooms/open":
+		status, result = s.openRoom(ctx, r, text)
 	case "/ui/rooms/join":
 		status, result = s.changeRoom(ctx, r, text, false)
 	case "/ui/rooms/leave":
@@ -303,6 +305,14 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 		return 422, mutationResult{Message: text.InvalidMessage, Code: "invalid_request", Rejected: true}
 	}
 	payload := sendInput(body, target, replyRevision, replyExcerptSHA256, mentions, attachments, at)
+	expectedKind := engineapi.SendMessageParamsXOieExpectedConversationKind(r.Form.Get("expectedConversationKind"))
+	params := &engineapi.SendMessageParams{IdempotencyKey: key}
+	if expectedKind != "" {
+		if !expectedKind.Valid() {
+			return 422, mutationResult{Message: text.InvalidMessage, Code: "invalid_request", Rejected: true}
+		}
+		params.XOieExpectedConversationKind = &expectedKind
+	}
 	receipt, evidence := s.sendReceipt(ctx, key)
 	switch evidence {
 	case "found":
@@ -316,7 +326,7 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 		}
 		// Older engines expose only metadata here. An explicit retry can ask
 		// them to verify the request against the already committed operation.
-		response, err := s.client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, payload)
+		response, err := s.client.SendMessageWithResponse(ctx, conversation, params, payload)
 		if err != nil {
 			return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
 		}
@@ -344,6 +354,9 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 	}
 	if owner.JSON200.AccountId != account {
 		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
+	}
+	if expectedKind != "" && string(owner.JSON200.Kind) != string(expectedKind) {
+		return 409, mutationResult{Message: text.ConversationChanged, Code: "state_conflict", Rejected: true}
 	}
 	if owner.JSON200.Kind == "room" {
 		session, callErr := s.client.GetRoomSessionWithResponse(ctx, conversation)
@@ -376,7 +389,7 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 			return status, mutationResult{Message: text.ReplyUnavailable, Code: "reply_unavailable", Rejected: status == 400 || status == 404}
 		}
 	}
-	response, err := s.client.SendMessageWithResponse(ctx, conversation, &engineapi.SendMessageParams{IdempotencyKey: key}, payload)
+	response, err := s.client.SendMessageWithResponse(ctx, conversation, params, payload)
 	if err != nil {
 		message, _ := s.sendReceipt(ctx, key)
 		if message != nil && matchingComposition(*message, conversation, account, payload) {
@@ -390,6 +403,12 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 	}
 	if message == nil {
 		result := problemResult(text, response.StatusCode(), response.Body)
+		if expectedKind != "" && result.Code == "state_conflict" {
+			var problem engineapi.Problem
+			if json.Unmarshal(response.Body, &problem) == nil && problem.CurrentRoomSession == nil {
+				result.Message, result.Rejected = text.ConversationChanged, true
+			}
+		}
 		if len(mentions) > 0 && response.StatusCode() == 400 && result.Code == "invalid_request" {
 			result.Code, result.Message = "mention_unavailable", text.MentionChanged
 		}
@@ -468,7 +487,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 	v.ErrorMessage = result.Message
 	v.PreferenceRecovery = r.URL.Path == "/ui/conversations/preferences" && result.PreferencesPending
 	v.FormTarget = r.Form.Get("formTarget")
-	for _, key := range []string{"address", "label", "endpoint", "accountId", "conversationId", "originalText", "operationKey", "expectedRevisionId", "archived", "favorite", "acceptRequest", "lang"} {
+	for _, key := range []string{"address", "nickname", "name", "label", "endpoint", "accountId", "conversationId", "originalText", "operationKey", "expectedRevisionId", "archived", "favorite", "acceptRequest", "lang"} {
 		v.Values[key] = r.Form.Get(key)
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -487,7 +506,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 
 func isMutationPath(path string) bool {
 	switch path {
-	case "/ui/scheduling/update", "/ui/scheduling/send-now", "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
+	case "/ui/scheduling/update", "/ui/scheduling/send-now", "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/open", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
 		return true
 	}
 	return false

@@ -5,8 +5,6 @@ import (
 	"errors"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/araihu/oie/internal/domain"
 )
@@ -147,7 +145,7 @@ func (e *Engine) setRoomIntent(ctx context.Context, key, id domain.ID, nickname 
 		return RoomIntentResult{}, ErrInvalid
 	}
 	nickname = strings.TrimSpace(nickname)
-	if active && (!utf8.ValidString(nickname) || utf8.RuneCountInString(nickname) > 100 || (strings.ContainsAny(nickname, "\x00\r\n/") || strings.IndexFunc(nickname, unicode.IsControl) >= 0)) {
+	if active && !validRoomNickname(nickname) {
 		return RoomIntentResult{}, ErrInvalid
 	}
 	repo, ok := e.repo.(RoomIntentRepository)
@@ -177,6 +175,15 @@ func (e *Engine) setRoomIntent(ctx context.Context, key, id domain.ID, nickname 
 	}
 	if c.Kind != "room" {
 		return RoomIntentResult{}, ErrInvalid
+	}
+	if active {
+		account, err := e.Account(ctx, c.AccountID)
+		if err != nil {
+			return RoomIntentResult{}, err
+		}
+		if err := e.checkRoomNickname(account, nickname); err != nil {
+			return RoomIntentResult{}, err
+		}
 	}
 	if _, ok := e.protocols.(RoomProtocol); !ok {
 		return RoomIntentResult{}, ErrProtocolUnavailable
@@ -268,6 +275,37 @@ func (e *Engine) RoomSessionChanged(ctx context.Context, s domain.RoomSession) e
 	return nil
 }
 
+// RoomEntryCurrent lets the wire adapter recheck the durable intent after
+// discovery or waiting for an IQ slot.
+func (e *Engine) RoomEntryCurrent(ctx context.Context, id, revision domain.ID, create bool) (bool, error) {
+	intent, err := e.roomIntent(ctx, id)
+	return err == nil && intent.Active && intent.IntentRevisionID == revision && (intent.CreationName != nil) == create, err
+}
+
+func (e *Engine) dispatchRoomEntry(ctx context.Context, p RoomProtocol, a domain.Account, c domain.Conversation, intent domain.RoomSession) error {
+	if intent.CreationName != nil {
+		if creator, ok := p.(RoomCreator); ok {
+			_, err := creator.CreateRoom(ctx, a, c, intent.Nickname, *intent.CreationName, intent.IntentRevisionID)
+			return err
+		}
+		return nil
+	}
+	if credentials, ok := e.repo.(ConversationRequestRepository); ok {
+		if invited, ok := p.(InvitedRoomProtocol); ok {
+			password, err := credentials.RoomInvitationCredential(ctx, c.ID)
+			if err != nil {
+				return err
+			}
+			if password != "" || c.Request == domain.RoomInvitation {
+				_, err := invited.JoinInvitedRoom(ctx, a, c, intent.Nickname, password, intent.IntentRevisionID)
+				return err
+			}
+		}
+	}
+	_, err := p.JoinRoom(ctx, a, c, intent.Nickname, intent.IntentRevisionID)
+	return err
+}
+
 func (e *Engine) wakeRooms() {
 	select {
 	case e.roomWork <- struct{}{}:
@@ -322,6 +360,13 @@ func (e *Engine) runRooms(ctx context.Context) error {
 				}
 				continue
 			}
+			if s.IntentRevisionID == intent.IntentRevisionID && (s.Revoked || (intent.CreationName != nil && s.State == "joined")) {
+				if err := e.RoomSessionChanged(ctx, s); err != nil && ctx.Err() == nil {
+					return err
+				}
+				continue
+			}
+
 			if s.IntentRevisionID == intent.IntentRevisionID && (s.State == "joined" || s.State == "joining" || s.LastErrorCode == "nickname_conflict" || s.LastErrorCode == "unsupported") {
 				continue
 			}
@@ -338,22 +383,15 @@ func (e *Engine) runRooms(ctx context.Context) error {
 			}
 			next[c.ID] = e.now().Add(10 * time.Second)
 			call, cancel := context.WithTimeout(ctx, 10*time.Second)
-			if credentials, ok := e.repo.(ConversationRequestRepository); ok {
-				if invited, ok := e.protocols.(InvitedRoomProtocol); ok {
-					password, readErr := credentials.RoomInvitationCredential(call, c.ID)
-					if readErr != nil {
-						cancel()
-						continue
-					}
-					if password != "" {
-						_, _ = invited.JoinInvitedRoom(call, a, c, intent.Nickname, password, intent.IntentRevisionID)
-						cancel()
-						continue
-					}
+			dispatchErr := e.dispatchRoomEntry(call, p, a, c, current)
+			cancel()
+			if errors.Is(dispatchErr, ErrInvalid) {
+				failed := intent
+				failed.State, failed.LastErrorCode, failed.Revoked = "failed", "invalid_nickname", true
+				if err := e.RoomSessionChanged(ctx, failed); err != nil && ctx.Err() == nil {
+					return err
 				}
 			}
-			_, _ = p.JoinRoom(call, a, c, intent.Nickname, intent.IntentRevisionID)
-			cancel()
 		}
 		select {
 		case <-ctx.Done():

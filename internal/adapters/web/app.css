@@ -532,3 +532,23 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-request-banner [role="status"]:empty{display:none}
 .oie-request-banner [data-form-feedback],.oie-request-banner #conversation-preference-status{position:absolute;z-index:1;inset-inline:0;top:calc(100% + 1rem);margin:0;padding:.5rem 1rem;background:var(--oie-panel);color:var(--oie-text);text-align:center}
 .oie-request-banner [data-form-feedback][data-error=true]{color:light-dark(#9e2626,#ffb4ab)}
+
+.oie-room-entry{padding:16px}
+.oie-room-entry form{display:grid;gap:12px}
+.oie-room-entry form>button{justify-self:start}
+.oie-room-entry-links{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}
+.oie-room-entry-links a{display:inline-flex;align-items:center;gap:6px}
+.oie-room-preview{padding:12px;border:1px solid var(--oie-border);border-radius:10px;overflow-wrap:anywhere}
+.oie-room-preview-heading{display:flex;align-items:center;gap:10px}
+.oie-room-preview-heading small{display:block;color:var(--oie-muted)}
+.oie-room-preview p{margin:6px 0 0;white-space:pre-wrap}
+.oie-room-preview>p:first-child{margin-top:0}
+.oie-original-message a[data-room-invitation],.oie-plain-fallback a[data-room-invitation]{color:inherit;text-decoration:underline;text-underline-offset:2px}
+
+.oie-room-invitation{margin-top:8px;width:20rem;max-width:100%;min-width:0;text-align:start;white-space:normal;color:var(--oie-text)}
+.oie-room-invitation-summary{display:grid;grid-template-columns:auto minmax(0,1fr);gap:9px;block-size:5.1rem;overflow:hidden}
+.oie-room-invitation-copy{min-width:0;line-height:1.25}
+.oie-room-invitation-copy strong,.oie-room-invitation-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.oie-room-invitation-copy small{color:var(--oie-muted);font-size:.75rem;margin-top:2px}
+.oie-room-invitation-copy p{font-size:.8125rem;margin:4px 0 0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.oie-room-invitation-action{display:inline-flex;align-items:center;gap:5px;min-block-size:28px}

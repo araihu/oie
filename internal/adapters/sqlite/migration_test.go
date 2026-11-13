@@ -61,7 +61,7 @@ func TestSchedulingPreviewMigratesWithoutDiscardingData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"000025_room_invitation_credentials", "000024_reaction_target_lookups", "000023_dispatch_wire_stage", "000022_scheduled_timeline", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
+	for _, name := range []string{"000026_room_invitation_credentials", "000025_room_creation", "000024_reaction_target_lookups", "000023_dispatch_wire_stage", "000022_scheduled_timeline", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
 		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
 		if err != nil {
 			t.Fatal(err)
@@ -139,6 +139,54 @@ func TestReactionLookupPreviewMigratesWithoutDiscardingData(t *testing.T) {
 	}
 	if scheduled, err := upgraded.ScheduledMessages(ctx, application.ScheduledQuery{Limit: 10}); err != nil || len(scheduled) != 0 {
 		t.Fatalf("scheduling schema unavailable after upgrade: %+v %v", scheduled, err)
+	}
+	var version int
+	var dirty bool
+	if err = upgraded.db.QueryRowContext(ctx, "SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestMigration || dirty {
+		t.Fatalf("migrate journal: %d %v %v", version, dirty, err)
+	}
+}
+
+func TestConversationRequestPreviewMigratesWithoutDiscardingCredentials(t *testing.T) {
+	ctx := t.Context()
+	store, _, conversation := outboxFixture(t)
+	migrateFixtureToVersion(t, store, 24)
+	migration, err := migrations.ReadFile("migrations/000026_room_invitation_credentials.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.db.ExecContext(ctx, string(migration)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.db.ExecContext(ctx, "PRAGMA user_version=24; UPDATE schema_migrations SET version=25"); err != nil {
+		t.Fatal(err)
+	}
+	room := domain.Conversation{
+		ID: migrationID(), RevisionID: migrationID(), PeerID: migrationID(),
+		AccountID: conversation.AccountID, Kind: "room", Address: "private@conference.localhost",
+		Title: "Private room", UpdatedAt: time.Now().UTC(), Request: domain.RoomInvitation,
+	}
+	const password = "fixture-password"
+	if err = store.StoreRoomInvitation(ctx, room, password); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := Open(ctx, store.dir, migrationID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = upgraded.Close() }()
+	if got, err := upgraded.RoomInvitationCredential(ctx, room.ID); err != nil || got != password {
+		t.Fatal("invitation credential was not retained", err)
+	}
+	if got, err := upgraded.Conversation(ctx, room.ID); err != nil || got.Request != domain.RoomInvitation {
+		t.Fatal("invitation was not retained", err)
+	}
+	var creationColumn bool
+	if err := upgraded.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pragma_table_info('room_intents') WHERE name='creation_name')").Scan(&creationColumn); err != nil || !creationColumn {
+		t.Fatal("room creation migration was not applied", err)
 	}
 	var version int
 	var dirty bool

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	"fmt"
 	"io"
 
 	"net"
@@ -92,7 +93,7 @@ func TestRoomPermissionFailuresCarryTerminalObservation(t *testing.T) {
 		name, raw, code string
 		revoked         bool
 	}{
-		{"conflict", `<presence xmlns="jabber:client" from="room@conference.example.test/Oie" type="error"><error><conflict xmlns="urn:ietf:params:xml:ns:xmpp-stanzas"/></error></presence>`, "nickname_conflict", false},
+		{"conflict", `<presence xmlns="jabber:client" from="room@conference.example.test/Oie" type="error"><error><conflict xmlns="urn:ietf:params:xml:ns:xmpp-stanzas"/></error></presence>`, "nickname_conflict", true},
 		{"forbidden", `<presence xmlns="jabber:client" from="room@conference.example.test/Oie" type="error"><error><forbidden xmlns="urn:ietf:params:xml:ns:xmpp-stanzas"/></error></presence>`, "forbidden", true},
 		{"kicked", `<presence xmlns="jabber:client" from="room@conference.example.test/Oie" type="unavailable"><x xmlns="http://jabber.org/protocol/muc#user"><status code="110"/><status code="307"/></x></presence>`, "removed", true},
 	} {
@@ -266,5 +267,39 @@ func TestNonanonymousReactionPrivacyRequiresCurrentPresence(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRoomConfigurationRemovalPreventsJoinedObservation(t *testing.T) {
+	m, e, slot, host := roomFixture(t)
+	name := "Pending creation"
+	slot.creationName = &name
+	slot.configuring = true
+	feedRoomPresence(t, m, e, `<presence xmlns="jabber:client" from="room@conference.example.test/Oie" type="unavailable" id="room-event"><x xmlns="http://jabber.org/protocol/muc#user"><status code="110"/><status code="307"/></x></presence>`)
+	if slot.snapshot.State != "failed" || !slot.snapshot.Revoked || slot.snapshot.LastErrorCode != "removed" || len(host.changes) != 1 {
+		t.Fatalf("room removal during configuration was ignored: %+v", slot.snapshot)
+	}
+}
+
+func TestRoomSlotLimitEvictsOnlyInactiveObservations(t *testing.T) {
+	_, e, slot, _ := roomFixture(t)
+	for len(e.rooms) < maxRoomSessions {
+		key := fmt.Sprintf("old-%d", len(e.rooms))
+		e.rooms[key] = &roomSlot{snapshot: domain.RoomSession{State: "failed", UpdatedAt: time.Now()}}
+	}
+	if !reserveRoomSlot(e, "next") || len(e.rooms) != maxRoomSessions-1 || e.rooms[slot.conversation.Address] != slot {
+		t.Fatal("room limit rejected an entry despite inactive slots")
+	}
+}
+
+func TestRoomPreviewDoesNotProbeUnadvertisedService(t *testing.T) {
+	m, e, _, _ := roomFixture(t)
+	e.account.Protocol = "xmpp"
+	preview, _, err := m.PreviewRoom(t.Context(), e.account, "tracking-token@attacker.example", true)
+	if err != nil || preview.State != "unavailable" {
+		t.Fatalf("unexpected automatic room lookup result: %+v %v", preview, err)
+	}
+	if err := m.ValidateRoomNickname(e.account, "name\u200b"); err != application.ErrInvalid {
+		t.Fatalf("invalid XMPP nickname accepted: %v", err)
 	}
 }

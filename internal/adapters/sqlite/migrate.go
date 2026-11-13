@@ -16,7 +16,7 @@ import (
 var migrations embed.FS
 
 const schedulingMigration = 21
-const latestMigration = 25
+const latestMigration = 26
 
 func migrateDatabase(ctx context.Context, db *sql.DB) error {
 	// Catalog introspection is bootstrap housekeeping, not application queries.
@@ -74,10 +74,42 @@ func migrateDatabase(ctx context.Context, db *sql.DB) error {
 			return err
 		}
 	}
+	if version == 25 {
+		if err := adoptConversationRequestPreview(ctx, db); err != nil {
+			return err
+		}
+	}
 	if err := runner.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return err
 	}
 	return nil
+}
+
+// The request preview used version 25 for invitation credentials. Install the
+// room-creation schema now assigned to that version before continuing to 26.
+func adoptConversationRequestPreview(ctx context.Context, db *sql.DB) error {
+	var preview bool
+	if err := db.QueryRowContext(ctx, `SELECT
+		EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'room_invitation_credentials')
+		AND NOT EXISTS(SELECT 1 FROM pragma_table_info('room_intents') WHERE name = 'creation_name')`).Scan(&preview); err != nil {
+		return err
+	}
+	if !preview {
+		return nil
+	}
+	migration, err := migrations.ReadFile("migrations/000025_room_creation.up.sql")
+	if err != nil {
+		return err
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, string(migration)); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // The reaction lookup preview registered version 21 with only the two indexes.

@@ -10,7 +10,7 @@ import (
 )
 
 const getRoomIntent = `-- name: GetRoomIntent :one
-SELECT conversation_id, account_id, id, revision_id, nickname, active, last_error_code, observation_fingerprint, updated_at FROM room_intents WHERE conversation_id=?
+SELECT conversation_id, account_id, id, revision_id, nickname, active, last_error_code, observation_fingerprint, updated_at, creation_name FROM room_intents WHERE conversation_id=?
 `
 
 func (q *Queries) GetRoomIntent(ctx context.Context, conversationID string) (RoomIntent, error) {
@@ -26,12 +26,13 @@ func (q *Queries) GetRoomIntent(ctx context.Context, conversationID string) (Roo
 		&i.LastErrorCode,
 		&i.ObservationFingerprint,
 		&i.UpdatedAt,
+		&i.CreationName,
 	)
 	return i, err
 }
 
 const listRoomIntents = `-- name: ListRoomIntents :many
-SELECT conversation_id, account_id, id, revision_id, nickname, active, last_error_code, observation_fingerprint, updated_at FROM room_intents ORDER BY conversation_id
+SELECT conversation_id, account_id, id, revision_id, nickname, active, last_error_code, observation_fingerprint, updated_at, creation_name FROM room_intents ORDER BY conversation_id
 `
 
 func (q *Queries) ListRoomIntents(ctx context.Context) ([]RoomIntent, error) {
@@ -53,6 +54,7 @@ func (q *Queries) ListRoomIntents(ctx context.Context) ([]RoomIntent, error) {
 			&i.LastErrorCode,
 			&i.ObservationFingerprint,
 			&i.UpdatedAt,
+			&i.CreationName,
 		); err != nil {
 			return nil, err
 		}
@@ -68,8 +70,8 @@ func (q *Queries) ListRoomIntents(ctx context.Context) ([]RoomIntent, error) {
 }
 
 const putRoomIntent = `-- name: PutRoomIntent :exec
-INSERT INTO room_intents(conversation_id,account_id,id,revision_id,nickname,active,last_error_code,updated_at)
-VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(conversation_id) DO UPDATE SET observation_fingerprint='',revision_id=excluded.revision_id,nickname=excluded.nickname,active=excluded.active,last_error_code=excluded.last_error_code,updated_at=excluded.updated_at
+INSERT INTO room_intents(conversation_id,account_id,id,revision_id,nickname,active,last_error_code,updated_at,creation_name)
+VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(conversation_id) DO UPDATE SET observation_fingerprint='',revision_id=excluded.revision_id,nickname=excluded.nickname,active=excluded.active,last_error_code=excluded.last_error_code,updated_at=excluded.updated_at,creation_name=excluded.creation_name
 `
 
 type PutRoomIntentParams struct {
@@ -81,6 +83,7 @@ type PutRoomIntentParams struct {
 	Active         int64
 	LastErrorCode  string
 	UpdatedAt      string
+	CreationName   *string
 }
 
 func (q *Queries) PutRoomIntent(ctx context.Context, arg PutRoomIntentParams) error {
@@ -93,21 +96,30 @@ func (q *Queries) PutRoomIntent(ctx context.Context, arg PutRoomIntentParams) er
 		arg.Active,
 		arg.LastErrorCode,
 		arg.UpdatedAt,
+		arg.CreationName,
 	)
 	return err
 }
 
 const setRoomObservation = `-- name: SetRoomObservation :exec
-UPDATE room_intents SET observation_fingerprint=? WHERE conversation_id=? AND revision_id=?
+UPDATE room_intents SET observation_fingerprint=?1,
+creation_name=CASE WHEN CAST(?2 AS INTEGER)=1 THEN NULL ELSE creation_name END
+WHERE conversation_id=?3 AND revision_id=?4
 `
 
 type SetRoomObservationParams struct {
 	ObservationFingerprint string
+	Joined                 int64
 	ConversationID         string
 	RevisionID             string
 }
 
 func (q *Queries) SetRoomObservation(ctx context.Context, arg SetRoomObservationParams) error {
-	_, err := q.db.ExecContext(ctx, setRoomObservation, arg.ObservationFingerprint, arg.ConversationID, arg.RevisionID)
+	_, err := q.db.ExecContext(ctx, setRoomObservation,
+		arg.ObservationFingerprint,
+		arg.Joined,
+		arg.ConversationID,
+		arg.RevisionID,
+	)
 	return err
 }

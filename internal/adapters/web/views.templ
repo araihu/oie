@@ -96,6 +96,7 @@ templ page(v view) {
 <script src="/ui/theme.js"></script>
 <script src="/ui/sidebar.js"></script>
 <script src="/ui/formatting.js"></script>
+<script src="/ui/room-entry.js"></script>
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href="/ui/app.css"/>
 <link rel="stylesheet" href={templ.URL(messageSearchStylesheetURL())}/>
@@ -171,6 +172,10 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 			@about(v)
 			@accounts(v)
 @newConversation(v)
+if !v.Preview {
+@roomEntryDrawer(v,false)
+@roomEntryDrawer(v,true)
+}
 @imageViewer(v)
 @documentViewer(v)
 @reactionPicker(v)
@@ -422,7 +427,7 @@ templ composer(v view){
 if v.scheduleAllowed() {
 @scheduleFields(v)
 }
-<input type="hidden" name="conversationId" value={v.ChatID}/><input type="hidden" name="accountId" value={selectedAccountID(v)}/>
+<input type="hidden" name="conversationId" value={v.ChatID}/><input type="hidden" name="accountId" value={selectedAccountID(v)}/><input type="hidden" name="expectedConversationKind" value={string(v.Selected.Kind)}/>
 <input type="hidden" name="replyToMessageId" value=""/>
 @composerEdit(v)
 <span class="sr-only" data-edit-announcement role="status" aria-live="polite"></span>
@@ -597,6 +602,9 @@ if len(v.Accounts)==0 {
 @textinput.TextInput(textinput.Config{ID:"peer-address",Name:"address",Label:v.Text.PeerAddress,Placeholder:v.Text.AddressPlaceholder,Value:v.field("address"),Required:true})
 @button.Button(button.WithType("submit")){ {v.Text.StartConversation} }
 <div data-form-feedback role="status" aria-live="polite"></div>
+}
+if !v.Preview {
+@roomEntryLinks(v)
 }
 }
 </div>
@@ -833,15 +841,21 @@ templ messageStarIndicator(v view,id string){
 // A device preference switches visibility without replacing message rows.
 templ messageBody(v view,m messageView){
 @replyCard(v,m)
+{{ scope := invitationScope{m.AccountId,m.ConversationId,v.Locale} }}
 <div data-message-presentation data-presentation-known={strconv.FormatBool(m.PresentationKnown)} data-presentation-version={originalMessageJSON(m.presentationText())}>
 <div class="oie-rendered-message" data-rendered-message>
 if m.Formatted!=nil {
 @m.Formatted
 }else{
-<div class="oie-plain-fallback">{m.presentationText()}</div>
+<div class="oie-plain-fallback">@plainRoomLinks(m.presentationText(),scope)</div>
 }
 </div>
-<div class="oie-original-message" data-original-message>{m.presentationText()}</div>
+<div class="oie-original-message" data-original-message>@plainRoomLinks(m.presentationText(),scope)</div>
+if !v.Preview {
+	for _, address := range m.RoomInvitations {
+		@roomInvitationCard(v, scope, address)
+	}
+}
 </div>
 <div class="oie-message-previews" data-message-previews={m.Id}>
 for _,p:=range v.MessagePreviews[m.Id] {

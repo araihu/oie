@@ -229,6 +229,11 @@ func (m *Manager) readHistoryIQ(ctx context.Context, e *entry, s *mx.Session, sc
 	return readArchiveIQ(ctx, e, s, scope, kind, payload)
 }
 
+type archiveIQRejected struct{ cause error }
+
+func (e archiveIQRejected) Error() string { return e.cause.Error() }
+func (e archiveIQRejected) Unwrap() error { return e.cause }
+
 func readArchiveIQ(ctx context.Context, e *entry, s *mx.Session, scope string, kind stanza.IQType, payload string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
@@ -278,12 +283,12 @@ func readArchiveIQ(ctx context.Context, e *entry, s *mx.Session, scope string, k
 	}
 	if result.Type == stanza.ErrorIQ {
 		if result.Error.Forbidden != nil || result.Error.Unauthorized != nil {
-			return "", errDetailPermission
+			return "", archiveIQRejected{errDetailPermission}
 		}
 		if result.Error.NotFound != nil {
-			return "", errArchiveCursor
+			return "", archiveIQRejected{errArchiveCursor}
 		}
-		return "", errArchive
+		return "", archiveIQRejected{errArchive}
 	}
 	if result.Type != stanza.ResultIQ {
 		return "", errArchive

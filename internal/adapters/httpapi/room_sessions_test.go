@@ -39,6 +39,10 @@ func (p *roomHTTPProtocol) JoinRoom(ctx context.Context, a domain.Account, c dom
 	p.roomMu.Unlock()
 	return s, p.host.RoomSessionChanged(ctx, s)
 }
+func (p *roomHTTPProtocol) CreateRoom(ctx context.Context, a domain.Account, c domain.Conversation, nickname, _ string, revision domain.ID) (domain.RoomSession, error) {
+	return p.JoinRoom(ctx, a, c, nickname, revision)
+}
+
 func (p *roomHTTPProtocol) LeaveRoom(ctx context.Context, a domain.Account, c domain.Conversation, revision domain.ID) (domain.RoomSession, error) {
 	s := domain.RoomSession{AccountID: a.ID, ConversationID: c.ID, IntentRevisionID: revision, State: "not_joined", UpdatedAt: time.Now().UTC()}
 	p.roomMu.Lock()
@@ -189,5 +193,58 @@ func TestRoomSessionHTTPRequiresExplicitIntentAndKeepsReplyReplay(t *testing.T) 
 	pending, err := store.PendingMessages(t.Context(), time.Now().Add(time.Hour))
 	if err != nil || len(pending) != 0 {
 		t.Fatal("unexpected extra room send", err)
+	}
+}
+
+func TestRoomEntryPromotesEmptyDirectAndKeepsPublicReceipt(t *testing.T) {
+	protocol := &roomHTTPProtocol{protocolStub: &protocolStub{connected: true}, rooms: map[domain.ID]domain.RoomSession{}}
+	e, _, server := newMessagingEngine(t, t.TempDir(), protocol)
+	protocol.host = e
+	direct := openTestConversation(t, e, "alice@localhost")
+	client, err := engineapi.NewClientWithResponses(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ action, address string }{
+		{"join", direct.Address},
+		{"create", "new@rooms.localhost"},
+	} {
+		key := string(id())
+		response, err := client.OpenRoomWithResponse(t.Context(), string(direct.AccountID),
+			&engineapi.OpenRoomParams{IdempotencyKey: key},
+			engineapi.OpenRoom{Action: engineapi.OpenRoomAction(tc.action), Address: tc.address})
+		if err != nil || response.JSON202 == nil || response.JSON202.Kind != "room" {
+			t.Fatalf("open %s: %+v %v", tc.action, response, err)
+		}
+		if tc.action == "join" && response.JSON202.Id != string(direct.ID) {
+			t.Fatal("room entry lost the direct placeholder identity")
+		}
+		if tc.action == "join" {
+			kind := engineapi.SendMessageParamsXOieExpectedConversationKind("direct")
+			stale, err := client.SendMessageWithResponse(t.Context(), response.JSON202.Id,
+				&engineapi.SendMessageParams{IdempotencyKey: string(id()), XOieExpectedConversationKind: &kind},
+				engineapi.SendMessage{OriginalText: "Private draft"})
+			if err != nil || stale.StatusCode() != 409 {
+				t.Fatalf("stale direct sender crossed room boundary: %+v %v", stale, err)
+			}
+		}
+		receipt, err := client.GetOperationWithResponse(t.Context(), key, &engineapi.GetOperationParams{})
+		if err != nil || receipt.JSON200 == nil || receipt.JSON200.Kind != engineapi.OperationKindOpenConversation ||
+			receipt.JSON200.ResourceId != response.JSON202.Id {
+			t.Fatalf("public room receipt: %+v %v", receipt, err)
+		}
+	}
+	occupied, err := e.OpenConversation(t.Context(), id(), direct.AccountID, "history@rooms.localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Receive(t.Context(), application.Incoming{AccountID: direct.AccountID, Address: occupied.Conversation.Address,
+		Kind: "direct", ProviderID: "direct-wire", OriginalText: "Keep this", CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	status, _ := request(t, server.URL, "POST", "/api/v1/accounts/"+string(direct.AccountID)+"/rooms", string(id()),
+		`{"action":"join","address":"history@rooms.localhost"}`)
+	if status != 409 {
+		t.Fatalf("entry overwrote retained direct history: status %d", status)
 	}
 }

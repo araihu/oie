@@ -126,6 +126,19 @@ func (m *Manager) queryInfo(ctx context.Context, e *entry, s *mx.Session, addres
 const discoInfoQuery = `<query xmlns="http://jabber.org/protocol/disco#info"/>`
 
 func (m *Manager) decodeDiscoInfo(ctx context.Context, e *entry, s *mx.Session, address, body string, revision uint64) (disco.Info, error) {
+	info, err := parseDiscoInfo(body)
+	if err != nil {
+		return disco.Info{}, err
+	}
+
+	if err := m.recordDiscoInfo(ctx, e, s, address, revision, info); err != nil {
+		return disco.Info{}, err
+	}
+	recordUploadLimit(e, s, address, info)
+	return info, nil
+}
+
+func parseDiscoInfo(body string) (disco.Info, error) {
 	var result struct {
 		Query *disco.Info `xml:"http://jabber.org/protocol/disco#info query"`
 	}
@@ -135,10 +148,6 @@ func (m *Manager) decodeDiscoInfo(ctx context.Context, e *entry, s *mx.Session, 
 	if result.Query == nil {
 		return disco.Info{}, errArchive
 	}
-	if err := m.recordDiscoInfo(ctx, e, s, address, revision, *result.Query); err != nil {
-		return disco.Info{}, err
-	}
-	recordUploadLimit(e, s, address, *result.Query)
 	return *result.Query, nil
 }
 

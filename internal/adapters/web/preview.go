@@ -230,6 +230,9 @@ func (v view) addAccountHref() string {
 	return v.href("open", "accounts", "accountPage", "add", "managedAccount", "")
 }
 func (v view) initialDrawer() string {
+	if v.FormTarget == "join-room" || v.FormTarget == "create-room" {
+		return v.FormTarget
+	}
 	if v.FormTarget == "register" || strings.HasPrefix(v.FormTarget, "connect-") || strings.HasPrefix(v.FormTarget, "disconnect-") {
 		return "accounts"
 	}

@@ -1,0 +1,162 @@
+package web
+
+import (
+	"strconv"
+	"strings"
+	"github.com/araihu/goshtoso/components/avatar"
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/card"
+	"github.com/araihu/goshtoso/components/drawer"
+	"github.com/araihu/goshtoso/components/form"
+	"github.com/araihu/goshtoso/components/icon/heroicons"
+	"github.com/araihu/goshtoso/components/link"
+	"github.com/araihu/goshtoso/components/textinput"
+	selectfield "github.com/araihu/goshtoso/components/select"
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+)
+
+templ roomEntryLinks(v view) {
+	<div class="oie-room-entry-links">
+		@link.Link(v.href("open","join-room"),link.WithAttrs(templ.Attributes{"data-room-entry-open":"join-room"})){ {v.Text.JoinRoom} @glyph(heroicons.Icon16SolidChevronRight) }
+		@link.Link(v.href("open","create-room"),link.WithAttrs(templ.Attributes{"data-room-entry-open":"create-room"})){ @glyph(heroicons.Icon16SolidPlus) {v.Text.CreateRoom} }
+	</div>
+}
+
+func roomEntryAccounts(v view, target string) []selectfield.Option {
+	selected := v.selectedAccount()
+	if v.FormTarget == target && v.field("accountId") != "" {
+		selected = v.field("accountId")
+	}
+	var options []selectfield.Option
+	for _, a := range v.Accounts {
+		if a.Protocol == "xmpp" {
+			options = append(options, selectfield.Option{Value:a.Id,Label:a.Label+" · "+a.Address,Selected:selected==a.Id})
+		}
+	}
+	return options
+}
+
+func roomAccountIDs(options []selectfield.Option) string {
+	ids := make([]string, 0, len(options))
+	for _, option := range options {
+		ids = append(ids, option.Value)
+	}
+	return strings.Join(ids, " ")
+}
+
+templ roomEntryDrawer(v view, create bool) {
+	{{ target,title,action := "join-room",v.Text.JoinRoom,"join" }}
+	if create {
+		{{ target,title,action = "create-room",v.Text.CreateRoom,"create" }}
+	}
+	{{ options := roomEntryAccounts(v,target) }}
+	{{ address,nickname,name,key := "","","",newOperationKey() }}
+	if v.FormTarget == target {
+		{{ address,nickname,name = v.field("address"),v.field("nickname"),v.field("name") }}
+		if validOperationKey(v.field("operationKey")) {
+			{{ key = v.field("operationKey") }}
+		}
+	} else if !create {
+		{{ address = v.field("inviteRoom") }}
+	}
+	@drawer.Drawer(drawer.Config{ID:target,Title:title}) {
+		<div class="oie-settings oie-room-entry">
+			if len(options)==0 {
+				@link.Link(v.addAccountHref()){ {v.Text.AddAccount} }
+			} else {
+				@form.Form(form.Config{ID:target+"-form",Action:"/ui/rooms/open",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"open","data-room-entry":action,"data-room-account-ids":roomAccountIDs(options)}}) {
+					@mutationFields(v,target,key)
+					<input type="hidden" name="roomAction" value={action}/>
+					<input type="hidden" name="lang" value={v.Locale}/>
+					@selectfield.Select(selectfield.Config{ID:target+"-account",Name:"accountId",Label:v.Text.ChooseAccount,Options:options,Required:true})
+					@textinput.TextInput(textinput.Config{ID:target+"-address",Name:"address",Label:v.Text.RoomAddress,Value:address,Placeholder:v.Text.RoomAddressPlaceholder,Required:true,InputAttrs:templ.Attributes{"maxlength":"2047","spellcheck":"false","autocapitalize":"none"}})
+					if create {
+						@textinput.TextInput(textinput.Config{ID:target+"-name",Name:"name",Label:v.Text.RoomName,Value:name,InputAttrs:templ.Attributes{"maxlength":"100"}})
+					} else {
+						@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-load-room-preview":""})){ {v.Text.PreviewRoom} }
+						<div class="oie-room-preview" data-room-preview role="status" aria-live="polite" data-loading={v.Text.RoomPreviewLoading} data-unavailable={v.Text.RoomPreviewUnavailable} data-invalid={v.Text.RoomAddressInvalid} hidden></div>
+					}
+					@textinput.TextInput(textinput.Config{ID:target+"-nickname",Name:"nickname",Label:v.Text.RoomNickname,Value:nickname,InputAttrs:templ.Attributes{"maxlength":"100"}})
+					@button.Button(button.WithType("submit"),button.WithAttrs(templ.Attributes{"data-room-entry-label":title})){ {title} }
+					<div data-form-feedback role="status" aria-live="polite"></div>
+				}
+			}
+		</div>
+	}
+}
+
+func roomPreviewName(preview engineapi.RoomPreview) string {
+	if preview.Name == nil || *preview.Name == "" {
+		return preview.Address
+	}
+	return *preview.Name
+}
+
+templ roomPreviewContent(text copy, preview engineapi.RoomPreview, address string) {
+	switch preview.State {
+		case "known":
+			<template data-room-preview-summary={ address }>@roomInvitationSummary(text,preview)</template>
+			<div class="oie-room-preview-heading">
+				if preview.AvatarHash != nil && validAvatarHash(*preview.AvatarHash) {
+					@avatar.Avatar(avatar.Config{Name:roomPreviewName(preview),Src:"/ui/avatars/"+*preview.AvatarHash,Size:avatar.SizeMD})
+				}
+				<div>
+					<strong>{roomPreviewName(preview)}</strong>
+					if roomPreviewName(preview)!=preview.Address {
+						<small>{preview.Address}</small>
+					}
+					if preview.OccupantCount!=nil {
+						<small>{text.RoomOccupants} · {strconv.Itoa(*preview.OccupantCount)}</small>
+					}
+				</div>
+			</div>
+			if preview.Topic!=nil && *preview.Topic!="" {
+				<p>{*preview.Topic}</p>
+			}
+			if preview.Description!=nil && *preview.Description!="" {
+				<p>{*preview.Description}</p>
+			}
+		case "not_connected":
+			<p>{text.NotConnected}</p>
+		case "not_found":
+			<p>{text.RoomNotFound}</p>
+		default:
+			<p>{text.RoomPreviewUnavailable}</p>
+	}
+}
+
+templ roomInvitationCard(v view, scope invitationScope, address string) {
+	<div class="oie-room-invitation" data-room-bubble={ address } data-room-bubble-account={ scope.account }>
+		@card.Card(card.Config{Density:card.DensityCompact, Body:roomInvitationCardBody(v,scope,address)})
+	</div>
+}
+
+templ roomInvitationCardBody(v view, scope invitationScope, address string) {
+	<div class="oie-room-invitation-summary" data-room-bubble-summary>
+		@roomInvitationSummary(v.Text,engineapi.RoomPreview{Address:address})
+	</div>
+	@link.Link(scope.href(address),link.WithRootClass("oie-room-invitation-action"),link.WithAttrs(templ.Attributes{"data-room-invitation":address,"aria-label":v.Text.ViewRoom+" · "+address})){
+		{v.Text.ViewRoom} @glyph(heroicons.Icon16SolidChevronRight)
+	}
+}
+
+templ roomInvitationSummary(text copy, preview engineapi.RoomPreview) {
+	{{ title, image, description := text.RoomInvitation, "", "" }}
+	if preview.Name!=nil && *preview.Name!="" {
+		{{ title = *preview.Name }}
+	}
+	if preview.AvatarHash!=nil && validAvatarHash(*preview.AvatarHash) {
+		{{ image = "/ui/avatars/"+*preview.AvatarHash }}
+	}
+	if preview.Description!=nil && *preview.Description!="" {
+		{{ description = *preview.Description }}
+	} else if preview.Topic!=nil {
+		{{ description = *preview.Topic }}
+	}
+	@avatar.Avatar(avatar.Config{Name:title,Src:image,Size:avatar.SizeSM,Icon:glyph(heroicons.Icon16SolidQueueList)})
+	<div class="oie-room-invitation-copy">
+		<strong title={ title }>{ title }</strong>
+		<small title={ preview.Address }>{ preview.Address }</small>
+		<p title={ description }>{ description }</p>
+	</div>
+}

@@ -62,7 +62,18 @@ func (v view) roomLabel() string {
 	}
 }
 func (v view) roomError() string {
-	if v.RoomSession == nil || v.RoomSession.LastErrorCode == nil {
+	if v.RoomSession == nil {
+		return ""
+	}
+	if v.RoomSession.CreationError != nil {
+		switch *v.RoomSession.CreationError {
+		case "room_exists":
+			return v.Text.RoomExists
+		case "creation_failed":
+			return v.Text.RoomCreationFailed
+		}
+	}
+	if v.RoomSession.LastErrorCode == nil {
 		return ""
 	}
 	switch *v.RoomSession.LastErrorCode {

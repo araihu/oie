@@ -78,6 +78,18 @@ func (s *Store) OpenConversation(ctx context.Context, in application.Conversatio
 	if err != nil {
 		return application.ConversationResult{}, err
 	}
+	if in.RoomEntry != nil {
+		if c.Kind != "room" {
+			c, err = promoteRoomPlaceholder(ctx, q, c, in.Conversation)
+			if err != nil {
+				return application.ConversationResult{}, err
+			}
+		}
+		if err := openRoomIntent(ctx, q, c.ID, *in.RoomEntry); err != nil {
+			return application.ConversationResult{}, err
+		}
+	}
+
 	if err = q.SetOperationResult(ctx, dbgen.SetOperationResultParams{ResourceID: string(c.ID), Result: jsonText(c), ID: string(in.Operation.ID)}); err != nil {
 		return application.ConversationResult{}, err
 	}
@@ -86,6 +98,32 @@ func (s *Store) OpenConversation(ctx context.Context, in application.Conversatio
 	}
 	return application.ConversationResult{Conversation: c, Existing: existing}, nil
 }
+func promoteRoomPlaceholder(ctx context.Context, q *dbgen.Queries, current, room domain.Conversation) (domain.Conversation, error) {
+	empty, err := q.CanPromoteRoomPlaceholder(ctx, string(current.ID))
+	if err != nil {
+		return current, err
+	}
+	if current.Kind != "direct" || empty == nil || !*empty {
+		return current, application.ErrRoomAddressConflict
+	}
+	parents := jsonText([]domain.ID{current.RevisionID})
+	current.Kind, current.Title, current.RevisionID = "room", room.Title, room.RevisionID
+	if err := q.UpdateConversation(ctx, dbgen.UpdateConversationParams{
+		ID: string(current.ID), RevisionID: string(current.RevisionID), Payload: jsonText(current),
+		ActivitySequence: current.ActivitySequence, UnreadCount: int64(current.UnreadCount),
+	}); err != nil {
+		return current, err
+	}
+	if err := q.InsertConversationRevision(ctx, dbgen.InsertConversationRevisionParams{
+		ID: string(current.RevisionID), EntityID: string(current.ID), Parents: parents,
+		Payload: jsonText(current), CreatedAt: stamp(room.UpdatedAt),
+	}); err != nil {
+		return current, err
+	}
+	_, err = change(ctx, q, "conversation.updated", current, room.UpdatedAt)
+	return current, err
+}
+
 func (s *Store) Conversation(ctx context.Context, id domain.ID) (domain.Conversation, error) {
 	row, err := s.queries.GetConversation(ctx, string(id))
 	if err != nil {
@@ -248,7 +286,7 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 	if err != nil {
 		return application.MessageResult{}, err
 	}
-	if c.Request != "" {
+	if c.Request != "" || (in.ExpectedConversationKind != "" && c.Kind != in.ExpectedConversationKind) {
 		return application.MessageResult{}, application.ErrStateConflict
 	}
 	if c.Kind == "room" {
@@ -352,6 +390,7 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if err = q.AcquireWriteLock(ctx); err != nil {
 		return err
 	}
+	incomingKind := c.Kind
 	if m.ArchiveID != "" {
 		var existingID string
 		existingID, err = q.GetArchiveAlias(ctx, dbgen.GetArchiveAliasParams{AccountID: string(m.AccountID), Scope: m.ArchiveScope, ArchiveID: m.ArchiveID})
@@ -405,6 +444,10 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	}
 	if err != nil {
 		return err
+	}
+	if c.Kind != incomingKind {
+		// The same bare address cannot import direct traffic into a room.
+		return nil
 	}
 	m.ConversationID = c.ID
 	if !m.IsOwn {
