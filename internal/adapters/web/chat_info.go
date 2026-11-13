@@ -54,7 +54,7 @@ func (s *Server) loadChatInfo(ctx context.Context, v *view, refresh bool) {
 		v.InfoInvalid = scoped.SharedInvalid
 	}
 	if v.InfoView == "stars" {
-		v.InfoStars, v.InfoInvalid = s.loadStarredMessages(ctx, v.Selected.AccountId, v.Selected.Id, v.InfoCursor)
+		v.InfoStars, v.InfoInvalid = s.loadStarredMessages(ctx, v.Selected.AccountId, v.Selected.Id, v.InfoCursor, "")
 		s.loadStarredContent(ctx, v, v.InfoStars)
 	}
 }

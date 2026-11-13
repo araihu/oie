@@ -148,9 +148,9 @@ type view struct {
 	StarredContent starredContent
 	PreviewScope   string
 
-	FavoritesPage    *engineapi.StarredMessagePage
-	FavoritesCursor  string
-	FavoritesInvalid bool
+	FavoritesPage                   *engineapi.StarredMessagePage
+	FavoritesCursor, FavoritesQuery string
+	FavoritesInvalid                bool
 
 	SchedulePage          *engineapi.ScheduledMessagePage
 	ScheduleEdit          *engineapi.Message
@@ -220,8 +220,8 @@ type view struct {
 }
 
 type copy struct {
-	Forward, ForwardTitle, ForwardChooseRooms, ForwardSearchRooms, ForwardNoRooms, ForwardLoading, ForwardSending string
-	ForwardAccepted, ForwardComplete, ForwardFailed, ForwardUnconfirmed, ForwardChanged                           string
+	Forward, ForwardTitle, ForwardChooseRooms, ForwardSearchRooms, ForwardNoRooms, ForwardNoRoomsFound, ForwardLoading, ForwardSending string
+	ForwardAccepted, ForwardComplete, ForwardFailed, ForwardUnconfirmed, ForwardChanged                                                string
 
 	CheckingConversation, MessageRequest, AcceptMessageRequest, ArchiveRequest string
 	ScheduleSelectedConversations                                              string
@@ -353,7 +353,7 @@ type copy struct {
 	InfoGroup                                                                                                                                                                                                string
 	InfoReportedOccupants                                                                                                                                                                                    string
 	InfoStarsUnavailable                                                                                                                                                                                     string
-	FavoritesEmpty, FavoritesEmptyHelp                                                                                                                                                                       string
+	FavoritesEmpty, FavoritesEmptyHelp, FavoritesSearch, FavoritesNoResults                                                                                                                                  string
 	InfoStarsEmpty                                                                                                                                                                                           string
 	InfoNavigationFailed                                                                                                                                                                                     string
 	SharedAccount                                                                                                                                                                                            string
@@ -847,6 +847,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	paneOnly := (fragment == "conversation" || fragment == "timeline") && v.ChatID != "" || editorOnly || infoOnly
 	accountsOnly := fragment == "accounts"
 	scheduledOnly := fragment == "scheduled" && v.Section == "scheduled"
+	favoritesOnly := fragment == "favorites" && v.Section == "favorites"
 	if fragment == "appearance" {
 		return
 	}
@@ -875,14 +876,14 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		s.loadMessageSearch(ctx, v)
 		return
 	}
-	if !listOnly && !paneOnly && !scheduledOnly && !accountsOnly {
+	if !listOnly && !paneOnly && !scheduledOnly && !accountsOnly && !favoritesOnly {
 		v.AccountUnread = s.accountUnread(ctx)
 	}
 	for _, a := range v.Accounts {
 		if !editorOnly && !scheduledOnly {
 			s.loadAvatars(ctx, v, a.Id)
 		}
-		if listOnly || paneOnly || scheduledOnly {
+		if listOnly || paneOnly || scheduledOnly || favoritesOnly {
 			continue
 		}
 		if !v.Preview && v.accountScreen() == "detail" && a.Id == v.managedAccountID() {
@@ -893,7 +894,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		}
 		s.loadAccountConnection(ctx, v, a.Id, editor)
 	}
-	if !listOnly && !paneOnly && !scheduledOnly {
+	if !listOnly && !paneOnly && !scheduledOnly && !favoritesOnly {
 		s.loadCapabilities(ctx, v)
 	}
 	if accountsOnly {
@@ -904,7 +905,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		return
 	}
 	if v.Section == "favorites" {
-		v.FavoritesPage, v.FavoritesInvalid = s.loadStarredMessages(ctx, v.AccountFilter, "", v.FavoritesCursor)
+		v.FavoritesPage, v.FavoritesInvalid = s.loadStarredMessages(ctx, v.AccountFilter, "", v.FavoritesCursor, v.FavoritesQuery)
 		s.loadStarredContent(ctx, v, v.FavoritesPage)
 		return
 	}
@@ -1177,6 +1178,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	if r.Header.Get("HX-Request") == "true" {
 		component = appFragment(v)
 		switch r.Header.Get("X-Oie-Fragment") {
+		case "favorites":
+			if v.Section == "favorites" {
+				component = favoritesResults(v)
+			}
 		case "inbox":
 			if r.URL.Path == "/" && v.Section != "media" && v.Section != "scheduled" && v.Section != "favorites" {
 				component = inboxList(v)

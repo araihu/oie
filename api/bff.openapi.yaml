@@ -30,6 +30,11 @@ paths:
         in: query
         description: Workspace section. Use favorites to browse starred messages across conversations, scoped to the selected account when present.
         schema: {type: string}
+      - name: favoritesQuery
+        in: query
+        description: Search messages in the Favorites workspace.
+        schema: {type: string, maxLength: 200}
+        example: planejamento
       - name: favoritesCursor
         in: query
         description: Continuation cursor for the starred-message workspace in the current account scope.
@@ -41,7 +46,7 @@ paths:
       - name: X-Oie-Fragment
         in: header
         description: Selects the HTML region. With HX-Request and no fragment selector, the app region is returned.
-        schema: {type: string, enum: [app, inbox, conversation, info, scheduled, schedule-editor, accounts, shared, appearance, timeline]}
+        schema: {type: string, enum: [app, favorites, inbox, conversation, info, scheduled, schedule-editor, accounts, shared, appearance, timeline]}
       responses:
         '200':
           description: Localized HTML document or fragment.

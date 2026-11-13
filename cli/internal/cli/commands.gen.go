@@ -776,6 +776,9 @@ func build67(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("query", "conversationId", &params.ConversationId); err != nil {
 		return nil, err
 	}
+	if err := input.Decode("query", "q", &params.Q); err != nil {
+		return nil, err
+	}
 	if err := input.Decode("query", "cursor", &params.Cursor); err != nil {
 		return nil, err
 	}

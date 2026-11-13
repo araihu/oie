@@ -38,7 +38,7 @@ window.OieRuntime.register('forwarding', life => {
     loading.textContent = body.dataset.loading;
     body.replaceChildren(loading);
     modal('open');
-    const params = new URLSearchParams({messageId, engineId: document.body.dataset.engineId, lang: document.documentElement.lang});
+    const params = new URLSearchParams({messageId, engineId: document.body.dataset.engineId, lang: document.documentElement.lang, theme: document.documentElement.dataset.mode || 'system'});
     try {
       const response = await life.fetch('/ui/messages/forward?' + params, {signal: controller.signal, cache: 'no-store'});
       if (!response.ok) throw new Error();
@@ -47,7 +47,15 @@ window.OieRuntime.register('forwarding', life => {
       const fresh = page.querySelector('[data-forward-form]');
       if (!fresh || fresh.elements.messageId.value !== messageId ||
           fresh.elements.engineId.value !== document.body.dataset.engineId) throw new Error();
-      body.replaceChildren(fresh);
+      const insert = () => {
+        for (const child of body.children) window.Alpine?.destroyTree(child);
+        body.replaceChildren(fresh);
+        window.Alpine?.initTree(fresh);
+      };
+      if (window.Alpine?.mutateDom) window.Alpine.mutateDom(insert);
+      else insert();
+      window.OieTime?.localize(fresh);
+      document.dispatchEvent(new Event('oie:forward-content'));
       for (const box of boxes(fresh)) {
         const receipt = journals.get(receiptKey(fresh, box));
         if (!receipt) continue;
@@ -81,6 +89,7 @@ window.OieRuntime.register('forwarding', life => {
   });
   life.on(dialog, 'close', () => {
     request?.abort();
+    window.OieVideos?.release(body);
     if (opener?.isConnected) opener.focus({preventScroll: true});
   });
   life.on(body, 'input', event => {
@@ -88,7 +97,7 @@ window.OieRuntime.register('forwarding', life => {
     const term = event.target.value.normalize('NFD').replace(/\p{M}/gu, '').trim().toLocaleLowerCase();
     let visible = 0;
     for (const room of body.querySelectorAll('[data-forward-room]')) {
-      const label = room.querySelector('label').textContent.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase();
+      const label = (room.querySelector('[data-forward-room-label]').textContent + ' ' + room.dataset.roomAddress).normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase();
       room.hidden = !room.querySelector('input').checked && !label.includes(term);
       if (!room.hidden) visible++;
     }

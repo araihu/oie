@@ -203,11 +203,11 @@ func TestStarredMessagePagingAndBatchScope(t *testing.T) {
 	base := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
 	all := []domain.Message{}
 	for i, offset := range []int{1, 5, 2, 5, 4, 3} {
-		c := a
+		c, sender := a, "Bob"
 		if i >= 4 {
-			c = b
+			c, sender = b, "Caról"
 		}
-		m := domain.Message{ID: id(), RevisionID: id(), AccountID: c.AccountID, ConversationID: c.ID, Sender: domain.Sender{ID: c.PeerID, DisplayName: "Bob"}, OriginalText: fmt.Sprintf("retained-%d", i), CreatedAt: base.Add(time.Duration(offset) * time.Hour), SendState: "received", ProviderID: string(id()), Historical: true}
+		m := domain.Message{ID: id(), RevisionID: id(), AccountID: c.AccountID, ConversationID: c.ID, Sender: domain.Sender{ID: c.PeerID, DisplayName: sender}, OriginalText: fmt.Sprintf("retained-%d", i), CreatedAt: base.Add(time.Duration(offset) * time.Hour), SendState: "received", ProviderID: string(id()), Historical: true}
 		if err = store.ReceiveMessage(t.Context(), c, m, id()); err != nil {
 			t.Fatal(err)
 		}
@@ -222,6 +222,16 @@ func TestStarredMessagePagingAndBatchScope(t *testing.T) {
 		}
 		return all[i].CreatedAt.After(all[j].CreatedAt)
 	})
+	query, one := "RÉTAINED carol", 1
+	filtered, err := client.ListStarredMessagesWithResponse(t.Context(), &engineapi.ListStarredMessagesParams{Limit: &one, Q: &query})
+	if err != nil || filtered.JSON200 == nil || len(filtered.JSON200.Items) != 1 || filtered.JSON200.NextCursor == nil || filtered.JSON200.Items[0].Message.OriginalText != "retained-4" {
+		t.Fatal("search missed the newest matching item beyond the unfiltered first page", filtered, err)
+	}
+	filtered, err = client.ListStarredMessagesWithResponse(t.Context(), &engineapi.ListStarredMessagesParams{Limit: &one, Q: &query, Cursor: filtered.JSON200.NextCursor})
+	if err != nil || filtered.JSON200 == nil || len(filtered.JSON200.Items) != 1 || filtered.JSON200.NextCursor != nil || filtered.JSON200.Items[0].Message.OriginalText != "retained-5" {
+		t.Fatal("search did not preserve its filter across pages", filtered, err)
+	}
+
 	limit := 2
 	page, err := client.ListStarredMessagesWithResponse(t.Context(), &engineapi.ListStarredMessagesParams{Limit: &limit})
 	if err != nil || page.JSON200 == nil || len(page.JSON200.Items) != 2 || page.JSON200.NextCursor == nil {

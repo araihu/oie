@@ -58,6 +58,9 @@ func (s *Server) ListConversationMessageStars(ctx context.Context, r engineapi.L
 
 func (s *Server) ListStarredMessages(ctx context.Context, r engineapi.ListStarredMessagesRequestObject) (engineapi.ListStarredMessagesResponseObject, error) {
 	in := application.StarQuery{Limit: 50}
+	if r.Params.Q != nil {
+		in.Search = *r.Params.Q
+	}
 	if r.Params.Limit != nil {
 		in.Limit = *r.Params.Limit
 	}

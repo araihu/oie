@@ -11,6 +11,8 @@ import (
 	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/emptystate"
 	"github.com/araihu/goshtoso/components/link"
+	"github.com/araihu/goshtoso/components/textinput"
+	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
@@ -20,6 +22,15 @@ templ favoritesWorkspace(v view) {
 			@navigationControl(v)
 			<h2 id="favorites-heading" tabindex="-1">{ v.Text.InfoStarred }</h2>
 		</header>
+		<form id="favorites-search-form" action="/" method="get" class="oie-favorites-search" role="search" aria-label={ v.Text.FavoritesSearch } hx-sync="this:replace">
+			<input type="hidden" name="section" value="favorites"/>
+			if v.AccountFilter != "" {
+				<input type="hidden" name="account" value={ v.AccountFilter }/>
+			}
+			<input type="hidden" name="lang" value={ v.Locale }/>
+			<input type="hidden" name="theme" value={ v.Theme }/>
+			@textinput.TextInput(textinput.Config{ID:"favorites-search", Name:"favoritesQuery", Type:textinput.TypeSearch, Value:v.FavoritesQuery, Placeholder:v.Text.FavoritesSearch, MaxLength:200, InputAttrs:templ.Attributes{"aria-controls":"favorites-results"}}).WithExpressions(expressions.TextInput{SearchAriaLabel:v.Text.FavoritesSearch})
+		</form>
 		<div id="favorites-scroll" class="oie-shared-scroll">
 			@favoritesResults(v)
 		</div>
@@ -27,7 +38,7 @@ templ favoritesWorkspace(v view) {
 }
 
 templ favoritesResults(v view) {
-	<div id="favorites-results" data-version={ v.starredPageVersion(v.FavoritesPage, v.FavoritesInvalid) }>
+	<div id="favorites-results" data-engine-id={ v.EngineID } data-search-query={ v.FavoritesQuery } data-version={ v.starredPageVersion(v.FavoritesPage, v.FavoritesInvalid) }>
 		@starredPageStates(v.FavoritesPage)
 		if v.FavoritesInvalid {
 			<p role="status">{ v.Text.SharedPageUnavailable }</p>
@@ -37,7 +48,11 @@ templ favoritesResults(v view) {
 			@link.Link(v.favoritesHref(v.FavoritesCursor)) { { v.Text.Retry } }
 		} else {
 			if len(v.FavoritesPage.Items) == 0 {
-				@emptystate.EmptyState(emptystate.Config{Title: v.Text.FavoritesEmpty, Description: v.Text.FavoritesEmptyHelp})
+				if v.FavoritesQuery != "" {
+					<div role="status">@emptystate.EmptyState(emptystate.Config{Title: v.Text.FavoritesNoResults})</div>
+				} else {
+					@emptystate.EmptyState(emptystate.Config{Title: v.Text.FavoritesEmpty, Description: v.Text.FavoritesEmptyHelp})
+				}
 			} else {
 				{{ starView := v.starredPageView(v.FavoritesPage, "favorites") }}
 				for _, item := range v.FavoritesPage.Items {

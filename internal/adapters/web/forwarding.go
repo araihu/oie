@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/araihu/goshtoso/components/dropdown"
@@ -84,8 +85,37 @@ func (s *Server) prepareForward(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
+	enrichment, stop := context.WithTimeout(ctx, 3*time.Second)
+	defer stop()
+	v.PreviewScope = "forward"
+	v.Selected = &engineapi.Conversation{Id: m.ConversationId, AccountId: m.AccountId}
+	preview := messageView{Message: *m}
+	var loaders sync.WaitGroup
+	loaders.Go(func() {
+		if messageBodyURLs.MatchString(preview.displayBody()) {
+			v.Messages = []messageView{preview}
+			s.loadMessagePreviews(enrichment, &v)
+			s.loadMessageVideos(enrichment, &v)
+			preview.PresentationKnown = v.PreviewsKnown
+		} else {
+			preview.PresentationKnown = true
+		}
+	})
+	loaders.Go(func() {
+		accounts := make(map[string]bool)
+		for _, room := range rooms {
+			if !accounts[room.AccountId] && enrichment.Err() == nil {
+				accounts[room.AccountId] = true
+				s.loadAvatars(enrichment, &v, room.AccountId)
+			}
+		}
+	})
+	s.loadForwardTopics(enrichment, rooms)
+	loaders.Wait()
+	v.formatMessage(ctx, &preview)
+
 	var out bytes.Buffer
-	if err := forwardForm(v, *m, rooms).Render(presentationContext(ctx, v), &out); err != nil {
+	if err := forwardForm(v, preview, rooms).Render(presentationContext(ctx, v), &out); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
@@ -93,9 +123,36 @@ func (s *Server) prepareForward(w http.ResponseWriter, r *http.Request) {
 	_, _ = out.WriteTo(w)
 }
 
-func (s *Server) forwardRooms(ctx context.Context) ([]engineapi.Conversation, bool) {
+type forwardRoom struct {
+	engineapi.Conversation
+	Topic string
+}
+
+func (s *Server) loadForwardTopics(ctx context.Context, rooms []forwardRoom) {
+	jobs := make(chan *forwardRoom, len(rooms))
+	for i := range rooms {
+		jobs <- &rooms[i]
+	}
+	close(jobs)
+	var workers sync.WaitGroup
+	for range min(6, len(rooms)) {
+		workers.Go(func() {
+			for room := range jobs {
+				if ctx.Err() != nil {
+					return
+				}
+				if details := s.conversationDetails(ctx, room.Conversation); details != nil {
+					room.Topic = strings.TrimSpace(previewValue(details.Topic))
+				}
+			}
+		})
+	}
+	workers.Wait()
+}
+
+func (s *Server) forwardRooms(ctx context.Context) ([]forwardRoom, bool) {
 	limit, kind := 100, engineapi.ListConversationsParamsKindRoom
-	var rooms []engineapi.Conversation
+	var rooms []forwardRoom
 	seen := make(map[string]bool)
 	for _, archived := range []bool{false, true} {
 		params := &engineapi.ListConversationsParams{Limit: &limit, Kind: &kind, Archived: &archived}
@@ -107,7 +164,10 @@ func (s *Server) forwardRooms(ctx context.Context) ([]engineapi.Conversation, bo
 			}
 			for _, room := range response.JSON200.Items {
 				if room.Kind == "room" && room.Request == nil && validOperationKey(room.Id) && !seen[room.Id] {
-					rooms = append(rooms, room)
+					if room.Title == "" {
+						room.Title = room.Address
+					}
+					rooms = append(rooms, forwardRoom{Conversation: room})
 					seen[room.Id] = true
 				}
 			}
@@ -122,7 +182,7 @@ func (s *Server) forwardRooms(ctx context.Context) ([]engineapi.Conversation, bo
 			params.Cursor = cursor
 		}
 	}
-	slices.SortStableFunc(rooms, func(a, b engineapi.Conversation) int {
+	slices.SortStableFunc(rooms, func(a, b forwardRoom) int {
 		return strings.Compare(strings.ToLower(a.Title), strings.ToLower(b.Title))
 	})
 	return rooms, true

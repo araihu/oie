@@ -126,6 +126,7 @@ const (
 	App            RenderWorkspaceParamsXOieFragment = "app"
 	Appearance     RenderWorkspaceParamsXOieFragment = "appearance"
 	Conversation   RenderWorkspaceParamsXOieFragment = "conversation"
+	Favorites      RenderWorkspaceParamsXOieFragment = "favorites"
 	Inbox          RenderWorkspaceParamsXOieFragment = "inbox"
 	Info           RenderWorkspaceParamsXOieFragment = "info"
 	ScheduleEditor RenderWorkspaceParamsXOieFragment = "schedule-editor"
@@ -144,6 +145,8 @@ func (e RenderWorkspaceParamsXOieFragment) Valid() bool {
 	case Appearance:
 		return true
 	case Conversation:
+		return true
+	case Favorites:
 		return true
 	case Inbox:
 		return true
@@ -785,6 +788,9 @@ type SubmissionReceipt struct {
 type RenderWorkspaceParams struct {
 	// Section Workspace section. Use favorites to browse starred messages across conversations, scoped to the selected account when present.
 	Section *string `form:"section,omitempty" json:"section,omitempty"`
+
+	// FavoritesQuery Search messages in the Favorites workspace.
+	FavoritesQuery *string `form:"favoritesQuery,omitempty" json:"favoritesQuery,omitempty"`
 
 	// FavoritesCursor Continuation cursor for the starred-message workspace in the current account scope.
 	FavoritesCursor *string `form:"favoritesCursor,omitempty" json:"favoritesCursor,omitempty"`

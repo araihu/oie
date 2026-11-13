@@ -775,6 +775,11 @@ paths:
         description: Optional source conversation filter; it must agree with accountId when both are supplied.
         schema:
           $ref: '#/components/schemas/ID'
+      - name: q
+        in: query
+        description: Search current retained message text, sender and source conversation.
+        schema: {type: string, maxLength: 200}
+        example: planejamento
       - name: cursor
         in: query
         description: Message UUID from nextCursor; its retained source message must belong to the selected scope.

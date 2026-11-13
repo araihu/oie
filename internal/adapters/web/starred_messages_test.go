@@ -64,6 +64,10 @@ func TestFavoritesWorkspaceShowsStarredMessagesAcrossConversations(t *testing.T)
 			w.WriteHeader(409)
 			_ = json.NewEncoder(w).Encode(engineapi.Problem{Status: 409})
 			return
+		case q.Get("q") == "Archived room":
+			page.Items = []engineapi.StarredMessage{room}
+			page.NextCursor = &room.Message.Id
+		case q.Get("q") != "":
 		case q.Get("cursor") == directID:
 			page.Items = []engineapi.StarredMessage{room}
 		case q.Get("accountId") == testAccount:
@@ -84,6 +88,8 @@ func TestFavoritesWorkspaceShowsStarredMessagesAcrossConversations(t *testing.T)
 		{"/?section=favorites&account=" + testAccount, []string{"Starred in the room", "favoritesCursor=" + testMessage}, []string{"Starred in a direct conversation"}},
 		{"/?section=favorites&favoritesCursor=" + directID, []string{"Starred in the room", "Show newest items"}, []string{"Starred in a direct conversation"}},
 		{"/?section=favorites&account=" + otherAccount + "&lang=pt-BR", []string{"Nenhuma mensagem favorita"}, []string{"Starred in the room", "Starred in a direct conversation"}},
+		{"/?section=favorites&favoritesQuery=Archived+room&lang=en", []string{`type="search"`, `aria-label="Search starred messages"`, `data-search-query="Archived room"`, "favoritesQuery=Archived+room", "favoritesCursor=" + testMessage}, []string{"Starred in a direct conversation"}},
+		{"/?section=favorites&favoritesQuery=missing&lang=en", []string{"No messages found"}, []string{"No starred messages", "Starred in the room"}},
 		{"/?section=favorites&favoritesCursor=stale&lang=en", []string{"Show newest items"}, []string{"Starred in the room"}},
 		{"/ui/refresh?section=favorites", []string{`id="favorites-results"`, "Starred in the room", "/ui/media/" + imageHash}, []string{`id="oie-app"`}},
 	} {

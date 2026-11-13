@@ -4285,6 +4285,9 @@ type ListStarredMessagesParams struct {
 	// ConversationId Optional source conversation filter; it must agree with accountId when both are supplied.
 	ConversationId *ID `form:"conversationId,omitempty" json:"conversationId,omitempty"`
 
+	// Q Search current retained message text, sender and source conversation.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
 	// Cursor Message UUID from nextCursor; its retained source message must belong to the selected scope.
 	Cursor *ID `form:"cursor,omitempty" json:"cursor,omitempty"`
 
@@ -10370,6 +10373,18 @@ func NewListStarredMessagesRequest(server string, params *ListStarredMessagesPar
 		if params.ConversationId != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "conversationId", *params.ConversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", *params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -21849,14 +21864,14 @@ var swaggerSpec = []string{
 	"Blh+55S4yfNhqD6a2UJ3raHMmAPhtl4hSISAGxs2tawH0Uqh9ix1743Q2VenaDg7L5ertVUYAoa3vmAx",
 	"/RXKNXC4qOkCVDBcHH3zmVXyHeFIzxNiQQro1i4KU1XUySgEDOfW/F0lProHWItCyobKHeVqpaQdQtxj",
 	"IZV41g/uuHGr5sFm7BUIQmGSfXGaTaOYywtjtY/ogEFSWRzWGiw+reSulZXPA2FyG4++pXbtcJj5mrcP",
-	"YMV5CA+E5q6m8twqbloa30+RCFL9VrVCrx8dSP40l088aGv13p9y/YX2bh1vXQAKVSZxkkZfEUF/e8Bb",
-	"Dxh3v0qwu/tXyv6u6wN3BG22tsI61OZpWwUGzYnf/w95QjFaMwlnd/UDKFjbbF9C9vOGCBcZrwmDAhze",
-	"cMU3VwheqMqsUH8SmhJqEWw1uj9aeL+6f3R06/a30+Pp8fTW/e+OvztGQmMe4m/DxOWxoQDRaMtS18q5",
-	"JNpnV86roXqGF4GyO6jIjPCA7+XymKHimEDBFhnMAgFkujtjKxuqWsFqwJwkkovx0wMeXajhl/O4Jo7Y",
-	"8wlv2qk4p+nAl7S6RGCDhPSO/KwaHidLFchLZk6ACc5TgBY9tQ7KHvw0Vc/2wGhkSTlvm8IjYUOVGJPy",
-	"mr/qKh6xoZwwe0O0t/pvOGsFM5YEmG+jJ+FvbiumOQhRK4D3IW4AjEJNOFA5CS+Indy4FMT6t8paY1nK",
-	"3f2jo3PtF81sWpjlkbRSL5ojo9XRrDKzo6XUNWTR3RHJxUSudHiFmy7Lf+o+dTxqYKZv9B35Ez98+P8P",
-	"AA==",
+	"YMV5CA+E5q6m8twqbloa30+RCFL9VrVCrx8dSH7GVTpd2yQsEmE0GNmC2Jj+R7bQ4aNVJWv1qwRxMR8H",
+	"g/s031NoHNTqvT/lmhHt3TquvQBuqkziUY3+LQIV94Dk7j/XA5WNXY21UvZ3XdO4I9C0tX3XIU1P22o7",
+	"aHv8/n/IU5URpkk4u6sfgMzaZtsMduANkUQyxhQGBdjB4Sp1rmq8UJVZoc4nBCjUT9hqdH+08H51/+jo",
+	"1u1vp8fT4+mt+98df3eMJMw8xN+GydZjEwSi/palrpVzSbTPrpxXQzUYLwLNeFDrGUkD38slPUMFPYE2",
+	"LrKuBdLKdHfGsDZUaYMVjDmxJRMIpAc8ulDDL+dxTRwx/hNGtlMlT9OBL2l1tsCmDukd+fk6PE6WKpCX",
+	"zAQCt4GnAL0QaneUPfhpqvjtAejI+nPeNoVHkokqsTzldYrVVTQLQglk9oZoIw4cP60AzJJA/m3EJ/zN",
+	"bcVhByFqBR0/xA2AkbMJB1cn4QWx+xyXr1j/VllrLEu5u390dK79oplNC7M8klbqRXNktDqaVWZ2tJS6",
+	"hsy/OyK5mMiVDq9w02X5T92njkcNzPSNviN/4ocP//8BAA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

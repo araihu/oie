@@ -13,7 +13,7 @@ import (
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
-func (s *Server) loadStarredMessages(ctx context.Context, account, conversation, cursor string) (*engineapi.StarredMessagePage, bool) {
+func (s *Server) loadStarredMessages(ctx context.Context, account, conversation, cursor, query string) (*engineapi.StarredMessagePage, bool) {
 	limit := 50
 	params := &engineapi.ListStarredMessagesParams{Limit: &limit}
 	if account != "" {
@@ -21,6 +21,9 @@ func (s *Server) loadStarredMessages(ctx context.Context, account, conversation,
 	}
 	if conversation != "" {
 		params.ConversationId = &conversation
+	}
+	if query != "" {
+		params.Q = &query
 	}
 	if cursor != "" {
 		params.Cursor = &cursor

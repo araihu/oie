@@ -117,7 +117,7 @@ func (s *Store) StarredMessages(ctx context.Context, in application.StarQuery) (
 		in.Cursor = canonical
 	}
 	rows, err := s.queries.ListStarredMessages(ctx, dbgen.ListStarredMessagesParams{
-		AccountID: string(in.AccountID), ConversationID: string(in.ConversationID), PageCursor: string(in.Cursor), PageLimit: int64(in.Limit),
+		AccountID: string(in.AccountID), ConversationID: string(in.ConversationID), PageCursor: string(in.Cursor), PageLimit: int64(in.Limit), Search: in.Search,
 	})
 	if err != nil {
 		return nil, err

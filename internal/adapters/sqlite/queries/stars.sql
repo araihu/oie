@@ -46,6 +46,11 @@ JOIN message_stars AS s ON s.message_id=(
 WHERE s.starred=1
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id)
+AND (CAST(sqlc.arg(search) AS TEXT)='' OR oie_search_match(
+ COALESCE(json_extract(COALESCE(h.payload,m.payload),'$.OriginalText'),'') || ' ' ||
+ COALESCE(json_extract(m.payload,'$.Sender.DisplayName'),'') || ' ' ||
+ COALESCE(json_extract(c.payload,'$.Title'),'') || ' ' || c.address,
+ CAST(sqlc.arg(search) AS TEXT))=1)
 AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
 AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
 AND (CAST(sqlc.arg(page_cursor) AS TEXT)='' OR

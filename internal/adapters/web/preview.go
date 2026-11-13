@@ -62,6 +62,8 @@ func (v *view) configureWorkspace(r *http.Request) {
 	}
 	if v.Section == "favorites" {
 		v.FavoritesCursor = q.Get("favoritesCursor")
+		query := []rune(strings.TrimSpace(q.Get("favoritesQuery")))
+		v.FavoritesQuery = string(query[:min(len(query), 200)])
 	}
 	v.ScheduleCursor = q.Get("scheduleCursor")
 	v.ScheduleConversations = slices.DeleteFunc(q["scheduleConversation"], func(id string) bool { return id == "" })
@@ -117,8 +119,13 @@ func (v view) href(pairs ...string) string {
 			q.Set("contentConversation", v.SharedConversation)
 		}
 	}
-	if v.Section == "favorites" && v.FavoritesCursor != "" {
-		q.Set("favoritesCursor", v.FavoritesCursor)
+	if v.Section == "favorites" {
+		if v.FavoritesCursor != "" {
+			q.Set("favoritesCursor", v.FavoritesCursor)
+		}
+		if v.FavoritesQuery != "" {
+			q.Set("favoritesQuery", v.FavoritesQuery)
+		}
 	}
 	if v.Section == "scheduled" {
 		if len(v.ScheduleConversations) > 0 {
@@ -162,7 +169,10 @@ func (v view) href(pairs ...string) string {
 			q.Del("scheduleConversation")
 			q.Del("scheduleCursor")
 		}
-		if pairs[i] == "section" && pairs[i+1] != "favorites" || pairs[i] == "account" && pairs[i+1] != v.AccountFilter {
+		if pairs[i] == "section" && pairs[i+1] != "favorites" {
+			q.Del("favoritesQuery")
+		}
+		if pairs[i] == "section" && pairs[i+1] != "favorites" || pairs[i] == "account" && pairs[i+1] != v.AccountFilter || pairs[i] == "favoritesQuery" && pairs[i+1] != v.FavoritesQuery {
 			q.Del("favoritesCursor")
 		}
 		if pairs[i] == "account" {
