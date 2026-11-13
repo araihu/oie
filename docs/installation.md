@@ -87,8 +87,9 @@ desktop icon variants are backlog B24.
 The packaging workflow prepares Homebrew recipes for macOS Apple Silicon and
 Linux x86_64, a Flatpak bundle for Linux x86_64, and native DEB, RPM and pacman
 packages. It reuses the executables from the selected release and verifies both
-archive checksums before packaging. The package-manager files are generated
-separately from the original release assets.
+archive checksums before packaging. The packages retain the release's license
+notices and source links. For releases with [corresponding source archives](release-source.md),
+the build also verifies those archives against the published checksum list.
 
 ### Install generated packages
 
@@ -149,7 +150,7 @@ locally with Python 3.12+ and Go 1.27.4+, run:
 ```sh
 version=v0.0.1-rc.1
 gh release download "$version" --repo araihu/oie --dir "dist/$version/assets" \
-  --pattern SHA256SUMS --pattern 'oie_*_darwin_arm64.tar.gz' --pattern 'oie_*_linux_amd64.tar.gz'
+  --pattern SHA256SUMS --pattern 'oie_*_darwin_arm64*.tar.gz' --pattern 'oie_*_linux_amd64*.tar.gz'
 mkdir -p bin
 GOBIN="$PWD/bin" GOWORK=off go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.49.0
 python3 scripts/package-distribution.py --version "$version" \

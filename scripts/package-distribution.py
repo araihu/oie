@@ -20,8 +20,7 @@ VERSION_TAG = re.compile(r"v([0-9]+\.[0-9]+\.[0-9]+)(?:-([0-9A-Za-z]+(?:[.-][0-9
 SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
-def verify_archive(assets, version, platform, sums):
-    name = f"oie_{version}_{platform}.tar.gz"
+def verify_archive(assets, name, sums):
     archive = assets / name
     checksum = sums.get(name, "")
     if not SHA256.fullmatch(checksum):
@@ -105,8 +104,15 @@ def generate(args):
         raise ValueError(f"output already exists: {output}")
 
     checksums = release_checksums(assets)
-    linux_archive, linux_sha = verify_archive(assets, args.version, "linux_amd64", checksums)
-    _, macos_sha = verify_archive(assets, args.version, "darwin_arm64", checksums)
+    linux_name = f"oie_{args.version}_linux_amd64"
+    macos_name = f"oie_{args.version}_darwin_arm64"
+    linux_archive, linux_sha = verify_archive(assets, f"{linux_name}.tar.gz", checksums)
+    _, macos_sha = verify_archive(assets, f"{macos_name}.tar.gz", checksums)
+    # Newer releases publish the corresponding source beside each binary.
+    for name in (linux_name, macos_name):
+        source_name = f"{name}_source.tar.gz"
+        if source_name in checksums:
+            verify_archive(assets, source_name, checksums)
     with tarfile.open(linux_archive) as archive:
         with archive.extractfile("share/doc/oie/build-info.json") as info:
             build = json.load(info)

@@ -29,8 +29,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release download --repo araihu/oie --dir dist/release \
-            --pattern SHA256SUMS --pattern 'oie_*_darwin_arm64.tar.gz' \
-            --pattern 'oie_*_linux_amd64.tar.gz' -- "$OIE_RELEASE_VERSION"
+            --pattern SHA256SUMS --pattern 'oie_*_darwin_arm64*.tar.gz' \
+            --pattern 'oie_*_linux_amd64*.tar.gz' -- "$OIE_RELEASE_VERSION"
       - name: Build native packages and Homebrew recipes
         run: |
           GOBIN="$RUNNER_TEMP" GOWORK=off go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.49.0

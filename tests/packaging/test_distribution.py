@@ -75,6 +75,14 @@ class DistributionTest(unittest.TestCase):
         self.assertIn("SHA-256 mismatch", result.stderr)
         self.assertFalse(self.output.exists())
 
+    def test_declared_source_archive_must_be_present(self):
+        with (self.assets / "SHA256SUMS").open("a") as checksums:
+            checksums.write(f"{'0' * 64}  oie_{VERSION}_linux_amd64_source.tar.gz\n")
+        result = self.generate("--recipes-only")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("linux_amd64_source.tar.gz", result.stderr)
+        self.assertFalse(self.output.exists())
+
     def test_traversal_leaves_no_output(self):
         self.write_linux_archive("../../escaped")
         result = self.generate("--nfpm", sys.executable)
