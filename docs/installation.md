@@ -115,6 +115,31 @@ Settings, Privacy & Security, using Open Anyway for this app. The installer
 does not disable Gatekeeper. The current flat app icon remains in this version;
 desktop icon variants are backlog B24.
 
+## Install Oiê with APT
+
+The Arai Hû archive targets Trisquel 12 and Ubuntu 24.04 on x86_64
+(`amd64`). Install its [APT source file](https://araihu.github.io/oie/apt/oie.sources)
+once. The file embeds the archive's public signing key and scopes it to this
+repository.
+
+```sh
+curl -fL -o oie.sources https://araihu.github.io/oie/apt/oie.sources && \
+  sudo install -m 0644 oie.sources /etc/apt/sources.list.d/oie.sources && \
+  sudo apt update && sudo apt install oie
+```
+
+Open Oiê from the applications menu or run `oie-desktop`. Updates arrive
+through APT. The archive includes prereleases as well as stable releases.
+`sudo apt remove oie` removes the application and keeps its user profile.
+
+The desktop release workflow rebuilds and signs the APT index after publishing
+each SemVer desktop tag. GitHub Pages serves the three most recent indexed
+releases, ranked by SemVer. The first publication can bootstrap from a public
+release that provides the Linux binary and its corresponding source archive.
+The `apt-signing` environment provides `OIE_APT_SIGNING_KEY` with only the
+archive signing subkey. The primary key fingerprint is pinned in
+[`packaging/apt/fingerprint`](../packaging/apt/fingerprint).
+
 ## Package-manager builds
 
 The packaging workflow prepares Homebrew recipes for macOS Apple Silicon and

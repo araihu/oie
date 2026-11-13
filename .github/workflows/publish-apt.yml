@@ -1,0 +1,79 @@
+name: Publish Arai Hû APT repository
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oie-apt-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'araihu/oie'
+    runs-on: ubuntu-24.04
+    environment: apt-signing
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BOOTSTRAP_TAG: v0.0.1-rc.3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Stage published desktop packages
+        id: stage
+        run: |
+          python3 scripts/stage_apt_releases.py dist/pages
+          shopt -s nullglob
+          packages=(dist/pages/apt/pool/main/o/oie/*.deb)
+          if (( ${#packages[@]} < 3 )) &&
+             [[ ! -e dist/pages/apt/pool/main/o/oie/oie_0.0.1~rc.3-1_amd64.deb ]]; then
+            echo 'bootstrap=true' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-go@v5
+        if: steps.stage.outputs.bootstrap == 'true'
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Package the bootstrap release
+        if: steps.stage.outputs.bootstrap == 'true'
+        run: |
+          python3 scripts/release_desktop.py validate "$BOOTSTRAP_TAG"
+          gh release view "$BOOTSTRAP_TAG" --repo araihu/oie --json isDraft --jq .isDraft | grep -qx false
+          gh release download "$BOOTSTRAP_TAG" --repo araihu/oie --dir dist/bootstrap \
+            --pattern SHA256SUMS --pattern "oie_${BOOTSTRAP_TAG}_linux_amd64*.tar.gz"
+          GOBIN="$RUNNER_TEMP" GOWORK=off go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.49.0
+          python3 scripts/package-distribution.py --version "$BOOTSTRAP_TAG" --deb-only \
+            --assets dist/bootstrap --output dist/bootstrap-package --nfpm "$RUNNER_TEMP/nfpm"
+          cp dist/bootstrap-package/native/*.deb dist/pages/apt/pool/main/o/oie/
+      - name: Index and sign the archive
+        env:
+          APT_SIGNING_KEY: ${{ secrets.OIE_APT_SIGNING_KEY }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends apt-utils
+          keyring=$(mktemp -d)
+          trap 'gpgconf --homedir "$keyring" --kill gpg-agent; rm -r "$keyring"' EXIT
+          printf '%s\n' "$APT_SIGNING_KEY" | gpg --batch --homedir "$keyring" --import
+          bash scripts/build-apt-repository.sh dist/pages "$keyring" "$(cat packaging/apt/fingerprint)"
+      - name: Verify the package can be acquired by name
+        run: bash tests/packaging/smoke_apt.sh dist/pages
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/pages
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.publish.outputs.page_url }}apt/
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: publish

@@ -47,7 +47,7 @@ def render(source, destination, values):
     destination.write_text(content, encoding="utf-8")
 
 
-def linux_packages(stage, linux_archive, release, prerelease, date, nfpm):
+def linux_packages(stage, linux_archive, release, prerelease, date, nfpm, formats):
     payload = stage / "payload"
     payload.mkdir()
     with tarfile.open(linux_archive) as archive:
@@ -80,7 +80,7 @@ def linux_packages(stage, linux_archive, release, prerelease, date, nfpm):
     env = os.environ.copy()
     env["SOURCE_DATE_EPOCH"] = str(int(date.timestamp()))
     config = ROOT / "packaging/linux/nfpm.yaml"
-    for packager in ("deb", "rpm", "archlinux"):
+    for packager in formats:
         # nFPM's Arch metadata omits its prerelease field unless there is
         # an epoch. Use a native Arch pkgver so stable sorts after the RC.
         version = release
@@ -108,11 +108,15 @@ def generate(args):
     linux_name = f"oie_{args.version}_linux_amd64"
     macos_name = f"oie_{args.version}_darwin_arm64"
     linux_archive, linux_sha = verify_archive(assets, f"{linux_name}.tar.gz", checksums)
-    _, macos_sha = verify_archive(assets, f"{macos_name}.tar.gz", checksums)
+    if args.deb_only:
+        verify_archive(assets, f"{linux_name}_source.tar.gz", checksums)
+        macos_sha = ""
+    else:
+        _, macos_sha = verify_archive(assets, f"{macos_name}.tar.gz", checksums)
     # Newer releases publish the corresponding source beside each binary.
     for name in (linux_name, macos_name):
         source_name = f"{name}_source.tar.gz"
-        if source_name in checksums:
+        if not args.deb_only and source_name in checksums:
             verify_archive(assets, source_name, checksums)
     with tarfile.open(linux_archive) as archive:
         with archive.extractfile("share/doc/oie/build-info.json") as info:
@@ -131,15 +135,17 @@ def generate(args):
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".oie-distribution-", dir=output.parent) as temporary:
         stage = Path(temporary) / "distribution"
-        for source in sorted((ROOT / "packaging/homebrew").glob("*/*.rb.in")):
-            render(source, stage / "homebrew" / source.parent.name / source.stem, values)
+        if not args.deb_only:
+            for source in sorted((ROOT / "packaging/homebrew").glob("*/*.rb.in")):
+                render(source, stage / "homebrew" / source.parent.name / source.stem, values)
         for source in sorted((ROOT / "packaging/flatpak").glob("*.in")):
             render(source, stage / "flatpak" / source.stem, values)
         if not args.recipes_only:
             nfpm = shutil.which(args.nfpm)
             if not nfpm:
                 raise ValueError(f"nFPM executable not found: {args.nfpm}")
-            linux_packages(stage, linux_archive, release, prerelease, date, nfpm)
+            formats = ("deb",) if args.deb_only else ("deb", "rpm", "archlinux")
+            linux_packages(stage, linux_archive, release, prerelease, date, nfpm, formats)
             shutil.rmtree(stage / "payload")
         stage.rename(output)
     print(output)
@@ -151,7 +157,9 @@ def main():
     parser.add_argument("--assets", required=True, type=Path, help="directory with both archives and SHA256SUMS")
     parser.add_argument("--output", required=True, type=Path, help="new directory for generated packages and recipes")
     parser.add_argument("--nfpm", default="nfpm", help="path to the nFPM executable")
-    parser.add_argument("--recipes-only", action="store_true", help="skip building the three native Linux packages")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--recipes-only", action="store_true", help="skip building the native Linux packages")
+    mode.add_argument("--deb-only", action="store_true", help="build a DEB from a Linux release with corresponding source")
     args = parser.parse_args()
     try:
         generate(args)

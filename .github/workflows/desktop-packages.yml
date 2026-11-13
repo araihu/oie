@@ -159,3 +159,10 @@ jobs:
           name: release-assets
           path: dist/release
       - run: bash scripts/publish-desktop-release.sh "$OIE_RELEASE_VERSION" dist/release "$OIE_RELEASE_REVISION"
+  publish-apt:
+    needs: publish
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/publish-apt.yml
