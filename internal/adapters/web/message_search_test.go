@@ -64,6 +64,15 @@ func TestMessageSearchHighlightsVisibleTextAndURL(t *testing.T) {
 	}
 }
 
+func TestCompactSearchStartsNearFirstHighlight(t *testing.T) {
+	query := "plataformas"
+	text := "An earlier line\n" + strings.Repeat("long caption ", 10) + "https://plataformas.example/test"
+	parts := searchTextParts(text, searchHighlightPattern(query), true)
+	if len(parts) < 3 || parts[0].text != "…" || len(parts[1].text) > 12 || !parts[2].match || parts[2].text != query {
+		t.Fatalf("first match is too far into the compact excerpt: %+v", parts)
+	}
+}
+
 func searchTestPage() engineapi.MessageSearchPage {
 	at := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
 	return engineapi.MessageSearchPage{Query: "needle", Items: []engineapi.MessageSearchHit{{Message: engineapi.Message{Id: testMessage, RevisionId: testRevision, AccountId: testAccount, ConversationId: testChat, CreatedAt: at}, MatchedRevisionId: testRevision, MatchedAt: at, MatchKind: "text", Excerpt: "<img src=x onerror=alert(1)>"}}, MetadataIndexing: engineapi.SharedContentIndexing{State: "complete", IndexedMessages: 1, TotalMessages: 1}}

@@ -256,7 +256,7 @@ window.OieRuntime.register('quick-message-search',life=>{
   if(!q)return;
   if(Array.from(q).length>200){feedback(root.dataset.invalid);return;}
   const state={q,engineId:engine,accounts:[],conversationId:'',includeEditHistory:'false',searchType:''};
-  const params=new URLSearchParams({q,engineId:engine,lang:app.dataset.routeLocale,theme:app.dataset.routeTheme});
+  const params=new URLSearchParams({q,engineId:engine,lang:app.dataset.routeLocale,theme:app.dataset.routeTheme,presentation:'compact'});
   if(cursor)params.set('cursor',cursor);
   const controller=new AbortController();
   active=controller;lastCursor=cursor;

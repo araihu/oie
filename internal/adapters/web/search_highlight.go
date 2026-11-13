@@ -44,7 +44,7 @@ func searchHighlightPattern(query string) *regexp.Regexp {
 	return regexp.MustCompile(strings.Join(terms, "|"))
 }
 
-func searchTextParts(text string, pattern *regexp.Regexp) []searchTextPart {
+func searchTextParts(text string, pattern *regexp.Regexp, compact bool) []searchTextPart {
 	if pattern == nil {
 		return []searchTextPart{{text: text}}
 	}
@@ -71,9 +71,29 @@ func searchTextParts(text string, pattern *regexp.Regexp) []searchTextPart {
 		start = end
 	}
 
+	matches := pattern.FindAllStringIndex(folded.String(), -1)
 	var parts []searchTextPart
 	start := 0
-	for _, match := range pattern.FindAllStringIndex(folded.String(), -1) {
+	if compact && len(matches) > 0 {
+		first := positions[matches[0][0]].start
+		prefix := text[:first]
+		// Keep the first match inside the floating dialog's two-line excerpt.
+		start = first
+		for range 12 {
+			if start == 0 {
+				break
+			}
+			r, width := utf8.DecodeLastRuneInString(prefix[:start])
+			if r == '\n' || r == '\r' {
+				break
+			}
+			start -= width
+		}
+		if start > 0 {
+			parts = append(parts, searchTextPart{text: "…"})
+		}
+	}
+	for _, match := range matches {
 		original := span{positions[match[0]].start, positions[match[1]-1].end}
 		if original.start < start {
 			continue

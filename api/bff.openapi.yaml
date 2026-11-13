@@ -499,6 +499,12 @@ paths:
         schema:
           type: string
           enum: [en, pt-BR]
+      - in: query
+        name: presentation
+        description: Use compact excerpts that start near the first visible match in the floating search dialog.
+        schema:
+          type: string
+          enum: [compact]
       responses:
         '200':
           description: Scoped HTML results or local blank-query state, with engine/query/scope/cursor metadata for safe swaps

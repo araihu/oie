@@ -69,6 +69,7 @@ func messageSearchStylesheetURL() string {
 }
 
 type messageSearchView struct {
+	Compact                                                                      bool
 	Contacts                                                                     []engineapi.Contact
 	ContactsKnown                                                                bool
 	ContactsPartial                                                              bool
@@ -108,6 +109,7 @@ func (v *view) configureMessageSearch(r *http.Request) {
 	native := r.URL.Path == "/search" || r.URL.Path == "/ui/message-search"
 	v.MessageSearch = messageSearchView{Limit: 30, State: "blank"}
 	s := &v.MessageSearch
+	s.Compact = r.URL.Path == "/ui/message-search" && q.Get("presentation") == "compact"
 	s.Category = q.Get("searchType")
 	if native {
 		s.Query = q.Get("q")

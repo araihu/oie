@@ -1734,7 +1734,7 @@ func messageSearchHit(v view, hit engineapi.MessageSearchHit, searchPattern *reg
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = highlightSearchText(excerpt, searchPattern).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = highlightSearchText(excerpt, searchPattern, v.MessageSearch.Compact).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1748,7 +1748,7 @@ func messageSearchHit(v view, hit engineapi.MessageSearchHit, searchPattern *reg
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = highlightSearchText(sharedURL, searchPattern).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = highlightSearchText(sharedURL, searchPattern, false).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1811,7 +1811,7 @@ func messageSearchHit(v view, hit engineapi.MessageSearchHit, searchPattern *reg
 	})
 }
 
-func highlightSearchText(text string, searchPattern *regexp.Regexp) templ.Component {
+func highlightSearchText(text string, searchPattern *regexp.Regexp, compact bool) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -1828,7 +1828,7 @@ func highlightSearchText(text string, searchPattern *regexp.Regexp) templ.Compon
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		for _, part := range searchTextParts(text, searchPattern) {
+		for _, part := range searchTextParts(text, searchPattern, compact) {
 			if part.match {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 112, "<mark class=\"oie-search-highlight\">")
 				if templ_7745c5c3_Err != nil {
