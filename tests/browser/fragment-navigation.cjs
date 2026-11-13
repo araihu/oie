@@ -10,7 +10,7 @@ const {chromium} = require('playwright');
 const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(check, label) {
-  for (let n = 0; n < 200; n++) {if (await check()) return; await wait(50);}
+  for (let n = 0; n < 600; n++) {if (await check()) return; await wait(50);}
   throw Error('Timed out: ' + label);
 }
 async function assertMobileControlOwnership(page) {
@@ -93,14 +93,102 @@ async function assertMobileControlOwnership(page) {
     // use fragments throughout that interval, then start one application scope.
     const early=await browser.newContext({viewport:{width:1440,height:1000},locale:'en'}),earlyPage=await early.newPage(),earlyDocuments=[],earlyHX=[],earlyErrors=[];let alpineHeld=false,releaseAlpine;const alpineGate=new Promise(resolve=>releaseAlpine=resolve);
     debuggingPage=earlyPage;await early.addInitScript(()=>{window.documentToken=Math.random();window.earlySettles=0;document.addEventListener('htmx:after:settle',()=>window.earlySettles++)});earlyPage.on('pageerror',error=>earlyErrors.push(error.message));earlyPage.on('request',request=>{if(request.resourceType()==='document')earlyDocuments.push(request.url());if(request.headers()['hx-request']==='true')earlyHX.push(request.url())});await earlyPage.route('**/assets/js/runtime/alpinejs/*/alpine.min.js',async route=>{alpineHeld=true;await alpineGate;try{await route.continue()}catch{}});
-    try{await earlyPage.goto(base+'/?section=chats&lang=en&theme=dark',{waitUntil:'commit'});await until(async()=>alpineHeld&&await earlyPage.evaluate(()=>!!window.htmx&&!window.OieRuntime?.generation),'HTMX ready before Alpine');const earlyToken=await earlyPage.evaluate(()=>{window.htmx.config.defaultSettleDelay=500;return window.documentToken});console.log('Early init diagnostic',JSON.stringify(await earlyPage.evaluate(()=>{const link=[...document.querySelectorAll('.oie-sidebar a')].find(link=>link.textContent.includes('Media & links'));return{ready:document.readyState,navigation:typeof window.OieNavigation,linkMatches:link.matches('.oie-navigation a[hx-boost=\"true\"]'),processed:link.getAttribute('data-htmx-powered'),process:typeof window.htmx.process}})));await earlyPage.locator('.oie-sidebar a').filter({hasText:'Media & links'}).click({noWaitAfter:true});await until(async()=>new URL(earlyPage.url()).searchParams.get('section')==='media'&&await earlyPage.locator('#shared-content-results').count()===1,'initial sidebar route before Alpine');console.log('Early sidebar evidence',JSON.stringify({documents:earlyDocuments.length,fragments:earlyHX.length,sameDocument:await earlyPage.evaluate(token=>window.documentToken===token,earlyToken)}));assert.equal(earlyDocuments.length,1,'sidebar reloaded after HTMX was ready but before Alpine');assert.equal(await earlyPage.evaluate(()=>window.documentToken),earlyToken);assert.equal(earlyHX.length,1);assert.equal(await earlyPage.evaluate(()=>window.OieRuntime.generation),0);assert.equal(streams.size,0);assert.equal(await earlyPage.evaluate(()=>window.earlySettles),0,'dependency release must precede fragment settlement');releaseAlpine();await until(async()=>await earlyPage.evaluate(()=>window.OieRuntime?.generation>0),'application starts after dependencies');await until(()=>streams.size===1,'one stream after delayed dependency');await until(async()=>await earlyPage.evaluate(()=>window.earlySettles)===1,'delayed fragment settles after dependency release');await wait(200);assert.equal(await earlyPage.evaluate(()=>window.OieRuntime.generation),1);assert.deepEqual(earlyErrors,[]);assert.equal(streams.size,1);findings.push('Sidebar navigation uses HTMX while Alpine is delayed and starts one application stream after dependency readiness')}finally{releaseAlpine();await early.close();await until(()=>streams.size===0,'early stream disposed')}
+    try{await earlyPage.goto(base+'/?section=chats&lang=en&theme=dark',{waitUntil:'commit'});await until(async()=>alpineHeld&&await earlyPage.evaluate(()=>!!window.htmx&&!window.OieRuntime?.generation),'HTMX ready before Alpine');const earlyToken=await earlyPage.evaluate(()=>{window.htmx.config.defaultSettleDelay=500;return window.documentToken});console.log('Early init diagnostic',JSON.stringify(await earlyPage.evaluate(()=>{const link=[...document.querySelectorAll('.oie-sidebar a')].find(link=>link.textContent.includes('Media & links'));return{ready:document.readyState,navigation:typeof window.OieNavigation,linkMatches:link.matches('.oie-navigation a[hx-boost=\"true\"]'),processed:link.getAttribute('data-htmx-powered'),process:typeof window.htmx.process}})));await earlyPage.locator('.oie-sidebar a').filter({hasText:'Media & links'}).click({noWaitAfter:true});await until(async()=>new URL(earlyPage.url()).searchParams.get('section')==='media'&&await earlyPage.locator('#shared-content-results').count()===1,'initial sidebar route before Alpine');console.log('Early sidebar evidence',JSON.stringify({documents:earlyDocuments.length,fragments:earlyHX.length,sameDocument:await earlyPage.evaluate(token=>window.documentToken===token,earlyToken)}));assert.equal(earlyDocuments.length,1,'sidebar reloaded after HTMX was ready but before Alpine');assert.equal(await earlyPage.evaluate(()=>window.documentToken),earlyToken);assert.equal(earlyHX.length,1);assert.equal(await earlyPage.evaluate(()=>window.OieRuntime.generation),0);assert.equal(streams.size,0);releaseAlpine();await until(async()=>await earlyPage.evaluate(()=>window.OieRuntime?.generation>0),'application starts after dependencies');await until(()=>streams.size===1,'one stream after delayed dependency');await until(async()=>await earlyPage.evaluate(()=>window.earlySettles)===1,'delayed fragment settles after dependency release');await wait(200);assert.equal(await earlyPage.evaluate(()=>window.OieRuntime.generation),1);assert.deepEqual(earlyErrors,[]);assert.equal(streams.size,1);findings.push('Sidebar navigation uses HTMX while Alpine is delayed and starts one application stream after dependency readiness')}finally{releaseAlpine();await early.close();await until(()=>streams.size===0,'early stream disposed')}
+    const startup=await browser.newContext({viewport:{width:390,height:844},locale:'pt-BR'});
+    const startupPage=await startup.newPage(),startupRequests=[];
+    let releaseStartup, startupHeld=false;
+    const startupGate=new Promise(resolve=>releaseStartup=resolve);
+    await startupPage.addInitScript(()=>{window.documentToken=Math.random()});
+    startupPage.on('request',request=>startupRequests.push([request.resourceType(),request.headers()['x-oie-fragment']]));
+    await startupPage.route('**/assets/js/runtime/alpinejs/*/alpine.min.js',async route=>{
+      startupHeld=true;await startupGate;await route.continue().catch(()=>{});
+    });
+    try {
+      await startupPage.goto(base+'/?lang=pt-BR&theme=light',{waitUntil:'commit'});
+      await until(()=>startupPage.evaluate(()=>!!window.htmx&&!window.OieRuntime?.generation).catch(()=>false).then(ready=>ready&&startupHeld),'chat list before Alpine');
+      const token=await startupPage.evaluate(()=>window.documentToken);
+      await startupPage.locator('#conversation-list a[data-conversation-id="'+chatB+'"]').click({noWaitAfter:true});
+      await until(()=>startupPage.evaluate(chat=>document.querySelector('#conversation-pane')?.dataset.conversationId===chat,chatB),'chat fragment before Alpine');
+      assert.equal(await startupPage.evaluate(()=>window.documentToken),token);
+      assert.equal(startupRequests.filter(([type])=>type==='document').length,1);
+      assert.equal(startupRequests.filter(([,kind])=>kind==='conversation').length,1);
+      releaseStartup();
+      await startupPage.waitForFunction(()=>window.OieRuntime.generation>0,{},{timeout:90000});
+      await until(()=>streams.size===1,'one stream after starting in the selected chat');
+    } finally {
+      releaseStartup();await startup.close();await until(()=>streams.size===0,'startup stream disposed');
+    }
+    {
+    const retainedCount=messages.length;
+    for(let index=0;index<24;index++)messages.push({
+      ...messages[0],id:id(200+index),createdAt:new Date(Date.parse('2026-11-08T12:00:00Z')+(index+1)*60000).toISOString(),
+      originalText:'A retained message to make the history scroll · '+index
+    });
+    const scopedContext=await browser.newContext({viewport:{width:1440,height:1000},locale:'en'});
+    const scoped=await scopedContext.newPage(), documents=[], scopedErrors=[];
+    debuggingPage=scoped;scoped.on('pageerror',error=>scopedErrors.push(error.message));
+    let subscriptions=0;
+    scoped.on('request',request=>{
+      if(request.resourceType()==='eventsource')subscriptions++;
+      if(request.resourceType()==='document')documents.push(request.url());
+    });
+    await scoped.goto(base+'/?chat='+chatA+'&lang=en&theme=dark',{waitUntil:'domcontentloaded'});
+    await until(()=>streams.size===1,'initial scoped stream connected');
+    const streamBefore=[...streams][0],subscriptionsBefore=subscriptions;
+    await scoped.locator('#message-composer').fill('Draft kept through scoped swaps');
+    const chatBefore=await scoped.evaluate(()=>{
+      const selectors=['#oie-app','#message-composer','#message-timeline','#conversation-list'];
+      window.chatNodes=selectors.map(selector=>document.querySelector(selector));
+      window.chatNodes[2].scrollTop=150;
+      return {generation:window.OieRuntime.generation,scroll:window.chatNodes[2].scrollTop};
+    });
+    assert(chatBefore.scroll>0,'fixture timeline overflows');
+    const keepChat=async()=>{
+      assert(await scoped.evaluate(({generation,scroll})=>window.OieRuntime.generation===generation&&
+        window.chatNodes.every(node=>node.isConnected)&&window.chatNodes[2].scrollTop===scroll,chatBefore));
+      assert.equal(await scoped.locator('#message-composer').inputValue(),'Draft kept through scoped swaps');
+      assert.equal(subscriptions,subscriptionsBefore);
+      assert.deepEqual([...streams],[streamBefore]);
+      assert.equal(documents.length,1);
+    };
+    const accountMenu=scoped.locator('[data-account-switcher]:visible').first();
+    await accountMenu.click();
+    await scoped.locator('[data-open-accounts]:visible').click();
+    await scoped.locator('[data-manage-account]:visible').first().click();
+    await scoped.locator('#account-blocks:visible').waitFor();await keepChat();
+    await scoped.keyboard.press('Escape');
+    await scoped.locator('#accounts-body').waitFor({state:'hidden'});
+    await scoped.locator('[data-open-details]').click();
+    await scoped.locator('[data-info-entry=media]:visible').click();
+    await scoped.locator('#chat-info-content[data-info-view=shared]').waitFor();
+    await scoped.locator('#chat-info-content [data-shared-tab=links]').click();
+    await scoped.locator('#chat-info-content [data-shared-tab=links][aria-current=true]').waitFor();
+    await scoped.goBack();
+    await scoped.locator('#chat-info-content [data-shared-tab=media][aria-current=true]').waitFor();
+    await keepChat();
+    await scoped.goForward();
+    await scoped.locator('#chat-info-content [data-shared-tab=links][aria-current=true]').waitFor();
+    await keepChat();
+    await scoped.keyboard.press('Escape');
+    await scoped.locator('#details-body').waitFor({state:'hidden'});
+    await scoped.locator('[data-navigation-settings]:visible').click();
+    await scoped.locator('#appearance-light').check();
+    await scoped.waitForFunction(()=>document.documentElement.dataset.mode==='light');
+    await keepChat();
+    await scoped.keyboard.press('Escape');
+    await scoped.locator('#settings-body').waitFor({state:'hidden'});
+    assert.deepEqual(scopedErrors,[]);
+    await scopedContext.close();await until(()=>streams.size===0,'scoped stream disposed');
+    messages.splice(retainedCount);
+    findings.push('Account details, details history and appearance preserve the mounted chat and original event connection');
+    }
     const context=await browser.newContext({viewport:{width:1440,height:1000},locale:'en'}),page=await context.newPage(),errors=[],documents=[],hx=[],fragmentChecks=[];
     debuggingPage=page;
     // These document identity and request probes belong only to the original page.
     await page.addInitScript(()=>{if(location.origin==='null')return;window.documentToken=Math.random();window.navTrace=[];for(const name of ['htmx:before:request','htmx:after:request','htmx:after:settle'])document.addEventListener(name,event=>{const ctx=event.detail.ctx;window.navTrace.push({event:name,action:ctx?.request?.action,target:ctx?.target?.id,location:location.href,generation:window.OieRuntime?.generation});});localStorage.setItem('oie.device.auto-image-downloads.v1','false');});
     page.on('pageerror',error=>errors.push(error.message));
     page.on('request',request=>{if(request.resourceType()==='document')documents.push(request.url());if(request.headers()['hx-request']==='true')hx.push(request.url());});page.on('response',response=>{if(response.request().headers()['x-oie-fragment']==='app'&&response.status()===200)fragmentChecks.push(response.text().then(body=>({doctype:/<!doctype|<html[ >]|<head[ >]/i.test(body),app:body.includes('id="oie-app"')})).catch(()=>null))});
-    await page.goto(base+'/?chat='+chatA+'&lang=en&theme=dark');
+    await page.goto(base+'/?chat='+chatA+'&lang=en&theme=dark',{waitUntil:'domcontentloaded'});
     await until(async()=>page.evaluate(()=>!!window.OieRuntime?.generation&&!!window.htmx),'runtime ready');
     const token=await page.evaluate(()=>window.documentToken);
     let settledGeneration=await page.evaluate(()=>window.OieRuntime.generation);
@@ -127,7 +215,11 @@ async function assertMobileControlOwnership(page) {
     await choose(alpha,'Personal');await until(async()=>await page.locator('#message-composer').inputValue()===draft,'account draft restored');
     await page.locator('.oie-sidebar a').filter({hasText:'Media & links'}).click();await route(async()=>await page.locator('#shared-content-results').count()===1);assert.equal(await page.locator('[data-shared-item]').count(),27);
     await choose('','All accounts');assert.equal(await page.locator('[data-shared-item]').count(),50);
-    await page.locator('[data-shared-next]').click();await route(async()=>new URL(page.url()).searchParams.get('contentCursor')==='next-page'&&await page.locator('[data-shared-item]').count()===3);
+    const beforePage=await page.evaluate(()=>window.OieRuntime.generation);
+    await page.locator('[data-shared-next]').click();
+    await until(async()=>await page.locator('[data-shared-item]').count()>=53||
+      new URL(page.url()).searchParams.get('contentCursor')==='next-page'&&await page.locator('[data-shared-item]').count()===3,'catalog continuation');
+    assert.equal(await page.evaluate(()=>window.OieRuntime.generation),beforePage);
     await sharedTab('links',2);assert.equal(new URL(page.url()).searchParams.get('contentCursor'),null);
     await sharedTab('documents',2);
     const sourceCard=page.locator('[data-shared-conversation="'+chatA+'"]').first();await sourceCard.locator('[data-shared-menu-trigger]').click();await sourceCard.getByRole('menuitem',{name:'Go to message',exact:true}).click();await route(async()=>await page.locator('[data-message-id="'+messages[0].id+'"]').count()===1&&new URL(page.url()).searchParams.get('message')===messages[0].id);await until(async()=>page.locator('[data-message-id="'+messages[0].id+'"]').evaluate(node=>document.activeElement===node),'source message focused');assert.equal(await page.locator('#message-composer').inputValue(),draft);

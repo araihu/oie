@@ -3,6 +3,15 @@ const {createHash, randomUUID} = require('node:crypto');
 
 async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob, aliceConversation, bobConversation}) {
   const source = '#message-composer';
+  function monitorNavigation(page) {
+    const traffic = {documents:0, streams:0};
+    const count = request => {
+      if (request.resourceType() === 'document') traffic.documents++;
+      if (request.resourceType() === 'eventsource') traffic.streams++;
+    };
+    page.on('request',count);
+    return {traffic, stop:() => page.off('request',count)};
+  }
   const preview = '[data-schedule-dialog]';
   const path = (conversation, account, lang) => base + '/?chat=' + conversation.id + '&account=' + account.id + '&lang=' + lang;
   const planned = new Date(Date.now() + 2 * 86400000);
@@ -235,7 +244,7 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   const row = alicePage.locator('[data-scheduled-row]').filter({hasText: content});
   let releaseFilter;
   const filterGate = new Promise(resolve => { releaseFilter = resolve; });
-  const filterFetch = url => url.pathname === '/ui/refresh' && url.searchParams.getAll('scheduleConversation').length === 2;
+  const filterFetch = url => url.pathname === '/' && url.searchParams.getAll('scheduleConversation').length === 2;
   await alicePage.route(filterFetch, async route => {
     await filterGate;
     await route.continue();
@@ -264,10 +273,33 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   await alicePage.keyboard.press('Escape');
   await row.getByRole('menu').waitFor({state:'hidden'});
   const reschedule = alicePage.locator(preview);
+  const agendaNavigation = monitorNavigation(alicePage);
+  await alicePage.evaluate(() => {
+    window.scheduleAgenda = document.getElementById('workspace');
+    window.scheduleFilter = document.querySelector('[data-schedule-filter]');
+    window.agendaGeneration = window.OieRuntime.generation;
+  });
   await agendaAction(row, 'Reschedule');
   await reschedule.waitFor({state:'visible'});
   await reschedule.getByRole('button', {name:'Back',exact:true}).click();
   await until(() => menuTrigger.evaluate(node => node === document.activeElement), 'agenda restores focus after closing the scheduling dialog');
+  const agendaDate = row.locator('[data-scheduled-date]');
+  const oldAgendaDate = await agendaDate.getAttribute('datetime');
+  const agendaURL = alicePage.url();
+  await agendaAction(row,'Reschedule');
+  await reschedule.waitFor({state:'visible'});
+  const agendaTime = reschedule.locator('#schedule-local-time');
+  const newAgendaTime = new Date((await agendaTime.inputValue())+'Z');
+  newAgendaTime.setUTCHours(newAgendaTime.getUTCHours()+1);
+  await agendaTime.fill(newAgendaTime.toISOString().slice(0,16));
+  await reschedule.getByRole('button',{name:'Reschedule',exact:true}).click();
+  await until(async()=>await agendaDate.getAttribute('datetime')!==oldAgendaDate,'agenda row updates in place');
+  assert.equal(alicePage.url(),agendaURL);
+  assert(await alicePage.evaluate(()=>window.scheduleAgenda===document.getElementById('workspace')&&
+    window.scheduleFilter===document.querySelector('[data-schedule-filter]')&&window.agendaGeneration===window.OieRuntime.generation));
+  assert.deepEqual(agendaNavigation.traffic,{documents:0,streams:0});
+  agendaNavigation.stop();
+
 
   await alicePage.goto(path(aliceConversation, alice, 'en'));
   const aliceDrawer = await openDrawer(alicePage, 'Scheduled');
@@ -296,6 +328,17 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   await until(() => rescheduleButton.evaluate(node => node === document.activeElement), 'drawer restores focus after rescheduling');
   assert.equal(alicePage.url(), chatURL);
 
+  const editNavigation = monitorNavigation(alicePage);
+  const preserved = await alicePage.evaluate(() => {
+    const timeline = document.getElementById('message-timeline');
+    window.scheduleChat = [timeline, document.getElementById('message-composer')];
+    return {top:timeline.scrollTop,generation:window.OieRuntime.generation};
+  });
+  const checkEditNavigation = async () => {
+    assert.deepEqual(editNavigation.traffic,{documents:0,streams:0});
+    assert(await alicePage.evaluate(({top,generation}) => window.scheduleChat.every(node=>node.isConnected)&&
+      Math.abs(window.scheduleChat[0].scrollTop-top)<=1&&window.OieRuntime.generation===generation,preserved));
+  };
   const editLink = drawerRow.getByRole('link', {name:'Edit message',exact:true});
   const editRequest = url => url.pathname === '/' && url.searchParams.has('editSchedule');
   await alicePage.route(editRequest, async route => {
@@ -308,6 +351,7 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   const beforeRefusal = await sample(alicePage);
   await alicePage.getByText('This message or conversation is no longer available. Your draft is kept.', {exact:true}).waitFor();
   await stable(alicePage, beforeRefusal);
+  await checkEditNavigation();
   assert(await aliceDrawer.isVisible());
   assert.equal(await alicePage.locator('[data-editing-schedule]').count(), 0);
   assert.equal(await alicePage.locator(source).inputValue(), 'Existing independent draft');
@@ -334,6 +378,8 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   await alicePage.locator('#composer-send').click();
   await alicePage.waitForURL(url => url.searchParams.get('chat') === aliceConversation.id && !url.searchParams.has('editSchedule'));
   await until(async () => await alicePage.locator(source).inputValue() === 'Existing independent draft', 'restored pre-existing draft');
+  await checkEditNavigation();
+  editNavigation.stop();
 
   const intervening = 'Mensagem recebida depois do agendamento ' + randomUUID().slice(0,8);
   await bobPage.locator(source).fill(intervening);

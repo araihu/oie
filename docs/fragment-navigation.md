@@ -1,30 +1,24 @@
 # Fragment navigation
 
-Ordinary in-app GET navigation uses the bundled HTMX 4 runtime. Chat selection, account switching, inbox filters/search, media categories/pages, retained source jumps and account-management links replace the application fragment. Chat-info categories, search, pagination and Back replace only the drawer's content. Native links and GET forms retain their addresses and work without JavaScript. Mutation forms retain their existing operation keys, CSRF validation and asynchronous submission handlers.
+Ordinary in-app GET navigation uses the bundled HTMX runtime. Native links and GET forms keep addressable destinations. Mutation forms retain their operation keys, CSRF validation and asynchronous submission handlers.
 
-The browser keeps the head, styles and runtime. `#oie-app` carries the selected engine/account/conversation, event cursor, locale/theme and presentation state. The BFF returns that fragment for an HTMX request, or `#chat-info-content` for a scoped info request. Both representations are uncached and vary by fragment headers. Native direct entry returns the full document. Unknown routes retain an application recovery screen.
+The document head, styles and runtime scripts stay mounted. Navigation across sections and inbox account scopes can replace `#oie-app`. Conversation selection within the same inbox replaces the conversation pane. Other interactions request the smallest applicable HTML fragment from the BFF.
 
-Chats, Media and links, Archived, and Favorites declare their HTMX attributes in the server-rendered Goshtoso Sidebar items, for desktop and mobile. The navigation controller loads without `defer` to install its DOM-lazy listeners before the ordered dependency loader can delay deferred scripts. A narrow capture handler processes a sidebar link on an ordinary click if HTMX has loaded but the remaining dependencies are still starting. This closes the interval before HTMX's initial document processing. Modified clicks retain native behavior. Application scopes start only after all dependencies are ready, using the current fragment rather than the initial screen. Starting an already active runtime is a no-op, so dependencies becoming ready between swap and settlement cannot duplicate subscriptions or handlers.
-
-Each JavaScript module registers a route initializer with `OieRuntime`. Disposal removes its listeners, cancels timers/frames, disconnects observers, aborts outstanding fetches and closes its live subscription. Obsolete async completions cannot modify the next route. Drafts, uncertain operation keys and device preferences retain an in-memory session fallback when browser storage is unavailable. Navigating away from an uncertain send does not create a new intent when the user returns.
-
-Navigation accepts only the latest request's response. Invalid fragments and transport failures leave the current view usable. Back/Forward fetch server truth through the same fragment boundary. Route scroll positions are bounded to 100 entries; explicit message targeting takes priority over a remembered timeline position. Focus and edited controls remain local to their account/conversation. Drawer reads capture the current star generation so a delayed snapshot cannot overwrite a newer star result.
-
-## Composition
-
-The existing Oie identity and public Goshtoso Drawer, Avatar, Panel, Accordion, Link and form controls remain in use. Chat information is a compact detail view with centered identity, available description/topic, participant observations and scoped content rows. Secondary connection/protocol information stays collapsed initially. The application owns fragment boundaries, navigation state and media-date grouping; no dependency change is required.
-
-| Interaction | Expected behavior | Preserved state |
+| Interaction | Updated region | Preserved state |
 |---|---|---|
-| Chat/account/filter/category | HTMX application fragment | URL, scoped draft and operation key, device preferences |
-| Info category/search/page/Back | HTMX drawer fragment | Composer node/draft, main query/filter, timeline and drawer return position |
-| Source message | Canonical account/conversation/message navigation | Original source identity; hidden filters cleared |
-| Browser Back/Forward | Fresh fragment through history handler | Addressed view, bounded scroll history, scoped draft |
-| Delayed or failed navigation | Ignore obsolete response or retain current view with recovery feedback | Current identity and unsent input |
-| Send reply lost while navigating | Reconcile original operation key on return | One accepted engine effect per intent |
-| Native fallback | Full server-rendered destination | Link/form semantics and localized shell |
+| Inbox filter | Filters and conversation list | Open chat, draft, timeline position and event stream |
+| Conversation selection | Conversation pane | Navigation, inbox search, list position and per-chat drafts |
+| Account management | Account drawer content | Open chat, draft, timeline position and event stream |
+| Media filters, search and tabs | Catalog results and affected account controls | Search field, device preferences and event stream |
+| Details subviews and browser history within those subviews | Details drawer content | Composer, timeline and event stream |
+| Appearance | Appearance controls and document theme | Open chat, draft, scroll and event stream |
+| Jump to latest | Timeline contents | Composer, draft and event stream |
+| Global agenda commands, filter and pagination | Agenda results | Agenda controls and event stream |
+| Edit a scheduled message in the current chat | Composer mode and its schedule fields | Composer node, separate ordinary draft, timeline position and event stream |
 
-Browser coverage includes repeated swaps, source/account isolation, draft restoration with denied storage, one live stream after settlement, exactly one mutation after remounts, overlapping requests, transport failure, native fallback and accessible mobile layouts. Chat-info checks also cover duplicate image projections, source-message stars and closing the viewer while keeping its underlying drawer open.
+Sidebar items and conversation rows declare their HTMX attributes in server-rendered links. The navigation controller can process a clicked link while the dependency loader is still starting. Modified clicks retain browser behavior. When a fragment replaces a route, its obsolete listeners, timers, observers and requests are disposed. Scoped updates reuse mounted route modules and the current event subscription.
+
+Navigation accepts the latest applicable response. Invalid fragments and transport failures preserve the current view. Back and Forward request server truth through the applicable fragment boundary. Retained scroll history is bounded. Opening or dismissing a message menu uses existing action state. The live subscription, recovery polling and action eligibility checks refresh that state.
 
 ## Verification on 2026-11-08
 
@@ -43,3 +37,13 @@ A read-only check of the live BFF confirmed that all four sidebar destinations a
 An isolated fixture reproduced an actual startup gap by delaying the final Alpine dependency without changing HTMX or forcing its processing from the test. Clicking the sidebar after `window.htmx` existed but before application startup loaded a second document and made no fragment request. Server-declared attributes and the pre-start click handler address that case. The fixture checks document identity and requests, dependency readiness, desktop/mobile navigation, Back/Forward, drafts and one active live stream.
 
 For this correction, `make check` and containerized `make ci-check` pass, including golangci-lint, generated-file checks, native tests, race tests and application/CLI builds. The delayed-start regression now records one document and one HTMX fragment. Readiness deliberately occurs between swap and settlement; the runtime starts once and retains one live stream. The live BFF serves the updated startup controller and fragment attributes for both sidebar layouts.
+
+## Scoped navigation verification on 2026-11-12
+
+The Chromium navigation fixture completed with one document load per desktop and mobile context. Separate probes confirmed that opening a conversation with Alpine held still requested the conversation fragment, and that account details, drawer history and appearance kept the original composer, a nonzero timeline scroll position and the original event stream.
+
+The scheduling probe used the actual BFF and an isolated engine API fixture. Entering and saving a schedule edit kept the original composer and timeline nodes and restored the independent draft. Reschedule, Send now and Cancel in the agenda updated the result region with no additional document or event-stream request. These probes exercise browser behavior and the BFF contract.
+
+The media search fixture used an isolated engine with SQLite. It passed desktop English and mobile Brazilian Portuguese search, account filtering, focus, caret, IME and stale-response checks. HTTP adapter tests and OpenAPI lint also passed.
+
+The local `make check` passed. Dagger completed checks, race tests and the app and mock builds. The full run reached its 12-minute deadline in `desktop-build-amd64`. The Chromium results above came from host runs against the local BFF.

@@ -19,6 +19,31 @@ tags:
 - name: Messages
   description: Browser submission receipt recovery
 paths:
+  /:
+    get:
+      tags: [Conversations]
+      operationId: renderWorkspace
+      summary: Render the workspace or a requested presentation fragment
+      description: Native navigation returns the workspace document. HTMX navigation may select an uncached HTML fragment, using the same URL and account and conversation visibility rules as native navigation.
+      parameters:
+      - name: HX-Request
+        in: header
+        description: Set to true to request an HTML fragment.
+        schema: {type: string, enum: ['true']}
+      - name: X-Oie-Fragment
+        in: header
+        description: Selects the HTML region. With HX-Request and no fragment selector, the app region is returned.
+        schema: {type: string, enum: [app, inbox, conversation, info, scheduled, schedule-editor, accounts, shared, appearance, timeline]}
+      responses:
+        '200':
+          description: Localized HTML document or fragment.
+          content:
+            text/html:
+              schema: {type: string}
+        '404':
+          description: The requested page or conversation is unavailable.
+        '503':
+          description: The requested presentation data is unavailable.
   /ui/scheduling/conversation:
     get:
       tags: [Conversations]

@@ -318,3 +318,8 @@
   min-inline-size: 2rem;
   padding: .375rem;
 }
+
+#send-message-form:not([data-editing-schedule]) :is([data-schedule-save-label], #composer-schedule-reschedule),
+#send-message-form[data-editing-schedule] :is([data-schedule-send-icon], #composer-schedule-new) {
+  display: none;
+}

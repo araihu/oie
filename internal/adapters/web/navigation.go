@@ -10,12 +10,16 @@ func sidebarNavigationAttrs() templ.Attributes {
 
 // Render navigation behavior before the client runtime's enhancement pass.
 func applicationNavigationAttrs() templ.Attributes {
+	return navigationAttrs("oie-app", "app", "outerHTML show:none")
+}
+
+func navigationAttrs(target, fragment, swap string) templ.Attributes {
 	return templ.Attributes{
 		"hx-boost":    "true",
-		"hx-target":   "#oie-app",
-		"hx-select":   "#oie-app",
-		"hx-swap":     "outerHTML show:none",
+		"hx-target":   "#" + target,
+		"hx-select":   "#" + target,
+		"hx-swap":     swap,
 		"hx-push-url": "true",
-		"hx-headers":  `{"X-Oie-Fragment":"app"}`,
+		"hx-headers":  `{"X-Oie-Fragment":"` + fragment + `"}`,
 	}
 }

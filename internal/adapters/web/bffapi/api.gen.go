@@ -105,6 +105,63 @@ func (e PendingSubmissionTheme) Valid() bool {
 	}
 }
 
+// Defines values for RenderWorkspaceParamsHXRequest.
+const (
+	True RenderWorkspaceParamsHXRequest = "true"
+)
+
+// Valid indicates whether the value is a known member of the RenderWorkspaceParamsHXRequest enum.
+func (e RenderWorkspaceParamsHXRequest) Valid() bool {
+	switch e {
+	case True:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RenderWorkspaceParamsXOieFragment.
+const (
+	Accounts       RenderWorkspaceParamsXOieFragment = "accounts"
+	App            RenderWorkspaceParamsXOieFragment = "app"
+	Appearance     RenderWorkspaceParamsXOieFragment = "appearance"
+	Conversation   RenderWorkspaceParamsXOieFragment = "conversation"
+	Inbox          RenderWorkspaceParamsXOieFragment = "inbox"
+	Info           RenderWorkspaceParamsXOieFragment = "info"
+	ScheduleEditor RenderWorkspaceParamsXOieFragment = "schedule-editor"
+	Scheduled      RenderWorkspaceParamsXOieFragment = "scheduled"
+	Shared         RenderWorkspaceParamsXOieFragment = "shared"
+	Timeline       RenderWorkspaceParamsXOieFragment = "timeline"
+)
+
+// Valid indicates whether the value is a known member of the RenderWorkspaceParamsXOieFragment enum.
+func (e RenderWorkspaceParamsXOieFragment) Valid() bool {
+	switch e {
+	case Accounts:
+		return true
+	case App:
+		return true
+	case Appearance:
+		return true
+	case Conversation:
+		return true
+	case Inbox:
+		return true
+	case Info:
+		return true
+	case ScheduleEditor:
+		return true
+	case Scheduled:
+		return true
+	case Shared:
+		return true
+	case Timeline:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ResetBrowserEngineDataFormdataBodyConfirmation.
 const (
 	Delete ResetBrowserEngineDataFormdataBodyConfirmation = "delete"
@@ -692,6 +749,21 @@ type SubmissionReceipt struct {
 	// Example: queued
 	State string `json:"state"`
 }
+
+// RenderWorkspaceParams defines parameters for RenderWorkspace.
+type RenderWorkspaceParams struct {
+	// HXRequest Set to true to request an HTML fragment.
+	HXRequest *RenderWorkspaceParamsHXRequest `json:"HX-Request,omitempty"`
+
+	// XOieFragment Selects the HTML region. With HX-Request and no fragment selector, the app region is returned.
+	XOieFragment *RenderWorkspaceParamsXOieFragment `json:"X-Oie-Fragment,omitempty"`
+}
+
+// RenderWorkspaceParamsHXRequest defines parameters for RenderWorkspace.
+type RenderWorkspaceParamsHXRequest string
+
+// RenderWorkspaceParamsXOieFragment defines parameters for RenderWorkspace.
+type RenderWorkspaceParamsXOieFragment string
 
 // GetBrowserReadStateParams defines parameters for GetBrowserReadState.
 type GetBrowserReadStateParams struct {

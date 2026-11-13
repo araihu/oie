@@ -25,6 +25,18 @@ templ sharedWorkspace(v view){
 <input type="hidden" name="section" value="media"/><input type="hidden" name="contentType" value={v.SharedType}/><input type="hidden" name="contentConversation" value={v.SharedConversation}/><input type="hidden" name="lang" value={v.Locale}/><input type="hidden" name="theme" value={v.Theme}/>
 @toolbar.Toolbar(toolbar.Config{Label:v.Text.SharedTools,RootClass:"oie-shared-toolbar",SearchClass:"oie-shared-search-region",FiltersClass:"oie-shared-filter-region",Search:sharedSearch(v),Filters:sharedAccountFilter(v)})
 </form>
+@sharedSearchResults(v)
+</section>
+}
+templ sharedFragment(v view){
+<div data-shared-fragment data-engine-id={v.EngineID} data-account-filter={v.AccountFilter}>
+@avatarData(v)
+@accountTrigger(v)
+@accountMenu(v)
+@sharedSearchResults(v)
+</div>
+}
+templ sharedSearchResults(v view){
 <div id="shared-search-results" class="oie-shared-search-results" data-search-query={v.Query}>
 <nav class="oie-shared-segments" aria-label={v.Text.SharedContentTypes}>
 @sharedTab(v,"media",v.Text.SharedMediaTab)
@@ -40,11 +52,10 @@ if v.SharedConversation!="" {
 <div id="shared-content-pagination">@sharedPagination(v)</div>
 </div>
 </div>
-</section>
 }
 templ sharedSearch(v view){
 {{ ctx=expressions.With(ctx,expressions.Set{TextInput:expressions.TextInput{SearchAriaLabel:v.Text.SharedSearch}}) }}
-@textinput.TextInput(textinput.Config{ID:"shared-search",Name:"q",Value:v.Query,Type:textinput.TypeSearch,Placeholder:v.Text.SharedSearch,InputAttrs:templ.Attributes{"hx-get":"/","hx-trigger":"oie:shared-search","hx-include":"#shared-content-search","hx-target":"#shared-search-results","hx-select":"#shared-search-results","hx-swap":"outerHTML show:none","hx-sync":"closest form:replace","hx-push-url":"false","hx-replace-url":"true","aria-controls":"shared-search-results"}})
+@textinput.TextInput(textinput.Config{ID:"shared-search",Name:"q",Value:v.Query,Type:textinput.TypeSearch,Placeholder:v.Text.SharedSearch,InputAttrs:templ.Attributes{"hx-get":"/","hx-trigger":"oie:shared-search","hx-include":"#shared-content-search","hx-target":"#shared-search-results","hx-select":"#shared-search-results","hx-swap":"outerHTML show:none","hx-sync":"closest form:replace","hx-headers":`{"X-Oie-Fragment":"shared"}`,"hx-push-url":"false","hx-replace-url":"true","aria-controls":"shared-search-results"}})
 }
 templ sharedAccountFilter(v view){
 if len(v.SharedAccountIDs)>0 {

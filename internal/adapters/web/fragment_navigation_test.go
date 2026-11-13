@@ -11,16 +11,24 @@ func TestNavigationResponsesKeepFragmentAndDocumentBoundaries(t *testing.T) {
 	fixture := &liveFixture{}
 	ui, client, _ := liveUI(t, fixture)
 	for _, tc := range []struct {
-		name         string
-		hx, kind     string
-		want, absent []string
+		name            string
+		hx, kind, query string
+		want, absent    []string
 	}{
 		{name: "native", want: []string{"<!doctype html>", `id="oie-app"`, `id="workspace"`, `src="/ui/navigation.js"`}},
 		{name: "shell fragment", hx: "true", kind: "app", want: []string{`id="oie-app"`, `id="workspace"`, `data-engine-id="` + testEngine + `"`, `data-account-id="` + testAccount + `"`}, absent: []string{"<!doctype", "<head>", `src="/ui/navigation.js"`}},
 		{name: "drawer fragment", hx: "true", kind: "info", want: []string{`id="chat-info-content"`, `data-details-conversation="` + testChat + `"`}, absent: []string{"<!doctype", "<head>", `id="oie-app"`, `id="workspace"`}},
+		{name: "account workspace", hx: "true", kind: "accounts", query: "open=accounts", want: []string{`id="account-workspace"`, `id="account-overview"`}, absent: []string{`id="oie-app"`, `id="message-composer"`}},
+		{name: "appearance", hx: "true", kind: "appearance", query: "theme=dark", want: []string{`id="appearance-settings"`, `data-mode="dark"`}, absent: []string{`id="oie-app"`, `id="message-composer"`}},
+		{name: "catalog", hx: "true", kind: "shared", query: "section=media", want: []string{`data-shared-fragment`, `id="shared-search-results"`}, absent: []string{`id="oie-app"`, `id="shared-content-search"`}},
+		{name: "timeline", hx: "true", kind: "timeline", want: []string{`id="message-timeline"`, `data-conversation-id="` + testChat + `"`}, absent: []string{`id="oie-app"`, `id="message-composer"`}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			req, err := http.NewRequest("GET", ui.URL+"/?chat="+testChat+"&open=details", nil)
+			query := tc.query
+			if query == "" {
+				query = "chat=" + testChat + "&open=details"
+			}
+			req, err := http.NewRequest("GET", ui.URL+"/?"+query, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

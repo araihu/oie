@@ -71,8 +71,7 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
   assert.equal(nativeAnchorDownloads,0);page.off('download',nativeDownload);await page.evaluate(()=>{delete window.OieDesktop;});
   await page.locator('[data-shared-tab=media]').click();await card(0).waitFor();await open(0);
   // A snapshot announces shared content before synchronizing message-menu slots.
-  // Capture the surviving node only after that synchronization completes. Menu
-  // open and Escape also request snapshots, so settle those between measurements.
+  // Capture the surviving node only after that synchronization completes.
   const watchSnapshot=async()=>page.evaluate(({engine,account,chat,source})=>{
    const controller=new AbortController(),state={previousGeneration:window.OieRuntime.generation,routeGeneration:null,swapGeneration:null,snapshotGeneration:null,copy:null};window.catalogActionSettlement=state;
    const current=()=>document.body.dataset.engineId===engine&&document.body.dataset.accountId===account&&document.body.dataset.conversationId===chat;
@@ -99,14 +98,16 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
    await page.setViewportSize({width,height:1000});
    await page.evaluate(mode=>document.documentElement.classList.toggle('dark',mode==='dark'),mode);
    const trigger=page.locator(`[data-message-menu-trigger="${items[0].message.id}"]`),copy=page.locator('#copy-message-'+items[0].message.id);
-   await trigger.locator('xpath=ancestor::*[@data-message-id][1]').hover();await watchSnapshot();await trigger.click();await until(snapshotApplied,'menu-open live snapshot applied');await copy.waitFor({state:'visible'});await until(async()=>await copy.evaluate(el=>getComputedStyle(el).cursor==='pointer'),'message menu pointer cursor');
+   await trigger.locator('xpath=ancestor::*[@data-message-id][1]').hover();await trigger.click();await copy.waitFor({state:'visible'});
+   await until(()=>streams.size===1,'live event stream connected');await watchSnapshot();emit();
+   await until(snapshotApplied,'live event snapshot applied while the menu is open');await copy.waitFor({state:'visible'});await until(async()=>await copy.evaluate(el=>getComputedStyle(el).cursor==='pointer'),'message menu pointer cursor');
    await page.mouse.move(0,0);const normal=await copy.evaluate(painted);await copy.hover();const hover=await copy.evaluate(painted);
    const cursorState=await copy.evaluate(el=>({cursor:getComputedStyle(el).cursor,connected:el.isConnected,root:el.getRootNode().nodeName,parent:el.parentElement?.outerHTML.slice(0,150),className:el.className}));assert.equal(cursorState.cursor,'pointer',JSON.stringify({width,mode,...cursorState}));
    assert(normal.reduce((sum,v,i)=>sum+Math.abs(v-hover[i]),0)>20,`${width}/${mode}: visible painted hover`);
    await page.mouse.move(0,0);await trigger.focus();await page.keyboard.press('Tab');
    assert.equal(await copy.evaluate(el=>document.activeElement===el&&el.matches(':focus-visible')),true);
    const focus=await copy.evaluate(painted);assert(normal.reduce((sum,v,i)=>sum+Math.abs(v-focus[i]),0)>20,`${width}/${mode}: visible keyboard focus`);
-   await watchSnapshot();await page.keyboard.press('Escape');await copy.waitFor({state:'hidden'});await until(async()=>await trigger.evaluate(el=>el===document.activeElement),'message menu restores trigger focus');await until(snapshotApplied,'menu-close live snapshot applied');
+   await page.keyboard.press('Escape');await copy.waitFor({state:'hidden'});await until(async()=>await trigger.evaluate(el=>el===document.activeElement),'message menu restores trigger focus');
   }
   assert.deepEqual(errors,[]);await c.close();
   for(const locale of ['en','pt-BR']){const m=await browser.newContext({viewport:{width:390,height:844},locale,hasTouch:true,reducedMotion:'reduce'});await m.addInitScript(()=>localStorage.setItem('oie.device.auto-image-downloads.v1','false'));const p=await m.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(base+'/?section=media&lang='+locale);await p.waitForFunction(()=>window.OieRuntime?.generation>0);const first=p.locator('[data-shared-item]').first();await first.locator('[data-shared-menu-trigger]').tap();await first.getByRole('menuitem',{name:locale==='en'?'Copy link':'Copiar link',exact:true}).waitFor({state:'visible'});await until(async()=>{const b=await first.locator('[role=menu]').boundingBox();return b&&b.x>=0&&b.x+b.width<=390},'mobile menu placement settles inside viewport');await p.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);await m.close()}
