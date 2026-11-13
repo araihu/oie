@@ -203,10 +203,15 @@ channel you used. These commands retain the user profile.
 Push a version tag such as `v0.0.1` or `v0.0.1-rc.3` from a commit that contains
 the **Desktop release** workflow. Use `vMAJOR.MINOR.PATCH` with an optional
 SemVer prerelease suffix. It builds the macOS and Linux binaries and
-corresponding source, tests the Linux release archive, then builds the native
-packages, Flatpak bundle and Homebrew recipes. The workflow uploads all assets
-and `SHA256SUMS` to a draft before publishing it. Tags with a SemVer prerelease
-suffix are marked as prereleases. Use a new tag for changed release assets.
+corresponding source. Each platform installs and launches its binary and
+rebuilds from the source archive with Go module downloads disabled. The
+workflow then builds the native packages, Flatpak bundle and Homebrew recipes.
+It uploads all assets and `SHA256SUMS` to a draft and verifies GitHub's asset
+digests before publishing. The release notes link directly to both source
+downloads. Tags with a SemVer prerelease suffix are marked as prereleases.
+Use a new tag for changed release assets. To rehearse the build and checks on a
+branch, run `gh workflow run desktop-packages.yml --ref BRANCH -f verify_only=true`.
+The rehearsal uploads the verified assets to the workflow run.
 
 The [Homebrew tap](https://github.com/araihu/homebrew-oie) synchronizes recipes
 from published GitHub Releases through its own workflow. Recipes become

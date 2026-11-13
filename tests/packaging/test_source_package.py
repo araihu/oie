@@ -20,22 +20,32 @@ class SourcePackageTest(unittest.TestCase):
             directory = Path(tmp)
             app = directory / "app"
             app.mkdir()
-            (app / "go.mod").write_text("module example.com/app\n")
+            (app / "go.mod").write_text("module example.com/app\ngo 1.27.4\n")
+            (app / "main.go").write_text("package main\nfunc main() {}\n")
+            (app / "cli").mkdir()
+            (app / "cli/go.mod").write_text("module example.com/app/cli\ngo 1.27.4\n")
+            (app / "cli/main.go").write_text("package main\nfunc main() {}\n")
             dep = directory / "v1.0.0.zip"
             dep.write_bytes(b"module sources")
             browser = directory / "runtime.tgz"
             browser.write_bytes(b"editable JavaScript source")
             manifest = directory / "browser-source.json"
-            manifest.write_text(json.dumps([{
+            manifest.write_text(json.dumps({"archives": [{
                 "name": browser.name,
                 "url": browser.as_uri(),
                 "sha256": hashlib.sha256(browser.read_bytes()).hexdigest(),
-            }]))
+            }]}))
 
             output = directory / "source.tar.gz"
             dependency = {"Path": "example.com/SomeModule", "Zip": dep}
             add_sources = PACKAGE.browser_sources
-            with patch.object(PACKAGE, "modules", return_value=[(dependency, ("Zip",))]):
+
+            def vendor(cwd, *args):
+                self.assertEqual(args[:-1], ("mod", "vendor", "-o"))
+                directory = Path(args[-1])
+                directory.mkdir()
+                (directory / "modules.txt").write_text(cwd.relative_to(app).as_posix())
+            with patch.object(PACKAGE, "go", side_effect=vendor), patch.object(PACKAGE, "modules", return_value=[dependency]):
                 with patch.object(PACKAGE, "browser_sources", side_effect=lambda archive, _, prefix:
                                   add_sources(archive, manifest, prefix)):
                     PACKAGE.package(app, ROOT, "v0.0.1", "a" * 40, output)
@@ -43,8 +53,11 @@ class SourcePackageTest(unittest.TestCase):
             with tarfile.open(output) as archive:
                 prefix = "oie_v0.0.1_source/"
                 for member, expected in {
+                    "oie/vendor/modules.txt": b".",
+                    "oie/cli/vendor/modules.txt": b"cli",
                     "oie/go.mod": (app / "go.mod").read_bytes(),
-                    "go-proxy/example.com/!some!module/@v/v1.0.0.zip": dep.read_bytes(),
+                    "go-sources/example.com/!some!module/v1.0.0.zip": dep.read_bytes(),
+                    "source-info.json": json.dumps({"version": "v0.0.1", "revision": "a" * 40}).encode(),
                     "browser-sources/runtime.tgz": browser.read_bytes(),
                     "release-tooling/packaging/licenses/pdfjs/LICENSE_BROTLI":
                         (ROOT / "packaging/licenses/pdfjs/LICENSE_BROTLI").read_bytes(),
@@ -57,9 +70,9 @@ class SourcePackageTest(unittest.TestCase):
             browser = directory / "runtime.tgz"
             browser.write_bytes(b"unexpected bytes")
             manifest = directory / "browser-source.json"
-            manifest.write_text(json.dumps([{
+            manifest.write_text(json.dumps({"archives": [{
                 "name": browser.name, "url": browser.as_uri(), "sha256": "0" * 64,
-            }]))
+            }]}))
             with tarfile.open(directory / "source.tar", "w") as archive:
                 with self.assertRaisesRegex(ValueError, "checksum mismatch"):
                     PACKAGE.browser_sources(archive, manifest, "source")

@@ -113,6 +113,7 @@ def main():
             assets.mkdir()
             shutil.copy2(args.archive, assets / args.archive.name)
             checksum = hashlib.sha256(args.archive.read_bytes()).hexdigest()
+            report["binaryArchiveSHA256"] = checksum
             (assets / "SHA256SUMS").write_text(f"{checksum}  {args.archive.name}\n")
             commands = root / "commands"
             commands.mkdir()
