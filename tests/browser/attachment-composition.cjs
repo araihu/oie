@@ -220,8 +220,6 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
       await until(async () => (await layout()).rows === 1, 'all three attachments fit on a wide screen');
       assert.deepEqual(await layout(), {rows:1, overflow:false});
       await page.setViewportSize({width,height:844});
-      await remove(file.name).click();
-      await remove(longFile.name).click();
       assert.deepEqual(requestPaths, Array(3).fill('/ui/scheduling/stage'));
       let releaseSend;
       const holdSend = new Promise(resolve => { releaseSend = resolve; });
@@ -234,6 +232,8 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
         const bubble = page.locator('[data-pending-send][data-pending-state="sending"]');
         const pendingFile = bubble.getByRole('link', {name:image.name, exact:true});
         await pendingFile.waitFor();
+        assert.deepEqual(await bubble.locator('[download]').evaluateAll(links => links.map(link => link.download)),
+          [image.name, file.name, longFile.name]);
         assert.equal(await bubble.locator('[data-pending-send-text]').textContent(), revised);
         assert.equal(await pendingFile.getAttribute('download'), image.name);
         await until(() => pendingFile.locator('img').evaluate(img => img.complete && img.naturalWidth > 0), 'pending attachment preview is decoded');
@@ -245,11 +245,11 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
         message.originalText.startsWith(revised) && message.sendState === 'submitted'), 'attachment with caption is sent through XMPP');
       const sent = (await retained()).items.filter(message => message.originalText.startsWith(revised));
       assert.equal(sent.length, 1);
-      assert.equal(sent[0].attachments[0].fileName, image.name);
+      assert.deepEqual(sent[0].attachments.map(attachment => attachment.fileName), [image.name, file.name, longFile.name]);
       assert.equal((await api('/api/v1/operations/' + operation)).resourceId, sent[0].id);
       assert.deepEqual(requestPaths.splice(0), [...Array(3).fill('/ui/scheduling/stage'), '/ui/messages/send']);
       await until(async () => (await api('/api/v1/conversations/' + aliceConversation.id + '/messages?limit=100')).items.some(message =>
-        message.originalText.startsWith(revised) && message.originalText.includes('https://')), 'receiver retains caption and uploaded URL');
+        message.originalText.startsWith(revised) && message.originalText.split('https://').length === 4), 'receiver retains the caption and all three uploaded URLs');
     }
     page.off('request', track);
   }
