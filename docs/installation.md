@@ -82,6 +82,99 @@ Settings, Privacy & Security, using Open Anyway for this app. The installer
 does not disable Gatekeeper. The current flat app icon remains in this version;
 desktop icon variants are backlog B24.
 
+## Package-manager builds
+
+The packaging workflow prepares Homebrew recipes for macOS Apple Silicon and
+Linux x86_64, a Flatpak bundle for Linux x86_64, and native DEB, RPM and pacman
+packages. It reuses the executables from the selected release and verifies both
+archive checksums before packaging. The package-manager files are generated
+separately from the original release assets.
+
+### Install generated packages
+
+Use the files from a build of the **Desktop packages** workflow or follow
+[the local build instructions](#build-and-distribute) below.
+
+| Platform | Install from the directory containing the package |
+| --- | --- |
+| Ubuntu 24.04 x86_64, APT | `sudo apt install ./oie_0.0.1~rc.1-1_amd64.deb` |
+| Fedora x86_64, DNF | `sudo dnf install ./oie-0.0.1~rc.1-1.x86_64.rpm` |
+| Arch Linux x86_64, pacman | `sudo pacman -U ./oie-0.0.1rc.1-1-x86_64.pkg.tar.zst` |
+| Linux x86_64, Flatpak | `flatpak install --user ./oie-v0.0.1-rc.1-x86_64.flatpak` |
+
+Flatpak needs the GNOME 50 runtime from Flathub. If you have not enabled Flathub
+for your user, add it before installing:
+
+```sh
+flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+```
+
+After installation, run `flatpak run org.araihu.oie` or open Oiê from the
+applications menu. Flatpak keeps its profile under
+`~/.var/app/org.araihu.oie/data/oie`. Native Linux packages and Homebrew on
+Linux use the normal XDG data location. When switching to Flatpak, quit Oiê and
+copy your existing profile to that location if you want to keep using it.
+The Flatpak uses FFmpeg from the GNOME runtime for local video thumbnails.
+
+Homebrew needs the generated `Casks/` and `Formula/` directories at the root of
+a Git tap. With that tap added, use its fully qualified package name:
+
+```sh
+# macOS Apple Silicon
+brew install --cask araihu/oie/oie
+
+# Linux x86_64 with compatible system GTK 4, WebKitGTK 6 and libsoup 3
+brew install --formula araihu/oie/oie
+```
+
+These names assume a tap published at `araihu/homebrew-oie`. To use the files
+locally, commit the generated directories in a local Git repository, then run
+`brew tap oie-local/packaging /absolute/path/to/local-tap` and substitute
+`oie-local/packaging/oie` in the installation commands. On Linux, install the
+system runtime libraries first. On Ubuntu, use the runtime package list above.
+The macOS cask follows the same [first-open procedure](#macos-first-open).
+
+Quit Oiê before installing an update. For a local package or bundle, install
+the newer file with the same manager. To remove the app, use
+`sudo apt remove oie`, `sudo dnf remove oie`, `sudo pacman -R oie`,
+`flatpak uninstall --user org.araihu.oie` or `brew uninstall oie` for the
+channel you used. These commands retain the user profile.
+
+### Build and distribute
+
+Run the **Desktop packages** workflow with a published release tag. It uploads
+the packages, recipes and package checksums as a workflow artifact. To build
+locally with Python 3.12+ and Go 1.27.4+, run:
+
+```sh
+version=v0.0.1-rc.1
+gh release download "$version" --repo araihu/oie --dir "dist/$version/assets" \
+  --pattern SHA256SUMS --pattern 'oie_*_darwin_arm64.tar.gz' --pattern 'oie_*_linux_amd64.tar.gz'
+mkdir -p bin
+GOBIN="$PWD/bin" GOWORK=off go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.49.0
+python3 scripts/package-distribution.py --version "$version" \
+  --assets "dist/$version/assets" --output "dist/packages/$version" --nfpm "$PWD/bin/nfpm"
+```
+
+The output directory must be new. Add `--recipes-only` to generate the
+Homebrew and Flatpak recipes without nFPM. Build the Flatpak on Linux x86_64
+with `flatpak-builder` and `appstreamcli` installed and Flathub enabled:
+
+```sh
+packages="dist/packages/$version"
+flatpak-builder --user --install-deps-from=flathub --disable-rofiles-fuse \
+  --state-dir=dist/flatpak-state --repo=dist/flatpak-repo \
+  --force-clean dist/flatpak-build "$packages/flatpak/org.araihu.oie.json"
+flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+  dist/flatpak-repo "$packages/oie-$version-x86_64.flatpak" org.araihu.oie
+```
+
+Publishing or updating a Homebrew tap and submitting to Flathub or AUR are
+separate distribution steps. The generated packages can be installed directly
+with the commands above. The native package filenames and metadata distinguish
+prereleases so the eventual stable release sorts after the corresponding RC.
+GitHub releases marked immutable require a new release to attach new assets.
+
 ## Platforms and verified scope
 
 | Target | Current evidence |
@@ -327,9 +420,8 @@ A source installation instead has only the executable at
 application paths under that prefix. Keep the profile containing history,
 credentials, media and preferences unless you explicitly choose to delete it.
 
-Homebrew, MacPorts, APT and other Oiê package-manager distributions remain
-backlog B22. Automatic updates are B23; the shell installer updates only when
-you run it.
+See [package-manager builds](#package-manager-builds) for other installation
+channels. Automatic in-app updates remain backlog B23.
 
 ## Installation issues observed on 2026-11-10
 

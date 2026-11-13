@@ -1,0 +1,58 @@
+name: Desktop packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published Oiê release tag (e.g. v0.0.1-rc.1)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      OIE_RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Download published desktop archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo araihu/oie --dir dist/release \
+            --pattern SHA256SUMS --pattern 'oie_*_darwin_arm64.tar.gz' \
+            --pattern 'oie_*_linux_amd64.tar.gz' -- "$OIE_RELEASE_VERSION"
+      - name: Build native packages and Homebrew recipes
+        run: |
+          GOBIN="$RUNNER_TEMP" GOWORK=off go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.49.0
+          python3 scripts/package-distribution.py --version "$OIE_RELEASE_VERSION" \
+            --assets dist/release --output dist/packages --nfpm "$RUNNER_TEMP/nfpm"
+      - name: Build Flatpak bundle
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder appstream desktop-file-utils
+          appstreamcli validate --no-net dist/packages/flatpak/org.araihu.oie.metainfo.xml
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak-builder --user --install-deps-from=flathub --assumeyes --disable-rofiles-fuse \
+            --state-dir=dist/flatpak-state --repo=dist/flatpak-repo \
+            dist/flatpak-build dist/packages/flatpak/org.araihu.oie.json
+          flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+            dist/flatpak-repo "dist/packages/oie-$OIE_RELEASE_VERSION-x86_64.flatpak" org.araihu.oie
+      - name: Record package checksums
+        working-directory: dist/packages
+        run: sha256sum native/* ./*.flatpak > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oie-packages-${{ inputs.version }}
+          path: dist/packages
+          if-no-files-found: error
+          compression-level: 0
