@@ -70,16 +70,19 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
 
     for (const [label, accept] of [[pt ? 'Imagem' : 'Image', 'image/*'], [pt ? 'Arquivo' : 'File', '']]) {
       await attach.click();
-      assert.deepEqual(await page.getByRole('menuitem').allTextContents().then(items => items.map(item => item.trim())),
-        pt ? ['Imagem', 'Arquivo'] : ['Image', 'File']);
+      const menuItem = page.getByRole('menuitem', {name:label, exact:true});
+      await menuItem.waitFor();
+      const items = await page.getByRole('menuitem').allTextContents();
+      assert.deepEqual(items.map(item => item.trim()), pt ? ['Imagem', 'Arquivo'] : ['Image', 'File']);
       const chooser = page.waitForEvent('filechooser');
-      await page.getByRole('menuitem', {name:label, exact:true}).click();
+      await menuItem.click();
       assert.equal(await (await chooser).element().getAttribute('accept'), accept);
     }
     assert.equal(await dataEvent(page, 'paste', [], 'ordinary pasted text'), false);
     assert.equal(await draftFiles.isVisible(), false);
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('text '));
+    await composer.focus();
     await composer.evaluate(node => node.setSelectionRange(0, 0));
     await page.keyboard.press('Control+v');
     await until(async () => await composer.inputValue() === 'text ' + original, 'ordinary paste inserts text');
