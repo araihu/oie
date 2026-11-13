@@ -21,7 +21,7 @@ The status labels have distinct meanings:
 
 Sections 2–13 describe **AGREED** behavior unless a paragraph carries a recommendation or open-decision label. Section 14 contains recommendations, not additional accepted scope. Acceptance scenarios distinguish agreed outcomes from proposed engineering details.
 
-The broader alpha target includes local standalone operation, hosted-engine operation, optional app/history sync, multi-account XMPP, reliable immediate and scheduled sends, retained searchable history, rooms, attachments, responsive web UI, PWA/offline behavior, and manual merge restore. The current source prerelease is v0.0.1-rc.1. It includes the initial room-history recovery changes tracked as B25 and the standalone desktop packages described in section 2.1.1.
+The broader alpha target includes local standalone operation, hosted-engine operation, optional app/history sync, multi-account XMPP, reliable immediate and scheduled sends, retained searchable history, rooms, attachments, responsive web UI, PWA/offline behavior, and manual merge restore. The current source prerelease is [v0.0.1-rc.2](releases/v0.0.1-rc.2.md). It ships the standalone desktop packages described in section 2.1.1.
 
 Alpha is single-user: one Oiê owner per instance. Multiple accounts and devices remain supported. Built-in application authentication, multi-user hosting, XMPP E2EE, calls, and other deferred features are listed in section 16. Protocol account credentials are still needed to connect existing XMPP accounts; this does not reopen the deferred application-login design.
 

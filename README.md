@@ -9,12 +9,12 @@ provenance are documented in [Branding](docs/branding.md).
 The alpha targets one owner with multiple protocol accounts. Device sync remains
 planned.
 
-The current release candidate is **v0.0.1-rc.1**. It includes the
-[initial room-history recovery improvements](docs/history-bootstrap-discussion.md)
-for the first alpha. macOS Apple Silicon and Ubuntu Linux x86_64 packages and
+The current release candidate is **v0.0.1-rc.2**. It adds scheduled messages,
+conversation requests, XMPP room creation and previews, and improved search.
+macOS Apple Silicon and Ubuntu Linux x86_64 packages and
 the per-user installer are available on
-[GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.1).
-See the [release notes](docs/releases/v0.0.1-rc.1.md).
+[GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.2).
+See the [release notes](docs/releases/v0.0.1-rc.2.md).
 
 - [Desktop installation on macOS and Linux](docs/installation.md)
 - [Live browser setup and development accounts](docs/live-preview.md)
@@ -39,8 +39,9 @@ The independent read-only mock remains available for presentation tests.
 Existing account text archives now recover serially with durable checkpoints,
 original timestamps, replay deduplication and progress through the API/UI. Saved
 rooms support creation, explicit entry/leave, basic text and replies while joined. [XMPP room links](docs/room-entry.md) open a preview and let you choose an account before joining.
-Attachment uploads, schedules, sync, PWA/offline and backup/restore remain later
-work.
+The composer schedules messages with supported attachments. The Scheduled view
+and each conversation's drawer let you manage pending sends. Device sync,
+PWA/offline queues and backup/restore remain later work.
 See [history recovery scope](docs/milestone-three-history.md). See [engine milestone notes](docs/milestone-two-engine.md) and
 [foundation notes](docs/milestone-one.md) for scope and invariants.
 
