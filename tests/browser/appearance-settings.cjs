@@ -38,6 +38,13 @@ const id='019a5df0-0000-7000-8000-000000000001';
    await page.waitForFunction(()=>document.documentElement.dataset.mode==='light');await dialog.waitFor({state:'visible'});
    await page.waitForFunction(()=>document.activeElement?.id==='appearance-light');assert(await group.getByRole('radio',{name:names[1],exact:true}).isChecked());
    await page.keyboard.press('ArrowRight');await page.waitForFunction(()=>document.documentElement.dataset.mode==='dark'&&document.activeElement?.id==='appearance-dark');await page.keyboard.press('ArrowLeft');await page.waitForFunction(()=>document.documentElement.dataset.mode==='light'&&document.activeElement?.id==='appearance-light');
+   const staleRefresh=await page.evaluate(async lang=>{
+    const response=await fetch('/ui/refresh?'+new URLSearchParams({lang,theme:'dark'}));
+    await response.text();
+    return response.status;
+   },locale);
+   assert.equal(staleRefresh,200);
+   assert.equal((await context.cookies()).find(c=>c.name==='oie_theme')?.value,'light');
    await page.goto(`${base}/?lang=${locale}`);await page.waitForFunction(()=>window.OieRuntime?.generation>0);if(width===390)await page.getByRole('button',{name:locale==='en'?'Open navigation':'Abrir navegação',exact:true}).click();await page.locator('[data-navigation-settings]:visible').click();await dialog.waitFor({state:'visible'});
    assert.equal(await page.evaluate(()=>document.documentElement.dataset.mode),'light');assert(await group.getByRole('radio',{name:names[1],exact:true}).isChecked());
    await group.getByRole('radio',{name:names[0],exact:true}).click({noWaitAfter:true});await page.waitForFunction(()=>document.documentElement.dataset.mode==='system');

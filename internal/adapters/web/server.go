@@ -758,8 +758,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.render(w, r, v)
 		return
 	}
-	savePreference(w, r, "lang", v.Locale)
-	savePreference(w, r, "theme", v.Theme)
+	// Background reads inherit the URL's presentation preferences. They can
+	// finish after a settings change and must not overwrite the new cookies.
+	if r.URL.Path == "/" || r.URL.Path == "/search" {
+		savePreference(w, r, "lang", v.Locale)
+		savePreference(w, r, "theme", v.Theme)
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 	s.load(ctx, r, &v)

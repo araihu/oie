@@ -52,6 +52,13 @@ func TestBFFUsesHTTPAndDeviceScopedPresentation(t *testing.T) {
 	if strings.Contains(w.Body.String(), "<!DOCTYPE") || !strings.Contains(w.Body.String(), `id="workspace"`) {
 		t.Fatal("HTMX route returned an entire document or lost fragment identity")
 	}
+	for _, route := range []string{"/ui/refresh", "/ui/info"} {
+		w = httptest.NewRecorder()
+		ui.ServeHTTP(w, httptest.NewRequest("GET", route+"?lang=pt-BR&theme=dark", nil))
+		if preferenceCookieCount(w.Result().Cookies()) != 0 {
+			t.Errorf("%s overwrote device preferences", route)
+		}
+	}
 	backend.Close()
 	w = httptest.NewRecorder()
 	ui.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
