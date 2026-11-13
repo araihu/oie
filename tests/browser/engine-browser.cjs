@@ -217,11 +217,15 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
     await bobPage.locator('a[data-conversation-id="' + bobConversation.id + '"]').waitFor({state: 'visible'});
     await bobPage.locator('a[data-conversation-id="' + bobConversation.id + '"]').click();
     const request = bobPage.locator('[data-conversation-request-panel]');
-    const archive = request.getByRole('button', {name:'Archive conversation', exact:true});
+    const archive = request.getByRole('button', {name:'Archive', exact:true});
     assert(await request.evaluate(el=>el.classList.contains('oie-request-banner')&&el.getAttribute('role')==='region'), 'the request owns the banner and actions');
     assert(await request.evaluate(el=>getComputedStyle(el.parentElement).backgroundImage.includes('/ui/chat-pattern.svg')), 'the request uses the chat wallpaper');
     await request.getByRole('heading', {name:'Message request'}).waitFor();
-    await request.getByRole('button', {name:'Accept', exact:true}).waitFor();
+    const accept = request.getByRole('button', {name:'Accept', exact:true});
+    await accept.waitFor();
+    assert(await archive.evaluate(button=>button.classList.contains('bg-warning-action')), 'archive has the warning tone');
+    assert.match(await archive.locator('use').getAttribute('href'), /#hi-16-solid-folder$/);
+    assert.match(await accept.locator('use').getAttribute('href'), /#hi-16-solid-check$/);
     assert.equal(await bobPage.locator('#message-timeline, #message-composer').count(),0);
     assert(!(await bobPage.content()).includes(firstText), 'pending message is absent from rendered HTML');
     assert.equal((await api('/api/v1/conversations/'+bobConversation.id+'/messages')).items.length,0);
@@ -245,6 +249,7 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
     for (const rect of frameGeometry) for (const axis of ['x','y','width','height']) {
       assert(Math.abs(rect[axis]-beforeArchive[axis])<=1, `request actions stay in place while archiving (${axis})`);
     }
+    assert.match(await archive.locator('use').getAttribute('href'), /#hi-16-solid-folder$/);
     completeArchive();
     await until(async () => (await api('/api/v1/conversations/'+bobConversation.id)).archived, 'request archived');
     await bobPage.locator('a[data-conversation-id="' + bobConversation.id + '"]').waitFor({state:'hidden'});

@@ -502,6 +502,7 @@
   "MessageRequest": "Message request",
   "RoomInvitation": "Room invitation",
   "AcceptMessageRequest": "Accept",
+  "ArchiveRequest": "Archive",
   "ConversationPreferenceUpdated": "Conversation updated.",
   "ConversationPreferenceConflict": "This conversation changed. Review its current state before trying again.",
   "ConversationPreferenceUncertain": "The change could not be confirmed. Retry the same change.",

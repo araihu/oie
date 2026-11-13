@@ -1,9 +1,6 @@
 package web
 
-import (
-	"github.com/araihu/goshtoso/components/button"
-	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
-)
+import "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 
 func (v view) requestKind() string {
 	if v.Selected == nil || v.Selected.Request == nil {
@@ -24,11 +21,4 @@ func (v view) requestLabel(c engineapi.Conversation) string {
 		}
 	}
 	return c.LastMessage
-}
-
-func requestButtonAppearance(field string) button.Appearance {
-	if field == "archived" {
-		return button.AppearancePlain
-	}
-	return button.AppearanceSolid
 }

@@ -4,6 +4,8 @@ import (
  "strconv"
  "github.com/araihu/goshtoso/components/button"
  "github.com/araihu/goshtoso/components/banner"
+ "github.com/araihu/goshtoso/components/icon"
+ "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/textinput"
  "github.com/araihu/goshtoso/components/link"
 )
@@ -27,17 +29,17 @@ templ conversationRequestContent(v view) {
   if v.requestKind()=="room_invitation" {
    @roomSessionStatus(v)
   } else {
-   @conversationRequestPreference(v,"acceptRequest",v.Text.AcceptMessageRequest)
+   @conversationRequestPreference(v,"acceptRequest",v.Text.AcceptMessageRequest,button.TonePrimary,heroicons.Icon16SolidCheck)
   }
   if !v.Selected.Archived {
-   @conversationRequestPreference(v,"archived",v.Text.ArchiveConversation)
+   @conversationRequestPreference(v,"archived",v.Text.ArchiveRequest,button.ToneWarning,heroicons.Icon16SolidFolder)
   }
  </div>
  @conversationPreferenceFeedback(v)
 </div>
 }
 
-templ conversationRequestPreference(v view,field,label string) {
+templ conversationRequestPreference(v view,field,label string,tone button.Tone,symbol icon.Symbol) {
 <form id={"request-"+field} action="/ui/conversations/preferences" method="post" data-conversation-preference={field}>
  @mutationFields(v,"request-"+field,newOperationKey())
  <input type="hidden" name="lang" value={v.Locale}/>
@@ -45,7 +47,10 @@ templ conversationRequestPreference(v view,field,label string) {
  <input type="hidden" name="conversationId" value={v.Selected.Id}/>
  <input type="hidden" name="expectedRevisionId" value={v.Selected.RevisionId}/>
  <input type="hidden" name={field} value="true"/>
- @button.Button(button.WithType("submit"),button.WithAttrs(templ.Attributes{"data-request-action":field}),button.WithAppearance(requestButtonAppearance(field))){ {label} }
+ @button.Button(button.WithType("submit"),button.WithAttrs(templ.Attributes{"data-request-action":field}),button.WithTone(tone)){
+  @glyph(symbol)
+  <span data-request-action-label data-label={label}>{label}</span>
+ }
 </form>
 }
 
