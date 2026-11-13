@@ -266,7 +266,7 @@ window.OieRuntime.register('scheduling', life => {
     const locate = locationForm.querySelector('[data-locate]');
     const locationStatus = locationForm.querySelector('[data-location-status]');
     const canLocate = () => Boolean(navigator.geolocation) && window.isSecureContext;
-    let locationRequest = 0;
+    let locationRequest = 0, locationApplied = false;
     const locationModal = action => window.dispatchEvent(new CustomEvent('modal:' + action, {detail:{id:locationDialog.id}}));
     const locationReady = () => messageForm.dataset.composeAllowed === 'true' &&
       messageForm.dataset.busy !== 'true' && messageForm.dataset.editing !== 'true' &&
@@ -280,6 +280,7 @@ window.OieRuntime.register('scheduling', life => {
     life.on(messageForm, 'oie:composer-preview-change', syncLocationAction);
     life.on(messageForm, 'oie:compose-add', event => {
       if (event.detail !== 'location' || !locationReady() || document.querySelector('dialog[open]')) return;
+      locationApplied = false;
       locationForm.reset();
       locationStatus.textContent = '';
       locate.disabled = !canLocate();
@@ -314,7 +315,7 @@ window.OieRuntime.register('scheduling', life => {
     });
     life.on(locationForm, 'submit', event => {
       event.preventDefault();
-      if (!locationReady()) return;
+      if (locationApplied || !locationReady()) return;
       let url;
       try { url = new URL(urlField.value); } catch {}
       if (!url || !['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.href.length > 4096) {
@@ -328,6 +329,7 @@ window.OieRuntime.register('scheduling', life => {
         locationStatus.textContent = locationForm.dataset.tooLong;
         return;
       }
+      locationApplied = true;
       life.on(locationDialog, 'close', () => messageForm.elements.namedItem('originalText').focus({preventScroll:true}), {once:true});
       locationModal('close');
     });
