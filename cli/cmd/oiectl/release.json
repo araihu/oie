@@ -1,1 +1,7 @@
-{}
+{
+  "version": "v0.30.0",
+  "specTag": "openapi/engine/v0.30.0",
+  "specRevision": "713234d523519e7ec01bbdebddb41a0166654a51",
+  "sourceRevision": "713234d523519e7ec01bbdebddb41a0166654a51",
+  "request": "spec"
+}
