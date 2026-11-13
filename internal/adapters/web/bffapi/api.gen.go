@@ -382,6 +382,37 @@ type BrowserEditTarget struct {
 	Target externalRef0.MessageEditTarget `json:"target"`
 }
 
+// BrowserForward Browser forwarding confirmation for one destination.
+type BrowserForward struct {
+	// ConversationId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	ConversationId externalRef0.ID `json:"conversationId"`
+
+	// Csrf Example: browser-csrf-token
+	Csrf string `json:"csrf"`
+
+	// EngineId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	EngineId externalRef0.ID `json:"engineId"`
+
+	// MessageId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	MessageId externalRef0.ID `json:"messageId"`
+
+	// OperationKey Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	OperationKey externalRef0.ID `json:"operationKey"`
+
+	// RevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	RevisionId externalRef0.ID `json:"revisionId"`
+}
+
 // BrowserReactionIntent Complete immutable reaction choice retained for receipt reconciliation.
 //
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","csrf":"browser-csrf-token","emojis":"[]","engineId":"019a5df0-0000-7000-8000-000000000001","expectedOwnRevisionId":"","lang":"en","messageId":"019a5df0-0000-7000-8000-000000000004","operationKey":"019a5df0-0000-7000-8000-000000000006"}
@@ -932,6 +963,15 @@ type SearchBrowserMessagesParamsLang string
 // SearchBrowserMessagesParamsPresentation defines parameters for SearchBrowserMessages.
 type SearchBrowserMessagesParamsPresentation string
 
+// PrepareBrowserForwardParams defines parameters for PrepareBrowserForward.
+type PrepareBrowserForwardParams struct {
+	// MessageId Retained source message.
+	MessageId externalRef0.ID `form:"messageId" json:"messageId"`
+
+	// EngineId Engine owning the source message.
+	EngineId externalRef0.ID `form:"engineId" json:"engineId"`
+}
+
 // PrepareBrowserReplyParams defines parameters for PrepareBrowserReply.
 type PrepareBrowserReplyParams struct {
 	// EngineId Engine whose retained source is displayed.
@@ -1030,6 +1070,9 @@ type SubmitBrowserMessageEditFormdataRequestBody = BrowserEditIntent
 
 // ReconcileBrowserMessageEditFormdataRequestBody defines body for ReconcileBrowserMessageEdit for application/x-www-form-urlencoded ContentType.
 type ReconcileBrowserMessageEditFormdataRequestBody = BrowserEditIntent
+
+// SubmitBrowserForwardFormdataRequestBody defines body for SubmitBrowserForward for application/x-www-form-urlencoded ContentType.
+type SubmitBrowserForwardFormdataRequestBody = BrowserForward
 
 // ReconcileBrowserMessageReactionsFormdataRequestBody defines body for ReconcileBrowserMessageReactions for application/x-www-form-urlencoded ContentType.
 type ReconcileBrowserMessageReactionsFormdataRequestBody = BrowserReactionIntent

@@ -41,10 +41,10 @@ window.OieRuntime.register('formatting', life => {
     if(!copied)throw new Error('copy_failed');
   }
   life.on(document,'click',async event=>{
-    const button=event.target.closest('[data-copy-original],[id^="copy-message-"]');if(!button)return;
+    const button=event.target.closest('[data-copy-original],[id^="copy-message-"],[id^="favorite-copy-"]');if(!button)return;
     event.preventDefault();
     const id=button.id?.startsWith('copy-message-')?button.id.slice(13):button.closest('[data-message-id]')?.dataset.messageId;
-    const row=id&&document.querySelector(`[data-message-id="${CSS.escape(id)}"][data-message-source]`),labels=document.querySelector('#oie-formatting-copy')?.dataset || {};
+    const row=button.closest('[data-favorite-source]')||(id&&document.querySelector(`[data-message-id="${CSS.escape(id)}"][data-message-source]`)),labels=document.querySelector('#oie-formatting-copy')?.dataset || {};
     const status=document.querySelector('#oie-copy-status');
     try {
       const original=JSON.parse(row.dataset.messageSource);
@@ -52,8 +52,12 @@ window.OieRuntime.register('formatting', life => {
       if(navigator.clipboard?.writeText){try{await navigator.clipboard.writeText(original);if(life.signal.aborted)return;}catch{if(life.signal.aborted)return;copyFallback(original);}}
       else copyFallback(original);
       if(status)status.textContent=labels.copied || '';
+      if(row.hasAttribute('data-favorite-source'))window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'success',message:labels.copied}}));
       button.dataset.copyState='copied';button.title=labels.copied || '';
       life.timeout(()=>{button.dataset.copyState='';button.title=labels.copy || '';},1800);
-    }catch{if(!life.signal.aborted&&status)status.textContent=labels.failed || '';}
+    }catch{if(!life.signal.aborted){
+      if(status)status.textContent=labels.failed || '';
+      if(row?.hasAttribute('data-favorite-source'))window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:labels.failed}}));
+    }}
   });
 });

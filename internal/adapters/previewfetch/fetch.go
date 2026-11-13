@@ -138,6 +138,10 @@ func (f *Fetcher) dialPublic(ctx context.Context, network, address string) (net.
 	return nil, last
 }
 func (f *Fetcher) get(ctx context.Context, address string) (*http.Response, error) {
+	return f.getPublic(ctx, address, "text/html, image/png, image/jpeg, image/gif;q=0.9")
+}
+
+func (f *Fetcher) getPublic(ctx context.Context, address, accept string) (*http.Response, error) {
 	u, err := url.Parse(address)
 	if err != nil {
 		return nil, application.PreviewFailure{Code: "blocked"}
@@ -151,7 +155,7 @@ func (f *Fetcher) get(ctx context.Context, address string) (*http.Response, erro
 		return nil, application.PreviewFailure{Code: "blocked"}
 	}
 	req.Header.Set("User-Agent", "Oie/0.5 link-preview")
-	req.Header.Set("Accept", "text/html, image/png, image/jpeg, image/gif;q=0.9")
+	req.Header.Set("Accept", accept)
 	response, err := f.client.Do(req)
 	if err != nil {
 		var failure application.PreviewFailure
@@ -484,4 +488,31 @@ func (f *Fetcher) siteIcon(ctx context.Context, address string) []byte {
 		}
 	}
 	return nil
+}
+
+// OpenForwardAttachment downloads a retained file after explicit selection.
+// StageAttachment limits streamed bytes even when the server omits length.
+func (f *Fetcher) OpenForwardAttachment(ctx context.Context, address string) (string, io.ReadCloser, error) {
+	response, err := f.getPublic(ctx, address, "*/*")
+	if err != nil {
+		return "", nil, mediaFailure(err)
+	}
+	mediaType, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
+	var failure error
+	switch {
+	case response.StatusCode != http.StatusOK || response.Header.Get("Content-Range") != "":
+		failure = application.MediaFailure{Code: "media_fetch_failed"}
+	case response.ContentLength > application.MaxStagedAttachmentSize:
+		failure = application.ErrAttachmentTooLarge
+	case mediaType == "text/html" || mediaType == "application/xhtml+xml":
+		failure = application.MediaFailure{Code: "media_unsupported"}
+	}
+	if failure != nil {
+		_ = response.Body.Close()
+		return "", nil, failure
+	}
+	if mediaType == "" {
+		mediaType = "application/octet-stream"
+	}
+	return mediaType, response.Body, nil
 }

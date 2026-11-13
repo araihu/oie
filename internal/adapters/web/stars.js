@@ -61,7 +61,7 @@ window.OieRuntime.register('stars', life => {
     const top=scroll?.scrollTop;
     const active=current.contains(document.activeElement)?document.activeElement:null;
     const message=active?.closest('[data-info-star-message]')?.dataset.infoStarMessage;
-    const action=active?.matches('[data-star-message]')?'[data-star-message]':'[data-info-source]';
+    const action=active?.matches('[data-star-message]')?'[data-star-message]':'[data-favorite-menu-trigger]';
     const visibleTop=scroll?.getBoundingClientRect().top;
     const anchors=scroll?[...current.querySelectorAll('[data-info-star-message]')]
       .filter(row=>row.getBoundingClientRect().bottom>visibleTop)
@@ -90,7 +90,7 @@ window.OieRuntime.register('stars', life => {
     const info=document.querySelector('[data-info-stars]');
     refreshStarredPage(info,page.querySelector('#live-info-content [data-info-stars]'),
       document.getElementById('details-body'),()=>info.querySelector('[data-info-heading]'));
-    refreshStarredPage(document.getElementById('favorites-results'),page.getElementById('favorites-results'),
+    refreshStarredPage(document.getElementById('favorites-results'),page.querySelector('#favorites-results'),
       document.getElementById('favorites-scroll'),()=>document.getElementById('favorites-heading'));
     read(page);readInfo(page);
   });

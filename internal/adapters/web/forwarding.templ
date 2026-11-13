@@ -1,0 +1,58 @@
+package web
+
+import (
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/checkbox"
+	"github.com/araihu/goshtoso/components/modal"
+	"github.com/araihu/goshtoso/components/textinput"
+	"github.com/araihu/goshtoso/expressions"
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+)
+
+templ forwardDialog(v view) {
+	@modal.Dialog(modal.DialogConfig{ID: "forward-message-dialog", Title: v.Text.ForwardTitle, FullscreenMobile: true, Content: forwardDialogBody(v)}).WithExpressions(expressions.Modal{DialogCloseAriaLabel: v.Text.Close})
+}
+
+templ forwardDialogBody(v view) {
+	<div data-forward-body data-retry={ v.Text.Retry } data-loading={ v.Text.ForwardLoading } data-failed={ v.Text.ForwardFailed } data-complete={ v.Text.ForwardComplete } data-unconfirmed={ v.Text.ForwardUnconfirmed } data-sending={ v.Text.ForwardSending }></div>
+}
+
+templ forwardForm(v view, source engineapi.Message, rooms []engineapi.Conversation) {
+	<form method="post" action="/ui/messages/forward" data-forward-form>
+		<input type="hidden" name="engineId" value={ v.EngineID }/>
+		<input type="hidden" name="csrf" value={ v.CSRF }/>
+		<input type="hidden" name="messageId" value={ source.Id }/>
+		<input type="hidden" name="revisionId" value={ source.RevisionId }/>
+		<div class="oie-forward-preview">
+			if source.Reply != nil {
+				<p>{ source.Reply.BodyText }</p>
+			} else if source.OriginalText != "" {
+				<p>{ source.OriginalText }</p>
+			}
+			if source.Attachments != nil {
+				for _, file := range *source.Attachments {
+					<p>{ file.FileName }</p>
+				}
+			}
+		</div>
+		if len(rooms) == 0 {
+			<p role="status">{ v.Text.ForwardNoRooms }</p>
+		} else {
+			@textinput.TextInput(textinput.Config{ID: "forward-search", Label: v.Text.ForwardSearchRooms, Type: textinput.TypeSearch, InputAttrs: templ.Attributes{"data-forward-search": "", "aria-controls": "forward-rooms"}})
+			<fieldset id="forward-rooms" class="oie-forward-rooms">
+				<legend>{ v.Text.ForwardChooseRooms }</legend>
+				for _, room := range rooms {
+					{{ label := room.Title; if label == "" { label = room.Address } }}
+					<div data-forward-room class="oie-forward-room">
+						@checkbox.Checkbox(checkbox.Config{ID: "forward-room-" + room.Id, Name: "conversationId", Value: room.Id, Label: label, HelperText: v.accountLabel(room.AccountId), InputAttrs: templ.Attributes{"data-key": newOperationKey()}})
+						<p class="oie-forward-result" data-forward-result role="status"></p>
+					</div>
+				}
+			</fieldset>
+			<p data-forward-no-results hidden>{ v.Text.NoResults }</p>
+			<footer class="oie-forward-footer">
+				@button.Button(button.WithType("submit"), button.WithAttrs(templ.Attributes{"data-forward-submit": "", "aria-disabled": "true", "data-send": v.Text.Forward, "data-retry": v.Text.Retry})){ { v.Text.Forward } }
+			</footer>
+		}
+	</form>
+}

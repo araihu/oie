@@ -97,6 +97,7 @@ templ page(v view) {
 <script src="/ui/theme.js"></script>
 <script src="/ui/sidebar.js"></script>
 <script src="/ui/formatting.js"></script>
+<script src="/ui/forwarding.js" defer></script>
 <script src="/ui/room-entry.js"></script>
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href="/ui/app.css"/>
@@ -181,6 +182,9 @@ if !v.Preview {
 @imageViewer(v)
 @documentViewer(v)
 @reactionPicker(v)
+if !v.Preview {
+@forwardDialog(v)
+}
 
 
 

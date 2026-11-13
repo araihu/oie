@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
+	"github.com/araihu/goshtoso/components/dropdown"
+	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
@@ -66,4 +68,16 @@ func starredPageVersion(page *engineapi.StarredMessagePage, invalid bool) string
 	data, _ := json.Marshal([]any{page, invalid})
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
+}
+
+func favoriteActions(v view, message engineapi.Message, scope string) []dropdown.Section {
+	prefix := scope + "-" + message.Id
+	items := []dropdown.Item{
+		{ID: "favorite-source-" + prefix, Label: v.Text.SharedGoToMessage, Href: v.infoSourceHref(message), Icon: glyph(heroicons.Icon16SolidArrowUturnLeft)},
+		{ID: "favorite-copy-" + prefix, Label: v.Text.CopyOriginal, OnClick: "void 0", Icon: glyph(heroicons.Icon16SolidDocumentDuplicate)},
+	}
+	if !v.Preview && message.SendState != "cancelled" {
+		items = append(items, forwardAction(v, "favorite-"+scope+"-", message.Id))
+	}
+	return []dropdown.Section{{Items: items}}
 }

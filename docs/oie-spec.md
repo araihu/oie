@@ -405,6 +405,8 @@ Retain already-stored retracted messages, including incoming retractions, behind
 
 Allow manual forwarding across conversations/accounts using the destination account and its capabilities. Forward as a new outgoing message through that account's outbox. Use a generic **Forwarded** label where supported. Original sender/conversation attribution is omitted unless explicitly chosen. This does not select automatic cross-protocol relaying.
 
+**AGREED:** in the room picker, select one or more destination rooms across accounts. The favorites menu offers Go to message, Copy original and Forward, and the timeline and shared-content menus can open the same forwarding picker.
+
 Forwarding media retrieves the full file if necessary and uploads through the destination account, with progress and clear errors. Do not silently substitute a source URL. Explicit forwarding authorizes retrieval of that selected file independently of automatic incoming download preferences.
 
 ### 6.1 Markdown and Copy

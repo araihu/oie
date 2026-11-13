@@ -4355,6 +4355,88 @@
         "x-cli-name": "get"
       }
     },
+    "/api/v1/messages/{messageId}/forward": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MessageID"
+        }
+      ],
+      "post": {
+        "operationId": "forwardMessage",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Forward a retained message to a room",
+        "description": "Creates a new outgoing message through the destination room's account. Copies the authored body and stages source attachments for a new upload. Replies and mentions are copied as text without references or attribution. A matching operation key replays the original acceptance, including after the source changes. Use one stable key per destination.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Stable UUIDv7 for this source revision and destination.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Source revision reviewed by the user and the selected destination room.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForwardMessage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Original acceptance replayed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "New message accepted into the destination outbox.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "description": "A source attachment exceeds the supported upload size.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "x-cli-ignore": true
+      }
+    },
     "/api/v1/messages/{messageId}/cancel": {
       "parameters": [
         {
@@ -8755,6 +8837,27 @@
             "type": "boolean",
             "example": false
           }
+        }
+      },
+      "ForwardMessage": {
+        "type": "object",
+        "description": "Copy one retained source revision into a new send for the destination room.",
+        "additionalProperties": false,
+        "required": [
+          "expectedRevisionId",
+          "conversationId"
+        ],
+        "properties": {
+          "expectedRevisionId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "conversationId": {
+            "$ref": "#/components/schemas/ID"
+          }
+        },
+        "example": {
+          "expectedRevisionId": "019a5df0-0000-7000-8000-000000000001",
+          "conversationId": "019a5df0-0000-7000-8000-000000000002"
         }
       },
       "SendMessage": {

@@ -576,3 +576,14 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 #favorites-results .oie-info-star:first-of-type { padding-block-start: 0; }
 .oie-favorite-source { margin: 4px 0 0; color: var(--oie-muted); font-size: .75rem; overflow-wrap: anywhere; }
 .oie-favorites-pagination { display: flex; flex-wrap: wrap; gap: 1rem; margin-block-start: 1rem; }
+
+.oie-info-star .oie-favorite-menu-trigger { opacity: 1; }
+.oie-forward-preview { max-block-size: 22vh; overflow: auto; margin-block-end: 1rem; padding: .75rem; background: var(--oie-raised); border-radius: .5rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.oie-forward-preview:empty { display: none; }
+.oie-forward-preview p { margin: 0; }
+.oie-forward-rooms { min-inline-size: 0; max-block-size: 42vh; overflow-y: auto; padding: .5rem 0; border: 0; }
+.oie-forward-room { padding-block: .35rem; }
+.oie-forward-room[hidden] { display: none; }
+.oie-forward-result { margin: 0; color: var(--oie-muted); font-size: .8125rem; }
+.oie-forward-footer { display: flex; justify-content: flex-end; padding-block-start: .75rem; }
+.oie-forward-footer [aria-disabled=true] { opacity: .65; }

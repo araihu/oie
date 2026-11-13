@@ -98,3 +98,19 @@ available from Favorites in the sidebar, the engine API and the generated CLI.
 The reusable public `modal.DialogConfig.HeaderContent` slot is supplied by
 [Goshtoso PR 373](https://github.com/araihu/goshtoso/pull/373), pinned at
 `v0.6.2-0.20261108145912-0cfde7dfc89c`.
+
+## Forwarding from Favorites
+
+The message menu in Favorites opens the original conversation, copies the
+original text, or opens the same room picker as the timeline and shared catalog.
+The picker identifies the account for each room and preserves selection across
+searches. Forwarding creates one ordinary outgoing message per selected room.
+
+| State or action | Expected outcome | Effect |
+| --- | --- | --- |
+| Open, search or dismiss the picker | Preserve the current page, composer and selected source. | No sends |
+| Confirm two eligible rooms | Accept a copy through each room's owning account. | One message per room |
+| Source changed, room left or destination is a direct conversation | Report the affected room and retain the selection. | No copy for the rejected destination |
+| Source file missing or over the upload limit | Show the failure for that room. | No copy with a substitute source URL |
+| Response lost after acceptance | Retry that room with the same key and reconcile its receipt. | One message total for that room |
+| Another selected room already accepted | Show its result and skip it on retry. | No duplicate |

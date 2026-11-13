@@ -49,6 +49,9 @@ func sharedActions(v view, item engineapi.SharedContentItem) []dropdown.Section 
 		{ID: sharedActionID(v, item, "copy"), Label: v.Text.SharedCopyLink, OnClick: "void 0", Icon: glyph(heroicons.Icon16SolidDocumentDuplicate)},
 		{ID: sharedActionID(v, item, "open"), Label: v.Text.SharedOpenLink, Href: safePreviewURL(item.Url), Target: "_blank", Rel: "noopener noreferrer", Icon: glyph(heroicons.Icon16SolidArrowTopRightOnSquare)},
 	}
+	if !v.Preview {
+		items = append(items, forwardAction(v, "shared-"+sharedActionScope(v)+"-"+item.Id+"-", item.Message.Id))
+	}
 	if item.Kind == "image" && (sharedActionPreview(item) != "" || sharedActionFile(item) != "") || sharedActionDownload(v, item) != "" {
 		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "download"), Label: v.Text.SharedDownload, OnClick: "void 0", Icon: glyph(heroicons.Icon16SolidArrowDownTray)})
 	}

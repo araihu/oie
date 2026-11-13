@@ -217,6 +217,9 @@ type view struct {
 }
 
 type copy struct {
+	Forward, ForwardTitle, ForwardChooseRooms, ForwardSearchRooms, ForwardNoRooms, ForwardLoading, ForwardSending string
+	ForwardAccepted, ForwardComplete, ForwardFailed, ForwardUnconfirmed, ForwardChanged                           string
+
 	CheckingConversation, MessageRequest, AcceptMessageRequest, ArchiveRequest string
 	ScheduleSelectedConversations                                              string
 	ScheduleLoading, ScheduleViewAgenda, ScheduleCancelSend                    string
@@ -604,6 +607,10 @@ var liveScript []byte
 var roomArchiveScript []byte
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/ui/messages/forward" && r.Method == http.MethodGet {
+		s.prepareForward(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/rooms/preview" {
 		s.roomPreview(w, r)
 		return
@@ -688,6 +695,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		body []byte
 	}{
 		"/ui/draft-link-preview.js": {"text/javascript", draftLinkPreviewScript}, "/ui/draft-link-preview.css": {"text/css", draftLinkPreviewStylesheet},
+		"/ui/forwarding.js":        {"text/javascript", forwardingScript},
 		"/ui/scheduling.js":        {"text/javascript", schedulingScript},
 		"/ui/scheduling.css":       {"text/css", schedulingStylesheet},
 		"/ui/sidebar.js":           {"text/javascript", sidebarScript},
