@@ -39,7 +39,7 @@ async function apiHandler(req, res) {
     return;
   }
   if (u.pathname === '/api/v1/avatars/' + avatarHash) {
-    res.writeHead(200, {'Content-Type': 'image/png'});
+    res.writeHead(200, {'Content-Type': 'image/png', 'Content-Length': avatar.length});
     res.end(avatar);
     return;
   }
@@ -104,6 +104,24 @@ async function waitFor(predicate) {
     await waitFor(async () => { try { return (await fetch(base)).ok; } catch { return false; } });
     const page = await browser.newPage({viewport: {width: 1440, height: 950}, locale: 'pt-BR'});
     page.on('pageerror', error => errors.push(error.message));
+    const avatarURL = base + '/ui/avatars/' + avatarHash;
+    const avatarResponses = [];
+    page.on('response', response => {
+      if (response.url() === avatarURL) avatarResponses.push(response.status());
+    });
+    page.on('requestfailed', request => {
+      if (request.url() === avatarURL) avatarResponses.push(request.failure()?.errorText);
+    });
+    const avatarReady = async container => {
+      const image = container.locator(`img[src="/ui/avatars/${avatarHash}"]`);
+      await image.waitFor({state: 'attached'});
+      try {
+        await image.evaluate(img => img.decode());
+        assert.equal(await image.evaluate(img => img.naturalWidth), 8);
+      } catch (error) {
+        throw new Error(`Room avatar failed to decode. Responses: ${JSON.stringify(avatarResponses)}`, {cause: error});
+      }
+    };
     const heldCard = new Promise(resolve => { release = resolve; });
     await page.route('**/ui/rooms/preview', async route => {
       const response = await route.fetch();
@@ -141,7 +159,7 @@ async function waitFor(predicate) {
     release();
     await card.getByText('Saberes <script>', {exact: true}).waitFor();
     await card.getByText('Bem-vindos!', {exact: true}).waitFor();
-    await waitFor(() => card.locator('img').evaluate(img => img.complete && img.naturalWidth > 0));
+    await avatarReady(card);
     assert.equal(await card.locator('script').count(), 0);
     const foreign = await page.request.post(base + '/ui/rooms/preview', {form: {accountId: alice, address}});
     assert.equal(foreign.status(), 403);
@@ -170,8 +188,7 @@ async function waitFor(predicate) {
     release();
     await preview.getByText('Saberes <script>', {exact: true}).waitFor();
     assert.equal(await preview.locator('script').count(), 0);
-    await waitFor(() => preview.locator('img').evaluate(img => img.complete && img.naturalWidth > 0));
-    assert.equal(await preview.locator('img').getAttribute('src'), '/ui/avatars/' + avatarHash);
+    await avatarReady(preview);
     assert.equal(await page.evaluate(() => { window.trackRoomGeometry = false; return window.roomDrift; }), 0);
     await page.keyboard.press('Escape');
     await waitFor(() => link.evaluate(el => document.activeElement === el));

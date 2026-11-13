@@ -133,7 +133,7 @@ async function assertMobileControlOwnership(page) {
       if(request.resourceType()==='document')documents.push(request.url());
     });
     await scoped.goto(base+'/?chat='+chatA+'&lang=en&theme=dark',{waitUntil:'domcontentloaded'});
-    await until(()=>streams.size===1,'initial scoped stream connected');
+    await until(()=>streams.size===1&&subscriptions===1,'initial scoped stream connected');
     const streamBefore=[...streams][0],subscriptionsBefore=subscriptions;
     await scoped.locator('#message-composer').fill('Draft kept through scoped swaps');
     const chatBefore=await scoped.evaluate(()=>{
