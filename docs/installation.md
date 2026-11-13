@@ -23,7 +23,8 @@ volume. If the package is private, authenticate to `ghcr.io` with access to
 the package before pulling. [GitHub Container Registry authentication](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
 
 CI builds and tests both architectures on pull requests and pushes to
-`main`. A successful push to `main` publishes `sha-<commit>` and updates
+`main`. When both container tests pass on `main`, CI publishes
+`sha-<commit>` and updates
 `:main` if the commit is still the branch tip. Application tags such as
 `v0.0.1-rc.3` publish a versioned image. `:latest` follows the highest
 canonical application version by SemVer, including prereleases. Use the
