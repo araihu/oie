@@ -28,6 +28,7 @@ type Querier interface {
 	FindAvatar(ctx context.Context, arg FindAvatarParams) (Avatar, error)
 	FindConversation(ctx context.Context, arg FindConversationParams) (Conversation, error)
 	FindMessagePreview(ctx context.Context, arg FindMessagePreviewParams) (MessagePreview, error)
+	// Match the partial identity index used for messages with provider IDs.
 	FindProviderMessage(ctx context.Context, arg FindProviderMessageParams) (Message, error)
 	FindReactionObservation(ctx context.Context, arg FindReactionObservationParams) ([]MessageReactionObservation, error)
 	// Look up the remote reference before checking its conversation.
