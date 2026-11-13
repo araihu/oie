@@ -416,7 +416,9 @@
    upgrade(root);
   }
   else if(root.id==='message-timeline'){
-   window.Alpine?.initTree(root);
+   // The timeline itself stays mounted. Initialize its new children before
+   // the live hooks read their Alpine state.
+   for(const child of root.children)window.Alpine?.initTree(child);
    const next=ctx?.oieTimelinePage?.getElementById(root.id);
    if(next){
     for(const key of ['version','roomArchive','archiveTextSearch','archiveInitial','archiveComplete','archiveCovered']){
