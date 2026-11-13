@@ -25,10 +25,9 @@ the package before pulling. [GitHub Container Registry authentication](https://d
 CI builds and tests both architectures on pull requests and pushes to
 `main`. A successful push to `main` publishes `sha-<commit>` and updates
 `:main` if the commit is still the branch tip. Application tags such as
-`v0.0.1-rc.2` publish a versioned image. `:latest` follows the highest
-canonical application version, including numbered alpha, beta and release
-candidate tags. Use the published digest from the workflow summary to pin an
-exact image.
+`v0.0.1-rc.3` publish a versioned image. `:latest` follows the highest
+canonical application version by SemVer, including prereleases. Use the
+published digest from the workflow summary to pin an exact image.
 
 ## Desktop installation on macOS and Linux
 

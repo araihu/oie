@@ -2,7 +2,7 @@ name: Release Oiê image
 
 on:
   push:
-    tags: ['v*']
+    tags: ['v*.*.*']
   workflow_dispatch:
 
 permissions:
@@ -34,7 +34,7 @@ jobs:
         id: version
         run: |
           set -euo pipefail
-          tags=$(sh scripts/oie-release-tags.sh)
+          tags=$(python3 scripts/oie-release-tags.py)
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             version=$(head -n 1 <<<"$tags")
             test -n "$version"
@@ -89,7 +89,7 @@ jobs:
           set -euo pipefail
           docker buildx imagetools inspect --raw "$IMAGE@$DIGEST" |
             jq -e '[.manifests[] | select(.platform.os == "linux") | .platform.architecture] | sort == ["amd64", "arm64"]'
-          tags=$(sh scripts/oie-release-tags.sh)
+          tags=$(python3 scripts/oie-release-tags.py)
           if [ "$VERSION" = "$(head -n 1 <<<"$tags")" ]; then
             docker buildx imagetools create --tag "$IMAGE:latest" "$IMAGE@$DIGEST"
           fi
