@@ -6,7 +6,6 @@ CREATE TABLE shared_catalog_sources (
  position_ms INTEGER NOT NULL,
  parser_version INTEGER NOT NULL
 );
-CREATE INDEX shared_catalog_pending ON shared_catalog_sources(parser_version,position_ms DESC,message_id DESC);
 CREATE TABLE shared_catalog_counts (
  conversation_id TEXT NOT NULL,
  parser_version INTEGER NOT NULL,
@@ -23,7 +22,6 @@ CREATE TABLE shared_catalog_order (
  reference_id TEXT NOT NULL REFERENCES shared_content(id) ON DELETE CASCADE,
  PRIMARY KEY(scope,tab,position_ms,reference_id)
 ) WITHOUT ROWID;
-CREATE INDEX shared_catalog_order_reference ON shared_catalog_order(reference_id);
 
 CREATE VIEW shared_catalog_visible_sources AS
 SELECT m.id AS message_id,m.conversation_id,COALESCE(m.timeline_at_ms,m.created_at_ms) AS position_ms,
@@ -47,11 +45,22 @@ SELECT CASE scope.kind WHEN 0 THEN '' WHEN 1 THEN 'account:'||account_id ELSE 'c
 FROM kinds CROSS JOIN (SELECT 0 AS kind UNION ALL SELECT 1 UNION ALL SELECT 2) scope
 WHERE tab IS NOT NULL;
 
-INSERT INTO shared_catalog_sources SELECT * FROM shared_catalog_visible_sources;
+-- Read the archive in table order during the one-time backfill. Eligibility
+-- sets are built once here; the view above uses lookups for a single source.
+INSERT INTO shared_catalog_sources
+SELECT m.id,m.conversation_id,COALESCE(m.timeline_at_ms,m.created_at_ms),COALESCE(s.parser_version,-1)
+FROM messages m NOT INDEXED LEFT JOIN shared_content_state s ON s.message_id=m.id
+WHERE m.conversation_id IN (SELECT id FROM conversations WHERE json_extract(payload,'$.Request') IS NULL)
+AND m.id NOT IN (SELECT alias_id FROM message_canonical_aliases WHERE alias_id IS NOT NULL)
+AND m.id NOT IN (SELECT message_id FROM hidden_scheduled_messages WHERE message_id IS NOT NULL);
 INSERT INTO shared_catalog_counts
  SELECT conversation_id,parser_version,COUNT(*) FROM shared_catalog_sources GROUP BY conversation_id,parser_version;
 INSERT INTO shared_catalog_order
  SELECT scope,tab,position_ms,reference_id FROM shared_catalog_order_rows;
+
+CREATE INDEX shared_catalog_pending ON shared_catalog_sources(parser_version,position_ms DESC,message_id DESC);
+CREATE INDEX shared_catalog_order_reference ON shared_catalog_order(reference_id);
+
 
 CREATE TRIGGER shared_catalog_count_insert AFTER INSERT ON shared_catalog_sources BEGIN
  INSERT INTO shared_catalog_counts VALUES(NEW.conversation_id,NEW.parser_version,1)
