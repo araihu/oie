@@ -2,6 +2,10 @@ name: Publish Arai Hû APT repository
 
 on:
   workflow_call:
+    secrets:
+      OIE_APT_SIGNING_KEY:
+        description: Signing subkey supplied by the apt-signing environment
+        required: true
   workflow_dispatch:
 
 permissions:
@@ -53,6 +57,10 @@ jobs:
         env:
           APT_SIGNING_KEY: ${{ secrets.OIE_APT_SIGNING_KEY }}
         run: |
+          if [[ -z "$APT_SIGNING_KEY" ]]; then
+            echo 'OIE_APT_SIGNING_KEY is missing from the apt-signing environment' >&2
+            exit 1
+          fi
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends apt-utils
           keyring=$(mktemp -d)

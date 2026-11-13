@@ -252,3 +252,5 @@ jobs:
       pages: write
       id-token: write
     uses: ./.github/workflows/publish-apt.yml
+    secrets:
+      OIE_APT_SIGNING_KEY: ${{ secrets.OIE_APT_SIGNING_KEY }}
