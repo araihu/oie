@@ -58,12 +58,14 @@ var presentationTimeScript []byte
 var localeFiles embed.FS
 
 type Server struct {
-	devBuildID    string
-	engineEditors []engineapi.RequestEditorFn
-	client        *engineapi.ClientWithResponses
-	archiveClient *engineapi.ClientWithResponses
-	streamClient  *engineapi.Client
-	catalogs      map[string]copy
+	locationMapStyle       string
+	locationMapAttribution string
+	devBuildID             string
+	engineEditors          []engineapi.RequestEditorFn
+	client                 *engineapi.ClientWithResponses
+	archiveClient          *engineapi.ClientWithResponses
+	streamClient           *engineapi.Client
+	catalogs               map[string]copy
 }
 
 func New(engineURL string, options ...Option) (*Server, error) {
@@ -80,6 +82,9 @@ func New(engineURL string, options ...Option) (*Server, error) {
 		if option != nil {
 			option(server)
 		}
+	}
+	if err := validateLocationMapStyle(server.locationMapStyle, server.locationMapAttribution); err != nil {
+		return nil, err
 	}
 	optionsFor := func(client *http.Client) []engineapi.ClientOption {
 		client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -145,12 +150,14 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
-	SchedulePage          *engineapi.ScheduledMessagePage
-	ScheduleEdit          *engineapi.Message
-	ScheduleDestinations  []engineapi.Conversation
-	ScheduleConversations []string
-	ScheduleCursor        string
-	ScheduleUnavailable   bool
+	LocationMapStyle       string
+	LocationMapAttribution string
+	SchedulePage           *engineapi.ScheduledMessagePage
+	ScheduleEdit           *engineapi.Message
+	ScheduleDestinations   []engineapi.Conversation
+	ScheduleConversations  []string
+	ScheduleCursor         string
+	ScheduleUnavailable    bool
 
 	InboxOnly        bool
 	Role             engineapi.EngineRole
@@ -219,6 +226,7 @@ type copy struct {
 	ScheduleReviewChanged, AttachmentTooLarge                                                                                                               string
 	AttachmentAddToDraft, AttachmentPreparing, AttachmentUnavailable                                                                                        string
 	AttachImage, AttachFile, AttachLocation, LocationLatitude, LocationLongitude, LocationUseCurrent, LocationInvalid, LocationUnavailable, LocationFinding string
+	LocationMapHint, LocationMapLoading, LocationMapUnavailable, LocationMarkCenter, LocationZoomIn, LocationZoomOut                                        string
 	DismissLinkPreview                                                                                                                                      string
 
 	Scheduled, Schedule, Reschedule, ScheduleWhen, ScheduleEmpty, ScheduleUnavailable, ScheduleReview, ScheduleBack, ScheduleCancel, ScheduleEditMode, ScheduleSave, ScheduleSaved, SendNow, ScheduleTimeInvalid, ScheduleTimeAmbiguous, AttachmentFailed, AttachmentLimit, RemoveAttachment string
@@ -648,7 +656,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.previewStatus(w, r)
 		return
 	}
-	if s.serveDevReload(w, r) || s.servePDFJS(w, r) {
+	if s.serveDevReload(w, r) || s.servePDFJS(w, r) || serveLocationMapAsset(w, r) {
 		return
 	}
 	if r.URL.Path == "/ui/message-search" {
@@ -804,7 +812,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, v)
 }
 func (s *Server) baseView(r *http.Request) view {
-	v := view{DevBuildID: s.devBuildID, Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system"), Avatars: map[avatarIdentity]string{}, Connections: map[string]connectionView{}, Histories: map[string]engineapi.HistoryStatus{}, Values: map[string]string{}, MessagePreviews: map[string][]engineapi.MessagePreview{}}
+	v := view{DevBuildID: s.devBuildID, LocationMapStyle: s.locationMapStyle, LocationMapAttribution: s.locationMapAttribution, Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system"), Avatars: map[avatarIdentity]string{}, Connections: map[string]connectionView{}, Histories: map[string]engineapi.HistoryStatus{}, Values: map[string]string{}, MessagePreviews: map[string][]engineapi.MessagePreview{}}
 	v.Text = s.catalogs[v.Locale]
 	v.configureWorkspace(r)
 	v.Values["address"] = r.URL.Query().Get("newChatAddress")

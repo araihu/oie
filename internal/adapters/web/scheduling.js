@@ -296,6 +296,7 @@ window.OieRuntime.register('scheduling', life => {
         if (!current()) return;
         latitude.value = coords.latitude.toFixed(6);
         longitude.value = coords.longitude.toFixed(6);
+        locationForm.dispatchEvent(new Event('oie:location-position'));
         locationStatus.textContent = '';
         locate.disabled = false;
         latitude.focus();

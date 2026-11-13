@@ -369,7 +369,7 @@
 }
 
 #oie-location-draft {
-  inline-size: min(29rem, calc(100vw - 2rem));
+  inline-size: min(42rem, calc(100vw - 1.5rem));
   color: var(--oie-text);
   background: var(--oie-raised);
   border-color: var(--oie-border);
@@ -390,3 +390,60 @@
 
 .oie-location-coordinates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
 .oie-location-coordinates > div { display: grid; gap: .25rem; }
+
+.oie-location-map {
+  position: relative;
+  min-inline-size: 0;
+  block-size: clamp(10rem, 38dvh, 23rem);
+  overflow: hidden;
+  border: 1px solid var(--oie-border);
+  border-radius: .75rem;
+  background: var(--oie-panel);
+}
+.oie-location-map [data-location-map-canvas] { position: absolute; inset: 0; }
+.oie-location-map .maplibregl-canvas { cursor: crosshair; }
+.oie-location-map .maplibregl-canvas:focus-visible { outline: 2px solid #164d9b; outline-offset: -3px; }
+.oie-location-map-center {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  translate: -50% -50%;
+  color: #27352f;
+  text-shadow: 0 0 3px white, 0 0 3px white;
+  font: 600 1.5rem/1 sans-serif;
+  pointer-events: none;
+}
+.oie-location-map-pin {
+  width: 1.125rem;
+  height: 1.125rem;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #164d9b;
+  box-shadow: 0 0 0 1px #164d9b, 0 2px 6px #0007;
+  pointer-events: none;
+}
+.oie-location-map:not([data-location-map-state="ready"]) .oie-location-map-center { display: none; }
+.oie-location-map-attribution {
+  position: absolute;
+  inset: auto 0 0 auto;
+  max-inline-size: 100%;
+  padding: .125rem .375rem;
+  border-start-start-radius: .35rem;
+  color: #22322c;
+  background: #fff;
+  overflow-wrap: anywhere;
+  font-size: .6875rem;
+}
+.oie-location-map-attribution span { margin-inline-end: .375rem; }
+.oie-location-map-attribution a { text-decoration: underline; }
+.oie-location-map [data-location-map-status] {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  text-align: center;
+  background: var(--oie-panel);
+}
+.oie-location-map [data-location-map-status]:empty { display: none; }
+.oie-location-map-actions { display: flex; flex-wrap: wrap; gap: .25rem .5rem; }
+#location-map-hint { color: var(--oie-muted); font-size: .875rem; }
