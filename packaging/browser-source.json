@@ -5,6 +5,11 @@
     "sha256": "2945117fd0dd7bec64b0ba8a7bdbdf3ff616ea621cbc9fd17ff1c3def9246c38"
   },
   {
+    "name": "araihu-oie-artwork-342a1c8.tar.gz",
+    "url": "https://codeload.github.com/araihu/assets/tar.gz/342a1c87a1f3784521cd6efc58820a1bd44b84b7",
+    "sha256": "ebf9add46afc9efddcaaf0be7fda17f6a4362fe44978aa9a9dac1c4f9a3f7f31"
+  },
+  {
     "name": "heroicons-2.2.0.tar.gz",
     "url": "https://codeload.github.com/tailwindlabs/heroicons/tar.gz/refs/tags/v2.2.0",
     "sha256": "42bd31001127631a20270e7bd87ac13647bfcd628dd533e2ff31497068b4f7af"
@@ -35,14 +40,44 @@
     "sha256": "ebd9885111092c78cefc79a76f6c1dc34ed5b834b02ae8f338227ce79c003de4"
   },
   {
+    "name": "openjpeg-8314119.tar.gz",
+    "url": "https://codeload.github.com/uclouvain/openjpeg/tar.gz/8314119b067c0fc77834731168daaebd379fdb12",
+    "sha256": "e723e8babb2188e8743308842bb1bfc9809f0375cd964cfeac2fb17285094321"
+  },
+  {
+    "name": "pdfium-bb1f9f7.tar.gz",
+    "url": "https://pdfium.googlesource.com/pdfium/+archive/bb1f9f71e7b15afdd5937adf8cfe5807522b882f.tar.gz",
+    "sha256": "74e4914e4b768de6689425845e7352d5cb5340500f47c79b834072daeeaa2712"
+  },
+  {
     "name": "pdfjs-6.5.438.tar.gz",
     "url": "https://codeload.github.com/mozilla/pdf.js/tar.gz/refs/tags/v6.5.438",
     "sha256": "eead5ce4cdc7682a791cb5661de089f1f89b6679593f11d6240e20186ac051ae"
   },
   {
+    "name": "pdfjs-jbig2-15f6f93.tar.gz",
+    "url": "https://codeload.github.com/mozilla/pdf.js.jbig2/tar.gz/15f6f9357c5e5e30285eb83aa08e5fe1a16ab77a",
+    "sha256": "20c52262116a471608e083bb21ac31591a1f953690d88928c0424bd715bcc0a7"
+  },
+  {
     "name": "pdfjs-maps-6.5.438.tgz",
     "url": "https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-6.5.438.tgz",
     "sha256": "7461aefcd27c4ef0dd76f9ca5760f09466eb6b3f934432670c12132e7b3d6faa"
+  },
+  {
+    "name": "pdfjs-openjpeg-d5f16ba.tar.gz",
+    "url": "https://codeload.github.com/mozilla/pdf.js.openjpeg/tar.gz/d5f16ba380391d4e32b51834e2e0afa796e402d8",
+    "sha256": "827857b130907fc15e60f7bb5a0840998aee5b48d4039e9bb6b17c01dc6bc73d"
+  },
+  {
+    "name": "pdfjs-qcms-2ae4ee7.tar.gz",
+    "url": "https://codeload.github.com/mozilla/pdf.js.qcms/tar.gz/2ae4ee72334782928210ba4050e3e77d9b2d35be",
+    "sha256": "c0ca3cb21a8411009138e51992553de26c8df22ee10392e189d5dc9d91e3b27c"
+  },
+  {
+    "name": "qcms-0.3.0.crate",
+    "url": "https://static.crates.io/crates/qcms/qcms-0.3.0.crate",
+    "sha256": "edecfcd5d755a5e5d98e24cf43113e7cdaec5a070edd0f6b250c03a573da30fa"
   },
   {
     "name": "tailwindcss-4.3.3.tar.gz",

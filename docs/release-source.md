@@ -18,9 +18,11 @@ go -C oie/cli build -mod=readonly ./cmd/oiectl
 The exact build and installer scripts are under `release-tooling/scripts`.
 The `browser-sources` directory contains editable upstream sources, and the
 Mermaid and PDF.js npm archives in it also include the source maps that
-identify the code and dependencies compiled into the shipped bundles. The
-Wails TypeScript source is in its Go module archive. The Oiê asset manifests
-record the artwork revisions and the exact bytes used in the binaries.
+identify the code and dependencies compiled into the shipped bundles. It also
+includes the PDF.js WebAssembly decoder sources and their build scripts. The
+Wails TypeScript source is in its Go module archive. The Arai Hû assets archive
+contains the original Oiê artwork and generator, and Oiê's asset manifest
+records the exact bytes used in the binaries.
 
 Publish each target's `_source.tar.gz` beside its binary archive and list both
 in the release notes and `SHA256SUMS`.
