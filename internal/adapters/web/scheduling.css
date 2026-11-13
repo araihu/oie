@@ -249,6 +249,8 @@
   gap: .25rem;
 }
 .oie-composer-attachments a { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.oie-message-attachments[hidden] { display: none; }
+.oie-message-attachments a { min-inline-size: 0; overflow-wrap: anywhere; }
 .oie-message-attachments img {
   display: block;
   width: min(14rem, 55vw);

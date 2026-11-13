@@ -37,6 +37,10 @@ The app accepts up to 16 attachments, with an engine limit of 20 MiB per
 file. A provider can impose a lower limit. The contact or room receives
 the caption followed by the provider's download links.
 
+A pending message shows its filenames and supported thumbnails in the timeline.
+The same attachments appear while waiting for confirmation or retrying after
+a reload.
+
 The XMPP adapter uploads attachments before writing the outgoing chat
 message. Once the message is accepted, the existing outbox tracks the send
 and governs recovery after a restart or a lost response.

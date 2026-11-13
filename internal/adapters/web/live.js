@@ -239,6 +239,29 @@ window.OieRuntime.register('live', life => {
       window.Alpine?.destroyTree(node);node.remove();acceptedBubbles.delete(node);
     }
   }
+  function renderPendingAttachments(bubble, files) {
+    const list = bubble.querySelector('[data-pending-send-attachments]');
+    const template = bubble.querySelector('[data-pending-send-file]');
+    for (const file of files || []) {
+      if (!canonicalID(file?.id) || typeof file.fileName !== 'string') continue;
+      const query = new URLSearchParams({engineId: body.dataset.engineId, conversationId: body.dataset.conversationId, attachmentId: file.id});
+      const previewURL = '/ui/scheduling/file?' + query;
+      const link = template.content.firstElementChild.cloneNode(true);
+      query.set('download', '1');
+      link.href = '/ui/scheduling/file?' + query;
+      link.download = file.fileName;
+      link.querySelector('span').textContent = file.fileName;
+      const thumbnail = link.querySelector('img');
+      if (['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'].includes(file.mediaType)) {
+        thumbnail.src = previewURL;
+      } else {
+        thumbnail.remove();
+      }
+      list.append(link);
+    }
+    list.hidden = !list.childElementCount;
+  }
+
   function renderPendingSend(state='sending'){
     if(!journal?.pending || journal.scheduledAt || editingSchedule)return;
     const timeline=document.querySelector('#message-timeline'),template=composer?.querySelector('[data-pending-send-template]');
@@ -248,7 +271,10 @@ window.OieRuntime.register('live', life => {
       pendingBubble=template.content.firstElementChild.cloneNode(true);
       pendingBubble.dataset.operationKey=journal.key;
       pendingBubble.dataset.createdAt=journal.submittedAt;
-      pendingBubble.querySelector('[data-pending-send-text]').textContent=journal.text;
+      const pendingText = pendingBubble.querySelector('[data-pending-send-text]');
+      pendingText.textContent = journal.text;
+      pendingText.hidden = !journal.text;
+      renderPendingAttachments(pendingBubble, journal.attachments);
       const quote=pendingBubble.querySelector('[data-pending-send-reply]');quote.hidden=!journal.reply;
       quote.querySelector('h3').textContent=journal.reply?.senderName||'';
       pendingBubble.querySelector('[data-pending-send-excerpt]').textContent=journal.reply?.excerpt||'';

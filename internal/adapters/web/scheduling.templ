@@ -354,7 +354,7 @@ templ outgoingAttachments(v view,m engineapi.Message) {
 			for _, a := range *m.Attachments {
 				@link.Link(v.stagedAttachmentHref(m.ConversationId,a.Id,true),link.WithAttrs(templ.Attributes{"download":a.FileName})) {
 					if rasterAttachment(a.MediaType) {
-						<img src={templ.URL(v.stagedAttachmentHref(m.ConversationId,a.Id,false))} alt={a.FileName} width="224" height="128" loading="lazy"/>
+						<img src={templ.URL(v.stagedAttachmentHref(m.ConversationId,a.Id,false))} alt="" width="224" height="128" loading="lazy"/>
 					}
 					<span>{a.FileName}</span>
 				}

@@ -125,6 +125,14 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
     const operation = await page.locator('#send-message-form [name="operationKey"]').inputValue();
     const retained = () => api('/api/v1/conversations/' + conversation.id + '/messages?limit=100');
     const messagesBefore = (await retained()).items.length;
+    let releaseSend;
+    const holdSend = new Promise(resolve => { releaseSend = resolve; });
+    if (pt) {
+      await page.route('**/ui/messages/send', async route => {
+        await holdSend;
+        await route.continue();
+      }, {times:1});
+    }
     const pending = page.waitForRequest(request => request.url().includes('/ui/scheduling/stage?'));
     await page.route(stagePath, holdStage, {times:1});
     const before = await sample(page);
@@ -174,7 +182,18 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
         if (expectTransportFailure) expectTransportFailure(false);
       }
     } else {
-      await review.waitFor({state:'hidden'});
+      try {
+        await review.waitFor({state:'hidden'});
+        const bubble = page.locator('[data-pending-send][data-pending-state="sending"]');
+        const pendingFile = bubble.getByRole('link', {name:image.name, exact:true});
+        await pendingFile.waitFor();
+        assert.equal(await bubble.locator('[data-pending-send-text]').textContent(), revised);
+        assert.equal(await pendingFile.getAttribute('download'), image.name);
+        await until(() => pendingFile.locator('img').evaluate(img => img.complete && img.naturalWidth > 0), 'pending attachment preview is decoded');
+        assert.equal((await retained()).items.length, messagesBefore, 'pending attachment is visible before acceptance');
+      } finally {
+        releaseSend();
+      }
       await until(async () => (await retained()).items.some(message =>
         message.originalText.startsWith(revised) && message.sendState === 'submitted'), 'attachment with caption is sent through XMPP');
       const sent = (await retained()).items.filter(message => message.originalText.startsWith(revised));
