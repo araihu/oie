@@ -550,11 +550,11 @@
    window.Alpine?.initTree(root);
    const field=document.getElementById('favorites-search');
    if(ctx?.oieHistory&&field)field.value=root.dataset.searchQuery||'';
-   const scroll=document.getElementById('favorites-scroll');
-   if(scroll)scroll.scrollTop=ctx?.oieHistory?(positions.get(location.href)?.['favorites-scroll']||0):0;
    upgrade(root);
    window.OieTime?.localize(root);
    document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root,generation:ctx?.oieStarGeneration}}));
+   const scroll=document.getElementById('favorites-scroll');
+   if(scroll)scroll.scrollTop=ctx?.oieHistory?(positions.get(location.href)?.['favorites-scroll']||0):0;
   }
   else if(root.id==='chat-info-content'){
    window.Alpine?.initTree(root);

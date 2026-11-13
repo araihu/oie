@@ -575,10 +575,12 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 #favorites-results {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  align-items: start;
   gap: 1rem;
   max-inline-size: 84rem;
   margin-inline: auto;
 }
+#favorites-results[data-masonry] { grid-auto-rows: 1px; row-gap: 0; }
 #favorites-results > :not([data-favorite-source]) { grid-column: 1 / -1; }
 #favorites-results > .oie-info-star { min-inline-size: 0; padding-block-start: 0; }
 #favorites-results .oie-starred-bubble .oie-image-frame { width: clamp(0px, calc(80cqi - 2rem), 340px); }
