@@ -308,6 +308,15 @@
               "maximum": 100,
               "default": 50
             }
+          },
+          {
+            "name": "includeFirstPageCounts",
+            "in": "query",
+            "description": "Include first-page item counts for Media, Links, and Documents with the same filters and search. Each count is capped at limit and independent of the requested type and cursor.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
           }
         ],
         "responses": {
@@ -6667,9 +6676,44 @@
             "type": "string",
             "maxLength": 512
           },
+          "firstPageCounts": {
+            "$ref": "#/components/schemas/SharedContentFirstPageCounts"
+          },
           "indexing": {
             "$ref": "#/components/schemas/SharedContentIndexing"
           }
+        }
+      },
+      "SharedContentFirstPageCounts": {
+        "type": "object",
+        "description": "Item counts for the three catalog tabs from the same snapshot. Each value is bounded by the requested page size.",
+        "additionalProperties": false,
+        "required": [
+          "media",
+          "links",
+          "documents"
+        ],
+        "properties": {
+          "media": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "links": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "documents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "example": {
+          "media": 50,
+          "links": 2,
+          "documents": 0
         }
       },
       "PreviewPage": {

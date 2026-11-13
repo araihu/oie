@@ -79,29 +79,37 @@ func (q *Queries) InvalidateSharedContent(ctx context.Context, messageID string)
 }
 
 const listSharedContent = `-- name: ListSharedContent :many
-SELECT sc.id,sc.revision_id,CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,sc.url,sc.file_name,CAST(COALESCE(h.payload,m.payload) AS TEXT) AS message_payload,m.timeline_at_ms,c.payload AS conversation_payload,a.label AS account_label,p.payload AS preview_payload
+SELECT sc.id, sc.revision_id,
+CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,
+sc.url, sc.file_name,
+CAST(CASE WHEN CAST(?1 AS INTEGER)=0 THEN COALESCE(h.payload,m.payload) ELSE '' END AS TEXT) AS message_payload,
+m.timeline_at_ms,
+CAST(CASE WHEN CAST(?1 AS INTEGER)=0 THEN c.payload ELSE '' END AS TEXT) AS conversation_payload,
+a.label AS account_label,
+p.payload AS preview_payload
 FROM shared_content AS sc JOIN messages AS m ON m.id=sc.message_id
-LEFT JOIN message_content_heads AS h ON h.canonical_id=m.id
-JOIN shared_content_state AS s ON s.message_id=m.id AND s.parser_version>=?1
+LEFT JOIN message_content_heads AS h ON h.canonical_id=m.id AND CAST(?1 AS INTEGER)=0
+JOIN shared_content_state AS s ON s.message_id=m.id AND s.parser_version>=?2
 JOIN conversations AS c ON c.id=m.conversation_id JOIN accounts AS a ON a.id=m.account_id
 LEFT JOIN message_previews AS p ON p.message_id=m.id AND p.url=sc.url
-WHERE (CAST(?2 AS TEXT)='' OR m.account_id=CAST(?2 AS TEXT))
-AND (CAST(?3 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?3 AS TEXT))))
+WHERE (CAST(?3 AS TEXT)='' OR m.account_id=CAST(?3 AS TEXT))
+AND (CAST(?4 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?4 AS TEXT))))
 AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id)
-AND (CAST(?4 AS TEXT)='' OR m.conversation_id=CAST(?4 AS TEXT))
-AND (CAST(?5 AS TEXT)='[]' OR m.id IN (SELECT value FROM json_each(CAST(?5 AS TEXT))))
-AND ((CAST(?6 AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
- OR (CAST(?6 AS TEXT)='video' AND sc.kind='video' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
- OR (CAST(?6 AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
- OR (CAST(?6 AS TEXT)='documents' AND sc.kind='document' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image'))
-AND (CAST(?7 AS TEXT)='' OR (COALESCE(m.timeline_at_ms,m.created_at_ms),sc.id)<(CAST(?8 AS INTEGER),CAST(?7 AS TEXT)))
-AND (CAST(?9 AS TEXT)='' OR oie_search_match(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),''),CAST(?9 AS TEXT))=1)
-ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,sc.id DESC LIMIT ?10
+AND (CAST(?5 AS TEXT)='' OR m.conversation_id=CAST(?5 AS TEXT))
+AND (CAST(?6 AS TEXT)='[]' OR m.id IN (SELECT value FROM json_each(CAST(?6 AS TEXT))))
+AND ((CAST(?7 AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
+ OR (CAST(?7 AS TEXT)='video' AND sc.kind='video' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
+ OR (CAST(?7 AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
+ OR (CAST(?7 AS TEXT)='documents' AND sc.kind='document' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image'))
+AND (CAST(?8 AS TEXT)='' OR (COALESCE(m.timeline_at_ms,m.created_at_ms),sc.id)<(CAST(?9 AS INTEGER),CAST(?8 AS TEXT)))
+AND (CAST(?10 AS TEXT)='' OR oie_search_match(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),''),CAST(?10 AS TEXT))=1)
+ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,sc.id DESC LIMIT ?11
 `
 
 type ListSharedContentParams struct {
+	CountOnly      int64
 	ParserVersion  int64
 	AccountID      string
 	AccountIds     string
@@ -129,6 +137,7 @@ type ListSharedContentRow struct {
 
 func (q *Queries) ListSharedContent(ctx context.Context, arg ListSharedContentParams) ([]ListSharedContentRow, error) {
 	rows, err := q.db.QueryContext(ctx, listSharedContent,
+		arg.CountOnly,
 		arg.ParserVersion,
 		arg.AccountID,
 		arg.AccountIds,

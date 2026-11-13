@@ -888,7 +888,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		return
 	}
 	if v.Section == "media" {
-		s.loadSharedContent(ctx, v)
+		s.loadSharedContent(ctx, v, v.SharedCursor == "" || r.URL.Path == "/ui/refresh")
 		return
 	}
 	if !paneOnly && !s.loadInbox(ctx, v, editor) {

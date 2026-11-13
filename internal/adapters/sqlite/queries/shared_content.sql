@@ -34,9 +34,16 @@ AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.ali
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id);
 
 -- name: ListSharedContent :many
-SELECT sc.id,sc.revision_id,CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,sc.url,sc.file_name,CAST(COALESCE(h.payload,m.payload) AS TEXT) AS message_payload,m.timeline_at_ms,c.payload AS conversation_payload,a.label AS account_label,p.payload AS preview_payload
+SELECT sc.id, sc.revision_id,
+CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,
+sc.url, sc.file_name,
+CAST(CASE WHEN CAST(sqlc.arg(count_only) AS INTEGER)=0 THEN COALESCE(h.payload,m.payload) ELSE '' END AS TEXT) AS message_payload,
+m.timeline_at_ms,
+CAST(CASE WHEN CAST(sqlc.arg(count_only) AS INTEGER)=0 THEN c.payload ELSE '' END AS TEXT) AS conversation_payload,
+a.label AS account_label,
+p.payload AS preview_payload
 FROM shared_content AS sc JOIN messages AS m ON m.id=sc.message_id
-LEFT JOIN message_content_heads AS h ON h.canonical_id=m.id
+LEFT JOIN message_content_heads AS h ON h.canonical_id=m.id AND CAST(sqlc.arg(count_only) AS INTEGER)=0
 JOIN shared_content_state AS s ON s.message_id=m.id AND s.parser_version>=sqlc.arg(parser_version)
 JOIN conversations AS c ON c.id=m.conversation_id JOIN accounts AS a ON a.id=m.account_id
 LEFT JOIN message_previews AS p ON p.message_id=m.id AND p.url=sc.url

@@ -488,10 +488,12 @@ Provide searchable **Media, Files, and Links** views. Catalog shared URLs automa
 its first results page, show a skeleton after 250 ms. On the catalog screen,
 cover the results area while keeping search and filter controls usable. Media
 uses the responsive card grid. Links and Documents use full-width rows. Use
-the item count from the last valid first-page response
-for the same engine, tab, account selection, conversation filter, and search.
-Refresh the estimate from the existing live snapshot for that scope. A new
-scope uses a small default that fits the viewport. A known empty page shows
+first-page counts supplied for all three tabs when the catalog opens, when
+its first page changes, and in the existing live snapshot. Each count uses the
+same account selection, conversation filter, and search as the active catalog
+and is capped at the page size. Refresh these estimates without loading the
+other tabs' cards or registering their previews. A scope without an estimate
+uses a small default that fits the viewport. A known empty page shows
 loading status without placeholder cards. Keep these estimates in bounded tab
 memory. Discard superseded responses and preserve the current scroll position
 when appending older items with the existing edge loading indicator.

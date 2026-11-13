@@ -92,13 +92,25 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 		return page, err
 	}
 	accountIDs := jsonText(nonNilIDs(query.AccountIDs))
-	rows, err := queries.ListSharedContent(ctx, dbgen.ListSharedContentParams{ParserVersion: application.SharedContentVersion, MessageIds: jsonText(nonNilIDs(query.MessageIDs)), AccountID: string(query.AccountID), AccountIds: accountIDs, ConversationID: string(query.ConversationID), ContentType: query.Type, CursorID: string(cursor.ID), CursorMs: cursor.Milliseconds, Search: strings.TrimSpace(query.Search), PageLimit: int64(query.Limit + 1)})
+	params := dbgen.ListSharedContentParams{
+		ParserVersion: application.SharedContentVersion, MessageIds: jsonText(nonNilIDs(query.MessageIDs)),
+		AccountID: string(query.AccountID), AccountIds: accountIDs, ConversationID: string(query.ConversationID),
+		ContentType: query.Type, CursorID: string(cursor.ID), CursorMs: cursor.Milliseconds,
+		Search: strings.TrimSpace(query.Search), PageLimit: int64(query.Limit + 1),
+	}
+	rows, err := queries.ListSharedContent(ctx, params)
 	if err != nil {
 		return page, err
 	}
 	more := len(rows) > query.Limit
 	if more {
 		rows = rows[:query.Limit]
+	}
+	if query.IncludeFirstPageCounts {
+		page.FirstPageCounts, err = sharedContentFirstPageCounts(ctx, queries, params, query.Limit, len(rows))
+		if err != nil {
+			return page, err
+		}
 	}
 	for _, row := range rows {
 		item := domain.SharedContentItem{SharedReference: domain.SharedReference{ID: domain.ID(row.ID), RevisionID: domain.ID(row.RevisionID), URL: row.Url, Kind: row.Kind, FileName: row.FileName}, AccountLabel: row.AccountLabel}
@@ -140,6 +152,30 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 	}
 	page.Indexing = domain.SharedContentIndex{State: state, IndexedMessages: status.IndexedMessages, TotalMessages: status.TotalMessages}
 	return page, tx.Commit()
+}
+
+// Reuse the list predicates so category changes and search match the first page.
+func sharedContentFirstPageCounts(ctx context.Context, queries *dbgen.Queries, active dbgen.ListSharedContentParams, limit, currentSize int) (*domain.SharedContentFirstPageCounts, error) {
+	counts := &domain.SharedContentFirstPageCounts{}
+	params := active
+	params.CountOnly, params.PageLimit = 1, int64(limit)
+	params.CursorID, params.CursorMs = "", 0
+	for _, tab := range []struct {
+		kind  string
+		count *int
+	}{{"media", &counts.Media}, {"links", &counts.Links}, {"documents", &counts.Documents}} {
+		if active.CursorID == "" && active.ContentType == tab.kind {
+			*tab.count = currentSize
+			continue
+		}
+		params.ContentType = tab.kind
+		rows, err := queries.ListSharedContent(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+		*tab.count = len(rows)
+	}
+	return counts, nil
 }
 
 func nonNilIDs(ids []domain.ID) []domain.ID {

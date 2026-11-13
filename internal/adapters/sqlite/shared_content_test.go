@@ -58,7 +58,7 @@ func TestSharedCatalogAccountSetFiltersBeforePagination(t *testing.T) {
 	at := time.Now().UTC()
 	replySeed(t, s, first, "https://example.test/first", at, nil, nil)
 	accounts := []domain.ID{first.AccountID}
-	for i, label := range []string{"included", "excluded"} {
+	for i, label := range []string{"included", "zebras"} {
 		a, err := e.Register(t.Context(), migrationID(), application.RegisterInput{Protocol: "xmpp", Address: label + "@localhost", Label: label})
 		if err != nil {
 			t.Fatal(err)
@@ -71,14 +71,22 @@ func TestSharedCatalogAccountSetFiltersBeforePagination(t *testing.T) {
 	defer stop()
 	waitCatalog(t, s, 3)
 
-	query := domain.SharedContentQuery{Type: "links", AccountIDs: []domain.ID{accounts[1], accounts[0]}, Limit: 1}
+	query := domain.SharedContentQuery{Type: "links", AccountIDs: []domain.ID{accounts[1], accounts[0]}, Limit: 1, IncludeFirstPageCounts: true}
 	for i, want := range []domain.ID{accounts[1], accounts[0]} {
 		page, err := e.SharedContent(t.Context(), query)
 		if err != nil || len(page.Items) != 1 || page.Items[0].Message.AccountID != want ||
 			page.Indexing.TotalMessages != 2 || (page.NextCursor != "") != (i == 0) {
 			t.Fatalf("page %d: %+v, %v", i, page, err)
 		}
+		if page.FirstPageCounts == nil || *page.FirstPageCounts != (domain.SharedContentFirstPageCounts{Links: 1}) {
+			t.Fatalf("page %d counts: %+v", i, page.FirstPageCounts)
+		}
 		query.Cursor = page.NextCursor
+	}
+	query.Search, query.Limit = "zebras", 10
+	page, err := e.SharedContent(t.Context(), query)
+	if err != nil || page.FirstPageCounts == nil || *page.FirstPageCounts != (domain.SharedContentFirstPageCounts{}) {
+		t.Fatalf("excluded account appeared in counts: %+v, %v", page.FirstPageCounts, err)
 	}
 }
 

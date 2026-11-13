@@ -44,7 +44,7 @@ func TestSharedContentHTTPAggregatesRetainedSourcesWithoutSending(t *testing.T) 
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if page == nil || len(page.Items) != 2 || page.Indexing.IndexedMessages != 4 {
+	if page == nil || len(page.Items) != 2 || page.Indexing.IndexedMessages != 4 || page.FirstPageCounts != nil {
 		t.Fatal("global image catalog", page)
 	}
 	item := page.Items[0]
@@ -60,9 +60,22 @@ func TestSharedContentHTTPAggregatesRetainedSourcesWithoutSending(t *testing.T) 
 	if err != nil || second.JSON200 == nil || len(second.JSON200.Items) != 1 || second.JSON200.Items[0].Id == first.JSON200.Items[0].Id {
 		t.Fatal("cursor duplicate", err)
 	}
-	search := "árvore"
-	found, err := client.ListSharedContentWithResponse(t.Context(), &engineapi.ListSharedContentParams{Q: &search})
-	if err != nil || found.JSON200 == nil || len(found.JSON200.Items) != 1 {
+	// A cursor changes the requested items and leaves the three head counts intact.
+	includeCounts := true
+	withCounts, err := client.ListSharedContentWithResponse(t.Context(), &engineapi.ListSharedContentParams{
+		Limit: &n, Cursor: first.JSON200.NextCursor, IncludeFirstPageCounts: &includeCounts,
+	})
+	if err != nil || withCounts.JSON200 == nil || withCounts.JSON200.FirstPageCounts == nil ||
+		*withCounts.JSON200.FirstPageCounts != (engineapi.SharedContentFirstPageCounts{Media: 1, Links: 1, Documents: 1}) {
+		t.Fatalf("bounded first-page counts for a cursor request: %+v, %v", withCounts, err)
+	}
+	search := "arvore"
+	account, conversation := string(c.AccountID), string(c.ID)
+	found, err := client.ListSharedContentWithResponse(t.Context(), &engineapi.ListSharedContentParams{
+		Q: &search, AccountId: &account, ConversationId: &conversation, IncludeFirstPageCounts: &includeCounts,
+	})
+	if err != nil || found.JSON200 == nil || len(found.JSON200.Items) != 1 || found.JSON200.FirstPageCounts == nil ||
+		*found.JSON200.FirstPageCounts != (engineapi.SharedContentFirstPageCounts{Media: 1}) {
 		t.Fatal("Unicode source metadata search", err)
 	}
 	kind := engineapi.ListSharedContentParamsType("documents")

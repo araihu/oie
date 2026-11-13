@@ -52,7 +52,7 @@ func (s *Server) loadChatInfo(ctx context.Context, v *view) {
 		scoped := v.infoSharedView()
 		scoped.AccountFilter = v.Selected.AccountId
 		scoped.Query = v.InfoQuery
-		s.loadSharedContent(ctx, &scoped)
+		s.loadSharedContent(ctx, &scoped, false)
 		v.InfoShared = scoped.SharedContent
 		v.InfoInvalid = scoped.SharedInvalid
 	}
