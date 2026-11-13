@@ -524,6 +524,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     assert.equal(await hits(multi).count(),3);
     assert.equal(await trigger.innerText(),'All accounts');
     await multi.goto(base+'/?'+new URLSearchParams([['section','media'],['contentType','links'],['contentAccount',account],['contentAccount',work],['lang','en']]));
+    await multi.evaluate(()=>{window.catalogSearchInput=document.getElementById('shared-search')});
     await catalogPicker.click();
     await multi.locator('#shared-account [data-combobox-option][data-value="'+work+'"]').click();
     await multi.waitForURL(url=>url.searchParams.getAll('contentAccount').join(',')===account);
@@ -532,6 +533,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     await multi.locator('#shared-account [data-combobox-clear-all]').click();
     await multi.waitForURL(url=>!url.searchParams.has('contentAccount'));
     await until(async()=>await catalogPicker.innerText()==='All accounts','clearing the inherited set restores All accounts');
+    assert(await multi.locator('#shared-search').evaluate(node=>node===window.catalogSearchInput),'clearing accounts preserves the catalog search input');
     await multi.context().close();
     findings.push('Searchable account checkboxes preserve selected accounts and query, apply before pagination, restore via Back, and clear to all accounts');
 

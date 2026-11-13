@@ -149,8 +149,7 @@
   if(document.getElementById('account-workspace')&&(params.get('open')==='accounts'||!node&&current.get('open')==='accounts'&&!params.has('open'))&&sameRoute(url,['open','accountPage','managedAccount','accountFocus']))return 'account-workspace';
   if(sameChat&&document.getElementById('schedule-editor')&&params.get('editSchedule')!==current.get('editSchedule')&&sameRoute(url,['editSchedule','open']))return 'schedule-editor';
   if(document.getElementById('scheduled-results')&&params.get('section')==='scheduled'&&(!node||node.matches('[data-agenda-next]'))&&sameRoute(url,['scheduleCursor','scheduleConversation']))return 'scheduled-results';
-  const sameAccountPicker=params.has('contentAccount')===current.has('contentAccount');
-  if(sameAccountPicker&&sharedRoute(url,['q','account','contentAccount','contentConversation'])&&(!node||node.id==='shared-content-search'||node.closest('#shared-search-results'))){
+  if(sharedRoute(url,['q','account','contentAccount','contentConversation'])&&(!node||node.id==='shared-content-search'||node.closest('#shared-search-results'))){
    return sharedRoute(url,node?.matches('[data-shared-tab]')?['q']:[])?'shared-content-scroll':'shared-search-results';
   }
   if(!node&&sameChat&&document.getElementById('message-timeline')&&!params.has('message')&&!params.has('timelineCursor')&&(current.has('message')||current.has('timelineCursor')||document.body.dataset.focusMessage)&&sameRoute(url,['message','timelineCursor','timelineDirection']))return 'message-timeline';
@@ -161,6 +160,16 @@
   picker?.dispatchEvent(new CustomEvent('combobox:load',{
    bubbles:true,detail:{id:'shared-account',values}
   }));
+ }
+ function reconcileSharedAccount(page,params,restoreSelection){
+  const picker=document.getElementById('shared-account'),next=page.getElementById('shared-account');
+  if(picker&&next&&picker.dataset.comboboxName!==next.dataset.comboboxName){
+   const restoreFocus=picker.contains(document.activeElement);
+   window.Alpine?.destroyTree(picker);
+   picker.replaceWith(next);
+   window.Alpine?.initTree(next);
+   if(restoreFocus)next.querySelector('[role="combobox"]')?.focus({preventScroll:true});
+  }else if(restoreSelection)syncSharedAccount(params);
  }
  function sharedFields(){
   const form=document.getElementById('shared-content-search');if(!form)return '';
@@ -383,15 +392,12 @@
    if(!page)return;
    window.Alpine?.initTree(root);
    const form=document.getElementById('shared-content-search'),url=new URL(location.href);
-   if(ctx.sourceElement!==document.getElementById('shared-search')){
-    document.getElementById('shared-search').value=url.searchParams.get('q')||'';
-    form.elements.contentConversation.value=url.searchParams.get('contentConversation')||'';
-   }
-   if(ctx.oieHistory)syncSharedAccount(url.searchParams);
+   if(ctx.oieHistory)document.getElementById('shared-search').value=url.searchParams.get('q')||'';
+   form.elements.contentConversation.value=url.searchParams.get('contentConversation')||'';
    const account=page.querySelector('[data-shared-fragment]').dataset.accountFilter;
+   reconcileSharedAccount(page,url.searchParams,ctx.oieHistory||account!==(app().dataset.sharedAccount||''));
    if(account!==(app().dataset.sharedAccount||'')){
     app().dataset.sharedAccount=account;
-    syncSharedAccount(url.searchParams);
     document.dispatchEvent(new CustomEvent('oie:shared-account',{detail:{page}}));
    }
    const type=page?.querySelector('#shared-content-results')?.dataset.contentType;

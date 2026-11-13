@@ -199,6 +199,7 @@ window.OieRuntime.register('shared-search', life => {
    document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:fresh.page}));document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));
   });
   on(document,'htmx:error',event=>{const ctx=event.detail.ctx;if(info&&owned(ctx)&&connected()){region()?.removeAttribute('aria-busy');window.OieNavigation.showError(ctx)}});
+  if(!info)on(document,'oie:shared-search-settled',alignTabs);
   return binding;
  }
  bind(false);bind(true);
