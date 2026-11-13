@@ -1,7 +1,7 @@
 # Attachment composition
 
-In a conversation, the attachment button, a file pasted into the composer and
-a file dropped onto the chat pane open the same preview. The preview starts
+In the web interface, the attachment button, a file pasted into the composer
+and a file dropped onto the chat pane open the same preview. The preview starts
 with the current composer text as its caption. Cancel or Escape returns to
 the original composer without changing the draft. Add to draft keeps the
 reviewed caption and files for the normal composer actions, including
@@ -40,3 +40,6 @@ the caption followed by the provider's download links.
 The XMPP adapter uploads attachments before writing the outgoing chat
 message. Once the message is accepted, the existing outbox tracks the send
 and governs recovery after a restart or a lost response.
+
+Browser checks cover Chromium at 390 px and 1440 px in Brazilian Portuguese
+and English. Native operating-system drag and drop requires a Wails integration.
