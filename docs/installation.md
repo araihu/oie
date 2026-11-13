@@ -1,4 +1,33 @@
-# Desktop installation on macOS and Linux
+# Install Oiê
+
+## Run with Docker
+
+The [GHCR package](https://github.com/araihu/oie/pkgs/container/oie) runs the
+engine and browser interface on Linux amd64 and arm64. Start it with a named
+volume to retain accounts, SQLite history, and media across container updates.
+
+```sh
+docker run -d --name oie \
+  --publish 127.0.0.1:8080:8080 \
+  --volume oie-data:/data \
+  ghcr.io/araihu/oie:main
+```
+
+Open [Oiê in your browser](http://127.0.0.1:8080) and add an existing XMPP
+account. Keep the port on localhost or use an authenticated proxy for remote
+access, since Oiê has no built-in login. FFmpeg is omitted from the image, so
+server-generated video thumbnails are unavailable in this container.
+
+To update, pull the image and recreate the container with the same `oie-data`
+volume. If the package is private, authenticate to `ghcr.io` with access to
+the package before pulling. [GitHub Container Registry authentication](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
+
+CI builds and tests both architectures on pull requests and pushes to
+`main`. A successful push to `main` publishes `sha-<commit>` and updates
+`:main` if the commit is still the branch tip. Use the published digest
+from the workflow summary to pin an exact image.
+
+## Desktop installation on macOS and Linux
 
 Oiê's desktop package includes the Go engine, SQLite store and web interface in
 one application. Add an existing XMPP account after launching. An external XMPP
