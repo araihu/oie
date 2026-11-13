@@ -10,7 +10,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
-from release_desktop import digest, verify_assets, version_key
+from release_desktop import digest, normalize_asset_names, verify_assets, version_key, write_checksums
 
 
 class ReleaseVersionTest(unittest.TestCase):
@@ -27,6 +27,23 @@ class ReleaseVersionTest(unittest.TestCase):
 class ReleaseAssemblyTest(unittest.TestCase):
     version = "v0.0.1-rc.7"
     revision = "a" * 40
+
+    def test_checksums_use_github_package_names(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            stage = Path(temporary)
+            deb = stage / "oie_0.0.1~rc.7-1_amd64.deb"
+            rpm = stage / "oie-0.0.1~rc.7-1.x86_64.rpm"
+            for asset in (deb, rpm):
+                asset.write_text(asset.name)
+            normalize_asset_names(stage, self.version)
+            write_checksums(stage)
+            entries = (stage / "SHA256SUMS").read_text().splitlines()
+            for asset, name in ((deb, f"oie_{self.version}_linux_amd64.deb"),
+                                (rpm, "oie-0.0.1.rc.7-1.x86_64.rpm")):
+                self.assertFalse(asset.exists())
+                normalized = asset.with_name(name)
+                self.assertEqual(normalized.read_text(), asset.name)
+                self.assertIn(f"{digest(normalized)}  {normalized.name}", entries)
 
     def make_archives(self, folder, os_name, arch, docs):
         name = f"oie_{self.version}_{os_name}_{arch}"

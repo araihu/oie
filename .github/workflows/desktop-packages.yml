@@ -9,23 +9,34 @@ on:
         description: Verify the selected ref without publishing a release
         type: boolean
         default: false
+      resume_tag:
+        description: Existing release tag to publish from a previous build
+        type: string
+      resume_run:
+        description: Desktop release workflow run ID with verified release-assets
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: desktop-release-${{ github.ref }}
+  group: desktop-release-${{ inputs.resume_tag && format('refs/tags/{0}', inputs.resume_tag) || github.ref }}
   cancel-in-progress: false
 
 jobs:
   tag:
+    permissions:
+      actions: read
+      contents: read
     if: >-
       github.repository == 'araihu/oie' &&
-      (inputs.verify_only || (github.ref_type == 'tag' && github.event.deleted != true && github.event.forced != true))
+      (inputs.verify_only || (github.ref_type == 'tag' && github.event.deleted != true && github.event.forced != true) ||
+       (github.ref == 'refs/heads/main' && inputs.resume_tag != '' && inputs.resume_run != ''))
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.tag.outputs.version }}
       revision: ${{ steps.tag.outputs.revision }}
+      resume: ${{ steps.tag.outputs.resume }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,17 +44,38 @@ jobs:
       - id: tag
         env:
           VERIFY_ONLY: ${{ inputs.verify_only }}
+          RESUME_TAG: ${{ inputs.resume_tag }}
+          RESUME_RUN: ${{ inputs.resume_run }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           version=$GITHUB_REF_NAME
-          if [[ "$GITHUB_REF_TYPE" == branch && "$VERIFY_ONLY" == true ]]; then
+          revision=$(git rev-parse HEAD)
+          if [[ -n "$RESUME_TAG" || -n "$RESUME_RUN" ]]; then
+            test "$GITHUB_REF" = refs/heads/main
+            test "$VERIFY_ONLY" = false
+            [[ "$RESUME_RUN" =~ ^[0-9]+$ ]]
+            version=$RESUME_TAG
+            python3 scripts/release_desktop.py validate "$version"
+            revision=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs%2Ftags%2F$version" --jq .sha)
+            run="repos/$GITHUB_REPOSITORY/actions/runs/$RESUME_RUN"
+            gh api "$run" | jq -e --arg version "$version" --arg revision "$revision" --arg repo "$GITHUB_REPOSITORY" '
+              .path == ".github/workflows/desktop-packages.yml" and
+              .head_repository.full_name == $repo and
+              .head_branch == $version and .head_sha == $revision and
+              .event == "push" and .status == "completed"
+            '
+            gh api "$run/jobs" | jq -e 'any(.jobs[]; .name == "packages" and .conclusion == "success")'
+            echo "resume=$RESUME_RUN" >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_REF_TYPE" == branch && "$VERIFY_ONLY" == true ]]; then
             version=v0.0.0-check.${GITHUB_RUN_ID}
           fi
           python3 scripts/release_desktop.py validate "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
 
   linux:
     needs: tag
+    if: needs.tag.outputs.resume == ''
     runs-on: ubuntu-24.04
     env:
       OIE_RELEASE_VERSION: ${{ needs.tag.outputs.version }}
@@ -72,6 +104,7 @@ jobs:
 
   macos:
     needs: tag
+    if: needs.tag.outputs.resume == ''
     runs-on: macos-15
     env:
       OIE_RELEASE_VERSION: ${{ needs.tag.outputs.version }}
@@ -164,12 +197,9 @@ jobs:
             dist/flatpak-repo "dist/release/oie-$OIE_RELEASE_VERSION-x86_64.flatpak" org.araihu.oie
       - name: Assemble the release assets
         run: |
-          # GitHub renames '~' in upload filenames. Keep it in package metadata.
-          cp dist/packages/native/*.deb "dist/release/oie_${OIE_RELEASE_VERSION}_linux_amd64.deb"
-          cp dist/packages/native/*.rpm "dist/release/oie_${OIE_RELEASE_VERSION}_linux_x86_64.rpm"
-          cp dist/packages/native/*.pkg.tar.zst dist/release/
+          cp dist/packages/native/* dist/release/
           tar -czf "dist/release/oie-$OIE_RELEASE_VERSION-homebrew.tar.gz" -C dist/packages/homebrew Casks Formula
-          python3 scripts/release_desktop.py checksums dist/release
+          python3 scripts/release_desktop.py checksums dist/release --release-version "$OIE_RELEASE_VERSION"
       - uses: actions/upload-artifact@v4
         with:
           name: release-assets
@@ -178,10 +208,14 @@ jobs:
           compression-level: 0
 
   publish:
-    if: github.ref_type == 'tag' && !inputs.verify_only
+    if: >-
+      !cancelled() && needs.tag.result == 'success' &&
+      (needs.tag.outputs.resume != '' ||
+       (github.ref_type == 'tag' && !inputs.verify_only && needs.packages.result == 'success'))
     needs: [tag, packages]
     runs-on: ubuntu-24.04
     permissions:
+      actions: read
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
@@ -193,11 +227,25 @@ jobs:
         with:
           persist-credentials: false
       - uses: actions/download-artifact@v4
+        if: needs.tag.outputs.resume == ''
         with:
           name: release-assets
           path: dist/release
+      - uses: actions/download-artifact@v4
+        if: needs.tag.outputs.resume != ''
+        with:
+          name: release-assets
+          path: dist/release
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.tag.outputs.resume }}
+      - name: Normalize package filenames from the previous build
+        if: needs.tag.outputs.resume != ''
+        run: |
+          python3 scripts/release_desktop.py verify-assets "$OIE_RELEASE_VERSION" "$OIE_RELEASE_REVISION" dist/release
+          python3 scripts/release_desktop.py checksums dist/release --release-version "$OIE_RELEASE_VERSION"
       - run: bash scripts/publish-desktop-release.sh "$OIE_RELEASE_VERSION" dist/release "$OIE_RELEASE_REVISION"
   publish-apt:
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
     needs: publish
     permissions:
       contents: read

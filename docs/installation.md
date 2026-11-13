@@ -216,7 +216,9 @@ digests before publishing. The release notes link directly to both source
 downloads. Tags with a SemVer prerelease suffix are marked as prereleases.
 Use a new tag for changed release assets. To rehearse the build and checks on a
 branch, run `gh workflow run desktop-packages.yml --ref BRANCH -f verify_only=true`.
-The rehearsal uploads the verified assets to the workflow run.
+The rehearsal uploads the verified assets to the workflow run. If publishing
+fails after the package build succeeds, resume from those verified artifacts
+with `gh workflow run desktop-packages.yml --ref main -f resume_tag=TAG -f resume_run=RUN_ID`.
 
 The [Homebrew tap](https://github.com/araihu/homebrew-oie) synchronizes recipes
 from published GitHub Releases through its own workflow. Recipes become
