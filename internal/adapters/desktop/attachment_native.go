@@ -95,7 +95,7 @@ func stageNativeAttachment(ctx context.Context, handler http.Handler, path, engi
 	if err != nil {
 		return engineapi.StagedAttachment{}, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() {
 		return engineapi.StagedAttachment{}, errors.New("attachment must be a regular file")
