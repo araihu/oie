@@ -1,0 +1,96 @@
+name: Release Oiê image
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-oie-image
+  queue: max
+
+jobs:
+  release:
+    if: >-
+      github.repository == 'araihu/oie' &&
+      (github.event_name == 'push' && !github.event.deleted && !github.event.forced ||
+       github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/araihu/oie
+    steps:
+      - name: Check out the image build recipe
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve canonical Oiê version
+        id: version
+        run: |
+          set -euo pipefail
+          tags=$(sh scripts/oie-release-tags.sh)
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            version=$(head -n 1 <<<"$tags")
+            test -n "$version"
+          else
+            version=$GITHUB_REF_NAME
+            if ! grep -Fxq "$version" <<<"$tags"; then
+              exit 0
+            fi
+          fi
+          printf 'tag=%s\n' "$version" >> "$GITHUB_OUTPUT"
+      - name: Check out the tagged source
+        if: steps.version.outputs.tag != ''
+        id: source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ steps.version.outputs.tag }}
+          path: release-source
+          persist-credentials: false
+      - name: Add the recipe to older tags
+        if: steps.version.outputs.tag != ''
+        run: |
+          if [ ! -f release-source/Dockerfile ]; then
+            cp Dockerfile Dockerfile.dockerignore release-source/
+          fi
+      - if: steps.version.outputs.tag != ''
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - name: Log in to GHCR
+        if: steps.version.outputs.tag != ''
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Publish the tagged version
+        if: steps.version.outputs.tag != ''
+        id: publish
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: release-source
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.IMAGE }}:${{ steps.version.outputs.tag }}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.source.outputs.commit }}
+            org.opencontainers.image.version=${{ steps.version.outputs.tag }}
+      - name: Verify both platforms and promote the newest version
+        if: steps.version.outputs.tag != ''
+        env:
+          VERSION: ${{ steps.version.outputs.tag }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect --raw "$IMAGE@$DIGEST" |
+            jq -e '[.manifests[] | select(.platform.os == "linux") | .platform.architecture] | sort == ["amd64", "arm64"]'
+          tags=$(sh scripts/oie-release-tags.sh)
+          if [ "$VERSION" = "$(head -n 1 <<<"$tags")" ]; then
+            docker buildx imagetools create --tag "$IMAGE:latest" "$IMAGE@$DIGEST"
+          fi
+          printf 'Published `%s:%s` at `%s`\n' "$IMAGE" "$VERSION" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"

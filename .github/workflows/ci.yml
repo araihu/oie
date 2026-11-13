@@ -107,8 +107,11 @@ jobs:
           DIGEST: ${{ steps.publish.outputs.digest }}
         run: |
           set -euo pipefail
+          docker buildx imagetools inspect --raw "$IMAGE@$DIGEST" |
+            jq -e '[.manifests[] | select(.platform.os == "linux") | .platform.architecture] | sort == ["amd64", "arm64"]'
           printf 'Published `%s@%s`\n' "$IMAGE" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"
           main_revision=$(git ls-remote --exit-code origin refs/heads/main | cut -f1)
           if [ "$main_revision" = "$GITHUB_SHA" ]; then
             docker buildx imagetools create --tag "$IMAGE:main" "$IMAGE@$DIGEST"
+            printf 'Updated `%s:main`\n' "$IMAGE" >> "$GITHUB_STEP_SUMMARY"
           fi
