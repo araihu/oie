@@ -76,16 +76,19 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
    const controller=new AbortController(),state={previousGeneration:window.OieRuntime.generation,routeGeneration:null,swapGeneration:null,snapshotGeneration:null,copy:null};window.catalogActionSettlement=state;
    const current=()=>document.body.dataset.engineId===engine&&document.body.dataset.accountId===account&&document.body.dataset.conversationId===chat;
    document.addEventListener('oie:route-ready',event=>{if(current())state.routeGeneration=event.detail.generation},{signal:controller.signal});
-   document.addEventListener('htmx:after:settle',event=>{const target=event.detail.task?.target;if(current()&&target?.id==='oie-app'&&target===document.getElementById('oie-app'))state.swapGeneration=window.OieRuntime.generation},{signal:controller.signal});
+   document.addEventListener('htmx:after:settle',event=>{const target=event.detail.task?.target;if(current()&&target?.id==='oie-route'&&target===document.getElementById('oie-route'))state.swapGeneration=window.OieRuntime.generation},{signal:controller.signal});
    document.addEventListener('oie:shared-refresh',event=>{const regions=event.detail?.querySelector('#oie-live-regions');if(!current()||regions?.dataset.engineId!==engine||regions.dataset.accountId!==account||regions.dataset.conversationId!==chat)return;state.snapshotGeneration=window.OieRuntime.generation},{signal:controller.signal});
    document.addEventListener('oie:actions-refreshed',()=>{if(current()&&state.snapshotGeneration===window.OieRuntime.generation){state.copy=document.getElementById('copy-message-'+source);controller.abort()}},{signal:controller.signal});
   },{engine,account,chat,source:items[0].message.id});
   const snapshotApplied=()=>page.evaluate(()=>{const s=window.catalogActionSettlement;return s.snapshotGeneration===window.OieRuntime.generation&&s.copy?.isConnected&&s.copy===document.getElementById(s.copy.id)});
+  const shell=await page.locator('#oie-app').elementHandle();
   await watchSnapshot();
   await menu(0).getByRole('menuitem',{name:'Go to message',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#message-timeline'));assert.equal(documents.length,1);assert.equal(new URL(page.url()).searchParams.get('message'),items[0].message.id);
   // Network completion is earlier than application consumption. Wait for the
   // actual source-route settlement and its scoped SSE snapshot to be applied.
   await until(async()=>await snapshotApplied()&&await page.evaluate(()=>{const s=window.catalogActionSettlement,generation=window.OieRuntime.generation;return s.routeGeneration===generation&&s.swapGeneration===generation&&generation===s.previousGeneration+1&&document.querySelector('#message-timeline')?.dataset.timelineBusy==='false'}),'source route and initial live snapshot applied');
+  assert(await shell.evaluate(node=>node===document.getElementById('oie-app')),'source keeps the app shell mounted');
+  await shell.dispose();
   assert(await page.evaluate(()=>window.catalogActionSettlement.copy.isConnected),'menu measurement starts from the applied live DOM');
   // Exercise the actual message action menu with the consumer theme overrides.
   const painted=el=>{
