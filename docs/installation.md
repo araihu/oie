@@ -262,9 +262,42 @@ flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakr
 ```
 
 The Flatpak and pacman packages can be installed directly with the commands
-above. Flathub and AUR submissions are separate from the GitHub Release. The native package filenames and metadata distinguish
+above. For Flathub publication status and the offline build check, see
+[Flathub distribution](#flathub-distribution). AUR submission is separate from
+the GitHub Release. The native package filenames and metadata distinguish
 prereleases so the eventual stable release sorts after the corresponding RC.
 GitHub releases marked immutable require a new release to attach new assets.
+
+## Flathub distribution
+
+Oiê currently distributes its Flatpak bundle through GitHub Releases. The
+desktop release CI also checks that the corresponding Linux source archive
+builds offline in the GNOME SDK. It verifies shared libraries and runs
+`oie-desktop --help` in the GNOME Platform runtime. To run the same check on
+x86_64 Linux with the release's Go toolchain and the GNOME 50 SDK and Platform
+installed, verify the source archive against `SHA256SUMS` and run:
+
+```sh
+bash tests/packaging/smoke_flatpak_source.sh oie_v0.0.1-rc.7_linux_amd64_source.tar.gz
+```
+
+The initial Flathub submission needs a stable release, a maintainer-authored
+manifest that builds from source, AppStream screenshots, and review by Flathub.
+Review the sources of the embedded JavaScript and WebAssembly assets as part of
+the offline build. The existing bundle ID `org.araihu.oie` points to
+`araihu.org`. The project's live website uses
+`araihu.com`, so `com.araihu.oie` is a candidate for a verifiable ID. Changing
+the Flatpak ID also changes the profile directory under `~/.var/app/`.
+[Flathub submission requirements](https://docs.flathub.org/docs/for-app-authors/requirements)
+
+Once the app is accepted, Flathub's External Data Checker can track the
+published `*_linux_amd64_source.tar.gz` assets and open update PRs. Its source
+query needs to select desktop releases by their SemVer tag and archive name,
+since the same GitHub repository also publishes `cli/` releases. Stable tags
+go to the stable channel. Prereleases can go to a separate beta branch after
+acceptance. Flathub starts a build after merging an update and handles signing
+and publication. Automatic merging requires Flathub approval.
+[Flathub maintenance](https://docs.flathub.org/docs/for-app-authors/maintenance)
 
 ## Platforms and verified scope
 

@@ -195,6 +195,10 @@ jobs:
             dist/flatpak-build dist/packages/flatpak/org.araihu.oie.json
           flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
             dist/flatpak-repo "dist/release/oie-$OIE_RELEASE_VERSION-x86_64.flatpak" org.araihu.oie
+      - name: Rebuild the corresponding source offline inside Flatpak
+        run: |
+          bash tests/packaging/smoke_flatpak_source.sh \
+            "dist/release/oie_${OIE_RELEASE_VERSION}_linux_amd64_source.tar.gz"
       - name: Assemble the release assets
         run: |
           cp dist/packages/native/* dist/release/
