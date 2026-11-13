@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import subprocess
 import tarfile
+from tempfile import TemporaryFile
 from urllib.request import urlopen
 
 
@@ -54,13 +55,17 @@ def proxy_path(path):
 
 def browser_sources(archive, manifest, prefix):
     for item in json.loads(manifest.read_text()):
-        with urlopen(item["url"], timeout=60) as response:
-            data = response.read()
-        if hashlib.sha256(data).hexdigest() != item["sha256"]:
-            raise ValueError(f"browser source checksum mismatch for {item['name']}")
-        entry = tarfile.TarInfo(f"{prefix}/browser-sources/{item['name']}")
-        entry.size = len(data)
-        archive.addfile(entry, io.BytesIO(data))
+        with urlopen(item["url"], timeout=60) as response, TemporaryFile() as data:
+            checksum = hashlib.sha256()
+            while chunk := response.read(1024 * 1024):
+                checksum.update(chunk)
+                data.write(chunk)
+            if checksum.hexdigest() != item["sha256"]:
+                raise ValueError(f"browser source checksum mismatch for {item['name']}")
+            entry = tarfile.TarInfo(f"{prefix}/browser-sources/{item['name']}")
+            entry.size = data.tell()
+            data.seek(0)
+            archive.addfile(entry, data)
 
 
 def package(source, tooling, version, revision, output):
