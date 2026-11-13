@@ -68,8 +68,23 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
   state.hold=true;let {page,context}=await create(media);let region=regions(page);await until(async()=>await region.results.locator('[data-shared-item]').count()===50,'initial page');const startURL=page.url(),history=await page.evaluate(()=>window.history.length);
   await bottom(region);await until(()=>state.pending.length===1,'one page request');for(let n=0;n<4;n++)await bottom(region);assert.equal(count(first),1);
-  const native=region.results.locator(`[data-video-item="${items[49].id}"] video`);await region.results.locator(`[data-video-item="${items[49].id}"] [data-video-play]`).click();await until(()=>native.evaluate(video=>video.currentTime>0.05),'active native video before append');await native.evaluate(video=>{video.loop=true;video.focus({preventScroll:true});window.scrollVideo=video});const oldTop=await region.scroll.evaluate(scroll=>scroll.scrollTop);
-  release();await until(async()=>await region.results.locator('[data-shared-item]').count()===100,'second page append');assert(await native.evaluate(video=>video===window.scrollVideo&&document.activeElement===video&&!video.paused));assert(Math.abs(await region.scroll.evaluate(scroll=>scroll.scrollTop)-oldTop)<3,'append jumped scroll position');assert.equal(page.url(),startURL);assert.equal(await page.evaluate(()=>window.history.length),history);
+  const native=region.results.locator(`[data-video-item="${items[49].id}"] video`);await region.results.locator(`[data-video-item="${items[49].id}"] [data-video-play]`).click();await until(()=>native.evaluate(video=>video.currentTime>0.05),'active native video before append');await native.evaluate(video=>{video.loop=true;video.focus({preventScroll:true});window.scrollVideo=video});
+  await region.scroll.evaluate(scroll=>{
+   scroll.scrollTop=scroll.scrollHeight;
+   const top=scroll.scrollTop,anchor=window.scrollVideo.closest('[data-shared-item]'),anchorTop=anchor.getBoundingClientRect().top;
+   window.appendGeometry=new Promise(resolve=>{
+    let frames=0,scrollDrift=0,anchorDrift=0;
+    const sample=()=>{
+     scrollDrift=Math.max(scrollDrift,Math.abs(scroll.scrollTop-top));
+     anchorDrift=Math.max(anchorDrift,Math.abs(anchor.getBoundingClientRect().top-anchorTop));
+     if(scroll.querySelectorAll('[data-shared-item]').length===100&&++frames===3)resolve({scrollDrift,anchorDrift});
+     else requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+   });
+  });
+  release();await until(async()=>await region.results.locator('[data-shared-item]').count()===100,'second page append');assert(await native.evaluate(video=>video===window.scrollVideo&&document.activeElement===video&&!video.paused));
+  const drift=await page.evaluate(()=>window.appendGeometry);assert(drift.scrollDrift<=1&&drift.anchorDrift<=1,`append moved the viewport: ${JSON.stringify(drift)}`);assert.equal(page.url(),startURL);assert.equal(await page.evaluate(()=>window.history.length),history);
   await bottom(region);await until(async()=>await region.results.locator('[data-shared-item]').count()===120,'terminal page append');assert.equal(count(first),1);assert.equal(count(second),1);assert.equal(await region.pagination.locator('[data-shared-next]:visible').count(),0);let content=await consistent(region);assert.equal(content.months.length,2);
   await region.scroll.evaluate(scroll=>scroll.scrollTop=Math.min(1600,scroll.scrollHeight-scroll.clientHeight));const anchor=await region.results.locator('[data-shared-item]').evaluateAll(items=>{const scroll=document.querySelector('#shared-content-scroll').getBoundingClientRect();const item=items.find(item=>item.getBoundingClientRect().bottom>scroll.top);return{id:item.dataset.sharedItem,top:item.getBoundingClientRect().top}});const beforeHead=state.reads.length;state.head=true;await refresh(page);await until(async()=>await region.results.locator(`[data-shared-item="${newest.id}"]`).count()===1,'SSE fresh head');await until(async()=>await region.results.locator('[data-shared-item]').count()===121,'SSE keeps loaded tail and old head spill');assert(await native.evaluate(video=>video===window.scrollVideo&&!video.paused));const anchorAfter=(await region.results.locator(`[data-shared-item="${anchor.id}"]`).boundingBox()).y;assert(Math.abs(anchorAfter-anchor.top)<3,`SSE moved visible anchor ${anchor.id}: ${anchor.top} -> ${anchorAfter}`);await consistent(region);
   await waitForMediaPage(region,beforeHead,'window revalidation after new head');

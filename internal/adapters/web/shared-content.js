@@ -49,9 +49,12 @@ window.OieRuntime.register('shared-content', life => {
   if(link){link.hidden=!c.next&&!failed;link.setAttribute('aria-disabled',String(c.busy));if(failed){link.textContent=page.dataset.sharedRetryLabel||'';try{link.href=requestURL(c,c.retryCursor).pathname+requestURL(c,c.retryCursor).search}catch{}}}
  }
  function refreshPager(c,html){c.pagerHTML=html;replace(c.pagination,html);const link=c.pagination.querySelector('[data-shared-next]');if(link&&c.href)link.setAttribute('href',c.href);observe(c)}
- function render(c,page){
+ function render(c,page,pagerHTML){
   const top=c.scroll.scrollTop,anchor=[...c.results.querySelectorAll('[data-shared-item]')].find(item=>item.getBoundingClientRect().bottom>=c.scroll.getBoundingClientRect().top),anchorID=anchor?.dataset.sharedItem,anchorTop=anchor?.getBoundingClientRect().top,active=c.results.contains(document.activeElement)?document.activeElement:null,activeID=active?.id;
   const activeItem=active?.closest("[data-shared-item]")?.dataset.sharedItem,activeAction=["data-preview-expand","data-preview-download","data-shared-source","data-image-menu-trigger","data-video-player","data-video-play","data-video-retry"].find(name=>active?.hasAttribute(name));
+  // Replacing a loading footer can clamp the scroll position before the new
+  // rows are appended. Capture the anchor against the old footer first.
+  if(pagerHTML!==undefined)refreshPager(c,pagerHTML);
   group(c.results);const existing=new Map([...c.results.querySelectorAll('[data-shared-item]')].map(node=>[node.dataset.sharedItem,node])),months=new Map();
   for(const item of sorted(c.items.values())){const date=new Date(item.ms),key=window.OieTime.dateKey(date,'month');if(!months.has(key))months.set(key,{date,items:[]});months.get(key).items.push(item)}
   const apply=()=>{
@@ -100,9 +103,10 @@ window.OieRuntime.register('shared-content', life => {
    capturePreviews(c);const data=pageData(page,c.info),items=check(c,data,cursor),newItems=items.filter(item=>!c.items.has(item.id)),upper=c.edges.get(cursor);if(items.some(item=>upper&&keyCompare(item,upper)>=0)||items.some(item=>c.items.has(item.id)&&c.items.get(item.id).ms!==item.ms))throw Error('invalid_boundary');if(!items.length&&data.next)throw Error('nonadvancing_page');if(!upper&&cursor!==c.base)throw Error('unknown_boundary');
    if(!refreshing&&((items.length&&!newItems.length)||(!items.length&&data.next)||c.used.has(data.next)&&data.next))throw Error('nonadvancing_page');
    if(data.next&&items.length)c.edges.set(data.next,items.at(-1));
-   if(refreshing){const overlap=items.some(item=>c.items.has(item.id));mergeWindow(c,items,false,upper);if(!overlap&&data.next&&oldest&&items.length&&keyCompare(items.at(-1),oldest)>0)c.bridge=data.next;else if(c.bridge===cursor)c.bridge='';const extendsTail=items.length&&(!oldest||keyCompare(items.at(-1),oldest)<0);if(cursor===c.tailRequest||extendsTail){c.next=data.next;c.href=data.href;c.tailRequest=cursor;refreshPager(c,data.pagination.innerHTML)}if(!c.pages.includes(cursor))c.pages.push(cursor)}
-   else{for(const item of items)if(!c.headIDs.has(item.id))c.items.set(item.id,item);c.pages.push(cursor);c.tailRequest=cursor;c.used.add(cursor);c.next=data.next;c.href=data.href;refreshPager(c,data.pagination.innerHTML)}
-   render(c,page);c.failed=false;c.retryMode=null;
+   let pagerHTML;
+   if(refreshing){const overlap=items.some(item=>c.items.has(item.id));mergeWindow(c,items,false,upper);if(!overlap&&data.next&&oldest&&items.length&&keyCompare(items.at(-1),oldest)>0)c.bridge=data.next;else if(c.bridge===cursor)c.bridge='';const extendsTail=items.length&&(!oldest||keyCompare(items.at(-1),oldest)<0);if(cursor===c.tailRequest||extendsTail){c.next=data.next;c.href=data.href;c.tailRequest=cursor;pagerHTML=data.pagination.innerHTML}if(!c.pages.includes(cursor))c.pages.push(cursor)}
+   else{for(const item of items)if(!c.headIDs.has(item.id))c.items.set(item.id,item);c.pages.push(cursor);c.tailRequest=cursor;c.used.add(cursor);c.next=data.next;c.href=data.href;pagerHTML=data.pagination.innerHTML}
+   render(c,page,pagerHTML);c.failed=false;c.retryMode=null;
   }catch(error){if(c.disposed||c.closed||generation!==c.generation||life.signal.aborted)return;c.failed=true;c.retryMode=refreshing?'refresh':'append';c.retryCursor=cursor;feedback(c,true);c.observer?.disconnect()}
   finally{clearTimeout(timeout);if(!c.disposed&&generation===c.generation){c.busy=false;c.request=null;feedback(c,c.failed);observe(c);save(c)}}
  }
@@ -118,8 +122,8 @@ window.OieRuntime.register('shared-content', life => {
  function update(page,info){
   const c=bind(info);if(!c||c.disposed)return;const data=pageData(page,info,true);let items;try{items=check(c,data,c.base)}catch{return}
   capturePreviews(c);const hasTail=c.pages.length>1||c.items.size>c.headIDs.size;mergeWindow(c,items,true);if(c.headNext!==data.next)c.bridge=data.next;c.headNext=data.next;if(data.next&&items.length)c.edges.set(data.next,items.at(-1));
-  if(!hasTail){c.next=data.next;c.href=data.href;refreshPager(c,data.pagination.innerHTML)}
-  render(c,page);const status=document.getElementById(c.prefix+'-status'),freshStatus=page.querySelector(info?'#live-info-content #info-shared-status':'#live-shared-status');if(status&&freshStatus&&!status.contains(document.activeElement)&&status.innerHTML!==freshStatus.innerHTML)replace(status,freshStatus.innerHTML);
+  if(!hasTail){c.next=data.next;c.href=data.href}
+  render(c,page,hasTail?undefined:data.pagination.innerHTML);const status=document.getElementById(c.prefix+'-status'),freshStatus=page.querySelector(info?'#live-info-content #info-shared-status':'#live-shared-status');if(status&&freshStatus&&!status.contains(document.activeElement)&&status.innerHTML!==freshStatus.innerHTML)replace(status,freshStatus.innerHTML);
   // One paced older window per live refresh. Include the current head boundary
   // so items pushed out of that window are eventually checked, not immortal.
   if(hasTail&&!c.busy&&!c.failed&&Date.now()-c.lastRefresh>=5000){const cursors=[...new Set([data.next,...c.pages.filter(cursor=>cursor!==c.base)].filter(Boolean))],cursor=!c.next&&c.pages.length>1&&!c.eofPriority?c.tailRequest:c.bridge||cursors[c.round++%cursors.length];c.eofPriority=!c.next&&!c.eofPriority;if(cursor){c.lastRefresh=Date.now();const generation=c.generation;life.timeout(()=>{if(!c.failed&&c.generation===generation)load(c,false,cursor)},150)}}
