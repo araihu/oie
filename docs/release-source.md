@@ -10,10 +10,13 @@ From the extracted archive, build the desktop command with Go 1.27.4 or newer
 and the native libraries listed in `oie/docs/installation.md`.
 
 ```sh
-export GOWORK=off GOPROXY="file://$PWD/go-proxy"
+export GOTOOLCHAIN=local GOWORK=off GOPROXY="file://$PWD/go-proxy" GOSUMDB=off
 CGO_ENABLED=1 go -C oie build -mod=readonly -tags production -trimpath -buildvcs=false ./cmd/oie-desktop
 go -C oie/cli build -mod=readonly ./cmd/oiectl
 ```
+
+Verify the source archive against the release's `SHA256SUMS` before using
+the bundled Go proxy offline. The builds still check the pinned `go.sum` files.
 
 The exact build and installer scripts are under `release-tooling/scripts`.
 The `browser-sources` directory contains editable upstream sources, and the
