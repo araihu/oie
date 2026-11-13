@@ -36,6 +36,8 @@ jobs:
           cache: ${{ runner.environment == 'github-hosted' }}
           cache-dependency-path: tools/ci/go.sum
       - run: make ci
+        env:
+          OIE_CI_TIMEOUT: 45m
       - if: always()
         uses: actions/upload-artifact@v4
         with:
