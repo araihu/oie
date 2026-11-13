@@ -15,6 +15,7 @@ import (
 	"github.com/araihu/goshtoso/components/textarea"
 	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/adapters/web/appicons"
 )
 
 templ scheduledWorkspace(v view) {
@@ -289,9 +290,9 @@ templ attachmentMenu(v view) {
 		Label: v.Text.Attach,
 		Trigger: attachmentMenuTrigger(v),
 		Sections: []dropdown.Section{{Items: []dropdown.Item{
-			{ID:"composer-attach-image", Label:v.Text.AttachImage, OnClick:"$dispatch('oie:compose-add','image')"},
-			{ID:"composer-attach-file", Label:v.Text.AttachFile, OnClick:"$dispatch('oie:compose-add','file')"},
-			{ID:"composer-attach-location", Label:v.Text.AttachLocation, OnClick:"$dispatch('oie:compose-add','location')"},
+			{ID:"composer-attach-image", Label:v.Text.AttachImage, Icon:appicons.Icon(appicons.Config{Symbol:appicons.IconHeroiconsPhoto16SolidPhoto, Decorative:true, RootClass:"oie-icon"}), OnClick:"$dispatch('oie:compose-add','image')"},
+			{ID:"composer-attach-file", Label:v.Text.AttachFile, Icon:glyph(heroicons.Icon16SolidPaperClip), OnClick:"$dispatch('oie:compose-add','file')"},
+			{ID:"composer-attach-location", Label:v.Text.AttachLocation, Icon:appicons.Icon(appicons.Config{Symbol:appicons.IconHeroiconsMapPin16SolidMapPin, Decorative:true, RootClass:"oie-icon"}), OnClick:"$dispatch('oie:compose-add','location')"},
 		}}},
 	})
 }

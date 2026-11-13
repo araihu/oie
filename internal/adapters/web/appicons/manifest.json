@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
   "tool": "goshtoso-iconpack",
-  "release": "iconpack-651078185e64",
+  "release": "iconpack-8b4a2e523bff",
   "identityRevision": 1,
   "catalogSchemaVersion": 1,
-  "catalogSha256": "651078185e647dca4e11bf632aadc85126720a97f1a3f996ae2809a82d7350ef",
+  "catalogSha256": "8b4a2e523bff2f83ac09cac4a8ab078069d933cf2968fb4e0d53a0fd2a4763b3",
   "releaseJsonSha256": "",
   "checksumsSha256": "",
   "sourceKind": "muamba-snapshot",
   "archiveSha256": "",
-  "sourceConfigSha256": "651078185e647dca4e11bf632aadc85126720a97f1a3f996ae2809a82d7350ef",
-  "sourceLockSha256": "5a273030b3a3a546dfe50ccb90522b2992c2798eb84310331b89437fd80530d7",
+  "sourceConfigSha256": "8b4a2e523bff2f83ac09cac4a8ab078069d933cf2968fb4e0d53a0fd2a4763b3",
+  "sourceLockSha256": "606d2cfd8e5a5db950d1372f71d3a2ce1fcd499f809fe7c4d3fcd30a94924d02",
   "package": "appicons",
   "constPrefix": "Icon",
   "spriteUrl": "/ui/icons/heroicons-extra.svg",
@@ -25,6 +25,26 @@
       "colorBehavior": "currentColor",
       "sha256": "c59f230d1a64adc26e65ddb08284d89c61cb33768586057938efd44dc2e4efcd",
       "goIdentifier": "IconHeroicons16SolidChatBubbleLeft"
+    },
+    {
+      "canonicalName": "heroicons-map-pin-16-solid-map-pin",
+      "namespace": "custom",
+      "product": "heroicons-map-pin",
+      "path": "heroicons-map-pin/16/solid/map-pin.svg",
+      "spriteSymbol": "heroicons-map-pin-16-solid-map-pin",
+      "colorBehavior": "currentColor",
+      "sha256": "bad0afdb51beb90ef04a7d35dc8b67571bd633207bf10dc73347d8b69bb58664",
+      "goIdentifier": "IconHeroiconsMapPin16SolidMapPin"
+    },
+    {
+      "canonicalName": "heroicons-photo-16-solid-photo",
+      "namespace": "custom",
+      "product": "heroicons-photo",
+      "path": "heroicons-photo/16/solid/photo.svg",
+      "spriteSymbol": "heroicons-photo-16-solid-photo",
+      "colorBehavior": "currentColor",
+      "sha256": "881555a8b9c771588f2eb663d445779e146850c1dce7956f990817b80474f005",
+      "goIdentifier": "IconHeroiconsPhoto16SolidPhoto"
     }
   ],
   "files": [
@@ -35,40 +55,52 @@
       "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
     },
     {
+      "path": "LICENSES/heroicons-map-pin-LICENSE.txt",
+      "mode": "0644",
+      "bytes": 1071,
+      "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    },
+    {
+      "path": "LICENSES/heroicons-photo-LICENSE.txt",
+      "mode": "0644",
+      "bytes": 1071,
+      "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    },
+    {
       "path": "NOTICE",
       "mode": "0644",
-      "bytes": 170,
-      "sha256": "6b494773d4650703412dccd7c9e7fd5498feb9f5cbb1f3444e7447ae3fe04a9e"
+      "bytes": 504,
+      "sha256": "9460d463aff236ff391fbd2b7f9d5bd3160303d2030ba74469abf010e4f42485"
     },
     {
       "path": "PROVENANCE/.iconpack.yaml",
       "mode": "0644",
-      "bytes": 410,
-      "sha256": "651078185e647dca4e11bf632aadc85126720a97f1a3f996ae2809a82d7350ef"
+      "bytes": 1152,
+      "sha256": "8b4a2e523bff2f83ac09cac4a8ab078069d933cf2968fb4e0d53a0fd2a4763b3"
     },
     {
       "path": "icons.json",
       "mode": "0644",
-      "bytes": 500,
-      "sha256": "dd26b32c190a37c31722a528cf1b027a09f439ae266aa3f6d9a87d223f593f95"
+      "bytes": 1540,
+      "sha256": "4f9c3f915e1c733e0c2826dd0f6bf2e065f2fffbe705289b2167a401df678e71"
     },
     {
       "path": "icons_gen.go",
       "mode": "0644",
-      "bytes": 1378,
-      "sha256": "9a21f0bd4a29bdd1de732065a301dd9914f983a3b7d75f7608d41b4dd52eb8bb"
+      "bytes": 2148,
+      "sha256": "3b31f3a84a63cfa1c1ac56118cb93800d0cc5a4ae7d50e297a56f4d76a0af431"
     },
     {
       "path": "provenance.json",
       "mode": "0644",
-      "bytes": 1328,
-      "sha256": "be381c33c33f88f1a085f8d413e0b5939aa6abc3a24f0a98b3b529cf532dc7bf"
+      "bytes": 3044,
+      "sha256": "e49d4c3f58e34904ab8b7f72d9002703ef521f025832d31a908515466c1e33ea"
     },
     {
       "path": "sprite.svg",
       "mode": "0644",
-      "bytes": 489,
-      "sha256": "236421f3cab7e6b0db097fb8f4e58cea24ee79396288691f0cd2ec8c740ae70d"
+      "bytes": 1491,
+      "sha256": "44e1dad1029b1821eaae32571ac4b5e76d862d589fa063ce6ee855d421f42e64"
     }
   ]
 }

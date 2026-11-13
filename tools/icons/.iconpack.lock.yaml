@@ -1,5 +1,25 @@
 schema: 1
 files:
+  - id: heroicons-map-pin/icon
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/map-pin.svg
+    path: .iconpack/sources/heroicons-map-pin/16/solid/map-pin.svg
+    size: 507
+    integrity: sha384-i9tzDWt9ytX1Pr+qT8md0sQ90WgDk0YOKNRoC+bAwTZhGRa33or5vK5erQq7wGX5
+  - id: heroicons-map-pin/license
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+    path: .iconpack/sources/heroicons-map-pin/LICENSE
+    size: 1071
+    integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
+  - id: heroicons-photo/icon
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/photo.svg
+    path: .iconpack/sources/heroicons-photo/16/solid/photo.svg
+    size: 467
+    integrity: sha384-AGF+DObfLc8yEt0quKdmMJNBh0mck6O/cMeSkWHenwRMVlSsFw4xmrv3PdZbuHzx
+  - id: heroicons-photo/license
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+    path: .iconpack/sources/heroicons-photo/LICENSE
+    size: 1071
+    integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
   - id: heroicons/icon
     url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/chat-bubble-left.svg
     path: .iconpack/sources/heroicons/16/solid/chat-bubble-left.svg
