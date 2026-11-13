@@ -45,3 +45,5 @@ The Chromium navigation fixture completed with one document load per desktop and
 The scheduling probe used the actual BFF and an isolated engine API fixture. Entering and saving a schedule edit kept the original composer and timeline nodes and restored the independent draft. Reschedule, Send now and Cancel in the agenda updated the result region with no additional document or event-stream request. These probes exercise browser behavior and the BFF contract.
 
 The media search fixture used an isolated engine with SQLite. It passed desktop English and mobile Brazilian Portuguese search, account filtering, focus, caret, IME and stale-response checks. HTTP adapter tests and OpenAPI lint also passed.
+
+The local `make check` passed. Dagger completed checks, race tests and the app and mock builds. The full run reached its 12-minute deadline in `desktop-build-amd64`. The Chromium results above came from host runs against the local BFF.
