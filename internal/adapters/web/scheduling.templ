@@ -265,7 +265,7 @@ templ scheduleFields(v view) {
 	<input type="hidden" name="scheduledAt"/>
 	<input type="hidden" name="attachmentIds"/>
 	@scheduleEditor(v)
-	<input type="file" data-attachment-picker multiple hidden disabled?={!v.messagingImplemented("file_upload")}/>
+	<input type="file" data-attachment-picker multiple hidden/>
 }
 
 templ scheduleEditor(v view) {
@@ -283,6 +283,40 @@ templ scheduleEditor(v view) {
 	</div>
 }
 
+templ attachmentMenu(v view) {
+	@dropdown.Dropdown(dropdown.Config{
+		ID: "composer-attachments",
+		Label: v.Text.Attach,
+		Trigger: attachmentMenuTrigger(v),
+		Sections: []dropdown.Section{{Items: []dropdown.Item{
+			{ID:"composer-attach-image", Label:v.Text.AttachImage, OnClick:"$dispatch('oie:compose-add','image')"},
+			{ID:"composer-attach-file", Label:v.Text.AttachFile, OnClick:"$dispatch('oie:compose-add','file')"},
+			{ID:"composer-attach-location", Label:v.Text.AttachLocation, OnClick:"$dispatch('oie:compose-add','location')"},
+		}}},
+	})
+}
+
+templ attachmentMenuTrigger(v view) {
+	@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Attach,"data-attach-menu":""})) { @glyph(heroicons.Icon16SolidPlus) }
+}
+
+templ locationDraftDialog(v view) {
+	@modal.Dialog(modal.DialogConfig{ID:"oie-location-draft",Title:v.Text.AttachLocation,Content:locationDraftForm(v)})
+}
+
+templ locationDraftForm(v view) {
+	<form class="oie-location-draft" method="dialog" data-location-draft data-invalid={v.Text.LocationInvalid} data-unavailable={v.Text.LocationUnavailable} data-finding={v.Text.LocationFinding} data-too-long={v.Text.InvalidMessage}>
+		<label for="location-map-link">{v.Text.LocationMapLink}</label>
+		<input id="location-map-link" type="url" maxlength="4096" required autofocus/>
+		@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-locate":""})) { <span>{v.Text.LocationUseCurrent}</span> }
+		<p data-location-status role="status"></p>
+		<footer>
+			@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-location-cancel":""})) { <span>{v.Text.DeleteDataCancel}</span> }
+			@button.Button(button.WithType("submit")) { <span>{v.Text.AttachmentAddToDraft}</span> }
+		</footer>
+	</form>
+}
+
 templ attachmentDialog(v view) {
 	@modal.Dialog(modal.DialogConfig{ID:"oie-attachment-review",Title:v.Text.AttachmentReview,HeaderContent:attachmentReviewHeader(v),Content:attachmentReview(v)})
 }
@@ -298,7 +332,7 @@ templ attachmentReview(v view) {
 	<form class="oie-attachment-review" data-attachment-review method="dialog"
 		data-attachment-failed={v.Text.AttachmentFailed} data-attachment-limit={v.Text.AttachmentLimit}
 		data-attachment-unavailable={v.Text.AttachmentUnavailable} data-remove-label={v.Text.RemoveAttachment}
-		data-invalid-caption={v.Text.InvalidMessage} data-staging={v.Text.AttachmentPreparing} data-send={v.Text.Send} data-save={v.Text.ScheduleSave}>
+		data-invalid-caption={v.Text.InvalidMessage} data-staging={v.Text.AttachmentPreparing}>
 		<ul data-attachment-review-files></ul>
 		<template>
 			<li>
@@ -311,8 +345,7 @@ templ attachmentReview(v view) {
 		<p data-attachment-status role="status"></p>
 		<footer>
 			@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-attachment-cancel":""})) { <span>{v.Text.DeleteDataCancel}</span> }
-			@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-attachment-keep"),button.WithAttrs(templ.Attributes{"data-attachment-add":""})) { <span>{v.Text.AttachmentAddToDraft}</span> }
-			@button.Button(button.WithType("submit"),button.WithAttrs(templ.Attributes{"data-attachment-send":""})) { <span>{v.Text.Send}</span> }
+			@button.Button(button.WithType("submit"),button.WithAttrs(templ.Attributes{"data-attachment-add":""})) { <span>{v.Text.AttachmentAddToDraft}</span> }
 		</footer>
 	</form>
 }

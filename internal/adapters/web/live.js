@@ -197,7 +197,10 @@ window.OieRuntime.register('live', life => {
     composer?.dispatchEvent(new Event('oie:composer-preview-change'));
     composer?.dispatchEvent(new CustomEvent('oie:composer-attachments',{detail:{files:journal?.attachments||[],locked:locked||editing||preparingReply||stopped||composer.dataset.busy==='true'}}));
   }
-  function draftRecord(pending=false){return {text:input?.value||'',key:submissionKey?.value||'',pending,reply:journal?.reply||null,mentions:readMentions(),attachments:journal?.attachments||[]};}
+  function privateMapLinks() {
+    try { return JSON.parse(composer?.dataset.privateMapLinks || '[]'); } catch { return []; }
+  }
+  function draftRecord(pending=false){return {text:input?.value||'',key:submissionKey?.value||'',pending,reply:journal?.reply||null,mentions:readMentions(),attachments:journal?.attachments||[],privateMapLinks:privateMapLinks().filter(url=>input?.value.includes(url))};}
 
   function scheduleReview(draft) {
     const {text, reply, mentions, attachments} = draft;
@@ -229,6 +232,7 @@ window.OieRuntime.register('live', life => {
       try { localStorage.removeItem(draftKey); } catch { storageWarning(); }
     }
     journal = null;
+    delete composer.dataset.privateMapLinks;
   }
   let pendingBubble;
   const acceptedBubbles=new Set();
@@ -339,6 +343,7 @@ window.OieRuntime.register('live', life => {
   }
   function restoreDraft(nextKey = submissionKey?.value, initialText = '') {
     journal = null;
+    delete composer.dataset.privateMapLinks;
     input.value = initialText;
     submissionKey.value = nextKey;
     let saved = readDraft();
@@ -352,6 +357,7 @@ window.OieRuntime.register('live', life => {
     lockComposer(false);
     if (saved && saved.conversationKind && saved.conversationKind !== conversationKind) saved = null;
     if (saved && typeof saved.text === 'string' && (canonicalID(saved.key)||(saved.key===''&&!saved.pending)) && (!saved.reply || (canonicalID(saved.reply.messageId) && saved.reply.engineId===body.dataset.engineId && saved.reply.accountId===body.dataset.accountId && saved.reply.conversationId===body.dataset.conversationId && typeof saved.reply.senderName==='string' && typeof saved.reply.excerpt==='string' && Array.from(saved.reply.excerpt).length<=512))) {
+      composer.dataset.privateMapLinks = JSON.stringify(Array.isArray(saved.privateMapLinks) ? saved.privateMapLinks : []);
       journal = {...saved,key:canonicalID(saved.key)?saved.key:submissionKey.value}; input.value = saved.pending&&!saved.scheduledAt&&!editingSchedule?'':saved.text; submissionKey.value = journal.key; restoreMentions(saved.mentions);
       lockComposer(saved.pending === true);
       if (saved.pending) feedback(composer, text('pending'), true);
@@ -695,6 +701,18 @@ window.OieRuntime.register('live', life => {
     detail.applied = true;
     renderReply();
   });
+  life.on(composer,'oie:location-draft',event=>{
+    if(journal?.pending||editSession||editPreparing||stopped||composer.dataset.busy==='true'||input.disabled||input.readOnly)return;
+    const {url} = event.detail;
+    if (typeof url !== 'string') return;
+    const separator = !input.value || /\s$/.test(input.value) ? '' : '\n';
+    const draft = input.value + separator + url;
+    if (Array.from(draft).length > 16384) return;
+    composer.dataset.privateMapLinks = JSON.stringify([...new Set([...privateMapLinks(),url])]);
+    input.value = draft;
+    input.dispatchEvent(new Event('input', {bubbles:true}));
+    event.detail.applied = true;
+  });
   life.on(composer,'oie:attachment-review',renderReply);
   life.on(composer,'oie:schedule-snapshot',event=>{
     const draft = draftRecord();
@@ -988,7 +1006,7 @@ window.OieRuntime.register('live', life => {
       if ((!value.trim() && !journal?.attachments?.length) || Array.from(value).length > 16384) { feedback(form,text('invalidMessage'),true);input.focus();return; }
       if (journal?.pending) submissionKey.value=journal.key;
       const mentions=journal?.pending?(journal.mentions||[]):readMentions();
-      saveDraft({text:value,key:submissionKey.value,pending:true,reply:journal?.reply||null,mentions,attachments:journal?.attachments||[],scheduledAt});if(!scheduledAt&&!editingSchedule)input.value='';restoreMentions(mentions);lockComposer(true);renderReply();
+      saveDraft({text:value,key:submissionKey.value,pending:true,reply:journal?.reply||null,mentions,attachments:journal?.attachments||[],privateMapLinks:privateMapLinks(),scheduledAt});if(!scheduledAt&&!editingSchedule)input.value='';restoreMentions(mentions);lockComposer(true);renderReply();
     }
     const values = new URLSearchParams(new FormData(form));
     const roomEntry = !!form.dataset.roomEntry;

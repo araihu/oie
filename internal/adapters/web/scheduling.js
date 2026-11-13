@@ -258,11 +258,94 @@ window.OieRuntime.register('scheduling', life => {
       drawerEditRequest = null;
     }, {capture: true});
   }
+  const messageForm = document.getElementById('send-message-form');
+  const locationDialog = document.getElementById('oie-location-draft');
+  if (messageForm && locationDialog) {
+    const locationForm = locationDialog.querySelector('[data-location-draft]');
+    const urlField = locationForm.querySelector('input');
+    const locate = locationForm.querySelector('[data-locate]');
+    const locationStatus = locationForm.querySelector('[data-location-status]');
+    const canLocate = () => Boolean(navigator.geolocation) && window.isSecureContext;
+    let locationRequest = 0;
+    const locationModal = action => window.dispatchEvent(new CustomEvent('modal:' + action, {detail:{id:locationDialog.id}}));
+    const locationReady = () => messageForm.dataset.composeAllowed === 'true' &&
+      messageForm.dataset.busy !== 'true' && messageForm.dataset.editing !== 'true' &&
+      messageForm.dataset.attachmentReviewOpen !== 'true' &&
+      !messageForm.elements.namedItem('originalText').readOnly;
+
+    const syncLocationAction = () => {
+      messageForm.querySelector('#composer-attach-location').disabled = !locationReady();
+    };
+    syncLocationAction();
+    life.on(messageForm, 'oie:composer-preview-change', syncLocationAction);
+    life.on(messageForm, 'oie:compose-add', event => {
+      if (event.detail !== 'location' || !locationReady() || document.querySelector('dialog[open]')) return;
+      locationForm.reset();
+      locationStatus.textContent = '';
+      locate.disabled = !canLocate();
+      locationModal('open');
+    });
+    life.on(locate, 'click', () => {
+      if (!canLocate()) return;
+      const request = ++locationRequest;
+      locate.disabled = true;
+      locationStatus.textContent = locationForm.dataset.finding;
+      const current = () => locationDialog.open && request === locationRequest && !life.signal.aborted;
+      navigator.geolocation.getCurrentPosition(({coords}) => {
+        if (!current()) return;
+        const lat = coords.latitude.toFixed(6), lon = coords.longitude.toFixed(6);
+        const map = new URL('https://www.openstreetmap.org/');
+        map.search = new URLSearchParams({mlat:lat, mlon:lon});
+        map.hash = 'map=16/' + lat + '/' + lon;
+        urlField.value = map.href;
+        locationStatus.textContent = '';
+        locate.disabled = false;
+        urlField.focus();
+      }, () => {
+        if (!current()) return;
+        locationStatus.textContent = locationForm.dataset.unavailable;
+        locate.disabled = false;
+      }, {timeout:10000});
+    });
+    life.on(urlField, 'input', () => {
+      locationRequest++;
+      locate.disabled = !canLocate();
+      locationStatus.textContent = '';
+    });
+    life.on(locationForm, 'submit', event => {
+      event.preventDefault();
+      if (!locationReady()) return;
+      let url;
+      try { url = new URL(urlField.value); } catch {}
+      if (!url || !['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.href.length > 4096) {
+        locationStatus.textContent = locationForm.dataset.invalid;
+        urlField.focus();
+        return;
+      }
+      const detail = {url:url.href};
+      messageForm.dispatchEvent(new CustomEvent('oie:location-draft', {detail}));
+      if (!detail.applied) {
+        locationStatus.textContent = locationForm.dataset.tooLong;
+        return;
+      }
+      life.on(locationDialog, 'close', () => messageForm.elements.namedItem('originalText').focus({preventScroll:true}), {once:true});
+      locationModal('close');
+    });
+    life.on(locationForm.querySelector('[data-location-cancel]'), 'click', () => locationModal('close'));
+    life.on(locationDialog, 'close', () => { locationRequest++; });
+  }
+
   const dialog = document.querySelector('[data-schedule-dialog]');
-  if (!dialog) return;
+  if (!dialog) {
+    for (const item of ['image', 'file']) {
+      const action = messageForm?.querySelector('#composer-attach-' + item);
+      if (action) action.disabled = true;
+    }
+    return;
+  }
   const composer = document.querySelector('[data-schedule-composer]');
   const picker = composer?.querySelector('[data-attachment-picker]');
-  const attach = composer?.querySelector('[data-attach-file]');
+  const attach = composer?.querySelector('[data-attach-menu]');
   const attachments = composer?.querySelector('[data-composer-attachments]');
   const localTime = dialog.querySelector('#schedule-local-time');
   const offsets = dialog.querySelector('[data-schedule-offset]');
@@ -384,7 +467,6 @@ window.OieRuntime.register('scheduling', life => {
   const reviewFiles = reviewForm?.querySelector('[data-attachment-review-files]');
   const status = reviewForm?.querySelector('[data-attachment-status]');
   const add = reviewForm?.querySelector('[data-attachment-add]');
-  const send = reviewForm?.querySelector('[data-attachment-send]');
   const chat = composer?.closest('.oie-chat-pane');
   const input = composer?.elements.namedItem('originalText');
   const csrf = document.querySelector('meta[name="oie-csrf"]')?.content || '';
@@ -398,7 +480,7 @@ window.OieRuntime.register('scheduling', life => {
     const noFiles = !review?.selected.length;
     caption.readOnly = busy;
     reviewFiles.setAttribute('aria-busy', String(busy));
-    add.disabled = send.disabled = busy || noFiles;
+    add.disabled = busy || noFiles;
     for (const button of reviewFiles.querySelectorAll('button')) button.disabled = busy;
   }
 
@@ -439,7 +521,6 @@ window.OieRuntime.register('scheduling', life => {
     };
     caption.value = input.value;
     status.textContent = '';
-    send.querySelector('span').textContent = composer.hasAttribute('data-editing-schedule') ? reviewForm.dataset.save : reviewForm.dataset.send;
     const template = reviewForm.querySelector('template');
     for (const item of review.selected) {
       const row = template.content.firstElementChild.cloneNode(true);
@@ -457,7 +538,7 @@ window.OieRuntime.register('scheduling', life => {
     modalEvent('open');
   }
 
-  function confirmAttachments(sendNow) {
+  function confirmAttachments() {
     if (!review || review.request || !review.selected.length) return;
     if (!available() || locked || input.value !== review.original || files !== review.files) {
       status.textContent = reviewForm.dataset.attachmentUnavailable;
@@ -468,10 +549,10 @@ window.OieRuntime.register('scheduling', life => {
       caption.focus();
       return;
     }
-    void stageAttachments(sendNow);
+    void stageAttachments();
   }
 
-  async function stageAttachments(sendNow) {
+  async function stageAttachments() {
     const current = review;
     const controller = new AbortController();
     current.request = controller;
@@ -497,7 +578,7 @@ window.OieRuntime.register('scheduling', life => {
         status.textContent = reviewForm.dataset.attachmentUnavailable;
         return;
       }
-      current.confirmed = {files: current.selected.map(item => item.metadata), caption: caption.value, sendNow};
+      current.confirmed = {files: current.selected.map(item => item.metadata), caption: caption.value};
       modalEvent('close');
     } catch {
       if (review === current && !life.signal.aborted && reviewDialog.open && !current.cancelled) {
@@ -513,7 +594,9 @@ window.OieRuntime.register('scheduling', life => {
   }
 
   function syncAttachmentControls() {
-    attach.disabled = !available() || locked;
+    for (const item of ['image', 'file']) {
+      document.getElementById('composer-attach-' + item).disabled = !available() || locked;
+    }
     for (const remove of attachments.querySelectorAll('[data-remove-attachment]')) remove.disabled = locked;
   }
 
@@ -531,7 +614,11 @@ window.OieRuntime.register('scheduling', life => {
       syncAttachmentControls();
     });
     life.cleanup(clearReview);
-    life.on(attach, 'click', () => picker.click());
+    life.on(composer, 'oie:compose-add', event => {
+      if (!['image', 'file'].includes(event.detail) || !available() || locked) return;
+      picker.accept = event.detail === 'image' ? 'image/*' : '';
+      picker.click();
+    });
     life.on(picker, 'change', () => {
       const picked = [...picker.files];
       picker.value = '';
@@ -597,8 +684,7 @@ window.OieRuntime.register('scheduling', life => {
       }
       const focus = detail?.applied || !previous.focus?.isConnected ? input : previous.focus;
       focus.focus({preventScroll: true});
-      if (detail?.applied && detail.sendNow) composer.requestSubmit();
-      else if (detail && !detail.applied) errorToast(reviewForm.dataset.attachmentUnavailable);
+      if (detail && !detail.applied) errorToast(reviewForm.dataset.attachmentUnavailable);
     });
     const cancel = () => {
       if (!review) return;
@@ -609,10 +695,9 @@ window.OieRuntime.register('scheduling', life => {
     };
     life.on(reviewDialog, 'cancel', cancel);
     for (const action of reviewDialog.querySelectorAll('[data-attachment-cancel]')) life.on(action, 'click', cancel);
-    life.on(add, 'click', () => confirmAttachments(false));
     life.on(reviewForm, 'submit', event => {
       event.preventDefault();
-      void confirmAttachments(true);
+      confirmAttachments();
     });
   }
 

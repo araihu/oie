@@ -1,11 +1,15 @@
 # Attachment composition
 
-In the web interface, the attachment button, a file pasted into the composer
-and a file dropped onto the chat pane open the same preview. The preview starts
-with the current composer text as its caption. Cancel or Escape returns to
-the original composer without changing the draft. Add to draft keeps the
-reviewed caption and files for the normal composer actions, including
-scheduling. Send submits them together through the existing outbox.
+The composer’s plus menu opens **Image**, **File**, or **Location**. Image
+opens a picker filtered to images. File accepts any supported attachment.
+Clipboard files and drops on the chat pane open the same attachment preview.
+The preview starts with the current composer text as its caption. Cancel or
+Escape preserves the original draft. **Add to draft** keeps the reviewed
+caption and files. Send and Schedule remain composer actions.
+
+Location lets the user paste a map link or use the device’s current position
+when available. It appends an editable link to the draft. A location added
+through this menu skips draft link enrichment while the user composes.
 
 The attachment preview is a compact overlay in the existing Oiê chat workspace.
 It uses Goshtoso Dialog, Textarea and Button. A row shows each filename and
@@ -24,7 +28,9 @@ behavior.
 | Confirm, staging still pending | Show progress and guard repeated activation | Keep the preview and allow cancellation | 0 |
 | Stage fails or response is lost, retry | Reuse the file's staging ID | Keep caption and selected files available for retry | 0 |
 | Add to draft after successful staging | Apply caption and files to the scoped draft | Focus the composer | 0 |
-| Send after successful staging | Use the ordinary message operation and receipt | Preserve the existing send recovery behavior | 1 logical send |
+| Review a location and add it to the draft | Append the map link without requesting a draft link preview | Keep the existing text and files, and focus the composer | 0 |
+| Geolocation denied, unavailable or cancelled | Offer the link field | Leave the existing draft unchanged | 0 |
+| Send from the composer | Use the ordinary message operation and receipt | Preserve the existing send recovery behavior | 1 logical send |
 | Navigation or cancellation while staging | Discard the preview; a late response cannot apply it | Keep the original draft in its conversation | 0 |
 
 Staging uses the existing conversation-scoped multipart endpoint. Staging IDs

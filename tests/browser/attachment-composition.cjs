@@ -58,13 +58,49 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
     const caption = review.locator('textarea');
     const original = pt ? 'Rascunho da conversa' : 'Independent text draft';
     const add = review.getByRole('button', {name:pt ? 'Adicionar ao rascunho' : 'Add to draft', exact:true});
-    const send = review.getByRole('button', {name:pt ? 'Enviar mensagem' : 'Send message', exact:true});
-    const attach = page.locator('[data-attach-file]');
+    const send = page.locator('#send-message-form [data-send-message]');
+    const attach = page.locator('[data-attach-menu]');
     await page.locator('body[data-oie-live-ready]').waitFor();
     await until(() => attach.isEnabled(), 'file upload capability is available in current conversation');
     await composer.fill(original);
     await composer.evaluate(node => node.setSelectionRange(2, 5));
     page.on('request', track);
+
+    for (const [label, accept] of [[pt ? 'Imagem' : 'Image', 'image/*'], [pt ? 'Arquivo' : 'File', '']]) {
+      await attach.click();
+      const chooser = page.waitForEvent('filechooser');
+      await page.getByRole('menuitem', {name:label, exact:true}).click();
+      assert.equal(await (await chooser).element().getAttribute('accept'), accept);
+    }
+    await attach.click();
+    await page.getByRole('menuitem', {name:pt ? 'Localização' : 'Location', exact:true}).click();
+    const location = page.locator('#oie-location-draft');
+    const map = location.locator('input');
+    const mapURL = 'https://www.openstreetmap.org/?mlat=-23.55&mlon=-46.63#map=16/-23.55/-46.63';
+    const linkRequests = [];
+    const trackLinks = request => {
+      if (new URL(request.url()).pathname === '/ui/link-preview') linkRequests.push(request.postDataJSON().url);
+    };
+    page.on('request', trackLinks);
+    if (pt) {
+      await page.context().grantPermissions(['geolocation']);
+      await page.context().setGeolocation({latitude:-23.55, longitude:-46.63});
+      await location.getByRole('button', {name:'Usar localização atual'}).click();
+      await until(async () => (await map.inputValue()).includes('mlat=-23.550000'), 'location is populated with browser coordinates');
+    } else {
+      await map.fill(mapURL);
+    }
+    const chosenMap = await map.inputValue();
+    await location.getByRole('button', {name:pt ? 'Adicionar ao rascunho' : 'Add to draft', exact:true}).click();
+    await location.waitFor({state:'hidden'});
+    assert.equal(await composer.inputValue(), original + '\n' + chosenMap);
+    await page.reload();
+    await until(async () => await composer.inputValue() === original + '\n' + chosenMap, 'map link remains in draft after reload');
+    assert.equal(await page.locator('[data-draft-link-preview]').isVisible(), false);
+    assert.equal(linkRequests.includes(chosenMap), false);
+    assert.equal(requestPaths.length, 0, 'location does not send or stage an attachment');
+    page.off('request', trackLinks);
+    await composer.fill(original);
 
     assert.equal(await dataEvent(page, 'paste', [], 'ordinary pasted text'), false);
     assert.equal(await review.isVisible(), false);
@@ -136,10 +172,10 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
     const pending = page.waitForRequest(request => request.url().includes('/ui/scheduling/stage?'));
     await page.route(stagePath, holdStage, {times:1});
     const before = await sample(page);
-    if (pt) await send.click(); else await add.click();
+    await add.click();
     await pending;
     await review.getByText(pt ? 'Preparando anexos…' : 'Preparing attachments…', {exact:true}).waitFor();
-    assert(await send.isDisabled() && await add.isDisabled());
+    assert(await add.isDisabled());
     assert.equal(await composer.inputValue(), original, 'staging does not edit the draft while waiting');
     if (!pt) {
       await page.keyboard.press('Escape');
@@ -184,6 +220,10 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
     } else {
       try {
         await review.waitFor({state:'hidden'});
+        assert.equal(await composer.inputValue(), revised);
+        assert.equal((await retained()).items.length, messagesBefore);
+        assert.deepEqual(requestPaths, ['/ui/scheduling/stage']);
+        await send.click();
         const bubble = page.locator('[data-pending-send][data-pending-state="sending"]');
         const pendingFile = bubble.getByRole('link', {name:image.name, exact:true});
         await pendingFile.waitFor();

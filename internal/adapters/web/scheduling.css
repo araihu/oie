@@ -387,12 +387,6 @@
 }
 .oie-attachment-review li button { flex: none; }
 .oie-attachment-review textarea { max-block-size: 25dvh; resize: vertical; }
-#oie-attachment-review .oie-attachment-keep {
-  min-block-size: 2.75rem;
-  padding-inline: .75rem;
-  border: 1px solid var(--oie-accent-text);
-  border-radius: 1rem;
-}
 .oie-attachment-review [data-attachment-cancel] { min-block-size: 2.75rem; }
 .oie-attachment-review [data-attachment-status] { min-block-size: 1.5rem; }
 .oie-attachment-review footer {
@@ -400,6 +394,22 @@
   justify-content: end;
   flex-wrap: wrap;
 }
-@media (max-width: 400px) {
-  .oie-attachment-review [data-attachment-send] { flex-basis: 100%; }
+#oie-location-draft {
+  inline-size: min(29rem, calc(100vw - 2rem));
+  color: var(--oie-text);
+  background: var(--oie-raised);
+  border-color: var(--oie-border);
 }
+.oie-location-draft { display: grid; gap: .5rem; }
+.oie-location-draft input {
+  min-inline-size: 0;
+  min-block-size: 2.75rem;
+  padding-inline: .75rem;
+  border: 1px solid var(--oie-muted);
+  border-radius: .65rem;
+  color: var(--oie-text);
+  background: var(--oie-panel);
+}
+.oie-location-draft [data-locate] { justify-self: start; }
+.oie-location-draft [data-location-status] { min-block-size: 1.5rem; }
+.oie-location-draft footer { display: flex; justify-content: end; gap: .5rem; flex-wrap: wrap; }
