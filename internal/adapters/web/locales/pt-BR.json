@@ -472,6 +472,8 @@
   "SettingsGeneral": "Geral",
   "PresentationTimeZone": "Fuso horário de exibição",
   "SystemTimeZone": "Fuso horário do sistema",
+  "SearchTimeZones": "Buscar fusos horários",
+  "NoTimeZonesFound": "Nenhum fuso horário encontrado",
   "EmojiShortcutLanguages": "Idiomas dos atalhos de emoji",
   "SearchLanguages": "Buscar idiomas",
   "NoLanguagesFound": "Nenhum idioma encontrado",

@@ -715,7 +715,7 @@ Device preferences remain meaningful with a hosted engine. Browser/site-data rem
 
 Internationalization is required from the start. Ship **English (`en`) and Brazilian Portuguese (`pt-BR`)**. Follow device/browser language unless explicitly overridden on that device; fall back to English when no supported language matches.
 
-**AGREED:** settings use a language selector with a leading flag emoji in each option and in the selected value.
+**AGREED:** General settings uses searchable comboboxes for language and display time zone. The language selector shows a leading flag emoji in each option and in the selected value.
 
 **AGREED:** the settings drawer groups preferences into General, Composition,
 and This device tabs. Composition uses a searchable multi-select for emoji

@@ -1,28 +1,28 @@
 package web
 
-import selectfield "github.com/araihu/goshtoso/components/select"
+import (
+	"github.com/araihu/goshtoso/components/combobox"
+	"github.com/araihu/goshtoso/expressions"
+)
 
-func languageSelect(v view) selectfield.Config {
-	return selectfield.Config{
+func languageCombobox(v view) combobox.Config {
+	return combobox.Config{
 		ID: "settings-language", Name: "lang", Label: v.Text.Languages,
-		Options: []selectfield.Option{
-			{Value: "en", Label: v.Text.English, Selected: v.Locale == "en", Leading: languageFlag("🇺🇸")},
-			{Value: "pt-BR", Label: v.Text.Portuguese, Selected: v.Locale == "pt-BR", Leading: languageFlag("🇧🇷")},
-		},
+		Mode: combobox.ModeSingle, EnableSearch: true, DisablePersistence: true,
+		Source: combobox.Source{Static: []combobox.Option{
+			{Value: "en", Label: v.Text.English, LabelAttrs: templ.Attributes{"data-language-flag": "🇺🇸"}},
+			{Value: "pt-BR", Label: v.Text.Portuguese, LabelAttrs: templ.Attributes{"data-language-flag": "🇧🇷"}},
+		}},
+		Selected: []string{v.Locale},
 		TriggerAttrs: templ.Attributes{"data-language-trigger": ""},
-		InputAttrs: templ.Attributes{
-			"data-language-select": "",
-			"x-on:change": "if (['en','pt-BR'].includes($event.target.value)) { const url = new URL(location.href); url.searchParams.set('lang', $event.target.value); url.searchParams.set('open','settings'); url.searchParams.set('settingsFocus','language'); if (window.OieNavigation) window.OieNavigation.go(url.pathname + url.search); else location.assign(url.pathname + url.search); }",
-		},
 	}
 }
 
 templ languageSettings(v view) {
 	<div x-data="{pendingLanguageFocus:false}" x-on:drawer:open.window="pendingLanguageFocus = $event.detail?.id === 'settings' && new URLSearchParams(location.search).get('settingsFocus') === 'language'" x-on:focusin.window="if (pendingLanguageFocus && $event.target.closest('[role=dialog]')?.contains($el)) { pendingLanguageFocus=false; $el.querySelector('[data-language-trigger]')?.focus({preventScroll:true}); }">
-		@selectfield.Select(languageSelect(v))
+		{{ config := languageCombobox(v) }}
+		@combobox.Combobox(config, config.InitialState()).WithExpressions(expressions.Combobox{
+			SearchPlaceholder: v.Text.SearchLanguages, EmptyText: v.Text.NoLanguagesFound,
+		})
 	</div>
-}
-
-templ languageFlag(flag string) {
-	<span aria-hidden="true">{ flag }</span>
 }

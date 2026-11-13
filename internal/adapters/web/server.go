@@ -277,6 +277,7 @@ type copy struct {
 	Composition, EmojiShortcutLanguages, EmojiSuggestions                                                                                                                                                    string
 	SettingsGeneral, SearchLanguages, NoLanguagesFound, EmojiShortcutsOff, EmojiShortcutLanguageCount                                                                                                        string
 	PresentationTimeZone, SystemTimeZone                                                                                                                                                                     string
+	SearchTimeZones, NoTimeZonesFound                                                                                                                                                                        string
 	EmojiSearch                                                                                                                                                                                              string
 	EmojiCategories                                                                                                                                                                                          string
 	EmojiAll                                                                                                                                                                                                 string

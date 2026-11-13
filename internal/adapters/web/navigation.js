@@ -494,6 +494,31 @@
  document.addEventListener('htmx:before:history:restore',event=>{event.preventDefault();go(event.detail.path,true);});
  function addressSearch(url,push=false){remember();history[push?'pushState':'replaceState'](history.state,'',url.pathname+url.search+url.hash);currentURL=location.href;syncFilterLinks();}
  window.OieNavigation={go,pinConversation,addressSearch,showError};
+ runtime.register('settings-comboboxes',life=>{
+  const language=document.getElementById('settings-language');
+  const settings=document.getElementById('settings-body');
+  life.on(language,'combobox:change',({detail})=>{
+   if(detail.id!==language.id)return;
+   const value=detail.values[0],current=document.documentElement.lang;
+   if(!['en','pt-BR'].includes(value)||value===current)return;
+   // The fragment owns the selected language. Keep the current value if navigation fails.
+   language.dispatchEvent(new CustomEvent('combobox:load',{bubbles:true,detail:{id:language.id,values:[current]}}));
+   const url=new URL(location.href);
+   url.searchParams.set('lang',value);
+   url.searchParams.set('open','settings');
+   url.searchParams.set('settingsFocus','language');
+   go(url);
+  });
+  let dismissingPicker=false;
+  life.on(settings,'keydown',event=>{
+   if(event.key!=='Escape'||!event.target.closest('[data-combobox]')?.querySelector('[role=combobox][aria-expanded=true]'))return;
+   dismissingPicker=true;
+   life.timeout(()=>{dismissingPicker=false;},0);
+  });
+  life.on(document,'drawer:close-request',event=>{
+   if(dismissingPicker&&event.detail?.id==='settings')event.preventDefault();
+  });
+ });
  document.addEventListener('oie:navigation-upgrade',()=>upgrade(app()));
  document.addEventListener('oie:shared-search-settled',()=>{currentURL=location.href;});
  reducedMotion.addEventListener('change',()=>upgrade(app()));

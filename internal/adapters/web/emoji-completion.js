@@ -106,16 +106,6 @@
       } catch { preferenceNotSaved = storageDenied = true; }
       applyPreference();
     });
-    // Let the picker handle Escape before the enclosing drawer can close.
-    let dismissingLanguages = false;
-    life.on(languagePicker, 'keydown', event => {
-      if (event.key !== 'Escape' || !languagePicker.querySelector('[role=combobox][aria-expanded=true]')) return;
-      dismissingLanguages = true;
-      life.timeout(() => { dismissingLanguages = false; }, 0);
-    });
-    life.on(document, 'drawer:close-request', event => {
-      if (dismissingLanguages && event.detail?.id === 'settings') event.preventDefault();
-    });
     life.on(window, 'storage', event => {
       if (event.key !== preferenceKey && event.key !== null) return;
       enabled = decodePreference(event.newValue);

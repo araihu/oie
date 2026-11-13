@@ -472,6 +472,8 @@
   "SettingsGeneral": "General",
   "PresentationTimeZone": "Display time zone",
   "SystemTimeZone": "System time zone",
+  "SearchTimeZones": "Search time zones",
+  "NoTimeZonesFound": "No time zones found",
   "EmojiShortcutLanguages": "Emoji shortcut languages",
   "SearchLanguages": "Search languages",
   "NoLanguagesFound": "No languages found",

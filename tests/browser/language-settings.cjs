@@ -30,23 +30,71 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    await page.goto(base+'/?'+new URLSearchParams(parameters));await page.waitForFunction(()=>window.OieRuntime?.generation>0);
    assert.equal(await page.locator('html').getAttribute('lang'),initial,'browser negotiation');assert.equal((await context.cookies()).find(cookie=>cookie.name==='oie_lang'),undefined,'initial negotiation must not become explicit override');
    const openSettings=async()=>{if(width===390)await page.getByRole('button',{name:(await page.locator('html').getAttribute('lang'))==='en'?'Open navigation':'Abrir navegação',exact:true}).click();await page.locator('[data-navigation-settings]:visible').click();await page.getByRole('dialog',{name:(await page.locator('html').getAttribute('lang'))==='en'?'Settings':'Configurações',exact:true}).waitFor({state:'visible'});};
-   await openSettings();const trigger=page.locator('[data-language-trigger]'),value=page.locator('#settings-language');
-   await trigger.waitFor({state:'visible'});assert.equal(await value.inputValue(),initial);assert((await trigger.innerText()).includes(flag[initial]));assert((await trigger.innerText()).includes(name[initial]));
-   const verifyLeading=async(node,locale)=>{const proof=await node.evaluate((node,data)=>{const text=node.innerText;return{flagBeforeName:text.indexOf(data.flag)>=0&&text.indexOf(data.flag)<text.indexOf(data.name),decorative:[...node.querySelectorAll('[aria-hidden="true"]')].some(child=>child.textContent.includes(data.flag)&&child.getBoundingClientRect().width>0)};},{flag:flag[locale],name:name[locale]});assert.deepEqual(proof,{flagBeforeName:true,decorative:true});};
+   await openSettings();const trigger=page.locator('[data-language-trigger]'),value=page.locator('#settings-language input[name="lang"]');
+   await trigger.waitFor({state:'visible'});assert.equal(await value.inputValue(),initial);
+   const verifyLeading=async(node,locale)=>{
+    const label=node.locator('[data-combobox-option-label],[data-combobox-trigger-label-outer]');
+    assert.equal(await label.textContent(),name[locale]);
+    const content=await label.evaluate(el=>getComputedStyle(el,'::before').content);
+    assert(content.includes(flag[locale])&&content.endsWith('/ ""'),content);
+   };
    await verifyLeading(trigger,initial);await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});await trigger.focus();await trigger.press('ArrowDown');
    for(const locale of ['en','pt-BR']){const option=page.getByRole('option',{name:name[locale],exact:true});await option.waitFor({state:'visible'});await verifyLeading(option,locale);assert.equal(await option.getAttribute('aria-selected'),String(locale===initial));}
    const openAxe=await page.getByRole('dialog',{name:initial==='en'?'Settings':'Configurações',exact:true}).evaluate(node=>axe.run(node,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(openAxe.violations.map(item=>({id:item.id,nodes:item.nodes.map(node=>node.target)})),[],'open language list is accessible');
+   const search=page.getByRole('textbox',{name:initial==='en'?'Search languages':'Buscar idiomas',exact:true});
+   await search.fill('no matching language');await page.locator('#settings-language').getByText(initial==='en'?'No languages found':'Nenhum idioma encontrado',{exact:true}).waitFor();
+   await search.fill('');await search.press('Escape');
+   await until(async()=>await trigger.getAttribute('aria-expanded')==='false'&&await trigger.evaluate(node=>node===document.activeElement),'Escape closes only the picker and returns focus');
+   await trigger.press('ArrowDown');
    const beforeSame=fragments;await page.getByRole('option',{name:name[initial],exact:true}).focus();await page.keyboard.press('Enter');await page.waitForTimeout(180);assert.equal(fragments,beforeSame,'same-value choice must not navigate');assert.equal((await context.cookies()).find(cookie=>cookie.name==='oie_lang'),undefined);
    await page.evaluate(()=>window.languageDocumentToken=Math.random());const token=await page.evaluate(()=>window.languageDocumentToken),next=initial==='en'?'pt-BR':'en',beforeChange=fragments;
-   await trigger.focus();await trigger.press('ArrowDown');await page.getByRole('option',{name:name[next],exact:true}).focus();await page.keyboard.press('Enter');
-   await until(async()=>await page.locator('html').getAttribute('lang')===next&&await page.locator('#settings-language').inputValue()===next,'language fragment applied');
+   let release,requestStarted;
+   const held=new Promise(resolve=>{requestStarted=resolve;}),response=new Promise(resolve=>{release=resolve;});
+   const languageRoute=url=>url.searchParams.get('settingsFocus')==='language';
+   await page.route(languageRoute,async route=>{
+    requestStarted();
+    if(await response==='fail')await route.abort();
+    else await route.continue();
+   });
+   const selectNext=async()=>{
+    await trigger.focus();await trigger.press('ArrowDown');await search.fill(name[next]);
+    assert.equal(await page.locator('#settings-language').getByRole('option').count(),1);
+    await search.press('ArrowDown');
+    await until(()=>page.getByRole('option',{name:name[next],exact:true}).evaluate(node=>node===document.activeElement),'filtered option receives keyboard focus');
+    await page.keyboard.press('Enter');
+   };
+   await selectNext();
+   await held;
+   await page.evaluate(()=>{
+    const nodes=['oie-app','settings-language-trigger','settings-time-zone-trigger'].map(id=>document.getElementById(id));
+    const geometry=()=>nodes.flatMap(node=>{const {x,y,width,height}=node.getBoundingClientRect();return [x,y,width,height]});
+    const before=geometry();
+    window.languageDrift=new Promise(resolve=>{
+     let frames=0,max=0;
+     const sample=()=>{
+      max=Math.max(max,...geometry().map((value,index)=>Math.abs(value-before[index])));
+      if(++frames===6)resolve(max);else requestAnimationFrame(sample);
+     };
+     requestAnimationFrame(sample);
+    });
+   });
+   assert.equal(await page.evaluate(()=>window.languageDrift),0,'delayed language fragment preserves settings geometry');
+   assert.equal(await value.inputValue(),initial,'pending selection preserves the applied language');
+   const failed=page.waitForEvent('requestfailed',request=>languageRoute(new URL(request.url())));
+   release('fail');
+   await failed;
+   assert.equal(await page.locator('html').getAttribute('lang'),initial);
+   assert.equal(await value.inputValue(),initial);
+   await page.unroute(languageRoute);
+   await selectNext();
+   await until(async()=>await page.locator('html').getAttribute('lang')===next&&await value.inputValue()===next,'language fragment applied');
    await page.getByRole('dialog',{name:next==='en'?'Settings':'Configurações',exact:true}).waitFor({state:'visible'});await until(async()=>page.locator('[data-language-trigger]').evaluate(node=>document.activeElement===node),'language control regains focus');
-   assert.equal(await page.evaluate(()=>window.languageDocumentToken),token);assert.equal(documents,1,'locale change preserves document');assert.equal(fragments,beforeChange+1,'one fragment per language change');
+   assert.equal(await page.evaluate(()=>window.languageDocumentToken),token);assert.equal(documents,1,'locale change preserves document');assert.equal(fragments,beforeChange+2,'one fragment per language attempt');
    for(const [key,expected]of Object.entries(parameters))assert.equal(new URL(page.url()).searchParams.get(key),expected,'preserve '+key);
    assert.equal(new URL(page.url()).searchParams.get('lang'),next);assert.equal(new URL(page.url()).searchParams.get('open'),'settings');assert.equal((await context.cookies()).find(cookie=>cookie.name==='oie_lang')?.value,next);await verifyLeading(page.locator('[data-language-trigger]'),next);
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const result=await page.getByRole('dialog',{name:next==='en'?'Settings':'Configurações',exact:true}).evaluate(node=>axe.run(node,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(result.violations.map(item=>({id:item.id,nodes:item.nodes.map(node=>node.target)})),[]);
-   await page.goto(base+'/?section=chats');await page.waitForFunction(()=>window.OieRuntime?.generation>0);assert.equal(await page.locator('html').getAttribute('lang'),next,'explicit device cookie overrides browser language after reload');await openSettings();assert.equal(await page.locator('#settings-language').inputValue(),next);await context.close();
+   await page.goto(base+'/?section=chats');await page.waitForFunction(()=>window.OieRuntime?.generation>0);assert.equal(await page.locator('html').getAttribute('lang'),next,'explicit device cookie overrides browser language after reload');await openSettings();assert.equal(await value.inputValue(),next);await context.close();
   }
-  assert.equal(writes,0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);console.log('PASS: device-language negotiation, leading emoji flags, keyboard selection, one HTMX swap, route/drawer/focus preservation, cookie persistence and EN/PT mobile accessibility');
+  assert.equal(writes,0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);console.log('PASS: language search, keyboard and Escape, flags, delayed and failed requests, HTMX route and focus preservation, cookie persistence and EN/PT accessibility');
  }catch(error){if(debugPage&&!debugPage.isClosed())console.error('Language selector evidence',await debugPage.evaluate(()=>({url:location.href,lang:document.documentElement.lang,focus:document.activeElement?.outerHTML.slice(0,250),language:document.querySelector('#settings-language')?.value,trigger:document.querySelector('[data-language-trigger]')?.outerHTML.slice(0,1200)})).catch(()=>({unavailable:true})));throw error;}finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(r=>api.close(r));}
 })().catch(error=>{console.error(error);process.exitCode=1;});
