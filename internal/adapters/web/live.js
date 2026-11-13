@@ -10,7 +10,7 @@ window.OieRuntime.register('live', life => {
   const mock = body.dataset.mock === 'true';
   const csrf = document.querySelector('meta[name="oie-csrf"]')?.content || '';
   let pendingRequests = 0, refreshTimer, refreshing = false, refreshAgain = false;
-  let source, stopped = false, forceBottom = false, storageDenied = false;
+  let source, stopped = false, storageDenied = false;
   life.cleanup(()=>{stopped=true;source?.close();});
   let accountsVersion = [...document.querySelectorAll('#account-blocks>[data-account-id]')].map(e => e.dataset.accountId+';').join('');
   // Exact account/address tuples avoid nickname guesses and cross-account leaks.
@@ -256,7 +256,7 @@ window.OieRuntime.register('live', life => {
       timeline.insertBefore(pendingBubble,timeline.querySelector('[data-timeline-edge="newer"]'));window.Alpine?.initTree(pendingBubble);
       localizeTimes();
       // Submitting is an explicit intent to view this outgoing message.
-      timeline.scrollTop=timeline.scrollHeight;
+      scrollLatest();
     }
     pendingBubble.dataset.pendingState=state;
     // Keep an unresolved send readable while the retry action is available.
@@ -566,10 +566,9 @@ window.OieRuntime.register('live', life => {
       divider.append(time);row.before(divider);
     }
   }
-  function nearBottom(timeline) { return !timeline || timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 60; }
   life.on(document,'oie:time-zone',()=>{
     const timeline=document.querySelector('#message-timeline');
-    const follow=timeline&&nearBottom(timeline)&&!pinned();
+    const follow=window.OieTimeline?.atBottom()&&!pinned();
     const viewport=timeline?.getBoundingClientRect();
     const row=viewport&&[...timeline.querySelectorAll(':scope>[data-message-id],:scope>[data-pending-send]')]
       .find(node=>node.getBoundingClientRect().bottom>viewport.top);
@@ -611,7 +610,7 @@ window.OieRuntime.register('live', life => {
       }else scrollLatest();
     }
   });
-  life.on(document.querySelector('#message-timeline'),'scroll',()=>{if(nearBottom(document.querySelector('#message-timeline')))showJump(pinned());});
+  life.on(document.querySelector('#message-timeline'),'scroll',()=>{if(window.OieTimeline?.atBottom())showJump(pinned());});
   localizeTimes();if(!body.dataset.focusMessage||!focusMessage(body.dataset.focusMessage))scrollLatest();else showJump(true);
 
   life.on(scheduleRetry,'click',()=>composer.requestSubmit());
@@ -678,7 +677,7 @@ window.OieRuntime.register('live', life => {
     const key=journal?.key;if(!journal?.pending)return false;
     const scheduled=journal.scheduledAt||editingSchedule;
     if(!scheduled)acceptPendingSend(result.messageId);
-    clearDraft(key);input.value='';restoreMentions([]);submissionKey.value=result.nextKey;lockComposer(false);forceBottom=!scheduled;renderReply();
+    clearDraft(key);input.value='';restoreMentions([]);submissionKey.value=result.nextKey;lockComposer(false);renderReply();
     if(scheduled&&result.message)window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',message:result.message}}));
     if(editingSchedule&&result.redirect)finishScheduleEdit(result.redirect,result.nextKey);
     return true;
@@ -777,7 +776,7 @@ window.OieRuntime.register('live', life => {
           return;
         }
         const timeline = document.querySelector('#message-timeline'), next = page.querySelector('#live-timeline');
-        if (timeline && next && window.OieTimeline) {window.OieTimeline.refresh(page,forceBottom,reactionStartedAt);forceBottom=false;}
+        if (timeline && next && window.OieTimeline) window.OieTimeline.refresh(page,reactionStartedAt);
         const header = document.querySelector('#chat-header'), nextHeader = page.querySelector('#live-header');
         if (preferencesCurrent && header && nextHeader?.firstElementChild && header.dataset.version !== nextHeader.dataset.version && !header.contains(document.activeElement)) {
           const replacement = nextHeader.firstElementChild.cloneNode(true);
