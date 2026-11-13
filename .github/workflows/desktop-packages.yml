@@ -4,6 +4,11 @@ on:
   push:
     tags: ['v*.*.*']
   workflow_dispatch:
+    inputs:
+      verify_only:
+        description: Verify the selected ref without publishing a release
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -14,7 +19,9 @@ concurrency:
 
 jobs:
   tag:
-    if: github.ref_type == 'tag' && github.event.deleted != true
+    if: >-
+      github.repository == 'araihu/oie' &&
+      (inputs.verify_only || (github.ref_type == 'tag' && github.event.deleted != true && github.event.forced != true))
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.tag.outputs.version }}
@@ -24,9 +31,15 @@ jobs:
         with:
           persist-credentials: false
       - id: tag
+        env:
+          VERIFY_ONLY: ${{ inputs.verify_only }}
         run: |
-          python3 scripts/release_desktop.py validate "$GITHUB_REF_NAME"
-          echo "version=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          version=$GITHUB_REF_NAME
+          if [[ "$GITHUB_REF_TYPE" == branch && "$VERIFY_ONLY" == true ]]; then
+            version=v0.0.0-check.${GITHUB_RUN_ID}
+          fi
+          python3 scripts/release_desktop.py validate "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   linux:
@@ -35,6 +48,7 @@ jobs:
     env:
       OIE_RELEASE_VERSION: ${{ needs.tag.outputs.version }}
       OIE_CI_ARTIFACTS: dist/linux
+      OIE_RELEASE_REVISION: ${{ needs.tag.outputs.revision }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,6 +59,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache-dependency-path: tools/ci/go.sum
+      - name: Create a local tag for branch verification
+        if: inputs.verify_only && github.ref_type == 'branch'
+        run: git tag "$OIE_RELEASE_VERSION" "$OIE_RELEASE_REVISION"
       - run: make package-linux
       - uses: actions/upload-artifact@v4
         with:
@@ -68,10 +85,26 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Build and verify the application bundle
+          cache-dependency-path: |
+            go.sum
+            cli/go.sum
+            tools/go.sum
+      - name: Create a local tag for branch verification
+        if: inputs.verify_only && github.ref_type == 'branch'
+        run: git tag "$OIE_RELEASE_VERSION" "$OIE_RELEASE_REVISION"
+      - name: Build the application bundle and its corresponding source
         run: |
           sh scripts/package-desktop.sh --version "$OIE_RELEASE_VERSION" \
             --revision "$OIE_RELEASE_REVISION" --source "$PWD" --output "$RUNNER_TEMP/macos"
+      - name: Verify the source rebuild and installed application
+        run: |
+          output="$RUNNER_TEMP/macos"
+          prefix="oie_${OIE_RELEASE_VERSION}_darwin_arm64"
+          python3 scripts/verify-source-package.py "$output/${prefix}_source.tar.gz" \
+            "$OIE_RELEASE_VERSION" "$OIE_RELEASE_REVISION" "$output/source-verification.json"
+          python3 tests/packaging/smoke_macos.py --archive "$output/$prefix.tar.gz" \
+            --installer scripts/install.sh --version "$OIE_RELEASE_VERSION" \
+            --revision "$OIE_RELEASE_REVISION" --artifacts "$output/runtime"
       - uses: actions/upload-artifact@v4
         with:
           name: macos-desktop
@@ -102,7 +135,8 @@ jobs:
           python3 scripts/release_desktop.py assemble --version "$OIE_RELEASE_VERSION" \
             --revision "$OIE_RELEASE_REVISION" --linux dist/builds/linux-desktop/release \
             --linux-report dist/builds/linux-desktop/runtime/report.json \
-            --macos dist/builds/macos-desktop --output dist/release
+            --macos dist/builds/macos-desktop --macos-report dist/builds/macos-desktop/runtime/report.json \
+            --output dist/release
           GOBIN="$RUNNER_TEMP" GOWORK=off go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.49.0
           python3 scripts/package-distribution.py --version "$OIE_RELEASE_VERSION" \
             --assets dist/release --output dist/packages --nfpm "$RUNNER_TEMP/nfpm"
@@ -141,6 +175,7 @@ jobs:
           compression-level: 0
 
   publish:
+    if: github.ref_type == 'tag' && !inputs.verify_only
     needs: [tag, packages]
     runs-on: ubuntu-24.04
     permissions:

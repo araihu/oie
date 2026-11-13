@@ -202,11 +202,21 @@ while IFS="$tab" read -r module_path module_dir; do
 done < "$stage/modules.tsv"
 # Include the resolved dependency versions without leaking builder paths.
 (cd "$source_dir" && go list -mod=readonly -m all) > "$doc_dir/go-modules.txt"
+python3 "$script_dir/package-source.py" "$source_dir" "$tooling_dir" "$version" "$revision" "$stage/$source_archive"
+source_checksum=$(python3 - "$stage/$source_archive" <<'PY_SOURCE'
+import hashlib
+import sys
+
+with open(sys.argv[1], "rb") as archive:
+    print(hashlib.file_digest(archive, "sha256").hexdigest())
+PY_SOURCE
+)
 built_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 cat > "$doc_dir/build-info.json" <<JSON
 {
   "version": "$version",
   "sourceRevision": "$revision",
+  "correspondingSourceSHA256": "$source_checksum",
   "sourceMode": "$source_mode",
   "buildVCS": $build_vcs,
   "goVersion": "$go_version",
@@ -246,7 +256,6 @@ if [ "$target_os" = darwin ]; then
 else
   tar -czf "$stage/$archive_name" -C "$payload" bin share
 fi
-python3 "$script_dir/package-source.py" "$source_dir" "$tooling_dir" "$version" "$revision" "$stage/$source_archive"
 for artifact in "$source_archive" "$archive_name"; do
   archive_tmp=$(mktemp "$output_dir/.oie-archive.XXXXXX")
   copy_file "$stage/$artifact" "$archive_tmp"

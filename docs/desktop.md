@@ -50,10 +50,12 @@ Use the packaging revision in the release receipt as the tooling checkout.
 and runs the Ubuntu amd64 build and installation checks through Dagger. Its
 output is under the selected CI artifact directory's `release` folder.
 
-The packaging recipe also produces a `_source.tar.gz` and SHA-256 file for
-each desktop target. Publish the binary and its source archive together.
+The Desktop release workflow builds each binary with its corresponding
+`_source.tar.gz` and verifies installation and an offline source rebuild on
+both platforms. After assembling the assets and their checksums, it checks
+the SHA-256 digests reported by GitHub for the draft before publishing.
 See [corresponding source](release-source.md) for the archive layout and build
-commands. Release packaging uses Python 3 and retrieves the browser source
+commands. Release packaging uses Python 3.12+ and retrieves the browser source
 archives pinned in `packaging/browser-source.json`.
 
 On native Apple Silicon with the build dependencies installed, obtain the

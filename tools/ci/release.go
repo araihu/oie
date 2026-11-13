@@ -69,11 +69,13 @@ func (r runner) release(ctx context.Context, source *dagger.Directory) error {
 		WithFile("/out/source-receipt.json", source.File(".release-identity.json")).
 		WithWorkdir("/app").
 		WithExec([]string{"sh", "/tooling/scripts/package-desktop.sh", "--version", identity.Version, "--revision", identity.Revision, "--source", "/app", "--output", "/out"})
+	archive := "oie_" + identity.Version + "_linux_amd64"
+	built = built.WithExec([]string{"python3", "/tooling/scripts/verify-source-package.py", "/out/" + archive + "_source.tar.gz", identity.Version, identity.Revision, "/out/source-verification.json"})
 	built, err = r.stage(ctx, "release-package-amd64", built)
 	if err != nil {
 		return err
 	}
-	archive := "oie_" + identity.Version + "_linux_amd64.tar.gz"
+	archive += ".tar.gz"
 	runtime := r.client.Container(dagger.ContainerOpts{Platform: platform}).From(desktopImage).
 		WithEnvVariable("DEBIAN_FRONTEND", "noninteractive").
 		WithExec([]string{"sh", "-c", "apt-get update -qq && apt-get install -y --no-install-recommends ca-certificates libgtk-4-1 libwebkitgtk-6.0-4 libsoup-3.0-0 xvfb xauth xdotool scrot dbus-x11 python3 && rm -rf /var/lib/apt/lists/*"})

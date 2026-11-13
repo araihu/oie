@@ -36,7 +36,9 @@ def main():
             assets.mkdir()
             commands.mkdir()
             shutil.copy2(args.archive, assets / args.archive.name)
-            (assets / "SHA256SUMS").write_text(hashlib.sha256(args.archive.read_bytes()).hexdigest() + "  " + args.archive.name + "\n")
+            checksum = hashlib.sha256(args.archive.read_bytes()).hexdigest()
+            report["binaryArchiveSHA256"] = checksum
+            (assets / "SHA256SUMS").write_text(f"{checksum}  {args.archive.name}\n")
             curl = commands / "curl"
             curl.write_text('''#!/usr/bin/env python3
 import os
