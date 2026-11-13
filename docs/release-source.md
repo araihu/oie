@@ -1,0 +1,26 @@
+# Oiê corresponding source
+
+The source archive for each desktop target contains the tagged Oiê tree, the
+packaging recipe, the Go module archives used by that target and the browser
+sources. The application tree includes the HTML templates and the scripts for
+generating code and acquiring pinned assets. `release-tooling/packaging`
+contains the additional third-party notices and the browser source checksums.
+
+From the extracted archive, build the desktop command with Go 1.27.4 or newer
+and the native libraries listed in `oie/docs/installation.md`.
+
+```sh
+export GOWORK=off GOPROXY="file://$PWD/go-proxy"
+CGO_ENABLED=1 go -C oie build -mod=readonly -tags production -trimpath -buildvcs=false ./cmd/oie-desktop
+go -C oie/cli build -mod=readonly ./cmd/oiectl
+```
+
+The exact build and installer scripts are under `release-tooling/scripts`.
+The `browser-sources` directory contains editable upstream sources, and the
+Mermaid and PDF.js npm archives in it also include the source maps that
+identify the code and dependencies compiled into the shipped bundles. The
+Wails TypeScript source is in its Go module archive. The Oiê asset manifests
+record the artwork revisions and the exact bytes used in the binaries.
+
+Publish each target's `_source.tar.gz` beside its binary archive and list both
+in the release notes and `SHA256SUMS`.

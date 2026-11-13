@@ -1,0 +1,52 @@
+[
+  {
+    "name": "alpine-3.17.2.tar.gz",
+    "url": "https://codeload.github.com/alpinejs/alpine/tar.gz/refs/tags/v3.17.2",
+    "sha256": "2945117fd0dd7bec64b0ba8a7bdbdf3ff616ea621cbc9fd17ff1c3def9246c38"
+  },
+  {
+    "name": "heroicons-2.2.0.tar.gz",
+    "url": "https://codeload.github.com/tailwindlabs/heroicons/tar.gz/refs/tags/v2.2.0",
+    "sha256": "42bd31001127631a20270e7bd87ac13647bfcd628dd533e2ff31497068b4f7af"
+  },
+  {
+    "name": "htmx-4.0.0.tar.gz",
+    "url": "https://codeload.github.com/bigskysoftware/htmx/tar.gz/refs/tags/v4.0.0",
+    "sha256": "1c9c6a54f24aa1a25475030fd346946b8644545b0718ddeab5fdcb305ac6a77a"
+  },
+  {
+    "name": "katex-0.19.1.tar.gz",
+    "url": "https://codeload.github.com/KaTeX/KaTeX/tar.gz/8000fbd4e29cca2c0cb1e88b745af3ed2f436b66",
+    "sha256": "ce1f12db7e012926ae6e0e1d6356277cb5d80139d94d32862a3b3fd3df2acfc8"
+  },
+  {
+    "name": "lru-cache-11.2.6.tar.gz",
+    "url": "https://codeload.github.com/isaacs/node-lru-cache/tar.gz/refs/tags/v11.2.6",
+    "sha256": "aa7b17b81c17ed054bfdd678e7c0a77b9e6001ed4ca53fd011f388d9e188db54"
+  },
+  {
+    "name": "mermaid-11.16.1.tar.gz",
+    "url": "https://codeload.github.com/mermaid-js/mermaid/tar.gz/refs/tags/mermaid@11.16.1",
+    "sha256": "0ee99b3bb82766e5d6c34b8cc768b8530ce8f1aaa13790ae368aebeef3de9d11"
+  },
+  {
+    "name": "mermaid-maps-11.16.1.tgz",
+    "url": "https://registry.npmjs.org/mermaid/-/mermaid-11.16.1.tgz",
+    "sha256": "ebd9885111092c78cefc79a76f6c1dc34ed5b834b02ae8f338227ce79c003de4"
+  },
+  {
+    "name": "pdfjs-6.5.438.tar.gz",
+    "url": "https://codeload.github.com/mozilla/pdf.js/tar.gz/refs/tags/v6.5.438",
+    "sha256": "eead5ce4cdc7682a791cb5661de089f1f89b6679593f11d6240e20186ac051ae"
+  },
+  {
+    "name": "pdfjs-maps-6.5.438.tgz",
+    "url": "https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-6.5.438.tgz",
+    "sha256": "7461aefcd27c4ef0dd76f9ca5760f09466eb6b3f934432670c12132e7b3d6faa"
+  },
+  {
+    "name": "tailwindcss-4.3.3.tar.gz",
+    "url": "https://codeload.github.com/tailwindlabs/tailwindcss/tar.gz/refs/tags/v4.3.3",
+    "sha256": "e702ce2493505287e8f6cab2dd1e0c14f154e57c296854d4ded38bde5da2be6e"
+  }
+]

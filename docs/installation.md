@@ -71,6 +71,9 @@ Both archives are built from the immutable `v0.0.1-rc.1` tag. The receipt
 records the application and packaging revisions, and `build-info.json` inside
 each package identifies its application source.
 
+The current packaging recipe produces a platform-specific archive of the
+[corresponding source](release-source.md) for publication with each binary.
+
 ### macOS first open
 
 The bundle has an ad-hoc signature. It is not Developer ID signed or notarized.

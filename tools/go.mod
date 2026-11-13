@@ -62,7 +62,7 @@ require (
 	github.com/alingse/nilnesserr v0.2.0 // indirect
 	github.com/andybalholm/brotli v1.2.7 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
-	github.com/araihu/oapi-cli-gen v0.0.0-20261111033254-90684aaa8e38 // indirect
+	github.com/araihu/oapi-cli-gen v0.0.0-20261113034014-24fed9919247 // indirect
 	github.com/ashanbrown/forbidigo/v2 v2.3.1 // indirect
 	github.com/ashanbrown/makezero/v2 v2.2.1 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect

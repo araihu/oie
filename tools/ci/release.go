@@ -65,6 +65,7 @@ func (r runner) release(ctx context.Context, source *dagger.Directory) error {
 		WithDirectory("/tooling/scripts", source.Directory("scripts")).
 		WithDirectory("/tooling/packaging", source.Directory("packaging")).
 		WithDirectory("/tooling/tests/packaging", source.Directory("tests/packaging")).
+		WithFile("/tooling/docs/release-source.md", source.File("docs/release-source.md")).
 		WithFile("/out/source-receipt.json", source.File(".release-identity.json")).
 		WithWorkdir("/app").
 		WithExec([]string{"sh", "/tooling/scripts/package-desktop.sh", "--version", identity.Version, "--revision", identity.Revision, "--source", "/app", "--output", "/out"})

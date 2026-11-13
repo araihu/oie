@@ -1,0 +1,3 @@
+The PDF.js worker incorporates the Brotli JavaScript decoder.
+Copyright 2017 Google Inc. All Rights Reserved.
+See LICENSE_BROTLI.

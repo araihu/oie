@@ -110,8 +110,12 @@ short_version=${version#v}
 short_version=${short_version%%-*}
 short_version=${short_version%%+*}
 archive_name="oie_${version}_${target_os}_${target_arch}.tar.gz"
+source_archive="oie_${version}_${target_os}_${target_arch}_source.tar.gz"
+command -v python3 >/dev/null 2>&1 || fail 'Python 3 is required for release source packaging'
 [ ! -e "$output_dir/$archive_name" ] || fail "archive already exists: $output_dir/$archive_name"
 [ ! -e "$output_dir/$archive_name.sha256" ] || fail 'archive checksum already exists'
+[ ! -e "$output_dir/$source_archive" ] || fail "source archive already exists: $output_dir/$source_archive"
+[ ! -e "$output_dir/$source_archive.sha256" ] || fail 'source archive checksum already exists'
 if [ "$target_os" = darwin ]; then
   # Signing and icon tools operate on native macOS storage. Only the finished
   # archive crosses into a possibly shared output filesystem.
@@ -152,6 +156,8 @@ printf '%s\n' "Building $version ($revision) for $target_os/$target_arch" >&2
 chmod 0755 "$executable"
 copy_file "$source_dir/LICENSE" "$source_dir/THIRD_PARTY_NOTICES.md" "$doc_dir/"
 mkdir -p "$doc_dir/licenses"
+# Retain the audited notices for code bundled inside third-party runtimes.
+copy_file -R "$tooling_dir/packaging/licenses/." "$doc_dir/licenses/"
 # Retain the embedded browser/artwork notices in a browsable relative tree.
 find "$source_dir/internal/adapters/web" "$source_dir/internal/adapters/desktop/assets" -type f | while IFS= read -r file; do
   case "$(basename "$file")" in
@@ -177,12 +183,22 @@ LC_ALL=C sort -u "$stage/modules-raw.tsv" > "$stage/modules.tsv"
 tab=$(printf '\t')
 while IFS="$tab" read -r module_path module_dir; do
   [ -n "$module_path" ] && [ -n "$module_dir" ] || continue
-  for file in "$module_dir"/LICENSE* "$module_dir"/LICENCE* "$module_dir"/COPYING* "$module_dir"/NOTICE*; do
+  for file in "$module_dir"/LICENSE* "$module_dir"/LICENCE* "$module_dir"/COPYING* "$module_dir"/NOTICE* "$module_dir"/PATENTS*; do
     [ -f "$file" ] || continue
     destination="$doc_dir/licenses/go-modules/$module_path"
     mkdir -p "$destination"
     copy_file "$file" "$destination/$(basename "$file")"
   done
+  case "$module_path" in
+    github.com/araihu/goshtoso)
+      for file in "$module_dir"/assets/icons/HEROICONS_LICENSE.txt "$module_dir"/assets/fonts/README.txt \
+        "$module_dir"/assets/js/runtime/*/*/LICENSE.txt "$module_dir"/assets/licenses/*/*/LICENSE.txt; do
+        relative=${file#"$module_dir/"}
+        destination="$doc_dir/licenses/go-modules/$module_path/$relative"
+        mkdir -p "$(dirname "$destination")"
+        copy_file "$file" "$destination"
+      done ;;
+  esac
 done < "$stage/modules.tsv"
 # Include the resolved dependency versions without leaking builder paths.
 (cd "$source_dir" && go list -mod=readonly -m all) > "$doc_dir/go-modules.txt"
@@ -205,7 +221,8 @@ JSON
 cat > "$doc_dir/SOURCE.txt" <<SOURCE
 Oiê $version
 Source revision: $revision
-Source: https://github.com/araihu/oie/tree/$revision
+Corresponding source: https://github.com/araihu/oie/releases/download/$version/$source_archive
+Application source: https://github.com/araihu/oie/tree/$revision
 Source verification: $source_mode
 Go: $go_version
 Target: $target_os/$target_arch
@@ -229,10 +246,13 @@ if [ "$target_os" = darwin ]; then
 else
   tar -czf "$stage/$archive_name" -C "$payload" bin share
 fi
-archive_tmp=$(mktemp "$output_dir/.oie-archive.XXXXXX")
-copy_file "$stage/$archive_name" "$archive_tmp"
-chmod 0644 "$archive_tmp"
-mv "$archive_tmp" "$output_dir/$archive_name"
-archive_tmp=
-(cd "$output_dir" && if command -v sha256sum >/dev/null 2>&1; then sha256sum "$archive_name"; else shasum -a 256 "$archive_name"; fi) > "$output_dir/$archive_name.sha256"
-printf '%s\n' "$output_dir/$archive_name"
+python3 "$script_dir/package-source.py" "$source_dir" "$tooling_dir" "$version" "$revision" "$stage/$source_archive"
+for artifact in "$source_archive" "$archive_name"; do
+  archive_tmp=$(mktemp "$output_dir/.oie-archive.XXXXXX")
+  copy_file "$stage/$artifact" "$archive_tmp"
+  chmod 0644 "$archive_tmp"
+  mv "$archive_tmp" "$output_dir/$artifact"
+  archive_tmp=
+  (cd "$output_dir" && if command -v sha256sum >/dev/null 2>&1; then sha256sum "$artifact"; else shasum -a 256 "$artifact"; fi) > "$output_dir/$artifact.sha256"
+done
+printf '%s\n' "$output_dir/$archive_name" "$output_dir/$source_archive"

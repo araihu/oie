@@ -36,6 +36,9 @@ package source, integrity and individual file checksums are recorded in
 `internal/adapters/web/pdfjs/manifest.json`. Its license is included beside the
 assets and is available at `/ui/pdfjs/LICENSE`.
 
+The PDF.js worker includes the MIT-licensed Brotli JavaScript decoder.
+The desktop archives include the decoder's notice and license.
+
 The distribution also includes Adobe character maps, PDFium/Foxit font data,
 image decoders and an ICC profile. Their notices are included in the respective
 `cmaps`, `standard_fonts`, `wasm` and `iccs` directories. They use BSD, MIT and
@@ -60,3 +63,27 @@ Unicode 17.0 and CLDR 48 data under Unicode-3.0. Copyright © 1991-2025 Unicode,
 Inc. The license is included at `internal/adapters/web/emoji/LICENSE.txt` and
 served at `/ui/emoji/LICENSE.txt`. Regenerate the validation base table with
 `python3 tools/generate-reaction-emoji-bases.py`.
+
+## Interface icons and browser runtime
+
+Goshtoso embeds the Heroicons 2.2.0 sprite under MIT, HTMX 4.0.0 under 0BSD,
+and Alpine.js 3.17.2 and its plugins under MIT. Its embedded files include
+the Heroicons and runtime license texts. Desktop archives also include the
+notices for Alpine's bundled Vue code, focus-trap and tabbable.
+
+The desktop archives include the notices for Nano ID in the Wails runtime and
+for the JavaScript bundled by Margo, including Mermaid 11.16.1, KaTeX and the
+libraries identified in the Mermaid source maps. DOMPurify 3.4.0 is distributed
+under its Apache-2.0 option.
+
+The Oiê logo and platform icons adapt Noto Emoji SVG artwork under Apache-2.0.
+Their provenance and modifications are recorded in
+`internal/adapters/web/brand/NOTICE.txt` and `SOURCE.json`.
+The third-party artwork permissions apply to the Noto material. The Oiê name
+and visual identity remain subject to the upstream Arai Hû brand terms.
+
+## Generated command-line client
+
+The runtime and templates copied into `oiectl` by `araihu/oapi-cli-gen`
+are available under MIT. The license text is in
+[`packaging/licenses/oapi-cli-gen/LICENSE`](packaging/licenses/oapi-cli-gen/LICENSE).
