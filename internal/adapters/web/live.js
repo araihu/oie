@@ -540,8 +540,14 @@ window.OieRuntime.register('live', life => {
     restoreDraft(nextKey);
     renderReply();
     renderEdit();
-    input.focus({preventScroll:true});
-    life.raf(()=>{if(editor.isConnected&&editingSchedule)input.focus({preventScroll:true});});
+    const drawer = editingSchedule && document.querySelector('[data-conversation-schedules]')?.closest('[role="dialog"]');
+    // The drawer's focus trap restores its opener as it closes.
+    const focusComposer = () => {
+      if (!editor.isConnected || scheduledMessage !== nextSchedule) return;
+      if (drawer?.getClientRects().length) life.raf(focusComposer);
+      else input.focus({preventScroll:true});
+    };
+    focusComposer();
   }
   function finishScheduleEdit(destination, nextKey) {
     const editor = document.getElementById('schedule-editor');
