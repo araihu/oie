@@ -283,6 +283,7 @@ templ scheduleEditor(v view) {
 }
 
 templ attachmentMenu(v view) {
+	if v.scheduleAllowed() {
 	@dropdown.Dropdown(dropdown.Config{
 		ID: "composer-attachments",
 		Label: v.Text.Attach,
@@ -292,10 +293,13 @@ templ attachmentMenu(v view) {
 			{ID:"composer-attach-file", Label:v.Text.AttachFile, Icon:glyph(heroicons.Icon16SolidPaperClip), OnClick:"$dispatch('oie:compose-add','file')"},
 		}}},
 	})
+	} else {
+		@attachmentMenuTrigger(v)
+	}
 }
 
 templ attachmentMenuTrigger(v view) {
-	@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Attach,"data-attach-menu":""})) { @glyph(heroicons.Icon16SolidPlus) }
+	@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Attach,"data-attach-menu":"","disabled":!v.scheduleAllowed(),"x-ref":"trigger"})) { @glyph(heroicons.Icon16SolidPlus) }
 }
 
 templ composerAttachments(v view) {

@@ -90,7 +90,7 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
       await imageAction.waitFor();
       await uploadCapability('false');
       assert(await attach.isDisabled());
-      assert(await imageAction.isDisabled());
+      await until(() => imageAction.isDisabled(), 'open attachment menu reflects the lost capability');
       await page.keyboard.press('Escape');
       await imageAction.waitFor({state:'hidden'});
       await uploadCapability('true');
