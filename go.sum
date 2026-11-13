@@ -9,10 +9,10 @@ github.com/alecthomas/repr v0.5.2 h1:SU73FTI9D1P5UNtvseffFSGmdNci/O6RsqzeXJtP0Qs
 github.com/alecthomas/repr v0.5.2/go.mod h1:Fr0507jx4eOXV7AlPV6AVZLYrLIuIeSOWtW57eE/O/4=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0 h1:axGnT1gRIfimI7gJifB699GoE/oq+F2MU7Dml6nw9rQ=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0/go.mod h1:lvDnEdqiQrp0O42VQGgmlKpxL1AP2+08jFMw88y4klk=
-github.com/araihu/goshtoso v0.6.2-0.20261113034108-24fb29af71c5 h1:wfN5PzAcnhWfFl9N2RQT1/LHtycnOS3rWZJ1j36n/7Y=
-github.com/araihu/goshtoso v0.6.2-0.20261113034108-24fb29af71c5/go.mod h1:H/vLd+4wvpzNIjDnW81Sk44+4670WIe7x6DUE57Kg/8=
-github.com/araihu/margo v0.0.36-0.20261108235149-ff44a5fe5052 h1:aA/5OmFLV8sNmlMbRWMIzNd6RJAc8nCePSWPSwGI/jA=
-github.com/araihu/margo v0.0.36-0.20261108235149-ff44a5fe5052/go.mod h1:Cvt4KcHzu/OLH9Dy8XvdiqlOneGffUw1CaK7A9f2bd0=
+github.com/araihu/goshtoso v0.6.2 h1:u+CxuLEsRcLrFAoeI0uZXKZTWL/OIapBVM/AeinAr5o=
+github.com/araihu/goshtoso v0.6.2/go.mod h1:H/vLd+4wvpzNIjDnW81Sk44+4670WIe7x6DUE57Kg/8=
+github.com/araihu/margo v0.0.36 h1:VV+plQdiHGRXY83v3/hwt2OfR4v00fpiwuYfmg7LIP0=
+github.com/araihu/margo v0.0.36/go.mod h1:Cvt4KcHzu/OLH9Dy8XvdiqlOneGffUw1CaK7A9f2bd0=
 github.com/bmatcuk/doublestar v1.1.1/go.mod h1:UD6OnuiIn0yFxxA2le/rnRU1G4RaI4UvFv1sNto9p6w=
 github.com/chromedp/cdproto v0.0.0-20250724212937-08a3db8b4327 h1:UQ4AU+BGti3Sy/aLU8KVseYKNALcX9UXY6DfpwQ6J8E=
 github.com/chromedp/cdproto v0.0.0-20250724212937-08a3db8b4327/go.mod h1:NItd7aLkcfOA/dcMXvl8p1u+lQqioRMq/SqDp71Pb/k=
