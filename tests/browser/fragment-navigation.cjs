@@ -130,9 +130,9 @@ async function assertMobileControlOwnership(page) {
       address:'contact'+index+'@fixture',unreadCount:0
     });
     const incomingChat=chats.at(-1),beforeIncoming={...incomingChat};
-    for(const {width,height,lang,chatsLabel,mediaLabel} of [
-      {width:1440,height:1000,lang:'en',chatsLabel:'Chats',mediaLabel:'Media & links'},
-      {width:390,height:844,lang:'pt-BR',chatsLabel:'Conversas',mediaLabel:'Mídia e links'}
+    for(const {width,height,lang,theme,chatsLabel,mediaLabel} of [
+      {width:1440,height:1000,lang:'en',theme:'dark',chatsLabel:'Chats',mediaLabel:'Media & links'},
+      {width:390,height:844,lang:'pt-BR',theme:'light',chatsLabel:'Conversas',mediaLabel:'Mídia e links'}
     ]){
       const context=await browser.newContext({viewport:{width,height},locale:lang});
       const inboxPage=await context.newPage(),errors=[],listRefreshes=[];
@@ -151,7 +151,7 @@ async function assertMobileControlOwnership(page) {
       };
       try {
         const initialRefresh=inboxPage.waitForResponse(response=>new URL(response.url()).pathname==='/ui/refresh');
-        await inboxPage.goto(base+'/?section=chats&lang='+lang+'&theme=dark');
+        await inboxPage.goto(base+'/?section=chats&lang='+lang+'&theme='+theme);
         await (await initialRefresh).finished();
         await until(()=>streams.size===1,'inbox event stream');
         const stream=[...streams][0];
@@ -193,6 +193,18 @@ async function assertMobileControlOwnership(page) {
           await navigate(mediaLabel);
           await inboxPage.waitForFunction(generation=>!!document.getElementById('shared-content-results')&&window.OieRuntime.generation>generation,generation);
           assert(await inboxPage.evaluate(()=>window.sidebarIdentity()),'sidebar survives the switch to Media');
+          const styles=await inboxPage.evaluate(()=>{
+            const style=section=>{
+              const link=document.querySelector('#desktop-navigation a[data-oie-navigation-item][href*="section='+section+'"]');
+              const {color,fontWeight}=getComputedStyle(link);
+              const icon=getComputedStyle(link.firstElementChild);
+              return {color,fontWeight,iconColor:icon.color,iconBackground:icon.backgroundColor};
+            };
+            return {chats:style('chats'),archived:style('archived'),media:style('media')};
+          });
+          assert.deepEqual(styles.chats,styles.archived,'Chats loses all active colors when Media opens');
+          assert.notEqual(styles.media.color,styles.chats.color);
+          assert.notEqual(styles.media.iconBackground,styles.chats.iconBackground);
           const reads=state.inboxReads,refreshes=listRefreshes.length;
           const mediaGeneration=await inboxPage.evaluate(()=>window.OieRuntime.generation);
           if(changed){
