@@ -153,6 +153,8 @@ type view struct {
 	ScheduleUnavailable   bool
 
 	InboxOnly        bool
+	ReuseInbox       bool
+	CachedInboxFirst string
 	Role             engineapi.EngineRole
 	CanResetData     bool
 	LatestEditTarget *engineapi.MessageEditTarget
@@ -595,6 +597,12 @@ var videosStylesheet []byte
 //go:embed live.js
 var liveScript []byte
 
+//go:embed event-stream.js
+var eventStreamScript []byte
+
+//go:embed inbox-cache.js
+var inboxCacheScript []byte
+
 //go:embed room-archive.js
 var roomArchiveScript []byte
 
@@ -688,6 +696,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/sidebar.js":           {"text/javascript", sidebarScript},
 		"/ui/presentation-time.js": {"text/javascript", presentationTimeScript},
 		"/ui/reset-data.js":        {"text/javascript", resetDataScript},
+		"/ui/event-stream.js":      {"text/javascript", eventStreamScript},
+		"/ui/inbox-cache.js":       {"text/javascript", inboxCacheScript},
 		"/ui/mentions.js":          {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
 		"/ui/room-entry.js":   {"text/javascript", roomEntryScript},
 		appicons.SpriteURL:    {"image/svg+xml", appIconSprite},
@@ -891,7 +901,18 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		s.loadSharedContent(ctx, v, v.SharedCursor == "" || r.URL.Path == "/ui/refresh")
 		return
 	}
-	if !paneOnly && !s.loadInbox(ctx, v, editor) {
+	cacheScope := r.Header.Get("X-Oie-Inbox-Scope")
+	cacheMatches := cacheScope != "" && cacheScope == v.inboxCacheScope()
+	reuseOnNavigation := fragment == "app" && v.Section == "chats" && !v.GlobalMessageSearch && cacheMatches
+	reuseOnRefresh := r.URL.Path == "/ui/refresh" && cacheMatches && v.EventCursor != "" &&
+		r.Header.Get("X-Oie-Inbox-Cursor") == v.EventCursor && (v.ChatID != "" || v.InboxOnly)
+	v.ReuseInbox = reuseOnNavigation || reuseOnRefresh
+	if reuseOnNavigation {
+		if first := r.Header.Get("X-Oie-Inbox-First"); validOperationKey(first) {
+			v.CachedInboxFirst = first
+		}
+	}
+	if !paneOnly && !v.ReuseInbox && !s.loadInbox(ctx, v, editor) {
 		return
 	}
 	if listOnly {
@@ -949,8 +970,14 @@ func (s *Server) loadInbox(ctx context.Context, v *view, editor engineapi.Reques
 
 func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view, paneOnly, editorOnly, infoOnly bool, editor engineapi.RequestEditorFn) {
 	selected := v.ChatID
-	if selected == "" && !v.InboxOnly && len(v.Chats) > 0 {
-		selected = v.Chats[0].Id
+	fromCache := false
+	if selected == "" && !v.InboxOnly {
+		if len(v.Chats) > 0 {
+			selected = v.Chats[0].Id
+		} else if v.ReuseInbox {
+			selected = v.CachedInboxFirst
+			fromCache = true
+		}
 	}
 	if selected == "" {
 		return
@@ -962,14 +989,17 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 	}
 	if conversation.JSON200 == nil {
 		if conversation.StatusCode() == 400 || conversation.StatusCode() == 404 {
-			v.NotFound = true
+			v.NotFound = !fromCache
 		} else {
 			v.Unavailable = true
 		}
 		return
 	}
 	if v.AccountFilter != "" && conversation.JSON200.AccountId != v.AccountFilter {
-		v.NotFound = true
+		v.NotFound = !fromCache
+		return
+	}
+	if fromCache && conversation.JSON200.Archived {
 		return
 	}
 	v.Selected = conversation.JSON200
@@ -1196,7 +1226,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Vary", "HX-Request, X-Oie-Fragment")
+	w.Header().Set("Vary", "HX-Request, X-Oie-Fragment, X-Oie-Inbox-Scope, X-Oie-Inbox-First")
 	if v.NotFound {
 		w.WriteHeader(http.StatusNotFound)
 	} else if v.Unavailable {

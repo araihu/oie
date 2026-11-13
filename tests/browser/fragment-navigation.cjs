@@ -26,8 +26,11 @@ async function assertMobileControlOwnership(page) {
   const chats=[{id:chatA,accountId:alpha,title:'Family',address:'family@fixture'},{id:chatB,accountId:beta,title:'Team',address:'team@fixture'}].map(c=>({...c,revisionId:revision,kind:'direct',updatedAt:'2026-11-08T12:00:00Z',unreadCount:1,archived:false,favorite:true,lastMessage:'Retained fixture'}));
   const messages=chats.map((c,n)=>({id:id(100+n),revisionId:revision,accountId:c.accountId,conversationId:c.id,sender:{id:id(20+n),displayName:n?'Sam':'Bob'},originalText:'Retained source '+n+' https://example.test/item.png',createdAt:'2026-11-08T12:00:00Z',isOwn:false,sendState:'received'}));
   const catalog=Array.from({length:57},(_,n)=>{const kind=n<53?'image':n<55?'link':'document',m=messages[n%2];return {id:id(500+n),revisionId:revision,kind,url:'https://example.test/'+n+(kind==='image'?'.png':kind==='document'?'.pdf':''),fileName:kind==='document'?n+'.pdf':'',accountLabel:accounts[n%2].label,conversationTitle:chats[n%2].title,message:m};});
-  const streams=new Set(),operations=new Map(),state={effects:0,seq:0,reads:[],searchReads:[]};let releaseDelayedSearch;
-  const emit=()=>{state.seq++;for(const stream of streams)stream.write(`id: ${engine}:${state.seq}\nevent: message.created\ndata: {}\n\n`);};
+  const streams=new Set(),operations=new Map(),state={effects:0,seq:0,reads:[],searchReads:[],inboxReads:0};let releaseDelayedSearch;
+  const emit=(type='message.created',data={})=>{
+    state.seq++;
+    for(const stream of streams)stream.write(`id: ${engine}:${state.seq}\nevent: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
   const api=http.createServer(async (req,res)=>{
     const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');
     const send=(status,data)=>{res.statusCode=status;res.end(JSON.stringify(data));};
@@ -38,7 +41,9 @@ async function assertMobileControlOwnership(page) {
     if(u.pathname.endsWith('/history'))return send(200,{accountId:u.pathname.includes(beta)?beta:alpha,state:'complete',retainedMessages:2,conversations:1,updatedAt:'2026-11-08T12:00:00Z'});
     if(u.pathname.endsWith('/avatars'))return send(200,{items:[]});
     if(u.pathname==='/api/v1/conversations'){
-      const matched=chats.filter(c=>(!u.searchParams.get('accountId')||c.accountId===u.searchParams.get('accountId'))&&c.archived===(u.searchParams.get('archived')==='true')&&(!u.searchParams.get('q')||c.title.toLowerCase().includes(u.searchParams.get('q').toLowerCase()))),limit=Number(u.searchParams.get('limit')||100);return send(200,{items:matched.slice(0,limit),nextCursor:matched.length>limit?matched[limit-1].id:undefined});
+      const unreadOnly=u.searchParams.get('unreadOnly')==='true';
+      if(!unreadOnly)state.inboxReads++;
+      const matched=chats.filter(c=>(!unreadOnly||c.unreadCount>0)&&(!u.searchParams.get('accountId')||c.accountId===u.searchParams.get('accountId'))&&c.archived===(u.searchParams.get('archived')==='true')&&(!u.searchParams.get('q')||c.title.toLowerCase().includes(u.searchParams.get('q').toLowerCase()))).sort((a,b)=>Date.parse(b.updatedAt)-Date.parse(a.updatedAt)),limit=Number(u.searchParams.get('limit')||100);return send(200,{items:matched.slice(0,limit),nextCursor:matched.length>limit?matched[limit-1].id:undefined});
     }
     if(u.pathname==='/api/v1/contacts')return send(200,{items:[],sources:accounts.filter(a=>!u.searchParams.get('accountId')||a.id===u.searchParams.get('accountId')).map(a=>({accountId:a.id,state:'known'}))});
     if(u.pathname==='/api/v1/messages/search'){
@@ -118,6 +123,131 @@ async function assertMobileControlOwnership(page) {
     } finally {
       releaseStartup();await startup.close();await until(()=>streams.size===0,'startup stream disposed');
     }
+    const inboxChecks=[];
+    const initialChats=chats.length;
+    for(let index=0;index<40;index++)chats.push({
+      ...chats[0],id:id(2000+index),title:'Inbox conversation '+index,
+      address:'contact'+index+'@fixture',unreadCount:0
+    });
+    const incomingChat=chats.at(-1),beforeIncoming={...incomingChat};
+    for(const {width,height,lang,chatsLabel,mediaLabel} of [
+      {width:1440,height:1000,lang:'en',chatsLabel:'Chats',mediaLabel:'Media & links'},
+      {width:390,height:844,lang:'pt-BR',chatsLabel:'Conversas',mediaLabel:'Mídia e links'}
+    ]){
+      const context=await browser.newContext({viewport:{width,height},locale:lang});
+      const inboxPage=await context.newPage(),errors=[],listRefreshes=[];
+      debuggingPage=inboxPage;
+      let subscriptions=0,releaseNavigation,releaseRefresh,heldNavigation,heldRefresh;
+      const resetIncoming=()=>Object.assign(incomingChat,beforeIncoming);
+      inboxPage.on('pageerror',error=>errors.push(error.message));
+      inboxPage.on('request',request=>{if(request.resourceType()==='eventsource')subscriptions++;});
+      const navigate=async label=>{
+        const navigation=width<500?'#mobile-navigation-panel':'.oie-sidebar';
+        if(width<500){
+          await inboxPage.locator('[aria-controls=mobile-navigation-panel]:visible').click();
+          await inboxPage.locator(navigation).waitFor({state:'visible'});
+        }
+        await inboxPage.locator(navigation+' a').filter({hasText:label}).click({noWaitAfter:true});
+      };
+      try {
+        const initialRefresh=inboxPage.waitForResponse(response=>new URL(response.url()).pathname==='/ui/refresh');
+        await inboxPage.goto(base+'/?section=chats&lang='+lang+'&theme=dark');
+        await (await initialRefresh).finished();
+        await until(()=>streams.size===1,'inbox event stream');
+        const stream=[...streams][0];
+        await inboxPage.evaluate(()=>{window.htmx.config.defaultSettleDelay=250;});
+        await inboxPage.route('**/?**',async route=>{
+          const request=route.request();
+          if(releaseNavigation&&request.headers()['x-oie-fragment']==='app'&&new URL(request.url()).searchParams.get('section')==='chats'){
+            heldNavigation=true;
+            await new Promise(resolve=>{releaseNavigation=resolve;});
+          }
+          await route.continue().catch(()=>{});
+        });
+        await inboxPage.route('**/ui/refresh?**',async route=>{
+          if(new URL(route.request().url()).searchParams.get('section')!=='media'){
+            listRefreshes.push(route.request().headers()['x-oie-inbox-cursor']||null);
+            if(releaseRefresh&&!route.request().headers()['x-oie-inbox-cursor']){
+              heldRefresh=true;
+              await new Promise(resolve=>{releaseRefresh=resolve;});
+            }
+          }
+          await route.continue().catch(()=>{});
+        });
+        for(const changed of [false,true]){
+          const generation=await inboxPage.evaluate(()=>window.OieRuntime.generation);
+          const top=await inboxPage.locator('#conversation-list').evaluate(list=>{
+            list.scrollTop=360;
+            window.inboxBefore=list;
+            return list.scrollTop;
+          });
+          assert(top>0);
+          await navigate(mediaLabel);
+          await inboxPage.waitForFunction(generation=>!!document.getElementById('shared-content-results')&&window.OieRuntime.generation>generation,generation);
+          const reads=state.inboxReads,refreshes=listRefreshes.length;
+          const mediaGeneration=await inboxPage.evaluate(()=>window.OieRuntime.generation);
+          if(changed){
+            await inboxPage.evaluate(()=>{
+              window.inboxEvent=false;
+              window.OieEvents.target.addEventListener('conversation.updated',()=>{window.inboxEvent=true;},{once:true});
+            });
+            incomingChat.lastMessage='Incoming message while browsing media';
+            incomingChat.unreadCount=1;
+            incomingChat.updatedAt='2026-11-08T13:00:00Z';
+            emit('message.created',{message:{...messages[0],id:id(2100),accountId:incomingChat.accountId,conversationId:incomingChat.id,originalText:incomingChat.lastMessage}});
+            emit('conversation.updated',{conversation:incomingChat});
+            await inboxPage.waitForFunction(()=>window.inboxEvent);
+            assert.equal(state.inboxReads,reads,'media does not prefetch the inbox');
+            releaseRefresh=()=>{};
+          }
+          await inboxPage.evaluate(()=>{
+            window.firstInboxFrame=undefined;
+            function sample(){
+              if(!document.querySelector('.oie-workspace')){requestAnimationFrame(sample);return;}
+              const list=document.getElementById('conversation-list');
+              window.firstInboxFrame={top:list?.scrollTop,retained:list===window.inboxBefore,rows:list?.querySelectorAll('[data-conversation-row]').length};
+            }
+            requestAnimationFrame(sample);
+          });
+          heldNavigation=false;releaseNavigation=()=>{};
+          await navigate(chatsLabel);
+          await until(()=>heldNavigation,'delayed return request');
+          assert(await inboxPage.locator('#shared-content-results').isVisible());
+          assert.equal(await inboxPage.locator('#conversation-list').count(),0);
+          releaseNavigation();releaseNavigation=undefined;
+          await inboxPage.waitForFunction(()=>!!window.firstInboxFrame);
+          assert.deepEqual(await inboxPage.evaluate(()=>window.firstInboxFrame),{top,retained:true,rows:chats.length});
+          if(changed){
+            await until(()=>heldRefresh,'one refresh for the changed inbox');
+            const updated=inboxPage.locator('[data-conversation-row="'+incomingChat.id+'"]');
+            assert.equal(await updated.locator('[data-conversation-id]').count(),1);
+            assert.equal(await updated.locator('.oie-unread-count').count(),0);
+            releaseRefresh();releaseRefresh=undefined;
+            await updated.getByText(incomingChat.lastMessage).waitFor({state:'attached'});
+            assert.equal(await updated.locator('.oie-unread-count').textContent(),'1');
+            assert.equal(await inboxPage.locator('[data-conversation-row]').first().getAttribute('data-conversation-row'),incomingChat.id);
+          } else {
+            await inboxPage.waitForFunction(generation=>window.OieRuntime.generation>generation,mediaGeneration);
+            const recovery=inboxPage.waitForResponse(response=>new URL(response.url()).pathname==='/ui/refresh');
+            await inboxPage.evaluate(()=>document.dispatchEvent(new Event('oie:refresh-request')));
+            assert(!(await (await recovery).text()).includes('id="live-list"'),'other live regions do not reload the current inbox');
+          }
+          await wait(450);
+          assert.equal(state.inboxReads-reads,Number(changed),'engine inbox reads after returning from media');
+          assert.equal(listRefreshes.slice(refreshes).filter(cursor=>!cursor).length,Number(changed),'browser refreshes requesting the inbox');
+          assert.equal(subscriptions,1);
+          assert.deepEqual([...streams],[stream]);
+          inboxChecks.push({lang,width,changed,firstFrameScroll:top,inboxReads:state.inboxReads-reads,subscriptions});
+        }
+        assert.deepEqual(errors,[]);
+      } finally {
+        releaseNavigation?.();releaseRefresh?.();
+        resetIncoming();
+        await context.close();await until(()=>streams.size===0,'inbox stream disposed');
+      }
+    }
+    chats.splice(initialChats);
+    findings.push('Returning from Media restores the inbox DOM and scroll on the first frame, with zero inbox reads when unchanged and one after an incoming message');
     {
     const retainedCount=messages.length;
     for(let index=0;index<24;index++)messages.push({
@@ -132,7 +262,9 @@ async function assertMobileControlOwnership(page) {
       if(request.resourceType()==='eventsource')subscriptions++;
       if(request.resourceType()==='document')documents.push(request.url());
     });
+    const scopedRefresh=scoped.waitForResponse(response=>new URL(response.url()).pathname==='/ui/refresh');
     await scoped.goto(base+'/?chat='+chatA+'&lang=en&theme=dark',{waitUntil:'domcontentloaded'});
+    await (await scopedRefresh).finished();
     await until(()=>streams.size===1&&subscriptions===1,'initial scoped stream connected');
     const streamBefore=[...streams][0],subscriptionsBefore=subscriptions;
     await scoped.locator('#message-composer').fill('Draft kept through scoped swaps');
@@ -271,7 +403,7 @@ async function assertMobileControlOwnership(page) {
     for(const [section,label]of sidebarDestinations){await mobile.locator('[aria-controls=mobile-navigation-panel]:visible').click();await mobile.locator('#mobile-navigation-panel').waitFor({state:'visible'});await mobile.locator('#mobile-navigation-panel a').filter({hasText:label}).click();await mobileRoute(section);await mobile.locator('#mobile-navigation-panel').waitFor({state:'hidden'});assert((await mobile.locator('#mobile-navigation-panel a[aria-current=page]').textContent()).includes(label))}
     await mobile.goBack();await mobileRoute('favorites');await mobile.goForward();await mobileRoute('chats');assert(mobileHX.length>=6);assert.deepEqual(mobileErrors,[]);findings.push('Mobile overlay routes all four destinations, closes after each fragment, updates active state and preserves the document through Back/Forward');assert(await mobile.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await mobile.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await mobile.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);await denied.close();findings.push('Mobile light layout preserves denied-storage session draft and has no horizontal overflow or WCAG A/AA violations');
     const native=await browser.newContext({javaScriptEnabled:false,viewport:{width:1440,height:1000}}),fallback=await native.newPage();await fallback.goto(base+'/?chat='+chatA+'&lang=en');for(const [section,label]of sidebarDestinations){await fallback.locator('.oie-sidebar a').filter({hasText:label}).click();assert.equal(new URL(fallback.url()).searchParams.get('section'),section);assert.equal(await fallback.locator('#oie-app').count(),1);assert((await fallback.locator('.oie-sidebar a[aria-current=page]').textContent()).includes(label));if(section==='media')assert.equal(await fallback.locator('[data-shared-item]').count(),50)}await native.close();findings.push('Direct native links remain usable when JavaScript is disabled');
-    const artifact=path.join(__dirname,'artifacts');await fs.mkdir(artifact,{recursive:true});await fs.writeFile(path.join(artifact,'fragment-navigation-report.json'),JSON.stringify({findings,fragmentRequests:hx.length,documentRequests:documents.length,completedFragmentShapes:completedFragments.length,mobileDocumentRequests:mobileDocuments.length,mobileFragmentRequests:mobileHX.length,earlyDocumentRequests:earlyDocuments.length,intents:2,mutations:state.effects,pageErrors:errors},null,2));console.log('PASS: HTMX fragment navigation, scoped drafts, Back/Forward, stale-response/failure recovery, one stream and one effect per intent, mobile accessibility and native fallback');
+    const artifact=path.join(__dirname,'artifacts');await fs.mkdir(artifact,{recursive:true});await fs.writeFile(path.join(artifact,'fragment-navigation-report.json'),JSON.stringify({findings,inboxChecks,fragmentRequests:hx.length,documentRequests:documents.length,completedFragmentShapes:completedFragments.length,mobileDocumentRequests:mobileDocuments.length,mobileFragmentRequests:mobileHX.length,earlyDocumentRequests:earlyDocuments.length,intents:2,mutations:state.effects,pageErrors:errors},null,2));console.log('PASS: HTMX fragment navigation, cached inbox first frame and request counts, scoped drafts, Back/Forward, stale-response/failure recovery, one stream and one effect per intent, mobile accessibility and native fallback');
   } catch(error) {
     if(debuggingPage&&!debuggingPage.isClosed())console.error('Fragment failure evidence',JSON.stringify(await debuggingPage.evaluate(()=>({url:location.href,ready:document.readyState,generation:window.OieRuntime?.generation,account:document.body.dataset.accountId,chat:document.body.dataset.conversationId,status:document.querySelector('[data-navigation-status]')?.textContent,labels:[...document.querySelectorAll('[data-account-switcher]')].map(e=>e.textContent),boosted:document.querySelectorAll('[hx-boost]').length,form:document.querySelector('form.oie-search')?.outerHTML,trace:window.navTrace?.slice(-30),workspace:document.querySelector('#workspace')?.className,paneOpen:document.querySelector('#conversation-pane')?.dataset.openChat,navigationControls:[...document.querySelectorAll('button[aria-label="Open navigation"]')].map(node=>({controls:node.getAttribute('aria-controls'),expanded:node.getAttribute('aria-expanded')}))})).catch(()=>({unavailable:true}))), 'streams',streams.size, 'BFF log',log);
     throw error;

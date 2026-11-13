@@ -24,6 +24,32 @@ Selection updates `aria-current` directly. A new conversation response does not
 mark the retained inbox data as current, so an intervening incoming message can
 still update its preview or unread count.
 
+## Returning from another sidebar section
+
+The tab retains one detached conversation-list node, including its scroll
+position. A matching Conversations route tells the BFF the inbox scope and
+the first row's ID. The BFF verifies the scope and uses that ID as a candidate
+for the implicit desktop conversation. It sends the rest of the app fragment
+without fetching or rendering the list. The browser restores the list and its
+scroll synchronously during the swap, before the first frame. The scope covers
+engine, account, section, filter, query, locale and theme. Native navigation
+loads the full view.
+
+One EventSource remains connected across fragment swaps. Route-owned handlers
+are disposed and reattached as the workspace changes. Conversation and message
+events invalidate the list, including while another section is visible.
+Returning shows the retained list and coalesces pending updates into a live
+refresh. The BFF omits the list on other refreshes when the current inbox scope
+and engine cursor match. A disconnected stream triggers recovery through
+reconnection or the existing polling fallback. Engine changes and data reset
+discard the retained list.
+
+The fragment navigation fixture delays both the sidebar response and the
+changed list refresh. It checks the original node and scroll on the first frame,
+the preview, ordering and unread badge after refresh, engine inbox reads and
+the identity of the event stream on desktop in English and mobile in
+Brazilian Portuguese.
+
 The fragment root is a flex column occupying one workspace grid cell. The chat
 fills that column and the details drawer stays inside it. Using `display:contents`
 on this root exposed the drawer's empty wrapper as another grid item, creating a

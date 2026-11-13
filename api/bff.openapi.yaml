@@ -34,6 +34,14 @@ paths:
         in: header
         description: Selects the HTML region. With HX-Request and no fragment selector, the app region is returned.
         schema: {type: string, enum: [app, inbox, conversation, info, scheduled, schedule-editor, accounts, shared, appearance, timeline]}
+      - name: X-Oie-Inbox-Scope
+        in: header
+        description: Scope of the conversation list held in the current tab. An app fragment for Conversations may omit the list contents when the scope matches the current engine and requested inbox.
+        schema: {type: string, pattern: '^[0-9a-f]{64}$'}
+      - name: X-Oie-Inbox-First
+        in: header
+        description: First conversation in the tab's cached default inbox, used as a candidate for implicit desktop selection when the scope matches. The server checks current visibility.
+        schema: {$ref: './openapi.yaml#/components/schemas/ID'}
       responses:
         '200':
           description: Localized HTML document or fragment.
@@ -44,6 +52,28 @@ paths:
           description: The requested page or conversation is unavailable.
         '503':
           description: The requested presentation data is unavailable.
+  /ui/refresh:
+    get:
+      tags: [Conversations]
+      operationId: refreshWorkspace
+      summary: Refresh the live regions of the current workspace
+      parameters:
+      - name: X-Oie-Inbox-Scope
+        in: header
+        description: Scope of the list mounted in the current tab.
+        schema: {type: string, pattern: '^[0-9a-f]{64}$'}
+      - name: X-Oie-Inbox-Cursor
+        in: header
+        description: Engine event cursor through which the mounted inbox is current. A matching scope and current cursor omit the conversation list from the live regions.
+        schema: {type: string}
+      responses:
+        '200':
+          description: Uncached localized HTML containing live regions for the current workspace.
+          content:
+            text/html:
+              schema: {type: string}
+        '503':
+          description: The live regions could not be rendered.
   /ui/scheduling/conversation:
     get:
       tags: [Conversations]

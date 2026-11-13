@@ -1,6 +1,7 @@
 (() => {
  'use strict';
  const runtime=window.OieRuntime;
+ const inbox=window.OieInbox;
  let booted=false,epoch=0,currentURL=location.href,infoReturnScroll=0,infoRequestGeneration=0,inboxScroll=0;
  let restoreFilterFocus=false,filterScroll=0;
  let pendingConversation, pendingShared, settling, historyRequest;
@@ -423,6 +424,18 @@
   stopSharedLoading();
   ctx.oieEpoch=++epoch;ctx.oieKind=ctx.target.id;ctx.oieHistory=historyRequest!==undefined&&new URL(ctx.request.action,location.href).href===historyRequest;
   if(ctx.oieHistory)historyRequest=undefined;
+  if(ctx.oieKind==='oie-app'||ctx.oieKind===inboxID){
+   ctx.oieInboxGeneration=inbox.generation;
+   if(booted&&ctx.oieKind==='oie-app'&&ctx.request.method.toUpperCase()==='GET'){
+    const entry=inbox.match(new URL(ctx.request.action,location.href));
+    if(entry){
+     ctx.oieInbox=entry;
+     ctx.request.headers['X-Oie-Inbox-Scope']=entry.list.dataset.inboxCacheScope;
+     const first=entry.list.querySelector('a[data-conversation-id]')?.dataset.conversationId;
+     if(first)ctx.request.headers['X-Oie-Inbox-First']=first;
+    }
+   }
+  }
   previousConversation?.request.abort();
   if(['shared-content-scroll','shared-search-results'].includes(ctx.oieKind)){
    ctx.oieSharedFields=sharedFields();ctx.target.setAttribute('aria-busy','true');startSharedLoading(ctx);
@@ -459,6 +472,11 @@
   }
   const parsed=new DOMParser().parseFromString(ctx.text||'','text/html'),next=parsed.querySelector('#'+ctx.oieKind);
   let valid=!!next;
+  if(ctx.oieKind==='oie-app'){
+   const list=next?.querySelector('#conversation-list');
+   if(!list?.hasAttribute('data-inbox-reuse'))ctx.oieInbox=undefined;
+   else valid=valid&&!!ctx.oieInbox&&inbox.holds(ctx.oieInbox)&&list.dataset.inboxCacheScope===ctx.oieInbox.list.dataset.inboxCacheScope&&next.dataset.engineId===app()?.dataset.engineId;
+  }
   if(['shared-content-scroll','shared-search-results'].includes(ctx.oieKind)){
    valid=valid&&ctx.response?.status===200&&parsed.querySelector('[data-shared-fragment]')?.dataset.engineId===document.body.dataset.engineId&&sharedFields()===ctx.oieSharedFields;
    ctx.oieSharedPage=parsed;
@@ -488,6 +506,7 @@
    event.preventDefault();return;
   }
   remember();ctx.target=document.getElementById(ctx.oieKind);
+  if(ctx.oieKind==='oie-app'&&booted&&!ctx.oieInbox)inbox.park(new URL(currentURL),inboxScroll);
   if(ctx.oieKind===inboxID){
    const filters=ctx.target.querySelector('.oie-filters');
    restoreFilterFocus=filters.contains(document.activeElement);
@@ -501,6 +520,16 @@
   }
 
   if(ctx.oieKind==='oie-app'||ctx.oieKind==='conversation-pane'){if(ctx.oieKind==='conversation-pane')closeOverlays();runtime.stop();}else infoRequestGeneration=ctx.oieStarGeneration;
+ });
+ document.addEventListener('htmx:before:settle',event=>{
+  const root=event.detail.task?.target,ctx=settling;
+  if(!root?.isConnected||ctx?.oieKind!==root.id||(root.id!=='oie-app'&&root.id!==inboxID))return;
+  const list=root.querySelector('#conversation-list');
+  if(ctx.oieInbox&&list){
+   inbox.restore(ctx.oieInbox,list,root.dataset.conversationId);
+  }else if(list){
+   inbox.track(list,ctx.oieInboxGeneration);
+  }
  });
  document.addEventListener('htmx:after:settle',event=>{
   const root=event.detail.task?.target;if(!root||!root.isConnected||root!==document.getElementById(root.id)||!kinds.includes(root.id))return;
@@ -578,7 +607,7 @@
   else{
    if(pendingConversation&&!pendingConversation.overlay.isConnected)stopConversationLoading();
    const pane=root.id==='conversation-pane'?root:null;
-   if(!pane)inboxScroll=0;
+   if(!pane)inboxScroll=ctx?.oieInbox?.top||0;
    routeState(pane);syncFilterLinks();upgrade(pane||app());
    if(!pane)rememberSharedPage(root.querySelector('#shared-content-pagination [data-shared-page]'));
    rememberInfoSharedPage(root);
@@ -594,7 +623,7 @@
     if(timeline)timeline.scrollTop=savedTimelineTop;
    }
    if(scheduleEditor)scheduleEditor.focus({preventScroll:true});
-   requestAnimationFrame(()=>{if(!root.isConnected||root!==document.getElementById(root.id))return;if(saved&&root.id==='oie-app')for(const [id,top]of Object.entries(saved)){if(id==='message-timeline')continue;const node=document.getElementById(id);if(node)node.scrollTop=top}const info=document.getElementById('chat-info-content');if(info)document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root:info,generation:Number(document.body.dataset.starGeneration||0)}}));});
+   requestAnimationFrame(()=>{if(!root.isConnected||root!==document.getElementById(root.id))return;if(saved&&root.id==='oie-app')for(const [id,top]of Object.entries(saved)){if(id==='message-timeline'||id==='conversation-list'&&ctx?.oieInbox)continue;const node=document.getElementById(id);if(node)node.scrollTop=top}const info=document.getElementById('chat-info-content');if(info)document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root:info,generation:Number(document.body.dataset.starGeneration||0)}}));});
   }
  });
  document.addEventListener('htmx:error',event=>{const ctx=event.detail.ctx;if(ctx?.oieKind&&!ctx.oieInfoCancelled&&ctx.oieEpoch===epoch){ctx.target?.removeAttribute('aria-busy');showError(ctx)}});
@@ -678,6 +707,6 @@
      event.detail.querySelector('#oie-live-regions')?.dataset.conversationId===document.body.dataset.conversationId)rememberSharedPage(info,true);
  });
  reducedMotion.addEventListener('change',()=>upgrade(app()));
- async function ready(){await window.goshtosoDependencies?.ready;booted=true;routeState();rememberSharedPage(document.querySelector('#shared-content-pagination [data-shared-page]'));rememberInfoSharedPage(document);syncFilterLinks();upgrade(app());runtime.start();}
+ async function ready(){inbox.seed(document.getElementById('conversation-list'));await window.goshtosoDependencies?.ready;booted=true;routeState();rememberSharedPage(document.querySelector('#shared-content-pagination [data-shared-page]'));rememberInfoSharedPage(document);syncFilterLinks();upgrade(app());runtime.start();}
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ready,{once:true});else ready();
 })();

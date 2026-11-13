@@ -93,7 +93,7 @@ templ page(v view) {
 <link rel="apple-touch-icon" sizes="180x180" href={templ.URL(brandURL("apple-touch-icon-180.png"))}/>
 <link rel="manifest" href={templ.SafeURL("/manifest.webmanifest?lang="+v.Locale)}/>
 <meta name="theme-color" content="#6092ab"/>
-			<script src="/ui/runtime.js"></script><script src="/ui/presentation-time.js" defer></script>
+			<script src="/ui/runtime.js"></script><script src="/ui/inbox-cache.js"></script><script src="/ui/event-stream.js"></script><script src="/ui/presentation-time.js" defer></script>
 <script src="/ui/theme.js"></script>
 <script src="/ui/sidebar.js"></script>
 <script src="/ui/formatting.js"></script>
@@ -319,8 +319,10 @@ templ inboxList(v view) {
 				@filterLink(v, "favorites", v.Text.Favorites)
 				@filterLink(v, "groups", v.Text.Groups)
 			</nav>
-<div class="oie-conversation-scroll" id="conversation-list" data-version={v.conversationListVersion()}>
+<div class="oie-conversation-scroll" id="conversation-list" data-inbox-cache-scope={v.inboxCacheScope()} data-inbox-cursor={v.EventCursor} data-inbox-reuse?={v.ReuseInbox} data-version={v.conversationListVersion()}>
+if !v.ReuseInbox {
 @conversationList(v)
+}
 </div>
 </div>
 }
@@ -664,7 +666,9 @@ if v.InfoView=="shared" || v.InfoView=="stars" {
 if v.Section=="media"{
 <div id="live-shared-content"><div id="live-shared-status">@sharedStatus(v)</div><div id="live-shared-results" data-version={v.sharedVersion()}>@sharedItems(v)</div><div id="live-shared-pagination">@sharedPagination(v)</div></div>
 }
+if !v.ReuseInbox && v.Section!="media" && v.Section!="scheduled" {
 <div id="live-list" data-version={v.conversationListVersion()}>@conversationList(v)</div>
+}
 <div id="live-timeline" data-version={v.timelineVersion()}>@timeline(v)</div>
 <div id="live-header" data-version={v.headerVersion()}>
 if v.Selected!=nil {
