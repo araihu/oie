@@ -119,7 +119,7 @@ window.OieRuntime.register('live', life => {
   function finishEdit(){keepLastEdit(editSession?{...editSession}:null);editEpoch++;clearTimeout(editPoll);editBusy=false;editPreparing=false;keepEdit(null);restoreOrdinaryDraft();scheduleRefresh();}
   function editMenuOpen(){return input.getAttribute('aria-expanded')==='true'||[...document.querySelectorAll('[role="dialog"],[role="menu"],[data-emoji-trigger][aria-expanded="true"]')].some(node=>node.getClientRects().length&&getComputedStyle(node).visibility!=='hidden');}
   async function beginEdit(messageId=''){
-    if(!composer||!editBox||composer.dataset.attachmentReviewOpen==='true'||editingSchedule||composer.dataset.editAllowed!=='true'||journal?.pending||preparingReply||editBusy||editPreparing||editSession||stopped)return;
+    if(!composer||!editBox||composer.hasAttribute('data-attachments-pending')||editingSchedule||composer.dataset.editAllowed!=='true'||journal?.pending||preparingReply||editBusy||editPreparing||editSession||stopped)return;
     const epoch=++editEpoch,draftAtRequest=input.value;editPreparing=true;feedback(composer,'');announceEdit(editText('preparing'));renderReply();renderEdit();
     const url=new URL(composer.dataset.editTargetUrl,location.origin);if(messageId)url.searchParams.set('messageId',messageId);else url.searchParams.delete('messageId');
     const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),10000);
@@ -192,7 +192,7 @@ window.OieRuntime.register('live', life => {
     if(replyBox){replyBox.hidden=!reply||(locked&&!journal?.scheduledAt&&!editingSchedule)||!!editSession;replyBox.querySelector('[data-composer-reply-sender]').textContent=typeof reply?.senderName==='string'?reply.senderName:'';replyBox.querySelector('[data-composer-reply-excerpt]').textContent=typeof reply?.excerpt==='string'?reply.excerpt:'';const cancel=replyBox.querySelector('[data-cancel-reply]');if(cancel)cancel.disabled=locked||preparingReply;}
     for(const button of document.querySelectorAll('[id^="reply-message-"]'))button.disabled=!composer||composer.dataset.replyAllowed!=='true'||locked||preparingReply||editing;
     if(composerSend) composerSend.disabled=stopped||locked||preparingReply||editing||composer.dataset.busy==='true'||
-      composer.dataset.attachmentReviewOpen==='true'||(composer.dataset.sendAllowed!=='true'&&!editingSchedule&&!locked);
+      composer.hasAttribute('data-attachments-pending')||(composer.dataset.sendAllowed!=='true'&&!editingSchedule&&!locked);
     if(scheduleRetry){scheduleRetry.hidden=!locked||!journal.scheduledAt&&!editingSchedule;scheduleRetry.disabled=stopped||composer.dataset.busy==='true';}
     composer?.dispatchEvent(new Event('oie:composer-preview-change'));
     composer?.dispatchEvent(new CustomEvent('oie:composer-attachments',{detail:{files:journal?.attachments||[],locked:locked||editing||preparingReply||stopped||composer.dataset.busy==='true'}}));
@@ -648,6 +648,7 @@ window.OieRuntime.register('live', life => {
     const wasEditing = editingSchedule;
     const nextSchedule = readScheduledMessage();
     if (!wasEditing && !nextSchedule) return;
+    composer.dispatchEvent(new Event('oie:attachment-draft-changing'));
     if (!wasEditing) saveDraft(draftRecord(false));
     scheduledMessage = nextSchedule;
     editingSchedule = !!scheduledMessage;
@@ -691,32 +692,27 @@ window.OieRuntime.register('live', life => {
     if(editingSchedule&&event.key==='Escape'&&!event.defaultPrevented&&!editMenuOpen()){event.preventDefault();composer.querySelector('[data-cancel-schedule-edit]').click();}
   });
   life.on(composer,'oie:attachments-change',event=>{
-    if(journal?.pending||editSession||editPreparing||preparingReply||stopped||composer.dataset.busy==='true')return;
+    if(journal?.pending||editSession||editPreparing||stopped||composer.dataset.busy==='true')return;
     const detail = event.detail;
-    if (typeof detail.caption === 'string' && input.value !== detail.caption) {
-      input.value = detail.caption;
-      input.dispatchEvent(new Event('input', {bubbles:true}));
-    }
     saveDraft({...draftRecord(false),attachments:detail.files});
     detail.applied = true;
     renderReply();
   });
   life.on(composer,'oie:location-draft',event=>{
     if(journal?.pending||editSession||editPreparing||stopped||composer.dataset.busy==='true'||input.disabled||input.readOnly)return;
-    const {url} = event.detail;
-    if (typeof url !== 'string') return;
+    const {text:position} = event.detail;
+    if (typeof position !== 'string') return;
     const separator = !input.value || /\s$/.test(input.value) ? '' : '\n';
-    const draft = input.value + separator + url;
+    const draft = input.value + separator + position;
     if (Array.from(draft).length > 16384) return;
-    composer.dataset.privateMapLinks = JSON.stringify([...new Set([...privateMapLinks(),url])]);
     input.value = draft;
     input.dispatchEvent(new Event('input', {bubbles:true}));
     event.detail.applied = true;
   });
-  life.on(composer,'oie:attachment-review',renderReply);
+  life.on(composer,'oie:attachment-staging',renderReply);
   life.on(composer,'oie:schedule-snapshot',event=>{
     const draft = draftRecord();
-    const editBlocked=!!journal?.pending||!!editSession||editPreparing||preparingReply||stopped||composer.dataset.busy==='true'||composer.dataset.attachmentReviewOpen==='true';
+    const editBlocked=!!journal?.pending||!!editSession||editPreparing||preparingReply||stopped||composer.dataset.busy==='true'||composer.hasAttribute('data-attachments-pending');
     Object.assign(event.detail,{text:draft.text,reply:draft.reply,files:draft.attachments,review:scheduleReview(draft),
       editBlocked:editBlocked||!composer.hasAttribute('data-schedule-composer'),
       blocked:editBlocked||(composer.dataset.sendAllowed!=='true'&&!editingSchedule)});
@@ -972,7 +968,7 @@ window.OieRuntime.register('live', life => {
     if(sending&&(editSession||editPreparing)){if(editSession&&!editSession.submitted)void submitEdit(false);return;}
     if (sending) {
       if(preparingReply){feedback(form,text('replyPreparing'));return}
-      if (composer.dataset.attachmentReviewOpen==='true'||(form.dataset.sendAllowed !== 'true'&&!editingSchedule&&!journal?.pending)) return;
+      if (composer.hasAttribute('data-attachments-pending')||(form.dataset.sendAllowed !== 'true'&&!editingSchedule&&!journal?.pending)) return;
       const scheduledAt=journal?.pending?journal.scheduledAt:form.elements.namedItem('scheduledAt')?.value;
       if(!journal?.pending&&needsReplyRefresh(journal?.reply)){
         const reviewed = scheduledAt || editingSchedule ? scheduleReview(draftRecord()) : '';

@@ -29,7 +29,7 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
   };
   const attachToDraft = async page => {
     await page.locator('[data-attachment-picker]').setInputFiles(attachment);
-    await page.locator('#oie-attachment-review').getByRole('button', {name:'Add to draft', exact:true}).click();
+    await page.locator('[data-composer-attachments]').getByRole('link', {name:attachment.name, exact:true}).waitFor();
   };
   const openMenu = async (page, label) => {
     await page.locator('#composer-split').getByRole('button', {name: label, exact: true}).click();
@@ -135,9 +135,8 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
       previous = current;
     }
   });
-  await alicePage.locator('[data-attachment-picker]').setInputFiles(attachment);
   const beforeStage = await sample(alicePage);
-  await alicePage.locator('#oie-attachment-review').getByRole('button', {name:'Add to draft', exact:true}).click();
+  await alicePage.locator('[data-attachment-picker]').setInputFiles(attachment);
   await alicePage.getByRole('link', {name: attachment.name, exact: true}).waitFor();
   await stable(alicePage, beforeStage);
   await openMenu(alicePage, 'More options');

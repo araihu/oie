@@ -225,7 +225,7 @@
   .oie-agenda-hour { padding-inline: 0 .625rem; min-inline-size: auto; }
 }
 
-.oie-schedule-edit-bar, .oie-composer-attachments, .oie-message-attachments {
+.oie-schedule-edit-bar, .oie-message-attachments {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -235,20 +235,52 @@
 .oie-schedule-edit-bar { justify-content: space-between; padding: .25rem .75rem; }
 
 .oie-composer-attachments {
-  padding-inline: .75rem;
-  overflow: auto;
-  flex-wrap: nowrap;
-  max-height: 5rem;
+  padding: .375rem .75rem;
 }
-.oie-composer-attachments[hidden], .oie-schedule-dialog [hidden] { display: none; }
-.oie-composer-attachments > span {
-  flex: 0 0 auto;
-  max-width: 15rem;
-  display: inline-flex;
+.oie-composer-attachments [data-attachment-items] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: .5rem;
+}
+.oie-composer-attachments[hidden], .oie-composer-attachments [hidden], .oie-schedule-dialog [hidden] { display: none; }
+.oie-draft-attachment {
+  display: grid;
+  min-inline-size: 0;
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto auto;
+  grid-template-rows: 1.25rem 1.25rem;
   align-items: center;
-  gap: .25rem;
+  column-gap: .375rem;
+  min-block-size: 3rem;
+  padding: .25rem .375rem;
+  border: 1px solid var(--oie-border);
+  border-radius: .5rem;
+  background: var(--oie-raised);
 }
-.oie-composer-attachments a { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.oie-draft-attachment img {
+  grid-area: 1 / 1 / 3 / 2;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  object-fit: cover;
+  border-radius: .25rem;
+}
+.oie-draft-attachment :is([data-file-name], [data-file-download]) {
+  grid-area: 1 / 2;
+  min-inline-size: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.oie-draft-attachment:has(img[hidden]) :is([data-file-name], [data-file-download], [data-file-state]) { grid-column: 1 / 3; }
+.oie-draft-attachment [data-file-download] { grid-row: 1 / 3; }
+.oie-draft-attachment [data-file-state] {
+  grid-area: 2 / 2;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: .75rem;
+}
+.oie-draft-attachment [data-retry-attachment] { grid-area: 1 / 3 / 3 / 4; }
+.oie-draft-attachment [data-remove-attachment] { grid-area: 1 / 4 / 3 / 5; }
 .oie-message-attachments[hidden] { display: none; }
 .oie-message-attachments a { min-inline-size: 0; overflow-wrap: anywhere; }
 .oie-message-attachments img {
@@ -336,64 +368,6 @@
   content: "";
 }
 
-#oie-attachment-review {
-  inline-size: min(30rem, calc(100vw - 2rem));
-  color: var(--oie-text);
-  background: var(--oie-raised);
-  border-color: var(--oie-border);
-}
-.oie-attachment-header, .oie-attachment-review footer {
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-}
-.oie-attachment-header {
-  justify-content: space-between;
-  flex: none;
-  padding: .5rem 1rem;
-  border-block-end: 1px solid var(--oie-border);
-}
-.oie-attachment-review {
-  display: grid;
-  min-inline-size: 0;
-  gap: .75rem;
-}
-.oie-attachment-review ul {
-  display: grid;
-  gap: .375rem;
-  max-block-size: min(36dvh, 15rem);
-  margin: 0;
-  overflow: auto;
-  padding: 0 .25rem;
-}
-.oie-attachment-review li {
-  display: flex;
-  align-items: center;
-  gap: .75rem;
-  min-block-size: 2.75rem;
-  padding: .25rem;
-}
-.oie-attachment-review li img {
-  flex: none;
-  inline-size: 4.5rem;
-  block-size: 3.5rem;
-  object-fit: contain;
-  border-radius: .375rem;
-  background: var(--oie-chat);
-}
-.oie-attachment-review li span {
-  flex: 1;
-  overflow-wrap: anywhere;
-}
-.oie-attachment-review li button { flex: none; }
-.oie-attachment-review textarea { max-block-size: 25dvh; resize: vertical; }
-.oie-attachment-review [data-attachment-cancel] { min-block-size: 2.75rem; }
-.oie-attachment-review [data-attachment-status] { min-block-size: 1.5rem; }
-.oie-attachment-review footer {
-  display: flex;
-  justify-content: end;
-  flex-wrap: wrap;
-}
 #oie-location-draft {
   inline-size: min(29rem, calc(100vw - 2rem));
   color: var(--oie-text);
@@ -413,3 +387,6 @@
 .oie-location-draft [data-locate] { justify-self: start; }
 .oie-location-draft [data-location-status] { min-block-size: 1.5rem; }
 .oie-location-draft footer { display: flex; justify-content: end; gap: .5rem; flex-wrap: wrap; }
+
+.oie-location-coordinates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.oie-location-coordinates > div { display: grid; gap: .25rem; }

@@ -12,7 +12,6 @@ import (
 	"github.com/araihu/goshtoso/components/link"
 	"github.com/araihu/goshtoso/components/modal"
 	"github.com/araihu/goshtoso/components/splitbutton"
-	"github.com/araihu/goshtoso/components/textarea"
 	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/araihu/oie/internal/adapters/web/appicons"
@@ -307,8 +306,12 @@ templ locationDraftDialog(v view) {
 
 templ locationDraftForm(v view) {
 	<form class="oie-location-draft" method="dialog" data-location-draft data-invalid={v.Text.LocationInvalid} data-unavailable={v.Text.LocationUnavailable} data-finding={v.Text.LocationFinding} data-too-long={v.Text.InvalidMessage}>
-		<label for="location-map-link">{v.Text.LocationMapLink}</label>
-		<input id="location-map-link" type="url" maxlength="4096" required autofocus/>
+		<div class="oie-location-coordinates">
+			<div><label for="location-latitude">{v.Text.LocationLatitude}</label>
+			<input id="location-latitude" name="latitude" type="number" inputmode="decimal" min="-90" max="90" step="any" required autofocus/></div>
+			<div><label for="location-longitude">{v.Text.LocationLongitude}</label>
+			<input id="location-longitude" name="longitude" type="number" inputmode="decimal" min="-180" max="180" step="any" required/></div>
+		</div>
 		@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-locate":""})) { <span>{v.Text.LocationUseCurrent}</span> }
 		<p data-location-status role="status"></p>
 		<footer>
@@ -318,37 +321,24 @@ templ locationDraftForm(v view) {
 	</form>
 }
 
-templ attachmentDialog(v view) {
-	@modal.Dialog(modal.DialogConfig{ID:"oie-attachment-review",Title:v.Text.AttachmentReview,HeaderContent:attachmentReviewHeader(v),Content:attachmentReview(v)})
-}
-
-templ attachmentReviewHeader(v view) {
-	<header class="oie-attachment-header">
-		<strong aria-hidden="true">{v.Text.AttachmentReview}</strong>
-		@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-attachment-cancel":"","aria-label":v.Text.Close})) { @glyph(heroicons.Icon16SolidXMark) }
-	</header>
-}
-
-templ attachmentReview(v view) {
-	<form class="oie-attachment-review" data-attachment-review method="dialog"
-		data-attachment-failed={v.Text.AttachmentFailed} data-attachment-limit={v.Text.AttachmentLimit}
-		data-attachment-unavailable={v.Text.AttachmentUnavailable} data-remove-label={v.Text.RemoveAttachment}
-		data-invalid-caption={v.Text.InvalidMessage} data-staging={v.Text.AttachmentPreparing}>
-		<ul data-attachment-review-files></ul>
+templ composerAttachments(v view) {
+	<div data-composer-attachments class="oie-composer-attachments" hidden
+		data-failed={v.Text.AttachmentFailed} data-limit={v.Text.AttachmentLimit}
+		data-unavailable={v.Text.AttachmentUnavailable} data-remove-label={v.Text.RemoveAttachment}
+		data-preparing={v.Text.AttachmentPreparing} data-retry={v.Text.Retry}>
+		<div data-attachment-items></div>
+		<span class="sr-only" data-attachment-status role="status"></span>
 		<template>
-			<li>
-				<img alt="" width="72" height="56" loading="lazy"/>
-				<span></span>
-				@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain)) { @glyph(heroicons.Icon16SolidXMark) }
-			</li>
+			<div class="oie-draft-attachment">
+				<img alt="" width="40" height="40" loading="lazy" hidden/>
+				<span data-file-name dir="auto"></span>
+				<a data-file-download hidden></a>
+				<span data-file-state hidden></span>
+				@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-retry-attachment":"","hidden":true})) { <span>{v.Text.Retry}</span> }
+				@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-remove-attachment":""})) { @glyph(heroicons.Icon16SolidXMark) }
+			</div>
 		</template>
-		@textarea.Textarea(textarea.Config{ID:"attachment-caption",Label:v.Text.AttachmentCaption,Rows:2,InputAttrs:templ.Attributes{"autofocus":true}})
-		<p data-attachment-status role="status"></p>
-		<footer>
-			@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-attachment-cancel":""})) { <span>{v.Text.DeleteDataCancel}</span> }
-			@button.Button(button.WithType("submit"),button.WithAttrs(templ.Attributes{"data-attachment-add":""})) { <span>{v.Text.AttachmentAddToDraft}</span> }
-		</footer>
-	</form>
+	</div>
 }
 
 templ scheduleDialog(v view) {

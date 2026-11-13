@@ -1,14 +1,17 @@
 const assert = require('node:assert/strict');
 const {randomUUID} = require('node:crypto');
+const {readFileSync} = require('node:fs');
+const {join} = require('node:path');
 
 async function attachmentComposition({base, api, until, alicePage, bobPage, alice, bob, aliceConversation, bobConversation, expectTransportFailure, prefix}) {
   const pageURL = (conversation, account, lang, theme) =>
     base + '/?' + new URLSearchParams({chat:conversation.id, account:account.id, lang, theme});
   const image = {
     name: 'planta-do-estudio.png', mimeType: 'image/png',
-    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z2gAAAABJRU5ErkJggg==', 'base64'),
+    buffer: readFileSync(join(__dirname, 'fixtures', 'video-poster.png')),
   };
   const file = {name:'notas.txt', mimeType:'text/plain', buffer:Buffer.from('Notes')};
+  const longFile = {...file, name:'roteiro-da-sessao-de-gravacao-e-notas-de-producao.txt'};
   const stagePath = '**/ui/scheduling/stage?*';
   const requestPaths = [];
   const track = request => {
@@ -54,10 +57,9 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
     await page.setViewportSize({width, height:844});
     await page.goto(pageURL(conversation, account, lang, theme));
     const composer = page.locator('#message-composer');
-    const review = page.locator('#oie-attachment-review');
-    const caption = review.locator('textarea');
+    const draftFiles = page.locator('[data-composer-attachments]');
+    const remove = (name) => draftFiles.getByRole('button', {name:(pt ? 'Remover anexo' : 'Remove attachment') + ' · ' + name, exact:true});
     const original = pt ? 'Rascunho da conversa' : 'Independent text draft';
-    const add = review.getByRole('button', {name:pt ? 'Adicionar ao rascunho' : 'Add to draft', exact:true});
     const send = page.locator('#send-message-form [data-send-message]');
     const attach = page.locator('[data-attach-menu]');
     await page.locator('body[data-oie-live-ready]').waitFor();
@@ -75,35 +77,30 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
     await attach.click();
     await page.getByRole('menuitem', {name:pt ? 'Localização' : 'Location', exact:true}).click();
     const location = page.locator('#oie-location-draft');
-    const map = location.locator('input');
-    const mapURL = 'https://www.openstreetmap.org/?mlat=-23.55&mlon=-46.63#map=16/-23.55/-46.63';
-    const linkRequests = [];
-    const trackLinks = request => {
-      if (new URL(request.url()).pathname === '/ui/link-preview') linkRequests.push(request.postDataJSON().url);
-    };
-    page.on('request', trackLinks);
+    const latitude = location.locator('[name="latitude"]');
+    const longitude = location.locator('[name="longitude"]');
     if (pt) {
       await page.context().grantPermissions(['geolocation']);
       await page.context().setGeolocation({latitude:-23.55, longitude:-46.63});
       await location.getByRole('button', {name:'Usar localização atual'}).click();
-      await until(async () => (await map.inputValue()).includes('mlat=-23.550000'), 'location is populated with browser coordinates');
+      await until(async () => Number(await latitude.inputValue()) === -23.55, 'browser coordinates populate latitude');
+      assert.equal(Number(await longitude.inputValue()), -46.63);
     } else {
-      await map.fill(mapURL);
+      await latitude.fill('-23.55');
+      await longitude.fill('-46.63');
     }
-    const chosenMap = await map.inputValue();
+    const position = 'geo:-23.55,-46.63';
     await location.getByRole('button', {name:pt ? 'Adicionar ao rascunho' : 'Add to draft', exact:true}).click();
     await location.waitFor({state:'hidden'});
-    assert.equal(await composer.inputValue(), original + '\n' + chosenMap);
+    assert.equal(await composer.inputValue(), original + '\n' + position);
     await page.reload();
-    await until(async () => await composer.inputValue() === original + '\n' + chosenMap, 'map link remains in draft after reload');
+    await until(async () => await composer.inputValue() === original + '\n' + position, 'coordinates remain in draft after reload');
     assert.equal(await page.locator('[data-draft-link-preview]').isVisible(), false);
-    assert.equal(linkRequests.includes(chosenMap), false);
     assert.equal(requestPaths.length, 0, 'location does not send or stage an attachment');
-    page.off('request', trackLinks);
     await composer.fill(original);
 
     assert.equal(await dataEvent(page, 'paste', [], 'ordinary pasted text'), false);
-    assert.equal(await review.isVisible(), false);
+    assert.equal(await draftFiles.isVisible(), false);
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.evaluate(() => navigator.clipboard.writeText('text '));
     await composer.evaluate(node => node.setSelectionRange(0, 0));
@@ -111,86 +108,53 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
     await until(async () => await composer.inputValue() === 'text ' + original, 'ordinary paste inserts text');
     await composer.fill(original);
     await composer.evaluate(node => node.setSelectionRange(2, 5));
-    assert.equal(await dataEvent(page, 'paste', [image, file]), true);
-    await until(() => review.isVisible(), 'pasted files open a preview');
-    await until(() => caption.evaluate(el => document.activeElement === el), 'caption receives focus on open');
-    assert.equal(await caption.inputValue(), original);
-    assert.equal(await review.locator('li').count(), 2);
-    await until(() => review.locator('img').evaluate(img => img.complete && img.naturalWidth > 0), 'local image preview is decoded');
-    assert.equal(requestPaths.length, 0, 'selecting files never stages or sends');
-    await review.getByRole('button', {name:(pt ? 'Remover anexo' : 'Remove attachment') + ' · ' + file.name, exact:true}).click();
-    assert.equal(await review.locator('li').count(), 1);
-    await caption.fill('Discard this caption');
-    await page.keyboard.press('Escape');
-    await review.waitFor({state:'hidden'});
-    assert.equal(await composer.inputValue(), original);
-    assert.deepEqual(await composer.evaluate(el => [document.activeElement === el, el.selectionStart, el.selectionEnd]), [true,2,5]);
-    assert.equal(requestPaths.length, 0, 'cancel and remove before confirmation have no network effect');
-
     assert.equal(await dataEvent(page, 'drop', [file], '', 20*1024*1024+1), true);
     const toast = page.locator('[data-toast-container] [role="alert"]').filter({hasText:pt ? '16 arquivos de 20 MiB' : '16 files of 20 MiB'});
     await toast.getByRole('button', {name:pt ? 'Fechar' : 'Close'}).click();
     await toast.waitFor({state:'hidden'});
-    assert.equal(await review.isVisible(), false);
+    assert.equal(await draftFiles.isVisible(), false);
     assert.equal(await composer.inputValue(), original);
 
-    const pane = page.locator('.oie-chat-pane');
-    assert.equal(await dataEvent(page, 'dragenter', [image]), true);
-    assert.equal(await pane.getAttribute('data-file-drag'), '');
-    assert.equal(await dataEvent(page, 'drop', [image, file]), true);
-    assert.equal(await pane.getAttribute('data-file-drag'), null);
-    await review.waitFor({state:'visible'});
-    const bounds = await review.evaluate(node => {
-      const {left, right, top, bottom} = node.getBoundingClientRect();
-      return {fits:left >= 15 && right <= innerWidth - 15 && top >= 0 && bottom <= innerHeight, overflow:document.documentElement.scrollWidth > innerWidth};
-    });
-    assert.deepEqual(bounds, {fits:true, overflow:false});
-    await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
-    const violations = await page.evaluate(async () =>
-      (await window.axe.run('#oie-attachment-review', {runOnly:{type:'tag', values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v => v.id));
-    assert.deepEqual(violations, []);
-    await review.screenshot({path:'artifacts/' + prefix + (pt ? '-attachment-mobile-pt.png' : '-attachment-desktop-en.png')});
-    await review.getByRole('button', {name:(pt ? 'Remover anexo' : 'Remove attachment') + ' · ' + file.name, exact:true}).click();
-    const revised = pt ? 'Legenda para envio ' + randomUUID() : 'Caption to keep';
-    await caption.fill(revised);
-
-    const holdStage = async route => {
-      await new Promise(resolve => setTimeout(resolve, 550));
-      await route.continue().catch(error => { if (pt) throw error; });
-    };
-    const operation = await page.locator('#send-message-form [name="operationKey"]').inputValue();
     const retained = () => api('/api/v1/conversations/' + conversation.id + '/messages?limit=100');
     const messagesBefore = (await retained()).items.length;
-    let releaseSend;
-    const holdSend = new Promise(resolve => { releaseSend = resolve; });
-    if (pt) {
-      await page.route('**/ui/messages/send', async route => {
-        await holdSend;
-        await route.continue();
-      }, {times:1});
-    }
-    const pending = page.waitForRequest(request => request.url().includes('/ui/scheduling/stage?'));
-    await page.route(stagePath, holdStage, {times:1});
+    const operation = await page.locator('#send-message-form [name="operationKey"]').inputValue();
+    let unblockStage;
+    const delayedStage = new Promise(resolve => { unblockStage = resolve; });
+    await page.route(stagePath, async route => {
+      await delayedStage;
+      await route.continue().catch(error => { if (pt) throw error; });
+    }, {times:1});
     const before = await sample(page);
-    await add.click();
-    await pending;
-    await review.getByText(pt ? 'Preparando anexos…' : 'Preparing attachments…', {exact:true}).waitFor();
-    assert(await add.isDisabled());
-    assert.equal(await composer.inputValue(), original, 'staging does not edit the draft while waiting');
+    if (pt) {
+      const pane = page.locator('.oie-chat-pane');
+      assert.equal(await dataEvent(page, 'dragenter', [image]), true);
+      assert.equal(await pane.getAttribute('data-file-drag'), '');
+      assert.equal(await dataEvent(page, 'drop', [image]), true);
+      assert.equal(await pane.getAttribute('data-file-drag'), null);
+    } else {
+      assert.equal(await dataEvent(page, 'paste', [image]), true);
+    }
+    await draftFiles.getByText(pt ? 'Preparando anexos…' : 'Preparing attachments…', {exact:true}).first().waitFor();
+    assert.equal(await page.locator('dialog[open]').count(), 0);
+    assert(await send.isDisabled());
+    assert.equal(await composer.inputValue(), original);
+    assert.deepEqual(await composer.evaluate(el => [document.activeElement === el, el.selectionStart, el.selectionEnd]), [true,2,5]);
+    await until(() => requestPaths.length === 1, 'file staging request reaches the browser');
+    assert.deepEqual(requestPaths, ['/ui/scheduling/stage']);
+    assert.equal((await retained()).items.length, messagesBefore);
+    const revised = pt ? 'Legenda para envio ' + randomUUID() : 'Caption to keep';
     if (!pt) {
-      await page.keyboard.press('Escape');
-      await review.waitFor({state:'hidden'});
-      assert.equal(await composer.inputValue(), original);
+      await composer.fill(revised);
+      await remove(image.name).click();
+      unblockStage();
+      await draftFiles.waitFor({state:'hidden'});
+      assert.equal(await composer.inputValue(), revised);
       await until(async () => await page.evaluate(() => window.attachmentFrames.length > 10), 'painted frames were captured');
       const frames = await page.evaluate(() => window.attachmentFrames);
       for (const frame of frames) assert(frame.every((value,i) => Math.abs(value-before[i]) <= 1), JSON.stringify({frame,before}));
-      assert.equal(await page.locator('[data-composer-attachments] a').count(), 0);
-      assert.equal((await retained()).items.length, messagesBefore);
       assert.deepEqual(requestPaths.splice(0), ['/ui/scheduling/stage']);
       if (expectTransportFailure) expectTransportFailure(true);
       try {
-        await dataEvent(page, 'paste', [image]);
-        await caption.fill(revised);
         let lostURL;
         await page.route(stagePath, async route => {
           lostURL = route.request().url();
@@ -198,31 +162,74 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
           assert.equal(response.status(), 200);
           await route.abort('failed');
         }, {times:1});
-        await add.click();
-        await review.getByText('Could not attach this file.', {exact:true}).waitFor();
-        assert.equal(await caption.inputValue(), revised);
-        assert.equal(await composer.inputValue(), original);
-        const replayed = page.waitForResponse(response => response.url() === lostURL && response.ok());
-        await add.click();
-        await replayed;
-        await review.waitFor({state:'hidden'});
-        await page.locator('[data-composer-attachments]').getByRole('link',{name:image.name}).waitFor();
+        const failed = draftFiles.locator('[data-file-state]').getByText('Could not attach this file.', {exact:true});
+        assert.equal(await dataEvent(page, 'paste', [image]), true);
+        await failed.waitFor();
         assert.equal(await composer.inputValue(), revised);
+        const [replayed] = await Promise.all([
+          page.waitForRequest(request => request.url() === lostURL),
+          draftFiles.getByRole('button', {name:'Try again · ' + image.name, exact:true}).click(),
+        ]);
+        assert.equal((await replayed.response()).status(), 200);
+        await draftFiles.getByRole('link',{name:image.name}).waitFor();
         assert.deepEqual(requestPaths.splice(0), ['/ui/scheduling/stage','/ui/scheduling/stage']);
         await page.reload();
-        await page.locator('[data-composer-attachments]').getByRole('link',{name:image.name}).waitFor();
+        await draftFiles.getByRole('link',{name:image.name}).waitFor();
         assert.equal(await composer.inputValue(), revised);
-        await page.locator('[data-composer-attachments] [data-remove-attachment]').click();
+        await draftFiles.screenshot({path:'artifacts/' + prefix + '-attachment-desktop-en.png'});
+        await remove(image.name).click();
         await composer.fill('');
       } finally {
         if (expectTransportFailure) expectTransportFailure(false);
       }
     } else {
+      await composer.fill(revised);
+      unblockStage();
+      await draftFiles.getByRole('link',{name:image.name,exact:true}).waitFor();
+      assert.equal(await composer.inputValue(), revised, 'staging preserves text typed during the request');
+      assert.deepEqual(requestPaths, ['/ui/scheduling/stage']);
+      assert.equal((await retained()).items.length, messagesBefore);
+      await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+      const violations = await page.evaluate(async () =>
+        (await window.axe.run('[data-composer-attachments]', {runOnly:{type:'tag', values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v => v.id));
+      assert.deepEqual(violations, []);
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      await page.locator('[data-attachment-picker]').setInputFiles([file, longFile]);
+      await draftFiles.getByRole('link', {name:longFile.name, exact:true}).waitFor();
+      await draftFiles.getByRole('link', {name:file.name, exact:true}).waitFor();
+      assert.deepEqual(await draftFiles.getByRole('link').allTextContents(), [image.name, file.name, longFile.name]);
+      const layout = () => draftFiles.evaluate(region => {
+        const list = region.querySelector('[data-attachment-items]');
+        const auxiliary = region.closest('.oie-composer-auxiliary');
+        return {
+          rows: new Set([...list.children].map(row => row.offsetTop)).size,
+          overflow: list.scrollWidth > list.clientWidth || auxiliary.scrollWidth > auxiliary.clientWidth ||
+            document.documentElement.scrollWidth > innerWidth,
+        };
+      });
+      assert.deepEqual(await layout(), {rows:3, overflow:false});
+      await composer.fill('Materiais para a sessão de amanhã');
+      const draftRect = await draftFiles.boundingBox();
+      const formRect = await page.locator('#send-message-form').boundingBox();
+      await page.screenshot({
+        path:'artifacts/' + prefix + '-caption-mobile-pt.png',
+        clip:{x:formRect.x, y:draftRect.y, width:formRect.width, height:formRect.y + formRect.height - draftRect.y},
+      });
+      await composer.fill(revised);
+      await page.setViewportSize({width:1440, height:844});
+      await until(async () => (await layout()).rows === 1, 'all three attachments fit on a wide screen');
+      assert.deepEqual(await layout(), {rows:1, overflow:false});
+      await page.setViewportSize({width,height:844});
+      await remove(file.name).click();
+      await remove(longFile.name).click();
+      assert.deepEqual(requestPaths, Array(3).fill('/ui/scheduling/stage'));
+      let releaseSend;
+      const holdSend = new Promise(resolve => { releaseSend = resolve; });
+      await page.route('**/ui/messages/send', async route => {
+        await holdSend;
+        await route.continue();
+      }, {times:1});
       try {
-        await review.waitFor({state:'hidden'});
-        assert.equal(await composer.inputValue(), revised);
-        assert.equal((await retained()).items.length, messagesBefore);
-        assert.deepEqual(requestPaths, ['/ui/scheduling/stage']);
         await send.click();
         const bubble = page.locator('[data-pending-send][data-pending-state="sending"]');
         const pendingFile = bubble.getByRole('link', {name:image.name, exact:true});
@@ -240,7 +247,7 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
       assert.equal(sent.length, 1);
       assert.equal(sent[0].attachments[0].fileName, image.name);
       assert.equal((await api('/api/v1/operations/' + operation)).resourceId, sent[0].id);
-      assert.deepEqual(requestPaths.splice(0), ['/ui/scheduling/stage','/ui/messages/send']);
+      assert.deepEqual(requestPaths.splice(0), [...Array(3).fill('/ui/scheduling/stage'), '/ui/messages/send']);
       await until(async () => (await api('/api/v1/conversations/' + aliceConversation.id + '/messages?limit=100')).items.some(message =>
         message.originalText.startsWith(revised) && message.originalText.includes('https://')), 'receiver retains caption and uploaded URL');
     }

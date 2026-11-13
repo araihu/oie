@@ -262,7 +262,8 @@ window.OieRuntime.register('scheduling', life => {
   const locationDialog = document.getElementById('oie-location-draft');
   if (messageForm && locationDialog) {
     const locationForm = locationDialog.querySelector('[data-location-draft]');
-    const urlField = locationForm.querySelector('input');
+    const latitude = locationForm.elements.namedItem('latitude');
+    const longitude = locationForm.elements.namedItem('longitude');
     const locate = locationForm.querySelector('[data-locate]');
     const locationStatus = locationForm.querySelector('[data-location-status]');
     const canLocate = () => Boolean(navigator.geolocation) && window.isSecureContext;
@@ -270,7 +271,6 @@ window.OieRuntime.register('scheduling', life => {
     const locationModal = action => window.dispatchEvent(new CustomEvent('modal:' + action, {detail:{id:locationDialog.id}}));
     const locationReady = () => messageForm.dataset.composeAllowed === 'true' &&
       messageForm.dataset.busy !== 'true' && messageForm.dataset.editing !== 'true' &&
-      messageForm.dataset.attachmentReviewOpen !== 'true' &&
       !messageForm.elements.namedItem('originalText').readOnly;
 
     const syncLocationAction = () => {
@@ -294,21 +294,18 @@ window.OieRuntime.register('scheduling', life => {
       const current = () => locationDialog.open && request === locationRequest && !life.signal.aborted;
       navigator.geolocation.getCurrentPosition(({coords}) => {
         if (!current()) return;
-        const lat = coords.latitude.toFixed(6), lon = coords.longitude.toFixed(6);
-        const map = new URL('https://www.openstreetmap.org/');
-        map.search = new URLSearchParams({mlat:lat, mlon:lon});
-        map.hash = 'map=16/' + lat + '/' + lon;
-        urlField.value = map.href;
+        latitude.value = coords.latitude.toFixed(6);
+        longitude.value = coords.longitude.toFixed(6);
         locationStatus.textContent = '';
         locate.disabled = false;
-        urlField.focus();
+        latitude.focus();
       }, () => {
         if (!current()) return;
         locationStatus.textContent = locationForm.dataset.unavailable;
         locate.disabled = false;
       }, {timeout:10000});
     });
-    life.on(urlField, 'input', () => {
+    life.on(locationForm, 'input', () => {
       locationRequest++;
       locate.disabled = !canLocate();
       locationStatus.textContent = '';
@@ -316,14 +313,14 @@ window.OieRuntime.register('scheduling', life => {
     life.on(locationForm, 'submit', event => {
       event.preventDefault();
       if (locationApplied || !locationReady()) return;
-      let url;
-      try { url = new URL(urlField.value); } catch {}
-      if (!url || !['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.href.length > 4096) {
+      const lat = latitude.valueAsNumber, lon = longitude.valueAsNumber;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
         locationStatus.textContent = locationForm.dataset.invalid;
-        urlField.focus();
+        latitude.focus();
         return;
       }
-      const detail = {url:url.href};
+      const coordinate = value => value.toFixed(8).replace(/\.?0+$/, '');
+      const detail = {text:'geo:' + coordinate(lat) + ',' + coordinate(lon)};
       messageForm.dispatchEvent(new CustomEvent('oie:location-draft', {detail}));
       if (!detail.applied) {
         locationStatus.textContent = locationForm.dataset.tooLong;
@@ -347,7 +344,6 @@ window.OieRuntime.register('scheduling', life => {
   }
   const composer = document.querySelector('[data-schedule-composer]');
   const picker = composer?.querySelector('[data-attachment-picker]');
-  const attach = composer?.querySelector('[data-attach-menu]');
   const attachments = composer?.querySelector('[data-composer-attachments]');
   const localTime = dialog.querySelector('#schedule-local-time');
   const offsets = dialog.querySelector('[data-schedule-offset]');
@@ -437,22 +433,6 @@ window.OieRuntime.register('scheduling', life => {
     return detail;
   }
 
-  function renderFiles() {
-    if (!attachments || !reviewForm) return;
-    attachments.replaceChildren();
-    attachments.hidden = !files.length;
-    for (const file of files) {
-      const item = document.createElement('span');
-      const remove = document.createElement('button');
-      remove.type = 'button';
-      remove.textContent = '×';
-      remove.setAttribute('aria-label', reviewForm.dataset.removeLabel + ' · ' + file.fileName);
-      remove.dataset.removeAttachment = file.id;
-      item.append(fileLink(file, false), remove);
-      attachments.append(item);
-    }
-  }
-
   function newID() {
     const bytes = crypto.getRandomValues(new Uint8Array(16));
     let ms = Date.now();
@@ -463,159 +443,168 @@ window.OieRuntime.register('scheduling', life => {
     return [raw.slice(0, 8), raw.slice(8, 12), raw.slice(12, 16), raw.slice(16, 20), raw.slice(20)].join('-');
   }
 
-  const reviewDialog = document.getElementById('oie-attachment-review');
-  const reviewForm = reviewDialog?.querySelector('[data-attachment-review]');
-  const caption = reviewForm?.querySelector('#attachment-caption');
-  const reviewFiles = reviewForm?.querySelector('[data-attachment-review-files]');
-  const status = reviewForm?.querySelector('[data-attachment-status]');
-  const add = reviewForm?.querySelector('[data-attachment-add]');
   const chat = composer?.closest('.oie-chat-pane');
   const input = composer?.elements.namedItem('originalText');
   const csrf = document.querySelector('meta[name="oie-csrf"]')?.content || '';
-  const available = () => !picker.disabled && composer.dataset.attachmentAllowed === 'true';
-  const modalEvent = action => window.dispatchEvent(new CustomEvent('modal:' + action, {detail: {id: reviewDialog.id}}));
+  const available = () => composer.dataset.attachmentAllowed === 'true';
   const raster = type => ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'].includes(type);
-  let review, dragDepth = 0;
 
-  function renderReview() {
-    const busy = !!review?.request;
-    const noFiles = !review?.selected.length;
-    caption.readOnly = busy;
-    reviewFiles.setAttribute('aria-busy', String(busy));
-    add.disabled = busy || noFiles;
-    for (const button of reviewFiles.querySelectorAll('button')) button.disabled = busy;
-  }
+  if (attachments) {
+    const labels = attachments.dataset;
+    const items = attachments.querySelector('[data-attachment-items]');
+    const status = attachments.querySelector('[data-attachment-status]');
+    const template = attachments.querySelector('template');
+    const pending = new Map();
+    const selectionOrder = new Map();
+    let sequence = 0;
+    let dragDepth = 0;
+    files = snapshot().files || [];
+    locked = snapshot().editBlocked;
 
-  function clearReview() {
-    if (!review) return;
-    const previous = review;
-    review = null;
-    previous.request?.abort();
-    for (const item of previous.selected) if (item.file && item.thumbnail) URL.revokeObjectURL(item.thumbnail);
-    reviewFiles.replaceChildren();
-    delete composer.dataset.attachmentReviewOpen;
-    if (!life.signal.aborted) composer.dispatchEvent(new Event('oie:attachment-review'));
-    return previous;
-  }
+    function renderFiles() {
+      const active = document.activeElement;
+      const focused = active?.closest('[data-draft-attachment]');
+      const action = ['data-file-download', 'data-retry-attachment', 'data-remove-attachment']
+        .find(attribute => active?.hasAttribute(attribute));
+      items.replaceChildren();
+      attachments.hidden = !files.length && !pending.size;
+      const order = file => selectionOrder.get(file.id) || 0;
+      const display = [...files, ...pending.values()].sort((a,b) => order(a) - order(b));
+      for (const file of display) {
+        const row = template.content.firstElementChild.cloneNode(true);
+        row.dataset.draftAttachment = file.id;
+        const name = row.querySelector('[data-file-name]');
+        name.textContent = file.fileName;
+        name.title = file.fileName;
+        if (!file.file) {
+          const download = row.querySelector('[data-file-download]');
+          download.href = fileURL(file.id, true);
+          download.download = download.textContent = file.fileName;
+          download.title = file.fileName;
+          download.hidden = false;
+          name.hidden = true;
+        }
+        const thumbnail = row.querySelector('img');
+        const source = file.file ? file.thumbnail : raster(file.mediaType) ? fileURL(file.id) : '';
+        if (source) {
+          thumbnail.src = source;
+          thumbnail.hidden = false;
+        }
+        const state = row.querySelector('[data-file-state]');
+        if (file.file) {
+          state.textContent = file.failed ? labels.failed : labels.preparing;
+          state.hidden = false;
+        }
+        const retry = row.querySelector('[data-retry-attachment]');
+        retry.hidden = !file.failed;
+        retry.setAttribute('aria-label', labels.retry + ' · ' + file.fileName);
+        row.querySelector('[data-remove-attachment]').setAttribute('aria-label', labels.removeLabel + ' · ' + file.fileName);
+        items.append(row);
+      }
+      if (focused && !focused.isConnected) {
+        const row = items.querySelector('[data-draft-attachment="' + CSS.escape(focused.dataset.draftAttachment) + '"]');
+        const target = (action && row?.querySelector('[' + action + ']:not([hidden])')) || row?.querySelector('[data-remove-attachment]') || input;
+        target.focus({preventScroll:true});
+      }
+      syncAttachmentControls();
+    }
 
-  function beginReview(picked) {
-    if (!picked.length || review || !chat.getClientRects().length) return;
-    if (!available() || locked || dialog.open || document.querySelector('dialog[open]')) {
-      errorToast(reviewForm.dataset.attachmentUnavailable);
-      return;
+    function syncAttachmentControls() {
+      for (const item of ['image', 'file']) {
+        composer.querySelector('#composer-attach-' + item).disabled = !available() || locked;
+      }
+      for (const remove of items.querySelectorAll('[data-remove-attachment]')) remove.disabled = locked;
+      for (const retry of items.querySelectorAll('[data-retry-attachment]')) retry.disabled = !available() || locked;
     }
-    if (files.length + picked.length > 16 || picked.some(file => file.size > 20 * 1024 * 1024)) {
-      errorToast(reviewForm.dataset.attachmentLimit);
-      return;
-    }
-    review = {
-      focus: document.activeElement,
-      original: input.value,
-      files,
-      selected: [
-        ...files.map(metadata => ({
-          metadata, name: metadata.fileName, thumbnail: raster(metadata.mediaType) ? fileURL(metadata.id) : '',
-        })),
-        ...picked.map(file => ({
-          file, name: file.name, id: newID(), thumbnail: raster(file.type) ? URL.createObjectURL(file) : '',
-        })),
-      ],
-    };
-    caption.value = input.value;
-    status.textContent = '';
-    const template = reviewForm.querySelector('template');
-    for (const item of review.selected) {
-      const row = template.content.firstElementChild.cloneNode(true);
-      row.querySelector('span').textContent = item.name;
-      row.querySelector('button').setAttribute('aria-label', reviewForm.dataset.removeLabel + ' · ' + item.name);
-      const img = row.querySelector('img');
-      if (item.thumbnail) img.src = item.thumbnail;
-      else img.remove();
-      item.row = row;
-      reviewFiles.append(row);
-    }
-    composer.dataset.attachmentReviewOpen = 'true';
-    composer.dispatchEvent(new Event('oie:attachment-review'));
-    renderReview();
-    modalEvent('open');
-  }
 
-  function confirmAttachments() {
-    if (!review || review.request || !review.selected.length) return;
-    if (!available() || locked || input.value !== review.original || files !== review.files) {
-      status.textContent = reviewForm.dataset.attachmentUnavailable;
-      return;
+    function syncPending() {
+      composer.toggleAttribute('data-attachments-pending', pending.size > 0);
+      composer.dispatchEvent(new Event('oie:attachment-staging'));
+      renderFiles();
     }
-    if (caption.value.includes('\0') || Array.from(caption.value).length > 16384) {
-      status.textContent = reviewForm.dataset.invalidCaption;
-      caption.focus();
-      return;
-    }
-    void stageAttachments();
-  }
 
-  async function stageAttachments() {
-    const current = review;
-    const controller = new AbortController();
-    current.request = controller;
-    status.textContent = reviewForm.dataset.staging;
-    renderReview();
-    const timeout = life.timeout(() => controller.abort(), 90000);
-    try {
-      for (const item of current.selected) {
-        if (item.metadata) continue;
+    function forget(file) {
+      file.request?.abort();
+      if (file.thumbnail) URL.revokeObjectURL(file.thumbnail);
+      pending.delete(file.id);
+    }
+
+    async function stage(file) {
+      const controller = new AbortController();
+      file.request = controller;
+      file.failed = false;
+      renderFiles();
+      const timeout = life.timeout(() => controller.abort(), 90000);
+      try {
         const form = new FormData();
-        form.set('file', item.file);
-        const response = await life.fetch(fileURL(item.id).replace('/file?', '/stage?'), {
+        form.set('file', file.file);
+        const response = await life.fetch(fileURL(file.id).replace('/file?', '/stage?'), {
           method: 'POST', headers: {'X-CSRF-Token': csrf}, body: form, signal: controller.signal,
         });
         if (!response.ok) throw Error('staging');
         const metadata = await response.json();
-        if (metadata.id !== item.id || metadata.fileName !== item.name || metadata.size !== item.file.size) throw Error('staging');
-        item.metadata = metadata;
+        if (metadata.id !== file.id || metadata.fileName !== file.fileName || metadata.size !== file.file.size) throw Error('staging');
+        if (life.signal.aborted || pending.get(file.id) !== file) return;
+        if (controller.signal.aborted || !available()) throw Error('staging unavailable');
+        pending.delete(file.id);
+        const order = item => selectionOrder.get(item.id) || 0;
+        const detail = {files: [...files, metadata].sort((a,b) => order(a) - order(b))};
+        composer.dispatchEvent(new CustomEvent('oie:attachments-change', {detail}));
+        if (!detail.applied) {
+          pending.set(file.id, file);
+          throw Error('draft unavailable');
+        }
+        if (file.thumbnail) URL.revokeObjectURL(file.thumbnail);
+      } catch {
+        if (life.signal.aborted || pending.get(file.id) !== file) return;
+        file.failed = true;
+        status.textContent = labels.failed;
+      } finally {
+        clearTimeout(timeout);
+        if (!life.signal.aborted) syncPending();
       }
-      if (review !== current || current.cancelled || life.signal.aborted || !reviewDialog.open) return;
-      if (controller.signal.aborted) throw Error('staging');
-      if (!available() || locked || input.value !== current.original || files !== current.files) {
-        status.textContent = reviewForm.dataset.attachmentUnavailable;
+    }
+
+    function addFiles(picked) {
+      if (!picked.length || !chat.getClientRects().length) return;
+      if (!available() || locked || document.querySelector('dialog[open]')) {
+        errorToast(labels.unavailable);
         return;
       }
-      current.confirmed = {files: current.selected.map(item => item.metadata), caption: caption.value};
-      modalEvent('close');
-    } catch {
-      if (review === current && !life.signal.aborted && reviewDialog.open && !current.cancelled) {
-        status.textContent = reviewForm.dataset.attachmentFailed;
+      if (files.length + pending.size + picked.length > 16 || picked.some(file => file.size > 20 * 1024 * 1024)) {
+        errorToast(labels.limit);
+        return;
       }
-    } finally {
-      clearTimeout(timeout);
-      if (review === current && !life.signal.aborted && !current.confirmed) {
-        current.request = null;
-        renderReview();
+      const selected = picked.map(file => ({
+        file, id: newID(), fileName: file.name, thumbnail: raster(file.type) ? URL.createObjectURL(file) : '',
+      }));
+      for (const file of selected) {
+        pending.set(file.id, file);
+        selectionOrder.set(file.id, ++sequence);
       }
+      status.textContent = labels.preparing;
+      input.focus({preventScroll:true});
+      syncPending();
+      for (const file of selected) void stage(file);
     }
-  }
 
-  function syncAttachmentControls() {
-    for (const item of ['image', 'file']) {
-      document.getElementById('composer-attach-' + item).disabled = !available() || locked;
-    }
-    for (const remove of attachments.querySelectorAll('[data-remove-attachment]')) remove.disabled = locked;
-  }
-
-  if (reviewForm) {
-    files = snapshot().files || [];
-    locked = snapshot().editBlocked;
     renderFiles();
-    syncAttachmentControls();
     life.on(composer, 'oie:composer-attachments', event => {
-      if (JSON.stringify(files) !== JSON.stringify(event.detail.files)) {
-        files = event.detail.files;
-        renderFiles();
-      }
+      const changed = JSON.stringify(files) !== JSON.stringify(event.detail.files);
+      files = event.detail.files;
       locked = event.detail.locked;
-      syncAttachmentControls();
+      if (changed) renderFiles();
+      else syncAttachmentControls();
     });
-    life.cleanup(clearReview);
+    function discardPending() {
+      for (const file of pending.values()) forget(file);
+    }
+    life.cleanup(discardPending);
+    life.on(composer, 'oie:attachment-draft-changing', () => {
+      discardPending();
+      selectionOrder.clear();
+      syncPending();
+    });
     life.on(composer, 'oie:compose-add', event => {
       if (!['image', 'file'].includes(event.detail) || !available() || locked) return;
       picker.accept = event.detail === 'image' ? 'image/*' : '';
@@ -624,24 +613,24 @@ window.OieRuntime.register('scheduling', life => {
     life.on(picker, 'change', () => {
       const picked = [...picker.files];
       picker.value = '';
-      beginReview(picked);
+      addFiles(picked);
     });
     life.on(chat, 'paste', event => {
       if (event.target !== input || !event.clipboardData?.files.length) return;
       event.preventDefault();
-      beginReview([...event.clipboardData.files]);
+      addFiles([...event.clipboardData.files]);
     });
     const fileDrag = event => Array.from(event.dataTransfer?.types || []).includes('Files');
     life.on(chat, 'dragenter', event => {
       if (!fileDrag(event)) return;
       event.preventDefault();
       dragDepth++;
-      chat.toggleAttribute('data-file-drag', available() && !locked && !review);
+      chat.toggleAttribute('data-file-drag', available() && !locked);
     });
     life.on(chat, 'dragover', event => {
       if (!fileDrag(event)) return;
       event.preventDefault();
-      event.dataTransfer.dropEffect = available() && !locked && !review ? 'copy' : 'none';
+      event.dataTransfer.dropEffect = available() && !locked ? 'copy' : 'none';
     });
     life.on(chat, 'dragleave', event => {
       if (!fileDrag(event)) return;
@@ -656,50 +645,24 @@ window.OieRuntime.register('scheduling', life => {
       event.preventDefault();
       dragDepth = 0;
       chat.removeAttribute('data-file-drag');
-      beginReview([...event.dataTransfer.files]);
+      addFiles([...event.dataTransfer.files]);
     });
-    life.on(attachments, 'click', event => {
-      const remove = event.target.closest('[data-remove-attachment]');
-      if (!remove || locked || review) return;
-      composer.dispatchEvent(new CustomEvent('oie:attachments-change', {
-        detail: {files: files.filter(file => file.id !== remove.dataset.removeAttachment)},
-      }));
-      (attach.disabled ? input : attach).focus({preventScroll: true});
-    });
-    life.on(reviewFiles, 'click', event => {
+    life.on(items, 'click', event => {
       const button = event.target.closest('button');
-      if (!button || !review || review.request) return;
-      const index = review.selected.findIndex(item => item.row.contains(button));
-      if (index < 0) return;
-      const [item] = review.selected.splice(index, 1);
-      if (item.file && item.thumbnail) URL.revokeObjectURL(item.thumbnail);
-      item.row.remove();
-      renderReview();
-      (review.selected[Math.min(index, review.selected.length - 1)]?.row.querySelector('button') || caption).focus();
-    });
-    life.on(reviewDialog, 'close', () => {
-      const previous = clearReview();
-      if (life.signal.aborted || !previous) return;
-      const detail = previous.confirmed;
-      if (detail && available() && !locked && input.value === previous.original && files === previous.files) {
+      const id = button?.closest('[data-draft-attachment]')?.dataset.draftAttachment;
+      if (!id || locked) return;
+      const file = pending.get(id);
+      if (button.hasAttribute('data-retry-attachment')) {
+        if (file?.failed && available()) void stage(file);
+      } else if (file) {
+        selectionOrder.delete(id);
+        forget(file);
+        syncPending();
+      } else {
+        const detail = {files: files.filter(file => file.id !== id)};
         composer.dispatchEvent(new CustomEvent('oie:attachments-change', {detail}));
+        if (detail.applied) selectionOrder.delete(id);
       }
-      const focus = detail?.applied || !previous.focus?.isConnected ? input : previous.focus;
-      focus.focus({preventScroll: true});
-      if (detail && !detail.applied) errorToast(reviewForm.dataset.attachmentUnavailable);
-    });
-    const cancel = () => {
-      if (!review) return;
-      review.cancelled = true;
-      delete review.confirmed;
-      review.request?.abort();
-      modalEvent('close');
-    };
-    life.on(reviewDialog, 'cancel', cancel);
-    for (const action of reviewDialog.querySelectorAll('[data-attachment-cancel]')) life.on(action, 'click', cancel);
-    life.on(reviewForm, 'submit', event => {
-      event.preventDefault();
-      confirmAttachments();
     });
   }
 

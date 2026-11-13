@@ -1,5 +1,5 @@
 #send-message-form{position:relative}
-.oie-composer-auxiliary{position:absolute;inset-inline:0;bottom:100%;z-index:40;max-block-size:min(50dvh,20rem);overflow-y:auto;overscroll-behavior:contain;background:var(--oie-panel)}
+.oie-composer-auxiliary{position:absolute;inset-inline:0;bottom:100%;z-index:40;max-block-size:min(50dvh,20rem);overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;background:var(--oie-panel)}
 /* Editing is indicated on the retained message, never by a composer banner. */
 .oie-message-body{position:relative}
 /* Secondary is the provisional editing tone; the comparison also evaluates warning. */
