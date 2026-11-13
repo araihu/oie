@@ -270,9 +270,11 @@ type copy struct {
 	RoomManagementSubmitted                                                                                                                                                                                  string
 	RoomManagedName                                                                                                                                                                                          string
 	RoomRoleLabel                                                                                                                                                                                            string
-	RoomRename                                                                                                                                                                                               string
-	RoomEditTopic                                                                                                                                                                                            string
+	RoomSaveDetails                                                                                                                                                                                          string
+	RoomDetailsPartial                                                                                                                                                                                       string
 	RoomTopic                                                                                                                                                                                                string
+	RoomDetailsUnchanged                                                                                                                                                                                     string
+	RoomInvitePeople                                                                                                                                                                                         string
 	RoomInvite                                                                                                                                                                                               string
 	RoomReason                                                                                                                                                                                               string
 	RoomSetRole                                                                                                                                                                                              string
@@ -1171,7 +1173,7 @@ func (v view) headerVersion() string {
 	if v.Selected == nil {
 		return ""
 	}
-	return v.Selected.Id + v.Selected.RevisionId + strconv.FormatBool(v.Selected.Archived) + strconv.FormatBool(v.Selected.Favorite) + v.Selected.Title + v.accountLabel(v.Selected.AccountId) + v.connectionLabel(v.Selected.AccountId) + strconv.FormatBool(v.canJoinRoom()) + strconv.FormatBool(v.canLeaveRoom())
+	return v.Selected.Id + v.Selected.RevisionId + strconv.FormatBool(v.Selected.Archived) + strconv.FormatBool(v.Selected.Favorite) + v.Selected.Title + v.accountLabel(v.Selected.AccountId) + v.connectionLabel(v.Selected.AccountId) + strconv.FormatBool(v.canJoinRoom()) + strconv.FormatBool(v.canLeaveRoom()) + strconv.FormatBool(v.canInviteToRoom())
 }
 func (v view) accountVersion() string {
 	var out strings.Builder

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"errors"
+	"net"
 	"slices"
 	"strings"
 	"time"
@@ -136,7 +137,7 @@ func (s roomManagement) actions() []string {
 	if role == "moderator" || (role == "participant" || role == "visitor") && flags.changeSubject {
 		out = append(out, "topic")
 	}
-	if role != "" && (flags.open || role == "moderator" || aff == "admin" || aff == "owner" || flags.membersOnly && flags.allowInvites && aff == "member") {
+	if s.canInvite() {
 		out = append(out, "invite")
 	}
 	if role == "moderator" {
@@ -149,6 +150,21 @@ func (s roomManagement) actions() []string {
 		out = append(out, "affiliation")
 	}
 	return out
+}
+
+func (s roomManagement) canInvite() bool {
+	role, aff, flags := s.self.role, s.self.affiliation, s.flags
+	return role != "" && (flags.open || role == "moderator" || aff == "admin" || aff == "owner" ||
+		flags.membersOnly && flags.allowInvites && aff == "member")
+}
+
+func (s roomManagement) allows(cmd domain.RoomManagementCommand) bool {
+	actions := s.actions()
+	if cmd.Action == "update_details" {
+		return (cmd.Name == nil || slices.Contains(actions, "rename")) &&
+			(cmd.Topic == nil || slices.Contains(actions, "topic"))
+	}
+	return slices.Contains(actions, cmd.Action)
 }
 
 func (s roomManagement) roles(target roomOccupant) []string {
@@ -292,7 +308,7 @@ func (m *Manager) readRoomAffiliations(ctx context.Context, e *entry, session *m
 }
 
 func (s roomManagement) payload(a domain.Account, c domain.Conversation, cmd domain.RoomManagementCommand, message domain.Message) (string, string) {
-	if !slices.Contains(s.actions(), cmd.Action) {
+	if !s.allows(cmd) {
 		return "", "denied"
 	}
 	target, reason := cmd.Target, ""
@@ -368,12 +384,16 @@ func (m *Manager) ManageRoom(ctx context.Context, a domain.Account, c domain.Con
 	if outcome != "" {
 		return outcome
 	}
+	name := cmd.Name
 	if cmd.Action == "rename" {
+		name = &cmd.Value
+	}
+	if name != nil {
 		form, err := readArchiveIQ(ctx, e, session, c.Address, stanza.GetIQ, roomOwnerQuery)
 		if err != nil {
 			return roomIQOutcome(err, false)
 		}
-		payload, err = roomConfigSubmit(form, cmd.Value, false)
+		payload, err = roomConfigSubmit(form, *name, false)
 		if err != nil {
 			return "unsupported"
 		}
@@ -390,7 +410,9 @@ func (m *Manager) ManageRoom(ctx context.Context, a domain.Account, c domain.Con
 		return "stale"
 	}
 	// Recheck occupant identity after waiting for the provider and the IQ lane.
-	if cmd.Action != "rename" {
+	if !slot.management.allows(cmd) {
+		outcome = "denied"
+	} else if name == nil {
 		payload, outcome = slot.management.payload(a, c, cmd, message)
 	}
 	if outcome != "" || ctx.Err() != nil {
@@ -409,25 +431,17 @@ func (m *Manager) ManageRoom(ctx context.Context, a domain.Account, c domain.Con
 		e.mu.Unlock()
 	}()
 	if messageAction {
-		if raw == nil {
-			return "unavailable"
-		}
 		kind := stanza.GroupChatMessage
 		if cmd.Action == "invite" {
 			kind = stanza.NormalMessage
 		}
-		deadline, _ := ctx.Deadline()
-		_ = raw.SetWriteDeadline(deadline)
-		err := session.Send(ctx, stanza.Message{To: room, Type: kind, ID: randomQueryID()}.Wrap(xml.NewDecoder(strings.NewReader(payload))))
-		_ = raw.SetWriteDeadline(time.Time{})
-		if err != nil {
-			_ = raw.Close()
-			return "unknown"
-		}
-		return "submitted"
+		return sendRoomManagementMessage(ctx, session, raw, room, kind, payload)
 	}
-	_, err = readArchiveIQ(ctx, e, session, c.Address, stanza.SetIQ, payload)
-	if err == nil && cmd.Action == "rename" {
+	if name != nil || cmd.Action != "update_details" {
+		_, err = readArchiveIQ(ctx, e, session, c.Address, stanza.SetIQ, payload)
+		if err != nil || name == nil {
+			return roomIQOutcome(err, true)
+		}
 		e.mu.Lock()
 		if activeManagementSlot(e, c) == slot {
 			advanceRoomPresenceLocked(e, c.Address)
@@ -435,7 +449,39 @@ func (m *Manager) ManageRoom(ctx context.Context, a domain.Account, c domain.Con
 		}
 		e.mu.Unlock()
 	}
-	return roomIQOutcome(err, true)
+	if cmd.Topic == nil {
+		return "confirmed"
+	}
+	e.sendMu.Lock()
+	defer e.sendMu.Unlock()
+	e.mu.RLock()
+	current := activeManagementSlot(e, c) == slot && slot.snapshot.IntentRevisionID == intent &&
+		slot.management.allows(domain.RoomManagementCommand{Action: "topic"}) && m.roomEntryCurrent(ctx, c.ID, intent, false)
+	e.mu.RUnlock()
+	if current && ctx.Err() == nil {
+		outcome = sendRoomManagementMessage(ctx, session, raw, room, stanza.GroupChatMessage, "<subject>"+escaped(*cmd.Topic)+"</subject>")
+	} else {
+		outcome = "stale"
+	}
+	if outcome != "submitted" && name != nil {
+		return "name_confirmed"
+	}
+	return outcome
+}
+
+func sendRoomManagementMessage(ctx context.Context, session *mx.Session, raw net.Conn, room jid.JID, kind stanza.MessageType, payload string) string {
+	if raw == nil {
+		return "unavailable"
+	}
+	deadline, _ := ctx.Deadline()
+	_ = raw.SetWriteDeadline(deadline)
+	err := session.Send(ctx, stanza.Message{To: room, Type: kind, ID: randomQueryID()}.Wrap(xml.NewDecoder(strings.NewReader(payload))))
+	_ = raw.SetWriteDeadline(time.Time{})
+	if err != nil {
+		_ = raw.Close()
+		return "unknown"
+	}
+	return "submitted"
 }
 
 func roomIQOutcome(err error, attempted bool) string {

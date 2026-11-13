@@ -15,7 +15,7 @@ import (
 templ roomManagementDrawer(v view) {
 	if v.Selected != nil && v.Selected.Kind == "room" && v.requestKind() == "" && !v.Preview {
 		@drawer.Drawer(drawer.Config{ID:"room-management",Title:v.Text.RoomManage,PanelClass:"oie-conversation-details-drawer"}) {
-			<div class="oie-settings oie-room-management" data-room-management data-chat={v.Selected.Id} data-account={v.Selected.AccountId} data-engine={v.EngineID} data-lang={v.Locale} data-loading={v.Text.RoomManagementLoading} data-unavailable={v.Text.RoomManagementUnavailable}>
+			<div class="oie-settings oie-room-management" data-room-management data-invite-title={v.Text.RoomInvitePeople} data-manage-title={v.Text.RoomManage} data-chat={v.Selected.Id} data-account={v.Selected.AccountId} data-engine={v.EngineID} data-lang={v.Locale} data-loading={v.Text.RoomManagementLoading} data-unavailable={v.Text.RoomManagementUnavailable}>
 				@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-room-management-refresh":""})){ {v.Text.DetailsRefresh} }
 				<div role="status" aria-live="polite" data-room-management-status></div>
 				<div data-room-management-content></div>
@@ -24,7 +24,7 @@ templ roomManagementDrawer(v view) {
 	}
 }
 
-templ roomManagementContent(v view, state engineapi.RoomManagement, messageID, affiliation string) {
+templ roomManagementContent(v view, state engineapi.RoomManagement, messageID, affiliation string, invite bool) {
 	if state.State != "available" || state.Revision == nil {
 		if state.State == "not_joined" {
 			<p>{v.Text.RoomJoinRequired}</p>
@@ -33,9 +33,15 @@ templ roomManagementContent(v view, state engineapi.RoomManagement, messageID, a
 		} else {
 			<p>{v.Text.RoomManagementUnavailable}</p>
 		}
+	} else if invite {
+		if slices.Contains(state.Actions,engineapi.Invite) {
+			@roomManagementForm(v,*state.Revision,"invite","",v.Text.RoomInvite,nil)
+		} else {
+			<p>{v.Text.RoomManagementDenied}</p>
+		}
 	} else if messageID != "" {
 		if slices.Contains(state.Actions,engineapi.RoomManagementAction("moderate_message")) {
-			@roomManagementForm(v,*state.Revision,"moderate_message",messageID,v.Text.RoomModerateMessage,"",nil)
+			@roomManagementForm(v,*state.Revision,"moderate_message",messageID,v.Text.RoomModerateMessage,nil)
 		} else {
 			<p>{v.Text.RoomManagementDenied}</p>
 		}
@@ -43,14 +49,9 @@ templ roomManagementContent(v view, state engineapi.RoomManagement, messageID, a
 		if len(state.Actions)==0 {
 			<p>{v.Text.RoomManagementDenied}</p>
 		}
-		if slices.Contains(state.Actions,engineapi.RoomManagementAction("rename")) {
-			@roomManagementForm(v,*state.Revision,"rename","",v.Text.RoomRename,v.infoTitle(),nil)
-		}
-		if slices.Contains(state.Actions,engineapi.RoomManagementAction("topic")) {
-			@roomManagementForm(v,*state.Revision,"topic","",v.Text.RoomEditTopic,v.managementTopic(),nil)
-		}
-		if slices.Contains(state.Actions,engineapi.RoomManagementAction("invite")) {
-			@roomManagementForm(v,*state.Revision,"invite","",v.Text.RoomInvite,"",nil)
+		{{ canRename, canEditTopic := slices.Contains(state.Actions,engineapi.Rename), slices.Contains(state.Actions,engineapi.Topic) }}
+		if canRename || canEditTopic {
+			@roomDetailsForm(v,*state.Revision,canRename,canEditTopic)
 		}
 		if len(state.Occupants)>0 {
 			<h3>{v.Text.Participants}</h3>
@@ -58,7 +59,7 @@ templ roomManagementContent(v view, state engineapi.RoomManagement, messageID, a
 		}
 		if slices.Contains(state.Actions,engineapi.RoomManagementAction("affiliation")) {
 			<h3>{v.Text.RoomAccess}</h3>
-			@roomManagementForm(v,*state.Revision,"affiliation","",v.Text.RoomSetAffiliation,"",roomOptions(v.Text,[]string{"member","admin","owner","outcast","none"}))
+			@roomManagementForm(v,*state.Revision,"affiliation","",v.Text.RoomSetAffiliation,roomOptions(v.Text,[]string{"member","admin","owner","outcast","none"}))
 			<div class="oie-room-entry-links" aria-label={v.Text.RoomAccess}>
 				for _, value := range []string{"member","admin","owner","outcast"} {
 					@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-room-affiliation-list":value,"aria-pressed":affiliation==value})){ {roomManagementLabel(v.Text,value)} }
@@ -105,7 +106,7 @@ func roomOptions[T ~string](text copy, values []T) []selectfield.Option {
 func roomOccupantItems(v view, revision string, occupants []engineapi.RoomManagedOccupant) []accordion.AccordionItem {
 	items := make([]accordion.AccordionItem,0,len(occupants))
 	for _, item := range occupants {
-		items=append(items,accordion.AccordionItem{ID:"manage-"+strings.TrimPrefix(item.Id,"occupant:"),Title:item.Nickname,Content:roomOccupantControls(v,revision,item)})
+		items=append(items,accordion.AccordionItem{ID:"manage-"+strings.TrimPrefix(item.Id,"occupant:"),Title:item.Nickname+" · "+roomManagementLabel(v.Text,string(item.Role)),Content:roomOccupantControls(v,revision,item)})
 	}
 	return items
 }
@@ -119,27 +120,18 @@ templ roomOccupantControls(v view, revision string, item engineapi.RoomManagedOc
 				{{ roles[i].Label=v.Text.RoomKick }}
 			}
 		}
-		@roomManagementForm(v,revision,"role",item.Id,v.Text.RoomSetRole,"",roles)
+		@roomManagementForm(v,revision,"role",item.Id,v.Text.RoomSetRole,roles)
 	}
 	if len(item.Affiliations)>0 {
-		@roomManagementForm(v,revision,"affiliation",item.Id,v.Text.RoomSetAffiliation,"",roomOptions(v.Text,item.Affiliations))
+		@roomManagementForm(v,revision,"affiliation",item.Id,v.Text.RoomSetAffiliation,roomOptions(v.Text,item.Affiliations))
 	}
 }
 
-templ roomManagementForm(v view, revision, action, target, label, initial string, options []selectfield.Option) {
+templ roomManagementForm(v view, revision, action, target, label string, options []selectfield.Option) {
 	{{ key := newOperationKey(); id := "manage-room-"+key }}
 	@form.Form(form.Config{ID:id,Action:"/ui/rooms/manage",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"room-management"}}) {
-		@mutationFields(v,"room-management",key)
-		<input type="hidden" name="conversationId" value={v.Selected.Id}/>
-		<input type="hidden" name="accountId" value={v.Selected.AccountId}/>
-		<input type="hidden" name="lang" value={v.Locale}/>
-		<input type="hidden" name="managementAction" value={action}/>
-		<input type="hidden" name="expectedRevision" value={revision}/>
+		@roomManagementFields(v,revision,action,key)
 		switch action {
-			case "rename":
-				@textinput.TextInput(textinput.Config{ID:id+"-value",Name:"value",Label:v.Text.RoomManagedName,Value:initial,Required:true,InputAttrs:templ.Attributes{"maxlength":"100"}})
-			case "topic":
-				@textinput.TextInput(textinput.Config{ID:id+"-value",Name:"value",Label:v.Text.RoomTopic,Value:initial,InputAttrs:templ.Attributes{"maxlength":"2000"}})
 			case "moderate_message":
 				<input type="hidden" name="messageId" value={target}/>
 			default:
@@ -156,6 +148,33 @@ templ roomManagementForm(v view, revision, action, target, label, initial string
 			@textinput.TextInput(textinput.Config{ID:id+"-reason",Name:"reason",Label:v.Text.RoomReason,InputAttrs:templ.Attributes{"maxlength":"500"}})
 		}
 		@button.Button(button.WithType("submit")){ {label} }
+		<div data-form-feedback role="status" aria-live="polite"></div>
+	}
+}
+
+
+templ roomManagementFields(v view, revision, action, key string) {
+		@mutationFields(v,"room-management",key)
+		<input type="hidden" name="conversationId" value={v.Selected.Id}/>
+		<input type="hidden" name="accountId" value={v.Selected.AccountId}/>
+		<input type="hidden" name="lang" value={v.Locale}/>
+		<input type="hidden" name="managementAction" value={action}/>
+		<input type="hidden" name="expectedRevision" value={revision}/>
+}
+
+templ roomDetailsForm(v view, revision string, canRename, canEditTopic bool) {
+	{{ key := newOperationKey(); id := "manage-room-"+key }}
+	@form.Form(form.Config{ID:id,Action:"/ui/rooms/manage",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"room-management"}}) {
+		@roomManagementFields(v,revision,"update_details",key)
+		if canRename {
+			<input type="hidden" name="originalName" value={v.infoTitle()}/>
+			@textinput.TextInput(textinput.Config{ID:id+"-name",Name:"name",Label:v.Text.RoomManagedName,Value:v.infoTitle(),Required:true,InputAttrs:templ.Attributes{"maxlength":"100"}})
+		}
+		if canEditTopic {
+			<input type="hidden" name="originalTopic" value={v.managementTopic()}/>
+			@textinput.TextInput(textinput.Config{ID:id+"-topic",Name:"topic",Label:v.Text.RoomTopic,Value:v.managementTopic(),InputAttrs:templ.Attributes{"maxlength":"2000"}})
+		}
+		@button.Button(button.WithType("submit")){ {v.Text.RoomSaveDetails} }
 		<div data-form-feedback role="status" aria-live="polite"></div>
 	}
 }

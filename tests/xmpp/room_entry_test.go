@@ -215,8 +215,24 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 		}
 	}
 	manage(joinedBob.Conversation.ID, "rename", "", "Forged", "denied")
-	manage(created.Conversation.ID, "rename", "", "Renamed Garden", "confirmed")
-	manage(created.Conversation.ID, "topic", "", "Reading plans", "submitted")
+	name, topic := "Renamed Garden", "Reading plans"
+	for _, check := range []struct {
+		room domain.ID
+		want string
+	}{{joinedBob.Conversation.ID, "denied"}, {created.Conversation.ID, "submitted"}} {
+		info, err := engine.RoomManagement(ctx, check.room, "")
+		if err != nil || info.Revision == "" {
+			t.Fatalf("room details permissions: %+v %v", info, err)
+		}
+		key := id()
+		cmd := domain.RoomManagementCommand{Action: "update_details", ExpectedRevision: info.Revision, Name: &name, Topic: &topic}
+		for range 2 {
+			state, err := engine.ManageRoom(ctx, key, check.room, cmd)
+			if err != nil || state != check.want {
+				t.Fatalf("combined room update: wanted %s, got %s %v", check.want, state, err)
+			}
+		}
+	}
 	manage(created.Conversation.ID, "invite", "bob@localhost", "", "submitted")
 	if os.Getenv("OIE_XMPP_MODERATION_INTEGRATION") == "1" {
 		info, err := engine.RoomManagement(ctx, created.Conversation.ID, "")

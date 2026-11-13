@@ -94,6 +94,15 @@ func roomManagementInput(c domain.RoomManagementCommand) bool {
 		!roomManagementText(c.Target, 2047) || !roomManagementText(c.Reason, 500) {
 		return false
 	}
+	if c.Action == "update_details" {
+		return c.Target == "" && c.Value == "" && c.Reason == "" && c.MessageID == "" &&
+			(c.Name != nil || c.Topic != nil) &&
+			(c.Name == nil || *c.Name != "" && validRoomLabel(*c.Name)) &&
+			(c.Topic == nil || roomManagementText(*c.Topic, 2000))
+	}
+	if c.Name != nil || c.Topic != nil {
+		return false
+	}
 	switch c.Action {
 	case "rename":
 		return c.MessageID == "" && c.Target == "" && c.Reason == "" && c.Value != "" && validRoomLabel(c.Value)
@@ -118,6 +127,14 @@ func roomManagementText(value string, max int) bool {
 
 func (e *Engine) ManageRoom(ctx context.Context, key, id domain.ID, cmd domain.RoomManagementCommand) (string, error) {
 	cmd.Target, cmd.Value, cmd.Reason = strings.TrimSpace(cmd.Target), strings.TrimSpace(cmd.Value), strings.TrimSpace(cmd.Reason)
+	if cmd.Name != nil {
+		value := strings.TrimSpace(*cmd.Name)
+		cmd.Name = &value
+	}
+	if cmd.Topic != nil {
+		value := strings.TrimSpace(*cmd.Topic)
+		cmd.Topic = &value
+	}
 	if !validID(key) || !validID(id) || !roomManagementInput(cmd) {
 		return "", ErrInvalid
 	}
@@ -165,6 +182,11 @@ func (e *Engine) ManageRoom(ctx context.Context, key, id domain.ID, cmd domain.R
 	var revision domain.ID
 	if state == "confirmed" && cmd.Action == "rename" {
 		name = cmd.Value
+	}
+	if cmd.Action == "update_details" && cmd.Name != nil && (state == "confirmed" || state == "submitted" || state == "name_confirmed") {
+		name = *cmd.Name
+	}
+	if name != "" {
 		revision, err = e.newID()
 		if err != nil {
 			return "unknown", nil

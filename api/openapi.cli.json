@@ -7507,6 +7507,10 @@
           "participants"
         ],
         "properties": {
+          "canInviteToRoom": {
+            "type": "boolean",
+            "description": "The current room session allows sending invitations."
+          },
           "canModerateMessages": {
             "type": "boolean",
             "description": "Current room permissions and advertised message moderation support."
@@ -8790,7 +8794,8 @@
           "invite",
           "role",
           "affiliation",
-          "moderate_message"
+          "moderate_message",
+          "update_details"
         ],
         "description": "Room-scoped action subject to current provider permissions."
       },
@@ -8824,6 +8829,17 @@
             "maxLength": 2000,
             "description": "Name, topic, role or affiliation to set."
           },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "New room name for update_details. Omit to keep the current name."
+          },
+          "topic": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "New room topic for update_details. An empty string clears it."
+          },
           "reason": {
             "type": "string",
             "maxLength": 500,
@@ -8853,7 +8869,8 @@
               "stale",
               "unsupported",
               "unavailable",
-              "unknown"
+              "unknown",
+              "name_confirmed"
             ]
           }
         },

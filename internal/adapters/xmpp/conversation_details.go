@@ -87,6 +87,7 @@ func (m *Manager) ConversationInfo(_ context.Context, a domain.Account, c domain
 		if activeManagementSlot(e, c) != nil && room.management.topic != nil {
 			info.Topic = *room.management.topic
 		}
+		info.CanInviteToRoom = activeManagementSlot(e, c) != nil && room.management.canInvite()
 		info.CanModerateMessages = activeManagementSlot(e, c) != nil && room.management.self.role == "moderator" && room.management.flags.moderate
 	}
 	return info, nil

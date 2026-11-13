@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -37,7 +38,8 @@ func (s *Server) roomManagementFragment(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	v.Selected = owner.JSON200
-	if messageID == "" {
+	invite := q.Get("invite") == "true"
+	if messageID == "" && !invite {
 		s.loadConversationDetails(ctx, &v)
 	}
 	var params engineapi.GetRoomManagementParams
@@ -54,7 +56,7 @@ func (s *Server) roomManagementFragment(w http.ResponseWriter, r *http.Request) 
 	}
 	management := *result.JSON200
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = roomManagementContent(v, management, messageID, q.Get("affiliation")).Render(ctx, w)
+	_ = roomManagementContent(v, management, messageID, q.Get("affiliation"), invite).Render(ctx, w)
 }
 
 func (s *Server) manageRoom(ctx context.Context, r *http.Request, text copy) (int, mutationResult) {
@@ -75,9 +77,17 @@ func (s *Server) manageRoom(ctx context.Context, r *http.Request, text copy) (in
 		message = &id
 	}
 	target, value, reason := r.Form.Get("target"), r.Form.Get("value"), r.Form.Get("reason")
-	result, err := s.client.ManageRoomWithResponse(ctx, id, &engineapi.ManageRoomParams{IdempotencyKey: key}, engineapi.ManageRoom{
+	command := engineapi.ManageRoom{
 		Action: action, ExpectedRevision: r.Form.Get("expectedRevision"), Target: &target, Value: &value, Reason: &reason, MessageId: message,
-	})
+	}
+	if action == engineapi.UpdateDetails {
+		command.Name = changedRoomField(r, "name", "originalName")
+		command.Topic = changedRoomField(r, "topic", "originalTopic")
+		if command.Name == nil && command.Topic == nil {
+			return http.StatusOK, mutationResult{OK: true, Message: text.RoomDetailsUnchanged}
+		}
+	}
+	result, err := s.client.ManageRoomWithResponse(ctx, id, &engineapi.ManageRoomParams{IdempotencyKey: key}, command)
 	if err != nil {
 		return http.StatusServiceUnavailable, mutationResult{Message: text.RoomCommandUnknown}
 	}
@@ -86,9 +96,11 @@ func (s *Server) manageRoom(ctx context.Context, r *http.Request, text copy) (in
 	}
 	switch result.JSON200.State {
 	case "confirmed":
-		return http.StatusOK, mutationResult{OK: true, Message: text.RoomManagementConfirmed}
+		return http.StatusOK, mutationResult{OK: true, Message: text.RoomManagementConfirmed, State: "confirmed"}
 	case "submitted":
-		return http.StatusOK, mutationResult{OK: true, Message: text.RoomManagementSubmitted}
+		return http.StatusOK, mutationResult{OK: true, Message: text.RoomManagementSubmitted, State: "submitted"}
+	case "name_confirmed":
+		return http.StatusConflict, mutationResult{Message: text.RoomDetailsPartial, State: "name_confirmed", Rejected: true}
 	case "denied":
 		return http.StatusForbidden, mutationResult{Message: text.RoomManagementDenied, Rejected: true}
 	case "stale":
@@ -98,6 +110,22 @@ func (s *Server) manageRoom(ctx context.Context, r *http.Request, text copy) (in
 	default:
 		return http.StatusServiceUnavailable, mutationResult{Message: text.RoomCommandUnknown}
 	}
+}
+
+func changedRoomField(r *http.Request, field, original string) *string {
+	if !r.Form.Has(field) {
+		return nil
+	}
+	value := strings.TrimSpace(r.Form.Get(field))
+	if r.Form.Has(original) && value == strings.TrimSpace(r.Form.Get(original)) {
+		return nil
+	}
+	return &value
+}
+
+func (v view) canInviteToRoom() bool {
+	return v.roomState() == "joined" && v.ConversationInfo != nil &&
+		v.ConversationInfo.CanInviteToRoom != nil && *v.ConversationInfo.CanInviteToRoom
 }
 
 func roomManagementLabel(text copy, value string) string {

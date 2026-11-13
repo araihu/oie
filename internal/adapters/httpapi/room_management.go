@@ -47,7 +47,7 @@ func (s *Server) ManageRoom(ctx context.Context, r engineapi.ManageRoomRequestOb
 	cmd := domain.RoomManagementCommand{
 		Action: string(r.Body.Action), ExpectedRevision: r.Body.ExpectedRevision,
 		Target: roomText(r.Body.Target), Value: roomText(r.Body.Value), Reason: roomText(r.Body.Reason),
-		MessageID: domain.ID(roomText(r.Body.MessageId)),
+		MessageID: domain.ID(roomText(r.Body.MessageId)), Name: r.Body.Name, Topic: r.Body.Topic,
 	}
 	state, err := s.engine.ManageRoom(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.ConversationId), cmd)
 	if err != nil {

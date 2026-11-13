@@ -88,6 +88,12 @@ async function apiHandler(req, res) {
   if (u.pathname === '/api/v1/conversations') return send(200, {items: [source, destination].filter(c => c && (!u.searchParams.has('accountId') || c.accountId === u.searchParams.get('accountId')))});
   if (u.pathname === '/api/v1/conversations/' + chat) return send(200, source);
   if (u.pathname === '/api/v1/conversations/' + room && destination) return send(200, destination);
+  if (u.pathname === '/api/v1/conversations/' + room + '/details' && destination) return send(200, {
+    accountId:destination.accountId, conversationId:room, kind:'room', address:destination.address,
+    name:'Trilha de livros', topic:'Encontro', state:'known', features:[], canInviteToRoom:true,
+    accountConnection:{accountId:destination.accountId,state:'connected',updatedAt:at},
+    participants:{scope:'occupants',state:'known',truncated:false,items:[]}
+  });
   if (u.pathname.endsWith('/room-session') && destination) return send(200, {accountId: destination.accountId,
     conversationId: room, active: true, state: roomState, intentRevisionId: revision, updatedAt: at});
   if (u.pathname === '/api/v1/conversations/' + chat + '/messages') return send(200, {items: [{id: id(8), revisionId: revision,
@@ -247,10 +253,10 @@ async function waitFor(predicate) {
     await page.locator('#room-session-status').waitFor({state: 'hidden'});
     for (const width of [1440, 390]) {
       await page.setViewportSize({width, height: 900});
-      await page.getByRole('button', {name: 'Mais opções', exact:true}).click();
+      await page.locator('[aria-controls=chat-options-panel]').click();
       await page.locator('#chat-manage-room').click();
       const management = page.locator('[data-room-management]');
-      await management.getByRole('button', {name:'Salvar tópico'}).waitFor();
+      await management.getByRole('button', {name:'Salvar alterações'}).waitFor();
       const topic = management.getByRole('textbox', {name:'Tópico', exact:true});
       if (width === 1440 && process.env.OIE_ROOM_MANAGEMENT_SCREENSHOT) {
         await management.screenshot({path:process.env.OIE_ROOM_MANAGEMENT_SCREENSHOT});
@@ -262,35 +268,54 @@ async function waitFor(predicate) {
           await held;
           await route.continue();
         }, {times:1});
+        await management.getByRole('textbox',{name:'Nome da sala',exact:true}).fill('Leituras de sábado');
         await topic.fill('Próxima leitura');
         const geometry = () => page.locator('#send-message-form').evaluate(element => {
           const {x,y,width,height} = element.getBoundingClientRect();
           return [x,y,width,height];
         });
         const before = await geometry();
-        const button = management.getByRole('button', {name:'Salvar tópico'});
+        const button = management.getByRole('button', {name:'Salvar alterações'});
         await button.click();
         assert.equal(await button.isDisabled(), true);
         assert.deepEqual(await geometry(), before);
         releaseRequest.send();
         await management.getByText('Alteração confirmada.').waitFor();
         assert.equal(managementCommands.length, 1);
-        assert.equal(managementCommands[0].value, 'Próxima leitura');
+        assert.equal(managementCommands[0].action, 'update_details');
+        assert.equal(managementCommands[0].name, 'Leituras de sábado');
+        assert.equal(managementCommands[0].topic, 'Próxima leitura');
+        assert.equal(await management.getByRole('button',{name:'Enviar convite'}).count(),0);
         assert.deepEqual(await geometry(), before);
       } else {
         await topic.fill('Rascunho do tópico');
         managementBlocked = true;
-        const submit = management.getByRole('button', {name:'Salvar tópico'});
+        const submit = management.getByRole('button', {name:'Salvar alterações'});
         await submit.click();
         await management.getByText('O estado da sala mudou. Atualize antes de tentar novamente.', {exact:true}).waitFor();
         await waitFor(() => managementCommands.length === 2);
-        assert.equal(managementCommands[1].value, 'Rascunho do tópico');
+        assert.equal(managementCommands[1].topic, 'Rascunho do tópico');
+        assert.equal(managementCommands[1].name, undefined);
         assert.equal(await topic.inputValue(), 'Rascunho do tópico');
         await waitFor(() => submit.isDisabled());
       }
       await page.keyboard.press('Escape');
       await management.waitFor({state:'hidden'});
     }
+
+    managementBlocked = false;
+    await page.locator('[aria-controls=chat-options-panel]').click();
+    await page.getByRole('menuitem',{name:'Convidar pessoas'}).click();
+    const invitePanel = page.locator('[data-room-management]');
+    await page.getByRole('heading',{name:'Convidar pessoas'}).waitFor();
+    assert.equal(await invitePanel.getByRole('button',{name:'Salvar alterações'}).count(),0);
+    await invitePanel.getByRole('textbox',{name:'Endereço da pessoa'}).fill('amiga@fixture');
+    await invitePanel.getByRole('button',{name:'Enviar convite'}).click();
+    await waitFor(() => managementCommands.length === 3);
+    assert.equal(managementCommands[2].action,'invite');
+    assert.equal(managementCommands[2].target,'amiga@fixture');
+    await page.keyboard.press('Escape');
+    await invitePanel.waitFor({state:'hidden'});
 
     await page.setViewportSize({width:1440,height:950});
     conflict = true;

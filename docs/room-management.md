@@ -1,9 +1,11 @@
 # XMPP room management
 
 Open **More → Manage room** in a joined room. The available actions depend on
-the account's room permissions. Owners can change the room name. Moderators
-can change the topic and adjust current occupants' roles. The room may let
-other occupants edit the topic or invite people. Administrators and owners
+the account's room permissions. The details form offers the name and topic
+fields the account can edit, with one Save changes button. Owners can change
+the name. Moderators can change the topic and adjust current occupants' roles.
+**More → Invite people** opens the invitation form when the room permits it.
+The room may let other occupants edit the topic or invite people. Administrators and owners
 can manage affiliations, including bans, and read the access lists the
 service returns. The participant list shows occupants seen in this session.
 A room can omit personal addresses even when it publishes nicknames.
@@ -21,7 +23,10 @@ Archiving an invitation retains the request and keeps it out of the inbox.
 subjects, mediated invitations, roles, and affiliations. A successful IQ
 confirms a name, role, or affiliation change. Sending a subject or invitation
 confirms submission. The room publishes its new topic and delivers invitations
-according to its policies. Name changes preserve the rest of the owner form.
+according to its policies. Name changes preserve the rest of the owner form. Saving both fields checks
+both permissions before sending. The room confirms the name first, then Oiê
+submits the topic. A partial result identifies the saved name and keeps the
+topic available for retry.
 
 A management request names an observed room revision. Permissions come from
 self-presence and service discovery. Role changes target a specific observed

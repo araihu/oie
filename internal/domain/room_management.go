@@ -17,6 +17,8 @@ type RoomManagedOccupant struct {
 type RoomManagementCommand struct {
 	Action, ExpectedRevision, Target, Value, Reason string
 	MessageID                                       ID
+	Name                                            *string `json:",omitempty"`
+	Topic                                           *string `json:",omitempty"`
 }
 
 type MessageModeration struct {

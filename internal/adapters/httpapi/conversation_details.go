@@ -51,6 +51,9 @@ func (s *Server) GetConversationDetails(ctx context.Context, r engineapi.GetConv
 	for _, p := range d.Participants.Items {
 		out.Participants.Items = append(out.Participants.Items, engineapi.ConversationParticipant{Id: p.ID, DisplayName: p.DisplayName, Source: engineapi.ConversationParticipantSource(p.Source), Presence: presenceObservation(p.Presence)})
 	}
+	if d.CanInviteToRoom {
+		out.CanInviteToRoom = &d.CanInviteToRoom
+	}
 	if d.CanModerateMessages {
 		out.CanModerateMessages = &d.CanModerateMessages
 	}

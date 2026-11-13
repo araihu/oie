@@ -4,8 +4,9 @@ window.OieRuntime.register('room-management', life => {
   const content = root.querySelector('[data-room-management-content]');
   const status = root.querySelector('[data-room-management-status]');
   const refresh = root.querySelector('[data-room-management-refresh]');
-  let request, opener, message = '', affiliation = '', active = false;
+  let request, opener, message = '', affiliation = '', invite = false, active = false;
   const pending = new WeakMap();
+  const title = document.getElementById("room-managementTitle");
   const drafts = new Map();
 
   async function load(replace = true) {
@@ -15,7 +16,7 @@ window.OieRuntime.register('room-management', life => {
     status.textContent = root.dataset.loading;
     root.setAttribute('aria-busy', 'true');
     const {chat, account, engine, lang} = root.dataset;
-    const params = new URLSearchParams({chat, account, engine, lang, message, affiliation});
+    const params = new URLSearchParams({chat, account, engine, lang, message, affiliation, invite});
     try {
       const response = await life.fetch('/ui/rooms/manage-fragment?' + params, {signal: current.signal});
       if (!response.ok) throw new Error();
@@ -33,9 +34,11 @@ window.OieRuntime.register('room-management', life => {
         for (const form of content.querySelectorAll('form')) {
           const draft = drafts.get(identity(form));
           if (!draft) continue;
-          for (const name of ['target','value','reason']) {
+          for (const name of ['target','value','reason','name','topic']) {
             const field = form.elements.namedItem(name);
-            if (field && field.type !== 'hidden' && draft.has(name)) {
+            const original = name === 'name' ? 'originalName' : name === 'topic' ? 'originalTopic' : '';
+            if (field && field.type !== 'hidden' && draft.has(name) &&
+                (!original || draft.get(name) !== draft.get(original))) {
               field.value = draft.get(name);
               field.dispatchEvent(new Event('input', {bubbles:true}));
             }
@@ -48,10 +51,13 @@ window.OieRuntime.register('room-management', life => {
         if (!revision) {
           content.innerHTML = markup;
         } else {
-          const fresh = new Set([...template.content.querySelectorAll('form')].map(identity));
+          const fresh = new Map([...template.content.querySelectorAll('form')].map(form => [identity(form), form]));
           for (const form of content.querySelectorAll('form')) {
             if (pending.has(form) || form.dataset.busy === 'true') continue;
-            if (!fresh.has(identity(form))) {
+            const freshForm = fresh.get(identity(form));
+            const permissionChanged = form.elements.managementAction.value === 'update_details' &&
+              ['name','topic'].some(name => !!form.elements.namedItem(name) !== !!freshForm?.elements.namedItem(name));
+            if (!freshForm || permissionChanged) {
               const submit = form.querySelector('[type=submit]');
               if (submit) submit.disabled = true;
               form.dataset.permissionLost = 'true';
@@ -81,12 +87,12 @@ window.OieRuntime.register('room-management', life => {
   }
 
   life.on(document, 'click', event => {
-    const trigger = event.target.closest('#chat-manage-room,[id^=moderate-room-message-],[data-room-management-refresh],[data-room-affiliation-list]');
+    const trigger = event.target.closest('#chat-manage-room,#chat-invite-room,[id^=moderate-room-message-],[data-room-management-refresh],[data-room-affiliation-list]');
     if (!trigger) return;
     if (trigger === refresh || trigger.hasAttribute('data-room-affiliation-list')) {
       if ([...content.querySelectorAll('form')].some(form => pending.has(form) || form.dataset.busy === 'true')) return;
       affiliation = trigger.dataset.roomAffiliationList || affiliation;
-      void load(trigger !== refresh || !content.querySelector('form'));
+      void load();
       return;
     }
     opener = trigger.closest('[data-message-id]')?.querySelector('[data-message-menu-trigger]') ||
@@ -102,19 +108,21 @@ window.OieRuntime.register('room-management', life => {
       window.dispatchEvent(new CustomEvent('drawer:open', {detail: {id: 'room-management'}}));
       void load();
     };
-    message = trigger.id.startsWith('moderate-room-message-') ? trigger.id.slice('moderate-room-message-'.length) : '';
+    const nextMessage = trigger.id.startsWith('moderate-room-message-') ? trigger.id.slice('moderate-room-message-'.length) : '';
+    const nextInvite = trigger.id === 'chat-invite-room';
     affiliation = '';
     active = true;
-    if (message !== root.dataset.message) {
+    if (nextMessage !== message || nextInvite !== invite) {
       if ([...content.querySelectorAll('form')].some(form => pending.has(form) || form.dataset.busy === 'true')) {
-        message = root.dataset.message || '';
         life.raf(open);
         return;
       }
-      drafts.clear();
+      for (const form of content.querySelectorAll('form')) drafts.set(identity(form), new FormData(form));
       content.replaceChildren();
     }
-    root.dataset.message = message;
+    message = nextMessage;
+    invite = nextInvite;
+    if (title) title.textContent = invite ? root.dataset.inviteTitle : root.dataset.manageTitle;
     life.raf(open);
   });
 
@@ -134,6 +142,17 @@ window.OieRuntime.register('room-management', life => {
       return;
     }
     pending.delete(form);
+    if (form.elements.managementAction.value === 'update_details') {
+      for (const [name, original] of [['name','originalName'],['topic','originalTopic']]) {
+        const field = form.elements.namedItem(name);
+        const baseline = form.elements.namedItem(original);
+        if (field && baseline && (result.ok || name === 'name' && result.state === 'name_confirmed')) baseline.value = field.value;
+      }
+    }
+    if (result.ok && form.elements.managementAction.value === 'invite') {
+      form.elements.target.value = '';
+      form.elements.reason.value = '';
+    }
     for (const input of form.querySelectorAll('input:not([type=hidden]),textarea')) input.readOnly = false;
     life.timeout(() => { if (active) void load(false); }, 0);
   });

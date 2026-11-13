@@ -389,7 +389,11 @@ if v.conversationSchedulesAvailable() {
 {{ sections[0].Items=append(sections[0].Items,dropdown.Item{Label:v.Text.Scheduled,Icon:glyph(heroicons.Icon16SolidClock),OnClick:"$dispatch('oie:conversation-drawer-open','conversation-schedules')"}) }}
 }
 if v.Selected.Kind=="room" {
-{{ roomItems:=[]dropdown.Item{{ID:"chat-manage-room",Label:v.Text.RoomManage,Icon:glyph(heroicons.Icon16SolidCog6Tooth),OnClick:"void 0"},{ID:"chat-leave-room",Label:v.Text.LeaveRoom,Icon:glyph(heroicons.Icon16SolidArrowTopRightOnSquare),OnClick:"$dispatch('oie:leave-room')",Disabled:!v.canLeaveRoom()}} }}
+{{ roomItems:=[]dropdown.Item{{ID:"chat-manage-room",Label:v.Text.RoomManage,Icon:glyph(heroicons.Icon16SolidCog6Tooth),OnClick:"void 0"}} }}
+if v.canInviteToRoom() {
+{{ roomItems=append(roomItems,dropdown.Item{ID:"chat-invite-room",Label:v.Text.RoomInvitePeople,Icon:glyph(heroicons.Icon16SolidUsers),OnClick:"void 0"}) }}
+}
+{{ roomItems=append(roomItems,dropdown.Item{ID:"chat-leave-room",Label:v.Text.LeaveRoom,Icon:glyph(heroicons.Icon16SolidArrowTopRightOnSquare),OnClick:"$dispatch('oie:leave-room')",Disabled:!v.canLeaveRoom()}) }}
 if v.canJoinRoom() {
 {{ roomItems=append(roomItems,dropdown.Item{ID:"chat-join-room",Label:v.Text.JoinRoom,OnClick:"$dispatch('oie:join-saved-room')"}) }}
 }
