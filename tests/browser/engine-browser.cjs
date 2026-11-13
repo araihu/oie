@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const {chromium} = require('playwright');
+const {attachmentComposition} = require('./attachment-composition.cjs');
 const {schedulingFlow} = require('./scheduling-flow.cjs');
 
 (async () => {
@@ -535,6 +536,9 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
     evidence.workflows.push('Actual chat usable at390px in Brazilian Portuguese with no checked WCAG A/AA violations');
     await schedulingFlow({base, api, until, alicePage, bobPage, alice, bob, aliceConversation, bobConversation});
     evidence.workflows.push('Review a scheduled composition with attachment, filter schedules across destinations, edit with draft recovery, send immediately via XMPP and cancel');
+    await attachmentComposition({base, api, until, alicePage, bobPage, alice, bob, aliceConversation, bobConversation,
+      expectTransportFailure:value => {expectedLostReply = value;}, prefix});
+    evidence.workflows.push('Paste, drop, review, cancel and retry staged attachments. Explicit send reaches the receiver with caption and file URL.');
     for(let index=evidence.consoleErrors.length-1;index>=0;index--){
       const url=consoleLocations[index],remaining=preferenceConflictURLs.get(url)||0;
       if(remaining>0&&evidence.consoleErrors[index]==='Failed to load resource: the server responded with a status of 409 (Conflict)'){

@@ -10,7 +10,9 @@ import (
 	"github.com/araihu/goshtoso/components/drawer"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/link"
+	"github.com/araihu/goshtoso/components/modal"
 	"github.com/araihu/goshtoso/components/splitbutton"
+	"github.com/araihu/goshtoso/components/textarea"
 	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
@@ -264,7 +266,6 @@ templ scheduleFields(v view) {
 	<input type="hidden" name="attachmentIds"/>
 	@scheduleEditor(v)
 	<input type="file" data-attachment-picker multiple hidden disabled?={!v.messagingImplemented("file_upload")}/>
-	<div data-composer-attachments class="oie-composer-attachments" hidden></div>
 }
 
 templ scheduleEditor(v view) {
@@ -282,11 +283,44 @@ templ scheduleEditor(v view) {
 	</div>
 }
 
+templ attachmentDialog(v view) {
+	@modal.Dialog(modal.DialogConfig{ID:"oie-attachment-review",Title:v.Text.AttachmentReview,HeaderContent:attachmentReviewHeader(v),Content:attachmentReview(v)})
+}
+
+templ attachmentReviewHeader(v view) {
+	<header class="oie-attachment-header">
+		<strong aria-hidden="true">{v.Text.AttachmentReview}</strong>
+		@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-attachment-cancel":"","aria-label":v.Text.Close})) { @glyph(heroicons.Icon16SolidXMark) }
+	</header>
+}
+
+templ attachmentReview(v view) {
+	<form class="oie-attachment-review" data-attachment-review
+		data-attachment-failed={v.Text.AttachmentFailed} data-attachment-limit={v.Text.AttachmentLimit}
+		data-attachment-unavailable={v.Text.AttachmentUnavailable} data-remove-attachment={v.Text.RemoveAttachment}
+		data-invalid-caption={v.Text.InvalidMessage} data-staging={v.Text.AttachmentPreparing} data-send={v.Text.Send} data-save={v.Text.ScheduleSave}>
+		<ul data-attachment-review-files></ul>
+		<template>
+			<li>
+				<img alt="" width="72" height="56" loading="lazy"/>
+				<span></span>
+				@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain)) { @glyph(heroicons.Icon16SolidXMark) }
+			</li>
+		</template>
+		@textarea.Textarea(textarea.Config{ID:"attachment-caption",Label:v.Text.AttachmentCaption,Rows:2,InputAttrs:templ.Attributes{"autofocus":true}})
+		<p data-attachment-status role="status"></p>
+		<footer>
+			@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-attachment-cancel":""})) { <span>{v.Text.DeleteDataCancel}</span> }
+			@button.Button(button.WithType("button"),button.WithTone(button.ToneSecondary),button.WithAttrs(templ.Attributes{"data-attachment-add":""})) { <span>{v.Text.AttachmentAddToDraft}</span> }
+			@button.Button(button.WithType("submit"),button.WithAttrs(templ.Attributes{"data-attachment-send":""})) { <span>{v.Text.Send}</span> }
+		</footer>
+	</form>
+}
+
 templ scheduleDialog(v view) {
 	<dialog class="oie-schedule-dialog" data-schedule-dialog aria-labelledby="schedule-dialog-title"
 		data-create={v.Text.Schedule} data-update={v.Text.Reschedule} data-time-invalid={v.Text.ScheduleTimeInvalid} data-time-ambiguous={v.Text.ScheduleTimeAmbiguous}
-		data-review-changed={v.Text.ScheduleReviewChanged} data-unavailable={v.Text.ScheduleUnavailable}
-		data-attachment-failed={v.Text.AttachmentFailed} data-attachment-limit={v.Text.AttachmentLimit} data-remove-attachment={v.Text.RemoveAttachment}>
+		data-review-changed={v.Text.ScheduleReviewChanged} data-unavailable={v.Text.ScheduleUnavailable}>
 		<form method="dialog" data-schedule-confirm>
 			<h2 id="schedule-dialog-title">{v.Text.Schedule}</h2>
 			<section class="oie-schedule-preview" aria-label={v.Text.ScheduleReview}>

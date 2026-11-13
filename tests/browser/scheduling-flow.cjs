@@ -27,6 +27,10 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
     mimeType: 'image/png',
     buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z2gAAAABJRU5ErkJggg==', 'base64'),
   };
+  const attachToDraft = async page => {
+    await page.locator('[data-attachment-picker]').setInputFiles(attachment);
+    await page.locator('#oie-attachment-review').getByRole('button', {name:'Add to draft', exact:true}).click();
+  };
   const openMenu = async (page, label) => {
     await page.locator('#composer-split').getByRole('button', {name: label, exact: true}).click();
   };
@@ -99,7 +103,7 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
     await files.getByRole('link', {name:attachment.name, exact:true}).waitFor();
     await files.getByRole('button', {name:'Remove attachment · ' + attachment.name, exact:true}).click();
     await files.waitFor({state:'hidden'});
-    await page.locator('[data-attachment-picker]').setInputFiles(attachment);
+    await attachToDraft(page);
     await files.getByRole('link', {name:attachment.name, exact:true}).waitFor();
   };
 
@@ -131,8 +135,9 @@ async function schedulingFlow({base, api, until, alicePage, bobPage, alice, bob,
       previous = current;
     }
   });
-  const beforeStage = await sample(alicePage);
   await alicePage.locator('[data-attachment-picker]').setInputFiles(attachment);
+  const beforeStage = await sample(alicePage);
+  await alicePage.locator('#oie-attachment-review').getByRole('button', {name:'Add to draft', exact:true}).click();
   await alicePage.getByRole('link', {name: attachment.name, exact: true}).waitFor();
   await stable(alicePage, beforeStage);
   await openMenu(alicePage, 'More options');

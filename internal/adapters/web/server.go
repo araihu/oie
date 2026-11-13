@@ -213,11 +213,12 @@ type view struct {
 }
 
 type copy struct {
-	CheckingConversation, MessageRequest, AcceptMessageRequest, ArchiveRequest string
-	ScheduleSelectedConversations                                              string
-	ScheduleLoading, ScheduleViewAgenda, ScheduleCancelSend                    string
-	ScheduleReviewChanged, AttachmentTooLarge                                  string
-	DismissLinkPreview                                                         string
+	CheckingConversation, MessageRequest, AcceptMessageRequest, ArchiveRequest                            string
+	ScheduleSelectedConversations                                                                         string
+	ScheduleLoading, ScheduleViewAgenda, ScheduleCancelSend                                               string
+	ScheduleReviewChanged, AttachmentTooLarge                                                             string
+	AttachmentReview, AttachmentCaption, AttachmentAddToDraft, AttachmentPreparing, AttachmentUnavailable string
+	DismissLinkPreview                                                                                    string
 
 	Scheduled, Schedule, Reschedule, ScheduleWhen, ScheduleEmpty, ScheduleUnavailable, ScheduleReview, ScheduleBack, ScheduleCancel, ScheduleEditMode, ScheduleSave, ScheduleSaved, SendNow, ScheduleTimeInvalid, ScheduleTimeAmbiguous, AttachmentFailed, AttachmentLimit, RemoveAttachment string
 
