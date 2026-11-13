@@ -18,6 +18,7 @@ type RoomManagementCommand struct {
 	Action, ExpectedRevision, Target, Value, Reason string
 	MessageID                                       ID
 	Name                                            *string `json:",omitempty"`
+	Image                                           []byte  `json:",omitempty"`
 	Topic                                           *string `json:",omitempty"`
 }
 

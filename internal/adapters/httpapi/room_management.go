@@ -49,6 +49,9 @@ func (s *Server) ManageRoom(ctx context.Context, r engineapi.ManageRoomRequestOb
 		Target: roomText(r.Body.Target), Value: roomText(r.Body.Value), Reason: roomText(r.Body.Reason),
 		MessageID: domain.ID(roomText(r.Body.MessageId)), Name: r.Body.Name, Topic: r.Body.Topic,
 	}
+	if r.Body.Image != nil {
+		cmd.Image = *r.Body.Image
+	}
 	state, err := s.engine.ManageRoom(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.ConversationId), cmd)
 	if err != nil {
 		return nil, err

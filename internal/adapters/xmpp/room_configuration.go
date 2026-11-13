@@ -122,6 +122,9 @@ func (m *Manager) invalidateRoomConfiguration(ctx context.Context, e *entry, msg
 			err := m.setRoomReactionPrivacy(ctx, e, room, mode, false)
 			e.mu.Unlock()
 			m.WakeRoomArchive(e.account.ID)
+			if status.Code == 104 {
+				m.queueAvatar(e, msg.From, "", false)
+			}
 			return err
 		}
 	}

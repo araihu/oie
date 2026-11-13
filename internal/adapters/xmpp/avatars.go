@@ -160,11 +160,12 @@ func (m *Manager) queueAvatar(e *entry, from jid.JID, expected string, presence 
 	address := from.Bare().String()
 	e.avatarMu.Lock()
 	kind, known := e.avatarTargets[address]
-	if known && (!presence || kind != "room" || from.Resourcepart() == "") {
+	dirty := known && (!presence || kind != "room" || from.Resourcepart() == "")
+	if dirty {
 		e.avatarDirty[address] = expected
 	}
 	e.avatarMu.Unlock()
-	if known {
+	if dirty {
 		m.wakeAvatars(e)
 	}
 }

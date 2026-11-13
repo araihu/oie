@@ -214,6 +214,45 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 			}
 		}
 	}
+	imageData.Set(0, 0, color.RGBA{B: 255, A: 255})
+	avatar.Reset()
+	if err := png.Encode(&avatar, imageData); err != nil {
+		t.Fatal(err)
+	}
+	publishAvatar := func(room domain.ID, action string, image []byte, want string) {
+		t.Helper()
+		info, err := engine.RoomManagement(ctx, room, "")
+		if err != nil || info.Revision == "" || slices.Contains(info.Actions, action) != (want == "confirmed") {
+			t.Fatalf("avatar permissions: %+v %v", info, err)
+		}
+		key := id()
+		cmd := domain.RoomManagementCommand{Action: action, Image: image, ExpectedRevision: info.Revision}
+		for range 2 {
+			if state, err := engine.ManageRoom(ctx, key, room, cmd); err != nil || state != want {
+				t.Fatalf("%s: wanted %s, got %s %v", action, want, state, err)
+			}
+		}
+	}
+	publishAvatar(joinedBob.Conversation.ID, "set_avatar", avatar.Bytes(), "denied")
+	publishAvatar(created.Conversation.ID, "set_avatar", avatar.Bytes(), "confirmed")
+	replaced, err := engine.PreviewRoom(ctx, bob, address, false)
+	if err != nil || replaced.Name != preview.Name || replaced.Description != preview.Description ||
+		replaced.AvatarHash == "" || replaced.AvatarHash == preview.AvatarHash {
+		t.Fatalf("replace photo only: %+v %v", replaced, err)
+	}
+	eventually(t, func() bool {
+		cached, err := engine.Avatar(ctx, bob, address)
+		return err == nil && cached.ImageHash == replaced.AvatarHash
+	})
+	publishAvatar(created.Conversation.ID, "remove_avatar", nil, "confirmed")
+	removed, err := engine.PreviewRoom(ctx, bob, address, false)
+	if err != nil || removed.AvatarHash != "" || removed.Name != preview.Name || removed.Description != preview.Description {
+		t.Fatalf("remove photo only: %+v %v", removed, err)
+	}
+	eventually(t, func() bool {
+		cached, err := engine.Avatar(ctx, bob, address)
+		return err == nil && cached.ImageHash == ""
+	})
 	manage(joinedBob.Conversation.ID, "rename", "", "Forged", "denied")
 	name, topic := "Renamed Garden", "Reading plans\r\nBring a book"
 	for _, check := range []struct {

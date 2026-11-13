@@ -228,6 +228,7 @@ func (m *Manager) finishRoomEntry(ctx context.Context, e *entry, slot *roomSlot,
 		captureOwnRoomOccupant(e, room, slot, presence.Occupants)
 		slot.creationName = nil
 		slot.snapshot = roomSnapshot(slot.conversation, "joined", slot.snapshot.Nickname, "", slot.snapshot.IntentRevisionID)
+		m.wakeAvatars(e)
 		queueRoomDetailsLocked(e, slot.conversation)
 	} else {
 		slot.snapshot = roomSnapshot(slot.conversation, "failed", slot.snapshot.Nickname, code, slot.snapshot.IntentRevisionID)

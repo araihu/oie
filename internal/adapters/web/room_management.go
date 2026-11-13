@@ -2,12 +2,16 @@ package web
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
+
+// Match the room management upload limit in the engine API.
+const maxRoomAvatarUpload = 512 << 10
 
 func (s *Server) roomManagementFragment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -80,6 +84,23 @@ func (s *Server) manageRoom(ctx context.Context, r *http.Request, text copy) (in
 	command := engineapi.ManageRoom{
 		Action: action, ExpectedRevision: r.Form.Get("expectedRevision"), Target: &target, Value: &value, Reason: &reason, MessageId: message,
 	}
+	if action == engineapi.SetAvatar {
+		file, _, err := r.FormFile("image")
+		if err != nil || len(r.MultipartForm.File) != 1 || len(r.MultipartForm.File["image"]) != 1 {
+			if file != nil {
+				_ = file.Close()
+			}
+			return http.StatusBadRequest, mutationResult{Message: text.RoomAvatarInvalid, Rejected: true}
+		}
+		defer func() { _ = file.Close() }()
+		data, err := io.ReadAll(io.LimitReader(file, maxRoomAvatarUpload+1))
+		if err != nil || len(data) == 0 || len(data) > maxRoomAvatarUpload {
+			return http.StatusBadRequest, mutationResult{Message: text.RoomAvatarInvalid, Rejected: true}
+		}
+		command.Image = &data
+	} else if r.MultipartForm != nil && len(r.MultipartForm.File) > 0 {
+		return http.StatusBadRequest, mutationResult{Message: text.InvalidForm, Rejected: true}
+	}
 	if action == engineapi.UpdateDetails {
 		command.Name = changedRoomField(r, "name", "originalName")
 		command.Topic = changedRoomField(r, "topic", "originalTopic")
@@ -92,6 +113,9 @@ func (s *Server) manageRoom(ctx context.Context, r *http.Request, text copy) (in
 		return http.StatusServiceUnavailable, mutationResult{Message: text.RoomCommandUnknown}
 	}
 	if result.JSON200 == nil {
+		if action == engineapi.SetAvatar && result.StatusCode() == http.StatusBadRequest {
+			return http.StatusBadRequest, mutationResult{Message: text.RoomAvatarInvalid, Rejected: true}
+		}
 		return result.StatusCode(), problemResult(text, result.StatusCode(), result.Body)
 	}
 	switch result.JSON200.State {

@@ -8,8 +8,22 @@ window.OieRuntime.register('room-management', life => {
   const pending = new WeakMap();
   const title = document.getElementById("room-managementTitle");
   const drafts = new Map();
+  const openForms = new Set();
+  const isPending = form => form.dataset.busy === 'true' || pending.has(form);
+  const hasPending = () => [...content.querySelectorAll('form')].some(isPending);
+  let accessList = 'member';
 
-  async function load(replace = true) {
+  function updateAvatarActions() {
+    const remove = content.querySelector('#room-remove-avatar');
+    if (!remove) return;
+    const avatar = content.querySelector('.oie-room-management-avatar [data-avatar-src]');
+    remove.hidden = !avatar?.dataset.avatarSrc;
+  }
+  const avatarChanges = new MutationObserver(updateAvatarActions);
+  avatarChanges.observe(content, {subtree: true, childList: true, attributes: true, attributeFilter: ['data-avatar-src']});
+  life.cleanup(() => avatarChanges.disconnect());
+
+  async function load(replace = true, announcement = '') {
     request?.abort();
     const current = new AbortController();
     request = current;
@@ -26,22 +40,33 @@ window.OieRuntime.register('room-management', life => {
       template.innerHTML = markup;
       if (replace) {
         for (const form of content.querySelectorAll('form')) {
-          if (form.dataset.busy === 'true' || pending.has(form)) {
+          if (isPending(form)) {
             status.textContent = '';
             return;
           }
-          drafts.set(identity(form), new FormData(form));
+          remember(form);
         }
         render(template);
         for (const form of content.querySelectorAll('form')) {
-          const draft = drafts.get(identity(form));
+          const id = identity(form);
+          if (openForms.has(id)) form.hidden = false;
+          const draft = drafts.get(id);
           if (!draft) continue;
-          for (const name of ['target','value','reason','name','topic']) {
+          for (const name of ['target','value','reason','name','topic','image']) {
             const field = form.elements.namedItem(name);
             const original = name === 'name' ? 'originalName' : name === 'topic' ? 'originalTopic' : '';
             if (field && field.type !== 'hidden' && draft.has(name) &&
                 (!original || draft.get(name) !== draft.get(original))) {
-              field.value = draft.get(name);
+              if (field.type === 'file') {
+                const file = draft.get(name);
+                if (!file.size) continue;
+                const transfer = new DataTransfer();
+                transfer.items.add(file);
+                field.files = transfer.files;
+                field.dispatchEvent(new Event('change', {bubbles:true}));
+              } else {
+                field.value = draft.get(name);
+              }
               field.dispatchEvent(new Event('input', {bubbles:true}));
             }
           }
@@ -72,7 +97,7 @@ window.OieRuntime.register('room-management', life => {
           }
         }
       }
-      status.textContent = '';
+      status.textContent = announcement;
     } catch {
       if (request === current && active && !life.signal.aborted) status.textContent = root.dataset.unavailable;
     } finally {
@@ -83,14 +108,22 @@ window.OieRuntime.register('room-management', life => {
   function render(template) {
     const currentTabs = content.querySelector('.oie-room-management-tabs');
     const incomingTabs = template.content.querySelector('.oie-room-management-tabs');
-    if (currentTabs && incomingTabs) {
-      const focusedList = document.activeElement?.dataset.roomAffiliationList;
+    const sameTabs = currentTabs && incomingTabs && currentTabs.dataset.tabsConfig === incomingTabs.dataset.tabsConfig;
+    if (sameTabs) {
+      const focused = document.activeElement;
+      const focusedList = focused?.dataset.roomAffiliationList;
+      const focusedAction = focused?.id || focused?.closest('form')?.dataset.roomActionForm;
+      const focusedMenu = focused?.closest('[data-room-participant]')?.querySelector('[aria-controls]')?.getAttribute('aria-controls');
       for (const panel of currentTabs.querySelectorAll('[role=tabpanel]')) {
         const incoming = template.content.getElementById(panel.id);
         panel.replaceChildren(...incoming.childNodes);
       }
       if (focusedList) {
         currentTabs.querySelector(`[data-room-affiliation-list="${CSS.escape(focusedList)}"]`)?.focus({preventScroll:true});
+      } else if (focusedAction && content.contains(focused) === false) {
+        const replacement = document.getElementById(focusedAction);
+        const menu = focusedMenu && currentTabs.querySelector(`[aria-controls="${CSS.escape(focusedMenu)}"]`);
+        (replacement || menu || currentTabs.querySelector('[role=tab][aria-selected=true]'))?.focus({preventScroll:true});
       }
     } else {
       content.replaceChildren(template.content);
@@ -100,16 +133,83 @@ window.OieRuntime.register('room-management', life => {
 
   function identity(form) {
     const target = form.elements.namedItem('target');
+    const value = form.elements.namedItem('value');
     return JSON.stringify([form.elements.managementAction.value, target?.type === 'hidden' ? target.value : '',
-      form.elements.namedItem('messageId')?.value || '']);
+      form.elements.namedItem('messageId')?.value || '', value?.type === 'hidden' ? value.value : '']);
   }
+
+  function clearInputs(form) {
+    const key = form.elements.operationKey.value;
+    const revision = form.elements.expectedRevision.value;
+    form.reset();
+    form.elements.operationKey.value = key;
+    form.elements.expectedRevision.value = revision;
+    form.elements.namedItem('image')?.dispatchEvent(new Event('change', {bubbles:true}));
+    const feedback = form.querySelector('[data-form-feedback]');
+    if (feedback) feedback.textContent = '';
+  }
+
+  function remember(form) {
+    const id = identity(form);
+    drafts.set(id, new FormData(form));
+    if (form.dataset.roomActionForm && !form.hidden) openForms.add(id);
+    else openForms.delete(id);
+  }
+
+  life.on(document, 'click', event => {
+    const cancel = event.target.closest('[data-room-action-cancel]');
+    if (cancel && content.contains(cancel)) {
+      const form = cancel.form;
+      if (isPending(form)) return;
+      form.hidden = true;
+      clearInputs(form);
+      remember(form);
+      const trigger = document.getElementById(form.dataset.roomActionForm);
+      (trigger?.closest('[role=menu]')?.parentElement.querySelector('[aria-controls]') || trigger)?.focus({preventScroll:true});
+      return;
+    }
+    const trigger = event.target.closest('[data-room-action-open],[id^=room-participant-][role=menuitem]');
+    if (trigger) {
+      if (hasPending()) return;
+      const form = content.querySelector(`[data-room-action-form="${CSS.escape(trigger.id)}"]`);
+      if (!form) return;
+      for (const open of content.querySelectorAll('form[data-room-action-form]:not([hidden])')) {
+        if (open.dataset.roomActionForm) open.hidden = true;
+      }
+      const menu = trigger.closest('[role=menu]');
+      const menuTrigger = document.getElementById(menu?.id?.replace(/-panel$/, ''))
+        ?.querySelector('[data-popover-trigger] [aria-expanded=true]');
+      menuTrigger?.click();
+      form.hidden = false;
+      const control = form.querySelector('input:not([type=hidden]),[type=submit]');
+      const focus = () => {
+        if (!form.isConnected || form.hidden) return;
+        if (menu?.getClientRects().length) {
+          life.raf(focus);
+          return;
+        }
+        control?.focus({preventScroll:true});
+      };
+      life.raf(focus);
+      return;
+    }
+    const tabButton = event.target.closest('[role=tab]');
+    if (!content.contains(tabButton) || hasPending()) return;
+    const tab = tabButton.getAttribute('aria-controls');
+    if (!tab) return;
+    const next = tab.endsWith('tabsbans') ? 'outcast' : tab.endsWith('tabsaccess') ? accessList : affiliation;
+    if (next !== affiliation) {
+      affiliation = next;
+      void load();
+    }
+  });
 
   life.on(document, 'click', event => {
     const trigger = event.target.closest('#chat-manage-room,#chat-invite-room,[id^=moderate-room-message-],[data-room-management-refresh],[data-room-affiliation-list]');
     if (!trigger) return;
     if (trigger === refresh || trigger.hasAttribute('data-room-affiliation-list')) {
-      if ([...content.querySelectorAll('form')].some(form => pending.has(form) || form.dataset.busy === 'true')) return;
-      affiliation = trigger.dataset.roomAffiliationList || affiliation;
+      if (hasPending()) return;
+      if (trigger.dataset.roomAffiliationList) affiliation = accessList = trigger.dataset.roomAffiliationList;
       void load();
       return;
     }
@@ -128,14 +228,14 @@ window.OieRuntime.register('room-management', life => {
     };
     const nextMessage = trigger.id.startsWith('moderate-room-message-') ? trigger.id.slice('moderate-room-message-'.length) : '';
     const nextInvite = trigger.id === 'chat-invite-room';
-    affiliation = '';
+    if (nextMessage !== message || nextInvite !== invite) affiliation = '';
     active = true;
     if (nextMessage !== message || nextInvite !== invite) {
-      if ([...content.querySelectorAll('form')].some(form => pending.has(form) || form.dataset.busy === 'true')) {
+      if (hasPending()) {
         life.raf(open);
         return;
       }
-      for (const form of content.querySelectorAll('form')) drafts.set(identity(form), new FormData(form));
+      for (const form of content.querySelectorAll('form')) remember(form);
       content.replaceChildren();
     }
     message = nextMessage;
@@ -143,6 +243,16 @@ window.OieRuntime.register('room-management', life => {
     if (title) title.textContent = invite ? root.dataset.inviteTitle : root.dataset.manageTitle;
     life.raf(open);
   });
+
+  life.on(document, 'keydown', event => {
+    if (!active || event.key !== 'Escape') return;
+    const menu = content.querySelector('[data-room-participant] [data-popover-trigger] [aria-expanded=true]');
+    if (!menu) return;
+    event.preventDefault();
+    event.stopPropagation();
+    menu.click();
+    menu.focus({preventScroll:true});
+  }, true);
 
   life.on(window, 'drawer:close-request', event => {
     if (event.detail?.id !== 'room-management') return;
@@ -160,18 +270,24 @@ window.OieRuntime.register('room-management', life => {
       return;
     }
     pending.delete(form);
-    if (form.elements.managementAction.value === 'update_details') {
+    const action = form.elements.managementAction.value;
+    if (action === 'update_details') {
       for (const [name, original] of [['name','originalName'],['topic','originalTopic']]) {
         const field = form.elements.namedItem(name);
         const baseline = form.elements.namedItem(original);
         if (field && baseline && (result.ok || name === 'name' && result.state === 'name_confirmed')) baseline.value = field.value;
       }
     }
-    if (result.ok && form.elements.managementAction.value === 'invite') {
+    if (result.ok && action === 'invite') {
       form.elements.target.value = '';
       form.elements.reason.value = '';
     }
     for (const input of form.querySelectorAll('input:not([type=hidden]),textarea')) input.readOnly = false;
-    life.timeout(() => { if (active) void load(false); }, 0);
+    const refreshContent = result.ok && (action === 'role' || action === 'affiliation' || action === 'set_avatar' || action === 'remove_avatar');
+    if (refreshContent) {
+      if (form.dataset.roomActionForm) form.hidden = true;
+      clearInputs(form);
+    }
+    life.timeout(() => { if (active) void load(refreshContent, refreshContent ? result.message : ''); }, 0);
   });
 });

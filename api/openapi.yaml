@@ -5480,7 +5480,7 @@ components:
           items: {$ref: '#/components/schemas/RoomAffiliation'}
     RoomManagementAction:
       type: string
-      enum: [rename, topic, invite, role, affiliation, moderate_message, update_details]
+      enum: [rename, topic, invite, role, affiliation, moderate_message, update_details, set_avatar, remove_avatar]
       description: Room-scoped action subject to current provider permissions.
     ManageRoom:
       description: An explicit action scoped to an observed room session.
@@ -5509,6 +5509,11 @@ components:
           type: string
           maxLength: 2000
           description: New room topic for update_details. An empty string clears it.
+        image:
+          type: string
+          format: byte
+          maxLength: 699052
+          description: Base64-encoded PNG, JPEG, or GIF, up to 512 KiB before encoding. Required for set_avatar only.
         reason:
           type: string
           maxLength: 500

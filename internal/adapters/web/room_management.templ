@@ -2,12 +2,14 @@ package web
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 
-	"github.com/araihu/goshtoso/components/accordion"
 	"github.com/araihu/goshtoso/components/avatar"
 	"github.com/araihu/goshtoso/components/button"
 	"github.com/araihu/goshtoso/components/drawer"
+	"github.com/araihu/goshtoso/components/dropdown"
+	"github.com/araihu/goshtoso/components/fileinput"
 	"github.com/araihu/goshtoso/components/form"
 	selectfield "github.com/araihu/goshtoso/components/select"
 	"github.com/araihu/goshtoso/components/tabs"
@@ -54,14 +56,21 @@ templ roomManagementContent(v view, state engineapi.RoomManagement, messageID, a
 		}
 	} else {
 		{{ ctx = expressions.With(ctx, expressions.Set{Tabs: expressions.Tabs{OptionsAriaLabel: v.Text.RoomManage}}) }}
-		@tabs.Tabs(tabs.Config{
-			ID:        "room-management-tabs",
-			RootClass: "oie-room-management-tabs",
-			Tabs: []tabs.Tab{
+		{{
+			pages := []tabs.Tab{
 				{ID: "details", Label: v.Text.RoomDetailsTab, Content: roomManagementDetails(v, state)},
-				{ID: "participants", Label: v.Text.Participants, Content: roomManagementParticipants(v, state, affiliation)},
-			},
-		})
+				{ID: "participants", Label: v.Text.Participants, Content: roomManagementParticipants(v, state)},
+			}
+		}}
+		if slices.Contains(state.Actions, engineapi.Affiliation) {
+			{{
+				pages = append(pages,
+					tabs.Tab{ID: "access", Label: v.Text.RoomAccessTab, Content: roomManagementAccess(v, state, affiliation)},
+					tabs.Tab{ID: "bans", Label: v.Text.RoomBans, Content: roomManagementBans(v, state, affiliation)},
+				)
+			}}
+		}
+		@tabs.Tabs(tabs.Config{ID: "room-management-tabs", RootClass: "oie-room-management-tabs", Tabs: pages})
 	}
 }
 
@@ -71,6 +80,9 @@ templ roomManagementDetails(v view, state engineapi.RoomManagement) {
 	<div class="oie-room-management-avatar">
 		@profileAvatar(v, v.Selected.AccountId, v.Selected.Address, avatar.Config{Name: v.infoTitle(), Size: avatar.SizeXL})
 	</div>
+	if slices.Contains(state.Actions, engineapi.SetAvatar) {
+		@roomAvatarControls(v, *state.Revision)
+	}
 	if !canRename {
 		<strong>{ v.infoTitle() }</strong>
 	}
@@ -82,34 +94,216 @@ templ roomManagementDetails(v view, state engineapi.RoomManagement) {
 	}
 }
 
-templ roomManagementParticipants(v view, state engineapi.RoomManagement, affiliation string) {
+templ roomManagementParticipants(v view, state engineapi.RoomManagement) {
 	if len(state.Occupants) > 0 {
-		@accordion.Accordion(accordion.AccordionConfig{ID: "room-managed-occupants", Items: roomOccupantItems(v, *state.Revision, state.Occupants)})
+		<ul class="oie-room-participants">
+			for _, occupant := range state.Occupants {
+				@roomParticipant(v, *state.Revision, occupant)
+			}
+		</ul>
 	} else {
 		<p>{ v.Text.RoomNoVisibleParticipants }</p>
 	}
-	if slices.Contains(state.Actions, engineapi.Affiliation) {
-		<h3>{ v.Text.RoomAccess }</h3>
-		@roomManagementForm(v, *state.Revision, "affiliation", "", v.Text.RoomSetAffiliation, roomOptions(v.Text, []string{"member", "admin", "owner", "outcast", "none"}))
-		<div class="oie-room-entry-links" aria-label={ v.Text.RoomAccess }>
-			for _, value := range []string{"member", "admin", "owner", "outcast"} {
-				@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-room-affiliation-list": value, "aria-pressed": affiliation == value})) {
-					{ roomManagementLabel(v.Text, value) }
+}
+
+templ roomManagementAccess(v view, state engineapi.RoomManagement, affiliation string) {
+	<div class="oie-room-entry-links" aria-label={ v.Text.RoomAccess }>
+		for _, value := range []string{"member", "admin", "owner"} {
+			@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-room-affiliation-list": value, "aria-pressed": strconv.FormatBool(affiliation == value)})) {
+				{ roomManagementLabel(v.Text, value) }
+			}
+		}
+	</div>
+	if affiliation != "" && affiliation != "outcast" {
+		@roomAccessList(v, state.Affiliations)
+	}
+	@roomManagementForm(v, *state.Revision, "affiliation", "", v.Text.RoomSetAffiliation, roomOptions(v.Text, []string{"member", "admin", "owner", "none"}))
+}
+
+templ roomAccessList(v view, addresses []string) {
+	if len(addresses) == 0 {
+		<p>{ v.Text.RoomNoAddresses }</p>
+	} else {
+		<ul class="oie-room-addresses">
+			for _, address := range addresses {
+				<li>{ address }</li>
+			}
+		</ul>
+	}
+}
+
+templ roomManagementBans(v view, state engineapi.RoomManagement, affiliation string) {
+	if affiliation == "outcast" {
+		if len(state.Affiliations) == 0 {
+			<p>{ v.Text.RoomNoBans }</p>
+		} else {
+			<ul class="oie-room-addresses" aria-label={ v.Text.RoomBannedAddresses }>
+				for _, address := range state.Affiliations {
+					{{ id := "unban-" + newOperationKey() }}
+					<li>
+						<span>{ address }</span>
+						@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"id": id, "data-room-action-open": "", "aria-label": v.Text.RoomUnban + " · " + address})) {
+							{ v.Text.RoomUnban }
+						}
+						@roomTargetAction(v, *state.Revision, id, address, "affiliation", "none", v.Text.RoomUnban, false)
+					</li>
+				}
+			</ul>
+		}
+	}
+	@roomTargetAction(v, *state.Revision, "", "", "affiliation", "outcast", v.Text.RoomBan, true)
+}
+
+type roomParticipantAction struct {
+	action, value, label string
+	danger               bool
+}
+
+func roomParticipantActions(text copy, occupant engineapi.RoomManagedOccupant) []roomParticipantAction {
+	var actions []roomParticipantAction
+	for _, role := range occupant.Roles {
+		var label string
+		switch role {
+		case "none":
+			label = text.RoomKick
+		case "visitor":
+			label = text.RoomRevokeVoice
+		case "participant":
+			label = text.RoomGrantVoice
+			if occupant.Role == "moderator" {
+				label = text.RoomDemoteModerator
+			}
+		case "moderator":
+			label = text.RoomPromoteModerator
+		}
+		if label != "" {
+			actions = append(actions, roomParticipantAction{"role", string(role), label, role == "none"})
+		}
+	}
+	for _, affiliation := range occupant.Affiliations {
+		var label string
+		switch affiliation {
+		case "none":
+			label = text.RoomRevokeAccess
+		case "member":
+			label = text.RoomMakeMember
+		case "admin":
+			label = text.RoomMakeAdmin
+		case "owner":
+			label = text.RoomMakeOwner
+		case "outcast":
+			label = text.RoomBan
+		}
+		if label != "" {
+			actions = append(actions, roomParticipantAction{"affiliation", string(affiliation), label, affiliation == "outcast"})
+		}
+	}
+	return actions
+}
+
+templ roomParticipant(v view, revision string, occupant engineapi.RoomManagedOccupant) {
+	{{
+		id := "room-participant-" + strings.TrimPrefix(occupant.Id, "occupant:")
+		label := strings.ReplaceAll(v.Text.RoomParticipantActions, "{name}", occupant.Nickname)
+		actions := roomParticipantActions(v.Text, occupant)
+	}}
+	<li class="oie-room-participant" data-room-participant>
+		<div class="oie-room-participant-row">
+			<div>
+				<strong>{ occupant.Nickname }</strong>
+				<small>
+					{ roomManagementLabel(v.Text, string(occupant.Role)) }
+					if occupant.Affiliation != "none" {
+						{ " · " + roomManagementLabel(v.Text, string(occupant.Affiliation)) }
+					}
+				</small>
+			</div>
+			if len(actions) > 0 {
+				{{ items := make([]dropdown.Item, 0, len(actions)) }}
+				for _, action := range actions {
+					{{ items = append(items, dropdown.Item{ID: id + "-" + action.action + "-" + action.value, Label: action.label, OnClick: "void 0", Danger: action.danger}) }}
+				}
+				@dropdown.Dropdown(dropdown.Config{ID: id, Label: label, Trigger: menuTrigger(label), MenuAlign: dropdown.AlignEnd, Sections: []dropdown.Section{{Items: items}}})
+			}
+		</div>
+		for _, action := range actions {
+			@roomTargetAction(v, revision, id+"-"+action.action+"-"+action.value, occupant.Id, action.action, action.value, action.label, action.danger)
+		}
+	</li>
+}
+
+templ roomTargetAction(v view, revision, trigger, target, action, value, label string, danger bool) {
+	{{
+		key := newOperationKey()
+		id := "manage-room-" + key
+	}}
+	@form.Form(form.Config{ID: id, Action: "/ui/rooms/manage", RootAttrs: templ.Attributes{"data-oie-action": "room-management", "data-room-action-form": trigger, "hidden": trigger != ""}}) {
+		@roomManagementFields(v, revision, action, key)
+		<input type="hidden" name="value" value={ value }/>
+		if target == "" {
+			@textinput.TextInput(textinput.Config{ID: id + "-address", Name: "target", Label: v.Text.RoomUserAddress, Required: true, InputAttrs: templ.Attributes{"maxlength": "2047", "spellcheck": "false", "autocapitalize": "none"}})
+		} else {
+			<input type="hidden" name="target" value={ target }/>
+		}
+		if value != "none" || action == "role" {
+			@textinput.TextInput(textinput.Config{ID: id + "-reason", Name: "reason", Label: v.Text.RoomReason, InputAttrs: templ.Attributes{"maxlength": "500"}})
+		}
+		<div class="oie-room-action-buttons">
+			{{
+				tone := button.TonePrimary
+				if danger {
+					tone = button.ToneDanger
+				}
+			}}
+			@button.Button(button.WithType("submit"), button.WithTone(tone)) {
+				{ label }
+			}
+			if trigger != "" {
+				@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-room-action-cancel": ""})) {
+					{ v.Text.RoomCancelAction }
 				}
 			}
 		</div>
-		if affiliation != "" {
-			<h4>{ roomManagementLabel(v.Text, affiliation) }</h4>
-			if len(state.Affiliations) == 0 {
-				<p>{ v.Text.RoomNoAddresses }</p>
-			} else {
-				<ul>
-					for _, address := range state.Affiliations {
-						<li>{ address }</li>
-					}
-				</ul>
-			}
+		<div data-form-feedback role="status" aria-live="polite"></div>
+	}
+}
+
+templ roomAvatarControls(v view, revision string) {
+	<div class="oie-room-avatar-actions">
+		@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"id": "room-change-avatar", "data-room-action-open": ""})) {
+			{ v.Text.RoomChangeAvatar }
 		}
+		@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"id": "room-remove-avatar", "data-room-action-open": "", "hidden": true})) {
+			{ v.Text.RoomRemoveAvatar }
+		}
+	</div>
+	{{ ctx = expressions.With(ctx, expressions.Set{FileInput: expressions.FileInput{BrowseLabel: v.Text.RoomAvatarBrowse, EmptyText: v.Text.RoomAvatarEmpty}}) }}
+	{{ key := newOperationKey() }}
+	@form.Form(form.Config{ID: "room-avatar-upload", Action: "/ui/rooms/manage", RootAttrs: templ.Attributes{"enctype": "multipart/form-data", "data-oie-action": "room-management", "data-room-action-form": "room-change-avatar", "hidden": true}}) {
+		@roomManagementFields(v, revision, "set_avatar", key)
+		@fileinput.FileInput(fileinput.Config{ID: "room-avatar-image", Name: "image", Label: v.Text.RoomAvatarFile, Appearance: fileinput.AppearanceUpload, Accept: "image/png,image/jpeg,image/gif", HelperText: v.Text.RoomAvatarHint, Required: true})
+		<div class="oie-room-action-buttons">
+			@button.Button(button.WithType("submit")) {
+				{ v.Text.RoomChangeAvatar }
+			}
+			@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-room-action-cancel": ""})) {
+				{ v.Text.RoomCancelAction }
+			}
+		</div>
+		<div data-form-feedback role="status" aria-live="polite"></div>
+	}
+	{{ removeKey := newOperationKey() }}
+	@form.Form(form.Config{ID: "room-avatar-removal", Action: "/ui/rooms/manage", RootAttrs: templ.Attributes{"data-oie-action": "room-management", "data-room-action-form": "room-remove-avatar", "hidden": true}}) {
+		@roomManagementFields(v, revision, "remove_avatar", removeKey)
+		<div class="oie-room-action-buttons">
+			@button.Button(button.WithType("submit"), button.WithTone(button.ToneDanger)) {
+				{ v.Text.RoomRemoveAvatar }
+			}
+			@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-room-action-cancel": ""})) {
+				{ v.Text.RoomCancelAction }
+			}
+		</div>
+		<div data-form-feedback role="status" aria-live="polite"></div>
 	}
 }
 
@@ -133,30 +327,6 @@ func roomOptions[T ~string](text copy, values []T) []selectfield.Option {
 		out = append(out, selectfield.Option{Value: string(value), Label: roomManagementLabel(text, string(value))})
 	}
 	return out
-}
-
-func roomOccupantItems(v view, revision string, occupants []engineapi.RoomManagedOccupant) []accordion.AccordionItem {
-	items := make([]accordion.AccordionItem, 0, len(occupants))
-	for _, item := range occupants {
-		items = append(items, accordion.AccordionItem{ID: "manage-" + strings.TrimPrefix(item.Id, "occupant:"), Title: item.Nickname + " · " + roomManagementLabel(v.Text, string(item.Role)), Content: roomOccupantControls(v, revision, item)})
-	}
-	return items
-}
-
-templ roomOccupantControls(v view, revision string, item engineapi.RoomManagedOccupant) {
-	<p>{ roomManagementLabel(v.Text,string(item.Role)) } · { roomManagementLabel(v.Text,string(item.Affiliation)) }</p>
-	if len(item.Roles)>0 {
-		{{ roles := roomOptions(v.Text, item.Roles) }}
-		for i := range roles {
-			if roles[i].Value=="none" {
-				{{ roles[i].Label = v.Text.RoomKick }}
-			}
-		}
-		@roomManagementForm(v, revision, "role", item.Id, v.Text.RoomSetRole, roles)
-	}
-	if len(item.Affiliations)>0 {
-		@roomManagementForm(v, revision, "affiliation", item.Id, v.Text.RoomSetAffiliation, roomOptions(v.Text, item.Affiliations))
-	}
 }
 
 templ roomManagementForm(v view, revision, action, target, label string, options []selectfield.Option) {

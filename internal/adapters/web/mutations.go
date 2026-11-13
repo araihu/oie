@@ -86,7 +86,11 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	text := s.catalogs[locale(r)]
-	if err := r.ParseForm(); err != nil {
+	parse := r.ParseForm
+	if r.URL.Path == "/ui/rooms/manage" && strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data;") {
+		parse = func() error { return r.ParseMultipartForm(1 << 20) }
+	}
+	if err := parse(); err != nil {
 		s.mutationResponse(w, r, 400, mutationResult{Message: text.InvalidForm, Code: "invalid_request", Rejected: true})
 		return
 	}

@@ -535,6 +535,7 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 		configuration := advanceRoomPresenceLocked(e, address)
 		captureOwnRoomOccupant(e, address, slot, p.Occupants)
 		slot.snapshot = roomSnapshot(slot.conversation, "joined", slot.snapshot.Nickname, "", slot.snapshot.IntentRevisionID)
+		m.wakeAvatars(e)
 		if configuration.mode == application.RoomReactionsNonanonymous {
 			queueRoomDetailsLocked(e, slot.conversation)
 		}

@@ -37,7 +37,7 @@ type roomManagement struct {
 }
 
 type roomManagementFlags struct {
-	open, membersOnly, changeSubject, allowInvites, moderate bool
+	open, membersOnly, changeSubject, allowInvites, moderate, avatar bool
 }
 
 func managementFlags(info disco.Info) roomManagementFlags {
@@ -50,6 +50,8 @@ func managementFlags(info disco.Info) roomManagementFlags {
 			flags.membersOnly = true
 		case roomModerationNS:
 			flags.moderate = true
+		case "vcard-temp":
+			flags.avatar = true
 		}
 	}
 	for _, form := range info.Form {
@@ -133,6 +135,9 @@ func (s roomManagement) actions() []string {
 	role, aff, flags := s.self.role, s.self.affiliation, s.flags
 	if aff == "owner" {
 		out = append(out, "rename")
+		if flags.avatar {
+			out = append(out, "set_avatar", "remove_avatar")
+		}
 	}
 	if role == "moderator" || (role == "participant" || role == "visitor") && flags.changeSubject {
 		out = append(out, "topic")
@@ -398,6 +403,17 @@ func (m *Manager) ManageRoom(ctx context.Context, a domain.Account, c domain.Con
 			return "unsupported"
 		}
 	}
+	avatarAction := cmd.Action == "set_avatar" || cmd.Action == "remove_avatar"
+	if avatarAction {
+		card, err := readArchiveIQ(ctx, e, session, c.Address, stanza.GetIQ, roomVCardQuery)
+		if err != nil && !errors.Is(err, errArchiveCursor) {
+			return roomIQOutcome(err, false)
+		}
+		payload, err = updateRoomVCard(card, cmd.Image)
+		if err != nil {
+			return "unsupported"
+		}
+	}
 	messageAction := cmd.Action == "topic" || cmd.Action == "invite"
 	if messageAction {
 		e.sendMu.Lock()
@@ -412,7 +428,7 @@ func (m *Manager) ManageRoom(ctx context.Context, a domain.Account, c domain.Con
 	// Recheck occupant identity after waiting for the provider and the IQ lane.
 	if !slot.management.allows(cmd) {
 		outcome = "denied"
-	} else if name == nil {
+	} else if name == nil && !avatarAction {
 		payload, outcome = slot.management.payload(a, c, cmd, message)
 	}
 	if outcome != "" || ctx.Err() != nil {
@@ -436,6 +452,13 @@ func (m *Manager) ManageRoom(ctx context.Context, a domain.Account, c domain.Con
 			kind = stanza.NormalMessage
 		}
 		return sendRoomManagementMessage(ctx, session, raw, room, kind, payload)
+	}
+	if avatarAction {
+		_, err := readArchiveIQ(ctx, e, session, c.Address, stanza.SetIQ, payload)
+		if err == nil {
+			m.queueAvatar(e, room, "", false)
+		}
+		return roomIQOutcome(err, true)
 	}
 	if name != nil || cmd.Action != "update_details" {
 		_, err = readArchiveIQ(ctx, e, session, c.Address, stanza.SetIQ, payload)

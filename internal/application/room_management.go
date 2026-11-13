@@ -22,6 +22,7 @@ type RoomManagementRepository interface {
 }
 
 const RoomManagementOperation = "manage_room"
+const MaxRoomAvatarSize = 512 << 10
 
 func (e *Engine) managementRoom(ctx context.Context, id domain.ID) (domain.Account, domain.Conversation, error) {
 	c, err := e.Conversation(ctx, id)
@@ -92,6 +93,15 @@ func roomAffiliation(value string) bool {
 func roomManagementInput(c domain.RoomManagementCommand) bool {
 	if len(c.ExpectedRevision) == 0 || len(c.ExpectedRevision) > 128 || !roomManagementText(c.ExpectedRevision, 128) ||
 		!roomManagementText(c.Target, 2047) || !roomManagementText(c.Reason, 500) {
+		return false
+	}
+	if c.Action == "set_avatar" || c.Action == "remove_avatar" {
+		return c.Target == "" && c.Value == "" && c.Reason == "" && c.MessageID == "" &&
+			c.Name == nil && c.Topic == nil &&
+			(c.Action == "set_avatar" && len(c.Image) > 0 && len(c.Image) <= MaxRoomAvatarSize ||
+				c.Action == "remove_avatar" && c.Image == nil)
+	}
+	if c.Image != nil {
 		return false
 	}
 	if c.Action == "update_details" {
@@ -176,6 +186,15 @@ func (e *Engine) ManageRoom(ctx context.Context, key, id domain.ID, cmd domain.R
 	}
 	fp := fingerprint(RoomManagementOperation, []any{id, cmd})
 	op := Operation{ID: key, ResourceID: id, Kind: RoomManagementOperation, CreatedAt: e.now().UTC()}
+	if cmd.Action == "set_avatar" {
+		if e.avatarFiles == nil {
+			return "", ErrProtocolUnavailable
+		}
+		cmd.Image, err = e.avatarFiles.Normalize(cmd.Image)
+		if err != nil {
+			return "", err
+		}
+	}
 	state, err := repo.ClaimRoomManagement(ctx, op, fp)
 	if err != nil || state != "" {
 		return state, err

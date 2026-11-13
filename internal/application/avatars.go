@@ -9,6 +9,7 @@ import (
 )
 
 type AvatarFiles interface {
+	Normalize([]byte) ([]byte, error)
 	Put(context.Context, []byte) (string, error)
 	Read(context.Context, string) ([]byte, error)
 }

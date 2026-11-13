@@ -552,10 +552,21 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-request-banner [data-form-feedback][data-error=true]{color:light-dark(#9e2626,#ffb4ab)}
 
 .oie-room-management{padding:16px}
-.oie-room-management [data-room-management-content]{display:grid;gap:14px}
+.oie-room-management [data-room-management-content]{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.oie-room-management-tabs [role="tab"]{padding-inline:8px}
+.oie-room-management-tabs [role="tabpanel"]{min-width:0}
 .oie-room-management [data-room-management-content]>form{border-bottom:1px solid var(--oie-border);padding-bottom:12px}
 .oie-room-management-tabs [role="tabpanel"]:not([x-cloak]){display:grid;gap:14px}
 .oie-room-management-avatar{display:grid;justify-items:center;margin-block:4px}
+.oie-room-participants,.oie-room-addresses{margin:0;padding:0;list-style:none}
+.oie-room-participant,.oie-room-addresses li{padding:8px 12px;border-bottom:1px solid var(--oie-border)}
+.oie-room-participant-row{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.oie-room-participant-row>div:first-child,.oie-room-addresses li{overflow-wrap:anywhere}
+.oie-room-participant-row small{display:block;color:var(--oie-muted)}
+.oie-room-participant form,.oie-room-addresses form{margin-top:8px}
+.oie-room-avatar-actions,.oie-room-action-buttons{display:flex;flex-wrap:wrap;gap:4px 8px}
+.oie-room-avatar-actions{justify-content:center}
+.oie-room-avatar-actions [hidden],.oie-room-management form[hidden]{display:none}
 .oie-room-management form{display:grid;gap:8px}
 .oie-room-management form>button{justify-self:start}
 .oie-room-management form [data-form-feedback]{min-height:1.4em}

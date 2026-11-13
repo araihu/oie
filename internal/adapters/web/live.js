@@ -982,14 +982,15 @@ window.OieRuntime.register('live', life => {
       const mentions=journal?.pending?(journal.mentions||[]):readMentions();
       saveDraft({text:value,key:submissionKey.value,pending:true,reply:journal?.reply||null,mentions,attachments:journal?.attachments||[],scheduledAt});if(!scheduledAt&&!editingSchedule)input.value='';restoreMentions(mentions);lockComposer(true);renderReply();
     }
-    let values = new URLSearchParams(new FormData(form));
+    const fields = new FormData(form);
+    let values = form.enctype === 'multipart/form-data' ? fields : new URLSearchParams(fields);
     const roomManagement = form.dataset.oieAction === 'room-management';
     const managementKey = roomManagement ? values.get('operationKey') : '';
     if (managementKey) {
       const key = 'oie.room-management:' + managementKey;
       const previous = inMemory.get(key);
-      if (previous) values = new URLSearchParams(previous);
-      else inMemory.set(key, values.toString());
+      if (previous) values = previous;
+      else inMemory.set(key, values);
     }
     const roomEntry = !!form.dataset.roomEntry;
     if (roomEntry) {

@@ -3,13 +3,12 @@
 Open **More → Manage room** in a joined room. The available actions depend on
 the account's room permissions. **Details** shows the room image and offers
 editable name and multiline topic fields with one **Save changes** button.
-Owners can change
-the name. Moderators can change the topic and adjust current occupants' roles.
+Owners can change the name and can replace or remove the room image when
+the service supports room vCards. Moderators can change the topic and adjust current occupants' roles.
 **More → Invite people** opens the invitation form when the room permits it.
-The room may let other occupants edit the topic or invite people. Administrators and owners
-can manage affiliations, including bans, and read the access lists the
-service returns. The **Participants** tab shows occupants seen in this session and the available
-access controls.
+The room may let other occupants edit the topic or invite people. Use the action menu on a row in **Participants** to moderate that occupant.
+Administrators and owners use **Access** to consult and change
+affiliations and **Bans** to consult bans, ban an address or lift a ban.
 A room can omit personal addresses even when it publishes nicknames.
 
 Room creation keeps the service's defaults with persistence enabled. Enter an
@@ -29,6 +28,12 @@ according to its policies. Name changes preserve the rest of the owner form. Sav
 both permissions before sending. The room confirms the name first, then Oiê
 submits the topic. A partial result identifies the saved name and keeps the
 topic available for retry.
+
+The image actions follow [XEP-0486](https://xmpp.org/extensions/xep-0486.html).
+The engine validates and resizes the uploaded raster to a static PNG.
+It reads the room vCard before writing, preserves other fields, and
+waits for the provider IQ result. The cached image refreshes through
+the existing profile image events.
 
 A management request names an observed room revision. Permissions come from
 self-presence and service discovery. Role changes target a specific observed
@@ -53,6 +58,7 @@ moderated text and references. The engine retains the original source rows.
 | Room directory | Browse or select a result | List public addresses or open preview | Retain account and conversation draft | Zero joins |
 | Protected room | Join with a password | Enter after confirmed self-presence | Open the saved room and retain its history | One durable entry request |
 | Room invitation | Archive | Show in Archived | Preserve the room and its request | Zero joins |
+| Joined owner, room advertises vCard | Replace or remove image | Confirm and refresh the published image | Keep the selected room | One vCard IQ write |
 | Joined owner | Rename | Confirm the change and show the published name | Stay in room controls | One configuration write |
 | Joined occupant | Change topic or send invitation | Show submission status | Retain the current conversation | One directed message |
 | Joined moderator | Change role or remove occupant | Confirm when accepted | Target the reviewed presence | One admin IQ |
