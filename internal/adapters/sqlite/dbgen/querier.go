@@ -18,6 +18,9 @@ type Querier interface {
 	ConversationUnreadSummary(ctx context.Context, conversationID string) (ConversationUnreadSummaryRow, error)
 	CorrectionNeighbors(ctx context.Context, arg CorrectionNeighborsParams) ([]CorrectionNeighborsRow, error)
 	CountRoomArchiveMessages(ctx context.Context, arg CountRoomArchiveMessagesParams) (int64, error)
+	// Match ListSharedContent's scope, categories and search. Any matching rows
+	// suffice for the capped count, so stop at the limit without sorting them.
+	CountSharedContentFirstPage(ctx context.Context, arg CountSharedContentFirstPageParams) (int64, error)
 	DeleteObsoleteSharedContent(ctx context.Context, arg DeleteObsoleteSharedContentParams) error
 	DeletePendingReplyMetadata(ctx context.Context, messageID string) error
 	DeleteReactionObservation(ctx context.Context, ordinal int64) error
@@ -118,11 +121,14 @@ type Querier interface {
 	ListRoomArchiveConversations(ctx context.Context, accountID string) ([]Conversation, error)
 	ListRoomIntents(ctx context.Context) ([]RoomIntent, error)
 	ListScheduledMessages(ctx context.Context, arg ListScheduledMessagesParams) ([]ListScheduledMessagesRow, error)
+	// The catalog and a bounded timeline use different driving indexes.
 	ListSharedContent(ctx context.Context, arg ListSharedContentParams) ([]ListSharedContentRow, error)
 	ListStarredMessages(ctx context.Context, arg ListStarredMessagesParams) ([]ListStarredMessagesRow, error)
 	MarkOutboxWireStarted(ctx context.Context, messageID string) error
 	MarkSharedContentIndexed(ctx context.Context, arg MarkSharedContentIndexedParams) error
+	// Bound the leading expression so SQLite seeks into messages_timeline.
 	MessagesAfterTarget(ctx context.Context, arg MessagesAfterTargetParams) ([]Message, error)
+	// Bound the leading expression so SQLite seeks into messages_timeline.
 	MessagesAtOrBeforeTarget(ctx context.Context, arg MessagesAtOrBeforeTargetParams) ([]Message, error)
 	OriginalSendReceipt(ctx context.Context, resourceID string) (Operation, error)
 	PendingDirectHistoryChecks(ctx context.Context, accountID string) ([]Conversation, error)

@@ -141,6 +141,17 @@ func TestSharedCatalogBackfillsAllHistoryAndKeepsMessageScope(t *testing.T) {
 	if err != nil || len(filtered.Items) != 70 {
 		t.Fatal("Unicode metadata/scope", len(filtered.Items), err)
 	}
+	scoped := domain.SharedContentQuery{
+		Type: "links", AccountID: c.AccountID, ConversationID: c.ID,
+		MessageIDs: []domain.ID{originals[0].ID, originals[1].ID},
+		Search:     "árvore", Limit: 10, IncludeFirstPageCounts: true,
+	}
+	page, err := e.SharedContent(t.Context(), scoped)
+	if err != nil || len(page.Items) != 2 || page.Indexing.State != "complete" ||
+		page.Indexing.TotalMessages != 2 || page.Indexing.IndexedMessages != 2 ||
+		page.FirstPageCounts == nil || *page.FirstPageCounts != (domain.SharedContentFirstPageCounts{Media: 2, Links: 2, Documents: 2}) {
+		t.Fatalf("message scope and search must apply to counts: %+v, %v", page, err)
+	}
 	docs, err := e.SharedContent(t.Context(), domain.SharedContentQuery{Type: "documents", ConversationID: c.ID, Limit: 100})
 	if err != nil || len(docs.Items) != 70 {
 		t.Fatal(len(docs.Items), err)

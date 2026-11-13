@@ -154,12 +154,13 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 	return page, tx.Commit()
 }
 
-// Reuse the list predicates so category changes and search match the first page.
 func sharedContentFirstPageCounts(ctx context.Context, queries *dbgen.Queries, active dbgen.ListSharedContentParams, limit, currentSize int) (*domain.SharedContentFirstPageCounts, error) {
 	counts := &domain.SharedContentFirstPageCounts{}
-	params := active
-	params.CountOnly, params.PageLimit = 1, int64(limit)
-	params.CursorID, params.CursorMs = "", 0
+	params := dbgen.CountSharedContentFirstPageParams{
+		ParserVersion: active.ParserVersion, MessageIds: active.MessageIds,
+		AccountID: active.AccountID, AccountIds: active.AccountIds, ConversationID: active.ConversationID,
+		Search: active.Search, PageLimit: int64(limit),
+	}
 	for _, tab := range []struct {
 		kind  string
 		count *int
@@ -169,11 +170,11 @@ func sharedContentFirstPageCounts(ctx context.Context, queries *dbgen.Queries, a
 			continue
 		}
 		params.ContentType = tab.kind
-		rows, err := queries.ListSharedContent(ctx, params)
+		count, err := queries.CountSharedContentFirstPage(ctx, params)
 		if err != nil {
 			return nil, err
 		}
-		*tab.count = len(rows)
+		*tab.count = int(count)
 	}
 	return counts, nil
 }
