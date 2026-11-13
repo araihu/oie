@@ -5,7 +5,6 @@ go 1.27.3
 tool (
 	github.com/a-h/templ/cmd/templ
 	github.com/air-verse/air
-	github.com/araihu/oapi-cli-gen/cmd/oapi-cli-gen
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 	github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 	github.com/oasdiff/oasdiff

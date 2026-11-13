@@ -44,6 +44,10 @@ tolerate unknown response properties; current request schemas reject unknown
 fields. Unknown enum values need explicit client handling; adding enum values
 is compatibility-sensitive and must pass the baseline gate or be reviewed.
 
+**AGREED:** product releases use `vX.Y.Z`, engine contracts use
+`openapi/engine/vX.Y.Z`, and the standalone CLI uses `cli/vX.Y.Z`.
+See [engine and CLI releases](engine-cli-releases.md) for publishing and retries.
+
 **RECOMMENDED:** run the breaking-change checker against the checked-in
 baseline with explicit provenance, alongside runtime response validation and
 generation drift. Deprecate before removal and describe migration in docs;
