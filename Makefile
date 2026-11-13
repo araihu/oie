@@ -7,10 +7,10 @@ COMPOSE ?= docker compose
 CODEGEN = GOWORK=off $(GO) tool -modfile=tools/go.mod
 VACUUM ?= env GOWORK=off $(GO) tool -modfile=tools/vacuum/go.mod vacuum
 GOLANGCI_LINT ?= $(CODEGEN) golangci-lint
-CLI_ARGS = --spec api/openapi.cli.json --name oiectl --module github.com/araihu/oie/cli --out cli
+CLI_GENERATOR = GOWORK=off $(GO) -C tools run ./cmd/generate-oiectl
 GO_TEST_EXEC = $(if $(OIE_GO_TEST_EXEC),-exec "$(OIE_GO_TEST_EXEC)")
 
-.PHONY: generate lint lint-go build build-cli run check test test-race check-generated dev-up dev-down test-xmpp test-engine-xmpp
+.PHONY: generate generate-cli lint lint-go build build-cli run check test test-race check-generated dev-up dev-down test-xmpp test-engine-xmpp
 
 generate:
 	python3 tools/generate-reaction-emoji-bases.py
@@ -20,10 +20,13 @@ generate:
 	$(CODEGEN) oapi-codegen --config api/bff.codegen.yaml api/bff.openapi.yaml
 	$(CODEGEN) oapi-codegen --config api/cache.codegen.yaml api/cache.openapi.yaml
 	$(CODEGEN) templ generate
+	$(MAKE) generate-cli
+
+generate-cli:
 	$(VACUUM) bundle --composed api/openapi.yaml api/openapi.bundle.yaml
 	$(VACUUM) apply-overlay --fail-on-warnings api/openapi.bundle.yaml api/cli.overlay.yaml api/openapi.cli.yaml
 	$(VACUUM) bundle --composed --format json api/openapi.cli.yaml api/openapi.cli.json
-	@if [ -f cli/.oapi-cli-gen.json ]; then $(CODEGEN) oapi-cli-gen generate $(CLI_ARGS) --update; else $(CODEGEN) oapi-cli-gen generate $(CLI_ARGS); fi
+	$(CLI_GENERATOR) -spec-version "$(OIECTL_SPEC_VERSION)"
 	GOWORK=off $(GO) -C cli mod tidy
 
 lint:
@@ -59,7 +62,7 @@ check-generated:
 	sh scripts/check-generated.sh $(VACUUM)
 
 check: lint lint-go check-generated check-api-compatibility check-ci-tools test-packaging
-	@test -z "$$(gofmt -l cmd internal api/spec.go tests tools/cmd)" || { echo 'Go formatting drift'; exit 1; }
+	@test -z "$$(gofmt -l cmd internal api/spec.go tests tools/cmd cli/cmd/oiectl/oiectl.go)" || { echo 'Go formatting drift'; exit 1; }
 	GOWORK=off $(GO) vet ./...
 	GOWORK=off $(GO) -C cli vet ./...
 	GOWORK=off $(GO) -C tools vet ./cmd/...

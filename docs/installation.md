@@ -387,6 +387,15 @@ Platform dependency references are [Wails installation](https://v3.wails.io/gett
 the Ubuntu package pages linked above and the
 [Go module environment reference](https://go.dev/ref/mod#environment-variables).
 
+## Install oiectl
+
+Choose an `oiectl` release with a `cli/vX.Y.Z` tag on
+[GitHub Releases](https://github.com/araihu/oie/releases). Download the archive
+for Linux x86-64 or macOS Apple Silicon, verify it against `SHA256SUMS`, and
+place the extracted `oiectl` executable on your `PATH`. Each release also
+includes its exact `go install` command and the engine spec tag it was built
+from. Run `oiectl --version` to see both the CLI version and its spec tag.
+
 ## Operating the engine without a web interface
 
 For automation against a loopback data API, build the server and generated CLI:

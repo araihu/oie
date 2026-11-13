@@ -44,4 +44,4 @@ root=$(pwd)
 "$@" apply-overlay --fail-on-warnings "$tmp/bundle.yaml" "$root/api/cli.overlay.yaml" "$tmp/cli.yaml" > /dev/null
 "$@" bundle --composed --format json "$tmp/cli.yaml" "$tmp/cli.json" > /dev/null
 cmp api/openapi.cli.json "$tmp/cli.json"
-GOWORK=off go tool -modfile=tools/go.mod oapi-cli-gen generate --spec api/openapi.cli.json --name oiectl --module github.com/araihu/oie/cli --out cli --check
+GOWORK=off go -C tools run ./cmd/generate-oiectl -check
