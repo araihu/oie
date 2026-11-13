@@ -20,14 +20,14 @@ start() {
     container=$(docker run -d --publish 127.0.0.1::8080 \
         --mount "type=volume,source=$volume,target=/data" "$image")
     url="http://$(docker port "$container" 8080/tcp)"
-    curl --fail --silent --show-error --retry 20 --retry-connrefused \
-        --retry-delay 1 --retry-max-time 90 --max-time 10 "$url/api/v1/health" |
-        jq -e '.status == "ready"' >/dev/null
+    ready=$(curl --fail --silent --show-error --retry 20 --retry-all-errors \
+        --retry-delay 1 --retry-max-time 90 --max-time 10 "$url/api/v1/health")
+    printf '%s\n' "$ready" | jq -e '.status == "ready"' >/dev/null
 }
 
 identity() {
-    curl --fail --silent --show-error --max-time 15 "$url/api/v1/engine" |
-        jq -er '.id | select(type == "string" and length > 0)'
+    engine=$(curl --fail --silent --show-error --max-time 15 "$url/api/v1/engine") || return
+    printf '%s\n' "$engine" | jq -er '.id | select(type == "string" and length > 0)'
 }
 
 start
