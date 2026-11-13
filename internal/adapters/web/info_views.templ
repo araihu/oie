@@ -1,13 +1,10 @@
 package web
 
 import (
- "github.com/araihu/goshtoso/components/avatar"
- "github.com/araihu/goshtoso/components/card"
  "github.com/araihu/goshtoso/components/icon"
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/link"
  "github.com/araihu/goshtoso/components/textinput"
- "strconv"
 )
 
 templ infoEntry(v view,kind,label string,symbol icon.Symbol){
@@ -52,16 +49,10 @@ templ infoSearchFields(v view){
 <input type="hidden" name="chat" value={v.ChatID}/><input type="hidden" name="account" value={v.AccountFilter}/><input type="hidden" name="section" value={v.Section}/><input type="hidden" name="filter" value={v.Filter}/><input type="hidden" name="q" value={v.Query}/><input type="hidden" name="message" value={v.FocusMessage}/><input type="hidden" name="open" value="details"/><input type="hidden" name="infoView" value="shared"/><input type="hidden" name="infoType" value={v.InfoType}/><input type="hidden" name="lang" value={v.Locale}/><input type="hidden" name="theme" value={v.Theme}/>
 }
 templ infoStarredContent(v view){
-<div class="oie-info-stars" data-info-stars data-version={v.infoStarsVersion()}>
+<div class="oie-info-stars" data-info-stars data-version={starredPageVersion(v.InfoStars,v.InfoInvalid)}>
 @infoBack(v)
 <h2 tabindex="-1" data-info-heading>{v.Text.InfoStarred}</h2>
-<div data-info-star-states data-known={strconv.FormatBool(v.InfoStars!=nil)}>
-if v.InfoStars!=nil {
-for _,item:=range v.InfoStars.Items {
-<span hidden data-star-state data-star-source={item.Message.Id} data-starred={strconv.FormatBool(item.Star.Starred)} data-revision={starRevision(item.Star)}></span>
-}
-}
-</div>
+@starredPageStates(v.InfoStars)
 if v.InfoInvalid {
 <p>{v.Text.SharedPageUnavailable}</p>
 @link.Link(v.infoHref("stars","stars"),link.WithAttrs(templ.Attributes{"data-info-nav":""})){ {v.Text.SharedNewest} }
@@ -71,15 +62,9 @@ if v.InfoInvalid {
 }else if len(v.InfoStars.Items)==0 {
 <p>{v.Text.InfoStarsEmpty}</p>
 }else{
-{{ starView:=v.infoStarView() }}
+{{ starView:=v.starredPageView(v.InfoStars) }}
 for _,item:=range v.InfoStars.Items {
-{{ position := messageTimelineTime(item.Message) }}
-<article class="oie-info-star" data-info-star-message={item.Message.Id}>
-<header>@avatar.Avatar(avatar.Config{Name:item.Message.Sender.DisplayName,Size:avatar.SizeXS})<strong>{item.Message.Sender.DisplayName}</strong>@starButton(starView,item.Message.Id)</header>
-@card.Card(card.Config{Body:infoStarExcerpt(infoExcerpt(item.Message)),Density:card.DensityCompact,RootClass:"oie-info-star-card"})
-<time data-shared-source-date datetime={position.Format("2006-01-02T15:04:05Z07:00")}>{position.Format("2006-01-02 15:04")}</time>
-@link.Link(v.infoSourceHref(item.Message),link.WithAttrs(templ.Attributes{"data-info-source":item.Message.Id})){ {v.Text.SharedGoToMessage} }
-</article>
+@starredMessageRow(starView,item,false)
 }
 if v.InfoStars.NextCursor!=nil {
 @link.Link(v.infoHref("stars","stars","infoCursor",*v.InfoStars.NextCursor),link.WithAttrs(templ.Attributes{"data-info-nav":"","data-info-stars-next":""})){ {v.Text.SharedNext} }
@@ -87,4 +72,3 @@ if v.InfoStars.NextCursor!=nil {
 }
 </div>
 }
-templ infoStarExcerpt(text string){<p class="oie-details-plain">{text}</p>}

@@ -26,6 +26,14 @@ paths:
       summary: Render the workspace or a requested presentation fragment
       description: Native navigation returns the workspace document. HTMX navigation may select an uncached HTML fragment, using the same URL and account and conversation visibility rules as native navigation.
       parameters:
+      - name: section
+        in: query
+        description: Workspace section. Use favorites to browse starred messages across conversations, scoped to the selected account when present.
+        schema: {type: string}
+      - name: favoritesCursor
+        in: query
+        description: Continuation cursor for the starred-message workspace in the current account scope.
+        schema: {type: string}
       - name: HX-Request
         in: header
         description: Set to true to request an HTML fragment.

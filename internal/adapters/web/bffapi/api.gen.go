@@ -752,6 +752,12 @@ type SubmissionReceipt struct {
 
 // RenderWorkspaceParams defines parameters for RenderWorkspace.
 type RenderWorkspaceParams struct {
+	// Section Workspace section. Use favorites to browse starred messages across conversations, scoped to the selected account when present.
+	Section *string `form:"section,omitempty" json:"section,omitempty"`
+
+	// FavoritesCursor Continuation cursor for the starred-message workspace in the current account scope.
+	FavoritesCursor *string `form:"favoritesCursor,omitempty" json:"favoritesCursor,omitempty"`
+
 	// HXRequest Set to true to request an HTML fragment.
 	HXRequest *RenderWorkspaceParamsHXRequest `json:"HX-Request,omitempty"`
 

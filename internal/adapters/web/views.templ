@@ -37,7 +37,7 @@ func navigation(v view, id string) sidebar.Config {
 
             {ID: "media", Label: v.Text.SharedMedia, Href: v.href("section", "media", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidRectangleGroup), Active: v.Section == "media", LinkAttrs: sidebarNavigationAttrs()},
 			{ID: "archived", Label: v.Text.Archived, Href: v.href("section", "archived", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidFolder), Active: v.Section == "archived", LinkAttrs: sidebarNavigationAttrs()},
-			{ID: "favorites", Label: v.Text.Favorites, Href: v.href("section", "favorites", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidStar), Active: v.Section == "favorites", LinkAttrs: sidebarNavigationAttrs()},
+			{ID: "favorites", Label: v.Text.Favorites, Href: v.favoritesHref(""), Icon: glyph(heroicons.Icon16SolidStar), Active: v.Section == "favorites", LinkAttrs: sidebarNavigationAttrs()},
 		},
 	}
 	if !v.Preview {
@@ -256,6 +256,8 @@ if v.NativeMessageSearch {
 @sharedWorkspace(v)
 }else if v.Section=="scheduled" {
 @scheduledWorkspace(v)
+}else if v.Section=="favorites" {
+@favoritesWorkspace(v)
 }else{
 	<div id="workspace" class={ "oie-workspace",templ.KV("oie-chat-open",v.ChatOpen) }>
 		<section class="oie-list-pane" aria-label={ v.Text.Chats }>
@@ -265,8 +267,6 @@ if v.NativeMessageSearch {
 					switch v.Section {
 						case "archived":
 							{ v.Text.Archived }
-						case "favorites":
-							{ v.Text.Favorites }
 						case "media":
 							{ v.Text.SharedMedia }
 						default:
@@ -645,7 +645,10 @@ templ liveRegions(v view){
 if v.Section=="scheduled"&&v.SchedulePage!=nil {
 @scheduledResults(v)
 }
-if v.Section!="media"{
+if v.Section=="favorites" && v.FavoritesPage!=nil {
+@favoritesResults(v)
+}
+if v.Section!="media" && v.Section!="favorites"{
 @starData(v)
 }
 if v.Selected!=nil {

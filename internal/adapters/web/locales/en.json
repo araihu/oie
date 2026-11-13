@@ -413,6 +413,8 @@
   "InfoGroup": "Group",
   "InfoReportedOccupants": "reported occupants",
   "InfoStarsUnavailable": "Starred messages could not be loaded.",
+  "FavoritesEmpty": "No starred messages",
+  "FavoritesEmptyHelp": "Star a message to find it here.",
   "InfoStarsEmpty": "No starred messages in this conversation.",
   "InfoNavigationFailed": "This view could not be loaded. Try the link again.",
   "NavFailed": "Could not open this view. Try again.",

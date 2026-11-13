@@ -28,7 +28,12 @@ window.OieRuntime.register('stars', life => {
     for(const button of document.querySelectorAll('[data-star-message],[id^="star-message-"]')){
       if(button.id?.startsWith('star-message-'))button.dataset.starMessage=button.id.slice(13);
       const id=button.dataset.starMessage,current=states.get(id),pending=id&&journal(id),known=!!current?.known;
-      button.hidden=!known;button.disabled=!known||busy.has(id);
+      button.hidden=!known;
+      if(button.closest('#favorites-results')){
+        // Keep keyboard focus on the action while the row awaits confirmation.
+        button.disabled=!known;
+        button.setAttribute('aria-disabled',String(!known||busy.has(id)));
+      }else button.disabled=!known||busy.has(id);
       const label=pending?labels.retry:current?.starred?labels.unstar:labels.star;
       button.setAttribute('aria-label',label||'');button.title=label||'';
       if(button.id?.startsWith('star-message-')){button.setAttribute('role','menuitem');button.removeAttribute('aria-pressed');
@@ -51,18 +56,44 @@ window.OieRuntime.register('stars', life => {
   life.on(document,'oie:info-content',event=>{if(event.detail.generation===generation)readInfo(event.detail.root);else{render();document.dispatchEvent(new CustomEvent('oie:refresh-request'));}});
 
   life.on(document,'oie:actions-refreshed',render);
-  function refreshInfo(page){
-    const current=document.querySelector('[data-info-stars]'),fresh=page.querySelector('#live-info-content [data-info-stars]');
+  function refreshStarredPage(current,fresh,scroll,heading){
     if(!current||!fresh||current.dataset.version===fresh.dataset.version)return;
-    const scroll=document.getElementById('details-body'),top=scroll?.scrollTop;
-    const active=current.contains(document.activeElement)?document.activeElement:null,message=active?.closest('[data-info-star-message]')?.dataset.infoStarMessage,wasStar=active?.matches('[data-star-message]');
-    const apply=()=>{for(const child of current.children)window.Alpine?.destroyTree(child);current.innerHTML=fresh.innerHTML;current.dataset.version=fresh.dataset.version;for(const child of current.children)window.Alpine?.initTree(child);};
+    const top=scroll?.scrollTop;
+    const active=current.contains(document.activeElement)?document.activeElement:null;
+    const message=active?.closest('[data-info-star-message]')?.dataset.infoStarMessage;
+    const action=active?.matches('[data-star-message]')?'[data-star-message]':'[data-info-source]';
+    const visibleTop=scroll?.getBoundingClientRect().top;
+    const anchors=scroll?[...current.querySelectorAll('[data-info-star-message]')]
+      .filter(row=>row.getBoundingClientRect().bottom>visibleTop)
+      .map(row=>[row.dataset.infoStarMessage,row.getBoundingClientRect().top]):[];
+    const findRow=id=>current.querySelector(`[data-info-star-message="${CSS.escape(id)}"]`);
+    const apply=()=>{
+      for(const child of current.children)window.Alpine?.destroyTree(child);
+      current.innerHTML=fresh.innerHTML;
+      current.dataset.version=fresh.dataset.version;
+      for(const child of current.children)window.Alpine?.initTree(child);
+    };
     if(window.Alpine?.mutateDom)window.Alpine.mutateDom(apply);else apply();
-    if(active){const row=message&&current.querySelector(`[data-info-star-message="${CSS.escape(message)}"]`);const target=wasStar?row?.querySelector('[data-star-message]'):row?.querySelector('[data-info-source]');(target||current.querySelector('[data-info-star-message] [data-star-message]')||current.querySelector('[data-info-heading]'))?.focus({preventScroll:true});}
-    if(scroll&&top!==undefined)scroll.scrollTop=top;
+    if(active){
+      const row=message&&findRow(message);
+      (row?.querySelector(action)||current.querySelector('[data-info-star-message] '+action)||heading())?.focus({preventScroll:true});
+    }
+    if(scroll&&top!==undefined){
+      const anchor=anchors.find(([id])=>findRow(id));
+      scroll.scrollTop=anchor?top+findRow(anchor[0]).getBoundingClientRect().top-anchor[1]:top;
+    }
     document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));
   }
-  life.on(document,'oie:stars-refresh',event=>{if(event.detail.generation===generation){refreshInfo(event.detail.page);read(event.detail.page);readInfo(event.detail.page);}});
+  life.on(document,'oie:stars-refresh',event=>{
+    if(event.detail.generation!==generation)return;
+    const page=event.detail.page;
+    const info=document.querySelector('[data-info-stars]');
+    refreshStarredPage(info,page.querySelector('#live-info-content [data-info-stars]'),
+      document.getElementById('details-body'),()=>info.querySelector('[data-info-heading]'));
+    refreshStarredPage(document.getElementById('favorites-results'),page.getElementById('favorites-results'),
+      document.getElementById('favorites-scroll'),()=>document.getElementById('favorites-heading'));
+    read(page);readInfo(page);
+  });
   let viewerRead=false,viewerAgain=false;
   async function refreshViewer(){
     if(!viewerMessage)return;if(viewerRead){viewerAgain=true;return;}viewerRead=true;

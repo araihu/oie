@@ -145,6 +145,10 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	FavoritesPage    *engineapi.StarredMessagePage
+	FavoritesCursor  string
+	FavoritesInvalid bool
+
 	SchedulePage          *engineapi.ScheduledMessagePage
 	ScheduleEdit          *engineapi.Message
 	ScheduleDestinations  []engineapi.Conversation
@@ -343,6 +347,7 @@ type copy struct {
 	InfoGroup                                                                                                                                                                                                string
 	InfoReportedOccupants                                                                                                                                                                                    string
 	InfoStarsUnavailable                                                                                                                                                                                     string
+	FavoritesEmpty, FavoritesEmptyHelp                                                                                                                                                                       string
 	InfoStarsEmpty                                                                                                                                                                                           string
 	InfoNavigationFailed                                                                                                                                                                                     string
 	SharedAccount                                                                                                                                                                                            string
@@ -887,6 +892,10 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		s.loadScheduled(ctx, v, !scheduledOnly)
 		return
 	}
+	if v.Section == "favorites" {
+		v.FavoritesPage, v.FavoritesInvalid = s.loadStarredMessages(ctx, v.AccountFilter, "", v.FavoritesCursor)
+		return
+	}
 	if v.Section == "media" {
 		s.loadSharedContent(ctx, v, v.SharedCursor == "" || r.URL.Path == "/ui/refresh")
 		return
@@ -924,7 +933,7 @@ func (s *Server) loadInbox(ctx context.Context, v *view, editor engineapi.Reques
 		yes := true
 		params.UnreadOnly = &yes
 	}
-	if v.Filter == "favorites" || v.Section == "favorites" {
+	if v.Filter == "favorites" {
 		yes := true
 		params.FavoritesOnly = &yes
 	}
@@ -1157,11 +1166,11 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 		component = appFragment(v)
 		switch r.Header.Get("X-Oie-Fragment") {
 		case "inbox":
-			if r.URL.Path == "/" && v.Section != "media" && v.Section != "scheduled" {
+			if r.URL.Path == "/" && v.Section != "media" && v.Section != "scheduled" && v.Section != "favorites" {
 				component = inboxList(v)
 			}
 		case "conversation":
-			if v.Section != "media" && v.Section != "scheduled" {
+			if v.Section != "media" && v.Section != "scheduled" && v.Section != "favorites" {
 				component = conversationPane(v)
 			}
 		case "timeline":

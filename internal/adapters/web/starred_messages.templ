@@ -1,0 +1,93 @@
+package web
+
+import (
+	"strconv"
+
+	"github.com/araihu/goshtoso/components/avatar"
+	"github.com/araihu/goshtoso/components/card"
+	"github.com/araihu/goshtoso/components/emptystate"
+	"github.com/araihu/goshtoso/components/link"
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+)
+
+templ favoritesWorkspace(v view) {
+	<section id="workspace" class="oie-shared-workspace" aria-labelledby="favorites-heading">
+		<header class="oie-shared-header">
+			@navigationControl(v)
+			<h2 id="favorites-heading" tabindex="-1">{ v.Text.InfoStarred }</h2>
+		</header>
+		<div id="favorites-scroll" class="oie-shared-scroll">
+			@favoritesResults(v)
+		</div>
+	</section>
+}
+
+templ favoritesResults(v view) {
+	<div id="favorites-results" data-version={ starredPageVersion(v.FavoritesPage, v.FavoritesInvalid) }>
+		@starredPageStates(v.FavoritesPage)
+		if v.FavoritesInvalid {
+			<p role="status">{ v.Text.SharedPageUnavailable }</p>
+			@link.Link(v.favoritesHref("")) { { v.Text.SharedNewest } }
+		} else if v.FavoritesPage == nil {
+			<p role="status">{ v.Text.InfoStarsUnavailable }</p>
+			@link.Link(v.favoritesHref(v.FavoritesCursor)) { { v.Text.Retry } }
+		} else {
+			if len(v.FavoritesPage.Items) == 0 {
+				@emptystate.EmptyState(emptystate.Config{Title: v.Text.FavoritesEmpty, Description: v.Text.FavoritesEmptyHelp})
+			} else {
+				{{ starView := v.starredPageView(v.FavoritesPage) }}
+				for _, item := range v.FavoritesPage.Items {
+					@starredMessageRow(starView, item, true)
+				}
+			}
+			if v.FavoritesCursor != "" || v.FavoritesPage.NextCursor != nil {
+				<nav class="oie-favorites-pagination" aria-label={ v.Text.InfoStarred }>
+					if v.FavoritesCursor != "" {
+						@link.Link(v.favoritesHref("")) { { v.Text.SharedNewest } }
+					}
+					if v.FavoritesPage.NextCursor != nil {
+						@link.Link(v.favoritesHref(*v.FavoritesPage.NextCursor)) { { v.Text.SharedNext } }
+					}
+				</nav>
+			}
+		}
+	</div>
+}
+
+templ starredPageStates(page *engineapi.StarredMessagePage) {
+	<div data-info-star-states data-known={ strconv.FormatBool(page != nil) } hidden>
+		if page != nil {
+			for _, item := range page.Items {
+				<span data-star-state data-star-source={ item.Message.Id } data-starred={ strconv.FormatBool(item.Star.Starred) } data-revision={ starRevision(item.Star) }></span>
+			}
+		}
+	</div>
+}
+
+templ starredMessageRow(v view, item engineapi.StarredMessage, showSource bool) {
+	{{ position := messageTimelineTime(item.Message) }}
+	<article class="oie-info-star" data-info-star-message={ item.Message.Id }>
+		<header>
+			@avatar.Avatar(avatar.Config{Name: item.Message.Sender.DisplayName, Size: avatar.SizeXS})
+			<strong>{ item.Message.Sender.DisplayName }</strong>
+			@starButton(v, item.Message.Id)
+		</header>
+		if showSource {
+			<p class="oie-favorite-source">
+				{ item.Conversation.Title }
+				if v.AccountFilter == "" && len(v.Accounts) > 1 {
+					if account := v.accountLabel(item.Conversation.AccountId); account != "" {
+						<span> · { account }</span>
+					}
+				}
+			</p>
+		}
+		@card.Card(card.Config{Body: infoStarExcerpt(infoExcerpt(item.Message)), Density: card.DensityCompact, RootClass: "oie-info-star-card"})
+		<time data-shared-source-date datetime={ position.Format("2006-01-02T15:04:05Z07:00") }>{ position.Format("2006-01-02 15:04") }</time>
+		@link.Link(v.infoSourceHref(item.Message), link.WithAttrs(templ.Attributes{"data-info-source": item.Message.Id})) { { v.Text.SharedGoToMessage } }
+	</article>
+}
+
+templ infoStarExcerpt(text string) {
+	<p class="oie-details-plain">{ text }</p>
+}

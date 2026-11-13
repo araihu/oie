@@ -93,8 +93,7 @@ header, unavailable-note removal, known star state and no page errors/overflow.
 A full Dagger run remains unverified because its client timed out after 180
 seconds. See [local CI status](local-ci.md). Zoom/navigation, sharing, Copy image
 and protocol actions remain outside this increment. The starred collection is
-available through the engine API and generated CLI; no separate library UI has
-been added.
+available from Favorites in the sidebar, the engine API and the generated CLI.
 
 The reusable public `modal.DialogConfig.HeaderContent` slot is supplied by
 [Goshtoso PR 373](https://github.com/araihu/goshtoso/pull/373), pinned at

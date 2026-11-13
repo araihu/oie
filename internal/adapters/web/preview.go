@@ -60,6 +60,9 @@ func (v *view) configureWorkspace(r *http.Request) {
 	default:
 		v.SharedType = "media"
 	}
+	if v.Section == "favorites" {
+		v.FavoritesCursor = q.Get("favoritesCursor")
+	}
 	v.ScheduleCursor = q.Get("scheduleCursor")
 	v.ScheduleConversations = slices.DeleteFunc(q["scheduleConversation"], func(id string) bool { return id == "" })
 	slices.Sort(v.ScheduleConversations)
@@ -114,6 +117,9 @@ func (v view) href(pairs ...string) string {
 			q.Set("contentConversation", v.SharedConversation)
 		}
 	}
+	if v.Section == "favorites" && v.FavoritesCursor != "" {
+		q.Set("favoritesCursor", v.FavoritesCursor)
+	}
 	if v.Section == "scheduled" {
 		if len(v.ScheduleConversations) > 0 {
 			q["scheduleConversation"] = v.ScheduleConversations
@@ -142,7 +148,7 @@ func (v view) href(pairs ...string) string {
 		}
 	}
 	for i := 0; i+1 < len(pairs); i += 2 {
-		if pairs[i] == "section" && (pairs[i+1] == "media" || pairs[i+1] == "scheduled") {
+		if pairs[i] == "section" && (pairs[i+1] == "media" || pairs[i+1] == "scheduled" || pairs[i+1] == "favorites") {
 			for _, key := range []string{"searchMode", "searchQuery", "searchAccount", "searchType", "searchEngine", "includeEditHistory", "chatSearch", "chatQuery", "chatIncludeHistory"} {
 				q.Del(key)
 			}
@@ -155,6 +161,9 @@ func (v view) href(pairs ...string) string {
 		if pairs[i] == "section" && pairs[i+1] != "scheduled" {
 			q.Del("scheduleConversation")
 			q.Del("scheduleCursor")
+		}
+		if pairs[i] == "section" && pairs[i+1] != "favorites" || pairs[i] == "account" && pairs[i+1] != v.AccountFilter {
+			q.Del("favoritesCursor")
 		}
 		if pairs[i] == "account" {
 			if pairs[i+1] != v.AccountFilter || len(sharedAccounts) > 0 {

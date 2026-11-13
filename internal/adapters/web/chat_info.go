@@ -2,9 +2,6 @@ package web
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"strings"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -57,42 +54,10 @@ func (s *Server) loadChatInfo(ctx context.Context, v *view, refresh bool) {
 		v.InfoInvalid = scoped.SharedInvalid
 	}
 	if v.InfoView == "stars" {
-		limit := 50
-		account, conversation := v.Selected.AccountId, v.Selected.Id
-		params := &engineapi.ListStarredMessagesParams{AccountId: &account, ConversationId: &conversation, Limit: &limit}
-		if v.InfoCursor != "" {
-			params.Cursor = &v.InfoCursor
-		}
-		result, err := s.client.ListStarredMessagesWithResponse(ctx, params)
-		if err != nil {
-			return
-		}
-		if result.StatusCode() == 400 || result.StatusCode() == 409 {
-			v.InfoInvalid = true
-			return
-		}
-		if result.JSON200 == nil {
-			return
-		}
-		for _, item := range result.JSON200.Items {
-			if !validOperationKey(item.Message.Id) || !validOperationKey(item.Message.RevisionId) || item.Conversation.Id != conversation || item.Conversation.AccountId != account || item.Message.ConversationId != conversation || item.Message.AccountId != account || item.Star.MessageId != item.Message.Id || item.Star.AccountId != account || item.Star.ConversationId != conversation || !item.Star.Starred || item.Star.RevisionId == nil || !validOperationKey(*item.Star.RevisionId) {
-				return
-			}
-		}
-		v.InfoStars = result.JSON200
+		v.InfoStars, v.InfoInvalid = s.loadStarredMessages(ctx, v.Selected.AccountId, v.Selected.Id, v.InfoCursor)
 	}
 }
-func (v view) infoStarView() view {
-	out := v
-	out.Stars = map[string]engineapi.MessageStar{}
-	out.StarsKnown = v.InfoStars != nil
-	if v.InfoStars != nil {
-		for _, item := range v.InfoStars.Items {
-			out.Stars[item.Message.Id] = item.Star
-		}
-	}
-	return out
-}
+
 func infoExcerpt(m engineapi.Message) string {
 	source := m.OriginalText
 	if m.Reply != nil {
@@ -103,10 +68,4 @@ func infoExcerpt(m engineapi.Message) string {
 		return string(runes[:512]) + "…"
 	}
 	return source
-}
-
-func (v view) infoStarsVersion() string {
-	data, _ := json.Marshal([]any{v.InfoStars, v.InfoInvalid})
-	hash := sha256.Sum256(data)
-	return hex.EncodeToString(hash[:])
 }

@@ -570,3 +570,9 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-room-invitation-copy small{color:var(--oie-muted);font-size:.75rem;margin-top:2px}
 .oie-room-invitation-copy p{font-size:.8125rem;margin:4px 0 0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .oie-room-invitation-action{display:inline-flex;align-items:center;gap:5px;min-block-size:28px}
+
+#favorites-scroll { scrollbar-gutter: stable; }
+#favorites-results { max-inline-size: 48rem; margin-inline: auto; }
+#favorites-results .oie-info-star:first-of-type { padding-block-start: 0; }
+.oie-favorite-source { margin: 4px 0 0; color: var(--oie-muted); font-size: .75rem; overflow-wrap: anywhere; }
+.oie-favorites-pagination { display: flex; flex-wrap: wrap; gap: 1rem; margin-block-start: 1rem; }
