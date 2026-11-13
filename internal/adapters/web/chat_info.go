@@ -55,17 +55,6 @@ func (s *Server) loadChatInfo(ctx context.Context, v *view, refresh bool) {
 	}
 	if v.InfoView == "stars" {
 		v.InfoStars, v.InfoInvalid = s.loadStarredMessages(ctx, v.Selected.AccountId, v.Selected.Id, v.InfoCursor)
+		s.loadStarredContent(ctx, v, v.InfoStars)
 	}
-}
-
-func infoExcerpt(m engineapi.Message) string {
-	source := m.OriginalText
-	if m.Reply != nil {
-		source = m.Reply.BodyText
-	}
-	runes := []rune(source)
-	if len(runes) > 512 {
-		return string(runes[:512]) + "…"
-	}
-	return source
 }

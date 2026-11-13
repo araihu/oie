@@ -65,8 +65,8 @@ func messageActions(v view, id string) []dropdown.Section {
 }
 func imageActions(v view, p engineapi.MessagePreview) []dropdown.Section {
 	return []dropdown.Section{{Items: []dropdown.Item{
-		{ID: "open-preview-" + p.Id, Icon: glyph(heroicons.Icon16SolidMagnifyingGlass), Label: v.Text.OpenImage, OnClick: "void 0"},
-		{ID: "info-preview-" + p.Id, Icon: glyph(heroicons.Icon16SolidInformationCircle), Label: v.Text.ImageInfo, OnClick: "void 0"},
-		{ID: "save-preview-" + p.Id, Icon: glyph(heroicons.Icon16SolidArrowDownTray), Label: v.Text.SaveOriginalImage, OnClick: "void 0", Disabled: mediaSource(p.FileHash) == ""},
+		{ID: v.previewControlID("open-preview", p.Id), Icon: glyph(heroicons.Icon16SolidMagnifyingGlass), Label: v.Text.OpenImage, OnClick: "void 0"},
+		{ID: v.previewControlID("info-preview", p.Id), Icon: glyph(heroicons.Icon16SolidInformationCircle), Label: v.Text.ImageInfo, OnClick: "void 0"},
+		{ID: v.previewControlID("save-preview", p.Id), Icon: glyph(heroicons.Icon16SolidArrowDownTray), Label: v.Text.SaveOriginalImage, OnClick: "void 0", Disabled: mediaSource(p.FileHash) == ""},
 	}}}
 }

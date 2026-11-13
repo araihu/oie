@@ -49,7 +49,7 @@ templ infoSearchFields(v view){
 <input type="hidden" name="chat" value={v.ChatID}/><input type="hidden" name="account" value={v.AccountFilter}/><input type="hidden" name="section" value={v.Section}/><input type="hidden" name="filter" value={v.Filter}/><input type="hidden" name="q" value={v.Query}/><input type="hidden" name="message" value={v.FocusMessage}/><input type="hidden" name="open" value="details"/><input type="hidden" name="infoView" value="shared"/><input type="hidden" name="infoType" value={v.InfoType}/><input type="hidden" name="lang" value={v.Locale}/><input type="hidden" name="theme" value={v.Theme}/>
 }
 templ infoStarredContent(v view){
-<div class="oie-info-stars" data-info-stars data-version={starredPageVersion(v.InfoStars,v.InfoInvalid)}>
+<div class="oie-info-stars" data-info-stars data-version={v.starredPageVersion(v.InfoStars,v.InfoInvalid)}>
 @infoBack(v)
 <h2 tabindex="-1" data-info-heading>{v.Text.InfoStarred}</h2>
 @starredPageStates(v.InfoStars)
@@ -62,7 +62,7 @@ if v.InfoInvalid {
 }else if len(v.InfoStars.Items)==0 {
 <p>{v.Text.InfoStarsEmpty}</p>
 }else{
-{{ starView:=v.starredPageView(v.InfoStars) }}
+{{ starView:=v.starredPageView(v.InfoStars,"info-stars") }}
 for _,item:=range v.InfoStars.Items {
 @starredMessageRow(starView,item,false)
 }

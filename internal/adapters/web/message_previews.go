@@ -41,6 +41,13 @@ func (s *Server) loadMessagePreviews(ctx context.Context, v *view) {
 	}
 }
 
+func (v view) previewControlID(action, id string) string {
+	if v.PreviewScope != "" {
+		return action + "-" + v.PreviewScope + "-" + id
+	}
+	return action + "-" + id
+}
+
 func safePreviewURL(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {

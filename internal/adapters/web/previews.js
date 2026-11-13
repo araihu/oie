@@ -33,7 +33,10 @@ window.OieRuntime.register('previews', life => {
   const near=new Set(),observed=new Set(),attempted=new Set(),observers=new Map(),scopeRoots=new Map();
   let activeAutomatic=0,automaticFrame;
   life.cleanup(()=>{for(const observer of observers.values())observer.disconnect();near.clear();observed.clear();});
-  function previewRoot(scope){return scope.closest('#info-shared-results')?document.querySelector('#details-body'):scope.closest('#shared-content-scroll')||scope.closest('#message-timeline');}
+  function previewRoot(scope){
+    if(scope.closest('#info-shared-results,[data-info-stars]'))return document.querySelector('#details-body');
+    return scope.closest('#favorites-scroll,#shared-content-scroll,#message-timeline');
+  }
   function observerFor(root){
     if(!root||typeof IntersectionObserver!=='function')return null;
     if(!observers.has(root))observers.set(root,new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting)near.add(entry.target);else near.delete(entry.target);}scheduleAutomatic();},{root,rootMargin:'240px 0px',threshold:0.01}));
@@ -41,7 +44,7 @@ window.OieRuntime.register('previews', life => {
   }
   function trackImages(){
     for(const scope of observed)if(!scope.isConnected){observers.get(scopeRoots.get(scope))?.unobserve(scope);scopeRoots.delete(scope);observed.delete(scope);near.delete(scope);}
-    for(const scope of document.querySelectorAll('#message-timeline [data-preview-kind="image"],#shared-content-scroll [data-preview-kind="image"],#info-shared-results [data-preview-kind="image"]')){
+    for(const scope of document.querySelectorAll('#message-timeline [data-preview-kind="image"],#shared-content-scroll [data-preview-kind="image"],#info-shared-results [data-preview-kind="image"],[data-favorite-source] [data-preview-kind="image"]')){
       if(!observed.has(scope)){const root=previewRoot(scope);observed.add(scope);scopeRoots.set(scope,root);observerFor(root)?.observe(scope);}
     }
     if(typeof IntersectionObserver!=='function')measureImages();scheduleAutomatic();
@@ -56,12 +59,13 @@ window.OieRuntime.register('previews', life => {
   }
   if(typeof IntersectionObserver!=='function'){life.on(document,'scroll',()=>{measureImages();scheduleAutomatic();},{capture:true,passive:true});life.on(window,'resize',()=>{measureImages();scheduleAutomatic();});}
   life.on(document,'visibilitychange',scheduleAutomatic);
-  life.raf(()=>{trackImages();for(const menu of document.querySelectorAll('[id^="save-preview-"]')){const scope=document.querySelector(`[data-preview-id="${CSS.escape(menu.id.slice(13))}"]`);menu.hidden=!scope?.dataset.previewFile;menu.disabled=!scope?.dataset.previewFile;}});
+  life.raf(()=>{trackImages();for(const menu of document.querySelectorAll('[id^="save-preview-"]')){const scope=menu.closest('[data-preview-id]')||document.querySelector(`[data-preview-id="${CSS.escape(menu.id.slice(13))}"]`);menu.hidden=!scope?.dataset.previewFile;menu.disabled=!scope?.dataset.previewFile;}});
   let viewing='',menuOpener=false,viewerOrigin='timeline';
   const source=hash=>typeof hash==='string' && /^[0-9a-f]{64}$/.test(hash)?'/ui/media/'+hash:'';
-  const contextOf=scope=>scope.closest('#info-shared-results')?'info':scope.closest('#shared-content-results')?'shared':'timeline';
+  const contexts='#info-shared-results,#shared-content-results,#favorites-results,[data-info-stars],#message-timeline';
+  const contextOf=scope=>scope.closest(contexts);
   const findAll=id=>document.querySelectorAll(`[data-preview-id="${CSS.escape(id)}"]`);
-  const find=id=>{const selector=viewerOrigin==='info'?'#info-shared-results':viewerOrigin==='shared'?'#shared-content-results':'#message-timeline';return document.querySelector(`${selector} [data-preview-id="${CSS.escape(id)}"]`)||document.querySelector(`[data-preview-id="${CSS.escape(id)}"]`);};
+  const find=id=>[...findAll(id)].find(scope=>contextOf(scope)===viewerOrigin)||findAll(id)[0];
   const state=element=>window.Alpine?.$data(element);
   const fields=['previewUrl','previewName','previewMime','previewSize','previewTitle','previewDescription','previewSite','previewImage','previewFavicon','previewHost','previewPath','previewFile','previewState','previewDownload','previewStatus','previewRevision'];
   function apply(scope,values) {
@@ -74,7 +78,8 @@ window.OieRuntime.register('previews', life => {
     const feedback=scope.querySelector('[data-link-refresh-feedback]');
     if(feedback&&scope.dataset.previewState!=='queued'&&(scope.dataset.previewRefreshing==='true'||scope.dataset.previewState==='ready'&&scope.dataset.previewRevision!==previousRevision)){feedback.textContent=scope.dataset.previewState==='unavailable'?(labels.refreshFailed||''):'';scope.dataset.previewRefreshing='false'}
     const refresh=scope.querySelector('[id^="refresh-preview-"]');if(refresh)refresh.disabled=scope.dataset.previewState==='queued'||refreshing.has(scope.dataset.previewId);
-    const save=document.getElementById('save-preview-'+scope.dataset.previewId);if(save){save.disabled=!scope.dataset.previewFile;save.hidden=!scope.dataset.previewFile;}
+    const save=scope.querySelector('[id^="save-preview-"]')||document.getElementById('save-preview-'+scope.dataset.previewId);
+    if(save){save.disabled=!scope.dataset.previewFile;save.hidden=!scope.dataset.previewFile;}
     if(viewing===scope.dataset.previewId&&contextOf(scope)===viewerOrigin)updateViewer(scope);
   }
   function updateViewer(scope) {
@@ -86,13 +91,14 @@ window.OieRuntime.register('previews', life => {
     viewer.dataset.viewerMessageId=scope.dataset.previewMessage || '';
     document.dispatchEvent(new CustomEvent('oie:viewer-source',{detail:{messageId:viewer.dataset.viewerMessageId}}));
     const identity=viewer.querySelector('[data-viewer-identity]');
-    if(identity&&identity.dataset.sourceId!==viewer.dataset.viewerMessageId){
+    const sourceId=(contextOf(scope)?.id||'details')+':'+viewer.dataset.viewerMessageId;
+    if(identity&&identity.dataset.sourceId!==sourceId){
       const row=document.querySelector(`[data-message-id="${CSS.escape(viewer.dataset.viewerMessageId)}"]`);
-      const template=(scope.closest('[data-shared-item]')||row)?.querySelector('[data-viewer-source]');
+      const template=(scope.closest('[data-shared-item],[data-favorite-source]')||row)?.querySelector('[data-viewer-source]');
       if(template){
         const replace=()=>{for(const child of identity.children)window.Alpine?.destroyTree(child);identity.replaceChildren(template.content.cloneNode(true));for(const child of identity.children)window.Alpine?.initTree(child);};
         if(window.Alpine?.mutateDom)window.Alpine.mutateDom(replace);else replace();
-        identity.dataset.sourceId=viewer.dataset.viewerMessageId;
+        identity.dataset.sourceId=sourceId;
         window.OieTime.localize(identity);
       }
     }
@@ -146,12 +152,11 @@ window.OieRuntime.register('previews', life => {
       }
     }
     for(const fresh of root.querySelectorAll('#live-timeline [data-preview-id],#live-shared-results [data-preview-id],#info-shared-results [data-preview-id]')) {
-      let current=find(fresh.dataset.previewId);
-      if(!current) {
-        const message=fresh.closest('[data-message-previews]')?.dataset.messagePreviews;
-        const container=message&&document.querySelector(`[data-message-previews="${CSS.escape(message)}"]`);
-        if(!container)continue;
-        current=fresh.cloneNode(true);
+      const existing=findAll(fresh.dataset.previewId);
+      const message=fresh.closest('#live-timeline [data-message-previews]')?.dataset.messagePreviews;
+      const container=message&&document.querySelector(`#message-timeline [data-message-previews="${CSS.escape(message)}"]`);
+      if(container&&![...existing].some(scope=>container.contains(scope))) {
+        const current=fresh.cloneNode(true);
         const insert=()=>{container.append(current);window.Alpine?.initTree(current);};
         if(window.Alpine?.mutateDom)window.Alpine.mutateDom(insert);else insert();
       }
@@ -168,6 +173,21 @@ window.OieRuntime.register('previews', life => {
   }
   life.on(document,'oie:previews-refresh',event=>{synchronize(event.detail);trackImages();});
   life.on(document,'oie:info-content',event=>{synchronize(event.detail.root);trackImages();});
+  life.on(document,'oie:starred-content',event=>{
+    const {current,fresh}=event.detail;
+    const rows=new Map([...current.querySelectorAll('[data-favorite-source]')].map(row=>[row.dataset.infoStarMessage,row]));
+    for(const next of fresh.querySelectorAll('[data-favorite-source]')){
+      const row=rows.get(next.dataset.infoStarMessage);
+      if(!row||row.dataset.sourceRevision!==next.dataset.sourceRevision||row.dataset.version===next.dataset.version)continue;
+      for(const preview of next.querySelectorAll('[data-preview-id]')){
+        const existing=row.querySelector(`[data-preview-id="${CSS.escape(preview.dataset.previewId)}"]`);
+        if(existing)apply(existing,preview.dataset);
+      }
+    }
+    trackImages();
+    const scope=viewing&&find(viewing);
+    if(scope&&contextOf(scope)===viewerOrigin)updateViewer(scope);
+  });
   // Catalog Save shares the image ensure pipeline, including queued originals.
   // Targeted status reads also cover items beyond the refreshed gallery page.
   const saving=new Set();
@@ -253,7 +273,7 @@ window.OieRuntime.register('previews', life => {
     const menu=event.target.closest('[id^="open-preview-"],[id^="info-preview-"],[id^="save-preview-"]');
     const button=menu||event.target.closest('button[data-preview-download],button[data-preview-expand]');if(!button)return;
     const id=menu?menu.id.slice(menu.id.indexOf('-preview-')+9):'';
-    const scope=menu?find(id):button.closest('[data-preview-id]');if(!scope||scope.dataset.previewKind!=='image')return;
+    const scope=button.closest('[data-preview-id]')||(menu&&find(id));if(!scope||scope.dataset.previewKind!=='image')return;
     event.preventDefault();
     if(menu?.id.startsWith('save-preview-')){
       const path=scope.dataset.previewFile;if(!/^\/ui\/media\/[0-9a-f]{64}$/.test(path||''))return;

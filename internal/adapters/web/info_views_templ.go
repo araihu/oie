@@ -480,9 +480,9 @@ func infoStarredContent(v view) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var25 string
-		templ_7745c5c3_Var25, templ_7745c5c3_Err = templruntime.NewAttributeExpression(starredPageVersion(v.InfoStars, v.InfoInvalid)).Resolve(ctx)
+		templ_7745c5c3_Var25, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.starredPageVersion(v.InfoStars, v.InfoInvalid)).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/info_views.templ`, Line: 52, Col: 103}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/info_views.templ`, Line: 52, Col: 105}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 		if templ_7745c5c3_Err != nil {
@@ -626,7 +626,7 @@ func infoStarredContent(v view) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			starView := v.starredPageView(v.InfoStars)
+			starView := v.starredPageView(v.InfoStars, "info-stars")
 			for _, item := range v.InfoStars.Items {
 				templ_7745c5c3_Err = starredMessageRow(starView, item, false).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {

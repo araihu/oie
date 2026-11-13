@@ -384,7 +384,7 @@ Star or unstar a retained source message from the timeline or its image viewer.
 All images attached to that message share its star. This is app-owned metadata,
 independent of protocol support, conversation favorites, and message content edits.
 
-**AGREED:** the sidebar Favorites workspace shows starred messages across direct conversations and rooms, including archived conversations. It follows the account selector. Each result identifies its source and can open the original message or remove its star.
+**AGREED:** the sidebar Favorites workspace shows starred messages across direct conversations and rooms, including archived conversations. It follows the account selector. Each result identifies its source and renders the chat bubble with the same formatted text, replies, previews and attachments as the timeline. A result can open the original message or remove its star.
 
 **AGREED:** inside chat bubbles, show a passive star beside the message time only when the message is starred. The indicator is not clickable or keyboard-focusable. Star and unstar actions in the chat are accessed through the message-actions chevron; the image viewer retains its separate action.
 

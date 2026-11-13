@@ -145,6 +145,9 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	StarredContent starredContent
+	PreviewScope   string
+
 	FavoritesPage    *engineapi.StarredMessagePage
 	FavoritesCursor  string
 	FavoritesInvalid bool
@@ -902,6 +905,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	}
 	if v.Section == "favorites" {
 		v.FavoritesPage, v.FavoritesInvalid = s.loadStarredMessages(ctx, v.AccountFilter, "", v.FavoritesCursor)
+		s.loadStarredContent(ctx, v, v.FavoritesPage)
 		return
 	}
 	if v.Section == "media" {

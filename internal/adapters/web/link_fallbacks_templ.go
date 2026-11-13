@@ -62,7 +62,7 @@ func linkFallbackCard(v view, p engineapi.MessagePreview) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if !v.SharedCard {
-			templ_7745c5c3_Err = dropdown.Dropdown(dropdown.Config{ID: "link-options-" + p.Id, Label: v.Text.More, Trigger: linkPreviewOptions(v), RootClass: "oie-link-options", MenuAlign: dropdown.AlignEnd, Sections: []dropdown.Section{{Items: []dropdown.Item{{ID: "refresh-preview-" + p.Id, Label: v.Text.RefreshPreview, OnClick: "void 0", Disabled: p.State == "queued"}}}}}).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = dropdown.Dropdown(dropdown.Config{ID: v.previewControlID("link-options", p.Id), Label: v.Text.More, Trigger: linkPreviewOptions(v), RootClass: "oie-link-options", MenuAlign: dropdown.AlignEnd, Sections: []dropdown.Section{{Items: []dropdown.Item{{ID: v.previewControlID("refresh-preview", p.Id), Label: v.Text.RefreshPreview, OnClick: "void 0", Disabled: p.State == "queued"}}}}}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

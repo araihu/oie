@@ -67,22 +67,50 @@ window.OieRuntime.register('stars', life => {
       .filter(row=>row.getBoundingClientRect().bottom>visibleTop)
       .map(row=>[row.dataset.infoStarMessage,row.getBoundingClientRect().top]):[];
     const findRow=id=>current.querySelector(`[data-info-star-message="${CSS.escape(id)}"]`);
+    const rows='[data-info-star-message]';
     const apply=()=>{
-      for(const child of current.children)window.Alpine?.destroyTree(child);
-      current.innerHTML=fresh.innerHTML;
-      current.dataset.version=fresh.dataset.version;
-      for(const child of current.children)window.Alpine?.initTree(child);
+      let cursor=current.firstElementChild;
+      for(const next of fresh.children){
+        const id=next.dataset.infoStarMessage;
+        let child=id?findRow(id):null;
+        if(!child&&cursor&&!cursor.matches(rows)&&cursor.isEqualNode(next))child=cursor;
+        if(!child){
+          child=next.cloneNode(true);
+          current.insertBefore(child,cursor);
+          window.Alpine?.initTree(child);
+        }else{
+          if(child!==cursor)current.insertBefore(child,cursor);
+          if(id&&child.dataset.version!==next.dataset.version&&!child.querySelector('[role="menu"]:focus-within') && !child.querySelector('.oie-message-body :focus')){
+            if(!window.OieVideos?.swap(child,next.innerHTML)){
+              for(const element of child.children)window.Alpine?.destroyTree(element);
+              child.innerHTML=next.innerHTML;
+              for(const element of child.children)window.Alpine?.initTree(element);
+            }
+            for(const name of ['data-version','data-source-revision','data-message-source'])child.setAttribute(name,next.getAttribute(name));
+          }
+        }
+        cursor=child.nextElementSibling;
+      }
+      while(cursor){
+        const next=cursor.nextElementSibling;
+        window.Alpine?.destroyTree(cursor);
+        cursor.remove();
+        cursor=next;
+      }
+      current.dataset.version=[...fresh.querySelectorAll(rows)].every(row=>findRow(row.dataset.infoStarMessage)?.dataset.version===row.dataset.version)?fresh.dataset.version:'';
     };
     if(window.Alpine?.mutateDom)window.Alpine.mutateDom(apply);else apply();
-    if(active){
+    if(active&&!active.isConnected){
       const row=message&&findRow(message);
-      (row?.querySelector(action)||current.querySelector('[data-info-star-message] '+action)||heading())?.focus({preventScroll:true});
+      (row?.querySelector(action)||current.querySelector(rows+' '+action)||heading())?.focus({preventScroll:true});
     }
     if(scroll&&top!==undefined){
       const anchor=anchors.find(([id])=>findRow(id));
       scroll.scrollTop=anchor?top+findRow(anchor[0]).getBoundingClientRect().top-anchor[1]:top;
     }
     document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));
+    document.dispatchEvent(new CustomEvent('oie:starred-content',{detail:{current,fresh}}));
+    window.OieTime?.localize(current);
   }
   life.on(document,'oie:stars-refresh',event=>{
     if(event.detail.generation!==generation)return;
