@@ -32,7 +32,9 @@ func (r runner) desktop(ctx context.Context, source *dagger.Directory) error {
 	}
 	built := base.WithDirectory("/src", source).WithWorkdir("/src").
 		WithExec([]string{"make", "build-desktop"}).
-		WithExec([]string{"golangci-lint", "run", "--build-tags=production", "./internal/adapters/desktop/...", "./cmd/oie-desktop/..."}).
+		// Loading the production packages through amd64 emulation can exceed the
+		// default lint timeout, particularly with a cold cache.
+		WithExec([]string{"golangci-lint", "run", "--timeout=20m", "--build-tags=production", "./internal/adapters/desktop/...", "./cmd/oie-desktop/..."}).
 		WithExec([]string{"go", "vet", "-tags=production", "./internal/adapters/desktop", "./cmd/oie-desktop"}).
 		WithExec([]string{"go", "test", "-race", "./internal/adapters/desktop", "./internal/apphost"})
 	built, err = r.stage(ctx, "desktop-build-amd64", built)

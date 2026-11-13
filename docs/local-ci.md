@@ -10,7 +10,9 @@ artifact-export and session-close errors as failures.
 The Wails integration adds `make ci-desktop` and includes that lane in
 `make ci`. It uses Ubuntu 24.04 with GTK 4/WebKitGTK 6, explicitly selecting
 `linux/amd64` even when Dagger runs on an arm64 host. Native build, production
-golangci-lint, vet, race tests and an actual WebView smoke run there. Xvfb,
+golangci-lint, vet, race tests and an actual WebView smoke run there. The desktop
+lint allows 20 minutes for package loading and analysis under amd64 emulation.
+Xvfb,
 a private D-Bus session and xdotool exercise the native Save/Cancel chooser.
 See [desktop verification](desktop.md#verification).
 
