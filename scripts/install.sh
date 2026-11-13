@@ -3,7 +3,7 @@
 set -eu
 umask 077
 
-default_version=v0.0.1-rc.1
+default_version=v0.0.1-rc.2
 version=$default_version
 prefix=
 temporary=

@@ -88,6 +88,42 @@ func (p *roomWakeProtocol) LeaveRoom(_ context.Context, _ domain.Account, _ doma
 	return p.session, nil
 }
 
+type revokingRoomProtocol struct {
+	roomWakeProtocol
+	repo    *roomWakeRepo
+	revoked domain.RoomSession
+}
+
+func (p *revokingRoomProtocol) RoomSession(context.Context, domain.Account, domain.Conversation) (domain.RoomSession, error) {
+	// The XMPP adapter can finish committing a revocation while the read waits
+	// on its notification lock. Its observation still refers to the old join.
+	p.repo.intent = p.revoked
+	return p.session, nil
+}
+
+func TestRoomSessionUsesRevisionCommittedDuringProtocolRead(t *testing.T) {
+	const accountID domain.ID = "019a5df0-0000-7000-8000-000000000001"
+	const roomID domain.ID = "019a5df0-0000-7000-8000-000000000002"
+	const joinRevision domain.ID = "019a5df0-0000-7000-8000-000000000003"
+	const failedRevision domain.ID = "019a5df0-0000-7000-8000-000000000004"
+	intent := domain.RoomSession{AccountID: accountID, ConversationID: roomID, IntentRevisionID: joinRevision, Active: true}
+	repo := &roomWakeRepo{account: domain.Account{ID: accountID}, conversation: domain.Conversation{ID: roomID, AccountID: accountID, Kind: "room"}, intent: intent}
+	protocol := &revokingRoomProtocol{repo: repo, revoked: intent}
+	protocol.session = domain.RoomSession{AccountID: accountID, ConversationID: roomID, IntentRevisionID: joinRevision, State: "failed", LastErrorCode: "nickname_conflict", Revoked: true}
+	protocol.revoked.IntentRevisionID = failedRevision
+	protocol.revoked.Active = false
+	protocol.revoked.LastErrorCode = "nickname_conflict"
+	e, err := New(repo, "local", func() (domain.ID, error) { return roomID, nil }, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.SetProtocols(protocol)
+	session, err := e.RoomSession(t.Context(), roomID)
+	if err != nil || session.State != "failed" || session.LastErrorCode != "nickname_conflict" || session.Active || session.IntentRevisionID != failedRevision {
+		t.Fatal("failed join must expose the committed revision for retry", session, err)
+	}
+}
+
 func TestRoomIntentAndReconnectWakeWorkerWithoutTicker(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		const accountID domain.ID = "019a5df0-0000-7000-8000-000000000001"

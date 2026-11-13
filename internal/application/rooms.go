@@ -69,6 +69,20 @@ func (e *Engine) RoomSession(ctx context.Context, id domain.ID) (domain.RoomSess
 	if c.Kind != "room" {
 		return domain.RoomSession{}, ErrInvalid
 	}
+	a, err := e.Account(ctx, c.AccountID)
+	if err != nil {
+		return domain.RoomSession{}, err
+	}
+	provider, ok := e.protocols.(RoomProtocol)
+	var observed domain.RoomSession
+	if ok {
+		observed, err = provider.RoomSession(ctx, a, c)
+		if err != nil {
+			return domain.RoomSession{}, err
+		}
+	}
+	// The protocol may finish persisting a revocation while RoomSession waits.
+	// Read the intent afterward so a failed join exposes the revision for retry.
 	result, err := e.roomIntent(ctx, id)
 	if err != nil {
 		return result, err
@@ -81,19 +95,10 @@ func (e *Engine) RoomSession(ctx context.Context, id domain.ID) (domain.RoomSess
 	if result.UpdatedAt.IsZero() {
 		result.UpdatedAt = c.UpdatedAt
 	}
-	a, err := e.Account(ctx, c.AccountID)
-	if err != nil {
-		return result, err
-	}
-	provider, ok := e.protocols.(RoomProtocol)
 	if !ok {
 		result.State = "failed"
 		result.LastErrorCode = "unsupported"
 		return result, nil
-	}
-	observed, err := provider.RoomSession(ctx, a, c)
-	if err != nil {
-		return result, err
 	}
 	if observed.AccountID != a.ID || observed.ConversationID != c.ID {
 		return result, ErrProtocolUnavailable
