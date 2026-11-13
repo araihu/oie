@@ -10,7 +10,7 @@ templ sharedPageControls(v view){
   data-shared-first-page-links={strconv.Itoa(counts.Links)}
   data-shared-first-page-documents={strconv.Itoa(counts.Documents)}
  }
- if !v.SharedInDetails && v.SharedCursor=="" && v.sharedPageState()=="ready" {
+ if v.SharedCursor=="" && v.sharedPageState()=="ready" {
   data-shared-page-count={strconv.Itoa(len(v.SharedContent.Items))}
  }
 >

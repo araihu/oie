@@ -995,7 +995,7 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		}
 	}
 	s.loadMessaging(ctx, v)
-	s.loadChatInfo(ctx, v)
+	s.loadChatInfo(ctx, v, r.URL.Path == "/ui/refresh")
 	if infoOnly || r.URL.Path == "/ui/info" {
 		return
 	}

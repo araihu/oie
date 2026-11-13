@@ -37,9 +37,14 @@ templ infoSharedContent(v view){
 @sharedTab(scoped,"links",v.Text.SharedLinksTab)
 @sharedTab(scoped,"documents",v.Text.SharedDocsTab)
 </nav>
+<div class="oie-shared-results-frame">
+<div id="info-shared-page-content">
 <div id="info-shared-status" role="status">@sharedStatus(scoped)</div>
 <div id="info-shared-results" data-version={scoped.sharedVersion()} data-content-type={v.InfoType}>@sharedItems(scoped)</div>
 <div id="info-shared-pagination">@sharedPagination(scoped)</div>
+</div>
+@sharedSkeleton(scoped,false)
+</div>
 </div>
 </div>
 }

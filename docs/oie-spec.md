@@ -498,6 +498,13 @@ loading status without placeholder cards. Keep these estimates in bounded tab
 memory. Discard superseded responses and preserve the current scroll position
 when appending older items with the existing edge loading indicator.
 
+**AGREED:** shared-content tabs in conversation details use the same first-page
+estimates and loading behavior. Scope the estimates to the owning account,
+conversation, and the drawer search. Provide all three counts when opening the
+shared-content subview, replacing its first page, and refreshing its live
+snapshot. During a slow tab or search request, cover only the results and keep
+the drawer controls available.
+
 Provide WhatsApp-like rich link cards using structured engine metadata. Preview enrichment must not require a provider client in the browser.
 
 **AGREED:** link-card fallbacks prefer the available preview image. Without an image, use a compact card with page title, available description and the domain once. Use a cached site icon when available; otherwise use a local link icon. When metadata is unavailable, show a readable URL path and domain, preserving the full URL as the destination. Do not reserve an empty image column. Keep message cards compact and catalog cards full-width. Metadata failures leave the basic card usable; More options offers an explicit metadata refresh without changing the message.

@@ -91,13 +91,67 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    await page.goto(base+'/?'+drawerParams);let drawerInput=page.locator('#info-shared-search');await drawerInput.waitFor({state:'visible'});assert.equal(await page.locator('#info-shared-search-form button[type=submit]').count(),0);assert.equal(await page.locator('#info-shared-search-results').count(),1);
    await drawerInput.focus();await page.evaluate(()=>{window.drawerSearchInput=document.querySelector('#info-shared-search');window.drawerSearchForm=document.querySelector('#info-shared-search-form');window.drawerComposer=document.querySelector('#message-composer')});const drawerGeneration=await page.evaluate(()=>window.OieRuntime.generation),drawerHistory=await page.evaluate(()=>history.length),drawerDocuments=documents;infoRequests.length=0;
    await typeBurst(drawerInput,'orcamento');await until(async()=>new URL(page.url()).searchParams.get('infoQuery')==='orcamento'&&await page.locator('#info-shared-results [data-shared-item]').count()===2,'drawer older-page fuzzy matches while typing');assert.equal(infoRequests.length,1,'drawer typing is debounced');const {target,...requestScope}=infoRequests[0];assert.deepEqual(requestScope,{query:'orcamento',cursor:null,inbox,chat:conversation.id,account:alpha.id,hx:'true'});assert.equal(await page.locator(target).getAttribute('id'),'info-shared-search-results');assert.equal(await page.evaluate(()=>history.length),drawerHistory);assert.equal(await page.evaluate(()=>window.OieRuntime.generation),drawerGeneration);assert(await drawerInput.evaluate(node=>node===window.drawerSearchInput&&document.activeElement===node&&node.selectionStart===9));assert(await page.evaluate(()=>window.drawerSearchForm===document.querySelector('#info-shared-search-form')&&window.drawerComposer===document.querySelector('#message-composer')));
+   const drawerPage=page.locator('#info-shared-pagination [data-shared-page]');
+   assert.equal(await drawerPage.getAttribute('data-shared-first-page-documents'),'2');
+   assert.equal(await drawerPage.getAttribute('data-shared-first-page-links'),'0');
+   const skeleton=page.locator('#details-shared-content [data-shared-skeleton]');
+   const switchWithSkeleton=async(type,count,status=200)=>{
+    const match=url=>url.origin===base&&url.pathname==='/'&&url.searchParams.get('infoView')==='shared'&&url.searchParams.get('infoType')===type;
+    let release;
+    const gate=new Promise(resolve=>release=resolve);
+    const hold=async route=>{await gate;if(status===200)await route.continue();else await route.fulfill({status,body:'Unavailable'});};
+    await page.route(match,hold);
+    const selectors=['#details-body','#info-shared-search','[data-info-back]','#message-composer','#message-timeline'];
+    await page.evaluate(selectors=>{
+     const read=nodes=>nodes.map(node=>{const {x,y,width,height}=node.getBoundingClientRect();return [x,y,width,height,node.scrollTop];});
+     const nodes=selectors.map(selector=>document.querySelector(selector));
+     const before=read(nodes),samples=[];
+     let frame;
+     const sample=()=>{samples.push(read(nodes));frame=requestAnimationFrame(sample);};
+     frame=requestAnimationFrame(sample);
+     window.stopDrawerGeometry=()=>{cancelAnimationFrame(frame);return {before,samples};};
+    },selectors);
+    await page.locator('#details-shared-content [data-shared-tab='+type+']').click();
+    try{
+     await skeleton.waitFor({state:'visible'});
+     assert.equal(await skeleton.getAttribute('data-content-type'),type);
+     assert.equal(await skeleton.locator('.oie-shared-placeholder').count(),count);
+     if(count===0)assert(await skeleton.getByText(config.locale==='en'?'Loading items…':'Carregando itens…',{exact:true}).isVisible());
+     await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+     const {before,samples}=await page.evaluate(()=>window.stopDrawerGeometry());
+     assert(samples.length>0);
+     assert(samples.every(sample=>sample.every((rect,i)=>rect.every((value,j)=>Math.abs(value-before[i][j])<=1))));
+    }finally{release();}
+    if(status===200)await page.waitForURL(match);
+    await skeleton.waitFor({state:'hidden'});
+    await page.unroute(match,hold);
+   };
+   if(config.width===1440){
+    const snapshot=page.waitForResponse(response=>new URL(response.url()).pathname==='/ui/refresh'&&new URL(response.url()).searchParams.get('infoQuery')==='orcamento');
+    await page.evaluate(()=>document.dispatchEvent(new Event('oie:refresh-request')));
+    const html=await (await snapshot).text();
+    assert.match(html,/id="live-info-content"[^>]*>[\s\S]*data-shared-first-page-media="0" data-shared-first-page-links="0" data-shared-first-page-documents="2"/);
+   }
+   await switchWithSkeleton('links',0,503);
+   assert.equal(new URL(page.url()).searchParams.get('infoType'),'documents');
+   const toast=page.locator('[data-toast-container]');
+   const failed=config.locale==='en'?'Could not open this view. Try again.':'Não foi possível abrir esta tela. Tente novamente.';
+   await toast.getByText(failed,{exact:true}).waitFor({state:'visible'});
+   await toast.getByRole('button',{name:config.locale==='en'?'Close':'Fechar',exact:true}).click();
+   await toast.getByText(failed,{exact:true}).waitFor({state:'hidden'});
+   await switchWithSkeleton('links',0);
+   await switchWithSkeleton('documents',2);
+   drawerInput=page.locator('#info-shared-search');
+   assert.equal(await drawerInput.inputValue(),'orcamento');
+   await drawerInput.focus();
+   await drawerInput.evaluate(node=>{window.drawerSearchInput=node;});
    await drawerInput.fill('faturamneto');await until(async()=>new URL(page.url()).searchParams.get('infoQuery')==='faturamneto'&&await page.locator('#info-shared-results [data-shared-item]').count()===2,'drawer transposition typo');assert.equal(new URL(page.url()).searchParams.get('q'),inbox);assert.equal(new URL(page.url()).searchParams.get('filter'),'unread');assert.equal(new URL(page.url()).searchParams.get('infoCursor'),null);
    let oldDrawerHeld=false,releaseDrawer;const drawerGate=new Promise(resolve=>releaseDrawer=resolve);await page.route('**/*',async route=>{const url=new URL(route.request().url());if(url.origin===base&&url.pathname==='/'&&url.searchParams.get('infoQuery')==='orcamento'){const response=await route.fetch();oldDrawerHeld=true;await drawerGate;try{await route.fulfill({response})}catch{}return}await route.continue()});await drawerInput.fill('orcamento');await until(()=>oldDrawerHeld,'drawer old response held');await drawerInput.fill('orcamxnto');releaseDrawer();await until(async()=>new URL(page.url()).searchParams.get('infoQuery')==='orcamxnto'&&await page.locator('#info-shared-results [data-shared-item]').count()===2,'newer drawer input wins');assert(await drawerInput.evaluate(node=>node===window.drawerSearchInput&&document.activeElement===node));await page.unroute('**/*');
    const infoBeforeIME=infoRequests.length;await drawerInput.evaluate(node=>{node.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));node.value='faturamneto';node.dispatchEvent(new InputEvent('input',{bubbles:true,isComposing:true,data:'faturamneto'}))});await page.waitForTimeout(450);assert.equal(infoRequests.length,infoBeforeIME);await drawerInput.evaluate(node=>node.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true})));await until(()=>new URL(page.url()).searchParams.get('infoQuery')==='faturamneto','drawer IME completion');
    let drawerRefreshHeld=false,releaseDrawerRefresh;const drawerRefreshGate=new Promise(resolve=>releaseDrawerRefresh=resolve);await page.route('**/ui/refresh?**',async route=>{if(new URL(route.request().url()).searchParams.get('infoQuery')==='faturamneto'){const response=await route.fetch();drawerRefreshHeld=true;await drawerRefreshGate;try{await route.fulfill({response})}catch{}return}await route.continue()});await page.evaluate(()=>document.dispatchEvent(new CustomEvent('oie:refresh-request')));await until(()=>drawerRefreshHeld,'old drawer SSE held');await drawerInput.fill('zzzzzzzzzz');await until(async()=>new URL(page.url()).searchParams.get('infoQuery')==='zzzzzzzzzz'&&await page.locator('#info-shared-results [data-shared-item]').count()===0,'drawer no-match query');releaseDrawerRefresh();await page.waitForTimeout(400);assert.equal(await page.locator('#info-shared-results [data-shared-item]').count(),0);await page.unroute('**/ui/refresh?**');
    let drawerTabHeld=false,releaseDrawerTab;const drawerTabGate=new Promise(resolve=>releaseDrawerTab=resolve);await page.route('**/*',async route=>{const url=new URL(route.request().url());if(url.origin===base&&url.pathname==='/'&&url.searchParams.get('infoQuery')==='faturamneto'&&url.searchParams.get('infoType')==='documents'){const response=await route.fetch();drawerTabHeld=true;await drawerTabGate;try{await route.fulfill({response})}catch{}return}await route.continue()});await drawerInput.fill('faturamneto');await until(()=>drawerTabHeld,'old drawer tab query held');await page.locator('[data-shared-tab=links]').click();await until(()=>new URL(page.url()).searchParams.get('infoType')==='links','drawer links tab');releaseDrawerTab();await page.waitForTimeout(400);drawerInput=page.locator('#info-shared-search');assert.equal(await drawerInput.inputValue(),'faturamneto');assert.equal(new URL(page.url()).searchParams.get('infoQuery'),'faturamneto');assert.equal(new URL(page.url()).searchParams.get('q'),inbox);assert.equal(await page.locator('#info-shared-results').getAttribute('data-content-type'),'links');assert.equal(await page.locator('#info-shared-results [data-shared-item]').count(),0);await page.unroute('**/*');
    await page.locator('[data-shared-tab=documents]').click();await until(async()=>new URL(page.url()).searchParams.get('infoType')==='documents'&&await page.locator('#info-shared-results [data-shared-item]').count()===2,'drawer returns to matching documents');await drawerInput.fill('');await until(async()=>!new URL(page.url()).searchParams.get('infoQuery')&&await page.locator('#info-shared-results [data-shared-item]').count()===50,'drawer clear without Enter');assert.equal(new URL(page.url()).searchParams.get('infoCursor'),null);
-   let drawerNavHeld=false,releaseDrawerNav;const drawerNavGate=new Promise(resolve=>releaseDrawerNav=resolve);await page.route('**/*',async route=>{const url=new URL(route.request().url());if(url.origin===base&&url.pathname==='/'&&url.searchParams.get('infoQuery')==='orcamento'){const response=await route.fetch();drawerNavHeld=true;await drawerNavGate;try{await route.fulfill({response})}catch{}return}await route.continue()});await drawerInput.fill('orcamento');await until(()=>drawerNavHeld,'drawer request held before Back');await page.locator('[data-info-back]').click();await until(async()=>await page.locator('[data-info-entry=documents]').count()===1,'drawer Back restores overview');releaseDrawerNav();await page.waitForTimeout(400);assert.equal(await page.locator('#info-shared-search').count(),0);assert.equal(new URL(page.url()).searchParams.get('q'),inbox);assert.equal(new URL(page.url()).searchParams.get('infoView'),null);assert.equal(documents,drawerDocuments);assert.equal(writes,0);assert(await page.evaluate(()=>window.drawerComposer===document.querySelector('#message-composer')));await page.unroute('**/*');
+   let drawerNavHeld=false,releaseDrawerNav;const drawerNavGate=new Promise(resolve=>releaseDrawerNav=resolve);await page.route('**/*',async route=>{const url=new URL(route.request().url());if(url.origin===base&&url.pathname==='/'&&url.searchParams.get('infoQuery')==='orcamento'){const response=await route.fetch();drawerNavHeld=true;await drawerNavGate;try{await route.fulfill({response})}catch{}return}await route.continue()});await drawerInput.fill('orcamento');await until(()=>drawerNavHeld,'drawer request held before Back');await skeleton.waitFor({state:'visible'});await page.locator('[data-info-back]').click();await until(async()=>await page.locator('[data-info-entry=documents]').count()===1,'drawer Back restores overview');releaseDrawerNav();await page.waitForTimeout(400);assert.equal(await page.locator('#info-shared-search').count(),0);assert.equal(new URL(page.url()).searchParams.get('q'),inbox);assert.equal(new URL(page.url()).searchParams.get('infoView'),null);assert.equal(documents,drawerDocuments);assert.equal(writes,0);assert(await page.evaluate(()=>window.drawerComposer===document.querySelector('#message-composer')));await page.unroute('**/*');
    findings.push({...config,realSQLite:true,documents,writes,debounced:true,focusPreserved:true,staleResponseRejected:true,ime:true,fuzzyOlderPages:true,drawer:{noSubmitButton:true,stableInputAndComposer:true,cursorReset:true,independentInboxQuery:true,debounce:true,ime:true,staleQueryAndSSE:true,tabCarry:true,navigationAbort:true}});await context.close();
   }
   assert.deepEqual(errors,[]);await fs.writeFile(path.join(__dirname,'artifacts','shared-search-report.json'),JSON.stringify({findings,pageErrors:errors},null,2));console.log('PASS: native SQLite fuzzy search, debounce, stable input/caret, stale responses, IME, scope and partial swaps');

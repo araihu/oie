@@ -44,7 +44,7 @@ func (v view) infoSharedView() view {
 	out.MessagePreviews = map[string][]engineapi.MessagePreview{}
 	return out
 }
-func (s *Server) loadChatInfo(ctx context.Context, v *view) {
+func (s *Server) loadChatInfo(ctx context.Context, v *view, refresh bool) {
 	if v.Selected == nil {
 		return
 	}
@@ -52,7 +52,7 @@ func (s *Server) loadChatInfo(ctx context.Context, v *view) {
 		scoped := v.infoSharedView()
 		scoped.AccountFilter = v.Selected.AccountId
 		scoped.Query = v.InfoQuery
-		s.loadSharedContent(ctx, &scoped, false)
+		s.loadSharedContent(ctx, &scoped, scoped.SharedCursor == "" || refresh)
 		v.InfoShared = scoped.SharedContent
 		v.InfoInvalid = scoped.SharedInvalid
 	}

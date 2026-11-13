@@ -39,7 +39,7 @@ func (v view) sharedPageState() string {
 }
 
 func (v view) sharedFirstPageCounts() *engineapi.SharedContentFirstPageCounts {
-	if v.SharedInDetails || v.sharedPageState() != "ready" {
+	if v.sharedPageState() != "ready" {
 		return nil
 	}
 	counts := v.SharedContent.FirstPageCounts
