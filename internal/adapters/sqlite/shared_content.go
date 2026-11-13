@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"math"
 	"strings"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
@@ -98,16 +99,44 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 		ContentType: query.Type, CursorID: string(cursor.ID), CursorMs: cursor.Milliseconds,
 		Search: strings.TrimSpace(query.Search), PageLimit: int64(query.Limit + 1),
 	}
-	rows, err := queries.ListSharedContent(ctx, params)
-	if err != nil {
-		return page, err
+	scope, browse := catalogBrowseScope(query, params.Search)
+	var rows []dbgen.ListSharedContentRow
+	if browse {
+		beforeMS, beforeID := cursor.Milliseconds, string(cursor.ID)
+		if beforeID == "" {
+			beforeMS, beforeID = math.MaxInt64, "~"
+		}
+		ordered, listErr := queries.ListCatalogPage(ctx, dbgen.ListCatalogPageParams{
+			Scope: scope, Tab: query.Type, ParserVersion: params.ParserVersion,
+			BeforeMs: beforeMS, BeforeID: beforeID, PageLimit: params.PageLimit,
+		})
+		if listErr != nil {
+			return page, listErr
+		}
+		rows = make([]dbgen.ListSharedContentRow, 0, len(ordered))
+		for _, row := range ordered {
+			rows = append(rows, dbgen.ListSharedContentRow{
+				ID: row.ID, RevisionID: row.RevisionID, Kind: row.Kind, Url: row.Url, FileName: row.FileName,
+				MessagePayload: row.MessagePayload, TimelineAtMs: row.TimelineAtMs,
+				ConversationPayload: row.ConversationPayload, AccountLabel: row.AccountLabel, PreviewPayload: row.PreviewPayload,
+			})
+		}
+		if len(ordered) > query.Limit && query.Limit > 0 {
+			last := ordered[query.Limit-1]
+			page.NextCursor = application.SharedContentCursor(last.PositionMs, domain.ID(last.ID))
+		}
+	} else {
+		rows, err = queries.ListSharedContent(ctx, params)
+		if err != nil {
+			return page, err
+		}
 	}
 	more := len(rows) > query.Limit
 	if more {
 		rows = rows[:query.Limit]
 	}
 	if query.IncludeFirstPageCounts {
-		page.FirstPageCounts, err = sharedContentFirstPageCounts(ctx, queries, params, query.Limit, len(rows))
+		page.FirstPageCounts, err = sharedContentFirstPageCounts(ctx, queries, params, query.Limit, len(rows), scope, browse)
 		if err != nil {
 			return page, err
 		}
@@ -138,23 +167,56 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 		}
 		page.Items = append(page.Items, item)
 	}
-	if more {
+	if more && page.NextCursor == "" {
 		last := page.Items[len(page.Items)-1]
 		page.NextCursor = application.SharedContentCursor(last.Message.TimelineTime().UnixMilli(), last.ID)
 	}
-	status, err := queries.SharedContentIndexStatus(ctx, dbgen.SharedContentIndexStatusParams{ParserVersion: application.SharedContentVersion, MessageIds: jsonText(nonNilIDs(query.MessageIDs)), AccountID: string(query.AccountID), AccountIds: accountIDs, ConversationID: string(query.ConversationID)})
+	page.Indexing, err = sharedCatalogProgress(ctx, queries, params.AccountID, accountIDs, params.ConversationID, params.MessageIds)
 	if err != nil {
 		return page, err
 	}
-	state := "complete"
-	if status.IndexedMessages < status.TotalMessages {
-		state = "pending"
-	}
-	page.Indexing = domain.SharedContentIndex{State: state, IndexedMessages: status.IndexedMessages, TotalMessages: status.TotalMessages}
 	return page, tx.Commit()
 }
 
-func sharedContentFirstPageCounts(ctx context.Context, queries *dbgen.Queries, active dbgen.ListSharedContentParams, limit, currentSize int) (*domain.SharedContentFirstPageCounts, error) {
+func catalogBrowseScope(query domain.SharedContentQuery, search string) (string, bool) {
+	if search != "" || len(query.MessageIDs) != 0 || query.Type == "video" || len(query.AccountIDs) > 1 {
+		return "", false
+	}
+	if query.ConversationID != "" {
+		return "conversation:" + string(query.ConversationID), true
+	}
+	if query.AccountID != "" {
+		return "account:" + string(query.AccountID), true
+	}
+	if len(query.AccountIDs) == 1 {
+		return "account:" + string(query.AccountIDs[0]), true
+	}
+	return "", true
+}
+
+func sharedCatalogProgress(ctx context.Context, q *dbgen.Queries, account, accounts, conversation, messages string) (domain.SharedContentIndex, error) {
+	const version = application.SharedContentVersion
+	out := domain.SharedContentIndex{State: "complete"}
+	if messages == "[]" {
+		row, err := q.SharedCatalogProgress(ctx, dbgen.SharedCatalogProgressParams{ParserVersion: version, AccountID: account, AccountIds: accounts, ConversationID: conversation})
+		if err != nil {
+			return out, err
+		}
+		out.TotalMessages, out.IndexedMessages = row.TotalMessages, row.IndexedMessages
+	} else {
+		row, err := q.SharedCatalogMessageProgress(ctx, dbgen.SharedCatalogMessageProgressParams{ParserVersion: version, AccountID: account, AccountIds: accounts, ConversationID: conversation, MessageIds: messages})
+		if err != nil {
+			return out, err
+		}
+		out.TotalMessages, out.IndexedMessages = row.TotalMessages, row.IndexedMessages
+	}
+	if out.IndexedMessages < out.TotalMessages {
+		out.State = "pending"
+	}
+	return out, nil
+}
+
+func sharedContentFirstPageCounts(ctx context.Context, queries *dbgen.Queries, active dbgen.ListSharedContentParams, limit, currentSize int, scope string, browse bool) (*domain.SharedContentFirstPageCounts, error) {
 	counts := &domain.SharedContentFirstPageCounts{}
 	params := dbgen.CountSharedContentFirstPageParams{
 		ParserVersion: active.ParserVersion, MessageIds: active.MessageIds,
@@ -170,7 +232,15 @@ func sharedContentFirstPageCounts(ctx context.Context, queries *dbgen.Queries, a
 			continue
 		}
 		params.ContentType = tab.kind
-		count, err := queries.CountSharedContentFirstPage(ctx, params)
+		var count int64
+		var err error
+		if browse {
+			count, err = queries.CountCatalogPage(ctx, dbgen.CountCatalogPageParams{
+				Scope: scope, Tab: tab.kind, ParserVersion: params.ParserVersion, PageLimit: params.PageLimit,
+			})
+		} else {
+			count, err = queries.CountSharedContentFirstPage(ctx, params)
+		}
 		if err != nil {
 			return nil, err
 		}

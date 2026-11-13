@@ -17,6 +17,7 @@ type Querier interface {
 	ClearRoomReactionVisibility(ctx context.Context, arg ClearRoomReactionVisibilityParams) error
 	ConversationUnreadSummary(ctx context.Context, conversationID string) (ConversationUnreadSummaryRow, error)
 	CorrectionNeighbors(ctx context.Context, arg CorrectionNeighborsParams) ([]CorrectionNeighborsRow, error)
+	CountCatalogPage(ctx context.Context, arg CountCatalogPageParams) (int64, error)
 	CountRoomArchiveMessages(ctx context.Context, arg CountRoomArchiveMessagesParams) (int64, error)
 	// Match ListSharedContent's scope, categories and search. Any matching rows
 	// suffice for the capped count, so stop at the limit without sorting them.
@@ -108,6 +109,8 @@ type Querier interface {
 	ListAvatars(ctx context.Context, arg ListAvatarsParams) ([]Avatar, error)
 	ListCanonicalMessageReferences(ctx context.Context, canonicalID string) ([]ListCanonicalMessageReferencesRow, error)
 	ListCanonicalSenderIdentities(ctx context.Context, arg ListCanonicalSenderIdentitiesParams) ([]ListCanonicalSenderIdentitiesRow, error)
+	// Keep selection ahead of joins on the bounded browse path.
+	ListCatalogPage(ctx context.Context, arg ListCatalogPageParams) ([]ListCatalogPageRow, error)
 	ListChanges(ctx context.Context, arg ListChangesParams) ([]Change, error)
 	ListContactRecords(ctx context.Context, accountID string) ([]Contact, error)
 	ListContactSources(ctx context.Context, arg ListContactSourcesParams) ([]ListContactSourcesRow, error)
@@ -165,8 +168,9 @@ type Querier interface {
 	SetOperationResult(ctx context.Context, arg SetOperationResultParams) error
 	SetRoomObservation(ctx context.Context, arg SetRoomObservationParams) error
 	SetRoomReactionPrivacy(ctx context.Context, arg SetRoomReactionPrivacyParams) (int64, error)
+	SharedCatalogMessageProgress(ctx context.Context, arg SharedCatalogMessageProgressParams) (SharedCatalogMessageProgressRow, error)
+	SharedCatalogProgress(ctx context.Context, arg SharedCatalogProgressParams) (SharedCatalogProgressRow, error)
 	SharedContentCandidates(ctx context.Context, arg SharedContentCandidatesParams) ([]Message, error)
-	SharedContentIndexStatus(ctx context.Context, arg SharedContentIndexStatusParams) (SharedContentIndexStatusRow, error)
 	ShiftArchivedReactions(ctx context.Context, arg ShiftArchivedReactionsParams) error
 	Snapshot(ctx context.Context) (SnapshotRow, error)
 	UpdateAvatar(ctx context.Context, arg UpdateAvatarParams) error

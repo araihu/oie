@@ -1,10 +1,7 @@
 -- name: SharedContentCandidates :many
-SELECT m.* FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
-WHERE (s.message_id IS NULL OR s.parser_version<sqlc.arg(parser_version))
-AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
-AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
-AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
-ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT sqlc.arg(batch_limit);
+SELECT m.* FROM shared_catalog_sources AS s CROSS JOIN messages AS m ON m.id=s.message_id
+WHERE s.parser_version<sqlc.arg(parser_version)
+ORDER BY s.parser_version,s.position_ms DESC,s.message_id DESC LIMIT sqlc.arg(batch_limit);
 
 -- name: PutSharedContent :exec
 INSERT INTO shared_content(id,revision_id,message_id,url,kind,file_name) VALUES(?,?,?,?,?,?)
@@ -21,26 +18,6 @@ ON CONFLICT(message_id) DO UPDATE SET parser_version=excluded.parser_version,cap
 
 -- name: InvalidateSharedContent :exec
 DELETE FROM shared_content_state WHERE message_id=?;
-
--- name: SharedContentIndexStatus :one
-WITH scoped_messages AS (
-    SELECT id, account_id, conversation_id FROM messages
-    WHERE CAST(sqlc.arg(message_ids) AS TEXT)='[]' AND CAST(sqlc.arg(conversation_id) AS TEXT)=''
-    UNION ALL
-    SELECT id, account_id, conversation_id FROM messages
-    WHERE CAST(sqlc.arg(message_ids) AS TEXT)='[]' AND conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT)
-    UNION ALL
-    SELECT id, account_id, conversation_id FROM messages
-    WHERE id IN (SELECT value FROM json_each(CAST(sqlc.arg(message_ids) AS TEXT)))
-    AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
-)
-SELECT COUNT(*) AS total_messages,COUNT(CASE WHEN s.parser_version>=sqlc.arg(parser_version) THEN 1 END) AS indexed_messages
-FROM scoped_messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
-WHERE (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
-AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))
-AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
-AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
-AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id);
 
 -- name: ListSharedContent :many
 -- The catalog and a bounded timeline use different driving indexes.
@@ -117,3 +94,50 @@ WHERE sc.id=sqlc.arg(item_id)
 AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id);
+
+-- name: ListCatalogPage :many
+-- Keep selection ahead of joins on the bounded browse path.
+WITH page AS (
+ SELECT o.reference_id,o.position_ms FROM shared_catalog_order o
+ WHERE o.scope=sqlc.arg(scope) AND tab=sqlc.arg(tab)
+ AND position_ms<=CAST(sqlc.arg(before_ms) AS INTEGER)
+ AND (position_ms,reference_id)<(CAST(sqlc.arg(before_ms) AS INTEGER),CAST(sqlc.arg(before_id) AS TEXT))
+ AND EXISTS (SELECT 1 FROM shared_content sc JOIN shared_catalog_sources s ON s.message_id=sc.message_id
+             WHERE sc.id=o.reference_id AND s.parser_version>=sqlc.arg(parser_version))
+ ORDER BY position_ms DESC,reference_id DESC LIMIT sqlc.arg(page_limit)
+)
+SELECT sc.id,sc.revision_id,
+ CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,
+ sc.url,sc.file_name,CAST(COALESCE(h.payload,m.payload) AS TEXT) AS message_payload,
+ m.timeline_at_ms,c.payload AS conversation_payload,a.label AS account_label,p.payload AS preview_payload,page.position_ms
+FROM page CROSS JOIN shared_content sc ON sc.id=page.reference_id
+JOIN messages m ON m.id=sc.message_id
+JOIN conversations c ON c.id=m.conversation_id JOIN accounts a ON a.id=m.account_id
+LEFT JOIN message_content_heads h ON h.canonical_id=m.id
+LEFT JOIN message_previews p ON p.message_id=m.id AND p.url=sc.url
+ORDER BY page.position_ms DESC,page.reference_id DESC;
+
+-- name: CountCatalogPage :one
+SELECT COUNT(*) FROM (
+ SELECT 1 FROM shared_catalog_order o
+ JOIN shared_content sc ON sc.id=o.reference_id
+ JOIN shared_catalog_sources s ON s.message_id=sc.message_id
+ WHERE o.scope=sqlc.arg(scope) AND o.tab=sqlc.arg(tab) AND s.parser_version>=sqlc.arg(parser_version)
+ LIMIT sqlc.arg(page_limit)
+);
+
+-- name: SharedCatalogProgress :one
+SELECT CAST(COALESCE(SUM(p.messages),0) AS INTEGER) AS total_messages,
+ CAST(COALESCE(SUM(CASE WHEN p.parser_version>=sqlc.arg(parser_version) THEN p.messages ELSE 0 END),0) AS INTEGER) AS indexed_messages
+FROM shared_catalog_counts p JOIN conversations c ON c.id=p.conversation_id
+WHERE (CAST(sqlc.arg(account_id) AS TEXT)='' OR c.account_id=CAST(sqlc.arg(account_id) AS TEXT))
+AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR c.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))
+AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR p.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT));
+
+-- name: SharedCatalogMessageProgress :one
+SELECT COUNT(*) AS total_messages,COUNT(CASE WHEN s.parser_version>=sqlc.arg(parser_version) THEN 1 END) AS indexed_messages
+FROM shared_catalog_sources s JOIN conversations c ON c.id=s.conversation_id
+WHERE s.message_id IN (SELECT value FROM json_each(CAST(sqlc.arg(message_ids) AS TEXT)))
+AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR c.account_id=CAST(sqlc.arg(account_id) AS TEXT))
+AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR c.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))
+AND s.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT);

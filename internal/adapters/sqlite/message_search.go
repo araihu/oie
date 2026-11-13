@@ -103,15 +103,10 @@ func (s *Store) SearchMessages(ctx context.Context, query domain.MessageSearchQu
 		last := rows[len(rows)-1]
 		page.NextCursor = application.EncodeMessageSearchCursor(application.MessageSearchCursor{Scope: query.ScopeHash, Milliseconds: last.PositionMs, ID: domain.ID(last.ID), Current: last.IsCurrent, RevisionAt: last.RevisionKeyAt, RevisionID: domain.ID(last.RevisionKeyID)})
 	}
-	status, err := q.SharedContentIndexStatus(ctx, dbgen.SharedContentIndexStatusParams{ParserVersion: application.SharedContentVersion, AccountID: string(query.AccountID), AccountIds: accountIDs, ConversationID: string(query.ConversationID), MessageIds: "[]"})
+	page.MetadataIndexing, err = sharedCatalogProgress(ctx, q, string(query.AccountID), accountIDs, string(query.ConversationID), "[]")
 	if err != nil {
 		return page, err
 	}
-	state := "complete"
-	if status.IndexedMessages < status.TotalMessages {
-		state = "pending"
-	}
-	page.MetadataIndexing = domain.SharedContentIndex{State: state, IndexedMessages: status.IndexedMessages, TotalMessages: status.TotalMessages}
 	return page, tx.Commit()
 }
 
