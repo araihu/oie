@@ -39,4 +39,4 @@ fi
 
 # Retrying a draft may replace these assets. Published releases are immutable.
 gh release upload "$version" "$assets"/* --clobber
-gh release edit "$version" --draft=false "${flags[@]}"
+gh release edit "$version" --draft=false "--prerelease=$prerelease" "${flags[@]}"

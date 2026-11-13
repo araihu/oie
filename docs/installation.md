@@ -129,8 +129,7 @@ brew install --cask araihu/oie/oie
 brew install --formula araihu/oie/oie
 ```
 
-These names assume a tap published at `araihu/homebrew-oie`. To use the files
-locally, commit the generated directories in a local Git repository, then run
+The public tap is `araihu/homebrew-oie`. To use generated files locally, commit the generated directories in a local Git repository, then run
 `brew tap oie-local/packaging /absolute/path/to/local-tap` and substitute
 `oie-local/packaging/oie` in the installation commands. On Linux, install the
 system runtime libraries first. On Ubuntu, use the runtime package list above.
@@ -145,7 +144,8 @@ channel you used. These commands retain the user profile.
 ### Build and distribute
 
 Push a version tag such as `v0.0.1` or `v0.0.1-rc.3` from a commit that contains
-the **Desktop release** workflow. It builds the macOS and Linux binaries and
+the **Desktop release** workflow. Use `vMAJOR.MINOR.PATCH` with an optional
+SemVer prerelease suffix. It builds the macOS and Linux binaries and
 corresponding source, tests the Linux release archive, then builds the native
 packages, Flatpak bundle and Homebrew recipes. The workflow uploads all assets
 and `SHA256SUMS` to a draft before publishing it. Tags with a SemVer prerelease
