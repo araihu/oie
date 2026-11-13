@@ -177,7 +177,8 @@ as a filename example for packages built [locally](#build-and-distribute).
 | Arch Linux x86_64, pacman | `sudo pacman -U ./oie-0.0.1rc.1-1-x86_64.pkg.tar.zst` |
 | Linux x86_64, Flatpak | `flatpak install --user ./oie-v0.0.1-rc.1-x86_64.flatpak` |
 
-Flatpak needs the GNOME 50 runtime from Flathub. If you have not enabled Flathub
+The new bundle uses the GNOME 51 runtime from Flathub. Bundles through rc.8
+use GNOME 50. If you have not enabled Flathub
 for your user, add it before installing:
 
 ```sh
@@ -290,10 +291,12 @@ Oiê currently distributes its Flatpak bundle through GitHub Releases. The
 desktop release CI also checks that the corresponding Linux source archive
 builds offline in the GNOME SDK. It verifies shared libraries and runs
 `oie-desktop --help` in the GNOME Platform runtime. To run the same check on
-x86_64 Linux with the release's Go toolchain and the GNOME 50 SDK and Platform
-installed, verify the source archive against `SHA256SUMS` and run:
+x86_64 Linux, install the GNOME 51 SDK and Platform and the Freedesktop
+Go SDK extension. Verify the source archive against `SHA256SUMS` and run:
 
 ```sh
+flatpak install --user flathub org.gnome.Sdk//51 org.gnome.Platform//51 \
+  org.freedesktop.Sdk.Extension.golang//26.08
 bash tests/packaging/smoke_flatpak_source.sh oie_v0.0.1-rc.7_linux_amd64_source.tar.gz
 ```
 
