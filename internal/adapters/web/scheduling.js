@@ -261,10 +261,8 @@ window.OieRuntime.register('scheduling', life => {
   const messageForm = document.getElementById('send-message-form');
   const dialog = document.querySelector('[data-schedule-dialog]');
   if (!dialog) {
-    for (const item of ['image', 'file']) {
-      const action = messageForm?.querySelector('#composer-attach-' + item);
-      if (action) action.disabled = true;
-    }
+    const attachTrigger = messageForm?.querySelector('[data-attach-menu]');
+    if (attachTrigger) attachTrigger.disabled = true;
     return;
   }
   const composer = document.querySelector('[data-schedule-composer]');
@@ -379,10 +377,12 @@ window.OieRuntime.register('scheduling', life => {
     const items = attachments.querySelector('[data-attachment-items]');
     const status = attachments.querySelector('[data-attachment-status]');
     const template = attachments.querySelector('template');
+    const attachTrigger = composer.querySelector('[data-attach-menu]');
     const pending = new Map();
     const selectionOrder = new Map();
     let sequence = 0;
     let dragDepth = 0;
+    let uploading = false;
     files = snapshot().files || [];
     locked = snapshot().editBlocked;
 
@@ -435,8 +435,10 @@ window.OieRuntime.register('scheduling', life => {
     }
 
     function syncAttachmentControls() {
-      for (const item of ['image', 'file']) {
-        composer.querySelector('#composer-attach-' + item).disabled = !available() || locked;
+      const disabled = !available() || locked;
+      attachTrigger.disabled = disabled;
+      for (const item of composer.querySelectorAll('#composer-attachments [role="menuitem"]')) {
+        item.disabled = disabled;
       }
       for (const remove of items.querySelectorAll('[data-remove-attachment]')) remove.disabled = locked;
       for (const retry of items.querySelectorAll('[data-retry-attachment]')) retry.disabled = !available() || locked;
@@ -454,11 +456,16 @@ window.OieRuntime.register('scheduling', life => {
       pending.delete(file.id);
     }
 
+    function stageNext() {
+      if (uploading || locked || !available() || life.signal.aborted) return;
+      const file = [...pending.values()].find(file => !file.failed);
+      if (file) void stage(file);
+    }
+
     async function stage(file) {
+      uploading = true;
       const controller = new AbortController();
       file.request = controller;
-      file.failed = false;
-      renderFiles();
       const timeout = life.timeout(() => controller.abort(), 90000);
       try {
         const form = new FormData();
@@ -468,7 +475,10 @@ window.OieRuntime.register('scheduling', life => {
         });
         if (!response.ok) throw Error('staging');
         const metadata = await response.json();
-        if (metadata.id !== file.id || metadata.fileName !== file.fileName || metadata.size !== file.file.size) throw Error('staging');
+        // Browsers may escape filename quotes in multipart. Use the name stored by the engine.
+        if (metadata?.id !== file.id || metadata.size !== file.file.size ||
+          typeof metadata.fileName !== 'string' || !metadata.fileName.trim() ||
+          typeof metadata.mediaType !== 'string' || !/^[a-f0-9]{64}$/.test(metadata.sha256)) throw Error('staging');
         if (life.signal.aborted || pending.get(file.id) !== file) return;
         if (controller.signal.aborted || !available()) throw Error('staging unavailable');
         pending.delete(file.id);
@@ -486,7 +496,10 @@ window.OieRuntime.register('scheduling', life => {
         status.textContent = labels.failed;
       } finally {
         clearTimeout(timeout);
+        delete file.request;
         if (!life.signal.aborted) syncPending();
+        uploading = false;
+        stageNext();
       }
     }
 
@@ -510,7 +523,7 @@ window.OieRuntime.register('scheduling', life => {
       status.textContent = labels.preparing;
       input.focus({preventScroll:true});
       syncPending();
-      for (const file of selected) void stage(file);
+      stageNext();
     }
 
     renderFiles();
@@ -520,6 +533,7 @@ window.OieRuntime.register('scheduling', life => {
       locked = event.detail.locked;
       if (changed) renderFiles();
       else syncAttachmentControls();
+      stageNext();
     });
     function discardPending() {
       for (const file of pending.values()) forget(file);
@@ -578,7 +592,11 @@ window.OieRuntime.register('scheduling', life => {
       if (!id || locked) return;
       const file = pending.get(id);
       if (button.hasAttribute('data-retry-attachment')) {
-        if (file?.failed && available()) void stage(file);
+        if (!file?.failed || !available()) return;
+        file.failed = false;
+        status.textContent = labels.preparing;
+        renderFiles();
+        stageNext();
       } else if (file) {
         selectionOrder.delete(id);
         forget(file);

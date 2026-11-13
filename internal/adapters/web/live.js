@@ -186,6 +186,14 @@ window.OieRuntime.register('live', life => {
     if(event.key==='ArrowUp'&&input.value===''&&!input.readOnly&&!input.disabled&&!editSession&&!editPreparing&&!journal?.pending&&!preparingReply&&!editMenuOpen()&&composer.dataset.editAllowed==='true'){event.preventDefault();void beginEdit();}
   });
 
+  function compositionLocked(){
+    return !!journal?.pending||!!editSession||editPreparing||preparingReply||stopped||composer?.dataset.busy==='true';
+  }
+  function scheduleBlocked(locked){
+    return locked||!composer?.hasAttribute('data-schedule-composer')||composer.hasAttribute('data-attachments-pending')||
+      (composer.dataset.sendAllowed!=='true'&&!editingSchedule);
+  }
+
   function renderReply(){
     const reply=journal?.reply,locked=!!journal?.pending,editing=!!editSession||editPreparing;
     if(replyField)replyField.value=reply?.messageId||'';
@@ -194,8 +202,15 @@ window.OieRuntime.register('live', life => {
     if(composerSend) composerSend.disabled=stopped||locked||preparingReply||editing||composer.dataset.busy==='true'||
       composer.hasAttribute('data-attachments-pending')||(composer.dataset.sendAllowed!=='true'&&!editingSchedule&&!locked);
     if(scheduleRetry){scheduleRetry.hidden=!locked||!journal.scheduledAt&&!editingSchedule;scheduleRetry.disabled=stopped||composer.dataset.busy==='true';}
+    const composingLocked=compositionLocked();
+    const scheduleMenu=composer?.querySelector('#composer-split-menu');
+    if(scheduleMenu){
+      const disabled=scheduleBlocked(composingLocked);
+      scheduleMenu.querySelector('[data-popover-trigger] button').disabled=disabled;
+      for(const item of scheduleMenu.querySelectorAll('[role="menuitem"]'))item.disabled=disabled;
+    }
     composer?.dispatchEvent(new Event('oie:composer-preview-change'));
-    composer?.dispatchEvent(new CustomEvent('oie:composer-attachments',{detail:{files:journal?.attachments||[],locked:locked||editing||preparingReply||stopped||composer.dataset.busy==='true'}}));
+    composer?.dispatchEvent(new CustomEvent('oie:composer-attachments',{detail:{files:journal?.attachments||[],locked:composingLocked}}));
   }
   function privateMapLinks() {
     try { return JSON.parse(composer?.dataset.privateMapLinks || '[]'); } catch { return []; }
@@ -701,10 +716,10 @@ window.OieRuntime.register('live', life => {
   life.on(composer,'oie:attachment-staging',renderReply);
   life.on(composer,'oie:schedule-snapshot',event=>{
     const draft = draftRecord();
-    const editBlocked=!!journal?.pending||!!editSession||editPreparing||preparingReply||stopped||composer.dataset.busy==='true'||composer.hasAttribute('data-attachments-pending');
+    const locked=compositionLocked();
     Object.assign(event.detail,{text:draft.text,reply:draft.reply,files:draft.attachments,review:scheduleReview(draft),
-      editBlocked:editBlocked||!composer.hasAttribute('data-schedule-composer'),
-      blocked:editBlocked||(composer.dataset.sendAllowed!=='true'&&!editingSchedule)});
+      editBlocked:locked||!composer.hasAttribute('data-schedule-composer')||composer.hasAttribute('data-attachments-pending'),
+      blocked:scheduleBlocked(locked)});
   });
   function completeSubmission(result){
     if(!result.accepted||!canonicalID(result.messageId)||!canonicalID(result.nextKey))return false;

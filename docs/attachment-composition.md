@@ -20,8 +20,9 @@ the message.
 | Send from the composer | Use the ordinary outbox and receipt | Preserve the normal send recovery behavior | 1 logical send |
 | Navigation or scheduled-draft switch during staging | Cancel the outstanding selections | A late response cannot apply to another draft | 0 |
 
-Staging uses the existing conversation-scoped multipart endpoint. Send and
-Schedule become available after all selected files finish staging or the user
+Staging uses the existing conversation-scoped multipart endpoint. Files stage
+one at a time, with a separate timeout for each request. Send and Schedule
+become available after all selected files finish staging or the user
 removes the remaining selections. Staged attachments survive a reload.
 Unfinished file selections are held in the current view. A file whose request
 committed before cancellation can remain in storage. Cleanup is tracked in O09.

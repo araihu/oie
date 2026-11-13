@@ -438,6 +438,8 @@ if v.scheduleAllowed() {
 @composerEdit(v)
 <span class="sr-only" data-edit-announcement role="status" aria-live="polite"></span>
 <div class="oie-edit-status" data-edit-last-status role="status" aria-live="polite" hidden><span data-edit-last-copy></span> @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-edit-last-check":""})){<span>{v.Text.EditCheckStatus}</span>}</div>
+<div class="oie-composer-overlay">
+<button type="button" class="oie-jump-latest" data-jump-latest hidden?={!v.ContextHasNewer&&!v.ContextMissing}>{v.Text.JumpToLatest}</button>
 <div class="oie-composer-auxiliary">
 if v.composeAllowed() {
 @draftLinkPreview(v)
@@ -447,6 +449,7 @@ if v.scheduleAllowed() {
 @composerAttachments(v)
 }
 <div class="oie-composer-feedback" data-form-feedback role="status" aria-live="polite"></div>
+</div>
 </div>
 @pendingSendTemplate(v)
 <div class="oie-composer">

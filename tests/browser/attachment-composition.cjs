@@ -11,6 +11,7 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
     buffer: readFileSync(join(__dirname, 'fixtures', 'video-poster.png')),
   };
   const file = {name:'notas.txt', mimeType:'text/plain', buffer:Buffer.from('Notes')};
+  const quotedFile = {...file, name:'relatório "final".txt'};
   const longFile = {...file, name:'roteiro-da-sessao-de-gravacao-e-notas-de-producao.txt'};
   const stagePath = '**/ui/scheduling/stage?*';
   const requestPaths = [];
@@ -78,6 +79,23 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
       await menuItem.click();
       assert.equal(await (await chooser).element().getAttribute('accept'), accept);
     }
+    if (!pt) {
+      const uploadCapability = value => attach.evaluate((trigger, allowed) => {
+        const form = trigger.form;
+        form.dataset.attachmentAllowed = allowed;
+        form.dispatchEvent(new CustomEvent('oie:attachment-staging'));
+      }, value);
+      await attach.click();
+      const imageAction = page.getByRole('menuitem', {name:'Image', exact:true});
+      await imageAction.waitFor();
+      await uploadCapability('false');
+      assert(await attach.isDisabled());
+      assert(await imageAction.isDisabled());
+      await page.keyboard.press('Escape');
+      await imageAction.waitFor({state:'hidden'});
+      await uploadCapability('true');
+      assert(await attach.isEnabled());
+    }
     assert.equal(await dataEvent(page, 'paste', [], 'ordinary pasted text'), false);
     assert.equal(await draftFiles.isVisible(), false);
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -117,6 +135,8 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
     await draftFiles.getByText(pt ? 'Preparando anexos…' : 'Preparing attachments…', {exact:true}).first().waitFor();
     assert.equal(await page.locator('dialog[open]').count(), 0);
     assert(await send.isDisabled());
+    const scheduleMenu = page.locator('#composer-split [data-popover-trigger] button');
+    assert(await scheduleMenu.isDisabled());
     assert.equal(await composer.inputValue(), original);
     assert.deepEqual(await composer.evaluate(el => [document.activeElement === el, el.selectionStart, el.selectionEnd]), [true,2,5]);
     await until(() => requestPaths.length === 1, 'file staging request reaches the browser');
@@ -132,6 +152,13 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
       await until(async () => await page.evaluate(() => window.attachmentFrames.length > 10), 'painted frames were captured');
       const frames = await page.evaluate(() => window.attachmentFrames);
       for (const frame of frames) assert(frame.every((value,i) => Math.abs(value-before[i]) <= 1), JSON.stringify({frame,before}));
+      assert.deepEqual(requestPaths.splice(0), ['/ui/scheduling/stage']);
+      assert(await scheduleMenu.isEnabled());
+      await page.locator('[data-attachment-picker]').setInputFiles(quotedFile);
+      const quoted = draftFiles.getByRole('link', {name:'relatório %22final%22.txt', exact:true});
+      await quoted.waitFor();
+      assert(await send.isEnabled());
+      await remove('relatório %22final%22.txt').click();
       assert.deepEqual(requestPaths.splice(0), ['/ui/scheduling/stage']);
       if (expectTransportFailure) expectTransportFailure(true);
       try {
@@ -174,10 +201,44 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
         (await window.axe.run('[data-composer-attachments]', {runOnly:{type:'tag', values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v => v.id));
       assert.deepEqual(violations, []);
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-      await page.locator('[data-attachment-picker]').setInputFiles([file, longFile]);
+      const focusedMessage = (await retained()).items[0].id;
+      const contextURL = new URL(page.url());
+      contextURL.searchParams.set('message', focusedMessage);
+      await page.goto(contextURL.href);
+      await page.locator('body[data-oie-live-ready]').waitFor();
+      const jump = page.locator('[data-jump-latest]');
+      await jump.waitFor();
+      let releaseFirst, firstStarted;
+      const holdFirst = new Promise(resolve => { releaseFirst = resolve; });
+      const firstRequest = new Promise(resolve => { firstStarted = resolve; });
+      await page.route(stagePath, async route => {
+        firstStarted();
+        await holdFirst;
+        await route.continue();
+      }, {times:1});
+      try {
+        await page.locator('[data-attachment-picker]').setInputFiles([file, longFile]);
+        await firstRequest;
+        await draftFiles.locator('[data-draft-attachment]').last().waitFor();
+        assert.equal(await draftFiles.locator('[data-draft-attachment]').count(), 3);
+        assert.equal(requestPaths.length, 2, 'only the first new file starts while the other waits');
+        assert(await scheduleMenu.isDisabled());
+        assert(await jump.evaluate(button => {
+          const box = button.getBoundingClientRect();
+          const panel = document.querySelector('.oie-composer-auxiliary').getBoundingClientRect();
+          return box.bottom <= panel.top && button.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+        }));
+      } finally {
+        releaseFirst();
+      }
       await draftFiles.getByRole('link', {name:longFile.name, exact:true}).waitFor();
       await draftFiles.getByRole('link', {name:file.name, exact:true}).waitFor();
       assert.deepEqual(await draftFiles.getByRole('link').allTextContents(), [image.name, file.name, longFile.name]);
+      assert(await scheduleMenu.isEnabled());
+      await Promise.all([page.waitForURL(url => !url.searchParams.has('message')), jump.click()]);
+      await page.locator('body[data-oie-live-ready]').waitFor();
+      await draftFiles.getByRole('link', {name:longFile.name, exact:true}).waitFor();
+      assert.equal(await composer.inputValue(), revised);
       const layout = () => draftFiles.evaluate(region => {
         const list = region.querySelector('[data-attachment-items]');
         const auxiliary = region.closest('.oie-composer-auxiliary');

@@ -130,7 +130,7 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 .oie-chat-skeleton[hidden]{display:none}
 .oie-chat-skeleton{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;background:var(--oie-chat)}
 .oie-timeline-frame>.oie-chat-skeleton>:is(.oie-chat-skeleton-header,.oie-chat-skeleton-composer){display:none}
-.oie-chat-pane:has(.oie-timeline-frame>.oie-chat-skeleton:not([hidden]))>[data-jump-latest]{visibility:hidden}
+.oie-chat-pane:has(.oie-timeline-frame>.oie-chat-skeleton:not([hidden])) [data-jump-latest]{visibility:hidden}
 .oie-chat-skeleton-identity{display:flex;align-items:center;gap:11px}
 .oie-chat-skeleton-avatar{width:32px}
 .oie-chat-skeleton-avatar [data-skeleton-item]{width:32px;height:32px}
@@ -201,10 +201,10 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 .oie-send-retry{border:0;background:transparent;color:inherit}
 .oie-send-retry:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:2px;border-radius:3px}
 .oie-chat-pane{position:relative}
-.oie-jump-latest{position:absolute;right:20px;bottom:85px;z-index:10;border:1px solid var(--oie-border);border-radius:18px;padding:8px 14px;background:var(--oie-panel);color:var(--oie-text);font-size:12px;box-shadow:0 2px 8px #0002}
+.oie-jump-latest{display:block;pointer-events:auto;margin:0 20px 8px auto;border:1px solid var(--oie-border);border-radius:18px;padding:8px 14px;background:var(--oie-panel);color:var(--oie-text);font-size:12px;box-shadow:0 2px 8px #0002}
 .oie-jump-latest[hidden]{display:none}
 .oie-storage-warning{padding:8px 18px;color:var(--oie-text);font-size:11px}
-@media(max-width:720px){.oie-account-filter{padding-bottom:6px}.oie-jump-latest{right:12px;bottom:92px}}
+@media(max-width:720px){.oie-account-filter{padding-bottom:6px}.oie-jump-latest{margin-inline-end:12px}}
 
 html{color-scheme:light}html.dark{color-scheme:dark}
 .oie-day-divider time{background:var(--oie-panel);border:1px solid var(--oie-border);padding:4px 12px;border-radius:7px;font-size:11px;color:var(--oie-muted)}
