@@ -93,8 +93,9 @@ the build also verifies those archives against the published checksum list.
 
 ### Install generated packages
 
-Use the files from a build of the **Desktop packages** workflow or follow
-[the local build instructions](#build-and-distribute) below.
+Download the package for your platform from the assets of a release built by
+the **Desktop release** workflow. The following commands use `v0.0.1-rc.1`
+as a filename example for packages built [locally](#build-and-distribute).
 
 | Platform | Install from the directory containing the package |
 | --- | --- |
@@ -143,9 +144,20 @@ channel you used. These commands retain the user profile.
 
 ### Build and distribute
 
-Run the **Desktop packages** workflow with a published release tag. It uploads
-the packages, recipes and package checksums as a workflow artifact. To build
-locally with Python 3.12+ and Go 1.27.4+, run:
+Push a version tag such as `v0.0.1` or `v0.0.1-rc.3` from a commit that contains
+the **Desktop release** workflow. It builds the macOS and Linux binaries and
+corresponding source, tests the Linux release archive, then builds the native
+packages, Flatpak bundle and Homebrew recipes. The workflow uploads all assets
+and `SHA256SUMS` to a draft before publishing it. Tags with a SemVer prerelease
+suffix are marked as prereleases. Use a new tag for changed release assets.
+
+The [Homebrew tap](https://github.com/araihu/homebrew-oie) synchronizes recipes
+from published GitHub Releases through its own workflow. Recipes become
+available in the tap after that workflow runs. The Homebrew archive is also
+available among the release assets.
+
+To build the package-manager files from existing release assets locally with
+Python 3.10+ and Go 1.27.4+, run:
 
 ```sh
 version=v0.0.1-rc.1
@@ -170,9 +182,8 @@ flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakr
   dist/flatpak-repo "$packages/oie-$version-x86_64.flatpak" org.araihu.oie
 ```
 
-Publishing or updating a Homebrew tap and submitting to Flathub or AUR are
-separate distribution steps. The generated packages can be installed directly
-with the commands above. The native package filenames and metadata distinguish
+The Flatpak and pacman packages can be installed directly with the commands
+above. Flathub and AUR submissions are separate from the GitHub Release. The native package filenames and metadata distinguish
 prereleases so the eventual stable release sorts after the corresponding RC.
 GitHub releases marked immutable require a new release to attach new assets.
 

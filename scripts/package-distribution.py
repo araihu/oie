@@ -3,31 +3,27 @@
 
 import argparse
 from datetime import datetime
-import hashlib
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import tarfile
 import tempfile
+from release_desktop import digest, version_key
 
 
 ROOT = Path(__file__).resolve().parent.parent
 APP_ID = "org.araihu.oie"
-VERSION_TAG = re.compile(r"v([0-9]+\.[0-9]+\.[0-9]+)(?:-([0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*))?")
-SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
 def verify_archive(assets, name, sums):
     archive = assets / name
     checksum = sums.get(name, "")
-    if not SHA256.fullmatch(checksum):
+    if len(checksum) != 64 or any(char not in "0123456789abcdef" for char in checksum):
         raise ValueError(f"missing SHA-256 in SHA256SUMS for {name}")
-    with archive.open("rb") as stream:
-        if hashlib.file_digest(stream, "sha256").hexdigest() != checksum:
-            raise ValueError(f"SHA-256 mismatch for {name}")
+    if digest(archive) != checksum:
+        raise ValueError(f"SHA-256 mismatch for {name}")
     return archive, checksum
 
 
@@ -55,18 +51,22 @@ def linux_packages(stage, linux_archive, release, prerelease, date, nfpm):
     payload = stage / "payload"
     payload.mkdir()
     with tarfile.open(linux_archive) as archive:
-        # Release archives only contain directories and regular payload files.
-        members = archive.getmembers()
-        if any(not (member.isfile() or member.isdir()) for member in members):
-            raise ValueError("unexpected file type in Linux release archive")
-        archive.extractall(payload, members=members, filter="data")
-
-    # Some earlier release builds used a private umask for copied resources.
-    for path in payload.rglob("*"):
-        if path.is_file():
-            path.chmod(0o755 if path == payload / "bin/oie-desktop" else 0o644)
-        elif path.is_dir():
-            path.chmod(0o755)
+        # Only regular files and directories may be staged, including on
+        # Python versions without tarfile extraction filters.
+        for member in archive:
+            destination = payload / member.name
+            if not destination.resolve().is_relative_to(payload):
+                raise ValueError(f"archive path outside the destination: {member.name}")
+            if member.isdir():
+                destination.mkdir(parents=True, exist_ok=True)
+                destination.chmod(0o755)
+            elif member.isfile():
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                with archive.extractfile(member) as source, destination.open("xb") as target:
+                    shutil.copyfileobj(source, target)
+                destination.chmod(0o755 if destination == payload / "bin/oie-desktop" else 0o644)
+            else:
+                raise ValueError(f"unexpected file type in Linux release archive: {member.name}")
     desktop = payload / f"share/applications/{APP_ID}.desktop"
     desktop.write_text(desktop.read_text(encoding="utf-8").replace("@OIE_EXEC@", "/usr/bin/oie-desktop"),
                        encoding="utf-8")
@@ -86,7 +86,10 @@ def linux_packages(stage, linux_archive, release, prerelease, date, nfpm):
         version = release
         suffix = prerelease or ""
         if packager == "archlinux" and suffix:
-            version += suffix.replace("-", ".")
+            arch_suffix = suffix.replace("-", ".").lstrip(".")
+            if not suffix[0].isalpha():
+                arch_suffix = f"pre.{arch_suffix}"
+            version += arch_suffix
             suffix = ""
         env.update(OIE_PACKAGE_VERSION=version, OIE_PACKAGE_PRERELEASE=suffix)
         subprocess.run([nfpm, "package", "--config", str(config), "--packager", packager,
@@ -94,10 +97,8 @@ def linux_packages(stage, linux_archive, release, prerelease, date, nfpm):
 
 
 def generate(args):
-    match = VERSION_TAG.fullmatch(args.version)
-    if not match:
-        raise ValueError("expected a release tag such as v0.0.1-rc.1")
-    release, prerelease = match.groups()
+    version_key(args.version)
+    release, _, prerelease = args.version[1:].partition("-")
     assets = args.assets.resolve()
     output = args.output.resolve()
     if output.exists():
@@ -118,7 +119,7 @@ def generate(args):
             build = json.load(info)
     if (build["version"], build["os"], build["arch"]) != (args.version, "linux", "amd64"):
         raise ValueError("unexpected version or target in Linux archive build metadata")
-    date = datetime.fromisoformat(build["builtAt"])
+    date = datetime.fromisoformat(build["builtAt"].replace("Z", "+00:00"))
     values = {
         "VERSION": args.version[1:],
         "DATE": date.date().isoformat(),
