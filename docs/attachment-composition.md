@@ -43,3 +43,14 @@ and governs recovery after a restart or a lost response.
 
 Browser checks cover Chromium at 390 px and 1440 px in Brazilian Portuguese
 and English. Native operating-system drag and drop requires a Wails integration.
+
+## Verification
+
+The focused browser test exercises ordinary text paste, file paste and drop,
+preview cancellation, preservation of draft text and selection, delayed staging,
+the local file-size limit, a lost staging response retried with the original
+ID, and draft restoration after reload. It samples composer and timeline
+geometry during cancellation and checks the preview with axe. Explicit send
+was verified through a development Prosody service. The receiver retained the
+caption and the provider's file link. The XMPP integration test also verified
+that a scheduled attachment downloads with its original bytes.
