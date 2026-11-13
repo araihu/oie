@@ -52,6 +52,36 @@ func catalogConversation(t *testing.T, s *Store, account domain.ID, address, tit
 	}
 	return result.Conversation
 }
+
+func TestSharedCatalogAccountSetFiltersBeforePagination(t *testing.T) {
+	s, e, first := outboxFixture(t)
+	at := time.Now().UTC()
+	replySeed(t, s, first, "https://example.test/first", at, nil, nil)
+	accounts := []domain.ID{first.AccountID}
+	for i, label := range []string{"included", "excluded"} {
+		a, err := e.Register(t.Context(), migrationID(), application.RegisterInput{Protocol: "xmpp", Address: label + "@localhost", Label: label})
+		if err != nil {
+			t.Fatal(err)
+		}
+		accounts = append(accounts, a.Account.ID)
+		c := catalogConversation(t, s, a.Account.ID, "peer@localhost", label)
+		replySeed(t, s, c, "https://example.test/"+label, at.Add(time.Duration(i+1)*time.Second), nil, nil)
+	}
+	stop := startCatalog(t, e)
+	defer stop()
+	waitCatalog(t, s, 3)
+
+	query := domain.SharedContentQuery{Type: "links", AccountIDs: []domain.ID{accounts[1], accounts[0]}, Limit: 1}
+	for i, want := range []domain.ID{accounts[1], accounts[0]} {
+		page, err := e.SharedContent(t.Context(), query)
+		if err != nil || len(page.Items) != 1 || page.Items[0].Message.AccountID != want ||
+			page.Indexing.TotalMessages != 2 || (page.NextCursor != "") != (i == 0) {
+			t.Fatalf("page %d: %+v, %v", i, page, err)
+		}
+		query.Cursor = page.NextCursor
+	}
+}
+
 func TestSharedCatalogBackfillsAllHistoryAndKeepsMessageScope(t *testing.T) {
 	s, e, c := outboxFixture(t)
 	at := time.Date(2020, 1, 1, 1, 1, 1, 123456789, time.UTC)

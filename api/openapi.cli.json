@@ -225,7 +225,7 @@
         ],
         "operationId": "listSharedContent",
         "summary": "Browse shared content across retained conversations",
-        "description": "Browse the local derived catalog, newest original message time first with item UUID ties at millisecond precision. Account/conversation filters apply before pagination. Metadata search covers URL, filename, visible caption, cached preview title/description, sender, conversation and account label. A background worker indexes all retained and incoming messages. Listing registers preview enrichment only for the returned image/link references; originals still follow device preferences and explicit download operations. Document/audio entries remain URL references. Video bytes are available only through the explicit content operation; listing does not fetch video metadata or bytes. Backfill or new arrivals may insert items before the current cursor; reload to include them. A conversation filter with another account is invalid.",
+        "description": "Browse the local derived catalog, newest original message time first with item UUID ties at millisecond precision. Account/conversation filters apply before pagination. Metadata search covers URL, filename, visible caption, cached preview title/description, sender, conversation and account label. A background worker indexes all retained and incoming messages. Listing registers preview enrichment only for the returned image/link references; originals still follow device preferences and explicit download operations. Document/audio entries remain URL references. Video bytes are available only through the explicit content operation; listing does not fetch video metadata or bytes. Backfill or new arrivals may insert items before the current cursor; reload to include them. A conversation filter outside the selected accounts is invalid.",
         "parameters": [
           {
             "name": "type",
@@ -244,11 +244,14 @@
           },
           {
             "name": "accountId",
-            "description": "Restrict to one owning account, or omit for all accounts.",
+            "description": "Restrict to one owning account. Omit both account filters to list all accounts.",
             "in": "query",
             "schema": {
               "$ref": "#/components/schemas/ID"
             }
+          },
+          {
+            "$ref": "#/components/parameters/SearchAccountIDs"
           },
           {
             "name": "conversationId",
@@ -5732,7 +5735,7 @@
       },
       "MessageSearchPreview": {
         "type": "object",
-        "description": "One indexed shared item from the matching current message. Cached artwork is preferred when multiple items are present.",
+        "description": "One indexed shared item from the matching current message. Prefer an item matching the query, then cached artwork.",
         "additionalProperties": false,
         "required": [
           "kind"
@@ -5748,6 +5751,11 @@
               "document"
             ],
             "description": "Category of the shared item."
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Source URL of the item represented by this preview."
           },
           "imageHash": {
             "type": "string",

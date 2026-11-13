@@ -596,6 +596,9 @@ func build54(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("query", "accountId", &params.AccountId); err != nil {
 		return nil, err
 	}
+	if err := input.Decode("query", "accountIds", &params.AccountIds); err != nil {
+		return nil, err
+	}
 	if err := input.Decode("query", "conversationId", &params.ConversationId); err != nil {
 		return nil, err
 	}

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/url"
 	"path"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -111,17 +112,17 @@ func (e *Engine) SharedContent(ctx context.Context, q domain.SharedContentQuery)
 	if _, err := ParseSharedContentCursor(q.Cursor); err != nil {
 		return empty, err
 	}
-	if q.AccountID != "" {
-		if _, err := e.Account(ctx, q.AccountID); err != nil {
-			return empty, err
-		}
+	accountIDs, err := e.validateSearchAccounts(ctx, q.AccountID, q.AccountIDs)
+	if err != nil {
+		return empty, err
 	}
+	q.AccountIDs = accountIDs
 	if q.ConversationID != "" {
 		c, err := e.Conversation(ctx, q.ConversationID)
 		if err != nil {
 			return empty, err
 		}
-		if q.AccountID != "" && c.AccountID != q.AccountID {
+		if q.AccountID != "" && c.AccountID != q.AccountID || len(q.AccountIDs) > 0 && !slices.Contains(q.AccountIDs, c.AccountID) {
 			return empty, ErrInvalid
 		}
 	}

@@ -129,7 +129,10 @@
   const key=value=>{const q=new URLSearchParams(shellKey(value));q.delete('contentType');q.delete('contentCursor');return q.toString()};
   return key(url)===key(current);
  }
- function sharedFields(){const form=document.getElementById('shared-content-search');return form?JSON.stringify(['q','account'].map(name=>new FormData(form).get(name)||'')):''}
+ function sharedFields(){
+  const form=document.getElementById('shared-content-search');if(!form)return '';
+  const fields=new FormData(form);return JSON.stringify([fields.get('q'),fields.get('account'),fields.getAll('contentAccount').sort()]);
+ }
  function swapFor(kind){
   if(kind==='shared-content-scroll')return 'innerHTML swap:'+(reducedMotion.matches?'0ms':'75ms')+' settle:0ms show:none';
   if(kind==='conversation-pane')return 'outerHTML settle:0ms show:none';

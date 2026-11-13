@@ -165,7 +165,7 @@ paths:
         Document/audio entries remain URL references. Video bytes are available only through
         the explicit content operation; listing does not fetch video metadata or bytes.
         Backfill or new arrivals may insert items before the current cursor; reload
-        to include them. A conversation filter with another account is invalid.
+        to include them. A conversation filter outside the selected accounts is invalid.
       parameters:
       - name: type
         description: Content category; media combines image, audio and video references; video restricts to video before pagination.
@@ -175,10 +175,11 @@ paths:
           enum: [media, links, documents, video]
           default: media
       - name: accountId
-        description: Restrict to one owning account, or omit for all accounts.
+        description: Restrict to one owning account. Omit both account filters to list all accounts.
         in: query
         schema:
           $ref: '#/components/schemas/ID'
+      - $ref: '#/components/parameters/SearchAccountIDs'
       - name: conversationId
         description: Restrict to one source conversation, or omit for all conversations.
         in: query
@@ -3599,7 +3600,7 @@ components:
           description: Bounded plain text from matching content or metadata. Never HTML; clients must escape it. Earlier content is represented here, rather than by the current message text.
     MessageSearchPreview:
       type: object
-      description: One indexed shared item from the matching current message. Cached artwork is preferred when multiple items are present.
+      description: One indexed shared item from the matching current message. Prefer an item matching the query, then cached artwork.
       additionalProperties: false
       required: [kind]
       properties:
@@ -3607,6 +3608,10 @@ components:
           type: string
           enum: [image, video, audio, link, document]
           description: Category of the shared item.
+        url:
+          type: string
+          format: uri
+          description: Source URL of the item represented by this preview.
         imageHash:
           type: string
           pattern: '^[0-9a-f]{64}$'

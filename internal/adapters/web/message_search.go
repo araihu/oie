@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -28,28 +27,48 @@ var messageSearchStylesheet []byte
 const searchConversationsOnly = "conversations"
 const searchMessagesOnly = "messages"
 
-var searchResultLinks = regexp.MustCompile(`https?://[^\s<>"\x00-\x1f]+`)
+type searchReference struct {
+	url   string
+	start int
+}
 
-func searchResultText(hit engineapi.MessageSearchHit) (excerpt, sharedURL string) {
+func searchResultText(hit engineapi.MessageSearchHit) (excerpt, sharedURL string, preview *engineapi.MessageSearchPreview) {
+	preview = hit.Preview
 	if hit.Historical || hit.MatchKind != "metadata" {
-		return hit.Excerpt, ""
+		return hit.Excerpt, "", preview
 	}
 	body := strings.TrimSpace(messageView{Message: hit.Message}.displayBody())
 	const limit = 512
-	for _, candidate := range searchResultLinks.FindAllString(body, 32) {
-		candidate = strings.TrimRight(candidate, ".,;!)]}")
-		if sharedURL == "" {
-			sharedURL = candidate
+	var refs []searchReference
+	seen := map[string]bool{}
+	for _, span := range messageBodyURLs.FindAllStringIndex(body, 128) {
+		address := strings.TrimRight(body[span[0]:span[1]], ".,;!)]}")
+		if len(address) > 4096 || seen[address] || safePreviewURL(address) == "" {
+			continue
 		}
-		if strings.Contains(hit.Excerpt, candidate) {
-			sharedURL = candidate
+		seen[address] = true
+		refs = append(refs, searchReference{url: address, start: span[0]})
+	}
+	if len(refs) == 0 {
+		return shortenSearchExcerpt(body, limit), "", nil
+	}
+	ref := refs[0]
+	for _, candidate := range refs {
+		if strings.Contains(hit.Excerpt, candidate.url) {
+			ref = candidate
 			break
 		}
 	}
-	if sharedURL != "" {
-		body = strings.TrimSpace(strings.Replace(body, sharedURL, "", 1))
+	if preview != nil {
+		index := slices.IndexFunc(refs, func(candidate searchReference) bool { return candidate.url == previewValue(preview.Url) })
+		if index >= 0 {
+			ref = refs[index]
+		} else if len(refs) > 1 || preview.Url != nil {
+			preview = &engineapi.MessageSearchPreview{Kind: "link"}
+		}
 	}
-	return shortenSearchExcerpt(body, limit), shortenSearchExcerpt(sharedURL, limit)
+	body = strings.TrimSpace(body[:ref.start] + body[ref.start+len(ref.url):])
+	return shortenSearchExcerpt(body, limit), shortenSearchExcerpt(ref.url, limit), preview
 }
 
 func shortenSearchExcerpt(text string, limit int) string {
@@ -343,13 +362,17 @@ func (s *Server) messageSearch(w http.ResponseWriter, r *http.Request) {
 	_ = messageSearchResponse(v).Render(presentationContext(r.Context(), v), w)
 }
 func (v view) messageSearchAccountCombobox() combobox.Config {
+	return v.searchableAccountCombobox("message-search-account", "accountId", v.MessageSearch.accounts())
+}
+
+func (v view) searchableAccountCombobox(id, name string, selected []string) combobox.Config {
 	options := make([]combobox.Option, 0, len(v.Accounts))
 	for _, account := range v.Accounts {
 		options = append(options, combobox.Option{Value: account.Id, Label: account.Label + " · " + account.Address})
 	}
 	return combobox.Config{
-		ID: "message-search-account", Name: "accountId", Label: v.Text.Accounts, Placeholder: v.Text.AllAccounts,
-		Mode: combobox.ModeMultiple, Source: combobox.Source{Static: options}, Selected: v.MessageSearch.accounts(),
+		ID: id, Name: name, Label: v.Text.Accounts, Placeholder: v.Text.AllAccounts,
+		Mode: combobox.ModeMultiple, Source: combobox.Source{Static: options}, Selected: selected,
 		EnableSearch: true, EnableClearAll: true, DisablePersistence: true,
 	}
 }
@@ -536,7 +559,9 @@ func (v view) messageSearchContactHref(c engineapi.Contact) string {
 }
 
 func (v view) messageSearchCategoryHref(kind string) string {
-	return v.href("section", "media", "contentType", kind, "contentCursor", "", "chat", "", "message", "", "q", v.MessageSearch.Query, "account", v.MessageSearch.AccountID)
+	v.AccountFilter = v.MessageSearch.AccountID
+	v.SharedAccountIDs = v.MessageSearch.AccountIDs
+	return v.href("section", "media", "contentType", kind, "contentCursor", "", "chat", "", "message", "", "q", v.MessageSearch.Query)
 }
 
 func (v view) messageSearchFilterHref(category string) string {

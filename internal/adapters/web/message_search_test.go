@@ -64,6 +64,35 @@ func TestMessageSearchHighlightsVisibleTextAndURL(t *testing.T) {
 	}
 }
 
+func TestMessageSearchBindsMetadataURLAndHighlightsTypos(t *testing.T) {
+	const address = "https://match.test/plataformas"
+	const unrelated = "https://other.test/notice"
+	hash := strings.Repeat("a", 64)
+	hit := searchTestPage().Items[0]
+	hit.MatchKind = "metadata"
+	hit.Excerpt = unrelated + " unrelated catalog excerpt"
+	hit.Message.OriginalText = "Conheça as plataformas disponíveis " + unrelated + "\n" + address
+	hit.Preview = &engineapi.MessageSearchPreview{Kind: "link", Url: new(address), FaviconHash: &hash}
+	for _, compact := range []bool{false, true} {
+		var rendered bytes.Buffer
+		v := view{MessageSearch: messageSearchView{Compact: compact}}
+		if err := messageSearchHit(v, hit, searchHighlightPattern("platafromas")).Render(t.Context(), &rendered); err != nil {
+			t.Fatal(err)
+		}
+		html := rendered.String()
+		if strings.Count(html, `<mark class="oie-search-highlight">plataformas</mark>`) != 2 ||
+			!strings.Contains(html, `class="oie-message-search-url">https://match.test/`) ||
+			!strings.Contains(html, unrelated) || !strings.Contains(html, hash) {
+			t.Fatal(html)
+		}
+	}
+	hit.Preview.Url = nil
+	_, _, fallback := searchResultText(hit)
+	if fallback == nil || fallback.FaviconHash != nil {
+		t.Fatal("legacy preview associated unverified artwork with one of multiple links")
+	}
+}
+
 func TestCompactSearchStartsNearFirstHighlight(t *testing.T) {
 	query := "plataformas"
 	text := "An earlier line\n" + strings.Repeat("long caption ", 10) + "https://plataformas.example/test"

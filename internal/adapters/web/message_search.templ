@@ -1,7 +1,6 @@
 package web
 
 import (
- "regexp"
  "slices"
  "strconv"
  "strings"
@@ -176,7 +175,7 @@ if next:=v.messageSearchNext();next!="" {
 </div>
 </div>
 }
-templ messageSearchHit(v view,hit engineapi.MessageSearchHit,searchPattern *regexp.Regexp){
+templ messageSearchHit(v view,hit engineapi.MessageSearchHit,searchPattern *searchHighlight){
 {{
 	sender, senderDomain := searchNameParts(hit.Message.Sender.DisplayName)
 	conversation, conversationDomain := searchNameParts(hit.ConversationTitle)
@@ -214,7 +213,7 @@ if conversationDomain != "" {
 if hit.Historical {
 @badge.Badge(badge.Config{Label:v.Text.SearchPriorVersion,Size:badge.SizeSM,Appearance:badge.AppearanceSoft})
 }
-{{ excerpt, sharedURL := searchResultText(hit) }}
+{{ excerpt, sharedURL, preview := searchResultText(hit) }}
 if excerpt!="" {
 <p class="oie-message-search-excerpt">@highlightSearchText(excerpt,searchPattern,v.MessageSearch.Compact)</p>
 }
@@ -222,8 +221,8 @@ if sharedURL!="" {
 <p class="oie-message-search-url">@highlightSearchText(sharedURL,searchPattern,false)</p>
 }
 </div>
-if hit.Preview != nil && !hit.Historical {
-@messageSearchPreview(*hit.Preview)
+if preview != nil && !hit.Historical {
+@messageSearchPreview(*preview)
 }
 </div>
 <time data-message-search-time datetime={hit.Message.CreatedAt.Format(time.RFC3339)}>{hit.Message.CreatedAt.Format("2006-01-02 15:04")}</time>
@@ -231,7 +230,7 @@ if hit.Preview != nil && !hit.Historical {
 </article>
 }
 
-templ highlightSearchText(text string,searchPattern *regexp.Regexp,compact bool){
+templ highlightSearchText(text string,searchPattern *searchHighlight,compact bool){
 for _, part := range searchTextParts(text,searchPattern,compact) {
 if part.match {
 <mark class="oie-search-highlight">{part.text}</mark>

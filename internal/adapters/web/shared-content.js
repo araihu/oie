@@ -151,7 +151,7 @@ window.OieRuntime.register('shared-search', life => {
   function scope(){return new URLSearchParams(new FormData(form)).toString()}
   function alignTabs(){
    const values=new FormData(form),root=info?form.closest('#chat-info-content'):form.closest('#workspace');
-   for(const link of root?.querySelectorAll('[data-shared-tab]')||[]){const url=new URL(link.href);for(const key of info?['infoQuery']:['q','account']){const value=values.get(key)||'';if(value)url.searchParams.set(key,value);else url.searchParams.delete(key)}if(info)url.searchParams.delete('infoCursor');link.href=url.pathname+url.search}
+   for(const link of root?.querySelectorAll('[data-shared-tab]')||[]){const url=new URL(link.href);for(const key of info?['infoQuery']:['q','account','contentAccount']){url.searchParams.delete(key);for(const value of values.getAll(key).filter(Boolean).sort())url.searchParams.append(key,value)}if(info)url.searchParams.delete('infoCursor');link.href=url.pathname+url.search}
   }
   const owned=ctx=>ctx?.target?.id===targetID&&ctx.sourceElement===input;
   function cancel(){clearTimeout(pending);for(const ctx of active)ctx.request.abort();active.clear();accepted=null;region()?.removeAttribute('aria-busy')}
@@ -161,7 +161,13 @@ window.OieRuntime.register('shared-search', life => {
   on(input,'compositionstart',()=>{composing=true;clearTimeout(pending)});
   on(input,'compositionend',()=>{composing=false;alignTabs();schedule()});
   on(form,'submit',()=>clearTimeout(pending),{capture:true});
-  on(form,'combobox:change',event=>{alignTabs();if(!info&&event.detail?.id==='shared-account'&&connected()){cancel();form.requestSubmit()}});
+  on(form,'combobox:change',event=>{
+   alignTabs();
+   if(info||event.detail?.id!=='shared-account'||!connected())return;
+   cancel();
+   if(new FormData(form).getAll('contentAccount').some(Boolean))input.dispatchEvent(new CustomEvent('oie:shared-search',{bubbles:true}));
+   else form.requestSubmit();
+  });
   on(document,'htmx:before:request',event=>{
    const ctx=event.detail.ctx;if(['oie-app','chat-info-content','shared-content-scroll'].includes(ctx?.target?.id))cancel();if(!owned(ctx)||!connected())return;
    active.add(ctx);ctx.oieSearch={form,scope:scope(),generation:Number(document.body.dataset.starGeneration||0),engine:document.body.dataset.engineId,conversation:document.body.dataset.conversationId};accepted=null;region()?.setAttribute('aria-busy','true');

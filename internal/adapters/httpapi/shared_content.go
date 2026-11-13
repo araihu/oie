@@ -7,7 +7,7 @@ import (
 )
 
 func (s *Server) ListSharedContent(ctx context.Context, r engineapi.ListSharedContentRequestObject) (engineapi.ListSharedContentResponseObject, error) {
-	q := domain.SharedContentQuery{Type: "media", Limit: 50}
+	q := domain.SharedContentQuery{Type: "media", Limit: 50, AccountIDs: searchAccountIDs(r.Params.AccountIds)}
 	if r.Params.Type != nil {
 		q.Type = string(*r.Params.Type)
 	}

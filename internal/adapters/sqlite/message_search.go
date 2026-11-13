@@ -95,7 +95,7 @@ func (s *Store) SearchMessages(ctx context.Context, query domain.MessageSearchQu
 		hit.Excerpt = messageSearchExcerpt(content, query.Search)
 		page.Items = append(page.Items, hit)
 	}
-	if err = loadSearchPreviews(ctx, q, page.Items); err != nil {
+	if err = loadSearchPreviews(ctx, q, page.Items, query.Search); err != nil {
 		return page, err
 	}
 	if more {
@@ -114,7 +114,7 @@ func (s *Store) SearchMessages(ctx context.Context, query domain.MessageSearchQu
 	return page, tx.Commit()
 }
 
-func loadSearchPreviews(ctx context.Context, q *dbgen.Queries, hits []domain.MessageSearchHit) error {
+func loadSearchPreviews(ctx context.Context, q *dbgen.Queries, hits []domain.MessageSearchHit, search string) error {
 	current := make(map[string]int, len(hits))
 	ids := make([]string, 0, len(hits))
 	for i, hit := range hits {
@@ -127,12 +127,12 @@ func loadSearchPreviews(ctx context.Context, q *dbgen.Queries, hits []domain.Mes
 	if len(ids) == 0 {
 		return nil
 	}
-	previews, err := q.SearchMessagePreviews(ctx, dbgen.SearchMessagePreviewsParams{MessageIds: jsonText(ids), ParserVersion: application.SharedContentVersion})
+	previews, err := q.SearchMessagePreviews(ctx, dbgen.SearchMessagePreviewsParams{MessageIds: jsonText(ids), ParserVersion: application.SharedContentVersion, Search: search})
 	if err != nil {
 		return err
 	}
 	for _, row := range previews {
-		preview := domain.MessageSearchPreview{Kind: row.Kind}
+		preview := domain.MessageSearchPreview{Kind: row.Kind, URL: row.Url}
 		if application.ValidImageHash(row.ImageHash) {
 			preview.ImageHash = row.ImageHash
 		}

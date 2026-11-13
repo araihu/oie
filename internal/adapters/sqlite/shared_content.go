@@ -86,7 +86,8 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 	if err != nil {
 		return page, err
 	}
-	rows, err := queries.ListSharedContent(ctx, dbgen.ListSharedContentParams{ParserVersion: application.SharedContentVersion, MessageIds: jsonText(nonNilIDs(query.MessageIDs)), AccountID: string(query.AccountID), ConversationID: string(query.ConversationID), ContentType: query.Type, CursorID: string(cursor.ID), CursorMs: cursor.Milliseconds, Search: strings.TrimSpace(query.Search), PageLimit: int64(query.Limit + 1)})
+	accountIDs := jsonText(nonNilIDs(query.AccountIDs))
+	rows, err := queries.ListSharedContent(ctx, dbgen.ListSharedContentParams{ParserVersion: application.SharedContentVersion, MessageIds: jsonText(nonNilIDs(query.MessageIDs)), AccountID: string(query.AccountID), AccountIds: accountIDs, ConversationID: string(query.ConversationID), ContentType: query.Type, CursorID: string(cursor.ID), CursorMs: cursor.Milliseconds, Search: strings.TrimSpace(query.Search), PageLimit: int64(query.Limit + 1)})
 	if err != nil {
 		return page, err
 	}
@@ -123,7 +124,7 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 		last := page.Items[len(page.Items)-1]
 		page.NextCursor = application.SharedContentCursor(last.Message.CreatedAt.UnixMilli(), last.ID)
 	}
-	status, err := queries.SharedContentIndexStatus(ctx, dbgen.SharedContentIndexStatusParams{ParserVersion: application.SharedContentVersion, MessageIds: jsonText(nonNilIDs(query.MessageIDs)), AccountID: string(query.AccountID), AccountIds: "[]", ConversationID: string(query.ConversationID)})
+	status, err := queries.SharedContentIndexStatus(ctx, dbgen.SharedContentIndexStatusParams{ParserVersion: application.SharedContentVersion, MessageIds: jsonText(nonNilIDs(query.MessageIDs)), AccountID: string(query.AccountID), AccountIds: accountIDs, ConversationID: string(query.ConversationID)})
 	if err != nil {
 		return page, err
 	}

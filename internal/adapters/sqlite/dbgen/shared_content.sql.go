@@ -82,21 +82,23 @@ JOIN shared_content_state AS s ON s.message_id=m.id AND s.parser_version>=?1
 JOIN conversations AS c ON c.id=m.conversation_id JOIN accounts AS a ON a.id=m.account_id
 LEFT JOIN message_previews AS p ON p.message_id=m.id AND p.url=sc.url
 WHERE (CAST(?2 AS TEXT)='' OR m.account_id=CAST(?2 AS TEXT))
+AND (CAST(?3 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?3 AS TEXT))))
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
-AND (CAST(?3 AS TEXT)='' OR m.conversation_id=CAST(?3 AS TEXT))
-AND (CAST(?4 AS TEXT)='[]' OR m.id IN (SELECT value FROM json_each(CAST(?4 AS TEXT))))
-AND ((CAST(?5 AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
- OR (CAST(?5 AS TEXT)='video' AND sc.kind='video' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
- OR (CAST(?5 AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
- OR (CAST(?5 AS TEXT)='documents' AND sc.kind='document' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image'))
-AND (CAST(?6 AS TEXT)='' OR (m.created_at_ms,sc.id)<(CAST(?7 AS INTEGER),CAST(?6 AS TEXT)))
-AND (CAST(?8 AS TEXT)='' OR oie_search_match(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),''),CAST(?8 AS TEXT))=1)
-ORDER BY m.created_at_ms DESC,sc.id DESC LIMIT ?9
+AND (CAST(?4 AS TEXT)='' OR m.conversation_id=CAST(?4 AS TEXT))
+AND (CAST(?5 AS TEXT)='[]' OR m.id IN (SELECT value FROM json_each(CAST(?5 AS TEXT))))
+AND ((CAST(?6 AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
+ OR (CAST(?6 AS TEXT)='video' AND sc.kind='video' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
+ OR (CAST(?6 AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
+ OR (CAST(?6 AS TEXT)='documents' AND sc.kind='document' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image'))
+AND (CAST(?7 AS TEXT)='' OR (m.created_at_ms,sc.id)<(CAST(?8 AS INTEGER),CAST(?7 AS TEXT)))
+AND (CAST(?9 AS TEXT)='' OR oie_search_match(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),''),CAST(?9 AS TEXT))=1)
+ORDER BY m.created_at_ms DESC,sc.id DESC LIMIT ?10
 `
 
 type ListSharedContentParams struct {
 	ParserVersion  int64
 	AccountID      string
+	AccountIds     string
 	ConversationID string
 	MessageIds     string
 	ContentType    string
@@ -122,6 +124,7 @@ func (q *Queries) ListSharedContent(ctx context.Context, arg ListSharedContentPa
 	rows, err := q.db.QueryContext(ctx, listSharedContent,
 		arg.ParserVersion,
 		arg.AccountID,
+		arg.AccountIds,
 		arg.ConversationID,
 		arg.MessageIds,
 		arg.ContentType,

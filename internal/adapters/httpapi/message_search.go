@@ -56,6 +56,9 @@ func (s *Server) SearchMessages(ctx context.Context, r engineapi.SearchMessagesR
 		}
 		if p := hit.Preview; p != nil {
 			item.Preview = &engineapi.MessageSearchPreview{Kind: engineapi.MessageSearchPreviewKind(p.Kind)}
+			if p.URL != "" {
+				item.Preview.Url = &p.URL
+			}
 			if p.ImageHash != "" {
 				item.Preview.ImageHash = &p.ImageHash
 			}

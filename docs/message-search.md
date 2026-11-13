@@ -49,6 +49,11 @@ default and independent of archive provenance. Excerpts are escaped plain text,
 not trusted HTML or pre-highlighted fragments. Retraction/deletion controls are
 outside this increment; no Include retracted control is introduced.
 
+The sidebar and floating search highlight visible literal and typo-tolerant
+matches. A metadata hit shows the source message and the URL represented by
+its thumbnail. The Media, Links and Documents shortcuts carry the query and
+selected accounts into the catalog, where the scope applies before pagination.
+
 ## Validation record
 
 Required checks include scoped BFF/HTTP tests, independent browser fixtures,

@@ -98,7 +98,10 @@ window.OieRuntime.register('message-search',life=>{
    const url=new URL(link.href,location.href);
    for(const name of [...searchKeys,'chatSearch','chatQuery','chatIncludeHistory','chat','message'])url.searchParams.delete(name);
    url.searchParams.set('q',query.value.trim());
-   url.searchParams.set('account',selectedAccounts.length===1?selectedAccounts[0]:'');
+   url.searchParams.delete('account');
+   url.searchParams.delete('contentAccount');
+   if(selectedAccounts.length===1)url.searchParams.set('account',selectedAccounts[0]);
+   else for(const id of selectedAccounts)url.searchParams.append('contentAccount',id);
    link.href=url.pathname+url.search;
   }
  }

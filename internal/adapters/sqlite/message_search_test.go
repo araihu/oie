@@ -177,7 +177,7 @@ func TestMessageSearchCurrentMetadataIsLocalAndInvalidatesOnCorrection(t *testin
 	s, e, c := outboxFixture(t)
 	at := time.Now().Add(-time.Hour).UTC()
 	e.SetProtocols(&outboundProtocol{})
-	receiveCorrection(t, e, c, "first", "source https://example.test/first-page", "", "proof:bob", "bob", at)
+	receiveCorrection(t, e, c, "first", "source https://example.test/first-page https://other.test/second-page", "", "proof:bob", "bob", at)
 	m := correctionMessages(t, e, c)[0]
 	refs := application.SharedReferences(m.OriginalText)
 	for i := range refs {
@@ -187,8 +187,14 @@ func TestMessageSearchCurrentMetadataIsLocalAndInvalidatesOnCorrection(t *testin
 	if err := s.IndexSharedContent(t.Context(), []domain.SharedContentMutation{{Message: m, References: refs, ParserVersion: application.SharedContentVersion}}); err != nil {
 		t.Fatal(err)
 	}
-	preview := domain.MessagePreview{ID: migrationID(), RevisionID: migrationID(), MessageID: m.ID, AccountID: c.AccountID, ConversationID: c.ID, URL: refs[0].URL, Title: "Orçamento especial", Description: "annual projection", State: "ready", Kind: "link", DownloadState: "not_downloaded", ImageHash: strings.Repeat("a", 64), FaviconHash: strings.Repeat("b", 64), UpdatedAt: time.Now().UTC()}
+	preview := domain.MessagePreview{ID: migrationID(), RevisionID: migrationID(), MessageID: m.ID, AccountID: c.AccountID, ConversationID: c.ID, URL: refs[1].URL, Title: "Orçamento especial", Description: "annual projection", State: "ready", Kind: "link", DownloadState: "not_downloaded", FaviconHash: strings.Repeat("b", 64), UpdatedAt: time.Now().UTC()}
 	if _, err := s.EnsurePreview(t.Context(), preview); err != nil {
+		t.Fatal(err)
+	}
+	other := preview
+	other.ID, other.RevisionID, other.URL = migrationID(), migrationID(), refs[0].URL
+	other.Title, other.Description, other.ImageHash = "Unrelated", "", strings.Repeat("a", 64)
+	if _, err := s.EnsurePreview(t.Context(), other); err != nil {
 		t.Fatal(err)
 	}
 	before, err := e.Snapshot(t.Context())
@@ -199,7 +205,7 @@ func TestMessageSearchCurrentMetadataIsLocalAndInvalidatesOnCorrection(t *testin
 	if len(page.Items) != 1 || page.Items[0].MatchKind != "metadata" || !strings.Contains(page.Items[0].Excerpt, "Orçamento especial") || page.MetadataIndexing.State != "complete" {
 		t.Fatal(page)
 	}
-	if p := page.Items[0].Preview; p == nil || p.Kind != "link" || p.ImageHash != preview.ImageHash || p.FaviconHash != preview.FaviconHash {
+	if p := page.Items[0].Preview; p == nil || p.Kind != "link" || p.URL != preview.URL || p.ImageHash != preview.FaviconHash || p.FaviconHash != preview.FaviconHash {
 		t.Fatalf("missing cached preview: %+v", p)
 	}
 	after, _ := e.Snapshot(t.Context())

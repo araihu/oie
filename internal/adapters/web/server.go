@@ -160,6 +160,7 @@ type view struct {
 	InfoStars                                                                                     *engineapi.StarredMessagePage
 	InfoInvalid, SharedInDetails                                                                  bool
 	SharedType, SharedCursor, SharedConversation                                                  string
+	SharedAccountIDs                                                                              []string
 	SharedContent                                                                                 *engineapi.SharedContentPage
 	SharedInvalid                                                                                 bool
 	SharedCard                                                                                    bool

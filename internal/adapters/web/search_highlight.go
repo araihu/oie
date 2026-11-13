@@ -7,8 +7,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"golang.org/x/text/cases"
-	"golang.org/x/text/unicode/norm"
+	"github.com/araihu/oie/internal/search"
 )
 
 type searchTextPart struct {
@@ -16,21 +15,21 @@ type searchTextPart struct {
 	match bool
 }
 
-func foldHighlightText(value string) string {
-	return strings.Map(func(r rune) rune {
-		if unicode.Is(unicode.Mn, r) {
-			return -1
-		}
-		return r
-	}, norm.NFKD.String(cases.Fold().String(value)))
+type searchHighlight struct {
+	literal *regexp.Regexp
+	terms   []string
 }
 
-func searchHighlightPattern(query string) *regexp.Regexp {
-	query = foldHighlightText(strings.TrimSpace(query))
+var searchHighlightWords = regexp.MustCompile(`[\p{L}\p{Nd}]+`)
+
+func searchHighlightPattern(query string) *searchHighlight {
+	query = search.Fold(strings.TrimSpace(query))
 	if query == "" {
 		return nil
 	}
+	words := search.Words(query)
 	terms := append([]string{query}, strings.Fields(query)...)
+	terms = append(terms, words...)
 	slices.SortFunc(terms, func(a, b string) int {
 		if len(a) != len(b) {
 			return len(b) - len(a)
@@ -41,10 +40,44 @@ func searchHighlightPattern(query string) *regexp.Regexp {
 	for i, term := range terms {
 		terms[i] = regexp.QuoteMeta(term)
 	}
-	return regexp.MustCompile(strings.Join(terms, "|"))
+	return &searchHighlight{literal: regexp.MustCompile(strings.Join(terms, "|")), terms: words}
 }
 
-func searchTextParts(text string, pattern *regexp.Regexp, compact bool) []searchTextPart {
+func (pattern *searchHighlight) matches(text string) [][2]int {
+	var matches [][2]int
+	for _, span := range pattern.literal.FindAllStringIndex(text, -1) {
+		matches = append(matches, [2]int(span))
+	}
+	var words [][]int
+	for _, term := range pattern.terms {
+		if utf8.RuneCountInString(term) < 4 || strings.Contains(text, term) {
+			continue
+		}
+		if words == nil {
+			words = searchHighlightWords.FindAllStringIndex(text, -1)
+		}
+		query := []rune(term)
+		for _, span := range words {
+			word := []rune(text[span[0]:span[1]])
+			if length := search.ApproximatePrefix(query, word); length > 0 {
+				matches = append(matches, [2]int{span[0], span[0] + len(string(word[:length]))})
+			}
+		}
+	}
+	slices.SortFunc(matches, func(a, b [2]int) int { return a[0] - b[0] })
+	merged := matches[:0]
+	for _, match := range matches {
+		if len(merged) > 0 && match[0] < merged[len(merged)-1][1] {
+			last := &merged[len(merged)-1]
+			last[1] = max(last[1], match[1])
+		} else {
+			merged = append(merged, match)
+		}
+	}
+	return merged
+}
+
+func searchTextParts(text string, pattern *searchHighlight, compact bool) []searchTextPart {
 	if pattern == nil {
 		return []searchTextPart{{text: text}}
 	}
@@ -63,7 +96,7 @@ func searchTextParts(text string, pattern *regexp.Regexp, compact bool) []search
 			}
 			end += width
 		}
-		value := foldHighlightText(text[start:end])
+		value := search.Fold(text[start:end])
 		folded.WriteString(value)
 		for range len(value) {
 			positions = append(positions, span{start, end})
@@ -71,7 +104,7 @@ func searchTextParts(text string, pattern *regexp.Regexp, compact bool) []search
 		start = end
 	}
 
-	matches := pattern.FindAllStringIndex(folded.String(), -1)
+	matches := pattern.matches(folded.String())
 	var parts []searchTextPart
 	start := 0
 	if compact && len(matches) > 0 {
