@@ -74,7 +74,16 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    assert.equal(await page.evaluate(()=>window.OieRuntime.generation),generation);
    assert.equal(accountStreams,0);
    assert.equal(new URL(page.url()).searchParams.get('q'),'faturamneto');assert.equal(new URL(page.url()).searchParams.get('contentType'),'documents');assert.equal(new URL(page.url()).searchParams.get('contentCursor'),null);assert.equal(requests.length,pickerRequests+1,'one account commit produces one fragment request');assert.equal(documents,1);assert.equal(writes,0);assert((await page.locator('[data-account-switcher]').first().textContent()).includes('Work'));assert.equal(await page.locator('body').getAttribute('data-account-id'),'');
-   await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);
+   await page.locator('#shared-account [role=listbox]').waitFor({state:'hidden'});
+   await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+   const axe=await page.evaluate(async()=>{
+    await document.fonts.ready;
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    await Promise.all(document.getAnimations().filter(animation=>animation.effect?.getComputedTiming().endTime<1000).map(animation=>animation.finished.catch(()=>{})));
+    return window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}});
+   });
+   assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(node=>({target:node.target,summary:node.failureSummary}))})),[]);
    const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,`shared-search-${config.width}.png`)});
    // The conversation drawer searches only its shared catalog and keeps the
    // form, input and composer alive while swapping its results region.
