@@ -9,7 +9,7 @@ scheduling. Send submits them together through the existing outbox.
 
 The attachment preview is a compact overlay in the existing Oiê chat workspace.
 It uses Goshtoso Dialog, Textarea and Button. A row shows each filename and
-a bounded local thumbnail for supported images. The browser owns paste/drop
+a local thumbnail in a fixed-size frame for supported images. The browser owns paste/drop
 events and unreconciled file selections. Text paste uses the textarea's built-in
 behavior.
 
@@ -32,3 +32,11 @@ stay stable across retries in the preview. The engine rechecks file availability
 and provider limits at acceptance. A file whose staging completed before a
 cancellation can remain in the engine's staging store. Unreferenced-file
 cleanup is tracked in O09 of the specification.
+
+The app accepts up to 16 attachments, with an engine limit of 20 MiB per
+file. A provider can impose a lower limit. The contact or room receives
+the caption followed by the provider's download links.
+
+The XMPP adapter uploads attachments before writing the outgoing chat
+message. Once the message is accepted, the existing outbox tracks the send
+and governs recovery after a restart or a lost response.

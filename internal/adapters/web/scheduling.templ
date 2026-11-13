@@ -295,9 +295,9 @@ templ attachmentReviewHeader(v view) {
 }
 
 templ attachmentReview(v view) {
-	<form class="oie-attachment-review" data-attachment-review
+	<form class="oie-attachment-review" data-attachment-review method="dialog"
 		data-attachment-failed={v.Text.AttachmentFailed} data-attachment-limit={v.Text.AttachmentLimit}
-		data-attachment-unavailable={v.Text.AttachmentUnavailable} data-remove-attachment={v.Text.RemoveAttachment}
+		data-attachment-unavailable={v.Text.AttachmentUnavailable} data-remove-label={v.Text.RemoveAttachment}
 		data-invalid-caption={v.Text.InvalidMessage} data-staging={v.Text.AttachmentPreparing} data-send={v.Text.Send} data-save={v.Text.ScheduleSave}>
 		<ul data-attachment-review-files></ul>
 		<template>
@@ -311,7 +311,7 @@ templ attachmentReview(v view) {
 		<p data-attachment-status role="status"></p>
 		<footer>
 			@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-attachment-cancel":""})) { <span>{v.Text.DeleteDataCancel}</span> }
-			@button.Button(button.WithType("button"),button.WithTone(button.ToneSecondary),button.WithAttrs(templ.Attributes{"data-attachment-add":""})) { <span>{v.Text.AttachmentAddToDraft}</span> }
+			@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-attachment-keep"),button.WithAttrs(templ.Attributes{"data-attachment-add":""})) { <span>{v.Text.AttachmentAddToDraft}</span> }
 			@button.Button(button.WithType("submit"),button.WithAttrs(templ.Attributes{"data-attachment-send":""})) { <span>{v.Text.Send}</span> }
 		</footer>
 	</form>

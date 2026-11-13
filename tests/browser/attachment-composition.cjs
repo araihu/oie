@@ -94,6 +94,7 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
     assert.equal(await dataEvent(page, 'drop', [file], '', 20*1024*1024+1), true);
     const toast = page.locator('[data-toast-container] [role="alert"]').filter({hasText:pt ? '16 arquivos de 20 MiB' : '16 files of 20 MiB'});
     await toast.getByRole('button', {name:pt ? 'Fechar' : 'Close'}).click();
+    await toast.waitFor({state:'hidden'});
     assert.equal(await review.isVisible(), false);
     assert.equal(await composer.inputValue(), original);
 
@@ -112,22 +113,24 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
     const violations = await page.evaluate(async () =>
       (await window.axe.run('#oie-attachment-review', {runOnly:{type:'tag', values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v => v.id));
     assert.deepEqual(violations, []);
-    await page.screenshot({path:'artifacts/' + prefix + (pt ? '-attachment-mobile-pt.png' : '-attachment-desktop-en.png')});
+    await review.screenshot({path:'artifacts/' + prefix + (pt ? '-attachment-mobile-pt.png' : '-attachment-desktop-en.png')});
     await review.getByRole('button', {name:(pt ? 'Remover anexo' : 'Remove attachment') + ' · ' + file.name, exact:true}).click();
     const revised = pt ? 'Legenda para envio ' + randomUUID() : 'Caption to keep';
     await caption.fill(revised);
 
     const holdStage = async route => {
       await new Promise(resolve => setTimeout(resolve, 550));
-      await route.continue();
+      await route.continue().catch(error => { if (pt) throw error; });
     };
     const operation = await page.locator('#send-message-form [name="operationKey"]').inputValue();
+    const retained = () => api('/api/v1/conversations/' + conversation.id + '/messages?limit=100');
+    const messagesBefore = (await retained()).items.length;
     const pending = page.waitForRequest(request => request.url().includes('/ui/scheduling/stage?'));
     await page.route(stagePath, holdStage, {times:1});
     const before = await sample(page);
     if (pt) await send.click(); else await add.click();
     await pending;
-    await review.getByRole('status').getByText(pt ? 'Preparando anexos…' : 'Preparing attachments…').waitFor();
+    await review.getByText(pt ? 'Preparando anexos…' : 'Preparing attachments…', {exact:true}).waitFor();
     assert(await send.isDisabled() && await add.isDisabled());
     assert.equal(await composer.inputValue(), original, 'staging does not edit the draft while waiting');
     if (!pt) {
@@ -138,6 +141,7 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
       const frames = await page.evaluate(() => window.attachmentFrames);
       for (const frame of frames) assert(frame.every((value,i) => Math.abs(value-before[i]) <= 1), JSON.stringify({frame,before}));
       assert.equal(await page.locator('[data-composer-attachments] a').count(), 0);
+      assert.equal((await retained()).items.length, messagesBefore);
       assert.deepEqual(requestPaths.splice(0), ['/ui/scheduling/stage']);
       if (expectTransportFailure) expectTransportFailure(true);
       try {
@@ -147,11 +151,11 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
         await page.route(stagePath, async route => {
           lostURL = route.request().url();
           const response = await route.fetch();
-          assert.equal(response.status(), 201);
+          assert.equal(response.status(), 200);
           await route.abort('failed');
         }, {times:1});
         await add.click();
-        await review.getByRole('status').getByText('Could not attach this file.').waitFor();
+        await review.getByText('Could not attach this file.', {exact:true}).waitFor();
         assert.equal(await caption.inputValue(), revised);
         assert.equal(await composer.inputValue(), original);
         const replayed = page.waitForResponse(response => response.url() === lostURL && response.ok());
@@ -164,16 +168,16 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
         await page.reload();
         await page.locator('[data-composer-attachments]').getByRole('link',{name:image.name}).waitFor();
         assert.equal(await composer.inputValue(), revised);
-        await page.locator('[data-remove-attachment]').click();
+        await page.locator('[data-composer-attachments] [data-remove-attachment]').click();
         await composer.fill('');
       } finally {
         if (expectTransportFailure) expectTransportFailure(false);
       }
     } else {
       await review.waitFor({state:'hidden'});
-      await until(async () => (await api('/api/v1/conversations/' + conversation.id + '/messages?limit=100')).items.some(message =>
+      await until(async () => (await retained()).items.some(message =>
         message.originalText.startsWith(revised) && message.sendState === 'submitted'), 'attachment with caption is sent through XMPP');
-      const sent = (await api('/api/v1/conversations/' + conversation.id + '/messages?limit=100')).items.filter(message => message.originalText.startsWith(revised));
+      const sent = (await retained()).items.filter(message => message.originalText.startsWith(revised));
       assert.equal(sent.length, 1);
       assert.equal(sent[0].attachments[0].fileName, image.name);
       assert.equal((await api('/api/v1/operations/' + operation)).resourceId, sent[0].id);

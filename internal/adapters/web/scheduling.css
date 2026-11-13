@@ -384,9 +384,20 @@
   overflow-wrap: anywhere;
 }
 .oie-attachment-review li button { flex: none; }
-.oie-attachment-review textarea { max-block-size: 25dvh; }
+.oie-attachment-review textarea { max-block-size: 25dvh; resize: vertical; }
+#oie-attachment-review .oie-attachment-keep {
+  min-block-size: 2.75rem;
+  padding-inline: .75rem;
+  border: 1px solid var(--oie-accent-text);
+  border-radius: 1rem;
+}
+.oie-attachment-review [data-attachment-cancel] { min-block-size: 2.75rem; }
 .oie-attachment-review [data-attachment-status] { min-block-size: 1.5rem; }
 .oie-attachment-review footer {
+  display: flex;
   justify-content: end;
   flex-wrap: wrap;
+}
+@media (max-width: 400px) {
+  .oie-attachment-review [data-attachment-send] { flex-basis: 100%; }
 }

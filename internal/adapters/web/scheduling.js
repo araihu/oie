@@ -361,7 +361,7 @@ window.OieRuntime.register('scheduling', life => {
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.textContent = '×';
-      remove.setAttribute('aria-label', reviewForm.dataset.removeAttachment + ' · ' + file.fileName);
+      remove.setAttribute('aria-label', reviewForm.dataset.removeLabel + ' · ' + file.fileName);
       remove.dataset.removeAttachment = file.id;
       item.append(fileLink(file, false), remove);
       attachments.append(item);
@@ -444,7 +444,7 @@ window.OieRuntime.register('scheduling', life => {
     for (const item of review.selected) {
       const row = template.content.firstElementChild.cloneNode(true);
       row.querySelector('span').textContent = item.name;
-      row.querySelector('button').setAttribute('aria-label', reviewForm.dataset.removeAttachment + ' · ' + item.name);
+      row.querySelector('button').setAttribute('aria-label', reviewForm.dataset.removeLabel + ' · ' + item.name);
       const img = row.querySelector('img');
       if (item.thumbnail) img.src = item.thumbnail;
       else img.remove();
