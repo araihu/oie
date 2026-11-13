@@ -246,11 +246,18 @@ jobs:
       - run: bash scripts/publish-desktop-release.sh "$OIE_RELEASE_VERSION" dist/release "$OIE_RELEASE_REVISION"
   publish-apt:
     if: ${{ !cancelled() && needs.publish.result == 'success' }}
-    needs: publish
+    needs: [tag, publish]
+    runs-on: ubuntu-24.04
     permissions:
-      contents: read
-      pages: write
-      id-token: write
-    uses: ./.github/workflows/publish-apt.yml
-    secrets:
-      OIE_APT_SIGNING_KEY: ${{ secrets.OIE_APT_SIGNING_KEY }}
+      actions: write
+    steps:
+      # Pages can keep serving an earlier deployment when a tag reuses its SHA.
+      # Dispatch on the default branch from CI to deploy outside the tag event.
+      - name: Start APT publication on the default branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_TAG: ${{ needs.tag.outputs.version }}
+        run: |
+          gh workflow run publish-apt.yml --repo "$GITHUB_REPOSITORY" --ref "$DEFAULT_BRANCH" \
+            --raw-field release_tag="$RELEASE_TAG" --raw-field desktop_run="$GITHUB_RUN_ID"

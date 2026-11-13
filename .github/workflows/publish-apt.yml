@@ -1,12 +1,15 @@
 name: Publish Arai Hû APT repository
+run-name: Publish Arai Hû APT repository${{ inputs.release_tag && format(' for {0}', inputs.release_tag) || '' }}${{ inputs.desktop_run && format(' (desktop run {0})', inputs.desktop_run) || '' }}
 
 on:
-  workflow_call:
-    secrets:
-      OIE_APT_SIGNING_KEY:
-        description: Signing subkey supplied by the apt-signing environment
-        required: true
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Desktop release tag that prompted the archive update
+        type: string
+      desktop_run:
+        description: Desktop release workflow run ID
+        type: string
 
 permissions:
   contents: read
@@ -17,9 +20,13 @@ concurrency:
 
 jobs:
   build:
-    if: github.repository == 'araihu/oie'
+    if: github.repository == 'araihu/oie' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-24.04
     environment: apt-signing
+    outputs:
+      index_sha256: ${{ steps.proof.outputs.index_sha256 }}
+      sources_sha256: ${{ steps.proof.outputs.sources_sha256 }}
+      version: ${{ steps.proof.outputs.version }}
     env:
       GH_TOKEN: ${{ github.token }}
       BOOTSTRAP_TAG: v0.0.1-rc.3
@@ -69,6 +76,20 @@ jobs:
           bash scripts/build-apt-repository.sh dist/pages "$keyring" "$(cat packaging/apt/fingerprint)"
       - name: Verify the package can be acquired by name
         run: bash tests/packaging/smoke_apt.sh dist/pages
+      - name: Record the signed archive checksums
+        id: proof
+        run: |
+          cd dist/pages/apt
+          echo "index_sha256=$(sha256sum dists/oie/InRelease | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "sources_sha256=$(sha256sum oie.sources | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          latest=
+          while read -r version; do
+            if [[ -z "$latest" ]] || dpkg --compare-versions "$version" gt "$latest"; then
+              latest=$version
+            fi
+          done < <(sed -n 's/^Version: //p' dists/oie/main/binary-amd64/Packages)
+          test -n "$latest"
+          echo "version=$latest" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist/pages
@@ -85,3 +106,13 @@ jobs:
     steps:
       - uses: actions/deploy-pages@v4
         id: publish
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify the public APT archive
+        env:
+          INDEX_SHA256: ${{ needs.build.outputs.index_sha256 }}
+          SOURCES_SHA256: ${{ needs.build.outputs.sources_sha256 }}
+          EXPECTED_VERSION: ${{ needs.build.outputs.version }}
+          ARCHIVE_URL: ${{ steps.publish.outputs.page_url }}apt/
+        run: bash tests/packaging/smoke_apt.sh "$ARCHIVE_URL" "$INDEX_SHA256" "$SOURCES_SHA256" "$EXPECTED_VERSION"

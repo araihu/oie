@@ -136,8 +136,10 @@ The public archive was verified with APT on fresh x86_64 installations of
 Trisquel 12 and Ubuntu 24.04 under emulation. Both installed `0.0.1~rc.3-1`,
 resolved the executable's shared libraries and ran `oie-desktop --help`.
 
-The desktop release workflow rebuilds and signs the APT index after publishing
-each SemVer desktop tag. GitHub Pages serves the three most recent indexed
+After publishing a SemVer desktop tag, the release workflow automatically starts
+the APT workflow on the default branch. That workflow signs the index, deploys
+it to GitHub Pages and verifies a download through the public APT source.
+GitHub Pages serves the three most recent indexed
 releases, ranked by SemVer. The first publication can bootstrap from a public
 release that provides the Linux binary and its corresponding source archive.
 The `apt-signing` environment provides `OIE_APT_SIGNING_KEY` with only the
