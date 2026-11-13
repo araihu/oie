@@ -54,3 +54,12 @@ error, as recorded in `/tmp/oie-video-reconcile-dagger-remote-proof.log`. Its
 client transport subsequently failed its health check, so that attempt does
 not provide a successful CLI completion. The preceding footer-removal Dagger
 run did exit successfully.
+
+## Opening a shared source
+
+The enhanced shared-item action starts with 16 messages around the source
+and keeps the existing older and newer paging controls. If the destination
+uses the mounted conversation scope, the response contains only the
+conversation panel. From the global catalog it uses the workspace route and
+reuses the parked inbox when its scope matches. Native links and ordinary
+conversation navigation use the existing timeline page size.
