@@ -297,6 +297,7 @@ type copy struct {
 	EmojiFlags                                                                                                                                                                                               string
 	RefreshPreview                                                                                                                                                                                           string
 	RefreshPreviewFailed                                                                                                                                                                                     string
+	SharedLoading                                                                                                                                                                                            string
 	SharedLoadingOlder                                                                                                                                                                                       string
 	SharedLoadFailed                                                                                                                                                                                         string
 	VideoPlay                                                                                                                                                                                                string
@@ -909,7 +910,8 @@ func (s *Server) loadAccountConnection(ctx context.Context, v *view, accountID s
 
 func (s *Server) loadInbox(ctx context.Context, v *view, editor engineapi.RequestEditorFn) bool {
 	limit := 100
-	params := &engineapi.ListConversationsParams{Limit: &limit}
+	includeCount := true
+	params := &engineapi.ListConversationsParams{Limit: &limit, IncludeLatestMessagePageCount: &includeCount}
 	archived := v.Section == "archived"
 	params.Archived = &archived
 	if v.AccountFilter != "" {

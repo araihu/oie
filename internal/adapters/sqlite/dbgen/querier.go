@@ -109,7 +109,7 @@ type Querier interface {
 	ListContactRecords(ctx context.Context, accountID string) ([]Contact, error)
 	ListContactSources(ctx context.Context, arg ListContactSourcesParams) ([]ListContactSourcesRow, error)
 	ListConversationMessageStars(ctx context.Context, arg ListConversationMessageStarsParams) ([]ListConversationMessageStarsRow, error)
-	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
+	ListConversations(ctx context.Context, arg ListConversationsParams) ([]ListConversationsRow, error)
 	ListMessageHistoryProofs(ctx context.Context, arg ListMessageHistoryProofsParams) ([]ListMessageHistoryProofsRow, error)
 	ListMessageHistorySources(ctx context.Context, arg ListMessageHistorySourcesParams) ([]ListMessageHistorySourcesRow, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)

@@ -221,6 +221,9 @@ func build13(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("query", "limit", &params.Limit); err != nil {
 		return nil, err
 	}
+	if err := input.Decode("query", "includeLatestMessagePageCount", &params.IncludeLatestMessagePageCount); err != nil {
+		return nil, err
+	}
 	if err := input.Decode("query", "accountId", &params.AccountId); err != nil {
 		return nil, err
 	}

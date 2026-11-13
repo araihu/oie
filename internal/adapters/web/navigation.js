@@ -3,7 +3,9 @@
  const runtime=window.OieRuntime;
  let booted=false,epoch=0,currentURL=location.href,infoReturnScroll=0,infoRequestGeneration=0,inboxScroll=0;
  let restoreFilterFocus=false,filterScroll=0;
- let pendingConversation, settling, historyRequest;
+ let pendingConversation, pendingShared, settling, historyRequest;
+ const sharedPageCounts=new Map();
+ let sharedCountEngine;
  const positions=new Map(),app=()=>document.getElementById('oie-app');
  const scrollIDs=['conversation-list','message-timeline','shared-content-scroll','details-body','accounts-body','account-detail-scroll','workspace'];
  const routeFields=['openDrawer','engineId','eventCursor','conversationId','accountId','focusMessage','contextNewer','contextMissing','mock'];
@@ -11,6 +13,30 @@
  const kinds=['oie-app','chat-info-content','conversation-pane','shared-content-scroll','shared-search-results','account-workspace','appearance-settings','scheduled-results','schedule-editor','message-timeline',inboxID];
  const chatQueryKeys=['message','timelineCursor','timelineDirection','chatSearch','chatQuery','chatIncludeHistory'];
  const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+ function pageCount(value){
+  return /^[0-9]{1,2}$/.test(value)&&Number(value)<=50?Number(value):undefined;
+ }
+ function visibleRows(viewport, container, item){
+  const style=getComputedStyle(viewport),gap=parseFloat(getComputedStyle(container).rowGap)||0;
+  const height=viewport.clientHeight-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom);
+  const row=item.getBoundingClientRect().height;
+  return row>0?Math.max(0,Math.floor((height+gap)/(row+gap))):0;
+ }
+ function renderPlaceholders(container, template, count, viewport=container){
+  container.replaceChildren();
+  if(count===0)return;
+  container.append(template.content.cloneNode(true));
+  const first=container.firstElementChild;
+  const conversation=container.hasAttribute('data-conversation-placeholders');
+  const columns=conversation?1:getComputedStyle(container).gridTemplateColumns.trim().split(/\s+/).length;
+  const visible=Math.min(count,visibleRows(viewport,container,first)*columns);
+  if(!visible){first.remove();return;}
+  for(let index=1;index<visible;index++){
+   const item=first.cloneNode(true);
+   if(conversation&&(index%5===1||index%5===4))item.classList.add('oie-chat-skeleton-outgoing');
+   container.append(item);
+  }
+ }
  function stopConversationLoading(){
   if(!pendingConversation)return;
   const {timer,pane,overlay,covered,focus}=pendingConversation;
@@ -19,6 +45,7 @@
   for(const node of covered??[])node.inert=false;
   const restoreFocus=focus?.isConnected&&(document.activeElement===document.body||overlay.contains(document.activeElement));
   overlay.hidden=true;
+  overlay.querySelector('[data-conversation-placeholders]').replaceChildren();
   if(overlay.parentElement!==pane)pane.append(overlay);
   if(restoreFocus)focus.focus({preventScroll:true});
  }
@@ -41,7 +68,13 @@
     pending.covered=[...chat.children].flatMap(node=>node===timeline?[timeline.firstElementChild]:[node]);
     for(const node of pending.covered)node.inert=true;
    }else if(covered){covered.inert=true;pending.covered=[covered];}
+   const params=new URL(ctx.request.action,location.href).searchParams;
+   const row=document.querySelector(`#conversation-list [data-conversation-row="${CSS.escape(ctx.oieChat)}"]`);
+   const estimate=params.get('message')||params.get('timelineCursor')?undefined:pageCount(row?.dataset.latestMessagePageCount);
    overlay.hidden=false;
+   const placeholders=overlay.querySelector('[data-conversation-placeholders]');
+   renderPlaceholders(placeholders,overlay.querySelector('[data-conversation-placeholder]'),estimate??5);
+   overlay.querySelector('[role=status]').classList.toggle('sr-only',placeholders.childElementCount>0);
    if(!timeline&&pending.focus)overlay.querySelector('[data-cancel-conversation-loading]').focus({preventScroll:true});
   },250);
  }
@@ -51,6 +84,54 @@
   epoch++;
   stopConversationLoading();
   ctx.request.abort();
+ }
+ function sharedPageKey(url){
+  const query=new URL(url,location.href).searchParams,engine=document.body.dataset.engineId;
+  if(engine!==sharedCountEngine){sharedPageCounts.clear();sharedCountEngine=engine;}
+  const type=query.get('contentType');
+  return JSON.stringify([engine,['links','documents'].includes(type)?type:'media',query.get('account')||'',
+   query.getAll('contentAccount').sort(),query.get('contentConversation')||'',
+   [...(query.get('q')||'')].slice(0,200).join(''),query.get('lang')||app()?.dataset.routeLocale]);
+ }
+ function rememberSharedPage(page){
+  if(page?.dataset.sharedPageState!=='ready'||page.dataset.sharedPageEngine!==document.body.dataset.engineId||page.dataset.sharedPageCursor)return;
+  const count=pageCount(page.dataset.sharedPageCount);
+  if(count===undefined)return;
+  const key=sharedPageKey(location.href);
+  sharedPageCounts.delete(key);
+  sharedPageCounts.set(key,count);
+  if(sharedPageCounts.size>50)sharedPageCounts.delete(sharedPageCounts.keys().next().value);
+ }
+ function stopSharedLoading(){
+  if(!pendingShared)return;
+  const {ctx,timer,scroll,overlay,covered}=pendingShared;
+  pendingShared=null;
+  clearTimeout(timer);
+  ctx.target.removeAttribute('aria-busy');
+  if(covered)scroll.inert=false;
+  if(overlay){overlay.hidden=true;overlay.querySelector('[data-shared-placeholders]').replaceChildren();}
+ }
+ function startSharedLoading(ctx){
+  const catalog=document.getElementById('shared-content-scroll');
+  const scroll=catalog||document.getElementById('workspace');
+  const overlay=document.querySelector(catalog?'[data-shared-skeleton]':'[data-shared-entry-skeleton]');
+  const pending={ctx,scroll,overlay};
+  pendingShared=pending;
+  const url=new URL(ctx.request.action,location.href),type=url.searchParams.get('contentType');
+  if(!scroll||!overlay||url.searchParams.get('contentCursor'))return;
+  pending.timer=setTimeout(()=>{
+   if(ctx.oieEpoch!==epoch||!overlay.isConnected)return;
+   if(ctx.oieSharedFields!==undefined&&sharedFields()!==ctx.oieSharedFields)return;
+   const focusInResults=scroll.contains(document.activeElement);
+   if(catalog&&focusInResults)return;
+   overlay.dataset.contentType=['links','documents'].includes(type)?type:'media';
+   overlay.hidden=false;
+   if(!scroll.inert&&!focusInResults){scroll.inert=true;pending.covered=true;}
+   const placeholders=overlay.querySelector('[data-shared-placeholders]');
+   renderPlaceholders(placeholders,overlay.querySelector('[data-shared-placeholder]'),
+    sharedPageCounts.get(sharedPageKey(url))??(overlay.dataset.contentType==='media'?6:3),overlay);
+   overlay.querySelector('[role=status]').classList.toggle('sr-only',placeholders.childElementCount>0);
+  },250);
  }
  function remember(){const state={};for(const id of scrollIDs){const node=document.getElementById(id);if(node){state[id]=node.scrollTop;if(id==='conversation-list'&&node.clientHeight>0)inboxScroll=node.scrollTop}}positions.set(currentURL,state);if(positions.size>100)positions.delete(positions.keys().next().value)}
  function routeState(pane){
@@ -302,13 +383,19 @@
  function closeMediaViewers(){for(const id of ['oie-image-viewer','oie-document-viewer']){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id}}));const dialog=document.getElementById(id);if(dialog?.open)dialog.close()}}
  function closeOverlays(){closeMediaViewers();for(const id of ['details','accounts','settings','about','newchat','join-room','create-room','sender','message-history'])window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id}}));}
  document.addEventListener('htmx:before:request',event=>{
-  const ctx=event.detail.ctx;if(ctx?.target?.id==='shared-search-results')document.getElementById('shared-content-scroll')?.removeAttribute('aria-busy');if(!ctx||!kinds.includes(ctx.target?.id))return;
+  const ctx=event.detail.ctx;if(!ctx||!kinds.includes(ctx.target?.id))return;
   const previousConversation=pendingConversation?.ctx;
   stopConversationLoading();
+  stopSharedLoading();
   ctx.oieEpoch=++epoch;ctx.oieKind=ctx.target.id;ctx.oieHistory=historyRequest!==undefined&&new URL(ctx.request.action,location.href).href===historyRequest;
   if(ctx.oieHistory)historyRequest=undefined;
   previousConversation?.request.abort();
-  if(['shared-content-scroll','shared-search-results'].includes(ctx.oieKind)){ctx.oieSharedFields=sharedFields();ctx.target.setAttribute('aria-busy','true')}ctx.oieStarGeneration=Number(document.body.dataset.starGeneration||0);
+  if(['shared-content-scroll','shared-search-results'].includes(ctx.oieKind)){
+   ctx.oieSharedFields=sharedFields();ctx.target.setAttribute('aria-busy','true');startSharedLoading(ctx);
+  }else if(ctx.oieKind==='oie-app'&&new URL(ctx.request.action,location.href).searchParams.get('section')==='media'){
+   startSharedLoading(ctx);
+  }
+  ctx.oieStarGeneration=Number(document.body.dataset.starGeneration||0);
   if(ctx.oieKind==='conversation-pane'){
    ctx.oieScope=ctx.target.dataset.conversationScope;
    const url=new URL(ctx.request.action,location.href);
@@ -325,6 +412,7 @@
  document.addEventListener('htmx:after:request',event=>{
   const ctx=event.detail.ctx;if(!ctx?.oieKind)return;if(ctx.oieEpoch!==epoch){event.preventDefault();return}
   if(pendingConversation?.ctx===ctx)clearTimeout(pendingConversation.timer);
+  if(pendingShared?.ctx===ctx)clearTimeout(pendingShared.timer);
   if(ctx.oieKind==='conversation-pane'){
    if(!conversationResponse(ctx)){event.preventDefault();showError(ctx);}
    return;
@@ -352,6 +440,7 @@
  });
  document.addEventListener('htmx:finally:request',event=>{
   if(pendingConversation?.ctx===event.detail.ctx)stopConversationLoading();
+  if(pendingShared?.ctx===event.detail.ctx)stopSharedLoading();
  });
  document.addEventListener('htmx:before:swap',event=>{
   const ctx=event.detail.ctx;if(!ctx?.oieKind)return;
@@ -404,6 +493,7 @@
    const type=page?.querySelector('#shared-content-results')?.dataset.contentType;
    if(type){const field=document.querySelector('#shared-content-search input[name=contentType]');if(field)field.value=type;for(const tab of document.querySelectorAll('#shared-search-results [data-shared-tab]'))tab.setAttribute('aria-current',String(tab.dataset.sharedTab===type));}
    const region=document.getElementById('shared-search-results'),fresh=page?.querySelector('#shared-search-results');if(region&&fresh)region.dataset.searchQuery=fresh.dataset.searchQuery||'';
+   rememberSharedPage(fresh?.querySelector('[data-shared-page]'));
    document.dispatchEvent(new CustomEvent('oie:shared-search-settled',{detail:{root:region,page}}));
    document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:page}));document.dispatchEvent(new CustomEvent('oie:stars-refresh',{detail:{page,generation:ctx.oieStarGeneration}}));upgrade(app());
   }
@@ -450,6 +540,7 @@
    const pane=root.id==='conversation-pane'?root:null;
    if(!pane)inboxScroll=0;
    routeState(pane);syncFilterLinks();upgrade(pane||app());
+   if(!pane)rememberSharedPage(root.querySelector('#shared-content-pagination [data-shared-page]'));
    // Alpine's HTMX hook flushes after settle. Initialize the new pane now
    // so the first scroll calculation already includes revealed previews.
    if(pane)window.Alpine?.initTree(pane);
@@ -522,7 +613,15 @@
  });
  document.addEventListener('oie:navigation-upgrade',()=>upgrade(app()));
  document.addEventListener('oie:shared-search-settled',()=>{currentURL=location.href;});
+ document.addEventListener('input',event=>{
+  if(event.target.id==='shared-search'&&pendingShared&&sharedFields()!==pendingShared.ctx.oieSharedFields)stopSharedLoading();
+ });
+ document.addEventListener('oie:shared-refresh',event=>{
+  const fresh=event.detail.querySelector('#live-shared-pagination [data-shared-page]');
+  const mounted=document.querySelector('#shared-content-pagination [data-shared-page]');
+  if(fresh&&fresh.dataset.sharedPageScope===mounted?.dataset.sharedPageScope)rememberSharedPage(fresh);
+ });
  reducedMotion.addEventListener('change',()=>upgrade(app()));
- async function ready(){await window.goshtosoDependencies?.ready;booted=true;routeState();syncFilterLinks();upgrade(app());runtime.start();}
+ async function ready(){await window.goshtosoDependencies?.ready;booted=true;routeState();rememberSharedPage(document.querySelector('#shared-content-pagination [data-shared-page]'));syncFilterLinks();upgrade(app());runtime.start();}
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ready,{once:true});else ready();
 })();

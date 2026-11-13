@@ -239,3 +239,41 @@ func TestCanonicalReferencesUseIndexedSourceLookups(t *testing.T) {
 		}
 	}
 }
+
+func TestConversationEstimateMatchesVisibleLatestPage(t *testing.T) {
+	_, e, chat := outboxFixture(t)
+	e.SetProtocols(&outboundProtocol{})
+	ctx := t.Context()
+	query := application.ConversationQuery{Limit: 10, IncludeLatestMessagePageCount: true}
+	assertCount := func(want int) {
+		t.Helper()
+		listed, err := e.Conversations(ctx, "", query)
+		if err != nil || len(listed) != 1 || listed[0].LatestMessagePageCount == nil || *listed[0].LatestMessagePageCount != want {
+			t.Fatalf("estimated page size, want %d: %+v, %v", want, listed, err)
+		}
+		messages, err := e.Messages(ctx, chat.ID, "", domain.LatestMessagePageSize)
+		if err != nil || min(len(messages), domain.LatestMessagePageSize) != want {
+			t.Fatalf("latest page has %d messages, want %d: %v", len(messages), want, err)
+		}
+	}
+	assertCount(0)
+	when := time.Now().UTC().Add(time.Hour)
+	if _, err := e.SendComposition(ctx, migrationID(), chat.ID, domain.OutgoingComposition{OriginalText: "hidden until sent"}, &when); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().UTC()
+	receiveCorrection(t, e, chat, "original", "First", "", "proof:bob", "bob", at)
+	receiveCorrection(t, e, chat, "edit", "Corrected", "original", "proof:bob", "bob", at)
+	assertCount(1)
+	for range domain.LatestMessagePageSize {
+		if _, err := e.SendMessage(ctx, migrationID(), chat.ID, "Visible now"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertCount(domain.LatestMessagePageSize)
+	query.IncludeLatestMessagePageCount = false
+	listed, err := e.Conversations(ctx, "", query)
+	if err != nil || len(listed) != 1 || listed[0].LatestMessagePageCount != nil {
+		t.Fatalf("estimate returned without an opt-in: %+v, %v", listed, err)
+	}
+}

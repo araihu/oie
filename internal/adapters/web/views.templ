@@ -165,7 +165,7 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 </div>
 }
 			<h1 class="sr-only">{v.Text.AppName}</h1>
-			@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: desktopNavigation(v), SidebarAttrs: templ.Attributes{"id": "desktop-navigation"}, Content: workspace(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
+			@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: desktopNavigation(v), SidebarAttrs: templ.Attributes{"id": "desktop-navigation"}, Content: workspaceWithLoading(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
 			@settings(v)
 			if v.CanResetData {
 				@resetDataDialog(v)
@@ -240,6 +240,13 @@ if v.AccountFilter!="" && connectionState(v,v.AccountFilter)!="not_connected" &&
 }
 </div>
 </div>
+}
+
+templ workspaceWithLoading(v view) {
+@workspace(v)
+if v.Section!="media" {
+@sharedSkeleton(v,true)
+}
 }
 
 templ workspace(v view) {
@@ -328,7 +335,11 @@ templ conversationRow(v view, c engineapi.Conversation) {
 	{{ attrs := navigationAttrs("conversation-pane", "conversation", "outerHTML settle:0ms show:none") }}
 	{{ attrs["data-conversation-id"] = c.Id }}
 	{{ attrs["aria-current"] = strconv.FormatBool(v.ChatID == c.Id) }}
-	<li data-conversation-row={c.Id} data-version={v.conversationRowVersion(c)}>
+	<li data-conversation-row={c.Id} data-version={v.conversationRowVersion(c)}
+		if c.Request == nil && c.LatestMessagePageCount != nil && *c.LatestMessagePageCount >= 0 && *c.LatestMessagePageCount <= timelinePageSize {
+			data-latest-message-page-count={strconv.Itoa(*c.LatestMessagePageCount)}
+		}
+	>
 		@link.Link(v.href("chat", c.Id,"message","","infoView","","infoType","","infoCursor","","infoQuery","","infoFocus","","lang",v.Locale,"theme",v.Theme), link.WithRootClass("oie-chat-link"), link.WithAttrs(attrs)) {
 			@profileAvatar(v,c.AccountId,c.Address,avatar.Config{Name: c.Title, Initials: chatInitials(c), Size: avatar.SizeSM, RootClass: "oie-chat-avatar"})
 			<div class="oie-row-content">

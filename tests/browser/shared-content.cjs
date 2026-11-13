@@ -41,12 +41,33 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const child=spawn(process.env.OIE_WEB_BINARY||path.resolve(__dirname,'../../bin/oie-shared-content-ui'),['--role','bff','--listen','127.0.0.1:'+port,'--engine-url','http://127.0.0.1:'+api.address().port],{stdio:['ignore','ignore','pipe']});let stderr='';child.stderr.on('data',chunk=>stderr+=chunk);
  const base='http://127.0.0.1:'+port,browser=await chromium.launch({headless:true}),errors=[],external=[],findings=[],preference='oie.device.auto-image-downloads.v1';
  const until=async(fn,label)=>{for(let n=0;n<240;n++){if(await fn())return;await new Promise(r=>setTimeout(r,50))}throw Error('Timed out: '+label+' '+stderr.slice(-1800))};const tile=(page,n)=>page.locator('[data-shared-item="'+items[n].id+'"]');
+ async function holdFirstPage(page,match){
+  let release;
+  const gate=new Promise(resolve=>release=resolve);
+  const handler=async route=>{await gate;await route.continue();};
+  await page.route(match,handler);
+  return {release,handler};
+ }
  const watch=async context=>{await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==base){external.push(route.request().url());route.abort()}else route.continue()});context.on('page',page=>page.on('pageerror',e=>errors.push(e.message)))};
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
   const context=await browser.newContext({viewport:{width:1440,height:1000},locale:'en',timezoneId:'America/Sao_Paulo'});await watch(context);await context.addInitScript(key=>{if(location.origin!=='null')localStorage.setItem(key,'false');window.copied=[];Object.defineProperty(navigator,'clipboard',{value:{writeText:async text=>copied.push(text)}})},preference);const page=await context.newPage(),accountRequests=[];let pageDocuments=0;page.on('request',request=>{const url=new URL(request.url());if(request.isNavigationRequest()&&request.resourceType()==='document')pageDocuments++;if(url.origin===base&&url.pathname==='/'&&url.searchParams.has('q'))accountRequests.push({q:url.searchParams.get('q'),account:url.searchParams.get('account'),cursor:url.searchParams.get('contentCursor')})});
   const chatURL=`${base}/?chat=${chatA}&account=${alpha}&lang=en&theme=dark`;await page.goto(chatURL);const draft='Draft survives gallery and source navigation 😀';await page.evaluate(value=>localStorage.setItem(['oie.draft.v1',document.body.dataset.engineId,document.body.dataset.accountId,document.body.dataset.conversationId].join(':'),JSON.stringify({text:value,key:'',pending:false})),draft);
-  const query=new URLSearchParams({section:'media',lang:'en',theme:'dark'});await page.goto(base+'/?'+query);assert.equal(await page.locator('#conversation-list').count(),0);assert.equal(await page.locator('#shared-content-search button[type=submit]').count(),0);assert.equal(await page.locator('[data-shared-item]').count(),50);assert(await page.locator('[data-shared-indexing]').isVisible());assert.equal(state.downloads.size,0);assert((await tile(page,2).locator('xpath=..').locator('xpath=..').locator('h3.oie-shared-month').textContent()).includes('October'));
+  const query=new URLSearchParams({section:'media',lang:'en',theme:'dark'});
+  const mediaEntry=url=>url.pathname==='/'&&url.searchParams.get('section')==='media'&&!url.searchParams.get('contentType');
+  const heldEntry=await holdFirstPage(page,mediaEntry);
+  await page.locator('#desktop-navigation').getByRole('link',{name:'Media & links',exact:true}).click();
+  const entrySkeleton=page.locator('[data-shared-entry-skeleton]');
+  try{
+   await entrySkeleton.waitFor({state:'visible'});
+   assert.equal(await entrySkeleton.getAttribute('data-content-type'),'media');
+   assert.equal(await entrySkeleton.locator('.oie-shared-placeholder').count(),6);
+   assert.deepEqual(await entrySkeleton.boundingBox(),await page.locator('.oie-main').boundingBox());
+   assert(await page.locator('#desktop-navigation').isVisible());
+  }finally{heldEntry.release();}
+  await page.locator('#shared-content-scroll').waitFor({state:'visible'});
+  await page.unroute(mediaEntry,heldEntry.handler);
+  await page.goto(base+'/?'+query);assert.equal(await page.locator('#conversation-list').count(),0);assert.equal(await page.locator('#shared-content-search button[type=submit]').count(),0);assert.equal(await page.locator('[data-shared-item]').count(),50);assert(await page.locator('[data-shared-indexing]').isVisible());assert.equal(state.downloads.size,0);assert((await tile(page,2).locator('xpath=..').locator('xpath=..').locator('h3.oie-shared-month').textContent()).includes('October'));
   await tile(page,2).evaluate(node=>{window.timeZoneBoundaryTile=node;});
   await page.locator('[data-navigation-settings]:visible').click();
   const settings=page.getByRole('dialog',{name:'Settings',exact:true});
@@ -69,6 +90,11 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const linksRoute=url=>url.pathname==='/'&&url.searchParams.get('contentType')==='links',holdLinks=async route=>{startedTab();await tabGate;await route.continue()};await page.route(linksRoute,holdLinks);
   await page.locator('[data-shared-tab=links]').click();await tabStarted;
   assert.equal(await page.locator('[data-shared-item]').count(),56);assert.equal(await page.locator('#shared-content-scroll').getAttribute('aria-busy'),'true');
+  const catalogSkeleton=page.locator('[data-shared-skeleton]');
+  await catalogSkeleton.waitFor({state:'visible'});
+  assert.equal(await catalogSkeleton.getAttribute('data-content-type'),'links');
+  assert.equal(await catalogSkeleton.locator('.oie-shared-placeholder').count(),3);
+  assert(await catalogSkeleton.locator('.oie-shared-placeholder').evaluateAll(cards=>cards.every(card=>card.getBoundingClientRect().x===cards[0].getBoundingClientRect().x)));
   assert.deepEqual(await page.locator('#shared-content-scroll').evaluate(node=>node.getBoundingClientRect().toJSON()),viewport.rect);assert.equal(await page.locator('#shared-content-scroll').evaluate(node=>node.scrollTop),viewport.scroll);
   releaseTab();
   await until(async()=>await page.locator('[data-shared-tab=links]').getAttribute('aria-current')==='true'&&await page.locator('[data-shared-item]').count()===3,'partial links settle');
@@ -77,6 +103,23 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await page.goBack();await until(async()=>await page.locator('[data-shared-item]').count()===56&&await page.locator('#shared-content-scroll').evaluate(node=>node.scrollTop)===viewport.scroll,'Back restores media window and scroll');
   await page.goForward();await until(async()=>await page.locator('[data-shared-tab=links]').getAttribute('aria-current')==='true'&&await page.locator('[data-shared-item]').count()===3,'Forward restores links');
   assert(await page.evaluate(()=>tabNodes.every(node=>node===document.getElementById(node.id))),'tab history replaced persistent shell nodes');
+  await catalogSkeleton.waitFor({state:'hidden'});
+  // A fresh first-page snapshot updates the hint even when a later page is cached.
+  const addedLink={...items[56],id:id(5000),url:'https://social.example.test/post/added',preview:undefined};
+  items.push(addedLink);emit();
+  await until(async()=>await page.locator('[data-shared-item]').count()===4,'link snapshot has a fourth card');
+  await page.locator('[data-shared-tab=media]').click();
+  await until(async()=>await page.locator('[data-shared-tab=media]').getAttribute('aria-current')==='true','media active before revisiting links');
+  const heldLinkResponse=await holdFirstPage(page,linksRoute);
+  await page.locator('[data-shared-tab=links]').click();
+  try{
+   await catalogSkeleton.waitFor({state:'visible'});
+   assert.equal(await catalogSkeleton.locator('.oie-shared-placeholder').count(),4,'uses the refreshed first-page count');
+  }finally{heldLinkResponse.release();}
+  await until(async()=>await page.locator('[data-shared-tab=links]').getAttribute('aria-current')==='true','links active again');
+  await page.unroute(linksRoute,heldLinkResponse.handler);
+  items.pop();emit();
+  await until(async()=>await page.locator('[data-shared-item]').count()===3,'link snapshot returns to three cards');
   await page.emulateMedia({reducedMotion:'reduce'});await until(async()=>(await page.locator('[data-shared-tab=media]').getAttribute('hx-swap')).includes('swap:0ms'),'reduced motion removes swap delay');assert.equal(await page.locator('#shared-content-scroll').evaluate(node=>getComputedStyle(node).transitionDuration),'0s');await page.emulateMedia({reducedMotion:'no-preference'});
   findings.push('Category tabs preserve shell/input/viewport DOM identity and dimensions during delayed requests, retain old cards until arrival, restore paginated media scroll with Back/Forward, align hidden form and active tab, and remove fade/delay for reduced motion');
   assert.equal(new URL(page.url()).searchParams.get('contentCursor'),null);await until(async()=>await page.locator('[data-shared-item]').count()===3,'links page ready');assert.equal(await page.locator('[data-shared-item]').count(),3);assert.equal(await page.locator('#shared-content-results script').count(),0);assert((await page.locator('#shared-content-results').textContent()).includes('Article <script>safe</script> café'));

@@ -14,16 +14,30 @@ SELECT created_at FROM conversation_revisions WHERE entity_id=? AND parents='[]'
 -- name: UpdateConversation :exec
 UPDATE conversations SET revision_id=?,payload=?,activity_sequence=?,unread_count=? WHERE id=?;
 -- name: ListConversations :many
-SELECT * FROM conversations
-WHERE activity_sequence < sqlc.arg(cursor)
-AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR account_id=CAST(sqlc.arg(account_id) AS TEXT))
-AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))
-AND archived=sqlc.arg(archived)
-AND (CAST(sqlc.arg(favorites_only) AS INTEGER)=0 OR favorite=1)
-AND (CAST(sqlc.arg(unread_only) AS INTEGER)=0 OR unread_count>0)
-AND (CAST(sqlc.arg(kind) AS TEXT)='' OR json_extract(payload,'$.Kind')=CAST(sqlc.arg(kind) AS TEXT))
-AND (CAST(sqlc.arg(query) AS TEXT)='' OR instr(lower(address || ' ' || json_extract(payload,'$.Title') || ' ' || CASE WHEN json_extract(payload,'$.Request') IS NULL THEN json_extract(payload,'$.LastMessage') ELSE '' END), lower(CAST(sqlc.arg(query) AS TEXT)))>0)
-ORDER BY activity_sequence DESC LIMIT sqlc.arg(page_limit);
+SELECT sqlc.embed(conversations), CAST(CASE
+    WHEN CAST(sqlc.arg(include_latest_message_page_count) AS INTEGER) = 0
+        OR json_extract(conversations.payload,'$.Request') IS NOT NULL THEN -1
+    ELSE (SELECT COUNT(*) FROM (
+        SELECT 1 FROM messages AS m WHERE m.conversation_id=conversations.id
+        AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
+        AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
+        ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC
+        LIMIT sqlc.arg(message_page_limit)
+    )) END AS INTEGER) AS latest_message_page_count
+FROM conversations
+JOIN (
+    SELECT c.id FROM conversations AS c
+    WHERE c.activity_sequence < sqlc.arg(cursor)
+    AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR c.account_id=CAST(sqlc.arg(account_id) AS TEXT))
+    AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR c.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))
+    AND c.archived=sqlc.arg(archived)
+    AND (CAST(sqlc.arg(favorites_only) AS INTEGER)=0 OR c.favorite=1)
+    AND (CAST(sqlc.arg(unread_only) AS INTEGER)=0 OR c.unread_count>0)
+    AND (CAST(sqlc.arg(kind) AS TEXT)='' OR json_extract(c.payload,'$.Kind')=CAST(sqlc.arg(kind) AS TEXT))
+    AND (CAST(sqlc.arg(query) AS TEXT)='' OR instr(lower(c.address || ' ' || json_extract(c.payload,'$.Title') || ' ' || CASE WHEN json_extract(c.payload,'$.Request') IS NULL THEN json_extract(c.payload,'$.LastMessage') ELSE '' END), lower(CAST(sqlc.arg(query) AS TEXT)))>0)
+    ORDER BY c.activity_sequence DESC LIMIT sqlc.arg(page_limit)
+) AS conversation_page ON conversation_page.id=conversations.id
+ORDER BY conversations.activity_sequence DESC;
 -- name: InsertMessage :exec
 INSERT INTO messages(id,revision_id,account_id,conversation_id,provider_id,is_own,state,payload,created_at_ms) VALUES(?,?,?,?,?,?,?,?,?);
 -- name: InsertMessageRevision :exec

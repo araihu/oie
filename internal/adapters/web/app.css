@@ -24,7 +24,7 @@ html.dark {
 html,body{margin:0;height:100%;font-family:var(--font-body);background:var(--oie-bg);color:var(--oie-text)}
 *{box-sizing:border-box} [x-cloak]{display:none!important}
 .oie-shell{height:100dvh;min-height:0;overflow:hidden;background:var(--oie-bg);color:var(--oie-text)}
-.oie-main{padding:0;overflow:hidden;background:var(--oie-panel)}
+.oie-main{position:relative;padding:0;overflow:hidden;background:var(--oie-panel)}
 .oie-sidebar{
  --oie-sidebar-min:184;--oie-sidebar-max:360;--oie-sidebar-viewport-share:28;
  display:block;width:var(--oie-sidebar-width,208px);
@@ -128,6 +128,7 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 .oie-media-card img{display:block;width:100%;height:auto;object-fit:cover}
 :is(.oie-composer,.oie-chat-skeleton-composer){--oie-composer-control-size:2.75rem;display:flex;align-items:flex-end;gap:9px;padding:11px 17px;background:var(--oie-panel);border-top:1px solid var(--oie-border);flex-shrink:0}
 .oie-chat-skeleton[hidden]{display:none}
+:is(.oie-chat-skeleton,.oie-shared-skeleton)>[role=status]:not(.sr-only){position:absolute;inset:0;display:grid;place-items:center;color:var(--oie-muted);font-size:13px;pointer-events:none}
 .oie-chat-skeleton{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;background:var(--oie-chat)}
 .oie-timeline-frame>.oie-chat-skeleton>:is(.oie-chat-skeleton-header,.oie-chat-skeleton-composer){display:none}
 .oie-chat-pane:has(.oie-timeline-frame>.oie-chat-skeleton:not([hidden]))>[data-jump-latest]{visibility:hidden}
@@ -139,7 +140,7 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 .oie-chat-skeleton-title [data-skeleton-item]+[data-skeleton-item]{margin-top:5px}
 .oie-chat-skeleton .oie-chat-skeleton-back{display:none}
 .oie-chat-skeleton-timeline{display:flex;flex-direction:column;justify-content:flex-end;gap:10px;overflow:hidden}
-.oie-chat-skeleton-message{width:min(54%,320px)}
+.oie-chat-skeleton-message{width:min(54%,320px);flex:none}
 .oie-chat-skeleton-message:nth-child(even){width:min(36%,220px)}
 .oie-chat-skeleton-message:nth-child(3){width:min(66%,390px)}
 .oie-chat-skeleton-message [data-skeleton-item]{height:46px;border-radius:12px}
@@ -433,6 +434,14 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-shared-header{display:flex;align-items:center;gap:12px;padding:20px 28px 10px;flex-shrink:0}.oie-shared-header h2{font-size:24px;font-weight:650;line-height:1.3;margin:0}
 .oie-shared-search{padding:8px 28px 14px}.oie-shared-toolbar{background:transparent;border:0;padding:0;align-items:flex-end}.oie-shared-search-region,.oie-shared-filter-region,.oie-shared-action-region{min-width:0}.oie-shared-account-filter{min-width:190px}
 .oie-shared-search-results{display:flex;flex:1;min-height:0;flex-direction:column;overflow:hidden}
+.oie-shared-results-frame{position:relative;display:flex;flex:1;min-height:0;flex-direction:column}
+.oie-shared-skeleton[hidden]{display:none}
+.oie-shared-skeleton{scrollbar-gutter:stable;position:absolute;inset:0;z-index:1;overflow:hidden;padding:0 28px 28px;background:var(--oie-bg)}
+.oie-shared-skeleton:not([data-content-type=media]) .oie-shared-grid{grid-template-columns:1fr}
+.oie-shared-placeholder [data-skeleton-item]{height:245px;border-radius:11px}
+.oie-shared-skeleton:not([data-content-type=media]) .oie-shared-placeholder [data-skeleton-item]{height:112px}
+.oie-shared-skeleton[data-shared-entry-skeleton]{padding-top:24px}
+@media(max-width:720px){.oie-shared-skeleton{padding-inline:12px;padding-bottom:22px}.oie-shared-placeholder [data-skeleton-item]{height:195px}}
 .oie-shared-segments{display:flex;align-self:center;gap:4px;padding:4px;background:var(--oie-raised);border-radius:12px;margin:0 20px 18px;flex-shrink:0}
 .oie-shared-segment{padding:9px 25px;border-radius:9px;font-size:13px;color:var(--oie-muted);text-decoration:none;font-weight:600}.oie-shared-segment:hover{color:var(--oie-text);text-decoration:none}.oie-shared-segment[aria-current=true]{background:var(--oie-panel);color:var(--oie-text);box-shadow:0 1px 3px #0002}
 .oie-shared-scroll{flex:1;min-height:0;overflow-y:auto;padding:0 28px 28px;scrollbar-width:thin;scrollbar-color:var(--oie-border) transparent}.oie-shared-scope{font-size:12px;margin:0 28px 12px;align-self:flex-start}

@@ -484,6 +484,18 @@ Provide searchable **Media, Files, and Links** views. Catalog shared URLs automa
 
 **AGREED:** the main Media and Links destination aggregates all conversations in the selected engine, with account filtering and Media, Links, and Documents tabs. The account filter uses a searchable single-selection combobox, matching account names and addresses and retaining an All accounts option. Entering from global search with multiple selected accounts carries the full selection into the catalog and uses the searchable checkbox combobox for that selection. Account selection follows the URL. Show date groups and the source of each item, and provide navigation to its original message. Opening an image keeps the viewer's previous/next navigation scoped to its conversation. Load older catalog items automatically near the end of the scroll area, both globally and in a conversation. Append them without a full-page navigation, preserving the active filters, visible position and video playback. Provide an explicit retry after a failed page load.
 
+**AGREED:** when opening Media and Links through in-app navigation or replacing
+its first results page, show a skeleton after 250 ms. On the catalog screen,
+cover the results area while keeping search and filter controls usable. Media
+uses the responsive card grid. Links and Documents use full-width rows. Use
+the item count from the last valid first-page response
+for the same engine, tab, account selection, conversation filter, and search.
+Refresh the estimate from the existing live snapshot for that scope. A new
+scope uses a small default that fits the viewport. A known empty page shows
+loading status without placeholder cards. Keep these estimates in bounded tab
+memory. Discard superseded responses and preserve the current scroll position
+when appending older items with the existing edge loading indicator.
+
 Provide WhatsApp-like rich link cards using structured engine metadata. Preview enrichment must not require a provider client in the browser.
 
 **AGREED:** link-card fallbacks prefer the available preview image. Without an image, use a compact card with page title, available description and the domain once. Use a cached site icon when available; otherwise use a local link icon. When metadata is unavailable, show a readable URL path and domain, preserving the full URL as the destination. Do not reserve an empty image column. Keep message cards compact and catalog cards full-width. Metadata failures leave the basic card usable; More options offers an explicit metadata refresh without changing the message.
@@ -627,6 +639,16 @@ Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screen
 **AGREED:** show a reaction shortcut beside the message bubble on hover and keyboard focus, on the right of received messages and the left of sent messages. The React action opens a compact row of common emojis beside the message. Choosing an emoji applies it immediately. The plus button opens the full searchable catalog above the row when space allows. Existing reactions use a compact capsule slightly overlapping the bubble's bottom border. Opening its summary and filtering by emoji are read-only actions. Clicking the capsule lists verified actors with name, cached avatar or initials and their emoji set. Emoji filters narrow that list. Own emoji actions remove only the current account's reaction. Show participant identities only when the API provides authoritative identity data. On touch devices, double-tapping a message opens the reaction selector; holding opens the existing message actions. Scrolling, canceled touches and navigation must cancel pending gestures without affecting the composer or sending a reaction. Preserve native links and playback controls. See [reaction interactions](reaction-interactions.md).
 
 **AGREED:** ordinary in-app navigation and filtering should use HTMX fragment swaps rather than full-document reloads. Changing an inbox filter updates only the filter controls and conversation list. Keep the open conversation, timeline position and draft even when the filtered list excludes that conversation. Selecting a different conversation within the same inbox replaces only the conversation region, preserving the navigation and conversation-list DOM, unfinished search input and list scroll. Show a conversation-shaped skeleton while a different conversation is loading. Skip the skeleton when the fragment arrives quickly and keep it static when reduced motion is enabled. Preserve addressable URLs, browser Back/Forward, account/conversation isolation, drafts and meaningful focus/scroll. Keep native links/forms as a fallback. Dispose obsolete listeners, timers and live subscriptions when a fragment replaces their owning screen; stale responses must not overwrite a newer screen or repeat a mutation. Keep the inbox free of history status banners and visible navigation progress text. Use a dismissible notification when a view fails to open.
+
+**AGREED:** the initial inbox and `/ui/refresh` include an optional first-page
+message count for each listed conversation with a visible timeline. The engine
+counts up to the 50 most recent visible canonical messages in the same bounded
+list query. Pending requests omit the count. SSE-triggered and periodic refreshes
+update the hint through the existing inbox response. When opening the latest
+page of a conversation, show at most the number of placeholder bubbles that fit
+in the timeline viewport. Use five as the fallback when the estimate is absent
+or the route requests historical context. A zero estimate shows the loading
+status without bubbles. The timeline response determines the actual content.
 
 Alpha is responsive: on phones, show one primary panel at a time with access to the other views. The screenshots do not require native window controls or add stories, calls, AI, communities, or recording features.
 

@@ -132,15 +132,24 @@ func (s *Store) Conversation(ctx context.Context, id domain.ID) (domain.Conversa
 	return decodeConversation(row)
 }
 func (s *Store) Conversations(ctx context.Context, in application.ConversationQuery) ([]domain.Conversation, error) {
-	rows, err := s.queries.ListConversations(ctx, dbgen.ListConversationsParams{Cursor: in.Cursor, AccountID: string(in.AccountID), AccountIds: jsonText(nonNilIDs(in.AccountIDs)), Archived: number(in.Archived), FavoritesOnly: number(in.FavoritesOnly), UnreadOnly: number(in.UnreadOnly), Kind: in.Kind, Query: in.Query, PageLimit: int64(in.Limit)})
+	rows, err := s.queries.ListConversations(ctx, dbgen.ListConversationsParams{
+		Cursor: in.Cursor, AccountID: string(in.AccountID), AccountIds: jsonText(nonNilIDs(in.AccountIDs)),
+		Archived: number(in.Archived), FavoritesOnly: number(in.FavoritesOnly), UnreadOnly: number(in.UnreadOnly),
+		Kind: in.Kind, Query: in.Query, PageLimit: int64(in.Limit),
+		IncludeLatestMessagePageCount: number(in.IncludeLatestMessagePageCount), MessagePageLimit: domain.LatestMessagePageSize,
+	})
 	if err != nil {
 		return nil, err
 	}
 	out := make([]domain.Conversation, 0, len(rows))
 	for _, row := range rows {
-		c, err := decodeConversation(row)
+		c, err := decodeConversation(row.Conversation)
 		if err != nil {
 			return nil, err
+		}
+		if row.LatestMessagePageCount >= 0 {
+			count := int(row.LatestMessagePageCount)
+			c.LatestMessagePageCount = &count
 		}
 		out = append(out, c)
 	}

@@ -6,6 +6,7 @@ import (
  "github.com/araihu/goshtoso/components/emptystate"
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/link"
+ "github.com/araihu/goshtoso/components/skeleton"
  "github.com/araihu/goshtoso/components/combobox"
  "github.com/araihu/goshtoso/components/textinput"
  "github.com/araihu/goshtoso/components/toolbar"
@@ -47,11 +48,23 @@ templ sharedSearchResults(v view){
 if v.SharedConversation!="" {
 @link.Link(v.sharedHref("contentConversation","","contentCursor",""),link.WithRootClass("oie-shared-scope")){ {v.Text.SharedAllChats} }
 }
+<div class="oie-shared-results-frame">
 <div id="shared-content-scroll" class="oie-shared-scroll" tabindex="0" aria-label={v.Text.SharedMedia}>
 <div id="shared-content-status" role="status">@sharedStatus(v)</div>
 <div id="shared-content-results" data-version={v.sharedVersion()} data-content-type={v.SharedType}>@sharedItems(v)</div>
 <div id="shared-content-pagination">@sharedPagination(v)</div>
 </div>
+@sharedSkeleton(v,false)
+</div>
+</div>
+}
+templ sharedSkeleton(v view,entry bool){
+<div class="oie-shared-skeleton" data-shared-skeleton?={!entry} data-shared-entry-skeleton?={entry} hidden>
+ <div class="sr-only" role="status">{v.Text.SharedLoading}</div>
+ <div class="oie-shared-grid" data-shared-placeholders aria-hidden="true"></div>
+ <template data-shared-placeholder>
+  @skeleton.Skeleton(skeleton.Config{Shape:skeleton.ShapeRectangle,RootClass:"oie-shared-placeholder"})
+ </template>
 </div>
 }
 templ sharedSearch(v view){

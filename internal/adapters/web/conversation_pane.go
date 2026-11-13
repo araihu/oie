@@ -25,6 +25,7 @@ func (v view) conversationListVersion() string {
 
 // Enhancement changes local times and avatars, so compare server row data.
 func (v view) conversationRowVersion(c engineapi.Conversation) string {
+	c.LatestMessagePageCount = nil
 	data, _ := json.Marshal([]any{c, v.Accounts, v.Locale})
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:])

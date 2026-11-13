@@ -449,6 +449,7 @@
   "VideoReady": "Reproduza este vídeo.",
   "VideoUnavailable": "Não foi possível carregar o vídeo. Verifique sua conexão e tente novamente.",
   "VideoUnsupported": "Este vídeo não pode ser reproduzido neste navegador.",
+  "SharedLoading": "Carregando itens…",
   "SharedLoadingOlder": "Carregando itens anteriores…",
   "SharedLoadFailed": "Não foi possível carregar os itens anteriores. Tente novamente.",
   "DocumentOpen": "Abrir documento",

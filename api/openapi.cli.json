@@ -2616,6 +2616,15 @@
             }
           },
           {
+            "name": "includeLatestMessagePageCount",
+            "in": "query",
+            "description": "Include a bounded estimate of the latest visible message page for each listed conversation.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
             "name": "accountId",
             "in": "query",
             "required": false,
@@ -7117,6 +7126,12 @@
             "type": "string",
             "format": "date-time",
             "description": "UTC timestamp."
+          },
+          "latestMessagePageCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 50,
+            "description": "Snapshot count of canonical messages visible in the latest 50-message timeline page. Included only when requested on the conversation list and a timeline is visible."
           },
           "unreadCount": {
             "type": "integer",

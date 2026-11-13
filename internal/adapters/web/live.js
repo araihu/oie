@@ -702,6 +702,9 @@ window.OieRuntime.register('live', life => {
         const id=next.dataset.conversationRow;if(!id)continue;wanted.add(id);let row=known.get(id);
         if(!row){row=next.cloneNode(true);mutateDOMNode(()=>{existing.append(row);window.Alpine?.initTree(row)})}
         else if(row.dataset.version!==next.dataset.version){mutateDOM(row,next.innerHTML);row.dataset.version=next.dataset.version}
+        const count=next.getAttribute('data-latest-message-page-count');
+        if(count===null)row.removeAttribute('data-latest-message-page-count');
+        else row.dataset.latestMessagePageCount=count;
         // Appending an unchanged node moves it without replacing its identity.
         if(existing.children[wanted.size-1]!==row)mutateDOMNode(()=>existing.insertBefore(row,existing.children[wanted.size-1]||null));
       }
