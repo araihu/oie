@@ -60,3 +60,9 @@ Unicode 17.0 and CLDR 48 data under Unicode-3.0. Copyright © 1991-2025 Unicode,
 Inc. The license is included at `internal/adapters/web/emoji/LICENSE.txt` and
 served at `/ui/emoji/LICENSE.txt`. Regenerate the validation base table with
 `python3 tools/generate-reaction-emoji-bases.py`.
+
+## Generated command-line client
+
+The runtime and templates copied into `oiectl` by `araihu/oapi-cli-gen`
+are available under MIT. The standalone CLI module carries the license in
+[`cli/internal/cliruntime/LICENSE`](cli/internal/cliruntime/LICENSE).
