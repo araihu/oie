@@ -52,7 +52,10 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});
   for(const width of [390,1440])for(const theme of ['goshtoso','minimal'])for(const mode of ['light','dark'])for(const locale of ['en','pt-BR']){
    state.mode='complete';const p=await browser.newPage({viewport:{width,height:1000},locale,timezoneId:'America/Sao_Paulo',hasTouch:width===390});p.on('pageerror',e=>errors.push(e.message));const q=new URLSearchParams(detailParams);q.set('accountPage','capabilities');q.set('lang',locale);q.set('theme',mode);await p.goto(base+'/?'+q);await until(async()=>await p.locator('[data-account-capabilities-title]').evaluate(el=>document.activeElement===el),'localized heading focus');await p.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
-   assert.equal(await p.locator('[data-account-capabilities-title]').textContent(),locale==='en'?'Capabilities':'Recursos');assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const table=p.locator('#account-capabilities-table');const box=await table.boundingBox();assert(box.width>0);assert.equal(await p.locator('[data-capability-id]').count(),23);
+   const table=p.locator('#account-capabilities-table');
+   await table.waitFor({state:'visible'});
+   assert.equal(await p.locator('[data-account-capabilities-title]').textContent(),locale==='en'?'Capabilities':'Recursos');assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+   const box=await table.boundingBox();assert(box&&box.width>0,'The capabilities table has no layout box');assert.equal(await p.locator('[data-capability-id]').count(),23);
    await p.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],`${width} ${theme} ${mode} ${locale}`);
    if(theme==='goshtoso')await p.screenshot({path:path.join(artifacts,`capabilities-${width}-${mode}-${locale}.png`)});findings.push({width,theme,mode,locale,axe:0});await p.close();
   }
