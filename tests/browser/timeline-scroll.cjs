@@ -75,7 +75,78 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
   await pageOnce(page,'older');bounds=await pageOnce(page,'older');assert.equal(bounds.count,200);const protectedIDs=bounds.ids;await boundary(page,'older');await until(async()=>await edge(page,'older').getAttribute('data-state')==='paused','active video protects capped edge');assert.deepEqual((await snapshot(page)).ids,protectedIDs);assert(await native.evaluate(video=>video===window.timelineVideo&&!video.paused));await native.evaluate(video=>video.pause());await edge(page,'older').locator('[data-timeline-load="older"]').click();await until(async()=>await rows(page).first().getAttribute('data-message-id')!==protectedIDs[0],'resume after protected media pauses');bounds=await snapshot(page);assert.equal(bounds.min,2750);assert.equal(bounds.max,2949);assert(await page.evaluate(()=>!window.timelineVideo.isConnected&&window.timelineVideo.paused&&window.timelineVideo.getAttribute('src')===null));
   for(let n=0;n<3;n++)bounds=await pageOnce(page,'older');assert.equal(bounds.min,2600);assert.equal(bounds.count,200);for(let n=0;n<4;n++)bounds=await pageOnce(page,'newer');assert.equal(bounds.max,2999);assert.equal(bounds.count,200);assert.equal(await page.locator('#message-composer').inputValue(),draft);assert.equal(app.documents(),1);assert.equal(await page.evaluate(()=>window.timelineToken),app.token);findings.push('Exact50-row pages prepend/append around a stable viewport and focus; tied subsecond timestamps retain chronological order;200-row cap reloads evicted edges without holes and protects active native video until explicit pause');
   await pageOnce(page,'older');bounds=await pageOnce(page,'older');const visible=bounds.min+100;await page.locator(`[data-message-id="${messageAt(visible).id}"]`).evaluate(row=>row.scrollIntoView({block:'center'}));await page.locator('#message-composer').evaluate(input=>input.focus({preventScroll:true}));const pinned=await anchor(page),beforeLive=bounds.ids;state.edits.set(messageAt(visible).id,{revisionId:id(9000002),originalText:'Corrected retained body 😀',edited:true,editedAt:new Date(baseTime+900).toISOString()});state.starred.add(messageAt(visible).id);state.externalReplyOwner=visible;const live={...messageAt(2999),id:id(9000010),revisionId:id(9000011),originalText:'Disconnected latest must stay outside the historical window',createdAt:new Date(baseTime+900).toISOString()};positions.set(live.id,messages.length);messages.push(live);emit();await until(async()=>await page.locator(`[data-message-id="${messageAt(visible).id}"] [data-rendered-message]`).textContent()==='Corrected retained body 😀','visible retained correction');assert.deepEqual((await snapshot(page)).ids,beforeLive);assert.equal(await page.locator(`[data-message-id="${live.id}"]`).count(),0);assert(await page.locator(`[data-message-id="${messageAt(visible).id}"] [data-message-star-indicator]`).isVisible());assert.equal(await page.locator('#message-composer').inputValue(),draft);assert(await page.locator('#message-composer').evaluate(input=>document.activeElement===input));await until(async()=>Math.abs((await page.locator(`[data-message-id="${pinned.id}"]`).boundingBox()).y-pinned.y)<3,'historical SSE anchor');
-  assert.equal(await page.locator(`[data-message-id="${messageAt(visible).id}"] [data-reply-target]`).count(),1);state.externalReplyOwner=messages.length-1;assert(await page.locator('[data-jump-latest]').isVisible());await page.locator('[data-jump-latest]').click();await until(async()=>await rows(page).count()===50&&await rows(page).last().getAttribute('data-message-id')===live.id,'natural historical window Jump to latest fetches current tail');for(const key of ['message','timelineCursor','timelineDirection'])assert.equal(new URL(page.url()).searchParams.get(key),null);assert.equal(await page.locator('#message-composer').inputValue(),draft);assert.equal(app.documents(),1);const target=messageAt(1500),source=page.locator(`[data-message-id="${live.id}"] [data-reply-target]`);await source.click();await until(async()=>new URL(page.url()).searchParams.get('message')===target.id&&await rows(page).count()===50,'reply opens bounded context');bounds=await snapshot(page);assert.equal(bounds.min,1476);assert.equal(bounds.max,1525);assert(await page.locator(`[data-message-id="${target.id}"]`).evaluate(row=>document.activeElement===row));const contextPosition=await anchor(page);state.imageReady=true;emit('message.preview_changed');await until(async()=>await page.locator(`[data-message-id="${messageAt(imageIndex).id}"] img.oie-preview-thumbnail`).evaluate(image=>image.complete&&image.naturalWidth===1),'late retained image height');await until(async()=>Math.abs((await page.locator(`[data-message-id="${contextPosition.id}"]`).boundingBox()).y-contextPosition.y)<3,'media height preserves context anchor');assert.equal(await page.locator('#message-composer').inputValue(),draft);await pageOnce(page,'older');await pageOnce(page,'newer');assert.equal(new URL(page.url()).searchParams.get('message'),target.id);assert(await page.locator('[data-jump-latest]').isVisible());await page.locator('[data-jump-latest]').click();await until(async()=>!new URL(page.url()).searchParams.has('message')&&await rows(page).count()===50&&await rows(page).last().getAttribute('data-message-id')===live.id,'Jump to latest bounded reset');assert.equal(await page.locator('#message-composer').inputValue(),draft);assert.equal(app.documents(),1);findings.push('Historical SSE refresh stays within retained window, applies canonical correction/star/reply metadata, and does not splice a disconnected latest batch; natural historical Jump to latest fetches the current tail; reply context pages both directions and late image layout preserves position; Jump to latest resets to50 rows');await context.close();
+  assert.equal(await page.locator(`[data-message-id="${messageAt(visible).id}"] [data-reply-target]`).count(),1);
+  state.externalReplyOwner=messages.length-1;
+  const jump=page.locator('[data-jump-latest]');
+  await jump.waitFor({state:'visible'});
+  await timeline(page).evaluate(root=>{
+   root.scrollTop=300;
+   root.dispatchEvent(new Event('scroll'));
+   window.jumpNodes=[root,document.getElementById('conversation-pane'),document.getElementById('message-composer')];
+  });
+  const historicalURL=page.url(),historicalHistory=await page.evaluate(()=>history.length);
+  const jumpRoute=request=>['timeline','conversation'].includes(request.headers()['x-oie-fragment']);
+  const rejectJump=async route=>{
+   if(jumpRoute(route.request()))await route.fulfill({status:503,body:'Unavailable'});
+   else await route.continue();
+  };
+  await page.route(historicalURL,rejectJump);
+  await jump.click();
+  await page.locator('[data-toast-container]').getByText('Could not open this view. Try again.',{exact:true}).waitFor();
+  assert.deepEqual((await snapshot(page)).ids,beforeLive);
+  assert.equal(await timeline(page).evaluate(root=>root.scrollTop),300,'failed jump preserves the reading position');
+  await page.unroute(historicalURL,rejectJump);
+  let releaseJump,jumpRequest;
+  const jumpGate=new Promise(resolve=>{releaseJump=resolve;});
+  await page.route(historicalURL,async route=>{
+   if(jumpRoute(route.request())){
+    jumpRequest=route.request();
+    await jumpGate;
+   }
+   await route.continue();
+  });
+  await page.evaluate(tail=>{
+   const frames=[];
+   function sample(){
+    const root=document.getElementById('message-timeline'),last=[...root.querySelectorAll(':scope > [data-message-id]')].at(-1);
+    const rect=node=>{const {x,y,width,height}=node.getBoundingClientRect();return [x,y,width,height]};
+    frames.push({latest:last?.dataset.messageId===tail,scroll:root.scrollTop,end:root.scrollHeight-root.clientHeight,timeline:rect(root),composer:rect(document.getElementById('message-composer'))});
+    window.jumpFrame=requestAnimationFrame(sample);
+   }
+   window.jumpFrames=frames;sample();
+  },live.id);
+  try{
+   await jump.click();
+   await until(()=>jumpRequest,'latest request held');
+   assert.equal(await timeline(page).evaluate(root=>root.scrollTop),300,'pending jump preserves the reading position');
+  }finally{releaseJump();}
+  await until(async()=>await rows(page).count()===50&&await rows(page).last().getAttribute('data-message-id')===live.id,'natural historical window Jump to latest fetches current tail');
+  await until(()=>timeline(page).evaluate(root=>Math.abs(root.scrollHeight-root.scrollTop-root.clientHeight)<=1),'same-URL historical jump reaches the bottom of the latest page');
+  await jump.waitFor({state:'hidden'});
+  const frames=await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>{cancelAnimationFrame(window.jumpFrame);resolve(window.jumpFrames)})));
+  assert(frames.some(frame=>frame.latest),'sampled the latest page');
+  for(const frame of frames){
+   assert(Math.abs(frame.scroll-(frame.latest?frame.end:300))<=1,JSON.stringify(frame));
+   for(const region of ['timeline','composer'])assert(frame[region].every((value,index)=>Math.abs(value-frames[0][region][index])<=1),JSON.stringify(frame));
+  }
+  assert.equal(jumpRequest.headers()['x-oie-fragment'],'timeline','historical jump uses the timeline fragment');
+  assert(await page.evaluate(()=>window.jumpNodes.every(node=>node===document.getElementById(node.id))));
+  assert.equal(page.url(),historicalURL);
+  assert.equal(await page.evaluate(()=>history.length),historicalHistory);
+  await page.unroute(historicalURL);
+  assert.equal(await page.locator('#message-composer').inputValue(),draft);
+  assert.equal(app.documents(),1);
+  const target=messageAt(1500),source=page.locator(`[data-message-id="${live.id}"] [data-reply-target]`);await source.click();await until(async()=>new URL(page.url()).searchParams.get('message')===target.id&&await rows(page).count()===50,'reply opens bounded context');bounds=await snapshot(page);assert.equal(bounds.min,1476);assert.equal(bounds.max,1525);assert(await page.locator(`[data-message-id="${target.id}"]`).evaluate(row=>document.activeElement===row));const contextPosition=await anchor(page);state.imageReady=true;emit('message.preview_changed');await until(async()=>await page.locator(`[data-message-id="${messageAt(imageIndex).id}"] img.oie-preview-thumbnail`).evaluate(image=>image.complete&&image.naturalWidth===1),'late retained image height');await until(async()=>Math.abs((await page.locator(`[data-message-id="${contextPosition.id}"]`).boundingBox()).y-contextPosition.y)<3,'media height preserves context anchor');assert.equal(await page.locator('#message-composer').inputValue(),draft);await pageOnce(page,'older');await pageOnce(page,'newer');assert.equal(new URL(page.url()).searchParams.get('message'),target.id);assert(await page.locator('[data-jump-latest]').isVisible());await page.locator('[data-jump-latest]').click();await until(async()=>!new URL(page.url()).searchParams.has('message')&&await rows(page).count()===50&&await rows(page).last().getAttribute('data-message-id')===live.id,'Jump to latest bounded reset');assert.equal(await page.locator('#message-composer').inputValue(),draft);assert.equal(app.documents(),1);findings.push('Historical SSE refresh stays within retained window, applies canonical correction/star/reply metadata, and does not splice a disconnected latest batch; natural historical Jump to latest fetches the current tail; reply context pages both directions and late image layout preserves position; Jump to latest resets to50 rows');await context.close();
+  app=await open({}, {width:390,locale:'pt-BR',touch:true});({page,context}=app);
+  for(let n=0;n<4;n++)await pageOnce(page,'older');
+  const mobileJump=page.getByRole('button',{name:'Ir para as mais recentes',exact:true});
+  await mobileJump.waitFor();
+  await timeline(page).evaluate(root=>{root.scrollTop=300;root.dispatchEvent(new Event('scroll'))});
+  await mobileJump.tap();
+  await until(async()=>await rows(page).count()===50&&await rows(page).last().getAttribute('data-message-id')===live.id&&
+   await timeline(page).evaluate(root=>Math.abs(root.scrollHeight-root.scrollTop-root.clientHeight)<=1),'mobile historical jump reaches the last message and the bottom');
+  await mobileJump.waitFor({state:'hidden'});
+  await context.close();
   for(const mode of ['failure','foreign','duplicate','nonadvancing','unordered','empty']){state.mode='normal';app=await open();({page,context}=app);const original=await snapshot(page),cursor=original.ids[0];state.mode=mode;await boundary(page,'older');await until(async()=>await edge(page,'older').getAttribute('data-state')==='failed','explicit '+mode+' retry');assert.deepEqual((await snapshot(page)).ids,original.ids);const failed=state.reads.filter(read=>read.chat===chat&&read.cursor===cursor&&read.direction==='older').length;for(let n=0;n<3;n++)await boundary(page,'older');emit();await sleep(300);assert.equal(state.reads.filter(read=>read.chat===chat&&read.cursor===cursor&&read.direction==='older').length,failed,'automatic failed cursor loop '+mode);state.mode='normal';await edge(page,'older').locator('[data-timeline-load="older"]').click();await until(async()=>await rows(page).count()===100,'manual retry '+mode);await snapshot(page);assert.equal(state.reads.filter(read=>read.chat===chat&&read.cursor===cursor&&read.direction==='older').length,failed+1);await context.close()}
   for(const focused of [false,true]){
    state.mode='normal';state.aliases.clear();app=await open({message:messageAt(1024).id});({page,context}=app);await sleep(250);

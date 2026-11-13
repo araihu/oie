@@ -604,8 +604,11 @@ window.OieRuntime.register('live', life => {
   },true);
   life.on(document,'click',event=>{
     if(event.target.closest('[data-jump-latest]')){
-      if(pinned()||new URLSearchParams(location.search).has('message')||new URLSearchParams(location.search).has('timelineCursor')){const url=new URL(location.href);url.searchParams.delete('message');url.searchParams.delete('timelineCursor');url.searchParams.delete('timelineDirection');window.OieNavigation.go(url);}
-      else scrollLatest();
+      const url=new URL(location.href);
+      if(pinned()||url.searchParams.has('message')||url.searchParams.has('timelineCursor')){
+        for(const key of ['message','timelineCursor','timelineDirection'])url.searchParams.delete(key);
+        window.OieNavigation.go(url,{latest:true});
+      }else scrollLatest();
     }
   });
   life.on(document.querySelector('#message-timeline'),'scroll',()=>{if(nearBottom(document.querySelector('#message-timeline')))showJump(pinned());});
@@ -769,7 +772,7 @@ window.OieRuntime.register('live', life => {
           const focus=pane.querySelector('[data-conversation-request-panel]')?.contains(document.activeElement);
           const route=location.pathname+location.search;
           if(!window.OieNavigation){location.reload();return;}
-          await window.OieNavigation.go(route,true);
+          await window.OieNavigation.go(route,{history:true});
           if(focus)document.querySelector('#conversation-request-title,#message-composer')?.focus({preventScroll:true});
           return;
         }

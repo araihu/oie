@@ -138,11 +138,12 @@
  function sharedRoute(url, ignored=[]) {
   return !!document.getElementById('shared-content-scroll')&&sameRoute(url,['contentType','contentCursor',...ignored]);
  }
- function scopedKind(url, node) {
+ function scopedKind(url, node, latest=false) {
   const params=url.searchParams,current=new URL(currentURL).searchParams;
   const pane=document.getElementById('conversation-pane');
   const chat=params.get('chat')||(!node&&!current.has('chat')?pane?.dataset.conversationId:'');
   const sameChat=!!pane?.dataset.conversationId&&chat===pane.dataset.conversationId&&!params.has('inbox');
+  if(latest&&sameChat&&document.getElementById('message-timeline'))return 'message-timeline';
   const localInfo=node?.closest('#chat-info-content');
   const detailsHistory=!node&&(params.get('open')==='details'||current.get('open')==='details')&&sameRoute(url,['open','infoView','infoType','infoQuery','infoCursor','infoFocus','chat']);
   if(sameChat&&(params.get('open')==='details'&&localInfo||detailsHistory))return 'chat-info-content';
@@ -465,15 +466,15 @@
   }
  });
  document.addEventListener('htmx:error',event=>{const ctx=event.detail.ctx;if(ctx?.oieKind&&ctx.oieEpoch===epoch){ctx.target?.removeAttribute('aria-busy');showError(ctx)}});
- function go(value,history=false){
+ function go(value,{history=false,latest=false}={}){
   const url=new URL(value,location.href);if(url.origin!==location.origin||!['/','/search'].includes(url.pathname)||!window.htmx){location.assign(url.href);return}
   const filterChanged=(url.searchParams.get('filter')||'all')!==(new URL(currentURL).searchParams.get('filter')||'all');
   const themeChanged=history&&sameRoute(url,['theme','open'])&&url.searchParams.get('theme')!==document.documentElement.dataset.mode&&url.searchParams.has('theme');
-  const kind=(themeChanged?'appearance-settings':scopedKind(url))||(filterChanged&&inboxRoute(url)?inboxID:conversationRoute(url)?'conversation-pane':'oie-app');
+  const kind=(themeChanged?'appearance-settings':scopedKind(url,null,latest))||(filterChanged&&inboxRoute(url)?inboxID:conversationRoute(url)?'conversation-pane':'oie-app');
   const requestURL=kind===inboxID?inboxURL(url):new URL(url);
-  if(kind==='chat-info-content'&&!requestURL.searchParams.has('chat'))requestURL.searchParams.set('chat',document.body.dataset.conversationId);
+  if(['chat-info-content','message-timeline'].includes(kind)&&!requestURL.searchParams.has('chat'))requestURL.searchParams.set('chat',document.body.dataset.conversationId);
   if(history)historyRequest=requestURL.href;
-  return window.htmx.ajax('GET',requestURL.pathname+requestURL.search,{source:app(),target:document.getElementById(kind),swap:swapFor(kind),select:selectFor(kind),push:history?'false':url.pathname+url.search,headers:{'X-Oie-Fragment':fragment(kind),...(history?{'HX-History-Restore-Request':'true'}:{})}});
+  return window.htmx.ajax('GET',requestURL.pathname+requestURL.search,{source:app(),target:document.getElementById(kind),swap:swapFor(kind),select:selectFor(kind),push:history||latest&&url.href===currentURL?'false':url.pathname+url.search,headers:{'X-Oie-Fragment':fragment(kind),...(history?{'HX-History-Restore-Request':'true'}:{})}});
  }
  // Turn an implicitly selected desktop conversation into an addressable one
  // before a command can remove its row from the current list. This is the same
@@ -491,7 +492,7 @@
   if(root)for(const row of root.querySelectorAll('#conversation-list a[data-conversation-id]'))row.setAttribute('aria-current',String(row.dataset.conversationId===id));
   return true;
  }
- document.addEventListener('htmx:before:history:restore',event=>{event.preventDefault();go(event.detail.path,true);});
+ document.addEventListener('htmx:before:history:restore',event=>{event.preventDefault();go(event.detail.path,{history:true});});
  function addressSearch(url,push=false){remember();history[push?'pushState':'replaceState'](history.state,'',url.pathname+url.search+url.hash);currentURL=location.href;syncFilterLinks();}
  window.OieNavigation={go,pinConversation,addressSearch,showError};
  runtime.register('settings-comboboxes',life=>{

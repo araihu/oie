@@ -18,6 +18,8 @@ Pagination belongs to the conversation region, keeping the composer and conversa
 
 Live snapshots must preserve the loaded window. A historical window cannot receive a disconnected latest page across an unloaded gap. Visible revisions and metadata can refresh through bounded reads of the existing interval. New arrivals follow the bottom only at a contiguous live edge; otherwise the shortcut takes the user to a fresh latest page.
 
+Jump to latest replaces the timeline contents and positions the viewport at the bottom before paint, including when older paging left the conversation URL unchanged. Browser Back and Forward continue to restore saved reading positions.
+
 The selected Goshtoso `scrollregion.ScrollRegion` supplies a bounded viewport and visual boundary cues. It does not manage message cursors, keyed message reconciliation or row eviction. Oie retains the existing conversation viewport and composes public ChatBubble and Link controls; the protocol-neutral paging lifecycle remains app-owned.
 
 ## Verification
