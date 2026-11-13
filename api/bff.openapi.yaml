@@ -32,7 +32,7 @@ paths:
         schema: {type: string, enum: ['true']}
       - name: X-Oie-Fragment
         in: header
-        description: Selects the HTML region. With HX-Request and no fragment selector, the app region is returned.
+        description: Selects the HTML region. With HX-Request and no fragment selector, the app region is returned. The app fragment includes the workspace region used for sidebar navigation.
         schema: {type: string, enum: [app, inbox, conversation, info, scheduled, schedule-editor, accounts, shared, appearance, timeline]}
       - name: X-Oie-Inbox-Scope
         in: header

@@ -16,7 +16,7 @@ func TestNavigationResponsesKeepFragmentAndDocumentBoundaries(t *testing.T) {
 		want, absent    []string
 	}{
 		{name: "native", want: []string{"<!doctype html>", `id="oie-app"`, `id="workspace"`, `src="/ui/navigation.js"`}},
-		{name: "shell fragment", hx: "true", kind: "app", want: []string{`id="oie-app"`, `id="workspace"`, `data-engine-id="` + testEngine + `"`, `data-account-id="` + testAccount + `"`}, absent: []string{"<!doctype", "<head>", `src="/ui/navigation.js"`}},
+		{name: "shell fragment", hx: "true", kind: "app", want: []string{`id="oie-app"`, `id="oie-route"`, `id="workspace"`, `hx-target="#oie-route"`, `data-engine-id="` + testEngine + `"`, `data-account-id="` + testAccount + `"`}, absent: []string{"<!doctype", "<head>", `src="/ui/navigation.js"`}},
 		{name: "drawer fragment", hx: "true", kind: "info", want: []string{`id="chat-info-content"`, `data-details-conversation="` + testChat + `"`}, absent: []string{"<!doctype", "<head>", `id="oie-app"`, `id="workspace"`}},
 		{name: "account workspace", hx: "true", kind: "accounts", query: "open=accounts", want: []string{`id="account-workspace"`, `id="account-overview"`}, absent: []string{`id="oie-app"`, `id="message-composer"`}},
 		{name: "appearance", hx: "true", kind: "appearance", query: "theme=dark", want: []string{`id="appearance-settings"`, `data-mode="dark"`}, absent: []string{`id="oie-app"`, `id="message-composer"`}},

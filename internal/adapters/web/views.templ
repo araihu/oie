@@ -146,6 +146,13 @@ if v.DevBuildID!="" {
 templ appFragment(v view) {
 <div id="oie-app" hx-history-elt data-shared-account={v.AccountFilter} data-route-error={v.Text.NavFailed} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
 @toast.ToastContainer(toast.ContainerConfig{}).WithExpressions(expressions.Toast{DismissLabel:v.Text.Close,DismissAriaLabel:v.Text.Close})
+<h1 class="sr-only">{v.Text.AppName}</h1>
+@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: desktopNavigation(v), SidebarAttrs: templ.Attributes{"id": "desktop-navigation"}, Content: routeContent(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
+</div>
+}
+
+templ routeContent(v view) {
+<div id="oie-route" class="oie-route" data-open-chat={strconv.FormatBool(v.ChatOpen)}>
 @liveCopy(v)
 <p class="sr-only" data-read-status data-read-failed={v.Text.ReadFailed} role="status" aria-live="polite" hidden></p>
 <div data-shared-action-copy hidden data-failed={v.Text.SharedActionFailed} data-copied={v.Text.SharedLinkCopied} data-downloading={v.Text.SharedDownloading}></div>
@@ -164,8 +171,7 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 }
 </div>
 }
-			<h1 class="sr-only">{v.Text.AppName}</h1>
-			@appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: desktopNavigation(v), SidebarAttrs: templ.Attributes{"id": "desktop-navigation"}, Content: workspaceWithLoading(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
+			@workspaceWithLoading(v)
 			@settings(v)
 			if v.CanResetData {
 				@resetDataDialog(v)

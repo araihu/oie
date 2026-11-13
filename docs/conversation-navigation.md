@@ -2,8 +2,12 @@
 
 Selecting a conversation in the same inbox replaces `#conversation-pane`.
 The application shell, sidebar, conversation list, unfinished search input and
-list scroll position remain mounted. Account, search, section, locale or theme
-changes still replace the broader application region.
+list scroll position remain mounted. The sidebar's section links and history
+traversal between sections replace the workspace to the right. The desktop
+sidebar stays mounted, and its links receive their current destinations and
+active state in place. The mobile navigation control keeps its identity as it
+moves to the incoming section's header. Routes that change the locale or engine
+use the full application fragment.
 
 The BFF serves this region for a root GET with `HX-Request: true` and
 `X-Oie-Fragment: conversation`. It includes conversation-owned stars, avatar

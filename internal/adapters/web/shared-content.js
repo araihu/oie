@@ -134,7 +134,7 @@ window.OieRuntime.register('shared-content', life => {
  life.on(document,'oie:info-content',()=>{bind(true)});
  life.on(document,'oie:shared-search-settled',()=>bind(false));
  life.on(document,'oie:info-shared-search-settled',()=>bind(true));
- life.on(document,'htmx:before:request',event=>{const id=event.detail.ctx?.target?.id;if(!['oie-app','chat-info-content','shared-content-scroll','shared-search-results','info-shared-search-results'].includes(id))return;for(const c of controllers.values())if(id!=='chat-info-content'||c.info){c.generation++;c.request?.abort();c.request=null;c.busy=false;c.observer?.disconnect();capturePreviews(c);c.top=c.scroll.scrollTop;save(c)}},{capture:true});
+ life.on(document,'htmx:before:request',event=>{const id=event.detail.ctx?.target?.id;if(!['oie-app','oie-route','chat-info-content','shared-content-scroll','shared-search-results','info-shared-search-results'].includes(id))return;for(const c of controllers.values())if(id!=='chat-info-content'||c.info){c.generation++;c.request?.abort();c.request=null;c.busy=false;c.observer?.disconnect();capturePreviews(c);c.top=c.scroll.scrollTop;save(c)}},{capture:true});
  for(const name of ['drawer:close','drawer:close-request'])life.on(window,name,event=>{if(event.detail?.id==='details')life.timeout(()=>{if(!event.defaultPrevented){const c=controllers.get('info-shared');if(c){c.closed=true;c.generation++;c.request?.abort();c.request=null;c.busy=false;c.observer?.disconnect();capturePreviews(c);feedback(c,c.failed);save(c)}}},0)});
  life.on(window,'drawer:open',event=>{if(event.detail?.id==='details'){const c=bind(true);if(c){c.closed=false;life.timeout(()=>observe(c),250)}}});
  life.on(document,'oie:shared-refresh',event=>{update(event.detail,false);update(event.detail,true)});
@@ -184,7 +184,7 @@ window.OieRuntime.register('shared-search', life => {
    else form.requestSubmit();
   });
   on(document,'htmx:before:request',event=>{
-   const ctx=event.detail.ctx;if(['oie-app','chat-info-content','shared-content-scroll'].includes(ctx?.target?.id))cancel();if(!owned(ctx)||!connected())return;
+   const ctx=event.detail.ctx;if(['oie-app','oie-route','chat-info-content','shared-content-scroll'].includes(ctx?.target?.id))cancel();if(!owned(ctx)||!connected())return;
    active.add(ctx);if(!info)return;ctx.oieSearch={form,scope:scope(),generation:Number(document.body.dataset.starGeneration||0),engine:document.body.dataset.engineId,conversation:document.body.dataset.conversationId};accepted=null;region()?.setAttribute('aria-busy','true');
   },{capture:true});
   on(document,'htmx:finally:request',event=>active.delete(event.detail.ctx),{capture:true});
