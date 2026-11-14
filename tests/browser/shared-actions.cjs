@@ -91,6 +91,16 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
   assert.equal(await opacity(star(0)),'1');
   assert.equal(await opacity(star(1)),'0');
   await star(0).hover();
+  const positions=await card(0).evaluate(node=>{
+   const card=node.getBoundingClientRect();
+   const star=node.querySelector('[data-shared-star]').getBoundingClientRect();
+   const menu=node.querySelector('[data-shared-menu-trigger]').getBoundingClientRect();
+   const center=document.elementFromPoint(card.x+card.width/2,star.y+star.height/2);
+   return {left:star.left-card.left,right:card.right-menu.right,actionsCoverCenter:!!center?.closest('[data-shared-actions]')};
+  });
+  assert(positions.left>0&&positions.left<=8,'the star sits at the left edge');
+  assert(positions.right>0&&positions.right<=8,'the menu sits at the right edge');
+  assert.equal(positions.actionsCoverCenter,false);
   for(const action of [star(0),star(2)]){
    const surface=await action.evaluate(node=>{
     const {backgroundColor,borderTopWidth,boxShadow}=getComputedStyle(node);
@@ -159,6 +169,8 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
    const action=mobile.locator(`[data-shared-item="${items[0].id}"] [data-shared-star]`);
    assert.equal(await action.getAttribute('aria-label'),'Favoritar');
    assert.equal(await opacity(action),'1');
+   const leftInset=await action.evaluate(node=>node.getBoundingClientRect().left-node.closest('[data-shared-item]').getBoundingClientRect().left);
+   assert(leftInset>0&&leftInset<=8,'the touch action sits at the left edge');
    await action.tap();
    await pressed(action,true);
    await action.tap();
