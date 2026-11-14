@@ -302,10 +302,13 @@ async function waitFor(predicate) {
       }
       const saveDetails = management.getByRole('button', {name:'Salvar alterações'});
       await saveDetails.waitFor();
+      assert.equal(await management.locator('[data-room-participant-detail]').count(),0);
+      assert.equal(await management.locator('[data-room-profile-slot] form').count(),0);
       await openingSkeleton.waitFor({state:'hidden'});
       assert.equal(await management.getByRole('button',{name:'Atualizar',exact:true}).count(),0);
       assert.equal(await saveDetails.isDisabled(), true);
       const topic = management.getByRole('textbox', {name:'Tópico', exact:true});
+      const originalTopicField = await topic.elementHandle();
       assert.equal(await topic.evaluate(input => input.tagName), 'TEXTAREA');
       const originalTopic = await topic.inputValue();
       const name = management.getByRole('textbox',{name:'Nome da sala',exact:true});
@@ -348,10 +351,24 @@ async function waitFor(predicate) {
       await page.keyboard.press('Escape');
       assert.equal(await search.inputValue(),'');
       await search.fill('leit');
+      let finishProfile;
+      if (width === 1440) {
+        const profileLoading = new Promise(resolve => {finishProfile = resolve;});
+        await page.route(url => url.pathname === '/ui/rooms/manage-fragment' && url.searchParams.has('profile'), async route => {
+          await profileLoading;
+          await route.continue();
+        },{times:1});
+      }
       await participant.focus();
       await page.keyboard.press('Enter');
+      if (finishProfile) {
+        await management.locator('.oie-room-profile-skeleton').waitFor();
+        assert.equal(await management.locator('[data-room-participant-detail]').count(),0);
+        finishProfile();
+      }
       const profile = management.getByRole('region',{name:'Leitora',exact:true});
       await profile.getByRole('heading',{name:'Leitora',exact:true}).waitFor();
+      assert.equal(await management.locator('[data-room-participant-detail]').count(),1);
       assert.equal(await profile.getByRole('button',{name:'Tornar moderador',exact:true}).isVisible(),true);
       assert.equal(await profile.getByRole('button',{name:'Banir da sala',exact:true}).isVisible(),true);
       assert.equal(await participant.isVisible(),false);
@@ -363,6 +380,7 @@ async function waitFor(predicate) {
       await participant.click();
       const kickTrigger = profile.getByRole('button', {name:'Remover da sala',exact:true});
       const promote = profile.getByRole('button', {name:'Tornar moderador',exact:true});
+      await promote.waitFor();
       assert.equal(await promote.locator('.oie-room-action-icon svg').count(), 1);
       assert.equal(await kickTrigger.locator('..').getAttribute('data-tone'), 'danger');
       await promote.click();
@@ -390,6 +408,7 @@ async function waitFor(predicate) {
       const bansLoading = new Promise(resolve => {finishBans = resolve;});
       const bansSkeleton = bans.getByRole('status',{name:'Carregando ações da sala…',exact:true});
       const tabsBeforeBans = await management.getByRole('tablist').boundingBox();
+      const originalParticipant = await participant.elementHandle();
       if (width === 1440) {
         await page.route(url => url.pathname === '/ui/rooms/manage-fragment' && url.searchParams.get('affiliation') === 'outcast',async route => {
           await bansLoading;
@@ -414,6 +433,9 @@ async function waitFor(predicate) {
       await initials.waitFor();
       assert.equal((await initials.innerText()).trim(),'SF');
       assert.equal(await bans.getByRole('button',{name:'banido@fixture',exact:true}).isVisible(),true);
+      assert.equal(await management.locator('[data-room-participant-detail]').count(),0);
+      assert(await originalParticipant.evaluate(node => node.isConnected));
+      assert(await originalTopicField.evaluate(node => node.isConnected));
       await participantsTab.click();
       assert.equal(await search.inputValue(),'leit');
       assert.deepEqual(await management.locator('.oie-room-participant-group:visible h3').allTextContents(),['Participantes']);
@@ -603,8 +625,12 @@ async function waitFor(predicate) {
     assert.equal(managementCommands.length,beforeBan);
     await banToggle.click();
     await banAddress.fill('ainda-fora@fixture');
+    const topicBeforeBan = await roomPanel.locator('textarea[name=topic]').elementHandle();
+    const rowsBeforeBan = await roomPanel.locator('#room-participant-results').elementHandle();
     await roomPanel.getByRole('button',{name:'Banir da sala',exact:true}).click();
     await roomPanel.getByRole('button',{name:'ainda-fora@fixture',exact:true}).waitFor();
+    assert(await topicBeforeBan.evaluate(node => node.isConnected));
+    assert(await rowsBeforeBan.evaluate(node => node.isConnected));
     assert.equal(await banAddress.isVisible(),false);
     assert.equal(await bansList.evaluate(list => list.scrollTop),scrollTop);
     assert.equal(managementCommands.at(-1).value,'outcast');
@@ -642,7 +668,7 @@ async function waitFor(predicate) {
     await bannedReaderProfile.getByText(readerAddress,{exact:true}).waitFor();
     await bannedReaderProfile.getByRole('button',{name:'Voltar para banimentos'}).click();
     await roomPanel.getByRole('tab',{name:'Participantes',exact:true}).click();
-    assert.equal(await roomPanel.locator('#room-participant-results').getByRole('button',{name:'Leitora',exact:true}).count(),0);
+    await roomPanel.locator('#room-participant-results').getByRole('button',{name:'Leitora',exact:true}).waitFor({state:'detached'});
     assert.equal(managementCommands.length,beforeBan+2);
     await page.keyboard.press('Escape');
     await roomPanel.waitFor({state:'hidden'});

@@ -3,8 +3,11 @@ window.OieRuntime.register('room-management', life => {
   if (!root) return;
   const content = root.querySelector('[data-room-management-content]');
   const loadError = root.querySelector('[data-room-management-error]');
-  let request, opener, message = '', affiliation = '', invite = false, active = false;
-  let bansFresh = false;
+  let request, opener, message = '', invite = false, active = false;
+  let bansRequest, bansFresh = false, participantsDirty = false;
+  let bansLoaded = false;
+  const bansPanelID = 'tabpanelroom-management-tabsbans';
+  const participantsPanelID = 'tabpanelroom-management-tabsparticipants';
   const pending = new WeakMap();
   const title = document.getElementById("room-managementTitle");
   const drafts = new Map();
@@ -13,6 +16,7 @@ window.OieRuntime.register('room-management', life => {
   const hasPending = () => [...content.querySelectorAll('form')].some(isPending);
   const participantViews = new Map();
   const listQueries = new Map();
+  const tabSelected = id => content.querySelector('[aria-controls="' + id + '"]')?.getAttribute('aria-selected') === 'true';
 
   function updateAvatarActions() {
     const remove = content.querySelector('#room-remove-avatar');
@@ -24,29 +28,140 @@ window.OieRuntime.register('room-management', life => {
   avatarChanges.observe(content, {subtree: true, childList: true, attributes: true, attributeFilter: ['data-avatar-src']});
   life.cleanup(() => avatarChanges.disconnect());
 
-  function showParticipant(panel, id, focus = false) {
+  function fragmentURL(extra = {}) {
+    const {chat, account, engine, lang} = root.dataset;
+    return '/ui/rooms/manage-fragment?' + new URLSearchParams({chat, account, engine, lang, ...extra});
+  }
+
+  function managementError() {
+    window.dispatchEvent(new CustomEvent('notify', {detail:{kind:'toast',tone:'danger',message:root.dataset.unavailable}}));
+  }
+
+  function closeParticipant(panel, focus = false) {
     const list = panel.querySelector('[data-room-participant-list]');
-    if (!list) return;
-    const details = [...panel.querySelectorAll('[data-room-participant-detail]')];
-    const selected = details.find(panel => panel.dataset.roomParticipantDetail === id);
-    const previous = participantViews.get(panel.id);
-    const viewport = list.querySelector('[data-goshtoso-scroll-viewport]') || panel;
-    if (selected) participantViews.set(panel.id, {id, scrollTop: previous?.scrollTop ?? viewport.scrollTop});
-    else participantViews.delete(panel.id);
-    list.hidden = !!selected;
-    for (const detail of details) detail.hidden = detail !== selected;
-    if (selected && !previous) panel.scrollTop = 0;
-    if (!selected && previous) viewport.scrollTop = previous.scrollTop;
+    const slot = panel.querySelector('[data-room-profile-slot]');
+    const view = participantViews.get(panel.id);
+    view?.controller.abort();
+    participantViews.delete(panel.id);
+    slot.hidden = true;
+    slot.removeAttribute('aria-busy');
+    slot.querySelector('[data-room-profile-content]').replaceChildren();
+    slot.querySelector('[data-room-profile-status]').replaceChildren();
+    list.hidden = false;
+    if (view) {
+      const viewport = list.querySelector('[data-goshtoso-scroll-viewport]') || panel;
+      viewport.scrollTop = view.scrollTop;
+    }
     if (focus) {
-      const target = selected?.querySelector('h3') || document.getElementById(previous?.id) || list.querySelector('input[type=search]') ||
-        content.querySelector('[role=tab][aria-selected=true]');
-      target?.focus({preventScroll:true});
+      (document.getElementById(view?.id) || list.querySelector('input[type=search]') ||
+        content.querySelector('[role=tab][aria-selected=true]'))?.focus({preventScroll:true});
+    }
+  }
+
+  async function openParticipant(panel, id, focus = true, keepProfile = false) {
+    const list = panel.querySelector('[data-room-participant-list]');
+    const slot = panel.querySelector('[data-room-profile-slot]');
+    const pendingPane = slot.querySelector('[data-room-profile-pending]');
+    const status = slot.querySelector('[data-room-profile-status]');
+    const profile = slot.querySelector('[data-room-profile-content]');
+    const viewport = list.querySelector('[data-goshtoso-scroll-viewport]') || panel;
+    const previous = participantViews.get(panel.id);
+    previous?.controller.abort();
+    const view = {id, scrollTop: previous?.scrollTop ?? viewport.scrollTop, controller: new AbortController()};
+    participantViews.set(panel.id, view);
+    list.hidden = true;
+    slot.hidden = false;
+    if (!keepProfile) {
+      panel.scrollTop = 0;
+      profile.replaceChildren();
+      pendingPane.hidden = false;
+      status.replaceChildren(root.querySelector('[data-room-profile-loading]').content.cloneNode(true));
+      if (focus && tabSelected(panel.id)) pendingPane.querySelector('button').focus({preventScroll:true});
+    }
+    slot.setAttribute('aria-busy', 'true');
+    try {
+      const response = await life.fetch(fragmentURL({profile:id}), {signal:view.controller.signal});
+      if ([403,404,409].includes(response.status)) {
+        if (!view.controller.signal.aborted && active && slot.isConnected) {
+          closeParticipant(panel, focus && tabSelected(panel.id));
+          if (panel.id === bansPanelID && response.status === 404) void loadBans();
+          else void load();
+        }
+        return;
+      }
+      if (!response.ok) throw new Error();
+      const template = document.createElement('template');
+      template.innerHTML = await response.text();
+      if (view.controller.signal.aborted || life.signal.aborted || !active || !slot.isConnected) return;
+      if ([...profile.querySelectorAll('form')].some(isPending)) return;
+      const moveFocus = focus && (slot.contains(document.activeElement) || document.activeElement.id === id ||
+        document.activeElement === document.body) && tabSelected(panel.id);
+      const focusID = keepProfile && (document.activeElement.id || document.activeElement.closest('form')?.dataset.roomActionForm);
+      if (keepProfile) for (const form of profile.querySelectorAll('form')) remember(form);
+      profile.replaceChildren(template.content);
+      restoreForms(profile);
+      status.replaceChildren();
+      pendingPane.hidden = true;
+      if (moveFocus) ((focusID && document.getElementById(focusID)) || profile.querySelector('h3'))?.focus({preventScroll:true});
+      document.dispatchEvent(new CustomEvent('oie:room-management-content', {detail:{root:profile}}));
+    } catch {
+      if (view.controller.signal.aborted || life.signal.aborted || !active || !slot.isConnected) return;
+      if (!keepProfile) closeParticipant(panel, focus && tabSelected(panel.id));
+      managementError();
+    } finally {
+      if (participantViews.get(panel.id) === view) slot.removeAttribute('aria-busy');
+    }
+  }
+
+  async function loadBans(retry = false) {
+    const panel = document.getElementById(bansPanelID);
+    if (!panel || bansRequest) return;
+    const controller = new AbortController();
+    bansRequest = controller;
+    panel.setAttribute('aria-busy','true');
+    try {
+      const response = await life.fetch(fragmentURL({affiliation:'outcast'}), {signal:controller.signal});
+      if (!response.ok) throw new Error();
+      const template = document.createElement('template');
+      template.innerHTML = await response.text();
+      if (!active || controller.signal.aborted || life.signal.aborted || !panel.isConnected) return;
+      const incoming = template.content.querySelector('#room-ban-results');
+      const results = panel.querySelector('#room-ban-results');
+      if (!incoming || !results) throw new Error();
+      const viewport = panel.querySelector('[data-goshtoso-scroll-viewport]');
+      const scrollTop = viewport?.scrollTop;
+      const focusedRow = document.activeElement.closest('[data-room-participant-open]');
+      results.replaceWith(incoming);
+      filterRoomList(panel.querySelector('[data-room-list-search]'), panel);
+      const form = panel.querySelector('.oie-room-ban-footer form');
+      if (!isPending(form)) form.elements.expectedRevision.value = incoming.dataset.roomRevision;
+      const view = participantViews.get(panel.id);
+      if (view && !incoming.querySelector('#' + CSS.escape(view.id))) closeParticipant(panel, tabSelected(panel.id));
+      else if (focusedRow && !focusedRow.isConnected) {
+        (document.getElementById(focusedRow.id) || panel.querySelector('[data-room-list-search]'))?.focus({preventScroll:true});
+      }
+      if (viewport && scrollTop && (!view || participantViews.has(panel.id))) viewport.scrollTop = scrollTop;
+      bansFresh = true;
+      bansLoaded = true;
+      document.dispatchEvent(new CustomEvent('oie:room-management-content', {detail:{root:incoming}}));
+    } catch {
+      if (controller.signal.aborted || life.signal.aborted || !active || !panel.isConnected) return;
+      if (retry) {
+        bansRequest = null;
+        return loadBans();
+      }
+      managementError();
+    } finally {
+      if (bansRequest === controller) {
+        bansRequest = null;
+        panel.removeAttribute('aria-busy');
+      }
     }
   }
 
   function filterRoomList(search, scope) {
     const results = scope.querySelector('#' + search.getAttribute('aria-controls'));
-    const empty = results.querySelector('[data-room-list-no-results]');
+    const empty = results?.querySelector('[data-room-list-no-results]');
     if (!empty) return;
     const fold = value => value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
     const query = fold(search.value);
@@ -69,6 +184,13 @@ window.OieRuntime.register('room-management', life => {
       if (fresh && fresh.dataset.avatarImage !== node.dataset.avatarImage) {
         node.replaceWith(fresh);
       }
+    }
+    const profile = document.getElementById(participantsPanelID);
+    const view = profile && participantViews.get(profile.id);
+    const oldAvatar = profile?.querySelector('[data-room-profile-content] [data-avatar-image]');
+    const freshAvatar = view && fragment.getElementById(view.id)?.querySelector('[data-avatar-image]');
+    if (oldAvatar && freshAvatar && oldAvatar.dataset.avatarImage !== freshAvatar.dataset.avatarImage && !hasPending()) {
+      void openParticipant(profile, view.id, true, true);
     }
   }
 
@@ -106,74 +228,49 @@ window.OieRuntime.register('room-management', life => {
     if (form?.hasAttribute('data-room-details-form')) syncDetailsSave(form);
   });
 
-  async function load(replace = true, avatarsOnly = false, retryBans = false) {
+  async function load(replace = true, avatarsOnly = false, participantsOnly = false) {
     if (avatarsOnly && request) return;
-    request?.controller.abort();
-    const current = {
-      controller: new AbortController(),
-      replacesBans: affiliation === 'outcast' && replace && !avatarsOnly,
-    };
-    request = current;
-    if (current.replacesBans) bansFresh = false;
+    request?.abort();
+    const controller = new AbortController();
+    request = controller;
     if (!avatarsOnly) {
       loadError.hidden = true;
-      root.setAttribute('aria-busy', 'true');
+      root.setAttribute('aria-busy','true');
     }
-    const {chat, account, engine, lang} = root.dataset;
-    const params = new URLSearchParams({chat, account, engine, lang, message, affiliation, invite});
     try {
-      const response = await life.fetch('/ui/rooms/manage-fragment?' + params, {signal: current.controller.signal});
+      const response = await life.fetch(fragmentURL(participantsOnly ? {participants:true} : {message,invite}), {signal:controller.signal});
+      if (participantsOnly && response.status === 409) return load();
       if (!response.ok) throw new Error();
-      const markup = await response.text();
-      if (request !== current || current.controller.signal.aborted || !active || life.signal.aborted) return;
       const template = document.createElement('template');
-      template.innerHTML = markup;
+      template.innerHTML = await response.text();
+      if (request !== controller || controller.signal.aborted || !active || life.signal.aborted) return;
       if (avatarsOnly) {
         refreshParticipantAvatars(template.content);
         return;
       }
+      if (participantsOnly) {
+        const panel = document.getElementById(participantsPanelID);
+        if (!panel || [...panel.querySelectorAll('form')].some(isPending)) return;
+        replacePanel(panel, template.content);
+        participantsDirty = false;
+        document.dispatchEvent(new CustomEvent('oie:room-management-content', {detail:{root:panel}}));
+        return;
+      }
       if (replace) {
+        if (hasPending()) return;
         for (const form of content.querySelectorAll('form')) {
-          if (isPending(form)) return;
-          remember(form);
+          if (!form.closest('[data-room-profile-slot]')) remember(form);
         }
-        const includesBans = current.replacesBans && !!template.content.querySelector('#room-ban-results') &&
-          !template.content.querySelector('.oie-room-bans-skeleton');
         render(template);
-        bansFresh = includesBans;
-        for (const form of content.querySelectorAll('form')) {
-          const id = identity(form);
-          if (openForms.has(id)) setActionOpen(form, true);
-          const draft = drafts.get(id);
-          if (!draft) continue;
-          for (const name of ['target','value','reason','name','topic','image']) {
-            const field = form.elements.namedItem(name);
-            const original = name === 'name' ? 'originalName' : name === 'topic' ? 'originalTopic' : '';
-            if (field && field.type !== 'hidden' && draft.has(name) &&
-                (!original || roomDetailsValue(name, draft.get(name)) !== roomDetailsValue(name, draft.get(original)))) {
-              if (field.type === 'file') {
-                const file = draft.get(name);
-                if (!file.size) continue;
-                const transfer = new DataTransfer();
-                transfer.items.add(file);
-                field.files = transfer.files;
-                field.dispatchEvent(new Event('change', {bubbles:true}));
-              } else {
-                field.value = draft.get(name);
-              }
-              field.dispatchEvent(new Event('input', {bubbles:true}));
-            }
-          }
-        }
+        restoreForms(content);
       } else {
         const revision = template.content.querySelector('[name=expectedRevision]')?.value;
-        if (!revision) {
-          bansFresh = false;
+        if (!revision && !template.content.querySelector('.oie-room-management-tabs')) {
           render(template);
         } else {
           const fresh = new Map([...template.content.querySelectorAll('form')].map(form => [identity(form), form]));
           for (const form of content.querySelectorAll('form')) {
-            if (pending.has(form) || form.dataset.busy === 'true') continue;
+            if (isPending(form) || form.closest('[data-room-profile-slot]')) continue;
             const freshForm = fresh.get(identity(form));
             const permissionChanged = form.elements.managementAction.value === 'update_details' &&
               ['name','topic'].some(name => !!form.elements.namedItem(name) !== !!freshForm?.elements.namedItem(name));
@@ -191,66 +288,109 @@ window.OieRuntime.register('room-management', life => {
                 if (submit) submit.disabled = false;
               }
             }
-            form.elements.expectedRevision.value = revision;
+            if (revision) form.elements.expectedRevision.value = revision;
           }
         }
       }
     } catch {
-      if (!avatarsOnly && request === current && !current.controller.signal.aborted && active && !life.signal.aborted) {
-        if (retryBans && current.replacesBans && !bansFresh && !hasPending()) return load();
-        if (content.childElementCount) {
-          window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:root.dataset.unavailable}}));
-        } else {
-          loadError.hidden = false;
-        }
+      if (!avatarsOnly && request === controller && !controller.signal.aborted && active && !life.signal.aborted) {
+        if (content.childElementCount) managementError();
+        else loadError.hidden = false;
       }
     } finally {
-      if (request === current) {
+      if (request === controller) {
         request = null;
         root.removeAttribute('aria-busy');
       }
     }
   }
 
-  function render(template) {
-    for (const search of template.content.querySelectorAll('[data-room-list-search]')) {
-      search.value = listQueries.get(search.id) || '';
-      filterRoomList(search, template.content);
+  function restoreForms(scope) {
+    for (const form of scope.querySelectorAll('form')) {
+      const id = identity(form);
+      if (openForms.has(id)) setActionOpen(form, true);
+      const draft = drafts.get(id);
+      if (!draft) continue;
+      for (const name of ['target','value','reason','name','topic','image']) {
+        const field = form.elements.namedItem(name);
+        const original = name === 'name' ? 'originalName' : name === 'topic' ? 'originalTopic' : '';
+        if (!field || field.type === 'hidden' || !draft.has(name) ||
+            original && roomDetailsValue(name, draft.get(name)) === roomDetailsValue(name, draft.get(original))) continue;
+        if (field.type === 'file') {
+          const file = draft.get(name);
+          if (!file.size) continue;
+          const transfer = new DataTransfer();
+          transfer.items.add(file);
+          field.files = transfer.files;
+          field.dispatchEvent(new Event('change', {bubbles:true}));
+        } else {
+          field.value = draft.get(name);
+        }
+        field.dispatchEvent(new Event('input', {bubbles:true}));
+      }
     }
+  }
+
+  function render(template) {
     const currentTabs = content.querySelector('.oie-room-management-tabs');
     const incomingTabs = template.content.querySelector('.oie-room-management-tabs');
     const sameTabs = currentTabs && incomingTabs && currentTabs.dataset.tabsConfig === incomingTabs.dataset.tabsConfig;
     if (sameTabs) {
-      const focused = document.activeElement;
-      const searchSelection = focused?.matches('[data-room-list-search]') ? [focused.selectionStart, focused.selectionEnd] : null;
-      const focusedAction = focused?.id || focused?.closest('form')?.dataset.roomActionForm;
-      const focusedProfile = focused?.closest('[data-room-participant-detail]');
       for (const panel of currentTabs.querySelectorAll('[role=tabpanel]')) {
-        const incoming = template.content.getElementById(panel.id);
-        const view = participantViews.get(panel.id);
-        const profileHasFocus = !!focusedProfile && panel.contains(focusedProfile);
-        const listScroll = panel.querySelector('.oie-room-bans-list [data-goshtoso-scroll-viewport]')?.scrollTop;
-        panel.replaceChildren(...incoming.childNodes);
-        if (listScroll) panel.querySelector('.oie-room-bans-list [data-goshtoso-scroll-viewport]').scrollTop = listScroll;
-        if (view) {
-          const removed = !document.getElementById(view.id);
-          const activePanel = currentTabs.querySelector('[role=tab][aria-selected=true]')?.getAttribute('aria-controls') === panel.id;
-          showParticipant(panel, view.id, profileHasFocus || removed && activePanel);
-        }
-      }
-      if (!focusedProfile && focusedAction && !content.contains(document.activeElement)) {
-        const replacement = document.getElementById(focusedAction);
-        (replacement || currentTabs.querySelector('[role=tab][aria-selected=true]'))?.focus({preventScroll:true});
-        if (searchSelection) replacement?.setSelectionRange(...searchSelection);
+        if (panel.id === bansPanelID) continue;
+        replacePanel(panel, template.content.getElementById(panel.id));
       }
     } else {
+      stopBans();
+      bansFresh = bansLoaded = false;
+      for (const view of participantViews.values()) view.controller.abort();
+      participantViews.clear();
       content.replaceChildren(template.content);
-      for (const panel of content.querySelectorAll('[role=tabpanel]')) {
-        const view = participantViews.get(panel.id);
-        if (view) showParticipant(panel, view.id);
+      for (const search of content.querySelectorAll('[data-room-list-search]')) {
+        search.value = listQueries.get(search.id) || '';
+        filterRoomList(search, content);
       }
     }
-    document.dispatchEvent(new CustomEvent('oie:room-management-content', {detail: {root: content}}));
+    participantsDirty = false;
+    document.dispatchEvent(new CustomEvent('oie:room-management-content', {detail:{root:content}}));
+  }
+
+  function replacePanel(panel, incoming) {
+    const focused = document.activeElement;
+    const focusInside = panel.contains(focused);
+    const searchSelection = focused?.matches('[data-room-list-search]') ? [focused.selectionStart, focused.selectionEnd] : null;
+    const focusedID = focused?.id || focused?.closest('form')?.dataset.roomActionForm;
+    const view = participantViews.get(panel.id);
+    view?.controller.abort();
+    const slot = view && panel.querySelector('[data-room-profile-slot]');
+    panel.replaceChildren(...incoming.childNodes);
+    const search = panel.querySelector('[data-room-list-search]');
+    if (search) {
+      search.value = listQueries.get(search.id) || '';
+      filterRoomList(search, panel);
+    }
+    if (view && panel.querySelector('#' + CSS.escape(view.id))) {
+      const hasProfile = !!slot?.querySelector('[data-room-participant-detail]');
+      if (hasProfile) {
+        panel.querySelector('[data-room-profile-slot]').replaceWith(slot);
+        if (focusInside && tabSelected(panel.id)) focused?.focus({preventScroll:true});
+      }
+      void openParticipant(panel, view.id, focusInside, hasProfile);
+    } else {
+      participantViews.delete(panel.id);
+      if (focusInside && tabSelected(panel.id)) {
+        const replacement = (focusedID && document.getElementById(focusedID)) || search ||
+          content.querySelector('[role=tab][aria-selected=true]');
+        replacement?.focus({preventScroll:true});
+        if (searchSelection && replacement === search) search.setSelectionRange(...searchSelection);
+      }
+    }
+  }
+
+  function stopBans() {
+    bansRequest?.abort();
+    bansRequest = null;
+    document.getElementById(bansPanelID)?.removeAttribute('aria-busy');
   }
 
   function identity(form) {
@@ -303,12 +443,12 @@ window.OieRuntime.register('room-management', life => {
   life.on(document, 'click', event => {
     const row = event.target.closest('[data-room-participant-open]');
     if (row && content.contains(row)) {
-      if (!hasPending()) showParticipant(row.closest('[role=tabpanel]'), row.dataset.roomParticipantOpen, true);
+      if (!hasPending()) void openParticipant(row.closest('[role=tabpanel]'), row.dataset.roomParticipantOpen);
       return;
     }
     const back = event.target.closest('[data-room-participant-back]');
     if (back && content.contains(back)) {
-      if (!hasPending()) showParticipant(back.closest('[role=tabpanel]'), '', true);
+      if (!hasPending()) closeParticipant(back.closest('[role=tabpanel]'), true);
       return;
     }
     const cancel = event.target.closest('[data-room-action-cancel]');
@@ -337,10 +477,9 @@ window.OieRuntime.register('room-management', life => {
     }
     const tabButton = event.target.closest('[role=tab]');
     if (!content.contains(tabButton)) return;
-    if (tabButton.getAttribute('aria-controls') === 'tabpanelroom-management-tabsbans' && !bansFresh && !request?.replacesBans) {
-      affiliation = 'outcast';
-      if (!hasPending()) void load();
-    }
+    const panel = tabButton.getAttribute('aria-controls');
+    if (panel === bansPanelID && !bansFresh && !hasPending()) void loadBans();
+    if (panel === participantsPanelID && participantsDirty && !hasPending()) void load(true, false, true);
   });
 
   life.on(document, 'click', event => {
@@ -357,13 +496,16 @@ window.OieRuntime.register('room-management', life => {
         return;
       }
       window.dispatchEvent(new CustomEvent('drawer:open', {detail: {id: 'room-management'}}));
-      void load();
+      void load().then(() => {
+        if (active && !bansFresh && tabSelected(bansPanelID)) void loadBans();
+      });
     };
     const nextMessage = trigger.id.startsWith('moderate-room-message-') ? trigger.id.slice('moderate-room-message-'.length) : '';
     const nextInvite = trigger.id === 'chat-invite-room';
     if (nextMessage !== message || nextInvite !== invite) {
-      affiliation = '';
-      bansFresh = false;
+      stopBans();
+      bansFresh = bansLoaded = false;
+      for (const view of participantViews.values()) view.controller.abort();
       participantViews.clear();
       listQueries.clear();
     }
@@ -394,19 +536,23 @@ window.OieRuntime.register('room-management', life => {
     const confirmation = event.target.closest('form[data-room-action-confirmation]:not([hidden])') ||
       event.target.closest('.oie-room-ban-footer')?.querySelector('form:not([hidden])');
     const detail = event.target.closest('[data-room-participant-detail]');
-    if (!confirmation && !detail) return;
+    const slot = event.target.closest('[data-room-profile-slot]');
+    if (!confirmation && !slot) return;
     event.preventDefault();
     event.stopPropagation();
     if (hasPending()) return;
-    const form = confirmation || detail.querySelector('.oie-room-action form:not([hidden])');
+    const form = confirmation || detail?.querySelector('.oie-room-action form:not([hidden])');
     if (form) cancelAction(form);
-    else showParticipant(detail.closest('[role=tabpanel]'), '', true);
+    else closeParticipant(slot.closest('[role=tabpanel]'), true);
   }, true);
 
   life.on(window, 'drawer:close-request', event => {
     if (event.detail?.id !== 'room-management') return;
     active = false;
-    request?.controller.abort();
+    request?.abort();
+    stopBans();
+    bansFresh = false;
+    for (const view of participantViews.values()) view.controller.abort();
     life.timeout(() => opener?.isConnected && opener.focus({preventScroll: true}), 220);
   });
 
@@ -420,9 +566,12 @@ window.OieRuntime.register('room-management', life => {
     }
     pending.delete(form);
     const action = form.elements.managementAction.value;
-    if (result.ok && action === 'affiliation') {
+    const panel = form.closest('[role=tabpanel]');
+    const changesBans = result.ok && action === 'affiliation' &&
+      (form.elements.value.value === 'outcast' || panel?.id === bansPanelID);
+    if (changesBans) {
       bansFresh = false;
-      request?.controller.abort();
+      stopBans();
     }
     if (action === 'update_details') {
       for (const [name, original] of detailsFields) {
@@ -447,8 +596,29 @@ window.OieRuntime.register('room-management', life => {
       }
       clearInputs(form);
     }
+    const view = panel && participantViews.get(panel.id);
     life.timeout(() => {
-      if (active) void load(refreshContent || affiliation === 'outcast' && !bansFresh, false, result.ok && action === 'affiliation');
+      if (!active) return;
+      if (panel?.id === bansPanelID) {
+        if (result.ok) {
+          participantsDirty = true;
+          void loadBans(true);
+          if (tabSelected(participantsPanelID)) void load(true, false, true);
+        } else if (view) {
+          void openParticipant(panel, view.id, true, true);
+        } else {
+          void loadBans();
+        }
+        return;
+      }
+      if (view && !result.ok) void openParticipant(panel, view.id, true, true);
+      else if (result.ok && panel?.id === participantsPanelID) {
+        participantsDirty = true;
+        void load(true, false, true);
+      } else void load(refreshContent);
+      if (!bansFresh && (tabSelected(bansPanelID) || changesBans && bansLoaded)) {
+        void loadBans(changesBans);
+      }
     }, 0);
   });
 });

@@ -563,7 +563,7 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-room-management [data-room-management-content]{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
 .oie-room-management-skeleton,.oie-room-bans-skeleton{display:none}
 .oie-room-management[aria-busy="true"]:has([data-room-management-content]:empty)>.oie-room-management-skeleton,
-.oie-room-management[aria-busy="true"] .oie-room-bans-skeleton{display:block}
+.oie-room-management-tabs [role=tabpanel][aria-busy="true"] .oie-room-bans-skeleton{display:block}
 .oie-room-management-placeholder[data-skeleton-item]{height:36px}
 .oie-room-management-tabs{display:grid;grid-template-rows:auto minmax(0,1fr);min-height:0}
 .oie-room-management-tabs>div:has(>[role="tabpanel"]){min-height:0;padding-bottom:0}
@@ -573,7 +573,9 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-room-management-tabs [role="tabpanel"]:not([x-cloak]){display:grid;gap:14px}
 .oie-room-management-tabs #tabpanelroom-management-tabsbans{height:100%}
 .oie-room-bans:not([hidden]){display:grid;grid-template-rows:auto minmax(44px,1fr) auto;min-height:0}
-.oie-room-management-tabs #tabpanelroom-management-tabsbans>.oie-room-participant-details{align-self:start}
+.oie-room-management-tabs #tabpanelroom-management-tabsbans>[data-room-profile-slot]{align-self:start;min-height:0;overflow:auto}
+[data-room-profile-pending]:not([hidden]){display:grid;justify-items:start;gap:14px}
+[data-room-profile-status]{width:100%}
 .oie-room-ban-footer{display:grid;justify-items:end;gap:8px;border-top:1px solid var(--oie-border);padding-top:8px}
 .oie-room-ban-footer .oie-room-ban-toggle{width:44px;height:44px}
 .oie-room-ban-footer form{justify-self:stretch}

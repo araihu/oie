@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -43,12 +44,21 @@ func (s *Server) roomManagementFragment(w http.ResponseWriter, r *http.Request) 
 	}
 	v.Selected = owner.JSON200
 	invite := q.Get("invite") == "true"
-	if messageID == "" && !invite {
+	profile := q.Get("profile")
+	bannedProfile := strings.HasPrefix(profile, "room-banned-")
+	bansOnly := q.Get("affiliation") == "outcast"
+	participantsOnly := q.Get("participants") == "true"
+	if (profile != "" || bansOnly || participantsOnly) && (messageID != "" || invite) ||
+		participantsOnly && (bansOnly || profile != "") ||
+		profile != "" && (bansOnly || !bannedProfile && !strings.HasPrefix(profile, "room-participant-")) {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if messageID == "" && !invite && profile == "" && !bansOnly && !participantsOnly {
 		s.loadConversationDetails(ctx, &v)
 	}
 	var params engineapi.GetRoomManagementParams
-	bansLoaded := messageID == "" && !invite && q.Get("affiliation") == "outcast"
-	if bansLoaded {
+	if bansOnly || bannedProfile {
 		affiliation := engineapi.RoomAffiliationOutcast
 		params.Affiliation = &affiliation
 	}
@@ -61,12 +71,47 @@ func (s *Server) roomManagementFragment(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	management := *result.JSON200
-	if bansLoaded && management.State == "unavailable" {
+	if (bansOnly || profile != "" || participantsOnly) && management.State == "unavailable" {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = roomManagementContent(v, management, messageID, invite, bansLoaded).Render(ctx, w)
+	if bansOnly || profile != "" || participantsOnly {
+		if management.State != "available" || management.Revision == nil {
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
+		if participantsOnly {
+			_ = roomManagementParticipants(v, management).Render(ctx, w)
+			return
+		}
+		if bansOnly || bannedProfile {
+			if !slices.Contains(management.Actions, engineapi.Affiliation) {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			if bansOnly {
+				_ = roomBanList(v, management, true).Render(ctx, w)
+				return
+			}
+			for _, address := range management.Affiliations {
+				if roomBannedID(address) == profile {
+					_ = roomBannedDetails(v, *management.Revision, address, roomBanNickname(management, address)).Render(ctx, w)
+					return
+				}
+			}
+		} else {
+			for _, occupant := range management.Occupants {
+				if roomParticipantID(occupant) == profile {
+					_ = roomParticipantDetails(v, *management.Revision, occupant).Render(ctx, w)
+					return
+				}
+			}
+		}
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	_ = roomManagementContent(v, management, messageID, invite).Render(ctx, w)
 }
 
 func (s *Server) manageRoom(ctx context.Context, r *http.Request, text copy) (int, mutationResult) {

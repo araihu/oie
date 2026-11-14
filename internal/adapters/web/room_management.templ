@@ -31,6 +31,9 @@ templ roomManagementDrawer(v view) {
 				@roomManagementSkeleton(v, "oie-room-management-skeleton")
 				<p data-room-management-error role="alert" hidden>{ v.Text.RoomManagementUnavailable }</p>
 				<div data-room-management-content></div>
+				<template data-room-profile-loading>
+					@roomManagementSkeleton(v, "oie-room-profile-skeleton")
+				</template>
 			</div>
 		}
 	}
@@ -40,7 +43,7 @@ templ roomManagementSkeleton(v view, class string) {
 	@skeleton.Skeleton(skeleton.Config{Shape: skeleton.ShapeRectangle, Count: 5, Label: v.Text.RoomManagementLoading, RootClass: class, ItemClass: "oie-room-management-placeholder"})
 }
 
-templ roomManagementContent(v view, state engineapi.RoomManagement, messageID string, invite, bansLoaded bool) {
+templ roomManagementContent(v view, state engineapi.RoomManagement, messageID string, invite bool) {
 	if state.State != "available" || state.Revision == nil {
 		if state.State == "not_joined" {
 			<p>{ v.Text.RoomJoinRequired }</p>
@@ -70,7 +73,7 @@ templ roomManagementContent(v view, state engineapi.RoomManagement, messageID st
 			}
 		}}
 		if slices.Contains(state.Actions, engineapi.Affiliation) {
-			{{ pages = append(pages, tabs.Tab{ID: "bans", Label: v.Text.RoomBans, Content: roomManagementBans(v, state, bansLoaded)}) }}
+			{{ pages = append(pages, tabs.Tab{ID: "bans", Label: v.Text.RoomBans, Content: roomManagementBans(v, state)}) }}
 		}
 		@tabs.Tabs(tabs.Config{ID: "room-management-tabs", RootClass: "oie-room-management-tabs", Tabs: pages})
 	}
@@ -117,9 +120,17 @@ templ roomManagementParticipants(v view, state engineapi.RoomManagement) {
 			<p>{ v.Text.RoomNoVisibleParticipants }</p>
 		}
 	</div>
-	for _, occupant := range state.Occupants {
-		@roomParticipantDetails(v, *state.Revision, occupant)
-	}
+	@roomProfileSlot("room-participant-profile", v.Text.Participants, v.Text.RoomBackToParticipants)
+}
+
+templ roomProfileSlot(id, label, accessibleLabel string) {
+	<div id={ id } data-room-profile-slot hidden>
+		<div data-room-profile-pending hidden>
+			@roomParticipantBack(label, accessibleLabel)
+			<div data-room-profile-status></div>
+		</div>
+		<div data-room-profile-content></div>
+	</div>
 }
 
 type roomParticipantGroup struct {
@@ -149,19 +160,17 @@ func roomParticipantGroups(text copy, occupants []engineapi.RoomManagedOccupant)
 	return slices.DeleteFunc(groups, func(group roomParticipantGroup) bool { return len(group.occupants) == 0 })
 }
 
-templ roomManagementBans(v view, state engineapi.RoomManagement, bansLoaded bool) {
+templ roomManagementBans(v view, state engineapi.RoomManagement) {
 	<div class="oie-room-bans" data-room-participant-list>
 		@roomListSearch("room-ban-search", "room-ban-results", v.Text.RoomSearchBans)
-		@scrollregion.ScrollRegion(scrollregion.Config{Content: roomBanList(v, state, bansLoaded), RootClass: "oie-room-bans-list"})
+		@scrollregion.ScrollRegion(scrollregion.Config{Content: roomBanList(v, state, false), RootClass: "oie-room-bans-list"})
 		{{ id := "room-ban-by-address" }}
 		<footer class="oie-room-ban-footer">
 			@tooltip.Tooltip(id+"-tooltip", v.Text.RoomBanByAddress, tooltip.WithDescription(v.Text.RoomBanByAddressHelp), tooltip.WithTrigger(roomBanToggle(v, id)), tooltip.WithPortal(true))
 			@roomTargetAction(v, *state.Revision, id, "", "affiliation", "outcast", v.Text.RoomBan, button.ToneDanger, "")
 		</footer>
 	</div>
-	for _, address := range state.Affiliations {
-		@roomBannedDetails(v, *state.Revision, address, roomBanNickname(state, address))
-	}
+	@roomProfileSlot("room-banned-profile", v.Text.RoomBans, v.Text.RoomBackToBans)
 }
 
 templ roomBanToggle(v view, id string) {
@@ -175,7 +184,7 @@ templ roomListSearch(id, resultsID, label string) {
 }
 
 templ roomBanList(v view, state engineapi.RoomManagement, bansLoaded bool) {
-	<div id="room-ban-results">
+	<div id="room-ban-results" data-room-revision={ *state.Revision }>
 		if bansLoaded {
 			if len(state.Affiliations) == 0 {
 				<p>{ v.Text.RoomNoBans }</p>
@@ -184,7 +193,7 @@ templ roomBanList(v view, state engineapi.RoomManagement, bansLoaded bool) {
 					for _, address := range state.Affiliations {
 						{{ nickname := roomBanNickname(state, address) }}
 						{{ name := cmp.Or(nickname, address) }}
-						@roomMemberRow(roomBannedID(address), name, address, nickname + " " + address, roomBannedAvatar(v, address, name, avatar.SizeXS))
+						@roomMemberRow(roomBannedID(address), "room-banned-profile", name, address, nickname + " " + address, roomBannedAvatar(v, address, name, avatar.SizeXS))
 					}
 				</ul>
 				<p data-room-list-no-results role="status" hidden>{ v.Text.RoomNoMatchingBans }</p>
@@ -215,7 +224,7 @@ templ roomBannedAvatar(v view, address, name string, size avatar.Size) {
 templ roomBannedDetails(v view, revision, address, nickname string) {
 	{{ id := roomBannedID(address) }}
 	{{ name := cmp.Or(nickname, address) }}
-	<section id={ id + "-details" } class="oie-room-participant-details" aria-labelledby={ id + "-name" } data-room-participant-detail={ id } hidden>
+	<section id={ id + "-details" } class="oie-room-participant-details" aria-labelledby={ id + "-name" } data-room-participant-detail={ id }>
 		@roomParticipantBack(v.Text.RoomBans, v.Text.RoomBackToBans)
 		<header class="oie-room-participant-profile">
 			@roomBannedAvatar(v, address, name, avatar.SizeLG)
@@ -299,12 +308,12 @@ templ roomParticipantAvatar(occupant engineapi.RoomManagedOccupant, size avatar.
 }
 
 templ roomParticipantRow(v view, occupant engineapi.RoomManagedOccupant) {
-	@roomMemberRow(roomParticipantID(occupant), roomParticipantName(v.Text, occupant), "", occupant.Nickname, roomParticipantAvatar(occupant, avatar.SizeXS))
+	@roomMemberRow(roomParticipantID(occupant), "room-participant-profile", roomParticipantName(v.Text, occupant), "", occupant.Nickname, roomParticipantAvatar(occupant, avatar.SizeXS))
 }
 
-templ roomMemberRow(id, name, address, match string, picture templ.Component) {
+templ roomMemberRow(id, controls, name, address, match string, picture templ.Component) {
 	<li data-room-list-match={ match }>
-		@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-room-member-row oie-room-participant-row"), button.WithAttrs(templ.Attributes{"id": id, "data-room-participant-open": id, "aria-controls": id + "-details"})) {
+		@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-room-member-row oie-room-participant-row"), button.WithAttrs(templ.Attributes{"id": id, "data-room-participant-open": id, "aria-controls": controls})) {
 			@picture
 			<span>
 				<span>{ name }</span>
@@ -327,7 +336,7 @@ templ roomParticipantBack(label, accessibleLabel string) {
 templ roomParticipantDetails(v view, revision string, occupant engineapi.RoomManagedOccupant) {
 	{{ id := roomParticipantID(occupant) }}
 	{{ actions := roomParticipantActions(v.Text, occupant) }}
-	<section id={ id + "-details" } class="oie-room-participant-details" aria-labelledby={ id + "-name" } data-room-participant-detail={ id } hidden>
+	<section id={ id + "-details" } class="oie-room-participant-details" aria-labelledby={ id + "-name" } data-room-participant-detail={ id }>
 		@roomParticipantBack(v.Text.Participants, v.Text.RoomBackToParticipants)
 		<header class="oie-room-participant-profile">
 			@roomParticipantAvatar(occupant, avatar.SizeLG)
