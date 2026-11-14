@@ -262,7 +262,7 @@
   "ImageSize": "Tamanho do arquivo",
   "ImageNotDownloaded": "A imagem ainda não foi baixada.",
   "MessageStarred": "Mensagem com estrela",
-  "StarMessage": "Marcar mensagem com estrela",
+  "StarMessage": "Favoritar",
   "UnstarMessage": "Remover estrela da mensagem",
   "RetryStar": "Tentar alteração da estrela novamente",
   "StarConflict": "A estrela mudou em outro lugar. O estado atual foi carregado; escolha novamente.",
