@@ -380,7 +380,7 @@ templ conversationRow(v view, c engineapi.Conversation) {
 		}
 	>
 		@link.Link(v.href("chat", c.Id,"message","","infoView","","infoType","","infoCursor","","infoQuery","","infoFocus","","lang",v.Locale,"theme",v.Theme), link.WithRootClass("oie-chat-link"), link.WithAttrs(attrs)) {
-			@profileAvatar(v,c.AccountId,c.Address,avatar.Config{Name: c.Title, Initials: chatInitials(c), Size: avatar.SizeSM, RootClass: "oie-chat-avatar"})
+			@avatarScope(v,c.AccountId,c.Address,avatar.Config{Name:c.Title,Initials:chatInitials(c),Size:avatar.SizeSM,RootClass:"oie-chat-avatar"},true)
 			<div class="oie-row-content">
 				<div class="oie-row-top"><strong>{ c.Title }</strong><time datetime={ c.UpdatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ c.UpdatedAt.Format("15:04") }</time></div>
 				<div class="oie-row-bottom">
@@ -783,7 +783,12 @@ templ nativeRecovery(v view){
 // The scope belongs to Oie. Avatar's public SrcExpr consumes a fixed expression;
 // opaque addresses are escaped HTML data, never JavaScript source.
 templ profileAvatar(v view,account,address string,cfg avatar.Config){
-<div class="oie-avatar-scope" data-avatar-account={account} data-avatar-address={address} data-avatar-src={v.avatarSource(account,address)} x-data="{oieAvatarSrc: $el.dataset.avatarSrc}">
+@avatarScope(v,account,address,cfg,false)
+}
+
+templ avatarScope(v view,account,address string,cfg avatar.Config,deferEmpty bool){
+{{ src:=v.avatarSource(account,address); deferred:=deferEmpty&&src=="" }}
+<div class="oie-avatar-scope" data-avatar-account={account} data-avatar-address={address} data-avatar-src={src} x-data="{oieAvatarSrc: $el.dataset.avatarSrc}" x-ignore?={deferred} data-inbox-avatar-deferred?={deferred}>
 @profileAvatarContent(v,account,address,cfg)
 </div>
 }
@@ -819,7 +824,7 @@ for identity,hash:=range v.Avatars {
 templ messageBubbleBody(v view,m messageView,grouped bool){
 <div class={"oie-message-body",templ.KV("oie-message-body-compact",m.IsOwn||grouped)} data-message-bubble={m.Id}>
 @messageReactionShortcut(v,m)
-<div class="oie-message-menu-slot" data-message-menu-slot={m.Id}>
+<div class="oie-message-menu-slot" data-message-menu-slot={m.Id} x-ignore?={v.CompactSource} data-source-menu-deferred?={v.CompactSource}>
 @dropdown.Dropdown(dropdown.Config{ID:"message-menu-"+m.Id,Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,m.Id),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:messageActions(v,m.Id)})
 </div>
 if !m.IsOwn && !grouped {
@@ -947,7 +952,7 @@ templ starButton(v view,id string){
 }
 
 templ messageMenuTrigger(v view,id string){
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-menu-chevron"),button.WithAttrs(templ.Attributes{"data-message-menu-trigger":id,"aria-label":v.Text.MessageActions,"title":v.Text.MessageActions})){@glyph(heroicons.Icon16SolidChevronDown)}
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-menu-chevron"),button.WithAttrs(templ.Attributes{"data-message-menu-trigger":id,"aria-label":v.Text.MessageActions,"title":v.Text.MessageActions,"aria-haspopup":"menu","aria-expanded":"false"})){@glyph(heroicons.Icon16SolidChevronDown)}
 }
 templ viewerSource(v view,m messageView){
 {{ position := messageTimelineTime(m.Message) }}

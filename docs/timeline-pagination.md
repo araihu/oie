@@ -73,6 +73,14 @@ fragment. The event stream stays connected while the foreground jump defers
 the automatic HTML refresh. Refresh resumes on the destination or after a
 failed or cancelled jump.
 
+For a compact source route, Oiê validates the fragment HTMX already parsed
+before committing the URL and mounting the workspace. HTMX processes the new
+links once. The browser positions the source before the first painted frame.
+The message menus use the existing Goshtoso dropdown and initialize on the
+first pointer or keyboard activation. Inbox initials need no Alpine scope
+until a photo becomes available. When leaving the catalog, only items with
+live preview state need their cached markup reopened.
+
 SQLite keeps one writer and a small pool of read-only connections in WAL
 mode. The event cursor, timeline and retained metadata can read committed
 data while archive imports and indexing write. A reaction batch loads the

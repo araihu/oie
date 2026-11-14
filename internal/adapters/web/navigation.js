@@ -202,9 +202,10 @@
   }
  }
  function keepMobileNavigation(ctx){
-  const mobile=ctx.target.querySelector('.oie-mobile-nav'),incoming=ctx.oieRouteApp.querySelector('.oie-mobile-nav');
+  const mobile=ctx.target.querySelector('.oie-mobile-nav'),incoming=(ctx.oieIncomingRoute||ctx.oieRouteApp).querySelector('.oie-mobile-nav');
   if(!mobile||!incoming)return;
   ctx.oieMobileNavigation=mobile;
+  ctx.oieIncomingMobile=incoming;
   ctx.oieMobileFocus=mobile.contains(document.activeElement);
   if(window.Alpine)window.Alpine.mutateDom(()=>mobile.remove());else mobile.remove();
  }
@@ -409,7 +410,7 @@
   if(root!==app()||failedEpoch!==epoch||!root?.dataset.routeError)return;
   window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:root.dataset.routeError}}));
  }
- function upgrade(root=document){if(!root)return;for(const node of root.querySelectorAll('a[href],form')){
+ function upgrade(root=document,process=true){if(!root)return;for(const node of root.querySelectorAll('a[href],form')){
   if(node.closest('[data-quick-search]')||node.matches('[data-global-search-form],[data-message-search-filter],[data-conversation-search-close],[data-open-sender],[data-room-invitation],[data-room-entry-open],a[download],a[target]:not([target="_self"])')||node.hasAttribute('hx-get')||node.hasAttribute('hx-post'))continue;
   const form=node.tagName==='FORM';if(form&&(node.method||'get').toLowerCase()!=='get')continue;
   let url;try{url=new URL(form?node.action:node.href,location.href)}catch{continue}
@@ -421,7 +422,7 @@
   const sourceInPane=source&&conversationRoute(url);
   const kind=sourceInPane?'conversation-pane':node.matches('a[data-oie-navigation-item]')||source?routeID:scoped||(pane?'conversation-pane':!form&&node.matches('a[data-filter]')?inboxID:'oie-app');
   node.setAttribute('hx-boost','true');node.setAttribute('hx-target','#'+kind);node.setAttribute('hx-select',selectFor(kind));node.setAttribute('hx-swap',swapFor(kind));node.setAttribute('hx-push-url','true');node.setAttribute('hx-headers',JSON.stringify({'X-Oie-Fragment':sourceInPane?'source-pane':source?'source':fragment(kind)}));
- }window.htmx?.process(root);}
+ }if(process)window.htmx?.process(root);}
  // The dependency loader can expose HTMX before Alpine finishes loading.
  // Process the clicked navigation link before the event reaches its target,
  // without starting application scopes before the remaining dependencies.
@@ -460,6 +461,28 @@
  function infoReady(starGeneration){const root=document.getElementById('chat-info-content');if(!root)return;rememberInfoSharedPage(root);upgrade(root);document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root,generation:starGeneration}}));const body=document.getElementById('details-body');if(root.dataset.infoView){if(body)body.scrollTop=0;root.querySelector('[data-info-heading]')?.focus({preventScroll:true})}else{if(body)body.scrollTop=infoReturnScroll;const kind=new URL(location.href).searchParams.get('infoFocus');root.querySelector(`[data-info-entry="${CSS.escape(kind||'media')}"]`)?.focus({preventScroll:true})}}
  function closeMediaViewers(){for(const id of ['oie-image-viewer','oie-document-viewer']){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id}}));const dialog=document.getElementById(id);if(dialog?.open)dialog.close()}}
  function closeOverlays(){closeMediaViewers();for(const id of ['details','accounts','settings','about','newchat','join-room','create-room','sender','message-history'])window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id}}));}
+ function workspaceResponse(ctx,nextApp,next){
+  if(ctx.oieKind===routeID){
+   if(!next||!nextApp||ctx.response?.status!==200)return false;
+   const mounted=app().dataset,incoming=nextApp.dataset;
+   if(incoming.engineId!==mounted.engineId||incoming.routeLocale!==mounted.routeLocale||incoming.mock!==mounted.mock){
+    ctx.oieRetry=true;go(ctx.request.action,{history:ctx.oieHistory,workspace:'oie-app'});return false;
+   }
+   ctx.oieRouteApp=nextApp;
+  }
+  const list=next?.querySelector('#conversation-list'),entry=ctx.oieInbox;
+  const matches=list&&entry&&inbox.holds(entry)&&list.dataset.inboxCacheScope===entry.list.dataset.inboxCacheScope&&nextApp?.dataset.engineId===app()?.dataset.engineId;
+  ctx.oieInboxReuse=list?.hasAttribute('data-inbox-reuse');
+  if(ctx.oieInboxReuse&&matches){
+   const params=new URL(ctx.request.action,location.href).searchParams;
+   const cursor=ctx.request.headers['X-Oie-Inbox-Cursor'];
+   if(!params.get('chat')&&params.get('inbox')!=='1'&&(!inbox.current(entry.list)||window.OieEvents.latest(cursor)!==cursor)){
+    ctx.oieRetry=true;go(ctx.request.action,{history:ctx.oieHistory,workspace:ctx.oieKind,noInboxReuse:true});return false;
+   }
+  }
+  if(!matches)ctx.oieInbox=undefined;
+  return !!next&&(!ctx.oieInboxReuse||!!matches);
+ }
  document.addEventListener('htmx:before:request',event=>{
   const ctx=event.detail.ctx;if(!ctx)return;
   if(ctx.target?.id==='info-shared-search-results'){
@@ -522,33 +545,19 @@
    if(!conversationResponse(ctx)){event.preventDefault();showError(ctx);}
    return;
   }
+  if(ctx.oieKind===routeID&&ctx.request.headers['X-Oie-Fragment']==='source'&&ctx.response?.status===200&&
+     /^<div\s+id="oie-app"\s+data-source-route(?:\s|>)/.test(ctx.text?.trimStart()||'')){
+   // Validate the envelope from HTMX's parsed fragment before committing
+   // history. Its default history update runs before it parses the response.
+   ctx.oieCompactSource=true;
+   ctx.select='#oie-app';
+   ctx.push='false';
+   return;
+  }
   const parsed=new DOMParser().parseFromString(ctx.text||'','text/html'),next=parsed.querySelector('#'+ctx.oieKind);
   let valid=!!next;
   if(replacesWorkspace(ctx.oieKind)){
-   const nextApp=parsed.getElementById('oie-app');
-   if(ctx.oieKind===routeID){
-    valid=valid&&!!nextApp&&ctx.response?.status===200;
-    if(valid&&(nextApp.dataset.engineId!==app().dataset.engineId||nextApp.dataset.routeLocale!==app().dataset.routeLocale||nextApp.dataset.mock!==app().dataset.mock)){
-     event.preventDefault();go(ctx.request.action,{history:ctx.oieHistory,workspace:'oie-app'});return;
-    }
-    ctx.oieRouteApp=nextApp;
-   }
-   const list=next?.querySelector('#conversation-list');
-   const matches=list&&ctx.oieInbox&&inbox.holds(ctx.oieInbox)&&
-    list.dataset.inboxCacheScope===ctx.oieInbox.list.dataset.inboxCacheScope&&nextApp?.dataset.engineId===app()?.dataset.engineId;
-   ctx.oieInboxReuse=list?.hasAttribute('data-inbox-reuse');
-   if(ctx.oieInboxReuse&&matches){
-    const params=new URL(ctx.request.action,location.href).searchParams;
-    const requestCursor=ctx.request.headers['X-Oie-Inbox-Cursor'];
-    const implicit=!params.get('chat')&&params.get('inbox')!=='1';
-    if(implicit&&(!inbox.current(ctx.oieInbox.list)||window.OieEvents.latest(requestCursor)!==requestCursor)){
-     event.preventDefault();
-     go(ctx.request.action,{history:ctx.oieHistory,workspace:ctx.oieKind,noInboxReuse:true});
-     return;
-    }
-   }
-   if(ctx.oieInboxReuse)valid=valid&&!!matches;
-   if(!matches)ctx.oieInbox=undefined;
+   valid=workspaceResponse(ctx,parsed.getElementById('oie-app'),next);
   }
   if(['shared-content-scroll','shared-search-results'].includes(ctx.oieKind)){
    valid=valid&&ctx.response?.status===200&&parsed.querySelector('[data-shared-fragment]')?.dataset.engineId===document.body.dataset.engineId&&sharedFields()===ctx.oieSharedFields;
@@ -567,7 +576,7 @@
    const url=new URL(ctx.request.action,location.href);
    valid=valid&&ctx.response?.status===200&&next.dataset.inboxScope===ctx.target.dataset.inboxScope&&next.dataset.inboxFilter===(url.searchParams.get('filter')||'all');
   }
-  if(!valid){event.preventDefault();ctx.target?.removeAttribute('aria-busy');if(ctx.sourceElement?.id==='shared-content-search')syncSharedAccount(new URL(currentURL).searchParams);if(!ctx.sourceElement?.matches('[data-conversation-schedule-edit]'))showError(ctx);}
+  if(!valid){event.preventDefault();ctx.target?.removeAttribute('aria-busy');if(ctx.sourceElement?.id==='shared-content-search')syncSharedAccount(new URL(currentURL).searchParams);if(!ctx.oieRetry&&!ctx.sourceElement?.matches('[data-conversation-schedule-edit]'))showError(ctx);}
  });
  document.addEventListener('htmx:finally:request',event=>{
   if(pendingConversation?.ctx===event.detail.ctx)stopConversationLoading();
@@ -578,7 +587,25 @@
   if(ctx.oieInfoCancelled||ctx.oieEpoch!==epoch||!document.getElementById(ctx.oieKind)||ctx.oieSharedFields!==undefined&&sharedFields()!==ctx.oieSharedFields){
    event.preventDefault();return;
   }
+  if(ctx.oieCompactSource){
+   const task=event.detail.tasks.find(task=>task.type==='main');
+   const fresh=task?.fragment.firstElementChild,route=fresh?.querySelector(':scope > #oie-route');
+   if(!fresh?.hasAttribute('data-source-route')||!route||!fresh.querySelector('#desktop-navigation')||
+      !workspaceResponse(ctx,fresh,route)){
+    event.preventDefault();if(!ctx.oieRetry)showError(ctx);return;
+   }
+   const url=new URL(ctx.response.raw.url||ctx.request.action,location.href);
+   if(url.origin!==location.origin){event.preventDefault();showError(ctx);return;}
+   ctx.oieSourceURL=url;
+   task.fragment.replaceChildren(route);
+   ctx.oieIncomingRoute=route;
+  }
   remember();ctx.target=document.getElementById(ctx.oieKind);
+  if(ctx.oieSourceURL&&window.htmx.config.history&&!ctx.oieHistory){
+   const {pathname,search,hash}=ctx.oieSourceURL;
+   if(!history.state)history.replaceState({htmx:true},'',location.href);
+   history.pushState({htmx:true},'',pathname+search+hash);
+  }
   if(ctx.oieKind===routeID)keepMobileNavigation(ctx);
   if(replacesWorkspace(ctx.oieKind)&&booted&&!ctx.oieInbox)inbox.park(new URL(currentURL),inboxScroll);
   if(ctx.oieKind===inboxID){
@@ -620,7 +647,7 @@
    updateSidebar(document.getElementById('desktop-navigation'),fresh.querySelector('#desktop-navigation'),accountChanged);
    if(ctx.oieMobileNavigation){
     const mobile=ctx.oieMobileNavigation;
-    updateSidebar(mobile,fresh.querySelector('.oie-mobile-nav'),accountChanged);
+    updateSidebar(mobile,ctx.oieIncomingMobile,accountChanged);
     const placeholder=root.querySelector('.oie-mobile-nav');
     if(window.Alpine)window.Alpine.mutateDom(()=>placeholder.replaceWith(mobile));else placeholder.replaceWith(mobile);
     const trigger=mobile.querySelector('button[aria-controls="mobile-navigation-panel"]');
@@ -725,7 +752,8 @@
    if(pendingConversation&&!pendingConversation.overlay.isConnected)stopConversationLoading();
    const pane=root.id==='conversation-pane'?root:null;
    if(!pane)inboxScroll=ctx?.oieInboxTop||0;
-   routeState(pane);syncFilterLinks();upgrade(pane||app());
+   routeState(pane);syncFilterLinks();
+   if(ctx?.oieCompactSource)upgrade(root,false);else upgrade(pane||app());
    if(!pane)rememberSharedPage(root.querySelector('#shared-content-pagination [data-shared-page]'));
    rememberInfoSharedPage(root);
    // Alpine's HTMX hook flushes after settle. Initialize the new pane now

@@ -108,6 +108,18 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
   page.off('request',watchRefresh);
   assert.equal(new URL(page.url()).searchParams.get('section'),'media');
   if(!await sourceMenu().isVisible())await open(0);
+  // An invalid success envelope must not commit history or replace the catalog.
+  await page.route(refusedURL,route=>route.fulfill({status:200,contentType:'text/html',body:'<div id="oie-app" data-source-route><div id="oie-route"></div></div>'}),{times:1});
+  const malformed=page.waitForResponse(r=>refusedURL(new URL(r.url())));
+  await page.evaluate(()=>{window.sourceFinally=false;document.addEventListener('htmx:finally:request',function finish(event){
+   if(event.detail.ctx?.request.headers['X-Oie-Fragment']!=='source')return;
+   document.removeEventListener('htmx:finally:request',finish);window.sourceFinally=true;
+  });});
+  const resumedAfterMalformed=page.waitForResponse(r=>new URL(r.url()).pathname==='/ui/refresh');
+  await sourceMenu().click();await malformed;await resumedAfterMalformed;
+  await page.waitForFunction(()=>window.sourceFinally);
+  assert.equal(new URL(page.url()).searchParams.get('section'),'media');
+  if(!await sourceMenu().isVisible())await open(0);
   // A snapshot announces shared content before synchronizing message-menu slots.
   // Capture the surviving node only after that synchronization completes.
   const watchSnapshot=async()=>page.evaluate(({engine,account,chat,source})=>{
@@ -122,12 +134,25 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
   const shell=await page.locator('#oie-app').elementHandle();
   const settings=await page.locator('[data-route-settings]').elementHandle();
   const viewers=await page.locator('[data-route-viewers]').elementHandle();
+  await page.evaluate(source=>{
+   window.sourceFirstFrame=null;
+   const frame=()=>{
+    const timeline=document.getElementById('message-timeline');
+    if(!timeline){requestAnimationFrame(frame);return;}
+    const target=timeline.querySelector(`[data-message-id="${CSS.escape(source)}"]`);
+    const row=target?.getBoundingClientRect(),viewport=timeline.getBoundingClientRect();
+    window.sourceFirstFrame={focused:document.activeElement===target,visible:!!row&&row.bottom>viewport.top&&row.top<viewport.bottom};
+   };
+   requestAnimationFrame(frame);
+  },items[0].message.id);
   await watchSnapshot();
   const jumpResponse=page.waitForResponse(r=>r.request().headers()['x-oie-fragment']==='source');
   await menu(0).getByRole('menuitem',{name:'Go to message',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#message-timeline'));assert.equal(documents.length,1);assert.equal(new URL(page.url()).searchParams.get('message'),items[0].message.id);
   const response=await jumpResponse;
   assert.equal(await response.headerValue('content-encoding'),'gzip');
   assert(!(await response.text()).includes('data-route-settings'));
+  await page.waitForFunction(()=>window.sourceFirstFrame);
+  assert.deepEqual(await page.evaluate(()=>window.sourceFirstFrame),{focused:true,visible:true});
   await until(()=>streams.size===1,'live stream retained across source navigation');
   emit();
   // Network completion is earlier than application consumption. Wait for the
@@ -140,6 +165,15 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
   await settings.dispose();
   await viewers.dispose();
   assert(await page.evaluate(()=>window.catalogActionSettlement.copy.isConnected),'menu measurement starts from the applied live DOM');
+  const deferredMenu=page.locator(`[data-message-menu-slot="${items[0].message.id}"]`);
+  assert.equal(await deferredMenu.getAttribute('data-source-menu-deferred'),'');
+  const deferredTrigger=deferredMenu.locator('[data-message-menu-trigger]');
+  await deferredTrigger.focus();await page.keyboard.press('ArrowDown');
+  await deferredMenu.getByRole('menu').waitFor({state:'visible'});
+  assert.equal(await deferredMenu.getAttribute('data-source-menu-deferred'),null);
+  await page.keyboard.press('Escape');
+  await deferredMenu.getByRole('menu').waitFor({state:'hidden'});
+  await until(async()=>await deferredTrigger.evaluate(el=>el===document.activeElement),'first keyboard open restores focus on Escape');
   // Exercise the actual message action menu with the consumer theme overrides.
   const painted=el=>{
    const canvas=document.createElement('canvas');canvas.width=canvas.height=1;const ctx=canvas.getContext('2d');
@@ -163,7 +197,14 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
    await page.keyboard.press('Escape');await copy.waitFor({state:'hidden'});await until(async()=>await trigger.evaluate(el=>el===document.activeElement),'message menu restores trigger focus');
   }
   assert.deepEqual(errors,[]);await c.close();
-  for(const locale of ['en','pt-BR']){const m=await browser.newContext({viewport:{width:390,height:844},locale,hasTouch:true,reducedMotion:'reduce'});await m.addInitScript(()=>localStorage.setItem('oie.device.auto-image-downloads.v1','false'));const p=await m.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(base+'/?section=media&lang='+locale);await p.waitForFunction(()=>window.OieRuntime?.generation>0);const first=p.locator('[data-shared-item]').first();await first.locator('[data-shared-menu-trigger]').tap();await first.getByRole('menuitem',{name:locale==='en'?'Copy link':'Copiar link',exact:true}).waitFor({state:'visible'});await until(async()=>{const b=await first.locator('[role=menu]').boundingBox();return b&&b.x>=0&&b.x+b.width<=390},'mobile menu placement settles inside viewport');await p.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);await m.close()}
+  for(const locale of ['en','pt-BR']){const m=await browser.newContext({viewport:{width:390,height:844},locale,hasTouch:true,reducedMotion:'reduce'});await m.addInitScript(()=>localStorage.setItem('oie.device.auto-image-downloads.v1','false'));const p=await m.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(base+'/?section=media&lang='+locale);await p.waitForFunction(()=>window.OieRuntime?.generation>0);const first=p.locator('[data-shared-item]').first();await first.locator('[data-shared-menu-trigger]').tap();await first.getByRole('menuitem',{name:locale==='en'?'Copy link':'Copiar link',exact:true}).waitFor({state:'visible'});await until(async()=>{const b=await first.locator('[role=menu]').boundingBox();return b&&b.x>=0&&b.x+b.width<=390},'mobile menu placement settles inside viewport');await p.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);
+   await first.getByRole('menuitem',{name:locale==='en'?'Go to message':'Ir para a mensagem',exact:true}).tap();
+   const focused=p.locator(`#message-timeline [data-message-id="${items[0].message.id}"]:focus`);
+   await focused.waitFor({state:'visible'});
+   await p.goBack();await p.locator('#shared-content-results').waitFor({state:'visible'});
+   await p.goForward();await focused.waitFor({state:'visible'});
+   await m.close();
+  }
   assert.deepEqual(errors,[]);console.log('PASS: catalog chevron, exact URL copy, cached/queued image downloads, video/document save, supported actions, fragment source jump and EN/PT touch accessibility');
  }finally{await browser.close();child.kill('SIGTERM');for(const s of streams)s.end();api.closeAllConnections();await new Promise(r=>api.close(r))}
 })().catch(e=>{console.error(e);process.exitCode=1});

@@ -31,9 +31,21 @@ window.OieRuntime.register('live', life => {
   function applyAvatars(root = document) {
     for (const scope of root.querySelectorAll('[data-avatar-account]')) {
       const src = avatarSources.get(avatarKey(scope.dataset.avatarAccount,scope.dataset.avatarAddress)) || '';
-      scope.dataset.avatarSrc = src;
+      if(scope.hasAttribute('data-inbox-avatar-deferred')){
+        if(!src)continue;
+        scope.dataset.avatarSrc=src;
+        if(!window.Alpine)continue;
+        window.Alpine.mutateDom(()=>{
+          window.Alpine.destroyTree(scope);
+          scope.removeAttribute('x-ignore');
+          scope.removeAttribute('data-inbox-avatar-deferred');
+          window.Alpine.initTree(scope);
+        });
+        continue;
+      }
+      if(scope.dataset.avatarSrc!==src)scope.dataset.avatarSrc=src;
       const data = window.Alpine?.$data?.(scope);
-      if (data && 'oieAvatarSrc' in data) data.oieAvatarSrc = src;
+      if (data && 'oieAvatarSrc' in data && data.oieAvatarSrc!==src) data.oieAvatarSrc = src;
     }
   }
   readAvatars(document);
