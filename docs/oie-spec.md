@@ -470,8 +470,8 @@ Record page limits and turn frequency in
 Search across accounts/sources in the selected engine and within a direct/group conversation. Alpha indexes message text, captions, filenames, URLs, page titles/descriptions, and available media metadata. Document-body extraction, image OCR, and audio transcription are backlogged.
 
 **AGREED:** room text search queries SQLite and the room archive in parallel
-when remote text search is supported. Show local results, including matching
-retained starred messages older than the cutoff, as they become available.
+when remote text search is supported. Show local results, including any matching
+messages retained beyond the cutoff, as they become available.
 Add authorized remote matches within the retention window as they arrive.
 Dispatch remote search after a short typing pause and keep only the latest term
 queued for each active room search. Apply responses to the matching search.
@@ -541,30 +541,67 @@ Dismissing the card leaves the draft text intact.
 
 | Conversation type | Global policy | Conversation override |
 | --- | --- | --- |
-| Rooms | **180 days** by default, configurable. | A room-specific policy takes precedence over the global room policy. Clearing the override restores inheritance. |
-| Direct conversations | **Unlimited by default**. A finite period can be enabled independently of the room policy. | A conversation can set its own period or disable expiry. Clearing the override restores the global direct-conversation policy. |
+| Rooms | **180 days** by default. Choose a finite period or **Unlimited**. | Inherit the global room policy, set a finite period, or choose **Unlimited**. |
+| Direct conversations | **Unlimited** by default. Choose a finite period independently of the room policy. | Inherit the global direct-conversation policy, set a finite period, or choose **Unlimited**. |
+
+When choosing **Unlimited** for rooms, explain that messages will no longer
+expire by age, local storage can grow, and Oiê can recover all history that the
+XMPP server still makes available and authorizes. The global setting applies to
+rooms that inherit it. Selecting a shorter period can remove older messages
+from the local history.
+
+#### Local expiry
 
 A finite policy sets a rolling cutoff based on the original message timestamp.
+For scheduled messages, retention age starts at actual send time. Pending sends,
+including sends with an unresolved outcome, follow section 5.
+
 For each room, keep its **100 most recent messages already stored in the engine
 database**, even if they are older than the cutoff. If the room has fewer than
 100 stored messages, keep all of them. This minimum applies under both the
 global room policy and room-specific overrides. All messages within the window
 and all starred messages are also kept, including stars outside the latest 100.
 
-Oiê purges eligible messages together with their revisions and message-derived
-search and shared-content entries. A message is eligible when it is older than
-the cutoff, unstarred, and outside the latest 100 if it belongs to a room.
-Downloaded files follow section 8, and pending sends follow section 5.
+The first expiry pass in the pre-alpha applies the effective policy to existing
+history automatically. When processing a batch, check the current policy, star
+state, and room minimum in the same transaction that removes eligible messages.
+A message is eligible when it is older than the cutoff, unstarred, and outside
+the latest 100 if it belongs to a room.
+
+Remove expired messages and their revisions from the engine database. Remove
+their content from search, shared-content entries, conversation previews,
+durable event replay and operation receipts. Receipts retain enough information
+to prevent retries from repeating completed operations.
+Preserve a direct conversation's acceptance when its last message expires.
+A retained reply keeps its own text. If the original has expired, replace the
+automatically quoted excerpt with **Original message unavailable**. Text copied
+manually into a reply follows that reply's retention. Downloaded files follow
+section 8.
+
+#### XMPP recovery
 
 The same cutoff is the earliest timestamp Oiê can retrieve from the XMPP
 archive. Apply it to initial reconstruction, automatic backfill, catch-up after
-reconnection, on-demand paging and remote search. The 100-message minimum and
-star protection apply only to copies already stored in Oiê. A fresh installation
-can therefore recover fewer than 100 messages for a room. With an unlimited
-policy, Oiê can retrieve the full available, authorized archive.
+reconnection, on-demand paging and remote search. The room minimum and local
+stars grant no additional XMPP history. A fresh installation can recover fewer
+than 100 messages for a room. **Unlimited** lets Oiê retrieve the full available,
+authorized archive.
 
-Purge cadence and how retention interacts with sync and backup restore remain
-open under O17.
+Use the effective room cutoff in archive requests. For known direct
+conversations, use peer-scoped queries with the effective cutoff. Account-wide
+discovery can return messages from conversations with different policies.
+Check each message against the effective policy before storing or displaying
+it, including delayed messages delivered outside archive queries and history
+sent on room entry. Recheck pages already in flight if the policy changes.
+
+When the retention window expands, reopen recovery for the newly eligible
+range even if earlier recovery completed. Respect the room's existing recovery
+mode. Gradual rooms fetch the newly eligible range in the background, and
+on-demand rooms make it available when requested. Recovery remains limited to
+history the server still has and authorizes.
+
+Purge cadence and storage maintenance remain open under O17. See sections 9.2
+and 12 for sync and restore.
 
 ## 8. Media and downloaded files
 
@@ -616,6 +653,13 @@ For a hosted engine shared by multiple devices, device-local deletion excludes t
 ### 9.2 Sync scope
 
 Optional sync is independent of provider-native multi-client features and independent of the engine's live UI SSE stream. A sync-only host need not own protocol sessions merely to exchange application data.
+
+Automatic expiry applies to the database enforcing the policy. Other copies
+apply their own effective policy. When receiving synced history, enforce the
+destination's current policy before storing or displaying it. Protect stored
+room messages covered by the local minimum and protect starred messages.
+If the window later expands, history that only expired can be recovered from
+an available source. Explicit deletion continues to apply within its chosen scope.
 
 | Data | Agreed scope |
 | --- | --- |
@@ -831,6 +875,11 @@ Include manual engine-data backup and restore, with media files optionally inclu
 
 Apply the same type-specific revision/conflict/deletion rules as sync. Preserve newer descendant revisions, resolve concurrent revisions deterministically, retain alternatives, and honor known deletion markers. Import time is not a new edit.
 
+Apply the destination's current retention policy before storing or displaying
+restored history. The room minimum protects only history already stored in the
+destination. A backup can bring back messages older than the effective cutoff
+only when they are starred. Explicit deletion rules still apply.
+
 Recovered pending/scheduled sends stay **paused until reviewed and explicitly resumed**. Ordinary engine restarts still resume eligible sends automatically. Restore must not reset an existing accepted/delivered/cancelled operation to queued, infer ownership takeover, or revive a cancelled intent through a stale backup.
 
 Explicit resume still requires reconciliation of unknown outcomes and current ownership. A backup may predate provider delivery or later edits/cancellation.
@@ -929,7 +978,7 @@ These are design tasks, not another mandatory interview checklist. They should b
 | **O14** | Locale regional matching/plurals, timestamp precision/encoding, DST input ambiguity, exact formatting and catalog tooling. | English/pt-BR, per-device selection, English fallback, and UTC underneath are agreed. |
 | **O15** | Backup archive/schema versions, snapshot consistency while running, merge recovery, credential inclusion/encryption, active outbox/sync interaction. | R14/R20; merge into existing data and review restored sends are agreed. |
 | **O16** | Compatible pinned Goshtoso/App Shells/Margo releases or PR pseudo-versions; generic APIs for G01/G02/Margo; driver/UUID libraries and implementation toolchain. | R13; inspected versions are evidence, not a completed consumer compatibility test. |
-| **O17** | Purge scheduling and storage maintenance, how retention policies and expired history interact with sync and backup restore, and whether to offer a separate export or cold archive. | Section 7.1 defines the agreed policy defaults, overrides, star protection and XMPP cutoff. B35 covers performance measurements and long-term storage options. |
+| **O17** | Purge cadence, storage maintenance, retention policy synchronization, and whether to offer a separate export or cold archive. | Sections 7.1, 9.2 and 12 define local expiry, XMPP recovery and history import under the effective policy. B35 covers performance measurements and long-term storage options. |
 
 Manual link stars/export, separate threads, automatic protocol relaying, multi-engine UI aggregation, recurring schedules, and native mobile packaging have **not been selected**. Do not silently implement them as either confirmed alpha scope or explicitly approved backlog.
 
@@ -1023,6 +1072,9 @@ These scenarios validate **AGREED** behavior; proposed mechanisms such as a part
 | History | Gradually import authorized history within the effective retention window by default and fetch eligible older pages as needed in on-demand rooms. Resume after interruption within the cutoff. Reopening a conversation uses retained messages, including those whose provider copies have expired. |
 | Room message retention | With default settings, a room with 20 messages within 180 days and at least 80 older messages keeps its latest 100 plus any starred messages outside those 100. A room with 150 messages within 180 days keeps all 150. A 90-day room override changes the date cutoff for purge and retrieval, with the same local minimum. XMPP reconstruction and remote search skip messages older than the effective cutoff, even when a fresh install recovers fewer than 100 messages. |
 | Direct message retention | Direct conversations retain and recover older messages by default. A finite direct policy bounds both operations. Old unstarred direct messages are eligible for purge even when the conversation has fewer than 100 messages. A conversation override can change the period or disable expiry. Removing an override restores the corresponding global policy. |
+| Room policy changes | Choosing Unlimited explains local storage growth and the scope of XMPP recovery. A room can inherit a global Unlimited setting or override it with a finite period. Extending a 90-day window to 180 days makes the newly eligible range recoverable in the room's existing recovery mode. When the window shrinks, a page already in flight stores and exposes only messages eligible under the current cutoff. |
+| Expiry effects | A star committed before the purge protects the message. After purge, previews, event replay and operation receipts no longer expose the purged content. Retrying a completed send still avoids a duplicate. A surviving reply shows its body and an unavailable original. An accepted direct conversation stays accepted when its last message expires. A scheduled message's age is measured from actual send time. |
+| History ingestion | An account-wide XMPP discovery page can contain conversations with different retention policies. Each message is checked against its own effective cutoff, including delayed deliveries and room-entry history. A backup can restore a starred message beyond the cutoff. An old unstarred message in that backup is skipped even when the destination has fewer than 100 room messages. |
 | Search | Global/per-conversation metadata search returns source context. Latest versions are default; historical/retracted matches require their independent filters. Offline results clearly cover only cached data. |
 | Retraction | Supported own retraction uses its separate action. While retained, retracted originals display a placeholder/Reveal original and remain outside ordinary search/library views. No guarantee of erasing another client's copy is shown. |
 | Deletion | Device-local deletion leaves other device copies intact, including with a shared hosted engine. All-copy deletion propagates on sync. All revisions/derived entries disappear within scope, including under both Include filters; known deletion markers prevent revival. |
