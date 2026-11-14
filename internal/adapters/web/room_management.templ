@@ -183,7 +183,8 @@ templ roomBanList(v view, state engineapi.RoomManagement, bansLoaded bool) {
 				<ul class="oie-room-addresses" aria-label={ v.Text.RoomBannedAddresses }>
 					for _, address := range state.Affiliations {
 						{{ nickname := roomBanNickname(state, address) }}
-						@roomMemberRow(roomBannedID(address), cmp.Or(nickname, address), nickname + " " + address, roomBannedAvatar(v, address, cmp.Or(nickname, address), avatar.SizeXS))
+						{{ name := cmp.Or(nickname, address) }}
+						@roomMemberRow(roomBannedID(address), name, address, nickname + " " + address, roomBannedAvatar(v, address, name, avatar.SizeXS))
 					}
 				</ul>
 				<p data-room-list-no-results role="status" hidden>{ v.Text.RoomNoMatchingBans }</p>
@@ -298,14 +299,19 @@ templ roomParticipantAvatar(occupant engineapi.RoomManagedOccupant, size avatar.
 }
 
 templ roomParticipantRow(v view, occupant engineapi.RoomManagedOccupant) {
-	@roomMemberRow(roomParticipantID(occupant), roomParticipantName(v.Text, occupant), occupant.Nickname, roomParticipantAvatar(occupant, avatar.SizeXS))
+	@roomMemberRow(roomParticipantID(occupant), roomParticipantName(v.Text, occupant), "", occupant.Nickname, roomParticipantAvatar(occupant, avatar.SizeXS))
 }
 
-templ roomMemberRow(id, name, match string, picture templ.Component) {
+templ roomMemberRow(id, name, address, match string, picture templ.Component) {
 	<li data-room-list-match={ match }>
 		@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-room-member-row oie-room-participant-row"), button.WithAttrs(templ.Attributes{"id": id, "data-room-participant-open": id, "aria-controls": id + "-details"})) {
 			@picture
-			<span>{ name }</span>
+			<span>
+				<span>{ name }</span>
+				if address != "" && address != name {
+					<span class="oie-room-member-address">{ address }</span>
+				}
+			</span>
 			@glyph(heroicons.Icon16SolidChevronRight)
 		}
 	</li>

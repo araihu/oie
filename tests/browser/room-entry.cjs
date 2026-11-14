@@ -502,6 +502,14 @@ async function waitFor(predicate) {
     await page.locator('[aria-controls=chat-options-panel]').click();
     await page.locator('#chat-manage-room').click();
     const roomPanel = page.locator('[data-room-management]');
+    const dismissRoomConfirmations = async () => {
+      const toasts = page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'Alteração confirmada.'});
+      while (await toasts.first().isVisible()) {
+        const count = await toasts.count();
+        await toasts.first().getByRole('button',{name:'Fechar',exact:true}).press('Enter');
+        await waitFor(async () => (await toasts.count()) < count);
+      }
+    };
     const image = roomPanel.locator('.oie-room-management-avatar [data-avatar-ready=true]');
     await image.waitFor();
     await roomPanel.getByRole('button',{name:'Remover imagem da sala',exact:true}).click();
@@ -514,6 +522,7 @@ async function waitFor(predicate) {
     await image.waitFor();
     assert.equal(managementCommands.at(-1).action,'set_avatar');
     assert.equal(managementCommands.at(-1).image,avatar.toString('base64'));
+    await dismissRoomConfirmations();
     await roomPanel.getByRole('tab',{name:'Banimentos',exact:true}).click();
     const banSearch = roomPanel.getByRole('searchbox',{name:'Pesquisar banimentos',exact:true});
     const bansList = roomPanel.locator('.oie-room-bans-list [data-goshtoso-scroll-viewport]');
@@ -564,6 +573,7 @@ async function waitFor(predicate) {
     assert.equal(managementCommands.length,beforeUnban+1);
     assert.equal(managementCommands.at(-1).action,'affiliation');
     assert.equal(managementCommands.at(-1).target,'banido@fixture');
+    await dismissRoomConfirmations();
     assert.equal(managementCommands.at(-1).value,'none');
     const banTabs = roomPanel.getByRole('tablist');
     const banToggle = roomPanel.getByRole('button',{name:'Banir por endereço',exact:true});
@@ -600,6 +610,7 @@ async function waitFor(predicate) {
     assert.equal(managementCommands.at(-1).value,'outcast');
     assert.equal(managementCommands.at(-1).target,'ainda-fora@fixture');
     assert.equal(managementCommands.length,beforeBan+1);
+    await dismissRoomConfirmations();
 
     const bansTab = roomPanel.getByRole('tab',{name:'Banimentos',exact:true});
     await roomPanel.getByRole('tab',{name:'Participantes',exact:true}).click();
@@ -613,11 +624,16 @@ async function waitFor(predicate) {
     assert.equal(unavailableBanReads,0);
     await reloadError.getByRole('button',{name:'Fechar',exact:true}).click();
     await reloadError.waitFor({state:'hidden'});
+    await dismissRoomConfirmations();
     assert.equal(managementCommands.at(-1).target,'occupant:reader');
     assert.equal(managementCommands.at(-1).value,'outcast');
-    await bansTab.click();
-    const bannedReader = roomPanel.getByRole('button',{name:'Leitora',exact:true});
+    await bansTab.press('Enter');
+    const bannedReader = roomPanel.getByRole('button',{name:'Leitora '+readerAddress,exact:true});
     await bannedReader.waitFor();
+    const listedAddress = bannedReader.getByText(readerAddress,{exact:true});
+    await listedAddress.waitFor();
+    const nicknameBox = await bannedReader.getByText('Leitora',{exact:true}).boundingBox();
+    assert((await listedAddress.boundingBox()).y >= nicknameBox.y + nicknameBox.height - 1);
     await banSearch.fill('leitora');
     assert.equal(await bansList.locator('li:visible').count(),1);
     await banSearch.fill(readerAddress);
