@@ -523,7 +523,6 @@ window.OieRuntime.register('scheduling', life => {
           // Thumbnail generation is independent of staging and playback.
         } finally {
           clearTimeout(timeout);
-          if (!pending.has(entry.id)) delete entry.file;
           previewing = null;
           previewNext();
         }
@@ -624,8 +623,6 @@ window.OieRuntime.register('scheduling', life => {
           throw Error('draft unavailable');
         }
         if (file.thumbnail) URL.revokeObjectURL(file.thumbnail);
-        const entry = videos.get(file.id);
-        if (entry?.attempted && previewing?.entry !== entry) delete entry.file;
       } catch {
         if (life.signal.aborted || pending.get(file.id) !== file) return;
         file.failed = true;

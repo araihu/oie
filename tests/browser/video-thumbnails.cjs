@@ -79,11 +79,59 @@ async function until(fn, label) { for(let n=0;n<180;n++){if(await fn())return;aw
   const phone=await manual.newPage();phone.on('pageerror',error=>errors.push(error.message));await phone.goto(base+'/?section=media&lang=pt-BR&theme=light');await sleep(400);assert.equal(state.ensures,0);assert.equal(state.media,0);
   const mobileCard=phone.locator('[data-video-item="'+itemID+'"]');assert.equal(await mobileCard.locator('[data-video-thumbnail-load]').count(),0,'gallery previews have no standalone retry control');const mobileTile=phone.locator('[data-shared-item="'+itemID+'"]');await mobileTile.locator('[data-shared-menu-trigger]').click();const manualAction=mobileTile.locator('[id^="shared-thumbnail-"]');assert.equal((await manualAction.textContent()).trim(),'Carregar prévia do vídeo');
   state.holdThumbnail=true;await manualAction.waitFor({state:'visible'});await manualAction.focus();assert.equal(await manualAction.evaluate(action=>document.activeElement===action),true,'manual preview action owns keyboard focus');await phone.keyboard.press('Enter');await until(()=>typeof state.releaseThumbnail==='function','manual thumbnail queued');await until(()=>manualAction.isDisabled(),'queued thumbnail action disabled');assert.equal(await mobileTile.locator('[data-shared-menu-trigger]').getAttribute('aria-expanded'),'false','thumbnail action closes its menu');assert.equal(typeof state.releaseThumbnail,'function');state.holdThumbnail=false;state.releaseThumbnail();state.releaseThumbnail=null;await until(()=>mobileCard.locator('[data-video-poster-image]').evaluate(image=>image.naturalWidth===64),'manual keyboard preview');await mobileTile.locator('[data-shared-menu-trigger]').click();assert.equal(await manualAction.isVisible(),false,'successful preview hides retry menu action');await phone.keyboard.press('Escape');await until(()=>mobileTile.locator('[role=menu]').isHidden(),'menu closed after checking cached preview');assert.equal(state.ensures,1);assert.equal(state.media,0);
+  state.status='not_requested';state.ensures=0;state.holdThumbnail=true;state.releaseThumbnail=null;
+  await phone.reload();
+  await mobileTile.locator('[data-shared-menu-trigger]').click();
+  await manualAction.click();
+  await until(()=>typeof state.releaseThumbnail==='function','slow supplied thumbnail queued');
+  await sleep(8000);
+  assert.equal(state.media,0,'queued supplied thumbnail must not read the video sample early');
+  state.holdThumbnail=false;
+  state.releaseThumbnail();
+  await until(()=>mobileCard.locator('[data-video-poster-image]').evaluate(image=>image.naturalWidth===64),'slow supplied thumbnail displayed');
   await phone.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await phone.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>({target:n.target,summary:n.failureSummary}))})),[]);
   await manual.close();
   state.status='unavailable';state.ensures=0;state.sampleFails=true;
   const failed=await browser.newContext({viewport:{width:1100,height:850}}),failurePage=await failed.newPage();await failed.addInitScript(()=>localStorage.setItem('oie.device.auto-video-previews.v1','false'));await failurePage.goto(base+'/?section=media&lang=en');await sleep(400);assert.equal(state.ensures,0,'failed previews must not retry just because a route opens');assert.equal(await failurePage.locator('[data-video-thumbnail-load]').count(),0);const failedTile=failurePage.locator('[data-shared-item="'+itemID+'"]');await failedTile.locator('[data-shared-menu-trigger]').click();const retryAction=failedTile.locator('[id^="shared-thumbnail-"]');assert.equal((await retryAction.textContent()).trim(),'Try again');assert.match(await failurePage.locator('[data-video-thumbnail-status]').textContent(),/unavailable/);const failedStage=await failurePage.locator('.oie-video-stage').boundingBox(),failedImage=await failurePage.locator('.oie-image-preview').boundingBox();assert(Math.abs(failedStage.height-failedImage.height)<1,'failure must retain the common preview frame');
   state.fail=true;await retryAction.click();await until(async()=>state.ensures===1&&!await retryAction.isDisabled(),'failed retry becomes available again');assert.equal((await retryAction.textContent()).trim(),'Try again');await sleep(350);assert.equal(state.ensures,1,'failed retry must not loop automatically');state.fail=false;await failedTile.locator('[data-shared-menu-trigger]').click();await retryAction.click();await until(()=>failurePage.locator('[data-video-poster-image]').evaluate(image=>image.naturalWidth===64),'explicit failed-preview retry');assert.equal(state.ensures,2);await failed.close();
+  const queue = await browser.newContext({viewport:{width:1100,height:850},locale:'en'});
+  const queuePage = await queue.newPage();
+  queuePage.on('pageerror', error => errors.push(error.message));
+  state.status = 'not_requested';
+  state.ensures = 0;
+  state.holdThumbnail = true;
+  state.releaseThumbnail = null;
+  const held = [];
+  await queuePage.route('**/ui/videos/thumbnail', route => {
+   held.push(route);
+   return new Promise(resolve => { route.release = resolve; });
+  });
+  await queuePage.goto(base+'/?section=media&lang=en');
+  await until(()=>held.length===1,'first automatic preview request is held');
+  await queuePage.evaluate(ids=>{
+   const original = document.querySelector('[data-video-item]');
+   for (const id of ids) {
+    const clone = original.cloneNode(true);
+    clone.dataset.videoItem = id;
+    clone.dataset.videoThumbnailState = 'not_requested';
+    original.after(clone);
+   }
+  },[id(101),id(102)]);
+  await until(()=>held.length===2,'automatic preview concurrency capped at two');
+  await until(()=>queuePage.locator('[data-video-thumbnail-state="queued"]').count().then(count=>count===3),'third preview waits in queue');
+  await queuePage.evaluate(()=>{
+   const toggle = document.createElement('input');
+   toggle.type = 'checkbox';
+   toggle.dataset.autoVideoThumbnails = '';
+   document.body.append(toggle);
+   toggle.dispatchEvent(new Event('change',{bubbles:true}));
+   toggle.remove();
+  });
+  await until(()=>queuePage.locator('[data-video-thumbnail-state="queued"]').count().then(count=>count===0),'opting out resets all automatic preview controls');
+  for (const route of held) { await route.abort().catch(()=>{}); route.release(); }
+  await sleep(350);
+  assert.equal(held.length,2,'no queued request starts after opting out');
+  await queue.close();
   assert.deepEqual(errors,[]);console.log('PASS: default automatic previews, uniform 4:3 image/video frames, stable playback, cache reuse, manual opt-out, failed-preview retry and mobile accessibility');
  }catch(error){console.error(log);throw error}finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(resolve=>api.close(resolve))}
 })().catch(error=>{console.error(error);process.exitCode=1});

@@ -34,7 +34,7 @@ async function launch() {
   const files = new Map();
   const streams = new Set();
   const reads = [], posts = [];
-  const state = {stageStatus:201, oversize:false};
+  const state = {stageStatus:201, oversize:false, stagedReads:0};
   const api = http.createServer((request, response) => {
     const url = new URL(request.url, 'http://fixture');
     const send = (status, value) => response.writeHead(status, {'Content-Type':'application/json'}).end(JSON.stringify(value));
@@ -81,6 +81,7 @@ async function launch() {
     if (chat && url.pathname.includes('/staged-attachments/')) {
       const key = chat.id + '/' + name;
       if (request.method === 'GET') {
+        state.stagedReads++;
         const file = files.get(key);
         if (!file) return send(404,{status:404});
         return response.writeHead(200,{'Content-Type':'application/octet-stream','Content-Length':file.length}).end(file);
@@ -191,6 +192,7 @@ async function launch() {
         await page.screenshot({path:process.env.OIE_VIDEO_DOC_SCREENSHOT,
           clip:{x:upper.x,y:upper.y,width:upper.width,height:bottom-upper.y}});
       }
+      const stagedReads = state.stagedReads;
       await row.locator('[data-draft-video-play]').click();
       await dialog.waitFor({state:'visible'});
       const waitPlayback = selector => page.waitForFunction(selector => {
@@ -198,6 +200,7 @@ async function launch() {
         return video?.videoWidth === 64 && video.currentTime > 0.05;
       }, selector);
       await waitPlayback('[data-draft-video-dialog] video');
+      assert.equal(state.stagedReads,stagedReads,'picked video plays without downloading staged bytes');
       await page.keyboard.press('Escape');
       await dialog.waitFor({state:'hidden'});
       assert.equal(await dialog.locator('video').getAttribute('src'),null);

@@ -1,6 +1,8 @@
 window.OieRuntime.register('video-thumbnails', life => {
   'use strict';
   const preference = 'oie.device.auto-video-previews.v1';
+  const suppliedTimeout = 45000;
+  const frameTimeout = 12000;
   const selector = '[data-video-item][data-video-thumbnail-state]:not([data-video-thumbnail-state=""])';
   const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
   const hash = value => /^[0-9a-f]{64}$/.test(value || '');
@@ -97,7 +99,7 @@ window.OieRuntime.register('video-thumbnails', life => {
     });
     if (!response.ok) return '';
     let p = (await response.json()).thumbnail;
-    for (let attempt = 0; valid(p) && p.state === 'queued' && attempt < 15; attempt++) {
+    while (valid(p) && p.state === 'queued') {
       await new Promise(resolve => setTimeout(resolve, 500));
       signal.throwIfAborted();
       response = await life.fetch('/ui/api/v1/shared-content/' + item + '/thumbnail', {
@@ -114,17 +116,34 @@ window.OieRuntime.register('video-thumbnails', life => {
     const ids = scope(card);
     if (!ids.every(uuid) || ids[0] !== engine || card.dataset.videoPoster || pending.has(identity) ||
       !manual && (!automatic || finished.has(identity))) return;
-    pending.set(identity, {card, manual, controller: new AbortController()});
+    const previous = card.dataset.videoThumbnailState === 'unavailable' ? 'unavailable' : 'not_requested';
+    pending.set(identity, {card, manual, previous, controller: new AbortController()});
     for (const current of matching(identity)) paint(current, 'queued');
     drain();
+  }
+
+  function cancel(identity, job) {
+    pending.delete(identity);
+    job.controller.abort();
+    for (const card of matching(identity)) if (!card.dataset.videoPoster) paint(card, job.previous);
+  }
+
+  function cancelOffscreen() {
+    for (const [identity, job] of pending) {
+      const current = matching(identity);
+      if (!current.length || !job.manual && (!automatic || !current.some(card => visible.has(card)))) {
+        cancel(identity, job);
+      }
+    }
   }
 
   function drain() {
     if (life.signal.aborted || running >= 2) return;
     for (const [identity, job] of pending) {
       if (job.started) continue;
-      if (!matching(identity).length) {
-        pending.delete(identity);
+      const current = matching(identity);
+      if (!current.length || !job.manual && (!automatic || !current.some(card => visible.has(card)))) {
+        cancel(identity, job);
         continue;
       }
       job.started = true;
@@ -134,30 +153,47 @@ window.OieRuntime.register('video-thumbnails', life => {
     }
   }
 
-  async function run(identity, {card, manual, controller}) {
+  async function run(identity, job) {
+    const {card, manual, controller} = job;
     const {signal} = controller;
-    const timer = setTimeout(() => controller.abort(), 18000);
     const result = {};
     try {
-      result.poster = await supplied(card, signal);
-      if (!result.poster) {
+      const suppliedController = new AbortController();
+      const abortSupplied = () => suppliedController.abort();
+      signal.addEventListener('abort', abortSupplied, {once:true});
+      const suppliedTimer = setTimeout(abortSupplied, suppliedTimeout);
+      try {
+        result.poster = await supplied(card, suppliedController.signal);
+      } catch {
+        // The bounded video sample can still provide a frame.
+      } finally {
+        clearTimeout(suppliedTimer);
+        signal.removeEventListener('abort', abortSupplied);
+      }
+      if (!result.poster && !signal.aborted) {
         const item = card.dataset.videoItem;
         const source = '/ui/shared-content/' + item + '/content?engineId=' + engine;
-        result.blob = await frameCache()({scope:scope(card), source}, {signal, refresh:manual});
+        const timer = setTimeout(() => controller.abort(), frameTimeout);
+        try {
+          result.blob = await frameCache()({scope:scope(card), source}, {signal, refresh:manual});
+        } finally {
+          clearTimeout(timer);
+        }
       }
     } catch {
       // The play control remains available when a still frame cannot be made.
     } finally {
-      clearTimeout(timer);
-      pending.delete(identity);
       running--;
-      const current = matching(identity);
-      if (!life.signal.aborted && current.length) {
-        // Store failure state only, plus the supplied URL. JPEGs use the shared LRU.
-        if (result.blob) finished.delete(identity);
-        else finished.set(identity, result);
-        if (finished.size > 128) finished.delete(finished.keys().next().value);
-        for (const node of current) apply(node, result);
+      if (pending.get(identity) === job) {
+        pending.delete(identity);
+        const current = matching(identity);
+        if (!life.signal.aborted && current.length) {
+          // Store failure state only, plus the supplied URL. JPEGs use the shared LRU.
+          if (result.blob) finished.delete(identity);
+          else finished.set(identity, result);
+          if (finished.size > 128) finished.delete(finished.keys().next().value);
+          for (const node of current) apply(node, result);
+        }
       }
       drain();
     }
@@ -168,8 +204,11 @@ window.OieRuntime.register('video-thumbnails', life => {
       const card = entry.target;
       if (entry.isIntersecting && card.isConnected) {
         visible.add(card);
-        request(card);
       } else visible.delete(card);
+    }
+    cancelOffscreen();
+    for (const {target, isIntersecting} of entries) {
+      if (isIntersecting && target.isConnected) request(target);
     }
   }, {rootMargin:'100px'});
 
@@ -194,7 +233,7 @@ window.OieRuntime.register('video-thumbnails', life => {
       observer.observe(card);
     }
     for (const [identity, job] of pending) {
-      if (job.started && !matching(identity).length) job.controller.abort();
+      if (!matching(identity).length) cancel(identity, job);
     }
   }
 
@@ -213,7 +252,9 @@ window.OieRuntime.register('video-thumbnails', life => {
   function setAutomatic(value) {
     automatic = value;
     for (const control of document.querySelectorAll('[data-auto-video-thumbnails]')) control.checked = value;
-    if (value) for (const card of visible) if (card.isConnected) request(card);
+    if (value) {
+      for (const card of visible) if (card.isConnected) request(card);
+    } else cancelOffscreen();
   }
   life.on(document, 'change', event => {
     if (!event.target.matches('[data-auto-video-thumbnails]')) return;
