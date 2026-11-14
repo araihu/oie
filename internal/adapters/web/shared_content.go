@@ -12,13 +12,16 @@ import (
 )
 
 func sharedAccountCombobox(v view) combobox.Config {
-	selected := v.SharedAccountIDs
-	if len(selected) == 0 && v.AccountFilter != "" {
-		selected = []string{v.AccountFilter}
-	}
-	config := v.searchableAccountCombobox("shared-account", "contentAccount", selected)
+	config := v.searchableAccountCombobox("shared-account", "contentAccount", v.sharedCatalogAccounts())
 	config.RootClass = "oie-shared-account-filter"
 	return config
+}
+
+func (v view) sharedCatalogAccounts() []string {
+	if v.SharedAccountIDs == nil && v.AccountFilter != "" {
+		return []string{v.AccountFilter}
+	}
+	return v.SharedAccountIDs
 }
 
 const sharedContentPageSize = 50
@@ -30,11 +33,13 @@ func (s *Server) loadSharedContent(ctx context.Context, v *view, includeFirstPag
 	if includeFirstPageCounts {
 		params.IncludeFirstPageCounts = &includeFirstPageCounts
 	}
-	if v.AccountFilter != "" {
-		params.AccountId = &v.AccountFilter
-	}
-	if len(v.SharedAccountIDs) > 0 {
-		params.AccountIds = &v.SharedAccountIDs
+	accounts := v.sharedCatalogAccounts()
+	switch len(accounts) {
+	case 0:
+	case 1:
+		params.AccountId = &accounts[0]
+	default:
+		params.AccountIds = &accounts
 	}
 	if v.SharedConversation != "" {
 		params.ConversationId = &v.SharedConversation
@@ -61,7 +66,7 @@ func (s *Server) loadSharedContent(ctx context.Context, v *view, includeFirstPag
 		if !validOperationKey(item.Id) || !validOperationKey(m.Id) || !validOperationKey(m.AccountId) || !validOperationKey(m.ConversationId) || safePreviewURL(item.Url) == "" || v.account(m.AccountId).Address == "" {
 			return
 		}
-		if (v.AccountFilter != "" && m.AccountId != v.AccountFilter) || (len(v.SharedAccountIDs) > 0 && !slices.Contains(v.SharedAccountIDs, m.AccountId)) || (v.SharedConversation != "" && m.ConversationId != v.SharedConversation) {
+		if (len(accounts) > 0 && !slices.Contains(accounts, m.AccountId)) || (v.SharedConversation != "" && m.ConversationId != v.SharedConversation) {
 			return
 		}
 		if (v.SharedType == "links" && item.Kind != "link") || (v.SharedType == "documents" && item.Kind != "document") || (v.SharedType == "media" && item.Kind != "image" && item.Kind != "audio" && item.Kind != "video") {

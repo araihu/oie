@@ -30,15 +30,17 @@ func (v *view) configureWorkspace(r *http.Request) {
 	default:
 		v.Section = "chats"
 	}
-	if v.Section == "media" {
-		v.SharedAccountIDs = append([]string(nil), q["contentAccount"]...)
+	if v.Section == "media" && q.Has("contentAccount") {
+		// A present but empty selection overrides the global account filter.
+		v.SharedAccountIDs = slices.DeleteFunc(slices.Clone(q["contentAccount"]), func(id string) bool { return id == "" })
 		slices.Sort(v.SharedAccountIDs)
 	}
-	v.Filter = q.Get("filter")
-	switch v.Filter {
-	case "unread", "favorites", "groups":
-	default:
-		v.Filter = "all"
+	v.Filter = "all"
+	if v.Section != "archived" {
+		switch filter := q.Get("filter"); filter {
+		case "unread", "favorites", "groups":
+			v.Filter = filter
+		}
 	}
 	v.InfoView = q.Get("infoView")
 	if v.InfoView != "shared" && v.InfoView != "stars" {
@@ -176,7 +178,7 @@ func (v view) href(pairs ...string) string {
 			q.Del("favoritesCursor")
 		}
 		if pairs[i] == "account" {
-			if pairs[i+1] != v.AccountFilter || len(sharedAccounts) > 0 {
+			if pairs[i+1] != v.AccountFilter || sharedAccounts != nil {
 				q.Del("contentCursor")
 			}
 			sharedAccounts = nil
@@ -199,8 +201,12 @@ func (v view) href(pairs ...string) string {
 			q.Set(pairs[i], pairs[i+1])
 		}
 	}
-	if q.Get("section") == "media" && len(sharedAccounts) > 0 {
-		q["contentAccount"] = sharedAccounts
+	if q.Get("section") == "media" {
+		if len(sharedAccounts) > 0 {
+			q["contentAccount"] = sharedAccounts
+		} else if sharedAccounts != nil && q.Get("account") != "" {
+			q.Set("contentAccount", "")
+		}
 	}
 	if len(q) == 0 {
 		return "/"

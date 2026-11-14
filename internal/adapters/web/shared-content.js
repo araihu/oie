@@ -181,7 +181,15 @@ window.OieRuntime.register('shared-search', life => {
   function scope(){return new URLSearchParams(new FormData(form)).toString()}
   function alignTabs(){
    const values=new FormData(form),root=info?form.closest('#chat-info-content'):form.closest('#workspace');
-   for(const link of root?.querySelectorAll('[data-shared-tab]')||[]){const url=new URL(link.href);for(const key of info?['infoQuery']:['q','account','contentAccount']){url.searchParams.delete(key);for(const value of values.getAll(key).filter(Boolean).sort())url.searchParams.append(key,value)}if(info)url.searchParams.delete('infoCursor');link.href=url.pathname+url.search}
+   for(const link of root?.querySelectorAll('[data-shared-tab]')||[]){
+    const url=new URL(link.href);
+    for(const key of info?['infoQuery']:['q','account','contentAccount']){
+     url.searchParams.delete(key);
+     for(const value of values.getAll(key).sort())if(value||key==='contentAccount')url.searchParams.append(key,value);
+    }
+    if(info)url.searchParams.delete('infoCursor');
+    link.href=url.pathname+url.search;
+   }
   }
   const owned=ctx=>ctx?.target?.id===targetID&&(ctx.sourceElement===input||!info&&ctx.sourceElement===form);
   function cancel(){clearTimeout(pending);for(const ctx of active)ctx.request.abort();active.clear();accepted=null;region()?.removeAttribute('aria-busy')}
@@ -192,8 +200,10 @@ window.OieRuntime.register('shared-search', life => {
   on(input,'compositionend',()=>{composing=false;alignTabs();schedule()});
   on(form,'submit',()=>clearTimeout(pending),{capture:true});
   on(form,'combobox:change',event=>{
-   alignTabs();
    if(info||event.detail?.id!=='shared-account'||!connected())return;
+   const all=form.querySelector('[data-shared-all-accounts]');
+   all.disabled=!form.elements.account.value||event.detail.values.length>0;
+   alignTabs();
    cancel();
    form.requestSubmit();
   });

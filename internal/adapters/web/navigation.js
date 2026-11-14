@@ -99,9 +99,7 @@
   const locale=query.get('lang')||app()?.dataset.routeLocale;
   if(info)return JSON.stringify([engine,'details',type,document.body.dataset.accountId,
    query.get('chat')||document.body.dataset.conversationId,term,locale]);
-  return JSON.stringify([engine,type,query.get('account')||'',
-   query.getAll('contentAccount').sort(),query.get('contentConversation')||'',
-   term,locale]);
+  return JSON.stringify([engine,type,sharedAccounts(query),query.get('contentConversation')||'',term,locale]);
  }
  function rememberSharedPage(page,info=false){
   if(page?.dataset.sharedPageState!=='ready'||page.dataset.sharedPageEngine!==document.body.dataset.engineId)return;
@@ -168,11 +166,15 @@
   for(const name of routeFields)document.body.dataset[name]=root.dataset[name]||'';
   document.body.dataset.starGeneration='0';document.documentElement.lang=root.dataset.routeLocale;document.documentElement.dataset.mode=root.dataset.routeTheme;document.documentElement.classList.toggle('dark',root.dataset.routeTheme==='dark'||root.dataset.routeTheme==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.querySelector('meta[name="oie-csrf"]')?.setAttribute('content',root.dataset.csrf||'');
  }
+ function inboxFilter(params){
+  const filter=params.get('filter');
+  return params.get('section')!=='archived'&&['unread','favorites','groups'].includes(filter)?filter:'all';
+ }
  function shellKey(url, ignored=[]){
   const q=new URLSearchParams(url.search);
   for(const key of ['chat','inbox','message','open','infoView','infoType','infoCursor','infoQuery','infoFocus','searchQuery','searchAccount','searchType','searchConversation','searchCursor','searchEngine','includeEditHistory','searchMode','chatSearch','chatQuery','chatIncludeHistory',...ignored])q.delete(key);
   for(const key of [...q.keys()])if(!q.get(key))q.delete(key);
-  q.set('section',q.get('section')||'chats');q.set('filter',q.get('filter')||'all');q.set('lang',q.get('lang')||document.documentElement.lang);q.set('theme',q.get('theme')||app()?.dataset.routeTheme||'system');q.sort();return q.toString();
+  q.set('section',q.get('section')||'chats');q.set('filter',inboxFilter(q));q.set('lang',q.get('lang')||document.documentElement.lang);q.set('theme',q.get('theme')||app()?.dataset.routeTheme||'system');q.sort();return q.toString();
  }
  function conversationRoute(url){return !!document.getElementById('conversation-pane')&&url.origin===location.origin&&url.pathname==='/'&&shellKey(url)===shellKey(new URL(currentURL));}
  function inboxURL(url){
@@ -224,7 +226,7 @@
    const link=node.tagName==='A',href=link?node.getAttribute('href'):node.value;
    if(!href?.startsWith('/'))continue;
    const target=new URL(href,location.href),params=target.searchParams;
-   if(target.origin!==location.origin||target.pathname!=='/'||(params.get('filter')||'all')!==previousFilter)continue;
+   if(target.origin!==location.origin||target.pathname!=='/'||inboxFilter(params)!==previousFilter)continue;
    if(['section','account','q'].some(name=>(params.get(name)||'')!==(url.searchParams.get(name)||'')))continue;
    if(filter==='all')params.delete('filter');else params.set('filter',filter);
    if(link)node.href=target.pathname+target.search+target.hash;
@@ -236,8 +238,8 @@
   const key=value=>{
    const q=new URLSearchParams(value.search);
    for(const name of ignored)q.delete(name);
-   for(const name of [...q.keys()])if(!q.get(name))q.delete(name);
-   q.set('section',q.get('section')||'chats');q.set('filter',q.get('filter')||'all');
+   for(const name of [...q.keys()])if(name!=='contentAccount'&&!q.get(name))q.delete(name);
+   q.set('section',q.get('section')||'chats');q.set('filter',inboxFilter(q));
    q.set('lang',q.get('lang')||document.documentElement.lang);
    q.set('theme',q.get('theme')||app()?.dataset.routeTheme||'system');
    q.sort();return q.toString();
@@ -265,10 +267,19 @@
   }
   if(!node&&sameChat&&document.getElementById('message-timeline')&&!params.has('message')&&!params.has('timelineCursor')&&(current.has('message')||current.has('timelineCursor')||document.body.dataset.focusMessage)&&sameRoute(url,['message','timelineCursor','timelineDirection']))return 'message-timeline';
  }
+ function sharedAccounts(params){
+  const values=params.getAll('contentAccount').filter(Boolean),account=params.get('account');
+  if(!params.has('contentAccount')&&account)values.push(account);
+  return values.sort();
+ }
  function syncSharedAccount(params){
   const picker=document.getElementById('shared-account');
-  const values=params.getAll('contentAccount'),account=params.get('account');
-  if(!values.length&&account)values.push(account);
+  const form=document.getElementById('shared-content-search');
+  const values=sharedAccounts(params),account=params.get('account');
+  if(form){
+   form.elements.account.value=account||'';
+   form.querySelector('[data-shared-all-accounts]').disabled=!account||values.length>0;
+  }
   picker?.dispatchEvent(new CustomEvent('combobox:load',{
    bubbles:true,detail:{id:'shared-account',values}
   }));
@@ -276,7 +287,7 @@
  }
  function sharedFields(){
   const form=document.getElementById('shared-content-search');if(!form)return '';
-  const fields=new FormData(form);return JSON.stringify([fields.get('q'),fields.get('contentConversation'),fields.getAll('contentAccount').sort()]);
+  const fields=new FormData(form);return JSON.stringify([fields.get('q'),fields.get('account'),fields.get('contentConversation'),fields.getAll('contentAccount').sort()]);
  }
  function swapFor(kind){
   if(kind==='shared-content-scroll')return 'innerHTML swap:'+(reducedMotion.matches?'0ms':'75ms')+' settle:0ms show:none';
@@ -474,7 +485,7 @@
   if(ctx.oieKind==='chat-info-content')valid=valid&&ctx.response?.status===200&&next.dataset.detailsConversation===document.body.dataset.conversationId;
   if(ctx.oieKind===inboxID){
    const url=new URL(ctx.request.action,location.href);
-   valid=valid&&ctx.response?.status===200&&next.dataset.inboxScope===ctx.target.dataset.inboxScope&&next.dataset.inboxFilter===(url.searchParams.get('filter')||'all');
+   valid=valid&&ctx.response?.status===200&&next.dataset.inboxScope===ctx.target.dataset.inboxScope&&next.dataset.inboxFilter===inboxFilter(url.searchParams);
   }
   if(!valid){event.preventDefault();ctx.target?.removeAttribute('aria-busy');if(ctx.sourceElement?.id==='shared-content-search'&&sharedFields()===ctx.oieSharedFields)syncSharedAccount(new URL(currentURL).searchParams);if(!ctx.sourceElement?.matches('[data-conversation-schedule-edit]'))showError(ctx);}
  });
@@ -509,7 +520,7 @@
   const previousURL=currentURL;
   currentURL=location.href;
   if(root.id===inboxID){
-   const previousFilter=new URL(previousURL).searchParams.get('filter')||'all';
+   const previousFilter=inboxFilter(new URL(previousURL).searchParams);
    syncInboxScope(root,previousFilter);
    upgrade(app());
    const scroll=positions.get(location.href)?.['conversation-list']||0;
@@ -616,7 +627,7 @@
  });
  function go(value,{history=false,latest=false}={}){
   const url=new URL(value,location.href);if(url.origin!==location.origin||!['/','/search'].includes(url.pathname)||!window.htmx){location.assign(url.href);return}
-  const filterChanged=(url.searchParams.get('filter')||'all')!==(new URL(currentURL).searchParams.get('filter')||'all');
+  const filterChanged=inboxFilter(url.searchParams)!==inboxFilter(new URL(currentURL).searchParams);
   const themeChanged=history&&sameRoute(url,['theme','open'])&&url.searchParams.get('theme')!==document.documentElement.dataset.mode&&url.searchParams.has('theme');
   const kind=(themeChanged?'appearance-settings':scopedKind(url,null,latest))||(filterChanged&&inboxRoute(url)?inboxID:conversationRoute(url)?'conversation-pane':'oie-app');
   const requestURL=kind===inboxID?inboxURL(url):new URL(url);

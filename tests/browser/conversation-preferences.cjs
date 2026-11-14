@@ -40,6 +40,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    if(url.searchParams.get('accountId'))selected=selected.filter(value=>value.accountId===url.searchParams.get('accountId'));
    if(url.searchParams.get('favoritesOnly')==='true')selected=selected.filter(value=>value.favorite);
    if(url.searchParams.get('unreadOnly')==='true')selected=selected.filter(value=>value.unreadCount>0);
+   if(url.searchParams.get('kind'))selected=selected.filter(value=>value.kind===url.searchParams.get('kind'));
    if(url.searchParams.get('q'))selected=selected.filter(value=>value.title.toLowerCase().includes(url.searchParams.get('q').toLowerCase()));
    return send(200,{items:selected});
   }
@@ -105,7 +106,25 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   findings.push('Archiving an implicitly selected desktop conversation pins its source URL and retains live message/canonical updates, draft and workspace after another row becomes the first inbox candidate');
 
   page=await fresh();await page.goto(url());await page.locator('#message-composer').waitFor({state:'visible'});
-  const observer=await fresh();await observer.goto(url(chat,'&section=archived'));await observer.locator('#conversation-list').waitFor({state:'attached'});assert.equal(await observer.locator('[data-conversation-row="'+chat.id+'"]').count(),0);
+  const observer=await fresh();await observer.goto(url(chat,'&section=archived&filter=unread'));
+  const archiveScope=observer.locator('#conversation-list-default');
+  await archiveScope.locator('.oie-filters').waitFor({state:'hidden'});
+  assert.equal(await archiveScope.getAttribute('data-inbox-filter'),'all');
+  assert.equal(await archiveScope.locator('[data-conversation-row]').count(),5,'read archived chats from a legacy unread-filter URL');
+  assert.equal(await archiveScope.locator('[data-conversation-row="'+chat.id+'"]').count(),0);
+  for(const filter of ['unread','favorites','groups']){
+   const response=await observer.request.get(url(chat,'&section=archived&filter='+filter),{headers:{'HX-Request':'true','X-Oie-Fragment':'inbox'}});
+   assert(response.ok());
+   const fragment=await response.text();
+   assert.match(fragment,/data-inbox-filter="all"/);
+   assert.equal((fragment.match(/data-conversation-row=/g)||[]).length,5,'archived fragment ignores '+filter);
+  }
+  await observer.waitForFunction(()=>window.OieRuntime?.generation>0);
+  const beforeArchiveNavigation=await observer.locator('#conversation-pane').elementHandle();
+  await observer.evaluate(href=>window.OieNavigation.go(href),url(chat,'&section=archived&filter=groups'));
+  await observer.waitForURL(location=>location.searchParams.get('filter')==='groups');
+  assert(await beforeArchiveNavigation.evaluate(node=>!node.isConnected),'legacy filter variants reuse the archive conversation route');
+  assert.equal(await archiveScope.locator('[data-conversation-row]').count(),5);
   const draft='Keep this exact draft while preferences change 😀';await page.locator('#message-composer').fill(draft);
   const geometry=await page.evaluate(sibling=>{
    const timeline=document.getElementById('message-timeline'),list=document.getElementById('conversation-list');timeline.scrollTop=(timeline.scrollHeight-timeline.clientHeight)/2;list.scrollTop=180;

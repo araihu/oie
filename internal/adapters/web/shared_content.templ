@@ -24,6 +24,8 @@ templ sharedWorkspace(v view){
 </header>
 <form action="/" method="get" id="shared-content-search" class="oie-shared-search" role="search" hx-sync="this:replace">
 <input type="hidden" name="section" value="media"/><input type="hidden" name="contentType" value={v.SharedType}/><input type="hidden" name="contentConversation" value={v.SharedConversation}/><input type="hidden" name="lang" value={v.Locale}/><input type="hidden" name="theme" value={v.Theme}/>
+<input type="hidden" name="account" value={v.AccountFilter}/>
+<input type="hidden" name="contentAccount" value="" data-shared-all-accounts disabled?={v.AccountFilter == "" || v.SharedAccountIDs == nil || len(v.SharedAccountIDs) > 0}/>
 @toolbar.Toolbar(toolbar.Config{Label:v.Text.SharedTools,RootClass:"oie-shared-toolbar",SearchClass:"oie-shared-search-region",FiltersClass:"oie-shared-filter-region",Search:sharedSearch(v),Filters:sharedAccountFilter(v)})
 </form>
 @sharedSearchResults(v)
