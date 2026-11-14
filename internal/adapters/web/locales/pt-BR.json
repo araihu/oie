@@ -498,6 +498,7 @@
   "RoomBans": "Banimentos",
   "RoomBan": "Banir da sala",
   "RoomUnban": "Retirar banimento",
+  "RoomUnbanConfirm": "Retirar o banimento de {address}?",
   "RoomConfirmAction": "Confirmar",
   "RoomCancelAction": "Cancelar",
   "RoomChangeAvatar": "Trocar imagem da sala",

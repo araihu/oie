@@ -271,7 +271,10 @@ window.OieRuntime.register('room-management', life => {
         if (open.dataset.roomActionForm) setActionOpen(open, false);
       }
       setActionOpen(form, true);
-      life.raf(() => form.querySelector('input:not([type=hidden]),[type=submit]')?.focus({preventScroll:true}));
+      const focusTarget = form.hasAttribute('data-room-action-confirmation')
+        ? '[data-room-action-cancel]'
+        : 'input:not([type=hidden]),[type=submit]';
+      life.raf(() => form.querySelector(focusTarget)?.focus({preventScroll:true}));
       return;
     }
     const tabButton = event.target.closest('[role=tab]');
@@ -323,11 +326,13 @@ window.OieRuntime.register('room-management', life => {
 
   life.on(document, 'keydown', event => {
     if (!active || event.key !== 'Escape' || !event.target.closest) return;
-    if (!participant || !event.target.closest('[data-room-participant-detail]')) return;
+    const confirmation = event.target.closest('form[data-room-action-confirmation]:not([hidden])');
+    const detail = event.target.closest('[data-room-participant-detail]');
+    if (!confirmation && (!participant || !detail)) return;
     event.preventDefault();
     event.stopPropagation();
     if (hasPending()) return;
-    const form = event.target.closest('[data-room-participant-detail]').querySelector('.oie-room-action form:not([hidden])');
+    const form = confirmation || detail.querySelector('.oie-room-action form:not([hidden])');
     if (form) cancelAction(form);
     else showParticipant('', true);
   }, true);

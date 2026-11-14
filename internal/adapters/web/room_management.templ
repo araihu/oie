@@ -14,6 +14,7 @@ import (
 	"github.com/araihu/goshtoso/components/tabs"
 	"github.com/araihu/goshtoso/components/textarea"
 	"github.com/araihu/goshtoso/components/textinput"
+	"github.com/araihu/goshtoso/components/tooltip"
 	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
@@ -146,17 +147,23 @@ templ roomManagementBans(v view, state engineapi.RoomManagement, bansLoaded bool
 				for _, address := range state.Affiliations {
 					{{ id := "unban-" + newOperationKey() }}
 					<li>
-						<span>{ address }</span>
-						@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"id": id, "data-room-action-open": "", "aria-label": v.Text.RoomUnban + " · " + address})) {
-							{ v.Text.RoomUnban }
-						}
-						@roomTargetAction(v, *state.Revision, id, address, "affiliation", "none", v.Text.RoomUnban, button.TonePrimary)
+						<div class="oie-room-banned-address">
+							<span>{ address }</span>
+							@tooltip.Tooltip(id+"-tooltip", v.Text.RoomUnban, tooltip.WithTrigger(roomUnbanButton(v, id, address)), tooltip.WithPosition(tooltip.PositionLeft), tooltip.WithPortal(true))
+						</div>
+						@roomTargetAction(v, *state.Revision, id, address, "affiliation", "none", v.Text.RoomUnban, button.TonePrimary, strings.ReplaceAll(v.Text.RoomUnbanConfirm, "{address}", address))
 					</li>
 				}
 			</ul>
 		}
 	}
-	@roomTargetAction(v, *state.Revision, "", "", "affiliation", "outcast", v.Text.RoomBan, button.ToneDanger)
+	@roomTargetAction(v, *state.Revision, "", "", "affiliation", "outcast", v.Text.RoomBan, button.ToneDanger, "")
+}
+
+templ roomUnbanButton(v view, id, address string) {
+	@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithSize(button.SizeSmall), button.WithRootClass("oie-room-unban"), button.WithAttrs(templ.Attributes{"id": id, "data-room-action-open": "", "aria-expanded": "false", "aria-controls": id + "-form", "aria-label": v.Text.RoomUnban + " · " + address})) {
+		@glyph(heroicons.Icon16SolidXMark)
+	}
 }
 
 type roomParticipantAction struct {
@@ -271,21 +278,30 @@ templ roomParticipantActionControl(v view, revision, id, target string, action r
 			<span>{ action.label }</span>
 			<span class="oie-room-action-chevron">@glyph(heroicons.Icon16SolidChevronDown)</span>
 		}
-		@roomTargetAction(v, revision, trigger, target, action.action, action.value, v.Text.RoomConfirmAction, action.tone)
+		@roomTargetAction(v, revision, trigger, target, action.action, action.value, v.Text.RoomConfirmAction, action.tone, "")
 	</div>
 }
 
-templ roomTargetAction(v view, revision, trigger, target, action, value, label string, tone button.Tone) {
+templ roomTargetAction(v view, revision, trigger, target, action, value, label string, tone button.Tone, confirmation string) {
 	{{
 		key := newOperationKey()
 		id := "manage-room-" + key
 		if trigger != "" {
 			id = trigger + "-form"
 		}
+		attrs := templ.Attributes{"data-oie-action": "room-management", "data-room-action-form": trigger, "hidden": trigger != ""}
+		cancelAttrs := templ.Attributes{"data-room-action-cancel": ""}
+		if confirmation != "" {
+			attrs["data-room-action-confirmation"] = ""
+			cancelAttrs["aria-describedby"] = id + "-prompt"
+		}
 	}}
-	@form.Form(form.Config{ID: id, Action: "/ui/rooms/manage", RootAttrs: templ.Attributes{"data-oie-action": "room-management", "data-room-action-form": trigger, "hidden": trigger != ""}}) {
+	@form.Form(form.Config{ID: id, Action: "/ui/rooms/manage", RootAttrs: attrs}) {
 		@roomManagementFields(v, revision, action, key)
 		<input type="hidden" name="value" value={ value }/>
+		if confirmation != "" {
+			<p id={ id + "-prompt" }>{ confirmation }</p>
+		}
 		if target == "" {
 			@textinput.TextInput(textinput.Config{ID: id + "-address", Name: "target", Label: v.Text.RoomUserAddress, Required: true, InputAttrs: templ.Attributes{"maxlength": "2047", "spellcheck": "false", "autocapitalize": "none"}})
 		} else {
@@ -299,7 +315,7 @@ templ roomTargetAction(v view, revision, trigger, target, action, value, label s
 				{ label }
 			}
 			if trigger != "" {
-				@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-room-action-cancel": ""})) {
+				@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(cancelAttrs)) {
 					{ v.Text.RoomCancelAction }
 				}
 			}
