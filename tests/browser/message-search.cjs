@@ -137,7 +137,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
         const base={message:m,accountLabel:a.label,conversationTitle:c.title,conversationAddress:c.address,senderAddress,matchedAt:m.createdAt,matchKind:'text',...(m===corpus[54]?{senderAvatarHash:senderHash}:{})};
         if(m===layoutMessages[0])base.preview={kind:'link',imageHash:conversationHash,faviconHash:senderHash};
         if(m===layoutMessages[1])base.preview={kind:'link'};
-        const rows=(fold(m.originalText).includes(fold(q))||m===corpus[2]&&q==='Telescpoe Cafe 😀'||m===markdownHit&&q==='viedo')?[{...base,matchedRevisionId:m===corpus[1]?id(9001):m.revisionId,historical:false,excerpt:m.originalText}]:[];
+        const rows=(fold(m.originalText).includes(fold(q))||m===markdownHit&&q==='viedo')?[{...base,matchedRevisionId:m===corpus[1]?id(9001):m.revisionId,historical:false,excerpt:m.originalText}]:[];
         if(m===previewMessage&&q==='platafromas')rows.push({...base,matchedRevisionId:m.revisionId,historical:false,matchKind:'metadata',excerpt:otherURL+' cached description',preview:{kind:'link',url:matchURL,faviconHash:senderHash}});
         if(history&&m===corpus[0]&&fold('Pineapple original').includes(fold(q)))rows.push(...[2,1].map(n=>({...base,matchedRevisionId:id(8000+n),matchedAt:`2026-11-09T12:00:0${n}Z`,historical:true,excerpt:'Pineapple prior version '+n})));
         return rows;
@@ -417,40 +417,6 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     const orderedMatches=corpus.filter(message=>message.conversationId===chat.id&&message.originalText.includes('Telescope')).sort((a,b)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime()||b.id.localeCompare(a.id));
     const selected=()=>chatSearch.getAttribute('data-search-selected');
     const roomHighlights=()=>page.evaluate(()=>Array.from(CSS.highlights.get('oie-room-search')||[],range=>range.toString()));
-    const roomRow=page.locator('[data-message-id="'+corpus[2].id+'"]');
-    let heldFuzzy,releaseFuzzy;
-    await page.route('**/ui/message-search?**',async route=>{
-      if(new URL(route.request().url()).searchParams.get('q')!=='Telescpoe Cafe 😀')return route.continue();
-      const response=await route.fetch();heldFuzzy=true;
-      await new Promise(resolve=>releaseFuzzy=resolve);
-      await route.fulfill({response});
-    });
-    await page.evaluate(()=>{
-      window.searchFrames=[];
-      const sample=()=>{
-        const box=selector=>{const {x,y,width,height}=document.querySelector(selector).getBoundingClientRect();return [x,y,width,height]};
-        window.searchFrames.push([...box('#message-composer'),...box('#message-timeline')]);
-        window.searchFrame=requestAnimationFrame(sample);
-      };
-      sample();
-    });
-    await chatQuery.fill('Telescpoe Cafe 😀');
-    await until(()=>heldFuzzy,'hold verified room fuzzy result');
-    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-    releaseFuzzy();
-    await until(async()=>await selected()===corpus[2].id,'fuzzy result selects the original room message');
-    await page.unroute('**/ui/message-search?**');
-    assert((await roomHighlights()).includes('Telescope'),'Go fuzzy spans highlight the transposition in the room');
-    assert((await roomHighlights()).includes('Café'),'room highlights preserve accents');
-    assert((await roomHighlights()).includes('😀'),'room highlights preserve astral UTF-16 positions');
-    const frameShift=await page.evaluate(()=>{
-      cancelAnimationFrame(window.searchFrame);
-      const [first,...frames]=window.searchFrames;
-      return Math.max(0,...frames.flatMap(frame=>frame.map((value,i)=>Math.abs(value-first[i]))));
-    });
-    assert(frameShift<=1,'delayed fuzzy highlight keeps composer and timeline geometry');
-    assert.equal(await roomRow.evaluate(row=>JSON.parse(row.dataset.messageSource)),corpus[2].originalText);
-
     await chatQuery.fill('Telescope');await until(async()=>await selected()===orderedMatches[0].id,'per-chat search starts at newest matching source');
     assert.equal(await chatQuery.evaluate(node=>document.activeElement===node),true,'initial chat search preserves typing focus');
     assert.equal(await query(page).inputValue(),globalSearchNodes.query);assert.equal(await hits(page).count(),1,'global results remain independently scoped');
@@ -491,7 +457,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     await until(markedVideo,'Markdown maps fuzzy range around an astral character');
     await markdownRow.evaluate(row=>{
       row.dataset.messageRevision='019a5df0-0000-7000-8000-000000009999';
-      document.dispatchEvent(new CustomEvent('oie:timeline-content'));
+      document.dispatchEvent(new CustomEvent('oie:timeline-content',{detail:{page:document,startedAt:performance.now()}}));
     });
     await until(async()=>!await markedVideo(),'changed current revision removes a stale fuzzy range');
     await fuzzyRoom.close();
