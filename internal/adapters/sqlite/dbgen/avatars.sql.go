@@ -7,6 +7,7 @@ package dbgen
 
 import (
 	"context"
+	"strings"
 )
 
 const findAvatar = `-- name: FindAvatar :one
@@ -29,6 +30,55 @@ func (q *Queries) FindAvatar(ctx context.Context, arg FindAvatarParams) (Avatar,
 		&i.Payload,
 	)
 	return i, err
+}
+
+const findAvatarHashes = `-- name: FindAvatarHashes :many
+SELECT address, CAST(COALESCE(json_extract(payload, '$.ImageHash'), '') AS TEXT) AS image_hash
+FROM avatars WHERE account_id = ?1 AND address IN (/*SLICE:addresses*/?)
+`
+
+type FindAvatarHashesParams struct {
+	AccountID string
+	Addresses []string
+}
+
+type FindAvatarHashesRow struct {
+	Address   string
+	ImageHash string
+}
+
+func (q *Queries) FindAvatarHashes(ctx context.Context, arg FindAvatarHashesParams) ([]FindAvatarHashesRow, error) {
+	query := findAvatarHashes
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.AccountID)
+	if len(arg.Addresses) > 0 {
+		for _, v := range arg.Addresses {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:addresses*/?", strings.Repeat(",?", len(arg.Addresses))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:addresses*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FindAvatarHashesRow{}
+	for rows.Next() {
+		var i FindAvatarHashesRow
+		if err := rows.Scan(&i.Address, &i.ImageHash); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const insertAvatar = `-- name: InsertAvatar :exec

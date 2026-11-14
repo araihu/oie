@@ -85,8 +85,13 @@ func (s *Store) OpenConversation(ctx context.Context, in application.Conversatio
 				return application.ConversationResult{}, err
 			}
 		}
-		if err := openRoomIntent(ctx, q, c.ID, *in.RoomEntry); err != nil {
+		if err := openRoomIntent(ctx, q, c.ID, *in.RoomEntry, in.RoomPassword != ""); err != nil {
 			return application.ConversationResult{}, err
+		}
+		if in.RoomPassword != "" {
+			if err := q.UpsertRoomInvitationCredential(ctx, dbgen.UpsertRoomInvitationCredentialParams{ConversationID: string(c.ID), Password: in.RoomPassword}); err != nil {
+				return application.ConversationResult{}, err
+			}
 		}
 	}
 

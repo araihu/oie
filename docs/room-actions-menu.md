@@ -5,14 +5,10 @@ exit icon. It is disabled while the command is pending or the room is inactive.
 An uncertain result opens the existing recovery dialog; retry preserves the
 operation key and command body.
 
-Other room-session controls open from **More → Room actions** in a room conversation.
-The status, nickname, join/leave form and refresh action live in a Goshtoso
-`modal.Dialog`; the timeline has no persistent room-session banner. Direct
-conversations do not show this menu item.
-
-The controls remain mounted so existing live session updates, composer
-permissions, compare-and-swap revisions and pending-command recovery continue
-to work. Opening the menu or dialog does not join or leave a room.
+For a saved room with inactive entry, **More → Enter room** opens the nickname
+and password form. The dialog also shows room status and supports retrying
+uncertain commands. The timeline has no persistent room-session banner.
+Opening the dialog does not change the room session.
 
 Verification passed with `make check`, the local Dagger check pipeline including
 race tests and builds, and the isolated reply-composer browser fixture. That

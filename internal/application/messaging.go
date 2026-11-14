@@ -25,6 +25,8 @@ func (e StateConflict) Unwrap() error { return ErrStateConflict }
 
 type ConnectionInput struct{ Password, Endpoint string }
 type Incoming struct {
+	Moderation                                *IncomingRoomModeration
+	ModerationTombstone                       bool
 	CheckDirectHistory                        bool
 	DirectArchiveID                           string
 	Reaction                                  *IncomingReaction
@@ -104,6 +106,7 @@ type ConversationMutation struct {
 	Fingerprint  string
 	Conversation domain.Conversation
 	RoomEntry    *domain.RoomSession
+	RoomPassword string
 }
 type ForwardSource struct {
 	MessageID, RevisionID domain.ID
@@ -486,7 +489,14 @@ func (e *Engine) Receive(ctx context.Context, in Incoming) error {
 		}
 		return e.ReceiveReaction(ctx, *in.Reaction)
 	}
-	if !utf8.ValidString(in.OriginalText) || strings.TrimSpace(in.OriginalText) == "" || strings.ContainsRune(in.OriginalText, 0) || len(in.OriginalText) > (1<<20) || len(in.ProviderID) > (1<<20) {
+	if in.Moderation != nil {
+		return e.receiveRoomModeration(ctx, in)
+	}
+	return e.receiveText(ctx, in)
+}
+
+func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
+	if !utf8.ValidString(in.OriginalText) || !in.ModerationTombstone && strings.TrimSpace(in.OriginalText) == "" || strings.ContainsRune(in.OriginalText, 0) || len(in.OriginalText) > (1<<20) || len(in.ProviderID) > (1<<20) {
 		return ErrInvalid
 	}
 	a, err := e.Account(ctx, in.AccountID)

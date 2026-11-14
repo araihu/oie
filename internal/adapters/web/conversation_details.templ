@@ -38,6 +38,8 @@ case "shared":
 @infoSharedContent(v)
 case "stars":
 @infoStarredContent(v)
+case "participants":
+@infoRoomParticipants(v)
 default:
 <div class="oie-conversation-details">
 <div id="conversation-details-identity" data-version={v.detailsVersion("identity")}>@detailsIdentity(v)</div>
@@ -47,6 +49,12 @@ default:
 @infoEntry(v,"links",v.Text.SharedLinksTab,heroicons.Icon16SolidLink)
 @infoEntry(v,"documents",v.Text.SharedDocsTab,heroicons.Icon16SolidDocumentText)
 @infoEntry(v,"stars",v.Text.InfoStarred,heroicons.Icon16SolidStar)
+if v.Selected.Kind=="room" && v.requestKind()=="" && !v.Preview {
+@infoEntry(v,"participants",v.Text.Participants,heroicons.Icon16SolidUsers)
+<template data-info-participants-loading>
+	@infoParticipantsSkeleton(v)
+</template>
+}
 </nav>
 if v.RoomArchive != nil {
   <div class="oie-room-archive-setting">
@@ -59,7 +67,6 @@ if v.RoomArchive != nil {
   </div>
 }
 <div id="conversation-details-description" data-version={v.detailsVersion("description")}>@infoDescription(v)</div>
-<div id="conversation-details-participants" data-version={v.detailsVersion("participants")}>@detailsParticipants(v)</div>
 @accordion.Accordion(accordion.AccordionConfig{ID:"chat-info-technical",RootClass:"oie-info-technical",Items:[]accordion.AccordionItem{{ID:"chat-info-connection",Title:v.Text.InfoConnection,Content:infoTechnical(v)}}})
 @link.Link(v.detailsHref(),link.WithAttrs(templ.Attributes{"data-details-refresh":"","data-info-nav":""}),link.WithRootClass("oie-details-refresh")){ {v.Text.DetailsRefresh} }
 <p class="oie-details-help">{v.Text.DetailsSnapshotHelp}</p>
@@ -151,45 +158,6 @@ if d.PeerPresence==nil||d.PeerPresence.State=="unknown" {
 }
 }else{
 <p class="oie-details-unavailable" role="status">{v.Text.DetailsReadUnavailable}</p>
-}
-}
-templ detailsParticipants(v view){
-if v.Selected.Kind=="room" {
-@panel.Panel(panel.Config{Header:detailsHeading(v.Text.Participants),RootClass:"oie-details-panel"}){
-if d:=v.ConversationInfo;d!=nil {
-<div data-participant-state={string(d.Participants.State)} data-participant-scope={string(d.Participants.Scope)}>
-@detailsObservedAt(v,d.Participants.CheckedAt)
-if d.Participants.Truncated {
-<p data-participants-truncated>{v.Text.DetailsParticipantsTruncated}</p>
-}
-if len(d.Participants.Items)>0 {
-<ul class="oie-participants-list">
-for _,p:=range d.Participants.Items {
-<li data-conversation-participant={p.Id}>
-@avatar.Avatar(avatar.Config{Name:v.participantName(p),Size:avatar.SizeSM})
-<div class="oie-participant-content"><strong>{v.participantName(p)}</strong>
-<small>
-if p.Source=="discovery" {
-{v.Text.DetailsSourceDiscovery}
-}else if p.Source=="presence" {
-{v.Text.DetailsSourcePresence}
-}else{
-{v.Text.DetailsUnknown}
-}
-</small>
-@presenceObservation(v,p.Presence)
-</div>
-</li>
-}
-</ul>
-}else{
-<p data-participants-empty>{v.Text.DetailsNoParticipants}</p>
-}
-</div>
-}else{
-<p data-participants-empty>{v.Text.DetailsNoParticipants}</p>
-}
-}
 }
 }
 templ presenceObservation(v view,p engineapi.PresenceObservation){

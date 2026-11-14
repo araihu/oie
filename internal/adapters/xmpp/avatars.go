@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/araihu/oie/internal/application"
+	"github.com/araihu/oie/internal/domain"
 	mx "mellium.im/xmpp"
 	"mellium.im/xmpp/crypto"
 	"mellium.im/xmpp/disco"
@@ -160,14 +161,37 @@ func (m *Manager) queueAvatar(e *entry, from jid.JID, expected string, presence 
 	address := from.Bare().String()
 	e.avatarMu.Lock()
 	kind, known := e.avatarTargets[address]
-	if known && (!presence || kind != "room" || from.Resourcepart() == "") {
+	dirty := known && (!presence || kind != "room" || from.Resourcepart() == "")
+	if dirty {
 		e.avatarDirty[address] = expected
 	}
 	e.avatarMu.Unlock()
-	if known {
+	if dirty {
 		m.wakeAvatars(e)
 	}
 }
+
+// Use only addresses disclosed by the joined room to this account.
+func (e *entry) roomAvatarTargets(targets []domain.AvatarTarget, session *mx.Session) []domain.AvatarTarget {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	slot := e.rooms[e.avatarRoom]
+	if slot == nil || slot.session != session || slot.snapshot.State != "joined" || slot.leaving || !slot.management.canShowParticipantAvatars() {
+		return targets
+	}
+	seen := make(map[string]bool, len(targets))
+	for _, target := range targets {
+		seen[target.Address] = true
+	}
+	for _, occupant := range slot.management.occupants {
+		if occupant.address != "" && !seen[occupant.address] {
+			targets = append(targets, domain.AvatarTarget{Address: occupant.address, Kind: "participant"})
+			seen[occupant.address] = true
+		}
+	}
+	return targets
+}
+
 func (m *Manager) avatarLoop(ctx context.Context, e *entry, s *mx.Session) {
 	host, ok := m.host.(application.AvatarHost)
 	if !ok {
@@ -180,7 +204,9 @@ func (m *Manager) avatarLoop(ctx context.Context, e *entry, s *mx.Session) {
 		if err != nil {
 			return
 		}
+		targets = e.roomAvatarTargets(targets, s)
 		e.avatarMu.Lock()
+		clear(e.avatarTargets)
 		for _, t := range targets {
 			e.avatarTargets[t.Address] = t.Kind
 		}

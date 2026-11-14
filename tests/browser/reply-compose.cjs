@@ -60,17 +60,18 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const base='http://127.0.0.1:'+port,browser=await chromium.launch({headless:true}),errors=[],findings=[];
  const until=async(fn,label)=>{for(let n=0;n<200;n++){if(await fn())return;await new Promise(r=>setTimeout(r,50))}throw Error('Timed out: '+label+' '+stderr.slice(-1200))};
  const open=async(page,c=chat,lang='en')=>{await page.goto(base+'/?chat='+c+'&account='+account+'&lang='+lang+'&theme=dark');await until(async()=>await page.locator('#send-message-form').count()===1&&await page.evaluate(()=>!!window.OieRuntime),'composer runtime');await page.evaluate(()=>document.fonts.ready)};
- // The generic room-actions menu entry is absent; exercise recovery controls through the public modal event.
+ // Enter a saved room through the conversation menu or resume its open recovery dialog.
  const roomControls=async page=>{
   const status=page.locator('#room-session-status'),dialog=page.locator('#room-session-dialog');
   assert.equal(await status.evaluate(node=>!!node.closest('#message-timeline')),false,'room controls must not occupy the timeline');
   assert.equal(await status.evaluate(node=>node.closest('dialog')?.id),'room-session-dialog','room controls belong to the public room dialog');
-  assert.equal(await page.locator('#chat-room-actions').count(),0);
+  assert.equal(await page.locator('#chat-room-session').count(),0);
   // Conflict refresh can preserve an already-open public modal. Reuse that
   // visible dialog; closed dialogs must keep their controls hidden.
   if(await dialog.isVisible()){assert(await status.isVisible(),'open room dialog exposes its recovery controls');return}
   assert(await status.isHidden(),'closed room dialog keeps controls hidden');
-  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('modal:open',{detail:{id:'room-session-dialog'}})));
+  await page.locator('[aria-controls=chat-options-panel]').click();
+  await page.locator('#chat-join-room').click();
   await dialog.waitFor({state:'visible'});assert(await status.isVisible());
  };
  const quote=async(page,sourceID)=>{if(page.viewportSize().width>720){await page.locator('[data-message-menu-trigger="'+sourceID+'"]').focus();await page.keyboard.press('Enter');await until(async()=>await page.locator('#copy-message-'+sourceID).evaluate(el=>document.activeElement===el),'menu keyboard focus');await page.locator('#reply-message-'+sourceID).focus();await page.keyboard.press('Enter')}else{await page.locator('[data-message-menu-trigger="'+sourceID+'"]').tap();await page.locator('#reply-message-'+sourceID).tap();}await until(async()=>await page.locator('[data-composer-reply]').isVisible(),'quote prepared')};

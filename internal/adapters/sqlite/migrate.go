@@ -128,6 +128,11 @@ func migrateDatabase(ctx context.Context, db *sql.DB, dir string) error {
 			return err
 		}
 	}
+	if version == 27 && legacy == 27 {
+		if err := adoptRoomModerationPreview(ctx, db); err != nil {
+			return err
+		}
+	}
 	if err := runner.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return err
 	}
@@ -149,6 +154,33 @@ func lastMigrationVersion(scripts source.Driver) (int, error) {
 		}
 		version = next
 	}
+}
+
+// The room-management preview used version 27 for moderation. Install the
+// catalog projection before version 28 integrates the retained moderation data.
+func adoptRoomModerationPreview(ctx context.Context, db *sql.DB) error {
+	var preview bool
+	if err := db.QueryRowContext(ctx, `SELECT
+		EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'room_message_moderation')
+		AND NOT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'shared_catalog_sources')`).Scan(&preview); err != nil {
+		return err
+	}
+	if !preview {
+		return nil
+	}
+	migration, err := migrations.ReadFile("migrations/000027_shared_catalog_projection.up.sql")
+	if err != nil {
+		return err
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, string(migration)); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // The request preview used version 25 for invitation credentials. Install the

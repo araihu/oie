@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 )
@@ -384,9 +385,15 @@ func TestCatalogProjectionBackfillKeepsReferenceAndVisibility(t *testing.T) {
 	}
 	ref := application.SharedReferences(message.OriginalText)[0]
 	ref.ID, ref.RevisionID = migrationID(), migrationID()
-	if err = s.IndexSharedContent(ctx, []domain.SharedContentMutation{{
-		Message: message, References: []domain.SharedReference{ref}, ParserVersion: application.SharedContentVersion,
-	}}); err != nil {
+	if err = s.queries.PutSharedContent(ctx, dbgen.PutSharedContentParams{
+		ID: string(ref.ID), RevisionID: string(ref.RevisionID), MessageID: string(message.ID),
+		Url: ref.URL, Kind: ref.Kind, FileName: ref.FileName,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.queries.MarkSharedContentIndexed(ctx, dbgen.MarkSharedContentIndexedParams{
+		MessageID: string(message.ID), ParserVersion: application.SharedContentVersion, Caption: message.OriginalText,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err = runner.Up(); err != nil {

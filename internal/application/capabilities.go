@@ -16,7 +16,7 @@ func implementedFeatures() []domain.CapabilityFeature {
 	for _, v := range []struct{ id, app, scope string }{
 		{"direct_text", "supported", "account"}, {"account_history", "supported", "account"},
 		{"saved_rooms", "supported", "account"}, {"room_history", "supported", "room"},
-		{"room_discovery", "unsupported", "service"}, {"room_messaging", "partial", "room"},
+		{"room_discovery", "supported", "service"}, {"room_messaging", "partial", "room"},
 		{"file_upload", "supported", "service"}, {"image_previews", "supported", "local"},
 		{"link_previews", "supported", "local"}, {"received_replies", "supported", "peer"},
 		{"send_replies", "supported", "peer"}, {"mentions", "supported", "room"}, {"edit_messages", "partial", "peer"},

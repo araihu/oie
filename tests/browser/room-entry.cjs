@@ -20,7 +20,12 @@ const accounts = [
   {id: alice, revisionId: revision, label: 'Alice', address: 'alice@fixture', protocol: 'xmpp', createdAt: at},
   {id: bob, revisionId: revision, label: 'Bob', address: 'bob@fixture', protocol: 'xmpp', createdAt: at}
 ];
-const previews = [], commands = [], streams = new Set();
+const previews = [], commands = [], managementCommands = [], streams = new Set();
+let managementRevision = 'first-room-revision', managementBlocked = false, roomImage = avatarHash;
+let unavailableBanReads = 0;
+const readerAddress = 'leitora@fixture';
+const bannedAddresses = new Set(['banido@fixture','sem-foto@fixture',
+  ...Array.from({length:30}, (_, index) => 'banido-' + index + '@fixture')]);
 let destination, roomState = 'joining', cursor = 0, conflict = false, trustedService = true;
 
 async function apiHandler(req, res) {
@@ -50,6 +55,44 @@ async function apiHandler(req, res) {
     if (u.searchParams.get('address') === 'missing@fixture') return send(200, {address: 'missing@fixture', state: 'not_found'});
     return send(200, {address, state: 'known', name: 'Saberes <script>', description: 'Bem-vindos!', topic: 'Encontro', occupantCount: 17, avatarHash});
   }
+  if (req.method === 'GET' && u.pathname.endsWith('/rooms')) {
+    return send(200, {state: 'known', rooms: [{address, name: 'Trilha de livros'}]});
+  }
+  if (u.pathname.endsWith('/room-management')) {
+    if (req.method === 'GET') {
+      if (u.searchParams.get('affiliation') === 'outcast' && unavailableBanReads > 0) {
+        unavailableBanReads--;
+        return send(200, {state:'unavailable',actions:[],occupants:[],affiliations:[]});
+      }
+      return send(200, {state:'available', revision:managementRevision,
+        actions:managementBlocked ? ['invite'] : ['rename','topic','invite','role','affiliation','set_avatar','remove_avatar'],
+        occupants:[
+          {id:'occupant:reader',nickname:'Leitora',role:'participant',affiliation:'member',avatarHash,roles:['none','visitor','moderator'],affiliations:['outcast']},
+          {id:'occupant:visitor',nickname:'Visitante',role:'visitor',affiliation:'none',roles:[],affiliations:[]},
+          {id:'self',self:true,nickname:'Marina',role:'moderator',affiliation:'owner',roles:[],affiliations:[]},
+          {id:'occupant:admin',nickname:'Helena',role:'moderator',affiliation:'admin',roles:[],affiliations:[]},
+          {id:'occupant:moderator',nickname:'Lucas',role:'moderator',affiliation:'member',roles:[],affiliations:[]},
+        ].filter(occupant => occupant.id !== 'occupant:reader' || !bannedAddresses.has(readerAddress)),
+        affiliations:u.searchParams.get('affiliation') === 'outcast' ? [...bannedAddresses] : [],
+        bannedNicknames:u.searchParams.get('affiliation') === 'outcast' && bannedAddresses.has(readerAddress) ? {[readerAddress]:'Leitora'} : undefined});
+    }
+    let data = '';
+    for await (const chunk of req) data += chunk;
+    const command = JSON.parse(data);
+    managementCommands.push({...command, key:req.headers['idempotency-key']});
+    if (managementBlocked || command.expectedRevision !== managementRevision) return send(200, {state:'stale'});
+    managementRevision = 'next-room-revision';
+    if (command.action === 'set_avatar' || command.action === 'remove_avatar') {
+      roomImage = command.action === 'remove_avatar' ? '' : avatarHash;
+      cursor++;
+      for (const stream of streams) stream.write('id: ' + engine + ':' + cursor + '\nevent: profile.avatar_changed\ndata: {}\n\n');
+    }
+    if (command.action === 'affiliation' && command.value === 'none') bannedAddresses.delete(command.target);
+    if (command.action === 'affiliation' && command.value === 'outcast') {
+      bannedAddresses.add(command.target === 'occupant:reader' ? readerAddress : command.target);
+    }
+    return send(200, {state:'confirmed'});
+  }
   if (req.method === 'POST' && u.pathname.endsWith('/rooms')) {
     let data = '';
     for await (const chunk of req) data += chunk;
@@ -65,10 +108,22 @@ async function apiHandler(req, res) {
   if (u.pathname.endsWith('/capabilities')) return send(200, {accountId: u.pathname.split('/')[4], state: 'known',
     features: [{id: 'room_messaging', appSupport: 'partial', protocolSupport: 'supported', serverSupport: 'scope_dependent'}]});
   if (u.pathname.endsWith('/history')) return send(200, {state: 'complete', retainedMessages: 1, conversations: 1, updatedAt: at});
-  if (u.pathname.endsWith('/avatars') || u.pathname.endsWith('/previews') || u.pathname.endsWith('/message-stars')) return send(200, {items: []});
+  if (u.pathname.endsWith('/avatars')) {
+    const accountId = u.pathname.split('/')[4];
+    return send(200, {items: destination?.accountId === accountId
+      ? [{accountId, address:destination.address, imageHash:roomImage, updatedAt:at},
+         {accountId, address:'banido@fixture', imageHash:avatarHash, updatedAt:at}] : []});
+  }
+  if (u.pathname.endsWith('/previews') || u.pathname.endsWith('/message-stars')) return send(200, {items: []});
   if (u.pathname === '/api/v1/conversations') return send(200, {items: [source, destination].filter(c => c && (!u.searchParams.has('accountId') || c.accountId === u.searchParams.get('accountId')))});
   if (u.pathname === '/api/v1/conversations/' + chat) return send(200, source);
   if (u.pathname === '/api/v1/conversations/' + room && destination) return send(200, destination);
+  if (u.pathname === '/api/v1/conversations/' + room + '/details' && destination) return send(200, {
+    accountId:destination.accountId, conversationId:room, kind:'room', address:destination.address,
+    name:'Trilha de livros', topic:'Encontro', state:'known', features:[], canInviteToRoom:true,
+    accountConnection:{accountId:destination.accountId,state:'connected',updatedAt:at},
+    participants:{scope:'occupants',state:'known',truncated:false,items:[]}
+  });
   if (u.pathname.endsWith('/room-session') && destination) return send(200, {accountId: destination.accountId,
     conversationId: room, active: true, state: roomState, intentRevisionId: revision, updatedAt: at});
   if (u.pathname === '/api/v1/conversations/' + chat + '/messages') return send(200, {items: [{id: id(8), revisionId: revision,
@@ -226,7 +281,399 @@ async function waitFor(predicate) {
     cursor++;
     for (const stream of streams) stream.write('id: ' + engine + ':' + cursor + '\nevent: conversation.room_session_changed\ndata: {}\n\n');
     await page.locator('#room-session-status').waitFor({state: 'hidden'});
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({width, height: 900});
+      let finishOpening;
+      const opening = new Promise(resolve => {finishOpening = resolve;});
+      if (width === 1440) {
+        await page.route('**/ui/rooms/manage-fragment?*',async route => {
+          await opening;
+          await route.continue();
+        },{times:1});
+      }
+      await page.locator('[aria-controls=chat-options-panel]').click();
+      await page.locator('#chat-manage-room').click();
+      const management = page.locator('[data-room-management]');
+      const openingSkeleton = management.getByRole('status',{name:'Carregando ações da sala…',exact:true});
+      if (width === 1440) {
+        await openingSkeleton.waitFor();
+        assert.equal(await openingSkeleton.locator('[data-skeleton-item]').count(),5);
+        finishOpening();
+      }
+      const saveDetails = management.getByRole('button', {name:'Salvar alterações'});
+      await saveDetails.waitFor();
+      assert.equal(await management.locator('[data-room-participant-detail]').count(),0);
+      assert.equal(await management.locator('[data-room-profile-slot] form').count(),0);
+      await openingSkeleton.waitFor({state:'hidden'});
+      assert.equal(await management.getByRole('button',{name:'Atualizar',exact:true}).count(),0);
+      assert.equal(await saveDetails.isDisabled(), true);
+      const topic = management.getByRole('textbox', {name:'Tópico', exact:true});
+      const originalTopicField = await topic.elementHandle();
+      assert.equal(await topic.evaluate(input => input.tagName), 'TEXTAREA');
+      const originalTopic = await topic.inputValue();
+      const name = management.getByRole('textbox',{name:'Nome da sala',exact:true});
+      const originalName = await name.inputValue();
+      const [saveBox, topicBox] = await Promise.all([saveDetails.boundingBox(), topic.boundingBox()]);
+      assert(Math.abs(saveBox.x + saveBox.width - topicBox.x - topicBox.width) <= 1);
+      await name.fill(originalName + ' ');
+      assert.equal(await saveDetails.isDisabled(), true);
+      await name.fill('Outro nome');
+      assert.equal(await saveDetails.isEnabled(), true);
+      await name.fill(originalName);
+      assert.equal(await saveDetails.isDisabled(), true);
+      await topic.fill('Outro tópico');
+      assert.equal(await saveDetails.isEnabled(), true);
+      await topic.fill(originalTopic);
+      assert.equal(await saveDetails.isDisabled(), true);
+      const detailsTab = management.getByRole('tab', {name:'Detalhes', exact:true});
+      const participantsTab = management.getByRole('tab', {name:'Participantes', exact:true});
+      const participant = management.getByRole('button', {name:'Leitora', exact:true});
+      await management.locator('.oie-room-management-avatar [data-avatar-ready=true]').waitFor();
+      assert.equal(await detailsTab.getAttribute('aria-selected'), 'true');
+      assert.equal(await participant.isVisible(), false);
+      await detailsTab.focus();
+      await page.keyboard.press('ArrowRight');
+      await page.keyboard.press('Enter');
+      await participant.waitFor();
+      assert.equal(await participantsTab.getAttribute('aria-selected'), 'true');
+      assert.equal(await topic.isVisible(), false);
+      assert.deepEqual(await management.locator('.oie-room-participant-group h3').allTextContents(),
+        ['Proprietários','Administradores','Moderadores','Participantes','Visitantes']);
+      await management.getByRole('button',{name:'Marina (Você)',exact:true}).waitFor();
+      const photo = participant.locator('img');
+      await photo.waitFor();
+      assert.equal(await photo.getAttribute('src'), '/ui/avatars/'+avatarHash);
+      const search = management.getByRole('searchbox',{name:'Pesquisar participantes',exact:true});
+      await search.fill('  LEITÓ  ');
+      assert.deepEqual(await management.locator('.oie-room-participant-group:visible h3').allTextContents(),['Participantes']);
+      await search.fill('sem resultado');
+      await management.getByText('Nenhum participante encontrado.',{exact:true}).waitFor();
+      await page.keyboard.press('Escape');
+      assert.equal(await search.inputValue(),'');
+      await search.fill('leit');
+      let finishProfile;
+      if (width === 1440) {
+        const profileLoading = new Promise(resolve => {finishProfile = resolve;});
+        await page.route(url => url.pathname === '/ui/rooms/manage-fragment' && url.searchParams.has('profile'), async route => {
+          await profileLoading;
+          await route.continue();
+        },{times:1});
+      }
+      await participant.focus();
+      await page.keyboard.press('Enter');
+      if (finishProfile) {
+        await management.locator('.oie-room-profile-skeleton').waitFor();
+        assert.equal(await management.locator('[data-room-participant-detail]').count(),0);
+        finishProfile();
+      }
+      const profile = management.getByRole('region',{name:'Leitora',exact:true});
+      await profile.getByRole('heading',{name:'Leitora',exact:true}).waitFor();
+      assert.equal(await management.locator('[data-room-participant-detail]').count(),1);
+      assert.equal(await profile.getByRole('button',{name:'Tornar moderador',exact:true}).isVisible(),true);
+      assert.equal(await profile.getByRole('button',{name:'Banir da sala',exact:true}).isVisible(),true);
+      assert.equal(await participant.isVisible(),false);
+      assert.equal(await search.isVisible(),false);
+      await page.keyboard.press('Escape');
+      await profile.waitFor({state:'hidden'});
+      assert.equal(await participant.evaluate(el => document.activeElement === el),true);
+      assert.equal(await search.inputValue(),'leit');
+      await participant.click();
+      const kickTrigger = profile.getByRole('button', {name:'Remover da sala',exact:true});
+      const promote = profile.getByRole('button', {name:'Tornar moderador',exact:true});
+      await promote.waitFor();
+      assert.equal(await promote.locator('.oie-room-action-icon svg').count(), 1);
+      assert.equal(await kickTrigger.locator('..').getAttribute('data-tone'), 'danger');
+      await promote.click();
+      const promoteForm = profile.locator('form[data-room-action-form$=role-moderator]');
+      await promoteForm.getByRole('button',{name:'Confirmar',exact:true}).waitFor();
+      assert.equal(await promote.getAttribute('aria-expanded'), 'true');
+      await page.keyboard.press('Escape');
+      await promoteForm.waitFor({state:'hidden'});
+      assert.equal(await promote.getAttribute('aria-expanded'), 'false');
+      assert.equal(await promote.evaluate(el => document.activeElement === el), true);
+      await kickTrigger.click();
+      const kick = management.locator('form[data-room-action-form$=role-none]');
+      await kick.getByRole('textbox',{name:'Motivo (opcional)'}).waitFor();
+      assert.equal(await kickTrigger.getAttribute('aria-expanded'), 'true');
+      await kick.getByRole('button',{name:'Cancelar'}).click();
+      await kick.waitFor({state:'hidden'});
+      assert.equal(await kickTrigger.getAttribute('aria-expanded'), 'false');
+      await profile.getByRole('button',{name:'Voltar para participantes'}).click();
+      await participant.waitFor();
+      assert.deepEqual((await management.getByRole('tab').allTextContents()).map(label => label.trim()),
+        ['Detalhes','Participantes','Banimentos']);
+      const bans = management.getByRole('tabpanel',{name:'Banimentos',exact:true});
+      const bansTab = management.getByRole('tab',{name:'Banimentos',exact:true});
+      let finishBans;
+      const bansLoading = new Promise(resolve => {finishBans = resolve;});
+      const bansSkeleton = bans.getByRole('status',{name:'Carregando ações da sala…',exact:true});
+      const tabsBeforeBans = await management.getByRole('tablist').boundingBox();
+      const originalParticipant = await participant.elementHandle();
+      if (width === 1440) {
+        await page.route(url => url.pathname === '/ui/rooms/manage-fragment' && url.searchParams.get('affiliation') === 'outcast',async route => {
+          await bansLoading;
+          await route.fulfill({status:503});
+        },{times:1});
+        await bansTab.click();
+        await bansSkeleton.waitFor();
+        assert.deepEqual(await management.getByRole('tablist').boundingBox(),tabsBeforeBans);
+        finishBans();
+        const errorToast = page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'As ações da sala estão indisponíveis.'});
+        await errorToast.waitFor();
+        await bansSkeleton.waitFor({state:'hidden'});
+        await errorToast.getByRole('button',{name:'Fechar',exact:true}).click();
+      }
+      await bansTab.click();
+      await bans.getByRole('button',{name:'banido@fixture',exact:true}).waitFor();
+      await bansSkeleton.waitFor({state:'hidden'});
+      assert.deepEqual(await management.getByRole('tablist').boundingBox(),tabsBeforeBans);
+      const bannedAvatar = bans.locator('.oie-room-addresses [data-avatar-address="banido@fixture"]');
+      await bannedAvatar.locator('[data-avatar-ready=true] img').waitFor();
+      const initials = bans.locator('.oie-room-addresses [data-avatar-address="sem-foto@fixture"] [data-avatar-initials]');
+      await initials.waitFor();
+      assert.equal((await initials.innerText()).trim(),'SF');
+      assert.equal(await bans.getByRole('button',{name:'banido@fixture',exact:true}).isVisible(),true);
+      assert.equal(await management.locator('[data-room-participant-detail]').count(),0);
+      assert(await originalParticipant.evaluate(node => node.isConnected));
+      assert(await originalTopicField.evaluate(node => node.isConnected));
+      await participantsTab.click();
+      assert.equal(await search.inputValue(),'leit');
+      assert.deepEqual(await management.locator('.oie-room-participant-group:visible h3').allTextContents(),['Participantes']);
+      await search.clear();
+      await detailsTab.click();
 
+      if (width === 1440 && process.env.OIE_ROOM_MANAGEMENT_SCREENSHOT) {
+        await management.screenshot({path:process.env.OIE_ROOM_MANAGEMENT_SCREENSHOT});
+      }
+      if (width === 1440) {
+        const releaseRequest = {};
+        const held = new Promise(resolve => {releaseRequest.send = resolve;});
+        await page.route('**/ui/rooms/manage', async route => {
+          await held;
+          await route.continue();
+        }, {times:1});
+        await management.getByRole('textbox',{name:'Nome da sala',exact:true}).fill('Leituras de sábado');
+        await topic.fill('Próxima leitura\nTraga um conto');
+        const geometry = () => page.locator('#send-message-form').evaluate(element => {
+          const {x,y,width,height} = element.getBoundingClientRect();
+          return [x,y,width,height];
+        });
+        const before = await geometry();
+        const tabsBefore = await management.getByRole('tablist').boundingBox();
+        await saveDetails.click();
+        assert.equal(await saveDetails.isDisabled(), true);
+        assert.deepEqual(await geometry(), before);
+        releaseRequest.send();
+        const toast = page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'Alteração confirmada.'});
+        await toast.waitFor();
+        assert.equal(await management.getByText('Alteração confirmada.',{exact:true}).count(),0);
+        assert.deepEqual(await management.getByRole('tablist').boundingBox(),tabsBefore);
+        await toast.getByRole('button',{name:'Fechar',exact:true}).click();
+        await toast.waitFor({state:'hidden'});
+        assert.equal(await saveDetails.isDisabled(), true);
+        await topic.fill('Próxima leitura\nTraga um conto\n');
+        assert.equal(await saveDetails.isDisabled(), true);
+        await topic.fill('Próxima leitura\nTraga dois contos');
+        assert.equal(await saveDetails.isEnabled(), true);
+        await topic.fill('Próxima leitura\nTraga um conto');
+        assert.equal(managementCommands.length, 1);
+        assert.equal(managementCommands[0].action, 'update_details');
+        assert.equal(managementCommands[0].name, 'Leituras de sábado');
+        assert.equal(managementCommands[0].topic, 'Próxima leitura\nTraga um conto');
+        assert.equal(await management.getByRole('button',{name:'Enviar convite'}).count(),0);
+        assert.deepEqual(await geometry(), before);
+      } else {
+        await topic.fill('Rascunho do tópico');
+        managementBlocked = true;
+        const submit = management.getByRole('button', {name:'Salvar alterações'});
+        await submit.click();
+        await management.getByText('A sala mudou. Revise as alterações antes de tentar novamente.', {exact:true}).waitFor();
+        await waitFor(() => managementCommands.length === 2);
+        assert.equal(managementCommands[1].topic, 'Rascunho do tópico');
+        assert.equal(managementCommands[1].name, undefined);
+        assert.equal(await topic.inputValue(), 'Rascunho do tópico');
+        await waitFor(() => submit.isDisabled());
+      }
+      await page.keyboard.press('Escape');
+      await management.waitFor({state:'hidden'});
+    }
+
+    managementBlocked = false;
+    await page.locator('[aria-controls=chat-options-panel]').click();
+    await page.locator('#chat-manage-room').click();
+    const recoveredPanel = page.locator('[data-room-management]');
+    await recoveredPanel.getByRole('textbox',{name:'Tópico',exact:true}).waitFor();
+    await waitFor(() => recoveredPanel.getByRole('button',{name:'Salvar alterações'}).isEnabled());
+    assert.equal(await recoveredPanel.getByRole('textbox',{name:'Tópico',exact:true}).inputValue(),'Rascunho do tópico');
+    await page.keyboard.press('Escape');
+    await recoveredPanel.waitFor({state:'hidden'});
+
+    await page.locator('[aria-controls=chat-options-panel]').click();
+    await page.getByRole('menuitem',{name:'Convidar pessoas'}).click();
+    const invitePanel = page.locator('[data-room-management]');
+    await page.getByRole('heading',{name:'Convidar pessoas'}).waitFor();
+    assert.equal(await invitePanel.getByRole('button',{name:'Salvar alterações'}).count(),0);
+    await invitePanel.getByRole('textbox',{name:'Endereço da pessoa'}).fill('amiga@fixture');
+    await invitePanel.getByRole('button',{name:'Enviar convite'}).click();
+    await waitFor(() => managementCommands.length === 3);
+    assert.equal(managementCommands[2].action,'invite');
+    assert.equal(managementCommands[2].target,'amiga@fixture');
+    await page.keyboard.press('Escape');
+    await invitePanel.waitFor({state:'hidden'});
+
+    await page.locator('[aria-controls=chat-options-panel]').click();
+    await page.locator('#chat-manage-room').click();
+    const roomPanel = page.locator('[data-room-management]');
+    const dismissRoomConfirmations = async () => {
+      const toasts = page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'Alteração confirmada.'});
+      while (await toasts.first().isVisible()) {
+        const count = await toasts.count();
+        await toasts.first().getByRole('button',{name:'Fechar',exact:true}).press('Enter');
+        await waitFor(async () => (await toasts.count()) < count);
+      }
+    };
+    const image = roomPanel.locator('.oie-room-management-avatar [data-avatar-ready=true]');
+    await image.waitFor();
+    await roomPanel.getByRole('button',{name:'Remover imagem da sala',exact:true}).click();
+    await roomPanel.locator('#room-avatar-removal').getByRole('button',{name:'Remover imagem da sala',exact:true}).click();
+    await image.waitFor({state:'hidden'});
+    assert.equal(managementCommands.at(-1).action,'remove_avatar');
+    await roomPanel.getByRole('button',{name:'Trocar imagem da sala',exact:true}).click();
+    await roomPanel.locator('input[name=image]').setInputFiles({name:'room.png',mimeType:'image/png',buffer:avatar});
+    await roomPanel.locator('#room-avatar-upload').getByRole('button',{name:'Trocar imagem da sala',exact:true}).click();
+    await image.waitFor();
+    assert.equal(managementCommands.at(-1).action,'set_avatar');
+    assert.equal(managementCommands.at(-1).image,avatar.toString('base64'));
+    await dismissRoomConfirmations();
+    await roomPanel.getByRole('tab',{name:'Banimentos',exact:true}).click();
+    const banSearch = roomPanel.getByRole('searchbox',{name:'Pesquisar banimentos',exact:true});
+    const bansList = roomPanel.locator('.oie-room-bans-list [data-goshtoso-scroll-viewport]');
+    await bansList.getByText('sem-foto@fixture',{exact:true}).waitFor();
+    await banSearch.fill('  SEM-FOTO@  ');
+    assert.deepEqual(await bansList.locator('li:visible').getByText('sem-foto@fixture',{exact:true}).allTextContents(),['sem-foto@fixture']);
+    assert.equal(await bansList.locator('li:visible').count(),1);
+    await banSearch.fill('sem correspondência');
+    await roomPanel.getByText('Nenhum endereço encontrado.',{exact:true}).waitFor();
+    await banSearch.press('Escape');
+    assert.equal(await banSearch.inputValue(),'');
+    await banSearch.fill('banido@');
+    const bannedRow = roomPanel.getByRole('button',{name:'banido@fixture',exact:true});
+    const bannedProfile = roomPanel.getByRole('region',{name:'banido@fixture',exact:true});
+    const beforeUnban = managementCommands.length;
+    await bannedRow.press('Enter');
+    await bannedProfile.getByRole('heading',{name:'banido@fixture',exact:true}).waitFor();
+    await bannedProfile.getByText('Banido',{exact:true}).waitFor();
+    assert.equal(await banSearch.isVisible(),false);
+    assert.equal(managementCommands.length,beforeUnban);
+    await bannedProfile.getByRole('button',{name:'Voltar para banimentos'}).click();
+    assert.equal(await banSearch.inputValue(),'banido@');
+    assert.equal(await bannedRow.evaluate(el => document.activeElement === el),true);
+    await bannedRow.click();
+    const unban = bannedProfile.getByRole('button',{name:'Retirar banimento',exact:true});
+    await unban.click();
+    const confirmation = bannedProfile.locator('form[data-room-action-confirmation]');
+    await confirmation.getByText('Retirar o banimento de banido@fixture?',{exact:true}).waitFor();
+    const cancelUnban = confirmation.getByRole('button',{name:'Cancelar',exact:true});
+    await page.waitForFunction(() => document.activeElement?.matches('[data-room-action-confirmation] [data-room-action-cancel]'));
+    assert.equal(managementCommands.length,beforeUnban);
+    await cancelUnban.click();
+    await confirmation.waitFor({state:'hidden'});
+    assert.equal(await unban.evaluate(el => document.activeElement === el),true);
+    await unban.click();
+    await page.waitForFunction(() => document.activeElement?.matches('[data-room-action-confirmation] [data-room-action-cancel]'));
+    await page.keyboard.press('Escape');
+    await confirmation.waitFor({state:'hidden'});
+    assert.equal(managementCommands.length,beforeUnban);
+    await unban.click();
+    await confirmation.getByRole('button',{name:'Confirmar',exact:true}).click();
+    await bannedProfile.waitFor({state:'hidden'});
+    await bannedRow.waitFor({state:'detached'});
+    assert.equal(await banSearch.inputValue(),'banido@');
+    await roomPanel.getByText('Nenhum endereço encontrado.',{exact:true}).waitFor();
+    await banSearch.clear();
+    assert.equal(await bansList.getByText('sem-foto@fixture',{exact:true}).isVisible(),true);
+    assert.equal(managementCommands.length,beforeUnban+1);
+    assert.equal(managementCommands.at(-1).action,'affiliation');
+    assert.equal(managementCommands.at(-1).target,'banido@fixture');
+    await dismissRoomConfirmations();
+    assert.equal(managementCommands.at(-1).value,'none');
+    const banTabs = roomPanel.getByRole('tablist');
+    const banToggle = roomPanel.getByRole('button',{name:'Banir por endereço',exact:true});
+    await banToggle.hover();
+    const banHelp = page.getByRole('tooltip').filter({hasText:'Banir por endereço'});
+    await banHelp.getByText('Impeça alguém de entrar na sala pelo endereço, mesmo que nunca tenha participado.').waitFor();
+    assert.equal(await banToggle.getAttribute('aria-controls'),'room-ban-by-address-form');
+    const banAddress = roomPanel.getByRole('textbox',{name:'Endereço da pessoa',exact:true});
+    assert.equal(await banAddress.isVisible(),false);
+    const footerBeforeScroll = await banToggle.boundingBox();
+    const searchBeforeScroll = await banSearch.boundingBox();
+    const tabsBeforeScroll = await banTabs.boundingBox();
+    const scrollTop = await bansList.evaluate(list => {
+      list.scrollTop = 200;
+      return list.scrollTop;
+    });
+    assert.equal(scrollTop,200);
+    assert.deepEqual(await banToggle.boundingBox(),footerBeforeScroll);
+    assert.deepEqual(await banSearch.boundingBox(),searchBeforeScroll);
+    assert.deepEqual(await banTabs.boundingBox(),tabsBeforeScroll);
+    const beforeBan = managementCommands.length;
+    await banToggle.click();
+    await banAddress.fill('ainda-fora@fixture');
+    await page.keyboard.press('Escape');
+    await banAddress.waitFor({state:'hidden'});
+    assert.equal(await banToggle.evaluate(el => document.activeElement === el),true);
+    assert.equal(managementCommands.length,beforeBan);
+    await banToggle.click();
+    await banAddress.fill('ainda-fora@fixture');
+    const topicBeforeBan = await roomPanel.locator('textarea[name=topic]').elementHandle();
+    const rowsBeforeBan = await roomPanel.locator('#room-participant-results').elementHandle();
+    await roomPanel.getByRole('button',{name:'Banir da sala',exact:true}).click();
+    await roomPanel.getByRole('button',{name:'ainda-fora@fixture',exact:true}).waitFor();
+    assert(await topicBeforeBan.evaluate(node => node.isConnected));
+    assert(await rowsBeforeBan.evaluate(node => node.isConnected));
+    assert.equal(await banAddress.isVisible(),false);
+    assert.equal(await bansList.evaluate(list => list.scrollTop),scrollTop);
+    assert.equal(managementCommands.at(-1).value,'outcast');
+    assert.equal(managementCommands.at(-1).target,'ainda-fora@fixture');
+    assert.equal(managementCommands.length,beforeBan+1);
+    await dismissRoomConfirmations();
+
+    const bansTab = roomPanel.getByRole('tab',{name:'Banimentos',exact:true});
+    await roomPanel.getByRole('tab',{name:'Participantes',exact:true}).click();
+    await roomPanel.getByRole('button',{name:'Leitora',exact:true}).click();
+    const reader = roomPanel.getByRole('region',{name:'Leitora',exact:true});
+    await reader.getByRole('button',{name:'Banir da sala',exact:true}).click();
+    unavailableBanReads = 2;
+    await reader.getByRole('button',{name:'Confirmar',exact:true}).click();
+    const reloadError = page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'As ações da sala estão indisponíveis.'});
+    await reloadError.waitFor();
+    assert.equal(unavailableBanReads,0);
+    await reloadError.getByRole('button',{name:'Fechar',exact:true}).click();
+    await reloadError.waitFor({state:'hidden'});
+    await dismissRoomConfirmations();
+    assert.equal(managementCommands.at(-1).target,'occupant:reader');
+    assert.equal(managementCommands.at(-1).value,'outcast');
+    await bansTab.press('Enter');
+    const bannedReader = roomPanel.getByRole('button',{name:'Leitora '+readerAddress,exact:true});
+    await bannedReader.waitFor();
+    const listedAddress = bannedReader.getByText(readerAddress,{exact:true});
+    await listedAddress.waitFor();
+    const nicknameBox = await bannedReader.getByText('Leitora',{exact:true}).boundingBox();
+    assert((await listedAddress.boundingBox()).y >= nicknameBox.y + nicknameBox.height - 1);
+    await banSearch.fill('leitora');
+    assert.equal(await bansList.locator('li:visible').count(),1);
+    await banSearch.fill(readerAddress);
+    await bannedReader.click();
+    const bannedReaderProfile = roomPanel.getByRole('region',{name:'Leitora',exact:true});
+    await bannedReaderProfile.getByText(readerAddress,{exact:true}).waitFor();
+    await bannedReaderProfile.getByRole('button',{name:'Voltar para banimentos'}).click();
+    await roomPanel.getByRole('tab',{name:'Participantes',exact:true}).click();
+    await roomPanel.locator('#room-participant-results').getByRole('button',{name:'Leitora',exact:true}).waitFor({state:'detached'});
+    assert.equal(managementCommands.length,beforeBan+2);
+    await page.keyboard.press('Escape');
+    await roomPanel.waitFor({state:'hidden'});
+
+    await page.setViewportSize({width:1440,height:950});
     conflict = true;
     await page.goto(base + '/?' + new URLSearchParams({chat, account: alice, lang: 'en'}));
     await page.locator('body[data-oie-live-ready=true]').waitFor();
@@ -265,6 +712,13 @@ async function waitFor(predicate) {
     await page.goto(base + '/?' + new URLSearchParams({chat, account: alice, open: 'join-room', lang: 'en'}));
     await form.waitFor();
     const previewButton = form.getByRole('button', {name: 'Preview room'});
+    const directory = form.locator('[data-room-directory]');
+    await directory.locator('summary').click();
+    await directory.getByRole('button', {name:'Browse public rooms'}).click();
+    await directory.getByRole('button', {name:'Trilha de livros'}).click();
+    assert.equal(await form.locator('[name=address]').inputValue(), address);
+    assert.equal(commands.length, 4);
+    await directory.locator('summary').click();
     await form.locator('[name=address]').fill('missing@fixture');
     await previewButton.click();
     await preview.getByText('Room not found.', {exact: true}).waitFor();

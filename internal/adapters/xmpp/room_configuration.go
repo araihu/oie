@@ -49,6 +49,10 @@ func (m *Manager) recordDiscoInfo(ctx context.Context, e *entry, s *mx.Session, 
 			return err
 		}
 		if slot != nil {
+			flags := managementFlags(info)
+			if flags != slot.management.flags {
+				slot.management.flags, slot.management.revision = flags, ""
+			}
 			switch {
 			case !e.occupantScopes[address]:
 				updateOwnRoomOccupant(slot, "")
@@ -99,6 +103,8 @@ func (m *Manager) invalidateRoomConfiguration(ctx context.Context, e *entry, msg
 				}
 			}
 			e.historyMu.Unlock()
+			slot.management.flags = roomManagementFlags{}
+			slot.management.revision = ""
 			delete(e.reactionLimits, room)
 			if detail := e.details[slot.conversation.ID]; detail != nil {
 				detail.info = domain.EmptyConversationInfo("room", "pending")
@@ -116,6 +122,9 @@ func (m *Manager) invalidateRoomConfiguration(ctx context.Context, e *entry, msg
 			err := m.setRoomReactionPrivacy(ctx, e, room, mode, false)
 			e.mu.Unlock()
 			m.WakeRoomArchive(e.account.ID)
+			if status.Code == 104 {
+				m.queueAvatar(e, msg.From, "", false)
+			}
 			return err
 		}
 	}

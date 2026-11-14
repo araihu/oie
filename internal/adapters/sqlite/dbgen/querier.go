@@ -26,6 +26,7 @@ type Querier interface {
 	DeletePendingReplyMetadata(ctx context.Context, messageID string) error
 	DeleteReactionObservation(ctx context.Context, ordinal int64) error
 	FindAvatar(ctx context.Context, arg FindAvatarParams) (Avatar, error)
+	FindAvatarHashes(ctx context.Context, arg FindAvatarHashesParams) ([]FindAvatarHashesRow, error)
 	FindConversation(ctx context.Context, arg FindConversationParams) (Conversation, error)
 	FindMessagePreview(ctx context.Context, arg FindMessagePreviewParams) (MessagePreview, error)
 	// Match the partial identity index used for messages with provider IDs.
@@ -60,6 +61,7 @@ type Querier interface {
 	GetRoomArchive(ctx context.Context, conversationID string) (GetRoomArchiveRow, error)
 	GetRoomIntent(ctx context.Context, conversationID string) (RoomIntent, error)
 	GetRoomInvitationCredential(ctx context.Context, conversationID string) (string, error)
+	GetRoomMessageModeration(ctx context.Context, messageID string) (GetRoomMessageModerationRow, error)
 	GetRoomReactionPrivacy(ctx context.Context, arg GetRoomReactionPrivacyParams) (GetRoomReactionPrivacyRow, error)
 	GetSharedContentItem(ctx context.Context, arg GetSharedContentItemParams) (GetSharedContentItemRow, error)
 	GetStagedAttachment(ctx context.Context, id string) (StagedAttachment, error)
@@ -96,6 +98,7 @@ type Querier interface {
 	InsertReactionObservation(ctx context.Context, arg InsertReactionObservationParams) error
 	InsertReadRevision(ctx context.Context, arg InsertReadRevisionParams) error
 	InsertRoomInvitationCredential(ctx context.Context, arg InsertRoomInvitationCredentialParams) error
+	InsertRoomModeration(ctx context.Context, arg InsertRoomModerationParams) (int64, error)
 	InsertStagedAttachment(ctx context.Context, arg InsertStagedAttachmentParams) error
 	InsertVisibleMessageChange(ctx context.Context, arg InsertVisibleMessageChangeParams) (int64, error)
 	InterruptedMessageEditCommands(ctx context.Context) ([]MessageEditCommand, error)
@@ -123,6 +126,7 @@ type Querier interface {
 	ListMessagesAfter(ctx context.Context, arg ListMessagesAfterParams) ([]Message, error)
 	ListPreviewSources(ctx context.Context, messageIds string) ([]ListPreviewSourcesRow, error)
 	ListRoomArchiveConversations(ctx context.Context, accountID string) ([]Conversation, error)
+	ListRoomBannedNicknames(ctx context.Context, conversationID string) ([]ListRoomBannedNicknamesRow, error)
 	ListRoomIntents(ctx context.Context) ([]RoomIntent, error)
 	ListScheduledMessages(ctx context.Context, arg ListScheduledMessagesParams) ([]ListScheduledMessagesRow, error)
 	// The catalog and a bounded timeline use different driving indexes.
@@ -134,6 +138,7 @@ type Querier interface {
 	MessagesAfterTarget(ctx context.Context, arg MessagesAfterTargetParams) ([]Message, error)
 	// Bound the leading expression so SQLite seeks into messages_timeline.
 	MessagesAtOrBeforeTarget(ctx context.Context, arg MessagesAtOrBeforeTargetParams) ([]Message, error)
+	ModeratedRoomMessageSources(ctx context.Context, arg ModeratedRoomMessageSourcesParams) ([]string, error)
 	OriginalSendReceipt(ctx context.Context, resourceID string) (Operation, error)
 	PendingDirectHistoryChecks(ctx context.Context, accountID string) ([]Conversation, error)
 	PendingMessageEditCommands(ctx context.Context, nextAttemptAt string) ([]MessageEditCommand, error)
@@ -151,6 +156,7 @@ type Querier interface {
 	PutMessageStar(ctx context.Context, arg PutMessageStarParams) error
 	PutRoomArchiveMode(ctx context.Context, arg PutRoomArchiveModeParams) error
 	PutRoomArchiveProgress(ctx context.Context, arg PutRoomArchiveProgressParams) error
+	PutRoomBannedNickname(ctx context.Context, arg PutRoomBannedNicknameParams) error
 	PutRoomIntent(ctx context.Context, arg PutRoomIntentParams) error
 	PutSharedContent(ctx context.Context, arg PutSharedContentParams) error
 	ReactionActorProfile(ctx context.Context, arg ReactionActorProfileParams) (ReactionActorProfileRow, error)
@@ -159,6 +165,8 @@ type Querier interface {
 	ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error
 	ReconcileReactionObservation(ctx context.Context, arg ReconcileReactionObservationParams) error
 	RecordOriginalTransmission(ctx context.Context, id string) error
+	RemoveModeratedSharedContent(ctx context.Context, messageID string) error
+	RemoveRoomBannedNickname(ctx context.Context, arg RemoveRoomBannedNicknameParams) error
 	ResetAllRoomReactionPrivacy(ctx context.Context) error
 	ResetRoomReactionPrivacy(ctx context.Context, accountID string) error
 	ResolveMessageAlias(ctx context.Context, aliasID string) (string, error)
@@ -182,6 +190,7 @@ type Querier interface {
 	UpdateMessagePreview(ctx context.Context, arg UpdateMessagePreviewParams) (int64, error)
 	UpdateMessageReactionCommand(ctx context.Context, arg UpdateMessageReactionCommandParams) error
 	UpdateOutbox(ctx context.Context, arg UpdateOutboxParams) error
+	UpsertRoomInvitationCredential(ctx context.Context, arg UpsertRoomInvitationCredentialParams) error
 }
 
 var _ Querier = (*Queries)(nil)

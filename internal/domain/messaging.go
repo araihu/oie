@@ -37,6 +37,7 @@ type MediaThumbnail struct {
 }
 
 type Message struct {
+	Moderation                                *MessageModeration `json:",omitempty"`
 	ID, RevisionID, AccountID, ConversationID ID
 	Sender                                    Sender
 	OriginalText                              string

@@ -315,6 +315,9 @@ func (s *Store) Events(ctx context.Context, after int64, limit int) ([]applicati
 			return nil, err
 		}
 		if e.Message != nil {
+			if err = hydrateRoomModeration(ctx, s.read, e.Message); err != nil {
+				return nil, err
+			}
 			if err = hydrateReply(ctx, s.read, e.Message); err != nil {
 				return nil, err
 			}

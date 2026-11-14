@@ -12,12 +12,13 @@ confirming. The room preview can show the published name, description, topic,
 occupant count, and avatar. Its availability depends on what the room publishes
 to the selected account.
 
-This flow accepts bare room addresses and `?join` links without credentials.
-It handles link activation inside Oie and supports the entry form at an
-in-app URL. System-wide `xmpp:` registration and password-protected entry are
-outside this increment. Creation enables persistence on services that advertise
-the XMPP room configuration form, uses their other defaults, and accepts an
-optional published name.
+This flow accepts bare room addresses and credential-free `?join` links.
+Enter a room password separately when required. **Browse public rooms** lists
+rooms advertised by the selected account's service. Select a result to fill
+the address and review the room before entry. Creation enables persistence
+and preserves the other defaults of the service configuration form. The room
+name is optional. See [room management](room-management.md) for invitations
+and permissions.
 
 ## Engine behavior
 

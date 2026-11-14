@@ -44,6 +44,11 @@ func readMessageEditHistory(ctx context.Context, q *dbgen.Queries, requested dom
 	if row.AccountID != requestedRow.AccountID || row.ConversationID != requestedRow.ConversationID {
 		return page, application.ErrNotFound
 	}
+	if _, err := q.GetRoomMessageModeration(ctx, string(canonical)); err == nil {
+		return page, application.ErrNotFound
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return page, err
+	}
 	page.MessageID = canonical
 	page.AccountID = domain.ID(row.AccountID)
 	page.ConversationID = domain.ID(row.ConversationID)

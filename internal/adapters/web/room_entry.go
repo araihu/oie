@@ -93,8 +93,12 @@ func (s *Server) openRoom(ctx context.Context, r *http.Request, text copy) (int,
 		return http.StatusBadRequest, mutationResult{Message: text.InvalidForm, Rejected: true}
 	}
 	nickname, name := r.Form.Get("nickname"), r.Form.Get("name")
+	var password *string
+	if value := r.Form.Get("password"); value != "" {
+		password = &value
+	}
 	response, err := s.client.OpenRoomWithResponse(ctx, account, &engineapi.OpenRoomParams{IdempotencyKey: key},
-		engineapi.OpenRoom{Address: address, Action: action, Nickname: &nickname, Name: &name})
+		engineapi.OpenRoom{Address: address, Action: action, Nickname: &nickname, Name: &name, Password: password})
 	if err != nil {
 		return http.StatusServiceUnavailable, mutationResult{Message: text.RoomCommandUnknown}
 	}
@@ -125,4 +129,34 @@ func (s *Server) openRoom(ctx context.Context, r *http.Request, text copy) (int,
 		}
 	}
 	return http.StatusOK, mutationResult{OK: true, Redirect: "/?" + q.Encode(), NextKey: newOperationKey()}
+}
+
+func (s *Server) roomDirectory(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	q := r.URL.Query()
+	account, service := q.Get("account"), q.Get("service")
+	if !validOperationKey(account) {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+	defer cancel()
+	engine, err := s.client.GetEngineWithResponse(ctx)
+	if err != nil || engine.JSON200 == nil || engine.HTTPResponse.Header.Get("X-Oie-Mock") == "true" || engine.JSON200.Id != q.Get("engine") {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	result, err := s.client.DiscoverRoomsWithResponse(ctx, account, &engineapi.DiscoverRoomsParams{Service: &service})
+	if err != nil || result.JSON200 == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	v := s.baseView(r)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = roomDirectoryContent(v.Text, *result.JSON200).Render(ctx, w)
 }

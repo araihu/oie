@@ -6,6 +6,10 @@ ORDER BY activity_sequence LIMIT 16;
 -- name: InsertRoomInvitationCredential :exec
 INSERT INTO room_invitation_credentials (conversation_id, password) VALUES (?, ?);
 
+-- name: UpsertRoomInvitationCredential :exec
+INSERT INTO room_invitation_credentials (conversation_id, password) VALUES (?, ?)
+ON CONFLICT(conversation_id) DO UPDATE SET password=excluded.password;
+
 -- name: GetRoomInvitationCredential :one
 SELECT password FROM room_invitation_credentials WHERE conversation_id = ?;
 

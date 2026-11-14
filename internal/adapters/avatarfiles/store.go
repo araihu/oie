@@ -26,19 +26,66 @@ func (s *Store) Put(ctx context.Context, data []byte) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
+	encoded, err := s.Normalize(data)
+	if err != nil {
+		return "", err
+	}
+	if err = ctx.Err(); err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(encoded)
+	hash := hex.EncodeToString(sum[:])
+	if err = os.MkdirAll(s.dir, 0700); err != nil {
+		return "", err
+	}
+	file, err := os.CreateTemp(s.dir, ".avatar-")
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = os.Remove(file.Name()) }()
+	defer func() { _ = file.Close() }()
+	if err = file.Chmod(0600); err != nil {
+		return "", err
+	}
+	if _, err = file.Write(encoded); err != nil {
+		return "", err
+	}
+	if err = file.Sync(); err != nil {
+		return "", err
+	}
+	if err = file.Close(); err != nil {
+		return "", err
+	}
+	if err = ctx.Err(); err != nil {
+		return "", err
+	}
+	if err = os.Rename(file.Name(), filepath.Join(s.dir, hash+".png")); err != nil {
+		return "", err
+	}
+	dir, err := os.Open(s.dir)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = dir.Close() }()
+	if err = dir.Sync(); err != nil {
+		return "", err
+	}
+	return hash, nil
+}
+func (s *Store) Normalize(data []byte) ([]byte, error) {
 	if len(data) == 0 || len(data) > 1<<20 {
-		return "", application.ErrInvalid
+		return nil, application.ErrInvalid
 	}
 	config, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil || config.Width < 1 || config.Height < 1 || config.Width > 4096 || config.Height > 4096 || config.Width*config.Height > 4<<20 {
-		return "", application.ErrInvalid
+		return nil, application.ErrInvalid
 	}
 	if format != "png" && format != "jpeg" && format != "gif" {
-		return "", application.ErrInvalid
+		return nil, application.ErrInvalid
 	}
 	original, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
-		return "", application.ErrInvalid
+		return nil, application.ErrInvalid
 	}
 	width, height := config.Width, config.Height
 	if width > 256 || height > 256 {
@@ -64,51 +111,12 @@ func (s *Store) Put(ctx context.Context, data []byte) (string, error) {
 		}
 	}
 	var encoded bytes.Buffer
-	if err = png.Encode(&encoded, thumb); err != nil {
-		return "", err
+	if err := png.Encode(&encoded, thumb); err != nil {
+		return nil, err
 	}
-	if err = ctx.Err(); err != nil {
-		return "", err
-	}
-	sum := sha256.Sum256(encoded.Bytes())
-	hash := hex.EncodeToString(sum[:])
-	if err = os.MkdirAll(s.dir, 0700); err != nil {
-		return "", err
-	}
-	file, err := os.CreateTemp(s.dir, ".avatar-")
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = os.Remove(file.Name()) }()
-	defer func() { _ = file.Close() }()
-	if err = file.Chmod(0600); err != nil {
-		return "", err
-	}
-	if _, err = file.Write(encoded.Bytes()); err != nil {
-		return "", err
-	}
-	if err = file.Sync(); err != nil {
-		return "", err
-	}
-	if err = file.Close(); err != nil {
-		return "", err
-	}
-	if err = ctx.Err(); err != nil {
-		return "", err
-	}
-	if err = os.Rename(file.Name(), filepath.Join(s.dir, hash+".png")); err != nil {
-		return "", err
-	}
-	dir, err := os.Open(s.dir)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = dir.Close() }()
-	if err = dir.Sync(); err != nil {
-		return "", err
-	}
-	return hash, nil
+	return encoded.Bytes(), nil
 }
+
 func (s *Store) Read(ctx context.Context, hash string) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

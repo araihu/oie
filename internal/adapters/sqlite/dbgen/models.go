@@ -323,6 +323,12 @@ type RoomArchive struct {
 	Progress       string
 }
 
+type RoomBanNickname struct {
+	ConversationID string
+	Address        string
+	Nickname       string
+}
+
 type RoomIntent struct {
 	ConversationID         string
 	AccountID              string
@@ -341,6 +347,14 @@ type RoomInvitationCredential struct {
 	Password       string
 }
 
+type RoomMessageModeration struct {
+	AccountID   string
+	RoomAddress string
+	StanzaID    string
+	ModeratedAt string
+	Reason      string
+}
+
 type RoomReactionPrivacy struct {
 	AccountID    string
 	Address      string
@@ -353,6 +367,13 @@ type SharedCatalogCount struct {
 	ConversationID string
 	ParserVersion  int64
 	Messages       int64
+}
+
+type SharedCatalogModeratedSource struct {
+	AccountID   string
+	RoomAddress string
+	StanzaID    string
+	MessageID   string
 }
 
 type SharedCatalogOrder struct {

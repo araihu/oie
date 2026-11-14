@@ -69,6 +69,7 @@ type entry struct {
 	details             map[domain.ID]*detailSlot
 	peerPresence        map[string]map[string]peerResource
 	avatarWake          chan struct{}
+	avatarRoom          string // Most recently opened room roster, guarded by mu.
 	avatarMu            sync.Mutex
 	avatarTargets       map[string]string
 	avatarDirty         map[string]string
@@ -620,6 +621,8 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			replyMetadata
 			correctionMetadata
 			reactionMetadata
+			roomModerationMetadata
+			Subject     *string        `xml:"jabber:client subject"`
 			Body        string         `xml:"jabber:client body"`
 			Archive     *archiveResult `xml:"urn:xmpp:mam:2 result"`
 			AvatarEvent *struct {
@@ -687,6 +690,13 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			}
 			return m.host.Reject(ctx, application.Rejected{AccountID: e.account.ID, MessageID: msg.ID, Address: address, FromServer: fromServer, FromParticipant: msg.From.Resourcepart() != ""})
 		}
+		if len(msg.Retractions) != 0 || len(msg.Tombstones) != 0 {
+			return m.receiveRoomModeration(ctx, e, msg.Message, msg.roomModerationMetadata, msg.Delay.Stamp, msg.Delay.From)
+		}
+		if msg.Type == stanza.GroupChatMessage && msg.Subject != nil && strings.TrimSpace(msg.Body) == "" {
+			m.observeRoomTopic(e, msg.Message, *msg.Subject)
+			return nil
+		}
 		if len(msg.Reactions) != 0 {
 			return m.receiveReaction(ctx, e, msg.Message, msg.reactionMetadata, msg.replyMetadata, msg.Occupants, msg.Delay.Stamp, msg.Delay.From)
 		}
@@ -729,17 +739,18 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		if err := decoder.Decode(&presence); err != nil {
 			return err
 		}
-		captureRoomMentionPresence(e, presence)
-		if handled, err := m.captureRoomPresence(ctx, e, presence); handled {
-			return err
-		}
-		capturePeerPresence(e, presence)
 		if presence.Update != nil && presence.Update.Photo != nil {
 			hash := strings.TrimSpace(*presence.Update.Photo)
 			if hash == "" || validSHA1(hash) {
 				m.queueAvatar(e, presence.From, hash, true)
 			}
 		}
+		captureRoomMentionPresence(e, presence)
+		if handled, err := m.captureRoomPresence(ctx, e, presence); handled {
+			return err
+		}
+		capturePeerPresence(e, presence)
+
 		return nil
 	case "iq":
 		iq, err := stanza.NewIQ(*start)

@@ -64,6 +64,10 @@ func (e *Engine) PreviewRoom(ctx context.Context, accountID domain.ID, address s
 	return preview, nil
 }
 
+func validRoomPassword(value string) bool {
+	return len(value) <= 1023 && utf8.ValidString(value) && strings.IndexFunc(value, unicode.IsControl) < 0
+}
+
 func validRoomNickname(value string) bool {
 	return validRoomLabel(value) && !strings.ContainsRune(value, '/')
 }
@@ -72,7 +76,14 @@ func validRoomLabel(value string) bool {
 	return utf8.ValidString(value) && utf8.RuneCountInString(value) <= 100 && strings.IndexFunc(value, unicode.IsControl) < 0
 }
 
-func (e *Engine) OpenRoom(ctx context.Context, key, accountID domain.ID, address, nickname, name string, create bool) (ConversationResult, error) {
+func (e *Engine) OpenRoom(ctx context.Context, key, accountID domain.ID, address, nickname, name string, create bool, passwords ...string) (ConversationResult, error) {
+	var password string
+	if len(passwords) > 0 {
+		password = passwords[0]
+	}
+	if !validRoomPassword(password) || create && password != "" {
+		return ConversationResult{}, ErrInvalid
+	}
 	nickname, name = strings.TrimSpace(nickname), strings.TrimSpace(name)
 	if !validID(key) || !validRoomNickname(nickname) || !validRoomLabel(name) || (!create && name != "") {
 		return ConversationResult{}, ErrInvalid
@@ -127,10 +138,14 @@ func (e *Engine) OpenRoom(ctx context.Context, key, accountID domain.ID, address
 			conversation.Title = name
 		}
 	}
+	parts := []string{string(accountID), canonical, nickname, name}
+	if password != "" {
+		parts = append(parts, password)
+	}
 	result, err := repo.OpenConversation(ctx, ConversationMutation{
 		Operation:    Operation{ID: key, ResourceID: id, CreatedAt: now, Kind: kind},
-		Fingerprint:  fingerprint(kind, []string{string(accountID), canonical, nickname, name}),
-		Conversation: conversation, RoomEntry: &intent,
+		Fingerprint:  fingerprint(kind, parts),
+		Conversation: conversation, RoomEntry: &intent, RoomPassword: password,
 	})
 	if err == nil && !result.Replayed {
 		e.wakeRooms()
