@@ -326,7 +326,7 @@ async function waitFor(predicate) {
       assert.equal(await kickTrigger.getAttribute('aria-expanded'), 'false');
       await profile.getByRole('button',{name:'Voltar para participantes'}).click();
       await participant.waitFor();
-      assert.deepEqual(await management.getByRole('tab').allTextContents(),
+      assert.deepEqual((await management.getByRole('tab').allTextContents()).map(label => label.trim()),
         ['Detalhes','Participantes','Banimentos']);
       await management.getByRole('tab', {name:'Banimentos',exact:true}).click();
       await management.getByText('banido@fixture',{exact:true}).waitFor();
