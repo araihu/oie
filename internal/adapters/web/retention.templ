@@ -6,7 +6,12 @@ import (
 	"github.com/araihu/goshtoso/components/button"
 	selectfield "github.com/araihu/goshtoso/components/select"
 	"github.com/araihu/goshtoso/components/textinput"
+	"github.com/araihu/oie/internal/adapters/web/appicons"
 )
+
+templ retentionIcon() {
+	@appicons.Icon(appicons.Config{Symbol:appicons.IconHeroiconsRetention16SolidCircleStack,Decorative:true,RootClass:"oie-icon"})
+}
 
 templ retentionRegion(v view, id string, p retentionView) {
 	{{ region := retentionRegionID(id) }}
@@ -17,7 +22,7 @@ templ retentionRegion(v view, id string, p retentionView) {
 			<div class="oie-retention-load"
 				if p.Loading {
 					hx-get={v.retentionHref(id)} hx-trigger="intersect once"
-					hx-target={"#"+region} hx-swap="outerHTML show:none"
+					hx-target={"#"+region} hx-swap="outerHTML settle:0ms show:none"
 				}
 			>
 				if p.Loading {
@@ -36,7 +41,7 @@ func retentionRetryAttrs(v view, id string, loading bool) templ.Attributes {
 	attrs := templ.Attributes{
 		"hx-get": v.retentionHref(id),
 		"hx-target": "#" + retentionRegionID(id),
-		"hx-swap": "outerHTML show:none",
+		"hx-swap": "outerHTML settle:0ms show:none",
 		"hx-disable": "this",
 	}
 	if loading {
@@ -49,7 +54,7 @@ func retentionRetryAttrs(v view, id string, loading bool) templ.Attributes {
 templ retentionForm(v view, id string, p retentionView) {
 	{{ region := retentionRegionID(id) }}
 	<form class="oie-retention-form" method="post" action={templ.URL(v.retentionHref(id))}
-		hx-post={v.retentionHref(id)} hx-target={"#"+region} hx-swap="outerHTML show:none" hx-disable="find fieldset" hx-sync="this:drop"
+		hx-post={v.retentionHref(id)} hx-target={"#"+region} hx-swap="outerHTML settle:0ms show:none" hx-disable="find fieldset" hx-sync="this:drop"
 		x-data="{error:'', sent:false, pending:false}"
 		data-unavailable={v.Text.RetentionUnavailable} data-invalid={v.Text.InvalidForm} data-forbidden={v.Text.CSRFError}
 		x-on:htmx:before:request="error = ''; sent = true; pending = true"
@@ -90,7 +95,7 @@ templ retentionForm(v view, id string, p retentionView) {
 templ retentionChoice(v view, prefix string, label string, days *int, inherited int, canInherit bool) {
 	<div class="grid gap-2" x-data={retentionAlpine(days)} x-on:change="if ($event.target.name.endsWith('-mode')) mode = $event.target.value">
 		@selectfield.Select(selectfield.Config{ID:"retention-"+prefix,Name:prefix+"-mode",Label:label,Options:retentionOptions(v,days,inherited,canInherit),Required:true})
-		<div x-cloak x-show="mode === 'finite'">
+		<div x-cloak?={retentionMode(days) != "finite"} x-show="mode === 'finite'">
 			@textinput.TextInput(textinput.Config{
 				ID:"retention-days-"+prefix,Name:prefix+"-days",Label:v.Text.RetentionDays,
 				Type:"number",Value:retentionDayValue(days,inherited),

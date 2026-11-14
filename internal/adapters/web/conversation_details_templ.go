@@ -365,24 +365,24 @@ func chatInfoContent(v view) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = infoEntry(v, "media", v.Text.SharedMediaTab, heroicons.Icon16SolidRectangleGroup).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = infoEntry(v, "media", v.Text.SharedMediaTab, glyph(heroicons.Icon16SolidRectangleGroup)).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = infoEntry(v, "links", v.Text.SharedLinksTab, heroicons.Icon16SolidLink).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = infoEntry(v, "links", v.Text.SharedLinksTab, glyph(heroicons.Icon16SolidLink)).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = infoEntry(v, "documents", v.Text.SharedDocsTab, heroicons.Icon16SolidDocumentText).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = infoEntry(v, "documents", v.Text.SharedDocsTab, glyph(heroicons.Icon16SolidDocumentText)).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = infoEntry(v, "stars", v.Text.InfoStarred, heroicons.Icon16SolidStar).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = infoEntry(v, "stars", v.Text.InfoStarred, glyph(heroicons.Icon16SolidStar)).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if v.Selected.Kind == "room" && v.requestKind() == "" && !v.Preview {
-				templ_7745c5c3_Err = infoEntry(v, "participants", v.Text.Participants, heroicons.Icon16SolidUsers).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = infoEntry(v, "participants", v.Text.Participants, glyph(heroicons.Icon16SolidUsers)).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -404,7 +404,7 @@ func chatInfoContent(v view) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if !v.Preview && v.requestKind() == "" {
-				templ_7745c5c3_Err = infoEntry(v, "retention", v.Text.RetentionTitle, heroicons.Icon16SolidClock).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = infoEntry(v, "retention", v.Text.RetentionTitle, retentionIcon()).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

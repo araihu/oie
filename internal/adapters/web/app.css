@@ -173,6 +173,8 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 .oie-settings-section h2{margin:8px 0 0;font-weight:650;font-size:14px}
 .oie-settings-section p,.oie-settings>.oie-settings-note{font-size:13px;line-height:1.6;color:var(--oie-muted)}
 .oie-device-retention{border-top:1px solid var(--oie-border);margin-top:20px;padding-top:10px}
+.oie-device-retention h2{display:flex;align-items:center;gap:8px}
+.oie-device-retention h2 .oie-icon{width:16px;height:16px}
 .oie-info-retention{padding:16px 12px 24px}
 .oie-info-retention h2{font-size:19px;font-weight:650;line-height:1.3;margin:0 0 17px;outline-color:var(--oie-accent-text);outline-offset:4px;width:fit-content}
 :is(.oie-retention-form,.oie-retention-fields){display:grid;gap:16px;min-inline-size:0}

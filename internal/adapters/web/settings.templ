@@ -92,7 +92,7 @@ templ deviceSettings(v view) {
 	</div>
 	if !v.Preview && v.EngineID != "" {
 		<section class="oie-settings-section oie-device-retention" aria-labelledby="device-retention-title">
-			<h2 id="device-retention-title">{v.Text.RetentionTitle}</h2>
+			<h2 id="device-retention-title">@retentionIcon()<span>{v.Text.RetentionTitle}</span></h2>
 			@retentionRegion(v,"",retentionView{Loading:true})
 		</section>
 	}
