@@ -18,7 +18,6 @@ import (
 	"github.com/araihu/goshtoso/components/drawer"
 	"github.com/araihu/goshtoso/components/fileinput"
 	"github.com/araihu/goshtoso/components/form"
-	"github.com/araihu/goshtoso/components/icon"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/tabs"
 	"github.com/araihu/goshtoso/components/textarea"
@@ -26,6 +25,7 @@ import (
 	"github.com/araihu/goshtoso/components/tooltip"
 	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/adapters/web/appicons"
 )
 
 func roomManagementDrawer(v view) templ.Component {
@@ -698,26 +698,26 @@ func roomUnbanButton(v view, id, address string) templ.Component {
 
 type roomParticipantAction struct {
 	action, value, label string
-	symbol               icon.Symbol
+	icon                 templ.Component
 	tone                 button.Tone
 }
 
 func roomParticipantActions(text copy, occupant engineapi.RoomManagedOccupant) []roomParticipantAction {
 	roleActions := []roomParticipantAction{
-		{"role", "moderator", text.RoomPromoteModerator, heroicons.Icon16SolidShieldCheck, button.TonePrimary},
-		{"role", "participant", text.RoomGrantVoice, heroicons.Icon16SolidMicrophone, button.ToneSuccess},
-		{"role", "visitor", text.RoomRevokeVoice, heroicons.Icon16SolidPause, button.ToneWarning},
-		{"role", "none", text.RoomKick, heroicons.Icon16SolidArrowTopRightOnSquare, button.ToneDanger},
+		{"role", "moderator", text.RoomPromoteModerator, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsRoomRole16SolidScale, Decorative: true, RootClass: "oie-icon"}), button.TonePrimary},
+		{"role", "participant", text.RoomGrantVoice, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsRoomVoice16SolidChatBubbleLeftEllipsis, Decorative: true, RootClass: "oie-icon"}), button.ToneSuccess},
+		{"role", "visitor", text.RoomRevokeVoice, glyph(heroicons.Icon16SolidPause), button.ToneWarning},
+		{"role", "none", text.RoomKick, glyph(heroicons.Icon16SolidArrowTopRightOnSquare), button.ToneDanger},
 	}
 	if occupant.Role == "moderator" {
-		roleActions[1] = roomParticipantAction{"role", "participant", text.RoomDemoteModerator, heroicons.Icon16SolidArrowDown, button.ToneWarning}
+		roleActions[1] = roomParticipantAction{"role", "participant", text.RoomDemoteModerator, glyph(heroicons.Icon16SolidArrowDown), button.ToneWarning}
 	}
 	accessActions := []roomParticipantAction{
-		{"affiliation", "owner", text.RoomMakeOwner, heroicons.Icon16SolidStar, button.TonePrimary},
-		{"affiliation", "admin", text.RoomMakeAdmin, heroicons.Icon16SolidCog6Tooth, button.TonePrimary},
-		{"affiliation", "member", text.RoomMakeMember, heroicons.Icon16SolidUser, button.TonePrimary},
-		{"affiliation", "none", text.RoomRevokeAccess, heroicons.Icon16SolidLockClosed, button.ToneWarning},
-		{"affiliation", "outcast", text.RoomBan, heroicons.Icon16SolidXCircle, button.ToneDanger},
+		{"affiliation", "owner", text.RoomMakeOwner, glyph(heroicons.Icon16SolidShieldCheck), button.TonePrimary},
+		{"affiliation", "admin", text.RoomMakeAdmin, glyph(heroicons.Icon16SolidCog6Tooth), button.TonePrimary},
+		{"affiliation", "member", text.RoomMakeMember, glyph(heroicons.Icon16SolidUser), button.TonePrimary},
+		{"affiliation", "none", text.RoomRevokeAccess, glyph(heroicons.Icon16SolidLockClosed), button.ToneWarning},
+		{"affiliation", "outcast", text.RoomBan, glyph(heroicons.Icon16SolidXCircle), button.ToneDanger},
 	}
 	var actions []roomParticipantAction
 	for _, action := range roleActions {
@@ -1135,7 +1135,7 @@ func roomParticipantActionControl(v view, revision, id, target string, action ro
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = glyph(action.symbol).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = action.icon.Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

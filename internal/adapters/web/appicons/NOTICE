@@ -2,3 +2,11 @@ heroicons
 Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/chat-bubble-left.svg
 License: MIT
 
+heroicons-room-role
+Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/scale.svg
+License: MIT
+
+heroicons-room-voice
+Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/chat-bubble-left-ellipsis.svg
+License: MIT
+

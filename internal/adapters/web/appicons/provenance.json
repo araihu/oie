@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "tool": "goshtoso-iconpack",
-  "release": "iconpack-651078185e64",
-  "catalogSha256": "651078185e647dca4e11bf632aadc85126720a97f1a3f996ae2809a82d7350ef",
+  "release": "iconpack-2f11b88a2579",
+  "catalogSha256": "2f11b88a2579ee1d999619418f9eec42bf3e16bbf196d5a1bfea5357b413abde",
   "sourceKind": "muamba-snapshot",
   "archiveSha256": "",
-  "sourceConfigSha256": "651078185e647dca4e11bf632aadc85126720a97f1a3f996ae2809a82d7350ef",
-  "sourceLockSha256": "5a273030b3a3a546dfe50ccb90522b2992c2798eb84310331b89437fd80530d7",
+  "sourceConfigSha256": "2f11b88a2579ee1d999619418f9eec42bf3e16bbf196d5a1bfea5357b413abde",
+  "sourceLockSha256": "fac3c65d0145155c5002858982255fd2acd94d4b0659f95b4fc856823c97dcc1",
   "sources": [
     {
       "namespace": "custom",
@@ -14,10 +14,34 @@
       "spritePath": "",
       "spriteSha256": "",
       "manifestPath": ".iconpack.yaml",
-      "manifestSha256": "651078185e647dca4e11bf632aadc85126720a97f1a3f996ae2809a82d7350ef",
+      "manifestSha256": "2f11b88a2579ee1d999619418f9eec42bf3e16bbf196d5a1bfea5357b413abde",
       "provenancePath": "",
       "provenanceSha256": "",
       "licensePath": "heroicons/LICENSE",
+      "licenseSha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    },
+    {
+      "namespace": "custom",
+      "product": "heroicons-room-role",
+      "spritePath": "",
+      "spriteSha256": "",
+      "manifestPath": ".iconpack.yaml",
+      "manifestSha256": "2f11b88a2579ee1d999619418f9eec42bf3e16bbf196d5a1bfea5357b413abde",
+      "provenancePath": "",
+      "provenanceSha256": "",
+      "licensePath": "heroicons-room-role/LICENSE",
+      "licenseSha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    },
+    {
+      "namespace": "custom",
+      "product": "heroicons-room-voice",
+      "spritePath": "",
+      "spriteSha256": "",
+      "manifestPath": ".iconpack.yaml",
+      "manifestSha256": "2f11b88a2579ee1d999619418f9eec42bf3e16bbf196d5a1bfea5357b413abde",
+      "provenancePath": "",
+      "provenanceSha256": "",
+      "licensePath": "heroicons-room-voice/LICENSE",
       "licenseSha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
     }
   ],
@@ -28,6 +52,20 @@
       "license": "MIT",
       "path": "heroicons/16/solid/chat-bubble-left.svg",
       "sha256": "c59f230d1a64adc26e65ddb08284d89c61cb33768586057938efd44dc2e4efcd"
+    },
+    {
+      "canonicalName": "heroicons-room-role-16-solid-scale",
+      "source": "https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/scale.svg:16/solid/scale.svg",
+      "license": "MIT",
+      "path": "heroicons-room-role/16/solid/scale.svg",
+      "sha256": "bb30aa9015bb1420d566994f9e1b0f23a4ffdb5f96f37ebdb243b4893b1c0664"
+    },
+    {
+      "canonicalName": "heroicons-room-voice-16-solid-chat-bubble-left-ellipsis",
+      "source": "https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/chat-bubble-left-ellipsis.svg:16/solid/chat-bubble-left-ellipsis.svg",
+      "license": "MIT",
+      "path": "heroicons-room-voice/16/solid/chat-bubble-left-ellipsis.svg",
+      "sha256": "e17ed1e7c6d7bf6f2d405a4a3904ed3a7fb12cefac74f64cd48122a06d591ea5"
     }
   ]
 }
