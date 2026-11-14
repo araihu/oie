@@ -110,22 +110,19 @@ cost of index maintenance. [Engine store](../internal/adapters/sqlite/store.go) 
 
 ## Search highlights and excerpts
 
-The sidebar and global dialog already render literal and typo-tolerant
-matches in escaped excerpts and URLs using the Go formatter. The room
-timeline currently decorates the selected row and highlights literal
-matches in its visible text nodes. A historical result displays its own
-excerpt and opens the canonical message in the timeline. [Global formatter](../internal/adapters/web/search_highlight.go) · [Room timeline](../internal/adapters/web/conversation-search.js)
+The global results and the conversation search use the Oiê matcher’s
+normalization and approximate-prefix rules for highlights. The BFF calculates
+ranges after the engine returns a verified page. Both indexed and SQL results
+use the same presentation path. The engine API continues to return plain
+excerpts. A conversation-scoped HTML fragment carries UTF-16 ranges bound to
+the current message revision and its original text.
 
-**Recommended first step.** Share the matching-span rules with the
-canonical verifier or the existing Oiê formatter. Calculate highlights
-only for verified hits and use those spans to choose the excerpt.
-Preserve the current presentation with escaped text and application-owned
-`<mark>` elements. In the timeline, apply spans only to the selected
-visible content and its matching revision. Markdown rendering needs a
-mapping from the source spans to visible text nodes. Where that mapping
-is unavailable, match the visible text with the same rules or keep the
-row highlight. Preserve selection and copy, and keep historical or
-metadata-only matches from decorating unrelated text in the current bubble.
+The room timeline paints ranges over visible text in the selected bubble.
+Plain text and simple inline Markdown can be mapped when their visible text
+agrees with the source. The selected row remains outlined when the projection
+cannot be mapped or the browser lacks CSS custom highlights. Historical and
+metadata hits show a separate highlighted excerpt. Remote archive hits retain
+their literal highlight. [Shared matching rules](../internal/search/highlight.go) · [Room timeline](../internal/adapters/web/conversation-search.js)
 
 **Bleve experiment.** On a separate field with offsets over the exact
 original text, `IncludeLocations` can supply term-vector byte ranges

@@ -19,6 +19,7 @@ import (
  "github.com/araihu/goshtoso/components/tooltip"
  "github.com/araihu/goshtoso/expressions"
  "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+ "github.com/araihu/oie/internal/search"
 )
 
 templ quickMessageSearch(v view){
@@ -175,7 +176,7 @@ if next:=v.messageSearchNext();next!="" {
 </div>
 </div>
 }
-templ messageSearchHit(v view,hit engineapi.MessageSearchHit,searchPattern *searchHighlight){
+templ messageSearchHit(v view,hit engineapi.MessageSearchHit,searchPattern *search.Highlight){
 {{
 	position := messageTimelineTime(hit.Message)
 	sender, senderDomain := searchNameParts(hit.Message.Sender.DisplayName)
@@ -188,8 +189,16 @@ templ messageSearchHit(v view,hit engineapi.MessageSearchHit,searchPattern *sear
 	if hit.SenderAvatarHash != nil {
 		senderAvatar.Src = avatarImageSource(*hit.SenderAvatarHash)
 	}
+	ranges := ""
+	if v.MessageSearch.ConversationHighlight && !hit.Historical && hit.MatchKind == "text" {
+		ranges = roomSearchRanges(hit.Message.OriginalText,searchPattern)
+	}
 }}
-<article data-message-search-hit={hit.Message.Id+":"+hit.MatchedRevisionId} data-search-message={hit.Message.Id} data-search-revision={hit.MatchedRevisionId} data-search-historical={strconv.FormatBool(hit.Historical)} data-search-match-kind={string(hit.MatchKind)}>
+<article data-message-search-hit={hit.Message.Id+":"+hit.MatchedRevisionId} data-search-message={hit.Message.Id} data-search-revision={hit.MatchedRevisionId} data-search-historical={strconv.FormatBool(hit.Historical)} data-search-match-kind={string(hit.MatchKind)}
+if ranges != "" {
+	data-search-ranges={ranges} data-search-content-revision={hit.Message.RevisionId} data-search-source-digest={searchSourceDigest(hit.Message.OriginalText)}
+}
+>
 @link.Link(v.messageSearchSourceHref(hit.Message),link.WithRootClass("oie-message-search-hit"),link.WithAttrs(templ.Attributes{"data-message-search-source":""})){
 <div class="oie-message-search-result">
 <div class="oie-message-search-text">
@@ -214,12 +223,20 @@ if conversationDomain != "" {
 if hit.Historical {
 @badge.Badge(badge.Config{Label:v.Text.SearchPriorVersion,Size:badge.SizeSM,Appearance:badge.AppearanceSoft})
 }
-{{ excerpt, sharedURL, preview := searchResultText(hit) }}
+{{
+	excerpt, sharedURL, preview := searchResultText(hit)
+	excerptSpans, urlSpans := searchPattern.Spans(excerpt), searchPattern.Spans(sharedURL)
+	if hit.MatchKind == "metadata" && len(excerptSpans) == 0 && len(urlSpans) == 0 {
+		if matched := searchPattern.Spans(hit.Excerpt); len(matched) != 0 {
+			excerpt, excerptSpans = hit.Excerpt, matched
+		}
+	}
+}}
 if excerpt!="" {
-<p class="oie-message-search-excerpt">@highlightSearchText(excerpt,searchPattern,v.MessageSearch.Compact)</p>
+<p class="oie-message-search-excerpt">@highlightSearchParts(searchTextPartsForSpans(excerpt,excerptSpans,v.MessageSearch.Compact))</p>
 }
 if sharedURL!="" {
-<p class="oie-message-search-url">@highlightSearchText(sharedURL,searchPattern,false)</p>
+<p class="oie-message-search-url">@highlightSearchParts(searchTextPartsForSpans(sharedURL,urlSpans,false))</p>
 }
 </div>
 if preview != nil && !hit.Historical {
@@ -228,11 +245,18 @@ if preview != nil && !hit.Historical {
 </div>
 <time data-message-search-time={v.Text.Today} datetime={position.Format(time.RFC3339)}>{position.Format("2006-01-02 15:04")}</time>
 }
+if v.MessageSearch.ConversationHighlight && (hit.Historical || hit.MatchKind == "metadata") {
+	<template data-search-result-excerpt>@highlightSearchText(hit.Excerpt,searchPattern,false)</template>
+}
 </article>
 }
 
-templ highlightSearchText(text string,searchPattern *searchHighlight,compact bool){
-for _, part := range searchTextParts(text,searchPattern,compact) {
+templ highlightSearchText(text string,searchPattern *search.Highlight,compact bool){
+@highlightSearchParts(searchTextParts(text,searchPattern,compact))
+}
+
+templ highlightSearchParts(parts []searchTextPart){
+for _, part := range parts {
 if part.match {
 <mark class="oie-search-highlight">{part.text}</mark>
 } else {

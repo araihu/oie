@@ -82,6 +82,7 @@ func shortenSearchExcerpt(text string, limit int) string {
 
 type messageSearchView struct {
 	Compact                                                                      bool
+	ConversationHighlight                                                        bool
 	Contacts                                                                     []engineapi.Contact
 	ContactsKnown                                                                bool
 	ContactsPartial                                                              bool
@@ -122,6 +123,7 @@ func (v *view) configureMessageSearch(r *http.Request) {
 	v.MessageSearch = messageSearchView{Limit: 30, State: "blank"}
 	s := &v.MessageSearch
 	s.Compact = r.URL.Path == "/ui/message-search" && q.Get("presentation") == "compact"
+	s.ConversationHighlight = r.URL.Path == "/ui/message-search" && q.Get("presentation") == "conversation" && q.Get("conversationId") != ""
 	s.Category = q.Get("searchType")
 	if native {
 		s.Query = q.Get("q")

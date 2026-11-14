@@ -12,6 +12,7 @@ import (
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
+	"github.com/araihu/oie/internal/search"
 )
 
 func (s *Store) SearchMessages(ctx context.Context, query domain.MessageSearchQuery) (domain.MessageSearchPage, error) {
@@ -101,7 +102,7 @@ func (s *Store) searchMessages(ctx context.Context, query domain.MessageSearchQu
 		if row.TextMatch == 0 {
 			hit.MatchKind = "metadata"
 			content = row.Metadata
-			if !matchSharedMetadata(content, query.Search) {
+			if !search.Match(content, query.Search) {
 				content = row.Body + " " + content
 			}
 		}
@@ -204,7 +205,7 @@ func messageSearchExcerpt(content, query string) string {
 		word := string(runes[i:end])
 		found := false
 		for _, term := range terms {
-			if matchSharedMetadata(word, term) {
+			if search.Match(word, term) {
 				found = true
 				break
 			}

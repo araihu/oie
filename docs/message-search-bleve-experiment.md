@@ -32,8 +32,7 @@ The 1,024 candidate budget includes pending IDs and exceptions. SQL handles
 candidate overflow, partial or failed lookup, a crossed publication, unavailable
 generations, rooms with up to 512 stored messages and queries without usable
 tokens. Bleve lookup has a 25 ms cancellation target. The duration can
-exceed it during fuzzy dictionary expansion. The existing highlight and
-excerpt code still renders the verified results.
+exceed it during fuzzy dictionary expansion. Both search paths feed the same [fuzzy highlight presentation](message-search.md).
 
 The worker advances a publication counter before starting a durable Scorch
 batch. A reader records the active generation and counter before its first

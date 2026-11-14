@@ -5,10 +5,46 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
 )
+
+// Match reports whether text satisfies the retained message and catalog search policy.
+func Match(text, query string) bool {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return true
+	}
+	if utf8.RuneCountInString(query) > 200 {
+		return false
+	}
+	haystack, needle := Fold(text), Fold(query)
+	if needle == "" {
+		return false
+	}
+	if strings.Contains(haystack, needle) {
+		return true
+	}
+	terms := Words(needle)
+	if len(terms) == 0 {
+		return false
+	}
+	words := Words(haystack)
+	for _, term := range terms {
+		if strings.Contains(haystack, term) {
+			continue
+		}
+		query := []rune(term)
+		if !slices.ContainsFunc(words, func(word string) bool {
+			return ApproximatePrefix(query, []rune(word)) > 0
+		}) {
+			return false
+		}
+	}
+	return true
+}
 
 // Fold normalizes case, accents and compatibility characters for search.
 func Fold(value string) string {
