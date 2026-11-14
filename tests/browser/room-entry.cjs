@@ -274,11 +274,26 @@ async function waitFor(predicate) {
     await page.locator('#room-session-status').waitFor({state: 'hidden'});
     for (const width of [1440, 390]) {
       await page.setViewportSize({width, height: 900});
+      let finishOpening;
+      const opening = new Promise(resolve => {finishOpening = resolve;});
+      if (width === 1440) {
+        await page.route('**/ui/rooms/manage-fragment?*',async route => {
+          await opening;
+          await route.continue();
+        },{times:1});
+      }
       await page.locator('[aria-controls=chat-options-panel]').click();
       await page.locator('#chat-manage-room').click();
       const management = page.locator('[data-room-management]');
+      const openingSkeleton = management.getByRole('status',{name:'Carregando ações da sala…',exact:true});
+      if (width === 1440) {
+        await openingSkeleton.waitFor();
+        assert.equal(await openingSkeleton.locator('[data-skeleton-item]').count(),5);
+        finishOpening();
+      }
       const saveDetails = management.getByRole('button', {name:'Salvar alterações'});
       await saveDetails.waitFor();
+      await openingSkeleton.waitFor({state:'hidden'});
       assert.equal(await management.getByRole('button',{name:'Atualizar',exact:true}).count(),0);
       assert.equal(await saveDetails.isDisabled(), true);
       const topic = management.getByRole('textbox', {name:'Tópico', exact:true});
@@ -360,9 +375,30 @@ async function waitFor(predicate) {
       await participant.waitFor();
       assert.deepEqual((await management.getByRole('tab').allTextContents()).map(label => label.trim()),
         ['Detalhes','Participantes','Banimentos']);
-      await management.getByRole('tab', {name:'Banimentos',exact:true}).click();
-      await management.getByText('banido@fixture',{exact:true}).waitFor();
       const bans = management.getByRole('tabpanel',{name:'Banimentos',exact:true});
+      const bansTab = management.getByRole('tab',{name:'Banimentos',exact:true});
+      let finishBans;
+      const bansLoading = new Promise(resolve => {finishBans = resolve;});
+      const bansSkeleton = bans.getByRole('status',{name:'Carregando ações da sala…',exact:true});
+      const tabsBeforeBans = await management.getByRole('tablist').boundingBox();
+      if (width === 1440) {
+        await page.route(url => url.pathname === '/ui/rooms/manage-fragment' && url.searchParams.get('affiliation') === 'outcast',async route => {
+          await bansLoading;
+          await route.fulfill({status:503});
+        },{times:1});
+        await bansTab.click();
+        await bansSkeleton.waitFor();
+        assert.deepEqual(await management.getByRole('tablist').boundingBox(),tabsBeforeBans);
+        finishBans();
+        const errorToast = page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'As ações da sala estão indisponíveis.'});
+        await errorToast.waitFor();
+        await bansSkeleton.waitFor({state:'hidden'});
+        await errorToast.getByRole('button',{name:'Fechar',exact:true}).click();
+      }
+      await bansTab.click();
+      await management.getByText('banido@fixture',{exact:true}).waitFor();
+      await bansSkeleton.waitFor({state:'hidden'});
+      assert.deepEqual(await management.getByRole('tablist').boundingBox(),tabsBeforeBans);
       const bannedAvatar = bans.locator('[data-avatar-address="banido@fixture"]');
       await bannedAvatar.locator('[data-avatar-ready=true] img').waitFor();
       const initials = bans.locator('[data-avatar-address="sem-foto@fixture"] [data-avatar-initials]');

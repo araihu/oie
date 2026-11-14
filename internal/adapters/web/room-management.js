@@ -2,7 +2,7 @@ window.OieRuntime.register('room-management', life => {
   const root = document.querySelector('[data-room-management]');
   if (!root) return;
   const content = root.querySelector('[data-room-management-content]');
-  const status = root.querySelector('[data-room-management-status]');
+  const loadError = root.querySelector('[data-room-management-error]');
   let request, opener, message = '', affiliation = '', invite = false, active = false;
   const pending = new WeakMap();
   const title = document.getElementById("room-managementTitle");
@@ -112,7 +112,7 @@ window.OieRuntime.register('room-management', life => {
     const current = new AbortController();
     request = current;
     if (!avatarsOnly) {
-      status.textContent = root.dataset.loading;
+      loadError.hidden = true;
       root.setAttribute('aria-busy', 'true');
     }
     const {chat, account, engine, lang} = root.dataset;
@@ -130,10 +130,7 @@ window.OieRuntime.register('room-management', life => {
       }
       if (replace) {
         for (const form of content.querySelectorAll('form')) {
-          if (isPending(form)) {
-            status.textContent = '';
-            return;
-          }
+          if (isPending(form)) return;
           remember(form);
         }
         render(template);
@@ -190,9 +187,15 @@ window.OieRuntime.register('room-management', life => {
           }
         }
       }
-      status.textContent = '';
     } catch {
-      if (!avatarsOnly && request === current && active && !life.signal.aborted) status.textContent = root.dataset.unavailable;
+      if (!avatarsOnly && request === current && active && !life.signal.aborted) {
+        if (content.querySelector('.oie-room-bans-skeleton')) affiliation = '';
+        if (content.childElementCount) {
+          window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:root.dataset.unavailable}}));
+        } else {
+          loadError.hidden = false;
+        }
+      }
     } finally {
       if (request === current) {
         request = null;

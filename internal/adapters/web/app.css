@@ -552,8 +552,12 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-request-banner [data-form-feedback][data-error=true]{color:light-dark(#9e2626,#ffb4ab)}
 
 .oie-room-management{padding:16px}
-.oie-room-management:has(.oie-room-management-tabs){display:grid;grid-template-rows:auto minmax(0,1fr);height:100%}
+.oie-room-management:has(.oie-room-management-tabs){display:grid;grid-template-rows:minmax(0,1fr);height:100%}
 .oie-room-management [data-room-management-content]{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.oie-room-management-skeleton,.oie-room-bans-skeleton{display:none}
+.oie-room-management[aria-busy="true"]:has([data-room-management-content]:empty)>.oie-room-management-skeleton,
+.oie-room-management[aria-busy="true"] .oie-room-bans-skeleton{display:block}
+.oie-room-management-placeholder[data-skeleton-item]{height:36px}
 .oie-room-management-tabs{display:grid;grid-template-rows:auto minmax(0,1fr);min-height:0}
 .oie-room-management-tabs>div:has(>[role="tabpanel"]){min-height:0;padding-bottom:0}
 .oie-room-management-tabs [role="tab"]{padding-inline:8px}
@@ -611,7 +615,6 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-room-management form>button{justify-self:start}
 .oie-room-management .oie-room-details-form>button{justify-self:end}
 .oie-room-management form [data-form-feedback]{min-height:1.4em}
-.oie-room-management [data-room-management-status]{min-height:1lh}
 .oie-room-management h3{font-weight:650}
 .oie-room-management .oie-room-entry-links{margin-top:0}
 .oie-room-directory{display:grid;gap:4px}

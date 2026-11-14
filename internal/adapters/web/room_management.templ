@@ -11,6 +11,7 @@ import (
 	"github.com/araihu/goshtoso/components/form"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/scrollregion"
+	"github.com/araihu/goshtoso/components/skeleton"
 	"github.com/araihu/goshtoso/components/tabs"
 	"github.com/araihu/goshtoso/components/textarea"
 	"github.com/araihu/goshtoso/components/textinput"
@@ -23,12 +24,17 @@ import (
 templ roomManagementDrawer(v view) {
 	if v.Selected != nil && v.Selected.Kind == "room" && v.requestKind() == "" && !v.Preview {
 		@drawer.Drawer(drawer.Config{ID: "room-management", Title: v.Text.RoomManage, PanelClass: "oie-conversation-details-drawer"}) {
-			<div class="oie-settings oie-room-management" data-room-management data-invite-title={ v.Text.RoomInvitePeople } data-manage-title={ v.Text.RoomManage } data-chat={ v.Selected.Id } data-account={ v.Selected.AccountId } data-engine={ v.EngineID } data-lang={ v.Locale } data-loading={ v.Text.RoomManagementLoading } data-unavailable={ v.Text.RoomManagementUnavailable }>
-				<div role="status" aria-live="polite" data-room-management-status></div>
+			<div class="oie-settings oie-room-management" data-room-management data-invite-title={ v.Text.RoomInvitePeople } data-manage-title={ v.Text.RoomManage } data-chat={ v.Selected.Id } data-account={ v.Selected.AccountId } data-engine={ v.EngineID } data-lang={ v.Locale } data-unavailable={ v.Text.RoomManagementUnavailable }>
+				@roomManagementSkeleton(v, "oie-room-management-skeleton")
+				<p data-room-management-error role="alert" hidden>{ v.Text.RoomManagementUnavailable }</p>
 				<div data-room-management-content></div>
 			</div>
 		}
 	}
+}
+
+templ roomManagementSkeleton(v view, class string) {
+	@skeleton.Skeleton(skeleton.Config{Shape: skeleton.ShapeRectangle, Count: 5, Label: v.Text.RoomManagementLoading, RootClass: class, ItemClass: "oie-room-management-placeholder"})
 }
 
 templ roomManagementContent(v view, state engineapi.RoomManagement, messageID string, invite, bansLoaded bool) {
@@ -180,6 +186,8 @@ templ roomBanList(v view, state engineapi.RoomManagement, bansLoaded bool) {
 				</ul>
 				<p data-room-list-no-results role="status" hidden>{ v.Text.RoomNoMatchingBans }</p>
 			}
+		} else {
+			@roomManagementSkeleton(v, "oie-room-bans-skeleton")
 		}
 	</div>
 }
