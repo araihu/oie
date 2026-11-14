@@ -601,7 +601,7 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-room-management form>button{justify-self:start}
 .oie-room-management .oie-room-details-form>button{justify-self:end}
 .oie-room-management form [data-form-feedback]{min-height:1.4em}
-.oie-room-management [data-room-management-status]{min-height:1.4em}
+.oie-room-management [data-room-management-status]{min-height:1lh}
 .oie-room-management h3{font-weight:650}
 .oie-room-management .oie-room-entry-links{margin-top:0}
 .oie-room-directory{display:grid;gap:4px}

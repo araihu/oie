@@ -75,7 +75,7 @@ window.OieRuntime.register('room-management', life => {
     if (form?.hasAttribute('data-room-details-form')) syncDetailsSave(form);
   });
 
-  async function load(replace = true, announcement = '', avatarsOnly = false) {
+  async function load(replace = true, avatarsOnly = false) {
     if (avatarsOnly && request) return;
     request?.abort();
     const current = new AbortController();
@@ -159,7 +159,7 @@ window.OieRuntime.register('room-management', life => {
           }
         }
       }
-      status.textContent = announcement;
+      status.textContent = '';
     } catch {
       if (!avatarsOnly && request === current && active && !life.signal.aborted) status.textContent = root.dataset.unavailable;
     } finally {
@@ -238,7 +238,7 @@ window.OieRuntime.register('room-management', life => {
   life.on(document, 'oie:room-participant-avatar-changed', event => {
     if (event.detail.accountId !== root.dataset.account || !active || !content.querySelector('[data-room-participant-avatar]')) return;
     clearTimeout(avatarRefresh);
-    avatarRefresh = life.timeout(() => { if (active) void load(false, '', true); }, 250);
+    avatarRefresh = life.timeout(() => { if (active) void load(false, true); }, 250);
   });
 
   life.on(document, 'click', event => {
@@ -367,6 +367,6 @@ window.OieRuntime.register('room-management', life => {
       if (form.dataset.roomActionForm) setActionOpen(form, false);
       clearInputs(form);
     }
-    life.timeout(() => { if (active) void load(refreshContent, refreshContent ? result.message : ''); }, 0);
+    life.timeout(() => { if (active) void load(refreshContent); }, 0);
   });
 });

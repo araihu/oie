@@ -376,11 +376,17 @@ async function waitFor(predicate) {
           return [x,y,width,height];
         });
         const before = await geometry();
+        const tabsBefore = await management.getByRole('tablist').boundingBox();
         await saveDetails.click();
         assert.equal(await saveDetails.isDisabled(), true);
         assert.deepEqual(await geometry(), before);
         releaseRequest.send();
-        await management.getByText('Alteração confirmada.').waitFor();
+        const toast = page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'Alteração confirmada.'});
+        await toast.waitFor();
+        assert.equal(await management.getByText('Alteração confirmada.',{exact:true}).count(),0);
+        assert.deepEqual(await management.getByRole('tablist').boundingBox(),tabsBefore);
+        await toast.getByRole('button',{name:'Fechar',exact:true}).click();
+        await toast.waitFor({state:'hidden'});
         assert.equal(await saveDetails.isDisabled(), true);
         await topic.fill('Próxima leitura\nTraga um conto\n');
         assert.equal(await saveDetails.isDisabled(), true);

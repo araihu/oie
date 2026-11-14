@@ -1062,7 +1062,12 @@ window.OieRuntime.register('live', life => {
           keepRoomOperation(null);
           if(roomCommand==='leave')document.dispatchEvent(new CustomEvent('oie:room-reaction-visibility-withdrawn'));
         }
-        feedback(form,sending ? '' : result.message || '');
+        if (roomManagement) {
+          feedback(form, '');
+          if (result.message) window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'success',message:result.message}}));
+        } else {
+          feedback(form,sending ? '' : result.message || '');
+        }
         if (sending && result.accepted) {
           if(!completeSubmission(result))feedback(form,text('pending'),true);
           input.focus({preventScroll:true});renderReply();
