@@ -116,7 +116,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await keyboardAction(page,'favorite');await until(()=>chat.favorite,'favorite commits');await settled(page,'favorite',true);
   const heart='use[href$="#hi-16-solid-heart"]';
   await until(async()=>await page.locator('[data-conversation-row="'+chat.id+'"] .oie-conversation-favorite '+heart).count()===1,'favorite heart appears beside unread count');
-  assert.equal(await page.locator('[data-filter="favorites"] '+heart).count(),1);
+  assert.equal(await page.locator('[data-filter="favorites"] svg').count(),0);
   assert.equal(await page.locator('#unfavorite-conversation-'+chat.id+' '+heart).count(),1);
   assert.equal(await page.locator('[data-conversation-row="'+chat.id+'"] .oie-unread-count').textContent(),'3');
   assert.equal(await page.locator('#message-composer').inputValue(),draft);

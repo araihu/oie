@@ -76,7 +76,6 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-filter{display:inline-flex;align-items:center;padding:5px 11px;border:1px solid var(--oie-border);border-radius:18px;color:var(--oie-muted);text-decoration:none;font-size:12px;line-height:1.35;white-space:nowrap;font-weight:600}
 .oie-filter:hover{color:var(--oie-text);background:var(--oie-raised);text-decoration:none}
 .oie-filter[aria-current=true]{background:var(--oie-accent-soft);border-color:transparent;color:var(--oie-text)}
-.oie-filter .oie-icon{width:12px;height:12px;margin-inline-end:4px}
 .oie-archived-row{display:flex;align-items:center;gap:10px;flex-shrink:0;min-height:44px;margin:0 8px 6px;padding:8px 11px;border-radius:9px;color:var(--oie-muted);font-size:13px;font-weight:650;text-decoration:none}
 .oie-archived-row:hover,.oie-archived-row[aria-current=page]{background:var(--oie-raised);color:var(--oie-text);text-decoration:none}
 .oie-archived-row:not([aria-current=page]){filter:grayscale(1)}

@@ -336,9 +336,6 @@ templ archivedRow(v view) {
 
 templ filterLink(v view, key, label string) {
 	@link.Link(v.filterHref(key), link.WithRootClass("oie-filter"), link.WithAttrs(templ.Attributes{"aria-current": strconv.FormatBool(v.Filter == key), "data-filter": key})) {
-		if key == "favorites" {
-			@glyph(heroicons.Icon16SolidHeart)
-		}
 		{ label }
 	}
 }
