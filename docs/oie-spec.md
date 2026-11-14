@@ -545,18 +545,23 @@ Dismissing the card leaves the draft text intact.
 | Direct conversations | **Unlimited by default**. A finite period can be enabled independently of the room policy. | A conversation can set its own period or disable expiry. Clearing the override restores the global direct-conversation policy. |
 
 A finite policy sets a rolling cutoff based on the original message timestamp.
-Oiê purges unstarred messages older than the cutoff from the engine database,
-including their revisions and message-derived search and shared-content entries.
-A star on the message itself keeps it in the database beyond the cutoff. An
-older message becomes eligible for purge if its star is removed. The purge
-applies to message history. Downloaded files follow section 8, and pending sends
-follow section 5.
+For each room, keep its **100 most recent messages already stored in the engine
+database**, even if they are older than the cutoff. If the room has fewer than
+100 stored messages, keep all of them. This minimum applies under both the
+global room policy and room-specific overrides. All messages within the window
+and all starred messages are also kept, including stars outside the latest 100.
+
+Oiê purges eligible messages together with their revisions and message-derived
+search and shared-content entries. A message is eligible when it is older than
+the cutoff, unstarred, and outside the latest 100 if it belongs to a room.
+Downloaded files follow section 8, and pending sends follow section 5.
 
 The same cutoff is the earliest timestamp Oiê can retrieve from the XMPP
 archive. Apply it to initial reconstruction, automatic backfill, catch-up after
-reconnection, on-demand paging and remote search. The star exception applies
-only to the copy already stored in Oiê. With an unlimited policy, Oiê can
-retrieve the full available, authorized archive.
+reconnection, on-demand paging and remote search. The 100-message minimum and
+star protection apply only to copies already stored in Oiê. A fresh installation
+can therefore recover fewer than 100 messages for a room. With an unlimited
+policy, Oiê can retrieve the full available, authorized archive.
 
 Purge cadence and how retention interacts with sync and backup restore remain
 open under O17.
@@ -1016,7 +1021,8 @@ These scenarios validate **AGREED** behavior; proposed mechanisms such as a part
 | Offline Send | Offline explicit Send persists a pending submission and later submits automatically. A saved draft does not. Lost acceptance responses do not create a second logical send; storage failure does not claim success or discard the draft. |
 | Ownership | Synced pending items are visible without another engine dispatching them. Alpha remote changes require owning-engine confirmation. Copying history or changing the selected engine does not silently take over sends. |
 | History | Gradually import authorized history within the effective retention window by default and fetch eligible older pages as needed in on-demand rooms. Resume after interruption within the cutoff. Reopening a conversation uses retained messages, including those whose provider copies have expired. |
-| Message retention | With default settings, a 181-day-old unstarred room message is purged and a starred one stays available locally. XMPP reconstruction and remote search skip both at that age, even when the server has them. A 90-day room override applies a 90-day cutoff to both purge and retrieval. Direct conversations retain and recover older messages by default. A finite direct policy bounds both operations, and a conversation override can change the period or disable expiry. Removing an override restores the corresponding global policy. |
+| Room message retention | With default settings, a room with 20 messages within 180 days and at least 80 older messages keeps its latest 100 plus any starred messages outside those 100. A room with 150 messages within 180 days keeps all 150. A 90-day room override changes the date cutoff for purge and retrieval, with the same local minimum. XMPP reconstruction and remote search skip messages older than the effective cutoff, even when a fresh install recovers fewer than 100 messages. |
+| Direct message retention | Direct conversations retain and recover older messages by default. A finite direct policy bounds both operations. Old unstarred direct messages are eligible for purge even when the conversation has fewer than 100 messages. A conversation override can change the period or disable expiry. Removing an override restores the corresponding global policy. |
 | Search | Global/per-conversation metadata search returns source context. Latest versions are default; historical/retracted matches require their independent filters. Offline results clearly cover only cached data. |
 | Retraction | Supported own retraction uses its separate action. While retained, retracted originals display a placeholder/Reveal original and remain outside ordinary search/library views. No guarantee of erasing another client's copy is shown. |
 | Deletion | Device-local deletion leaves other device copies intact, including with a shared hosted engine. All-copy deletion propagates on sync. All revisions/derived entries disappear within scope, including under both Include filters; known deletion markers prevent revival. |
