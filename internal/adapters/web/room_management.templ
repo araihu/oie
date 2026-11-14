@@ -242,7 +242,7 @@ func roomParticipantActions(text copy, occupant engineapi.RoomManagedOccupant) [
 	}
 	accessActions := []roomParticipantAction{
 		{"affiliation", "owner", text.RoomMakeOwner, glyph(heroicons.Icon16SolidShieldCheck), button.TonePrimary},
-		{"affiliation", "admin", text.RoomMakeAdmin, glyph(heroicons.Icon16SolidCog6Tooth), button.TonePrimary},
+		{"affiliation", "admin", text.RoomMakeAdmin, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsWrenchScrewdriver16SolidWrenchScrewdriver, Decorative: true, RootClass: "oie-icon"}), button.TonePrimary},
 		{"affiliation", "member", text.RoomMakeMember, glyph(heroicons.Icon16SolidUser), button.TonePrimary},
 		{"affiliation", "none", text.RoomRevokeAccess, glyph(heroicons.Icon16SolidLockClosed), button.ToneWarning},
 		{"affiliation", "outcast", text.RoomBan, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsNoSymbol16SolidNoSymbol, Decorative: true, RootClass: "oie-icon"}), button.ToneDanger},
