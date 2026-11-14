@@ -33,10 +33,9 @@ func navigation(v view, id string) sidebar.Config {
 	cfg := sidebar.Config{
 		DisableSkipLink: true, RootClass: "oie-navigation", FooterSlot: navigationFooter(v,id),
 		Items: []sidebar.Item{
-			{ID: "chats", Label: v.Text.Chats, Href: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), Icon: appicons.Icon(appicons.Config{Symbol: appicons.IconHeroicons16SolidChatBubbleLeft, Decorative: true, RootClass: "oie-icon"}), Active: v.Section == "chats", LinkAttrs: sidebarNavigationAttrs()},
+			{ID: "chats", Label: v.Text.Chats, Href: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), Icon: appicons.Icon(appicons.Config{Symbol: appicons.IconHeroicons16SolidChatBubbleLeft, Decorative: true, RootClass: "oie-icon"}), Active: v.Section == "chats" || v.Section == "archived", LinkAttrs: sidebarNavigationAttrs()},
 
             {ID: "media", Label: v.Text.SharedMedia, Href: v.href("section", "media", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidRectangleGroup), Active: v.Section == "media", LinkAttrs: sidebarNavigationAttrs()},
-			{ID: "archived", Label: v.Text.Archived, Href: v.href("section", "archived", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidFolder), Active: v.Section == "archived", LinkAttrs: sidebarNavigationAttrs()},
 			{ID: "favorites", Label: v.Text.Favorites, Href: v.favoritesHref(""), Icon: glyph(heroicons.Icon16SolidStar), Active: v.Section == "favorites", LinkAttrs: sidebarNavigationAttrs()},
 		},
 	}
@@ -324,10 +323,19 @@ templ inboxList(v view) {
 				@filterLink(v, "favorites", v.Text.Favorites)
 				@filterLink(v, "groups", v.Text.Groups)
 			</nav>
+			@archivedRow(v)
 <div class="oie-conversation-scroll" id="conversation-list" data-version={v.conversationListVersion()}>
 @conversationList(v)
 </div>
 </div>
+}
+
+templ archivedRow(v view) {
+	{{ attrs := sidebarNavigationAttrs(); if v.Section == "archived" { attrs["aria-current"] = "page" } }}
+	@link.Link(v.href("section", "archived", "chat", "", "q", "", "filter", "all"), link.WithRootClass("oie-archived-row"), link.WithAttrs(attrs)) {
+		@appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsArchive16SolidArchiveBoxArrowDown, Decorative: true, RootClass: "oie-icon"})
+		{ v.Text.Archived }
+	}
 }
 
 templ filterLink(v view, key, label string) {
