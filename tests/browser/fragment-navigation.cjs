@@ -209,13 +209,18 @@ async function assertMobileControlOwnership(page) {
     for(const [section,label]of sidebarDestinations){await page.locator('.oie-sidebar a').filter({hasText:label}).click();await route(async()=>new URL(page.url()).searchParams.get('section')===section);assert.equal(await page.locator('.oie-sidebar a[aria-current=page]').count(),1);assert((await page.locator('.oie-sidebar a[aria-current=page]').textContent()).includes(label))}
     await page.goBack();await route(async()=>new URL(page.url()).searchParams.get('section')==='favorites');assert((await page.locator('.oie-sidebar a[aria-current=page]').textContent()).includes('Favorites'));await page.goForward();await route(async()=>new URL(page.url()).searchParams.get('section')==='chats');
     const archived=page.locator('#conversation-list-default > nav.oie-filters + a.oie-archived-row');
+    const inboxFilters=page.locator('#conversation-list-default > nav.oie-filters');
     assert.equal(await page.locator('.oie-sidebar a[href*="section=archived"]').count(),0);
     assert.equal(await archived.locator('use[href$="#heroicons-archive-16-solid-archive-box-arrow-down"]').count(),1);
+    assert.equal(await archived.evaluate(node=>getComputedStyle(node).filter),'grayscale(1)');
     await archived.click();
     await route(async()=>new URL(page.url()).searchParams.get('section')==='archived');
     assert.equal(await archived.getAttribute('aria-current'),'page');
+    assert.equal(await archived.evaluate(node=>getComputedStyle(node).filter),'none');
+    assert.equal(await inboxFilters.isVisible(),false);
     assert((await page.locator('.oie-sidebar a[aria-current=page]').textContent()).includes('Chats'));
     await page.goBack();await route(async()=>new URL(page.url()).searchParams.get('section')==='chats');
+    await inboxFilters.waitFor({state:'visible'});
     for(const gesture of [{modifiers:['Control']},{button:'middle'}]){const original=page.url(),requests=hx.length,popupEvent=context.waitForEvent('page');await page.locator('.oie-sidebar a').filter({hasText:'Media & links'}).click(gesture);const popup=await popupEvent;await popup.waitForURL(url=>url.searchParams.get('section')==='media',{waitUntil:'domcontentloaded'});assert.equal(new URL(popup.url()).searchParams.get('section'),'media');assert.equal(await popup.locator('#oie-app').count(),1);assert.equal(page.url(),original);assert.equal(hx.length,requests);assert.equal(await page.evaluate(()=>window.documentToken),token);await popup.close();await until(()=>streams.size===1,'modifier popup stream disposed')}
     await page.locator('a[data-conversation-id="'+chatA+'"]').click();await route(async()=>await page.locator('#message-composer').count()===1);findings.push('Sidebar destinations, Archived and Back/Forward use same-document fragments with the active links updated; Control and middle clicks retain native new-tab behavior');
     const draft='Unsaved local draft 👋';await page.locator('#message-composer').fill(draft);

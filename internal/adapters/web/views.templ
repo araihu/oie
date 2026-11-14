@@ -313,7 +313,7 @@ templ menuTrigger(label string) {
 
 templ inboxList(v view) {
 <div id="conversation-list-default" class="oie-list-default" data-inbox-scope={v.conversationScope()} data-inbox-filter={v.Filter} hidden?={v.GlobalMessageSearch}>
-			<nav class="oie-filters" aria-label={ v.Text.Chats }>
+			<nav class="oie-filters" aria-label={ v.Text.Chats } hidden?={ v.Section == "archived" }>
 				@filterLink(v, "all", v.Text.All)
 				@filterLink(v, "unread", v.Text.Unread)
 				@filterLink(v, "favorites", v.Text.Favorites)
