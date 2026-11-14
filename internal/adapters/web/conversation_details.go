@@ -18,7 +18,13 @@ func (s *Server) loadConversationDetails(ctx context.Context, v *view) {
 	if err != nil || response.JSON200 == nil {
 		return
 	}
-	d := response.JSON200
+	v.applyConversationDetails(response.JSON200)
+}
+
+func (v *view) applyConversationDetails(d *engineapi.ConversationDetails) {
+	if d == nil {
+		return
+	}
 	if d.ConversationId != v.Selected.Id || d.AccountId != v.Selected.AccountId || d.AccountConnection.AccountId != v.Selected.AccountId || !d.AccountConnection.State.Valid() || d.Address != v.Selected.Address || string(d.Kind) != string(v.Selected.Kind) {
 		return
 	}

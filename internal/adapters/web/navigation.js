@@ -208,6 +208,13 @@
   ctx.oieMobileFocus=mobile.contains(document.activeElement);
   if(window.Alpine)window.Alpine.mutateDom(()=>mobile.remove());else mobile.remove();
  }
+ const sourceRetainedRegions=['data-route-shared-copy','data-route-settings','data-route-viewers'];
+ function keepSourceRegions(ctx){
+  if(!ctx.oieRouteApp?.hasAttribute('data-source-route'))return;
+  ctx.oieSourceRegions=sourceRetainedRegions.map(name=>ctx.target.querySelector('['+name+']')).filter(Boolean);
+  const remove=()=>{for(const node of ctx.oieSourceRegions)node.remove()};
+  if(window.Alpine)window.Alpine.mutateDom(remove);else remove();
+ }
  function shellKey(url, ignored=[]){
   const q=new URLSearchParams(url.search);
   for(const key of ['chat','inbox','message','open','infoView','infoType','infoCursor','infoQuery','infoFocus','searchQuery','searchAccount','searchType','searchConversation','searchCursor','searchEngine','includeEditHistory','searchMode','chatSearch','chatQuery','chatIncludeHistory',...ignored])q.delete(key);
@@ -586,13 +593,29 @@
    window.OieVideos?.release(ctx.target);
   }
 
-  if(replacesWorkspace(ctx.oieKind)||ctx.oieKind==='conversation-pane'){if(ctx.oieKind!=='oie-app')closeOverlays();runtime.stop();}else infoRequestGeneration=ctx.oieStarGeneration;
+  if(replacesWorkspace(ctx.oieKind)||ctx.oieKind==='conversation-pane'){
+   if(ctx.oieKind!=='oie-app')closeOverlays();
+   runtime.stop();
+   if(ctx.oieKind===routeID)keepSourceRegions(ctx);
+  }else infoRequestGeneration=ctx.oieStarGeneration;
  });
  document.addEventListener('htmx:before:settle',event=>{
   const root=event.detail.task?.target,ctx=settling;
   if(!root?.isConnected||ctx?.oieKind!==root.id||(!replacesWorkspace(root.id)&&root.id!==inboxID))return;
   if(root.id===routeID){
+   if(ctx.oieSourceRegions){
+    const restore=()=>root.append(...ctx.oieSourceRegions);
+    if(window.Alpine)window.Alpine.mutateDom(restore);else restore();
+   }
    const fresh=ctx.oieRouteApp;
+   if(ctx.oieSourceRegions){
+    const previous=document.getElementById('desktop-navigation');
+    const badges=new Map([...previous.querySelectorAll('[data-account-unread]')].map(node=>[node.dataset.accountUnread,node]));
+    for(const container of [fresh,root])for(const badge of container.querySelectorAll('[data-account-unread]')){
+     const saved=badges.get(badge.dataset.accountUnread);
+     if(saved){badge.textContent=saved.textContent;badge.hidden=saved.hidden;badge.setAttribute('aria-label',saved.getAttribute('aria-label'));}
+    }
+   }
    const accountChanged=app().dataset.sharedAccount!==fresh.dataset.sharedAccount;
    updateSidebar(document.getElementById('desktop-navigation'),fresh.querySelector('#desktop-navigation'),accountChanged);
    if(ctx.oieMobileNavigation){

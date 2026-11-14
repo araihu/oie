@@ -55,6 +55,10 @@ templ desktopNavigation(v view) {
 	<div class="oie-sidebar-splitter" role="separator" tabindex="0" aria-orientation="vertical" aria-controls="desktop-navigation" aria-label={v.Text.Navigation} data-sidebar-splitter></div>
 }
 
+templ sourceDesktopNavigation(v view) {
+	<div id="desktop-navigation">@sidebar.Sidebar(navigation(v,"desktop"))</div>
+}
+
 templ navigationControl(v view) {
 	@button.Button(button.WithRootClass("oie-icon-button oie-sidebar-toggle"), button.WithAttrs(templ.Attributes{
 		"type": "button", "data-sidebar-toggle": "", "aria-controls": "desktop-navigation",
@@ -144,22 +148,41 @@ if v.DevBuildID!="" {
 
 // Application state travels with each shell fragment; the head/runtime persists.
 templ appFragment(v view) {
-<div id="oie-app" hx-history-elt data-shared-account={v.AccountFilter} data-route-error={v.Text.NavFailed} data-route-locale={v.Locale} data-route-theme={v.Theme} data-csrf={v.CSRF} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
+<div id="oie-app" hx-history-elt { appRouteAttrs(v)... }>
 @toast.ToastContainer(toast.ContainerConfig{}).WithExpressions(expressions.Toast{DismissLabel:v.Text.Close,DismissAriaLabel:v.Text.Close})
 <h1 class="sr-only">{v.Text.AppName}</h1>
 @appshell.AppShell(appshell.Config{RootClass: "oie-shell", MainClass: "oie-main", SidebarClass: "oie-sidebar", Sidebar: desktopNavigation(v), SidebarAttrs: templ.Attributes{"id": "desktop-navigation"}, Content: routeContent(v), RootAttrs: templ.Attributes{"data-open-chat": strconv.FormatBool(v.ChatOpen)}})
 </div>
 }
 
+func appRouteAttrs(v view) templ.Attributes {
+	return templ.Attributes{
+		"data-shared-account":v.AccountFilter,"data-route-error":v.Text.NavFailed,"data-route-locale":v.Locale,"data-route-theme":v.Theme,"data-csrf":v.CSRF,
+		"data-open-drawer":v.initialDrawer(),"data-engine-id":v.EngineID,"data-event-cursor":v.EventCursor,"data-conversation-id":v.ChatID,"data-account-id":selectedAccountID(v),
+		"data-focus-message":v.FocusMessage,"data-context-newer":strconv.FormatBool(v.ContextHasNewer),"data-context-missing":strconv.FormatBool(v.ContextMissing),"data-mock":strconv.FormatBool(v.Preview),
+	}
+}
+
+templ sourceRouteFragment(v view) {
+<div id="oie-app" data-source-route { appRouteAttrs(v)... }>
+@sourceDesktopNavigation(v)
+@routeContent(v)
+</div>
+}
+
 templ routeContent(v view) {
 <div id="oie-route" class="oie-route" data-open-chat={strconv.FormatBool(v.ChatOpen)}>
+if !v.CompactSource {
+<div data-route-shared-copy>
 @liveCopy(v)
 <p class="sr-only" data-read-status data-read-failed={v.Text.ReadFailed} role="status" aria-live="polite" hidden></p>
 <div data-shared-action-copy hidden data-failed={v.Text.SharedActionFailed} data-copied={v.Text.SharedLinkCopied} data-downloading={v.Text.SharedDownloading}></div>
+<div class="sr-only" data-live-status role="status" aria-live="polite" hidden></div>
+</div>
+}
 if v.Section=="media" {
 @avatarData(v)
 }
-<div class="sr-only" data-live-status role="status" aria-live="polite" hidden></div>
 if v.ErrorMessage!="" {
 <div class="oie-native-error" role="alert" tabindex="-1" data-native-error>
 {v.ErrorMessage}
@@ -172,20 +195,28 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 </div>
 }
 			@workspaceWithLoading(v)
-			@settings(v)
-			if v.CanResetData {
-				@resetDataDialog(v)
-			}
-			@about(v)
+if !v.CompactSource {
+<div data-route-settings>
+@settings(v)
+if v.CanResetData {
+@resetDataDialog(v)
+}
+@about(v)
+</div>
+}
 			@accounts(v)
 @newConversation(v)
 if !v.Preview {
 @roomEntryDrawer(v,false)
 @roomEntryDrawer(v,true)
 }
+if !v.CompactSource {
+<div data-route-viewers>
 @quickMessageSearch(v)
 @imageViewer(v)
 @documentViewer(v)
+</div>
+}
 @reactionPicker(v)
 
 

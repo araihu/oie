@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/domain"
 )
 
 func messageTimelineTime(m engineapi.Message) time.Time {
@@ -115,7 +116,7 @@ func (v view) timelinePageHref(direction string) string {
 }
 
 const timelinePageSize = 50
-const sourceContextPageSize = 16
+const sourceContextPageSize = domain.SourceContextPageSize
 
 func timelineInitialParams(v view) *engineapi.ListMessagesParams {
 	limit := timelinePageSize
@@ -154,10 +155,7 @@ func (v view) timelineUnread() int {
 }
 
 func (s *Server) formatTimeline(ctx context.Context, v *view, items []engineapi.Message, extras map[string]*mediaView) {
-	slices.Reverse(items)
-	for _, m := range items {
-		v.Messages = append(v.Messages, messageView{Message: m, Attachment: extras[m.Id], Presentation: m.OriginalText})
-	}
+	v.setTimelineMessages(items, extras)
 	// Each enrichment request stays within the public batch contract.
 	for start := 0; start < len(v.Messages); start += 50 {
 		part := *v
@@ -179,6 +177,16 @@ func (s *Server) formatTimeline(ctx context.Context, v *view, items []engineapi.
 	}
 	s.loadMessageStars(ctx, v)
 	s.loadReactions(ctx, v)
+	v.formatTimelineMessages(ctx)
+}
+
+func (v *view) setTimelineMessages(items []engineapi.Message, extras map[string]*mediaView) {
+	for _, m := range slices.Backward(items) {
+		v.Messages = append(v.Messages, messageView{Message: m, Attachment: extras[m.Id], Presentation: m.OriginalText})
+	}
+}
+
+func (v *view) formatTimelineMessages(ctx context.Context) {
 	for i := range v.Messages {
 		m := &v.Messages[i]
 		m.Presentation = videoPresentation(imagePresentation(m.displayBody(), v.MessagePreviews[m.Id]), v.messageVideos(m.Id))

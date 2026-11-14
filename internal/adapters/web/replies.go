@@ -54,15 +54,21 @@ func (s *Server) contextMessages(ctx context.Context, v *view, account string, l
 		v.Unavailable = true
 		return nil, true
 	}
-	page := response.JSON200
-	if !validContextTarget(*page, v.FocusMessage, v.ChatID, account) {
+	if !v.applyMessageContext(*response.JSON200, account) {
 		v.Unavailable = true
 		return nil, true
+	}
+	return response.JSON200.Items, true
+}
+
+func (v *view) applyMessageContext(page engineapi.MessageContext, account string) bool {
+	if !validContextTarget(page, v.FocusMessage, v.ChatID, account) {
+		return false
 	}
 	v.FocusMessage = page.TargetId
 	v.ContextHasNewer = page.HasNewer
 	v.ContextHasOlder = page.HasOlder
-	return page.Items, true
+	return true
 }
 
 // An alias can change only the canonical target, never its ownership. The engine

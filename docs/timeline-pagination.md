@@ -63,3 +63,12 @@ uses the mounted conversation scope, the response contains only the
 conversation panel. From the global catalog it uses the workspace route and
 reuses the parked inbox when its scope matches. Native links and ordinary
 conversation navigation use the existing timeline page size.
+
+The source-context engine endpoint provides the owning conversation and the
+window's presentation data in one response. The browser server reads the
+account list, selected account's avatars and cold inbox separately. It can
+still use the individual endpoints with an older engine. The source route
+keeps its mounted settings and viewer panels and negotiates gzip for the
+fragment. The event stream stays connected while the foreground jump defers
+the automatic HTML refresh. Refresh resumes on the destination or after a
+failed or cancelled jump.

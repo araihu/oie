@@ -27,13 +27,7 @@ func (s *Server) loadMessageStars(ctx context.Context, v *view) {
 			return
 		}
 		for _, star := range response.JSON200.Items {
-			if !wanted[star.MessageId] || star.AccountId != v.Selected.AccountId || star.ConversationId != v.Selected.Id {
-				return
-			}
-			if star.RevisionId != nil && !validOperationKey(*star.RevisionId) {
-				return
-			}
-			if star.Starred && star.RevisionId == nil {
+			if !wanted[star.MessageId] || !validTimelineStar(star, v.Selected.AccountId, v.Selected.Id) {
 				return
 			}
 			found[star.MessageId] = star
@@ -44,6 +38,11 @@ func (s *Server) loadMessageStars(ctx context.Context, v *view) {
 	}
 	v.Stars = found
 	v.StarsKnown = true
+}
+
+func validTimelineStar(star engineapi.MessageStar, account, conversation string) bool {
+	return star.AccountId == account && star.ConversationId == conversation &&
+		(star.RevisionId != nil && validOperationKey(*star.RevisionId) || star.RevisionId == nil && !star.Starred)
 }
 func (v view) starLabel(id string) string {
 	if v.Stars[id].Starred {

@@ -761,7 +761,7 @@ type RenderWorkspaceParams struct {
 	// HXRequest Set to true to request an HTML fragment.
 	HXRequest *RenderWorkspaceParamsHXRequest `json:"HX-Request,omitempty"`
 
-	// XOieFragment Selects the HTML region. With HX-Request and no fragment selector, the app region is returned. The app fragment includes the workspace region used for sidebar navigation. The source fragment uses a smaller initial timeline window around an explicit message target, with paging in both directions. The source-pane fragment returns only the conversation panel with that same smaller window.
+	// XOieFragment Selects the HTML region. With HX-Request and no fragment selector, the app region is returned. The app fragment includes the workspace region used for sidebar navigation. The source fragment uses a bounded initial timeline around an explicit message target and can omit panels already mounted by the browser. The source-pane fragment returns only the conversation panel with that same window. Both preserve paging in each direction and can use gzip when accepted by the client.
 	XOieFragment *RenderWorkspaceParamsXOieFragment `json:"X-Oie-Fragment,omitempty"`
 
 	// XOieInboxScope Scope of the conversation list held in the current tab. An app or source fragment for Conversations may omit the list contents when the scope matches the current engine and requested inbox.
