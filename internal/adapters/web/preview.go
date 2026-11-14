@@ -154,11 +154,14 @@ func (v view) href(pairs ...string) string {
 		q.Set("chatQuery", v.ConversationSearchQuery)
 		if v.ConversationSearchHistory {
 			q.Set("chatIncludeHistory", "true")
+			if v.FocusMessage != "" && v.ConversationSearchRevision != "" {
+				q.Set("chatSearchRevision", v.ConversationSearchRevision)
+			}
 		}
 	}
 	for i := 0; i+1 < len(pairs); i += 2 {
 		if pairs[i] == "section" && (pairs[i+1] == "media" || pairs[i+1] == "scheduled" || pairs[i+1] == "favorites") {
-			for _, key := range []string{"searchMode", "searchQuery", "searchAccount", "searchType", "searchEngine", "includeEditHistory", "chatSearch", "chatQuery", "chatIncludeHistory"} {
+			for _, key := range []string{"searchMode", "searchQuery", "searchAccount", "searchType", "searchEngine", "includeEditHistory", "chatSearch", "chatQuery", "chatIncludeHistory", "chatSearchRevision"} {
 				q.Del(key)
 			}
 		}
@@ -187,6 +190,7 @@ func (v view) href(pairs ...string) string {
 			q.Del("chatSearch")
 			q.Del("chatQuery")
 			q.Del("chatIncludeHistory")
+			q.Del("chatSearchRevision")
 			for _, key := range []string{"infoView", "infoType", "infoCursor", "infoQuery", "infoFocus"} {
 				q.Del(key)
 			}
@@ -200,6 +204,9 @@ func (v view) href(pairs ...string) string {
 		} else {
 			q.Set(pairs[i], pairs[i+1])
 		}
+	}
+	if q.Get("message") != v.FocusMessage || q.Get("chatQuery") != v.ConversationSearchQuery || q.Get("chatIncludeHistory") != "true" {
+		q.Del("chatSearchRevision")
 	}
 	if q.Get("section") == "media" {
 		if len(sharedAccounts) > 0 {

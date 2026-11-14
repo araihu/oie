@@ -39,6 +39,10 @@ paths:
         in: query
         description: Continuation cursor for the starred-message workspace in the current account scope.
         schema: {type: string}
+      - name: chatSearchRevision
+        in: query
+        description: Historical result revision to restore for the focused message in the conversation search.
+        schema: {$ref: './openapi.yaml#/components/schemas/ID'}
       - name: HX-Request
         in: header
         description: Set to true to request an HTML fragment.

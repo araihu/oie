@@ -28,7 +28,9 @@ Bleve supplies candidate UUIDs from normalized trigrams and fuzzy prefix
 tokens, scoped by account and conversation. SQLite applies the existing
 matcher, verifies current content and authorized retained edit history,
 checks visibility, and applies the chronological cursor before hydration.
-The 1,024 candidate budget includes pending IDs and exceptions. SQL handles
+The 1,024 candidate budget includes pending IDs and exceptions that belong to
+the requested account or conversation scope. Unscoped searches keep an
+engine-wide budget. SQL handles
 candidate overflow, partial or failed lookup, a crossed publication, unavailable
 generations, rooms with up to 512 stored messages and queries without usable
 tokens. Bleve lookup has a 25 ms cancellation target. The duration can

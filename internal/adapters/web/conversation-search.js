@@ -5,6 +5,7 @@ window.OieRuntime.register('conversation-search',life=>{
  const engine=root.dataset.searchEngine,account=root.dataset.searchAccount,conversation=root.dataset.searchConversation;
  const uuid=value=>/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value||'');
  let opened=root.dataset.searchOpen==='true',epoch=0,selectionEpoch=0,timer=0,controller=null,busy=false,composing=false,hits=[],index=-1,next='',complete=false,lastCursor='',failure='',selected='',returnFocus=null;
+ let lastSearchFocus=true;
  let archiveTimer=0, archiveController, contextController, archiveCursor='', archivePending=false, archiveFailed=false, localCoverage='';
  const state=()=>({q:query.value.trim(),includeEditHistory:String(history.checked),engineId:engine,accountId:account,conversationId:conversation});
  const valid=()=>!life.signal.aborted&&root.isConnected&&document.body.dataset.engineId===engine&&document.body.dataset.accountId===account&&document.body.dataset.conversationId===conversation;
@@ -154,7 +155,7 @@ window.OieRuntime.register('conversation-search',life=>{
    }
   }
  }
- function address(){const url=new URL(location.href);if(opened){url.searchParams.set('chatSearch','1');if(query.value)url.searchParams.set('chatQuery',query.value);else url.searchParams.delete('chatQuery');if(history.checked)url.searchParams.set('chatIncludeHistory','true');else url.searchParams.delete('chatIncludeHistory')}else for(const key of ['chatSearch','chatQuery','chatIncludeHistory'])url.searchParams.delete(key);window.OieNavigation?.addressSearch(url);}
+ function address(clearRevision=false){const url=new URL(location.href);if(opened){url.searchParams.set('chatSearch','1');if(query.value)url.searchParams.set('chatQuery',query.value);else url.searchParams.delete('chatQuery');if(history.checked)url.searchParams.set('chatIncludeHistory','true');else url.searchParams.delete('chatIncludeHistory')}else for(const key of ['chatSearch','chatQuery','chatIncludeHistory'])url.searchParams.delete(key);if(clearRevision||!opened)url.searchParams.delete('chatSearchRevision');window.OieNavigation?.addressSearch(url);}
  function abort(){epoch++;selectionEpoch++;clearTimeout(timer);clearTimeout(archiveTimer);controller?.abort();archiveController?.abort();contextController?.abort();controller=null;busy=false;window.OieTimeline?.cancelFocus?.();}
  function reset(){hits=[];index=-1;selected='';next='';archiveCursor='';archivePending=false;archiveFailed=false;localCoverage='';complete=false;failure='';lastCursor='';excerpt.hidden=true;excerpt.textContent='';coverage.hidden=true;coverage.textContent='';clearHighlights();status('');controls();}
  function parse(html,request,cursor){
@@ -168,7 +169,7 @@ window.OieRuntime.register('conversation-search',life=>{
   return {items,next:nextCursor,coverage:envelope.querySelector('[data-message-search-indexing]')?.textContent?.slice(0,512)||''};
  }
  async function select(position){
-  if(!valid()||!opened||position<0||position>=hits.length)return;const generation=epoch,selection=++selectionEpoch,hit=hits[position];index=position;selected='';failure='';busy=true;clearHighlights();status(root.dataset.searchLoading);controls();
+  if(!valid()||!opened||position<0||position>=hits.length)return;const generation=epoch,selection=++selectionEpoch,hit=hits[position];index=position;selected='';failure='';busy=true;clearHighlights();excerpt.hidden=true;status(root.dataset.searchLoading);controls();
   try{
    if(hit.remote){
     contextController?.abort();
@@ -179,28 +180,47 @@ window.OieRuntime.register('conversation-search',life=>{
    }
    const found=await window.OieTimeline?.focus?.(hit.id,{focus:false});if(!valid()||!opened||generation!==epoch||selection!==selectionEpoch)return;
    busy=false;if(!found){failure='focus';status(root.dataset.searchMissing);controls();return}
-   selected=hit.id;const url=new URL(location.href);url.searchParams.set('message',hit.id);url.searchParams.delete('timelineCursor');url.searchParams.delete('timelineDirection');window.OieNavigation?.addressSearch(url);status(root.dataset.searchResultLabel+' '+(index+1)+(complete?' / '+hits.length:''));
+   selected=hit.id;const url=new URL(location.href);url.searchParams.set('message',hit.id);if(hit.historical)url.searchParams.set('chatSearchRevision',hit.revision);else url.searchParams.delete('chatSearchRevision');url.searchParams.delete('timelineCursor');url.searchParams.delete('timelineDirection');window.OieNavigation?.addressSearch(url);status(root.dataset.searchResultLabel+' '+(index+1)+(complete?' / '+hits.length:''));
    showExcerpt(hit);
    highlight();controls();document.dispatchEvent(new CustomEvent('oie:conversation-search-selected',{detail:{id:hit.id,index}}));
   }catch{if(valid()&&generation===epoch&&selection===selectionEpoch){busy=false;failure='focus';status(root.dataset.searchFailed);controls()}}
  }
  async function request(cursor='',position=0,focusResult=true){
   if(!valid()||!opened||busy||composing)return;const request=state(),generation=epoch;if(!request.q){reset();return}if(Array.from(request.q).length>200){failure='';status(root.dataset.searchInvalid);controls();return}
-  busy=true;failure='';lastCursor=cursor;status(root.dataset.searchLoading);controls();controller=new AbortController();const ownController=controller,timeout=life.timeout(()=>ownController.abort(),12000);
+  busy=true;failure='';lastSearchFocus=focusResult;status(root.dataset.searchLoading);controls();controller=new AbortController();const ownController=controller,timeout=life.timeout(()=>ownController.abort(),12000);
   try{
-   const params=new URLSearchParams({...request,limit:'50',presentation:'conversation',lang:document.documentElement.lang});if(cursor)params.set('cursor',cursor);
-   const response=await life.fetch('/ui/message-search?'+params,{credentials:'same-origin',cache:'no-store',redirect:'error',signal:ownController.signal});if(!response.ok||!response.headers.get('Content-Type')?.startsWith('text/html'))throw Error(response.status===409?'engine_changed':response.status===400?'invalid':'response');const html=await response.text();if(html.length>2*1024*1024)throw Error('large');if(!valid()||!opened||generation!==epoch||!same(request))return;
-   const page=parse(html,request,cursor);localCoverage=page.coverage;
-   addHits(page.items);next=page.next;busy=false;updateCoverage();
-   if(!hits.length){status(root.dataset.searchEmpty);controls();return}if(focusResult)await select(position);else{
-    const target=new URL(location.href).searchParams.get('message');
-    index=hits.findIndex(hit=>hit.id===target);
+   const params=new URLSearchParams({...request,limit:'50',presentation:'conversation',lang:document.documentElement.lang});
+   const address=new URL(location.href).searchParams;
+   const target=focusResult?'':address.get('message');
+   const revision=target&&history.checked?address.get('chatSearchRevision'):'';
+   const restoreRevision=uuid(target)&&uuid(revision);
+   const visited=new Set();
+   while(true){
+    if(visited.has(cursor))throw Error('cursor');
+    visited.add(cursor);
+    lastCursor=cursor;
+    if(cursor)params.set('cursor',cursor);else params.delete('cursor');
+    const response=await life.fetch('/ui/message-search?'+params,{credentials:'same-origin',cache:'no-store',redirect:'error',signal:ownController.signal});if(!response.ok||!response.headers.get('Content-Type')?.startsWith('text/html'))throw Error(response.status===409?'engine_changed':response.status===400?'invalid':'response');const html=await response.text();if(html.length>2*1024*1024)throw Error('large');if(!valid()||!opened||generation!==epoch||!same(request))return;
+    const page=parse(html,request,cursor);localCoverage=page.coverage;
+    addHits(page.items);next=page.next;updateCoverage();
+    if(focusResult||!hits.length)break;
+    index=hits.findIndex(hit=>hit.id===target&&(!restoreRevision||hit.historical&&hit.revision===revision));
     if(index>=0){
      selected=target;showExcerpt(hits[index]);highlight();
      status(root.dataset.searchResultLabel+' '+(index+1)+(complete?' / '+hits.length:''));
-    }else status('');
-    controls();
+     break;
+    }
+    if(!restoreRevision||!next){
+     status(restoreRevision?root.dataset.searchMissing:'');
+     break;
+    }
+    // Follow the same bounded local pages under the original request timeout.
+    cursor=next;
    }
+   busy=false;
+   if(!hits.length)status(root.dataset.searchEmpty);
+   else if(focusResult){await select(position);return;}
+   controls();
   }catch(error){if(valid()&&opened&&generation===epoch&&same(request)){busy=false;failure='search';status(error.message==='engine_changed'?root.dataset.searchEngineChanged:error.message==='invalid'?root.dataset.searchInvalid:root.dataset.searchFailed);controls()}}
   finally{clearTimeout(timeout);if(controller===ownController)controller=null;}
  }
@@ -252,7 +272,7 @@ window.OieRuntime.register('conversation-search',life=>{
  }
  function changed(delay=100){
   if(!opened)return;
-  returnFocus=null;abort();reset();address();
+  returnFocus=null;abort();reset();address(true);
   if(!composing&&state().q){
    archivePending=window.OieRoomArchive?.search()===true;
    timer=life.timeout(()=>request(),delay);
@@ -268,7 +288,7 @@ window.OieRuntime.register('conversation-search',life=>{
  life.on(older,'click',()=>{if(busy)return;returnFocus=older;if(index+1<hits.length)select(index+1);else if(next)request(next,index+1);else if(archiveCursor&&!archivePending)searchArchive(archiveCursor)});
  life.on(newer,'click',()=>{if(!busy&&index>0){returnFocus=newer;select(index-1)}});
  life.on(root.querySelector('[data-conversation-search-close]'),'click',event=>{event.preventDefault();event.stopPropagation();close()});
- life.on(retry,'click',()=>{returnFocus=retry;if(failure==='focus')select(index);else request(lastCursor,index<0?0:index+1)});
+ life.on(retry,'click',()=>{returnFocus=retry;if(failure==='focus')select(index);else request(lastCursor,index<0?0:index+1,lastSearchFocus)});
  life.on(root,'keydown',event=>{
   if(!opened||event.defaultPrevented||event.isComposing||event.keyCode===229||composing||event.ctrlKey||event.metaKey||event.altKey)return;
   if(event.key==='Escape'){event.preventDefault();close();return;}

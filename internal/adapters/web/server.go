@@ -178,6 +178,7 @@ type view struct {
 	ConversationSearchOpen                                                                        bool
 	ConversationSearchQuery                                                                       string
 	ConversationSearchHistory                                                                     bool
+	ConversationSearchRevision                                                                    string
 	MessageSearch                                                                                 messageSearchView
 	NativeMessageSearch                                                                           bool
 	PreferenceRecovery                                                                            bool
@@ -855,6 +856,9 @@ func (s *Server) baseView(r *http.Request) view {
 	v.ConversationSearchOpen = r.URL.Query().Get("chatSearch") == "1"
 	v.ConversationSearchQuery = strings.TrimSpace(r.URL.Query().Get("chatQuery"))
 	v.ConversationSearchHistory = r.URL.Query().Get("chatIncludeHistory") == "true"
+	if id := r.URL.Query().Get("chatSearchRevision"); v.ConversationSearchOpen && v.ConversationSearchHistory && validOperationKey(id) {
+		v.ConversationSearchRevision = id
+	}
 	return v
 }
 func (s *Server) load(ctx context.Context, r *http.Request, v *view) {

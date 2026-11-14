@@ -804,6 +804,9 @@ type RenderWorkspaceParams struct {
 	// FavoritesCursor Continuation cursor for the starred-message workspace in the current account scope.
 	FavoritesCursor *string `form:"favoritesCursor,omitempty" json:"favoritesCursor,omitempty"`
 
+	// ChatSearchRevision Historical result revision to restore for the focused message in the conversation search.
+	ChatSearchRevision *externalRef0.ID `form:"chatSearchRevision,omitempty" json:"chatSearchRevision,omitempty"`
+
 	// HXRequest Set to true to request an HTML fragment.
 	HXRequest *RenderWorkspaceParamsHXRequest `json:"HX-Request,omitempty"`
 

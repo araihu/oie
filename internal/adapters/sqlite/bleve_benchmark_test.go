@@ -5,20 +5,24 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"net/url"
 	"os"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
+	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 )
 
 var indexBenchRows = flag.Int("oie-index-bench-rows", 100000, "retained messages in the experimental index measurement")
+var indexBenchWeb = flag.Bool("oie-index-bench-web", false, "measure HTML and highlight generation using the browser server")
 
 type chronologicalIndexControl struct{ *Store }
 
@@ -80,7 +84,22 @@ func TestExperimentalMessageIndexIngestionBenchmark(t *testing.T) {
 	fixtures := make([]fixture, 0, 2)
 	for _, mode := range []string{"sql-read", "bleve"} {
 		old, _, c := outboxFixture(t)
+		if *indexBenchWeb {
+			c.ID, c.RevisionID, c.PeerID = migrationID(), migrationID(), migrationID()
+			c.Kind, c.Address, c.Title = "room", "index-benchmark@conference.localhost", "Search benchmark room"
+			_, err := old.OpenConversation(t.Context(), application.ConversationMutation{
+				Operation:   application.Operation{ID: migrationID(), ResourceID: c.ID, CreatedAt: c.UpdatedAt, Kind: "open_conversation"},
+				Fingerprint: "search benchmark", Conversation: c,
+			})
+			requireIndexTest(t, err)
+		}
 		seedIndexBenchmark(t, old, c, *indexBenchRows)
+		if *indexBenchWeb {
+			text := strings.Repeat("As notificações da equipe chegaram ontem. ", 1400) + "O plano é mapear o terreno com os colegas."
+			for n := range 52 {
+				replySeed(t, old, c, text, time.Now().UTC().Add(time.Duration(n)*time.Second), nil, nil)
+			}
+		}
 		dir := old.dir
 		requireIndexTest(t, old.Close())
 
@@ -103,26 +122,57 @@ func TestExperimentalMessageIndexIngestionBenchmark(t *testing.T) {
 	for _, f := range fixtures {
 		mode, store, c := f.mode, f.store, f.conversation
 		t.Run(mode, func(t *testing.T) {
-			var serverURL string
+			var repository application.Repository = chronologicalIndexControl{store}
 			if mode == "bleve" {
-				serverURL = openIndexTestHTTP(t, store).URL
-			} else {
-				serverURL = openIndexTestHTTP(t, chronologicalIndexControl{store}).URL
+				repository = store
+			}
+			engine := openIndexTestHTTP(t, repository)
+			serverURL := engine.URL
+			engineID, _, err := store.Snapshot(t.Context())
+			requireIndexTest(t, err)
+			measure := measureIndexRequest
+			route := "/api/v1/messages/search"
+			if *indexBenchWeb {
+				serverURL = openIndexTestWeb(t, engine.URL).URL
+				route = "/ui/message-search"
+				measure = measureHighlightedSearch
 			}
 			client := &http.Client{Timeout: 90 * time.Second}
 			t.Cleanup(client.CloseIdleConnections)
-			terms := []string{"arqiuvo", "docun", "faturamento", "viedo"}
-			addresses := make([]string, len(terms))
-			for n, term := range terms {
-				addresses[n] = serverURL + "/api/v1/messages/search?" + (url.Values{"q": {term}, "limit": {"20"}}).Encode()
-				requireIndexTest(t, measureIndexRequest(t.Context(), client, addresses[n]))
+			type scenario struct {
+				name, term   string
+				conversation bool
+			}
+			scenarios := []scenario{
+				{"global arqiuvo", "arqiuvo", false}, {"global docun", "docun", false},
+				{"global faturamento", "faturamento", false}, {"global viedo", "viedo", false},
+			}
+			if *indexBenchWeb {
+				scenarios = append(scenarios, scenario{"conversation arqiuvo", "arqiuvo", true},
+					scenario{"conversation docun", "docun", true}, scenario{"conversation long maepar", "maepar", true})
+			}
+			addresses := make([]string, len(scenarios))
+			for n, scenario := range scenarios {
+				params := url.Values{"q": {scenario.term}, "limit": {"20"}}
+				if *indexBenchWeb {
+					params.Set("engineId", string(engineID))
+					params.Set("searchType", "messages")
+					if scenario.conversation {
+						params.Set("accountId", string(c.AccountID))
+						params.Set("conversationId", string(c.ID))
+						params.Set("presentation", "conversation")
+						params.Set("limit", "50")
+					}
+				}
+				addresses[n] = serverURL + route + "?" + params.Encode()
+				requireIndexTest(t, measure(t.Context(), client, addresses[n]))
 			}
 
 			// Fixed offered rates. Each lane queues work and includes time spent
 			// waiting behind earlier requests. The writer uses actual archive
 			// message acceptance and commits all offered messages.
-			const queries = 120
-			const writes = 240
+			queries := 30 * len(scenarios)
+			writes := 2 * queries
 			const queryInterval = 100 * time.Millisecond
 			const writeInterval = 50 * time.Millisecond
 			type job struct {
@@ -143,8 +193,8 @@ func TestExperimentalMessageIndexIngestionBenchmark(t *testing.T) {
 			for range 4 {
 				workers.Go(func() {
 					for task := range queryJobs {
-						n := task.n % len(terms)
-						err := measureIndexRequest(t.Context(), client, addresses[n])
+						n := task.n % len(scenarios)
+						err := measure(t.Context(), client, addresses[n])
 						queryResults <- struct {
 							index  int
 							result indexMeasurement
@@ -198,7 +248,7 @@ func TestExperimentalMessageIndexIngestionBenchmark(t *testing.T) {
 			elapsed := time.Since(start)
 			close(queryResults)
 			close(writeResults)
-			var readTimes [4][]time.Duration
+			readTimes := make([][]time.Duration, len(scenarios))
 			for result := range queryResults {
 				requireIndexTest(t, result.result.err)
 				readTimes[result.index] = append(readTimes[result.index], result.result.latency)
@@ -212,10 +262,10 @@ func TestExperimentalMessageIndexIngestionBenchmark(t *testing.T) {
 				t.Fatalf("committed %d out of %d offered messages", len(writeTimes), writes)
 			}
 			for n, samples := range readTimes {
-				if len(samples) != queries/len(terms) {
-					t.Fatalf("completed %d queries for %s", len(samples), terms[n])
+				if len(samples) != queries/len(scenarios) {
+					t.Fatalf("completed %d queries for %s", len(samples), scenarios[n].name)
 				}
-				t.Logf("%s %s HTTP p95=%s n=%d", mode, terms[n], indexP95(samples), len(samples))
+				t.Logf("%s %s HTTP p95=%s n=%d", mode, scenarios[n].name, indexP95(samples), len(samples))
 			}
 			t.Logf("%s archive ingest p95=%s committed=%d elapsed=%s", mode, indexP95(writeTimes), writes, elapsed)
 			retained := make(map[string]bool, len(archiveIDs))
@@ -239,4 +289,29 @@ func TestExperimentalMessageIndexIngestionBenchmark(t *testing.T) {
 			}
 		})
 	}
+}
+
+func measureHighlightedSearch(ctx context.Context, client *http.Client, address string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
+	if err != nil {
+		return err
+	}
+	response, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = response.Body.Close() }()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+	markup := string(body)
+	if response.StatusCode != http.StatusOK || !strings.Contains(markup, "data-search-state=\"ready\"") ||
+		!strings.Contains(markup, "class=\"oie-search-highlight\"") {
+		return fmt.Errorf("search returned %d without highlighted results for %s", response.StatusCode, req.URL.RawQuery)
+	}
+	if req.URL.Query().Get("presentation") == "conversation" && !strings.Contains(markup, "data-search-ranges=") {
+		return fmt.Errorf("conversation search returned no body ranges for %s", req.URL.RawQuery)
+	}
+	return nil
 }

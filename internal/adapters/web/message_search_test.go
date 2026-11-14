@@ -102,6 +102,30 @@ func TestCompactSearchStartsNearFirstHighlight(t *testing.T) {
 	}
 }
 
+func TestRoomSearchRangesUseTheVerifiedExcerpt(t *testing.T) {
+	leading := strings.Repeat("Notificações da equipe. ", 2000) + "🔭 "
+	excerpt := "O arquivo chegou."
+	pattern := searchHighlightPattern("arqiuvo")
+	ranges := roomSearchRanges(leading+excerpt, excerpt, pattern.Spans(excerpt))
+	var got [][2]int
+	if err := json.Unmarshal([]byte(ranges), &got); err != nil {
+		t.Fatal(err)
+	}
+	start := len([]rune(leading+"O ")) + 1 // UTF-16 encodes the telescope in two units.
+	if len(got) != 1 || got[0] != [2]int{start, start + len("arquivo")} {
+		t.Fatalf("ranges %s do not point to the authored excerpt", ranges)
+	}
+	for _, clipped := range []string{"subarquivo chegou.", "arquivoX"} {
+		const fragment = "arquivo"
+		if got := roomSearchRanges(clipped, fragment, pattern.Spans(fragment)); got != "" {
+			t.Fatalf("marked a clipped word %q in %q", got, clipped)
+		}
+	}
+	if got := roomSearchRanges("Outro texto", excerpt, pattern.Spans(excerpt)); got != "" {
+		t.Fatalf("marked a different source: %s", got)
+	}
+}
+
 func searchTestPage() engineapi.MessageSearchPage {
 	at := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
 	return engineapi.MessageSearchPage{Query: "needle", Items: []engineapi.MessageSearchHit{{Message: engineapi.Message{Id: testMessage, RevisionId: testRevision, AccountId: testAccount, ConversationId: testChat, CreatedAt: at}, MatchedRevisionId: testRevision, MatchedAt: at, MatchKind: "text", Excerpt: "<img src=x onerror=alert(1)>"}}, MetadataIndexing: engineapi.SharedContentIndexing{State: "complete", IndexedMessages: 1, TotalMessages: 1}}
@@ -299,15 +323,20 @@ func TestSavedContactsRequireScopedDirectoryEvidence(t *testing.T) {
 }
 
 func TestSearchNavigationSeparatesGlobalAndConversationScopes(t *testing.T) {
-	v := view{GlobalMessageSearch: true, ConversationSearchOpen: true, ConversationSearchQuery: "inner", ConversationSearchHistory: true, Section: "chats", Filter: "unread", Query: "old title", ChatID: testChat, ChatOpen: true, Locale: "en", Theme: "dark", EngineID: testEngine, MessageSearch: messageSearchView{Query: "outer", AccountID: testAccount, IncludeHistory: true}}
+	v := view{GlobalMessageSearch: true, ConversationSearchOpen: true, ConversationSearchQuery: "inner", ConversationSearchHistory: true, ConversationSearchRevision: testRevision, FocusMessage: testMessage, Section: "chats", Filter: "unread", Query: "old title", ChatID: testChat, ChatOpen: true, Locale: "en", Theme: "dark", EngineID: testEngine, MessageSearch: messageSearchView{Query: "outer", AccountID: testAccount, IncludeHistory: true}}
 	same, _ := url.Parse(v.href("chat", testChat))
-	if same.Query().Get("chatQuery") != "inner" || same.Query().Get("searchQuery") != "outer" {
+	if same.Query().Get("chatQuery") != "inner" || same.Query().Get("searchQuery") != "outer" || same.Query().Get("chatSearchRevision") != testRevision {
 		t.Fatal("same-chat navigation lost an independent query")
 	}
 	changed, _ := url.Parse(v.href("chat", testMessage))
 	if changed.Query().Has("chatQuery") || changed.Query().Has("chatSearch") || changed.Query().Get("searchQuery") != "outer" {
 		t.Fatal("different conversation inherited the old conversation query")
 	}
+	differentMessage, _ := url.Parse(v.href("message", testChat))
+	if differentMessage.Query().Has("chatSearchRevision") {
+		t.Fatal("different focused message inherited the historical revision")
+	}
+
 	contact := engineapi.Contact{AccountId: testAccount, Address: "friend@example.test"}
 	target, _ := url.Parse(v.messageSearchContactHref(contact))
 	if target.Path != "/" || target.Query().Get("open") != "newchat" || target.Query().Get("newChatAddress") != contact.Address || target.Query().Get("account") != testAccount {

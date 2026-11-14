@@ -14,7 +14,7 @@
  const routeID='oie-route';
  const replacesWorkspace=kind=>kind==='oie-app'||kind===routeID;
  const kinds=['oie-app',routeID,'chat-info-content','conversation-pane','shared-content-scroll','shared-search-results','favorites-results','account-workspace','appearance-settings','scheduled-results','schedule-editor','message-timeline',inboxID];
- const chatQueryKeys=['message','timelineCursor','timelineDirection','chatSearch','chatQuery','chatIncludeHistory'];
+ const chatQueryKeys=['message','timelineCursor','timelineDirection','chatSearch','chatQuery','chatIncludeHistory','chatSearchRevision'];
  const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
  function pageCount(value){
   return /^[0-9]{1,2}$/.test(value)&&Number(value)<=50?Number(value):undefined;
@@ -220,7 +220,7 @@
  }
  function shellKey(url, ignored=[]){
   const q=new URLSearchParams(url.search);
-  for(const key of ['chat','inbox','message','open','infoView','infoType','infoCursor','infoQuery','infoFocus','searchQuery','searchAccount','searchType','searchConversation','searchCursor','searchEngine','includeEditHistory','searchMode','chatSearch','chatQuery','chatIncludeHistory',...ignored])q.delete(key);
+  for(const key of ['chat','inbox','message','open','infoView','infoType','infoCursor','infoQuery','infoFocus','searchQuery','searchAccount','searchType','searchConversation','searchCursor','searchEngine','includeEditHistory','searchMode','chatSearch','chatQuery','chatIncludeHistory','chatSearchRevision',...ignored])q.delete(key);
   for(const key of [...q.keys()])if(!q.get(key))q.delete(key);
   q.set('section',q.get('section')||'chats');q.set('filter',inboxFilter(q));q.set('lang',q.get('lang')||document.documentElement.lang);q.set('theme',q.get('theme')||app()?.dataset.routeTheme||'system');q.sort();return q.toString();
  }

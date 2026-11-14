@@ -69,7 +69,15 @@ func (i *messageIndex) candidates(ctx context.Context, q *dbgen.Queries, p dbgen
 	// The first SELECT (the room count when scoped) pins the WAL snapshot.
 	// Pending work in that snapshot covers stale or absent postings from a
 	// batch that was already in progress when the epoch was captured.
-	pending, err := q.ListMessageSearchUnindexed(ctx, searchCandidateLimit+1)
+	var pending []string
+	var err error
+	if p.ConversationID != "" || p.AccountID != "" || p.AccountIds != "[]" {
+		pending, err = q.ListScopedMessageSearchUnindexed(ctx, dbgen.ListScopedMessageSearchUnindexedParams{
+			ConversationID: p.ConversationID, AccountID: p.AccountID, AccountIds: p.AccountIds, MaxIds: searchCandidateLimit + 1,
+		})
+	} else {
+		pending, err = q.ListMessageSearchUnindexed(ctx, searchCandidateLimit+1)
+	}
 	if err != nil || len(pending) > searchCandidateLimit {
 		return nil, false
 	}

@@ -139,10 +139,10 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
         if(m===layoutMessages[1])base.preview={kind:'link'};
         const rows=(fold(m.originalText).includes(fold(q))||m===markdownHit&&q==='viedo')?[{...base,matchedRevisionId:m===corpus[1]?id(9001):m.revisionId,historical:false,excerpt:m.originalText}]:[];
         if(m===previewMessage&&q==='platafromas')rows.push({...base,matchedRevisionId:m.revisionId,historical:false,matchKind:'metadata',excerpt:otherURL+' cached description',preview:{kind:'link',url:matchURL,faviconHash:senderHash}});
-        if(history&&m===corpus[0]&&fold('Pineapple original').includes(fold(q)))rows.push(...[2,1].map(n=>({...base,matchedRevisionId:id(8000+n),matchedAt:`2026-11-09T12:00:0${n}Z`,historical:true,excerpt:'Pineapple prior version '+n})));
+        if(history&&m===corpus[0]&&(fold('Pineapple original').includes(fold(q))||q==='Pineapple prior'))rows.push(...[2,1].map(n=>({...base,matchedRevisionId:id(8000+n),matchedAt:`2026-11-09T12:00:0${n}Z`,historical:true,excerpt:'Pineapple prior version '+n})));
         return rows;
       }).sort((a,b)=>new Date(b.message.createdAt).getTime()-new Date(a.message.createdAt).getTime()||b.message.id.localeCompare(a.message.id)||Number(a.historical)-Number(b.historical)||b.matchedAt.localeCompare(a.matchedAt));
-      const limit=conversation===chat.id?Math.min(7,Number(u.searchParams.get('limit')||50)):Number(u.searchParams.get('limit')||50),items=hits.slice(offset,offset+limit);
+      const limit=conversation===chat.id?Math.min(q==='Pineapple prior'?1:7,Number(u.searchParams.get('limit')||50)):Number(u.searchParams.get('limit')||50),items=hits.slice(offset,offset+limit);
       const indexedMessages=corpus.filter(matchesScope).length,totalMessages=all.filter(matchesScope).length;
       return send(200,{query:q,...(selectedAccount?{accountId:selectedAccount}:{}),...(accountIds.length?{accountIds}:{}),...(conversation?{conversationId:conversation}:{}),includeEditHistory:history,items,nextCursor:offset+limit<hits.length?Buffer.from(JSON.stringify({scope:fingerprint,offset:offset+limit})).toString('base64url'):undefined,metadataIndexing:{state:totalMessages===indexedMessages?'complete':'pending',indexedMessages,totalMessages}});
     }
@@ -448,6 +448,23 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     assert.equal(await page.evaluate(()=>window.OieRuntime.generation),generationBeforeChatSearchClose,'closing chat search does not navigate the workspace');
     assert.equal(await page.locator('body').getAttribute('data-focus-message'),corpus[0].id,'closing chat search keeps its selected source');
     findings.push('Global and per-chat queries coexist independently; next/previous traverse scoped pages without wrapping, preserve draft/global DOM/focus, highlight visible exact and fuzzy matches and keep timeline bounded to200 rows');
+
+    const historicalRoom=await fresh();
+    await historicalRoom.goto(initial()+'&chatSearch=1&chatIncludeHistory=true&chatQuery=Pineapple+prior');
+    const historyBar=historicalRoom.locator('[data-conversation-search]');
+    const historicalExcerpt=historyBar.locator('[data-conversation-search-excerpt]');
+    await until(async()=> (await historicalExcerpt.innerText()).includes('version 2'),'first historical result');
+    await historyBar.locator('[data-conversation-search-older]').click();
+    await until(async()=> (await historicalExcerpt.innerText()).includes('version 1'),'historical result on second page');
+    const historicalURL=new URL(historicalRoom.url());
+    assert.equal(historicalURL.searchParams.get('chatSearchRevision'),id(8001));
+    await historicalRoom.reload();
+    await until(async()=> (await historicalExcerpt.innerText()).includes('version 1'),'reload keeps the selected historical revision');
+    await historyBar.locator('[data-conversation-search-newer]').click();
+    await until(async()=> (await historicalExcerpt.innerText()).includes('version 2'),'newer navigation works after restoring the historical page');
+    await historyBar.locator('[data-conversation-search-close]').click();
+    assert.equal(new URL(historicalRoom.url()).searchParams.has('chatSearchRevision'),false);
+    await historicalRoom.close();
 
     const fuzzyRoom=await fresh({viewport:{width:390,height:844},locale:'pt-BR'});
     await fuzzyRoom.goto(base+'/?chat='+layoutRoom.id+'&account='+account+'&lang=pt-BR&chatSearch=1&chatQuery=viedo');

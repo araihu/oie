@@ -137,6 +137,9 @@ type Querier interface {
 	ListRoomArchiveConversations(ctx context.Context, accountID string) ([]Conversation, error)
 	ListRoomIntents(ctx context.Context) ([]RoomIntent, error)
 	ListScheduledMessages(ctx context.Context, arg ListScheduledMessagesParams) ([]ListScheduledMessagesRow, error)
+	// Filter against the retained message in the same snapshot. Deleted IDs can
+	// still need index maintenance, but cannot contribute a search result.
+	ListScopedMessageSearchUnindexed(ctx context.Context, arg ListScopedMessageSearchUnindexedParams) ([]string, error)
 	// The catalog and a bounded timeline use different driving indexes.
 	ListSharedContent(ctx context.Context, arg ListSharedContentParams) ([]ListSharedContentRow, error)
 	ListStarredMessages(ctx context.Context, arg ListStarredMessagesParams) ([]ListStarredMessagesRow, error)

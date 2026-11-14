@@ -35,6 +35,25 @@ SELECT message_id FROM message_search_exceptions
 ORDER BY message_id
 LIMIT sqlc.arg(max_ids);
 
+-- name: ListScopedMessageSearchUnindexed :many
+-- Filter against the retained message in the same snapshot. Deleted IDs can
+-- still need index maintenance, but cannot contribute a search result.
+SELECT p.message_id FROM message_search_pending p
+WHERE EXISTS(SELECT 1 FROM messages m
+ WHERE m.id=p.message_id
+  AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
+  AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
+  AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT)))))
+UNION
+SELECT e.message_id FROM message_search_exceptions e
+WHERE EXISTS(SELECT 1 FROM messages m
+ WHERE m.id=e.message_id
+  AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
+  AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
+  AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT)))))
+ORDER BY message_id
+LIMIT sqlc.arg(max_ids);
+
 -- name: ListMessageSearchBuildIDs :many
 SELECT id FROM messages WHERE id>sqlc.arg(cursor) ORDER BY id LIMIT sqlc.arg(batch_limit);
 

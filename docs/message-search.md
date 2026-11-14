@@ -112,9 +112,12 @@ message, including the link and any accompanying text in the snippet.
 The sidebar and floating dialog highlight visible query terms in the message
 and URL, ignoring case and accents. The conversation toolbar uses the same
 matching rules for saved messages and paints the current visible text when the
-source ranges can be mapped to that revision. It keeps the selected row outlined
-for unsupported projections or browsers without custom text highlights. Matches
-from edit history or link metadata display a separate highlighted excerpt.
+highlighted excerpt can be mapped to that revision. Long messages use the
+bounded excerpt for their inline highlight. The selected row stays outlined for
+unsupported projections or browsers without custom text highlights. Matches from
+edit history or link metadata display a separate highlighted excerpt. The
+conversation URL keeps the selected historical revision across reloads, including
+results reached through pagination.
 
 Each current message result can show one compact preview of indexed shared
 content. Link results show cached page artwork when available, then the cached

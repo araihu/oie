@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/araihu/oie/internal/search"
@@ -14,13 +16,27 @@ func searchSourceDigest(text string) string {
 	return hex.EncodeToString(digest[:])
 }
 
-// Room ranges address UTF-16 positions in the same message snapshot as the
-// search result. They are emitted only for the conversation response.
-func roomSearchRanges(text string, pattern *search.Highlight) string {
-	spans := pattern.Spans(text)
-	if len(spans) == 0 {
+// Room ranges project the already-highlighted excerpt onto its original text.
+// Only the excerpt is matched. The full body is used to locate its offsets.
+func roomSearchRanges(text, excerpt string, spans []search.Span) string {
+	if len(spans) == 0 || len(text) > search.MaxHighlightBytes {
 		return ""
 	}
+	start := strings.Index(text, excerpt)
+	if start < 0 {
+		return ""
+	}
+	end := start + len(excerpt)
+	// The engine may cut its excerpt through a word. Do not turn a
+	// partial word at an excerpt boundary into a new fuzzy prefix.
+	before, _ := utf8.DecodeLastRuneInString(text[:start])
+	after, _ := utf8.DecodeRuneInString(text[end:])
+	isWord := func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsMark(r) }
+	firstWordEnd := strings.IndexFunc(excerpt, func(r rune) bool { return !isWord(r) })
+	if firstWordEnd < 0 {
+		firstWordEnd = len(excerpt)
+	}
+	lastWordStart := len(strings.TrimRightFunc(excerpt, isWord))
 	ranges := make([][2]int, 0, len(spans))
 	byteOffset, units := 0, 0
 	advance := func(end int) int {
@@ -34,7 +50,13 @@ func roomSearchRanges(text string, pattern *search.Highlight) string {
 		return units
 	}
 	for _, span := range spans {
-		ranges = append(ranges, [2]int{advance(span.Start), advance(span.End)})
+		if isWord(before) && span.Start < firstWordEnd || isWord(after) && span.End > lastWordStart {
+			continue
+		}
+		ranges = append(ranges, [2]int{advance(start + span.Start), advance(start + span.End)})
+	}
+	if len(ranges) == 0 {
+		return ""
 	}
 	encoded, _ := json.Marshal(ranges)
 	return string(encoded)

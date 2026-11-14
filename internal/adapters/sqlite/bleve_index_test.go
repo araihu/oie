@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +21,7 @@ import (
 	"github.com/araihu/oie/internal/adapters/httpapi"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
+	"github.com/araihu/oie/internal/adapters/web"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	"github.com/blevesearch/bleve/v2"
@@ -182,6 +185,79 @@ func TestExperimentalMessageIndexParity(t *testing.T) {
 	checkIndexParity(t, s, domain.MessageSearchQuery{Search: "antediluviano cotacoes", Limit: 2})
 }
 
+func TestExperimentalMessageIndexScopesTheOverlayBeforeCounting(t *testing.T) {
+	old, e, chat := outboxFixture(t)
+	seedIndexBenchmark(t, old, chat, searchSmallRoom)
+	at := time.Now().UTC()
+	hit := replySeed(t, old, chat, "arquivo de revisão", at, nil, nil)
+	account, err := e.Register(t.Context(), migrationID(), application.RegisterInput{Protocol: "xmpp", Address: "foreign@localhost", Label: "Foreign"})
+	requireIndexTest(t, err)
+	other := domain.Conversation{ID: migrationID(), RevisionID: migrationID(), AccountID: account.Account.ID, PeerID: migrationID(), Kind: "direct", Address: "review@localhost", Title: "Review", UpdatedAt: at}
+	replySeed(t, old, other, "other chat", at, nil, nil)
+	const insert = `WITH RECURSIVE seq(n) AS (VALUES(1) UNION ALL SELECT n+1 FROM seq WHERE n<?1)
+	 INSERT INTO messages(id,revision_id,account_id,conversation_id,provider_id,is_own,state,payload,created_at_ms)
+	 SELECT printf('019cd001-0000-7000-8000-%012x',n),'',?3,?4,'',0,'received',
+	 json_object('OriginalText',?2),1700000000000+n FROM seq`
+	_, err = old.db.ExecContext(t.Context(), insert, searchCandidateLimit+1, strings.Repeat("a", searchIndexMaxDocumentBytes+1), other.AccountID, other.ID)
+	requireIndexTest(t, err)
+	localException := replySeed(t, old, chat, strings.Repeat("x ", searchIndexMaxDocumentBytes/2)+" arquivo", at, nil, nil)
+	dir := old.dir
+	requireIndexTest(t, old.Close())
+	s, err := Open(t.Context(), dir, migrationID(), WithExperimentalSearch())
+	requireIndexTest(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	waitIndexReady(t, s, "")
+	overlay, err := s.read.ListMessageSearchUnindexed(t.Context(), searchCandidateLimit+1)
+	requireIndexTest(t, err)
+	if len(overlay) != searchCandidateLimit+1 {
+		t.Fatalf("expected unscoped overflow, got %d", len(overlay))
+	}
+
+	for _, p := range []dbgen.SearchMessagesParams{
+		{Search: "arqiuvo", AccountIds: "[]", ConversationID: string(chat.ID)},
+		{Search: "arqiuvo", AccountIds: "[]", AccountID: string(chat.AccountID)},
+		{Search: "arqiuvo", AccountIds: jsonText([]domain.ID{chat.AccountID})},
+	} {
+		assertScopedIndexedCandidate(t, s, p, hit.ID)
+		assertScopedIndexedCandidate(t, s, p, localException.ID)
+	}
+	checkIndexParity(t, s, domain.MessageSearchQuery{Search: "arqiuvo", ConversationID: chat.ID, Limit: 5})
+	checkIndexParity(t, s, domain.MessageSearchQuery{Search: "arqiuvo", AccountID: chat.AccountID, Limit: 5})
+	checkIndexParity(t, s, domain.MessageSearchQuery{Search: "arqiuvo", Limit: 5})
+
+	// The presentation receives the same excerpts and source ranges even
+	// when the complete chronological SQL query provides the results.
+	indexed := openIndexTestWeb(t, openIndexTestHTTP(t, s).URL)
+	fallback := openIndexTestWeb(t, openIndexTestHTTP(t, chronologicalIndexControl{s}).URL)
+	engineID, _, err := s.Snapshot(t.Context())
+	requireIndexTest(t, err)
+	params := url.Values{"engineId": {string(engineID)}, "accountId": {string(chat.AccountID)}, "q": {"arqiuvo"}, "searchType": {"messages"}, "limit": {"5"}}
+	render := func(server *httptest.Server) string {
+		t.Helper()
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/ui/message-search?"+params.Encode(), nil)
+		requireIndexTest(t, err)
+		response, err := server.Client().Do(req)
+		requireIndexTest(t, err)
+		defer func() { _ = response.Body.Close() }()
+		body, err := io.ReadAll(response.Body)
+		requireIndexTest(t, err)
+		if response.StatusCode != http.StatusOK || !strings.Contains(string(body), `class="oie-search-highlight"`) {
+			t.Fatalf("search returned %d without highlighted results", response.StatusCode)
+		}
+		return string(body)
+	}
+	before := s.messageIndex.used.Load()
+	if render(indexed) != render(fallback) || s.messageIndex.used.Load() != before+1 {
+		t.Fatal("global search HTML differs or did not use Bleve")
+	}
+	params.Set("conversationId", string(chat.ID))
+	params.Set("presentation", "conversation")
+	got := render(indexed)
+	if !strings.Contains(got, "data-search-ranges=") || got != render(fallback) || s.messageIndex.used.Load() != before+2 {
+		t.Fatal("conversation search HTML or ranges differ, or did not use Bleve")
+	}
+}
+
 func TestExperimentalMessageIndexRecovery(t *testing.T) {
 	if dir := os.Getenv("OIE_TEST_CRASH_INDEX_DIR"); dir != "" {
 		crashMessageIndexAfterBatch(t, dir)
@@ -270,6 +346,15 @@ func openIndexTestHTTP(t *testing.T, repository application.Repository) *httptes
 	h, err := httpapi.New(e)
 	requireIndexTest(t, err)
 	server := httptest.NewServer(h)
+	t.Cleanup(server.Close)
+	return server
+}
+
+func openIndexTestWeb(t *testing.T, engineURL string) *httptest.Server {
+	t.Helper()
+	handler, err := web.New(engineURL)
+	requireIndexTest(t, err)
+	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	return server
 }

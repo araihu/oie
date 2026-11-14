@@ -189,9 +189,16 @@ templ messageSearchHit(v view,hit engineapi.MessageSearchHit,searchPattern *sear
 	if hit.SenderAvatarHash != nil {
 		senderAvatar.Src = avatarImageSource(*hit.SenderAvatarHash)
 	}
+	excerpt, sharedURL, preview := searchResultText(hit)
+	excerptSpans, urlSpans := searchPattern.Spans(excerpt), searchPattern.Spans(sharedURL)
+	if hit.MatchKind == "metadata" && len(excerptSpans) == 0 && len(urlSpans) == 0 {
+		if matched := searchPattern.Spans(hit.Excerpt); len(matched) != 0 {
+			excerpt, excerptSpans = hit.Excerpt, matched
+		}
+	}
 	ranges := ""
 	if v.MessageSearch.ConversationHighlight && !hit.Historical && hit.MatchKind == "text" {
-		ranges = roomSearchRanges(hit.Message.OriginalText,searchPattern)
+		ranges = roomSearchRanges(hit.Message.OriginalText,excerpt,excerptSpans)
 	}
 }}
 <article data-message-search-hit={hit.Message.Id+":"+hit.MatchedRevisionId} data-search-message={hit.Message.Id} data-search-revision={hit.MatchedRevisionId} data-search-historical={strconv.FormatBool(hit.Historical)} data-search-match-kind={string(hit.MatchKind)}
@@ -223,15 +230,6 @@ if conversationDomain != "" {
 if hit.Historical {
 @badge.Badge(badge.Config{Label:v.Text.SearchPriorVersion,Size:badge.SizeSM,Appearance:badge.AppearanceSoft})
 }
-{{
-	excerpt, sharedURL, preview := searchResultText(hit)
-	excerptSpans, urlSpans := searchPattern.Spans(excerpt), searchPattern.Spans(sharedURL)
-	if hit.MatchKind == "metadata" && len(excerptSpans) == 0 && len(urlSpans) == 0 {
-		if matched := searchPattern.Spans(hit.Excerpt); len(matched) != 0 {
-			excerpt, excerptSpans = hit.Excerpt, matched
-		}
-	}
-}}
 if excerpt!="" {
 <p class="oie-message-search-excerpt">@highlightSearchParts(searchTextPartsForSpans(excerpt,excerptSpans,v.MessageSearch.Compact))</p>
 }

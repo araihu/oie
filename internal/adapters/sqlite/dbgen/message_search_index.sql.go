@@ -249,6 +249,61 @@ func (q *Queries) ListMessageSearchUnindexed(ctx context.Context, maxIds int64) 
 	return items, nil
 }
 
+const listScopedMessageSearchUnindexed = `-- name: ListScopedMessageSearchUnindexed :many
+SELECT p.message_id FROM message_search_pending p
+WHERE EXISTS(SELECT 1 FROM messages m
+ WHERE m.id=p.message_id
+  AND (CAST(?2 AS TEXT)='' OR m.conversation_id=CAST(?2 AS TEXT))
+  AND (CAST(?3 AS TEXT)='' OR m.account_id=CAST(?3 AS TEXT))
+  AND (CAST(?4 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?4 AS TEXT)))))
+UNION
+SELECT e.message_id FROM message_search_exceptions e
+WHERE EXISTS(SELECT 1 FROM messages m
+ WHERE m.id=e.message_id
+  AND (CAST(?2 AS TEXT)='' OR m.conversation_id=CAST(?2 AS TEXT))
+  AND (CAST(?3 AS TEXT)='' OR m.account_id=CAST(?3 AS TEXT))
+  AND (CAST(?4 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?4 AS TEXT)))))
+ORDER BY message_id
+LIMIT ?1
+`
+
+type ListScopedMessageSearchUnindexedParams struct {
+	MaxIds         int64
+	ConversationID string
+	AccountID      string
+	AccountIds     string
+}
+
+// Filter against the retained message in the same snapshot. Deleted IDs can
+// still need index maintenance, but cannot contribute a search result.
+func (q *Queries) ListScopedMessageSearchUnindexed(ctx context.Context, arg ListScopedMessageSearchUnindexedParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listScopedMessageSearchUnindexed,
+		arg.MaxIds,
+		arg.ConversationID,
+		arg.AccountID,
+		arg.AccountIds,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var message_id string
+		if err := rows.Scan(&message_id); err != nil {
+			return nil, err
+		}
+		items = append(items, message_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const removeMessageSearchException = `-- name: RemoveMessageSearchException :exec
 DELETE FROM message_search_exceptions WHERE message_id=?1
 `
