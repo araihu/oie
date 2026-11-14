@@ -17,6 +17,7 @@ import (
 	"github.com/araihu/goshtoso/components/tabs"
 	"github.com/araihu/goshtoso/components/textarea"
 	"github.com/araihu/goshtoso/components/textinput"
+	"github.com/araihu/goshtoso/components/tooltip"
 	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/araihu/oie/internal/adapters/web/appicons"
@@ -153,15 +154,18 @@ templ roomManagementBans(v view, state engineapi.RoomManagement, bansLoaded bool
 		@scrollregion.ScrollRegion(scrollregion.Config{Content: roomBanList(v, state, bansLoaded), RootClass: "oie-room-bans-list"})
 		{{ id := "room-ban-by-address" }}
 		<footer class="oie-room-ban-footer">
-			@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-room-ban-toggle"), button.WithAttrs(templ.Attributes{"id": id, "data-room-action-open": "", "aria-expanded": "false", "aria-controls": id + "-form"})) {
-				@glyph(heroicons.Icon16SolidPlus)
-				{ v.Text.RoomBanByAddress }
-			}
+			@tooltip.Tooltip(id+"-tooltip", v.Text.RoomBanByAddress, tooltip.WithDescription(v.Text.RoomBanByAddressHelp), tooltip.WithTrigger(roomBanToggle(v, id)), tooltip.WithPortal(true))
 			@roomTargetAction(v, *state.Revision, id, "", "affiliation", "outcast", v.Text.RoomBan, button.ToneDanger, "")
 		</footer>
 	</div>
 	for _, address := range state.Affiliations {
 		@roomBannedDetails(v, *state.Revision, address)
+	}
+}
+
+templ roomBanToggle(v view, id string) {
+	@button.Button(button.WithType("button"), button.WithTone(button.TonePrimary), button.WithRootClass("oie-icon-button oie-room-ban-toggle"), button.WithAttrs(templ.Attributes{"id": id, "data-room-action-open": "", "aria-label": v.Text.RoomBanByAddress, "aria-expanded": "false", "aria-controls": id + "-form"})) {
+		@glyph(heroicons.Icon16SolidPlus)
 	}
 }
 

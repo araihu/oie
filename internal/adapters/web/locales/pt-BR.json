@@ -500,6 +500,7 @@
   "RoomBans": "Banimentos",
   "RoomBan": "Banir da sala",
   "RoomBanByAddress": "Banir por endereço",
+  "RoomBanByAddressHelp": "Impeça alguém de entrar na sala pelo endereço, mesmo que nunca tenha participado.",
   "RoomUnban": "Retirar banimento",
   "RoomUnbanConfirm": "Retirar o banimento de {address}?",
   "RoomConfirmAction": "Confirmar",

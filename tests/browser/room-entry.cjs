@@ -558,6 +558,10 @@ async function waitFor(predicate) {
     assert.equal(managementCommands.at(-1).value,'none');
     const banTabs = roomPanel.getByRole('tablist');
     const banToggle = roomPanel.getByRole('button',{name:'Banir por endereço',exact:true});
+    await banToggle.hover();
+    const banHelp = page.getByRole('tooltip').filter({hasText:'Banir por endereço'});
+    await banHelp.getByText('Impeça alguém de entrar na sala pelo endereço, mesmo que nunca tenha participado.').waitFor();
+    assert.equal(await banToggle.getAttribute('aria-controls'),'room-ban-by-address-form');
     const banAddress = roomPanel.getByRole('textbox',{name:'Endereço da pessoa',exact:true});
     assert.equal(await banAddress.isVisible(),false);
     const footerBeforeScroll = await banToggle.boundingBox();

@@ -500,6 +500,7 @@
   "RoomBans": "Bans",
   "RoomBan": "Ban from room",
   "RoomBanByAddress": "Ban by address",
+  "RoomBanByAddressHelp": "Block someone from joining the room by address, even if they have never joined.",
   "RoomUnban": "Lift ban",
   "RoomUnbanConfirm": "Lift the ban on {address}?",
   "RoomConfirmAction": "Confirm",
