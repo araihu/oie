@@ -29,13 +29,20 @@ item, both revisions, source address, renderer version and output density.
 Plain-text excerpts, static Margo Markdown fragments and generated PDF PNG
 thumbnails use the same IndexedDB storage adapter. They share a seven-day,
 64-entry, 16-MiB device cache. Plain-text fallbacks for failed Markdown renders
-stay in RAM for 30 seconds. The existing database keeps PDF previews available
-through the upgrade. It stores derived previews. The same LRU library applies
-TTL and eviction inside transactions. Database connections are shared, closed
-on version change or page exit, and bounded by a store registry. Persistence
-failures fall back to RAM or normal rendering. Invalid entries are discarded
-and regenerated. Cached Markdown markup is checked against the static preview
-allowlist before it enters the page.
+stay in RAM for 30 seconds. When a card enters view, a bounded conditional range
+request checks the cached representation's ETag. A 304 reuses the rendered
+preview without transferring source bytes. A changed representation is rendered
+from the bytes returned by the conditional request. If the source omits an ETag,
+the renderer can reuse a preview after comparing the digest of its complete
+input. This covers the bounded text excerpt and PDFs that fit in the initial
+range. Larger PDFs without an ETag render again within the range budget.
+Existing entries without validators are regenerated when they are next used.
+
+The LRU library applies TTL and eviction inside transactions. Database
+connections are shared, closed on version change or page exit, and bounded by
+a store registry. Persistence failures fall back to RAM or normal rendering.
+Invalid entries are discarded and regenerated. Cached Markdown markup is
+checked against the static preview allowlist before it enters the page.
 This cache is distinct from drafts, pending submissions and retained files.
 
 ## HTTP representations

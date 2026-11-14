@@ -35,15 +35,16 @@ window.OieRuntime.register('previews', life => {
   life.cleanup(()=>{for(const observer of observers.values())observer.disconnect();near.clear();observed.clear();});
   function previewRoot(scope){
     if(scope.closest('#info-shared-results,[data-info-stars]'))return document.querySelector('#details-body');
-    return scope.closest('#forward-message-preview,#favorites-scroll,#shared-content-scroll,#message-timeline');
+    return scope.closest('#forward-message-dialog,#favorites-scroll,#shared-content-scroll,#message-timeline');
   }
   function observerFor(root){
     if(!root||typeof IntersectionObserver!=='function')return null;
-    if(!observers.has(root))observers.set(root,new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting)near.add(entry.target);else near.delete(entry.target);}scheduleAutomatic();},{root,rootMargin:'240px 0px',threshold:0.01}));
+    if(!observers.has(root))observers.set(root,new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting&&entry.target.isConnected)near.add(entry.target);else near.delete(entry.target);}scheduleAutomatic();},{root,rootMargin:'240px 0px',threshold:0.01}));
     return observers.get(root);
   }
   function trackImages(){
-    for(const scope of observed)if(!scope.isConnected){observers.get(scopeRoots.get(scope))?.unobserve(scope);scopeRoots.delete(scope);observed.delete(scope);near.delete(scope);}
+    for(const [root,observer] of observers)if(!root.isConnected){observer.disconnect();observers.delete(root);}
+    for(const scope of observed)if(!scope.isConnected||scopeRoots.get(scope)!==previewRoot(scope)){observers.get(scopeRoots.get(scope))?.unobserve(scope);scopeRoots.delete(scope);observed.delete(scope);near.delete(scope);}
     for(const scope of document.querySelectorAll('#message-timeline [data-preview-kind="image"],#shared-content-scroll [data-preview-kind="image"],#info-shared-results [data-preview-kind="image"],[data-favorite-source] [data-preview-kind="image"],[data-forward-preview] [data-preview-kind="image"]')){
       if(!observed.has(scope)){const root=previewRoot(scope);observed.add(scope);scopeRoots.set(scope,root);observerFor(root)?.observe(scope);}
     }

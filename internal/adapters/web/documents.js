@@ -71,10 +71,17 @@ window.OieRuntime.register('documents', life => {
  // Card previews only read bounded bytes for visible documents. Originals still
  // use the existing explicit viewer path, independently of preview failures.
  const previewChunk=64*1024,previewBudget=2*1024*1024,previewQueue=[],previewSeen=new WeakSet(),previewRequests=new Set();let previewActive=0;
- async function previewRange(record,start,end,controller,partial=false){
-  const response=await life.fetch(record.source,{credentials:'same-origin',cache:'default',redirect:'error',headers:{Range:`bytes=${start}-${end-1}`},signal:controller.signal});
+ function validPreviewTag(tag){return typeof tag==='string'&&tag.length<=1024&&/^(?:W\/)?"[\x21\x23-\x7e]*"$/.test(tag)}
+ const validPreviewDigest=value=>typeof value==='string'&&/^[0-9a-f]{64}$/.test(value);
+ async function previewRange(record,start,end,controller,{partial=false,etag='',ifRange=''}={}){
+  const headers={Range:`bytes=${start}-${end-1}`};
+  if(etag)headers['If-None-Match']=etag;
+  if(ifRange)headers['If-Range']=ifRange;
+  const response=await life.fetch(record.source,{credentials:'same-origin',cache:'no-store',redirect:'error',headers,signal:controller.signal});
+  if(response.status===304&&etag)return {unchanged:true};
   if(!response.ok)throw Error('unavailable');
   const kind=response.headers.get('Content-Type')?.split(';')[0].trim();if(kind!==(record.format==='pdf'?'application/pdf':'text/plain'))throw Error('type');
+  const responseTag=response.headers.get('ETag');
   const header=response.headers.get('Content-Range'),range=header&&/^bytes (\d+)-(\d+)\/(\d+)$/.exec(header),length=Number(response.headers.get('Content-Length'));
   if(response.status===206&&(!range||Number(range[1])!==start||Number(range[2])>=end||Number(range[3])<=Number(range[2])))throw Error('range');
   if(response.status!==206&&(start!==0||(!partial&&length>end))) {await response.body?.cancel();throw Error('range')}
@@ -82,14 +89,29 @@ window.OieRuntime.register('documents', life => {
   try{while(size<end-start){const {done,value}=await reader.read();if(done)break;const chunk=value.subarray(0,end-start-size);chunks.push(chunk);size+=chunk.length;if(chunk.length!==value.length&&!partial)throw Error('large')}if(partial)await reader.cancel();else{const rest=await reader.read();if(!rest.done)throw Error('large')}}finally{await reader.cancel().catch(()=>{});reader.releaseLock()}
   const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length}
   if(range&&size!==Number(range[2])-start+1)throw Error('range');
-  return {bytes,total:range?Number(range[3]):size,range:!!range};
+  return {bytes,total:range?Number(range[3]):length||size,etag:validPreviewTag(responseTag)?responseTag:''};
  }
- async function producePreview(record,{signal}){
+ async function producePreview(record,{signal,previous}){
   const controller=new AbortController(),cancel=()=>controller.abort();signal.addEventListener('abort',cancel,{once:true});if(signal.aborted)controller.abort();
-  try{return await renderDocumentPreview(record,controller)}finally{signal.removeEventListener('abort',cancel);controller.abort()}
+  try{
+   const initial=await previewRange(record,0,previewChunk,controller,{partial:record.format!=='pdf',etag:previous?.etag});
+   if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
+   if(initial.unchanged)return previous;
+   // For sources without an ETag, only reuse a render if we can verify all its
+   // inputs. Text rendering uses this excerpt; PDF.js may need other ranges.
+   let digest='';
+   if(!initial.etag&&globalThis.crypto?.subtle&&(record.format!=='pdf'||initial.total===initial.bytes.length)){
+    const input=new Uint8Array(initial.bytes.length+1);
+    input.set(initial.bytes);input[input.length-1]=Number(initial.total>initial.bytes.length);
+    const hash=await crypto.subtle.digest('SHA-256',input);
+    digest=Array.from(new Uint8Array(hash),byte=>byte.toString(16).padStart(2,'0')).join('');
+    if(previous?.digest===digest)return previous;
+   }
+   const value=await renderDocumentPreview(record,controller,initial);
+   return {...value,etag:initial.etag,digest};
+  }finally{signal.removeEventListener('abort',cancel);controller.abort()}
  }
- async function renderDocumentPreview(record,controller){
-  const initial=await previewRange(record,0,previewChunk,controller,record.format!=='pdf');if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
+ async function renderDocumentPreview(record,controller,initial){
   if(record.format!=='pdf'){
    // A range can end inside a UTF-8 sequence. Decode incrementally without
    // flushing that final incomplete code point into a replacement character.
@@ -107,7 +129,7 @@ window.OieRuntime.register('documents', life => {
     if(!Number.isSafeInteger(begin)||!Number.isSafeInteger(end)||begin<0||end<=begin||end>initial.total||(spent+=end-begin)>previewBudget){failed(Error('large'));return}
     // PDF.js can request several disjoint objects at once. Serialize each
     // document's ranges so two preview jobs still use at most two HTTP readers.
-    rangeQueue=rangeQueue.then(async()=>{if(controller.signal.aborted)return;const part=await previewRange(record,begin,end,controller);if(!controller.signal.aborted){if(part.total!==initial.total)throw Error('changed');this.onDataRange(begin,part.bytes)}}).catch(error=>{if(!controller.signal.aborted)failed(error)});
+    rangeQueue=rangeQueue.then(async()=>{if(controller.signal.aborted)return;const part=await previewRange(record,begin,end,controller,{ifRange:initial.etag.startsWith('"')?initial.etag:''});if(!controller.signal.aborted){if(part.total!==initial.total||part.etag!==initial.etag)throw Error('changed');this.onDataRange(begin,part.bytes)}}).catch(error=>{if(!controller.signal.aborted)failed(error)});
    }
    abort(){controller.abort()}
   }
@@ -119,6 +141,7 @@ window.OieRuntime.register('documents', life => {
  }
  const previewMarkdownTags=new Set('article section div figure figcaption h1 h2 h3 h4 h5 h6 p ul ol li blockquote pre code span strong em del s hr br table thead tbody tfoot tr th td dl dt dd sup sub'.split(' '));
  async function validStoredPreview(value,record){
+  if(!validPreviewTag(value?.etag)&&!validPreviewDigest(value?.digest))return false;
   if(record.format==='text')return value?.kind==='text'&&typeof value.text==='string'&&value.text.length<=1800&&!value.text.includes('\u0000');
   if(record.format==='markdown'){
    if(value?.kind!=='markdown'||typeof value.html!=='string'||value.html.length>1024*1024)return false;
@@ -136,8 +159,9 @@ window.OieRuntime.register('documents', life => {
   ttl:(value,record)=>record.format==='markdown'&&value.kind==='text'?30000:30*60*1000,
   size:value=>value.kind==='image'?value.blob.size:(value.text??value.html).length*2,
   storage:window.OieCache.indexedDBStore({name:'oie.pdf-previews.v1',store:'thumbnails'}),
-  persist:(record,value)=>record.format!=='markdown'||value?.kind!=='text',
+  persist:(record,value)=>value===undefined||(Boolean(value.etag||value.digest)&&(record.format!=='markdown'||value.kind==='markdown')),
   validate:validStoredPreview,
+  revalidate:true,
  });
  async function paintPreview(card,record,controller){
   record={...record,output:record.format==='pdf'?Math.min(devicePixelRatio||1,2):1};

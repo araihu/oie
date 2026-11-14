@@ -7,7 +7,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const text=await fs.readFile(path.join(__dirname,'fixtures/tiny-document.txt')),pdfBytes=await fs.readFile(path.join(__dirname,'fixtures/tiny-document.pdf'));
  const markdownBytes=Buffer.from('# Release notes\n\n**Fixed** a bug.\n\n- First change\n- Second change\n\n> A quoted note\n\n```go\nfmt.Println("Olá")\n```\n\n[Documentation](https://docs.example.test/)\n');
  const engine=id(1),account=id(2),other=id(3),chat=id(4),revision=id(5),good=id(20),pdf=id(21),bad=id(22),held=id(23),oversize=id(24),foreign=id(25),streams=new Set();
- const state={seq:0,failure:true,hold:false,foreignEngine:false,pdfCatalog:null,reads:[],peakReaders:0,activeReaders:0,busyReaders:0,pending:[],aborted:[],writes:0};
+ const state={seq:0,failure:true,hold:false,foreignEngine:false,pdfCatalog:null,reads:[],versions:new Map(),peakReaders:0,activeReaders:0,busyReaders:0,pending:[],aborted:[],writes:0};
  const unsupported=id(35),sparse=id(36),budget=id(37),burst=id(38);
  // Unused stream data can be skipped with sparse ranges. A long comment before
  // required page content needs more bytes and must stop at the preview budget.
@@ -43,7 +43,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   }
   const match=u.pathname.match(/^\/api\/v1\/shared-content\/([^/]+)\/content$/);
   if(match){assert.equal(u.search,'');const file=definitions.find(file=>file.id===match[1]);if(!file)return send(404,{status:404});state.reads.push({id:file.id,range:req.headers.range||''});
-   const respond=()=>{if(file.id===bad&&state.failure)return send(404,{type:'urn:oie:problem:not_found',title:'Not found',status:404,code:'not_found'});const body=file.id===burst?burstBytes:file.id===budget?budgetBytes:file.id===sparse?sparseBytes:file.id===pdf?pdfBytes:file.id===oversize?Buffer.alloc((2<<20)+1,120):file.name.endsWith('.md')?markdownBytes:text;let start=0,end=body.length-1,status=200;if(req.headers.range){const range=/^bytes=(\d+)-(\d*)$/.exec(req.headers.range);if(!range||Number(range[1])>=body.length){res.setHeader('Content-Range','bytes */'+body.length);return send(416,{status:416,code:'invalid_range'})}start=Number(range[1]);if(range[2])end=Math.min(Number(range[2]),end);status=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${body.length}`)}res.setHeader('Content-Type',file.mime==='application/pdf'?'application/pdf':'text/plain');res.setHeader('Content-Length',end-start+1);res.setHeader('Content-Disposition','inline; filename="'+file.name+'"');res.setHeader('Accept-Ranges','bytes');res.setHeader('ETag','"original-document-v1"');res.writeHead(status);res.end(body.subarray(start,end+1))};
+   const respond=()=>{if(file.id===bad&&state.failure)return send(404,{type:'urn:oie:problem:not_found',title:'Not found',status:404,code:'not_found'});const version=state.versions.get(file.id),tag=version?version.tag:'"original-document-v1"';const body=version?.body??(file.id===burst?burstBytes:file.id===budget?budgetBytes:file.id===sparse?sparseBytes:file.id===pdf?pdfBytes:file.id===oversize?Buffer.alloc((2<<20)+1,120):file.name.endsWith('.md')?markdownBytes:text);let start=0,end=body.length-1,status=200;if(req.headers.range&&(!req.headers['if-range']||req.headers['if-range']===tag)){const range=/^bytes=(\d+)-(\d*)$/.exec(req.headers.range);if(!range||Number(range[1])>=body.length){res.setHeader('Content-Range','bytes */'+body.length);return send(416,{status:416,code:'invalid_range'})}start=Number(range[1]);if(range[2])end=Math.min(Number(range[2]),end);status=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${body.length}`)}res.setHeader('Content-Type',file.mime==='application/pdf'?'application/pdf':'text/plain');res.setHeader('Content-Length',end-start+1);res.setHeader('Content-Disposition','inline; filename="'+file.name+'"');res.setHeader('Accept-Ranges','bytes');if(tag)res.setHeader('ETag',tag);res.writeHead(status);res.end(body.subarray(start,end+1))};
    if(file.id===held&&state.hold&&!req.headers.range){res.setHeader('Content-Type','text/plain');res.setHeader('Content-Length',text.length);res.setHeader('Content-Disposition','inline; filename="pending.txt"');res.writeHead(200);res.write(text.subarray(0,20));const request={res,respond:()=>res.end(text.subarray(20))};state.pending.push(request);res.on('close',()=>{if(!res.writableEnded)state.aborted.push(file.id)});return}if(req.headers.range){state.activeReaders++;state.peakReaders=Math.max(state.peakReaders,state.activeReaders);if(state.activeReaders>4){state.activeReaders--;state.busyReaders++;return send(503,{status:503,code:'media_busy'})}res.once('close',()=>state.activeReaders--);setTimeout(()=>{if(!res.destroyed&&!res.writableEnded)respond()},40);return}return respond();
   }
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
@@ -63,6 +63,9 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
   let {page,context}=await contextFor();await page.goto(docsURL());await card(page,good).waitFor({state:'visible'});await until(async()=>{await card(page,good).scrollIntoViewIfNeeded();return await card(page,good).getAttribute('data-document-preview-state')==='ready'},'automatic text excerpt');assert.equal(count(good),0);assert(await card(page,good).locator('[data-document-excerpt]').textContent().then(value=>value.includes('<script>')));assert.equal(await card(page,good).locator('[data-document-open]').textContent().then(value=>value.includes('Open document')),false);await card(page,pdf).scrollIntoViewIfNeeded();await until(async()=>await card(page,pdf).getAttribute('data-document-preview-state')==='ready'&&await card(page,pdf).locator('[data-document-preview] img[data-document-pdf-preview]').count()===1,'automatic first-page PDF preview');assert.equal(count(pdf),0);
+  const conditional=[];
+  page.on('response',response=>{const match=new URL(response.url()).pathname.match(/\/ui\/shared-content\/([^/]+)\/content$/);if(match&&response.request().headers()['if-none-match'])conditional.push({id:match[1],status:response.status()})});
+  const revalidations=(item,status=304)=>conditional.filter(entry=>entry.id===item&&entry.status===status).length;
   // Exercise the large fixtures together to retain range concurrency coverage.
   state.pdfCatalog=[sparse,budget,burst];
   await page.reload();
@@ -73,10 +76,17 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const pdfRanges=()=>state.reads.filter(read=>read.id===pdf&&read.range).length;
   const pdfReady=async()=>{await card(page,pdf).scrollIntoViewIfNeeded();await until(async()=>await card(page,pdf).getAttribute('data-document-preview-state')==='ready','PDF card ready')};
   const cacheEntries=()=>page.evaluate(()=>new Promise((resolve,reject)=>{const request=indexedDB.open('oie.pdf-previews.v1',1);request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,tx=db.transaction('thumbnails','readonly'),get=tx.objectStore('thumbnails').getAll();get.onsuccess=()=>resolve(get.result.map(e=>({key:e.key,bytes:e.bytes,createdAt:e.createdAt,usedAt:e.usedAt})));tx.oncomplete=()=>db.close()}}));
-  await pdfReady();await until(async()=>await card(page,pdf).getAttribute('data-document-preview-stored')==='true','persistent PDF thumbnail committed');const cachedRanges=pdfRanges();
-  await tab(page,'media');await tab(page,'documents');await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'hit');assert((await page.evaluate(()=>OieCache.stats())).entries>=1);assert.equal(pdfRanges(),cachedRanges,'fragment navigation must reuse the generated PNG without PDF reads');
-  await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'hit');assert.equal(pdfRanges(),cachedRanges,'a reload must reuse IndexedDB without PDF range reads');
-  const pdfItem=items.find(item=>item.id===pdf),previousRevision=pdfItem.revisionId;pdfItem.revisionId=id(777);await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>cachedRanges,'a new catalog revision must generate a new thumbnail');pdfItem.revisionId=previousRevision;
+  await pdfReady();await until(async()=>await card(page,pdf).getAttribute('data-document-preview-stored')==='true','persistent PDF thumbnail committed');const cachedRanges=pdfRanges(),cachedValidations=revalidations(pdf);
+  await tab(page,'media');await tab(page,'documents');await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'hit');assert((await page.evaluate(()=>OieCache.stats())).entries>=1);assert.equal(pdfRanges(),cachedRanges+1);assert.equal(revalidations(pdf),cachedValidations+1,'fragment navigation reuses the PNG after a bodyless conditional read');
+  await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'hit');assert.equal(pdfRanges(),cachedRanges+2);assert.equal(revalidations(pdf),cachedValidations+2,'reload reuses the persisted PNG after a bodyless conditional read');
+  const beforeRefresh=await card(page,pdf).locator('[data-document-pdf-preview]').screenshot();
+  state.versions.set(pdf,{tag:'"original-document-v2"',body:Buffer.from(pdfBytes.toString().replace('Oie document fixture','New document fixture'))});
+  await page.reload();await pdfReady();
+  assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');
+  assert.equal(revalidations(pdf,206),1);
+  assert.notDeepEqual(await card(page,pdf).locator('[data-document-pdf-preview]').screenshot(),beforeRefresh,'a changed ETag regenerates the PNG at the same URL');
+  state.versions.delete(pdf);
+  const pdfItem=items.find(item=>item.id===pdf),previousRevision=pdfItem.revisionId;const beforeRevision=pdfRanges();pdfItem.revisionId=id(777);await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>beforeRevision,'a new catalog revision must generate a new thumbnail');pdfItem.revisionId=previousRevision;
   const beforeAccount=pdfRanges();pdfItem.message.accountId=other;await page.goto(docsURL('en','dark',other));await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>beforeAccount,'a different account must not receive the previous account thumbnail');pdfItem.message.accountId=account;await page.goto(docsURL());await pdfReady();
   // Persisted corruption must be discarded without making the source unusable.
   await page.evaluate(()=>new Promise(resolve=>{const request=indexedDB.open('oie.pdf-previews.v1',1);request.onsuccess=()=>{const db=request.result,tx=db.transaction('thumbnails','readwrite'),store=tx.objectStore('thumbnails'),get=store.getAll();get.onsuccess=()=>{for(const entry of get.result)if(entry.value.kind==='image'){entry.value.blob=new Blob(['broken'],{type:'image/png'});store.put(entry)}};tx.oncomplete=()=>{db.close();resolve()}}}));const corruptRanges=pdfRanges();await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>corruptRanges,'corrupt PNG must regenerate from bounded PDF bytes');
@@ -112,7 +122,9 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const beforeReload={reads:rangeReads(),renders:markdownRequests};
   await page.reload();
   await ready(good,'hit');await ready(markdown,'hit');
-  assert.deepEqual({reads:rangeReads(),renders:markdownRequests},beforeReload,'reload restores both previews without reading or rendering their sources');
+  assert.equal(rangeReads(),beforeReload.reads+2);
+  assert.equal(markdownRequests,beforeReload.renders,'reload restores both previews without rendering their unchanged sources');
+  assert(revalidations(good)>0&&revalidations(markdown)>0,'text and Markdown both receive a bodyless conditional response');
   assert.equal(await card(page,markdown).locator('[data-document-markdown-preview] h1').textContent(),'Release notes');
 
   await page.evaluate(()=>new Promise((resolve,reject)=>{
@@ -136,6 +148,25 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   assert.equal(await card(page,markdown).locator('[data-document-markdown-preview] h1').textContent(),'Release notes');
   assert.equal(await card(page,markdown).locator('[data-document-markdown-preview] [x-init]').count(),0);
 
+  state.versions.set(good,{tag:'"original-document-v2"',body:Buffer.from('Updated text at its original URL.')});
+  state.versions.set(markdown,{tag:'"original-document-v2"',body:Buffer.from('# Updated Markdown\n\nSame URL, same catalog revision.\n')});
+  await page.reload();await ready(good,'miss');await ready(markdown,'miss');
+  assert.equal((await card(page,good).locator('[data-document-excerpt]').textContent()).trim(),'Updated text at its original URL.');
+  assert.equal(await card(page,markdown).locator('[data-document-markdown-preview] h1').textContent(),'Updated Markdown');
+  assert(revalidations(good,206)>0&&revalidations(markdown,206)>0,'changed originals arrive in the conditional range response');
+
+  state.versions.set(markdown,{tag:'',body:Buffer.from('# Markdown without an ETag\n')});
+  await page.reload();await ready(markdown,'miss');
+  assert.equal(await card(page,markdown).getAttribute('data-document-preview-stored'),'true');
+  const beforeDigest=markdownRequests;
+  await page.reload();await ready(markdown,'hit');
+  assert.equal(markdownRequests,beforeDigest,'unchanged Markdown without an ETag reuses the render after hashing the excerpt');
+  state.versions.set(markdown,{tag:'',body:Buffer.from('# Updated Markdown without an ETag\n')});
+  await page.reload();await ready(markdown,'miss');
+  assert.equal(await card(page,markdown).locator('[data-document-markdown-preview] h1').textContent(),'Updated Markdown without an ETag');
+  assert.equal(markdownRequests,beforeDigest+1);
+  state.versions.delete(good);state.versions.delete(markdown);
+
   const markdownItem=items.find(item=>item.id===markdown),priorMarkdownRevision=markdownItem.revisionId;
   markdownItem.revisionId=id(778);
   await page.route('**/ui/document-markdown',route=>route.fulfill({status:503,body:''}));
@@ -147,10 +178,10 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await page.reload();await ready(markdown,'miss');
   assert.equal(await card(page,markdown).getAttribute('data-document-preview-stored'),'true');
   markdownItem.revisionId=priorMarkdownRevision;
-  findings.push('Rendered text and Markdown survive reload without source reads; invalid fragments regenerate and transient Markdown fallbacks stay in memory');
+  findings.push('Rendered text and Markdown survive reload after ETag validation or matching bounded excerpts; changed sources and invalid fragments regenerate');
   state.pdfCatalog=null;
   await page.reload();
-  findings.push('PDF PNG previews reuse memory across fragments and IndexedDB across reloads without provider reads; revision/account isolation, corrupt-cache recovery and bounded LRU/expiry verified');
+  findings.push('PDF PNG previews reuse memory across fragments and IndexedDB across reloads after ETag validation; provider changes, revision/account isolation, corrupt-cache recovery and bounded LRU/expiry verified');
   await until(async()=>{
    await card(page,good).scrollIntoViewIfNeeded();
    return await card(page,good).getAttribute('data-document-preview-state')==='ready';
@@ -267,7 +298,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   // The drawer uses the same viewer and current engine/account/source identity.
   await page.goto(base+'/?'+new URLSearchParams({chat,account,lang:'en',theme:'dark'}));await page.locator('[data-open-details]').click();await page.locator('[data-info-entry=media]').click();await page.locator('[data-shared-tab=documents]').click();await page.locator('#info-shared-results [data-document-open]').first().waitFor({state:'visible'});const drawer=page.locator(`#info-shared-results [data-document-item="${good}"] [data-document-open]`);await drawer.click();await loaded(page);await close(page);assert(await drawer.evaluate(button=>document.activeElement===button));await page.keyboard.press('Escape');findings.push('Conversation drawer document cards reuse the scoped viewer and restore focus to their original opener');await context.close();
   // Browser storage denial still permits the generated preview and memory reuse.
-  {const isolated=await contextFor();await isolated.context.addInitScript(()=>{indexedDB.open=()=>{throw new DOMException('Blocked','SecurityError')}});await isolated.page.goto(docsURL());const preview=card(isolated.page,pdf);await preview.scrollIntoViewIfNeeded();await until(async()=>await preview.getAttribute('data-document-preview-state')==='ready','PDF preview with denied storage');const before=pdfRanges();await tab(isolated.page,'media');await tab(isolated.page,'documents');await preview.scrollIntoViewIfNeeded();await until(async()=>await preview.getAttribute('data-document-preview-cache')==='hit','memory fallback after storage denial');assert.equal(pdfRanges(),before);await isolated.context.close();findings.push('Storage denial falls back to bounded memory without breaking PDF preview or navigation')}
+  {const isolated=await contextFor();await isolated.context.addInitScript(()=>{indexedDB.open=()=>{throw new DOMException('Blocked','SecurityError')}});await isolated.page.goto(docsURL());const preview=card(isolated.page,pdf);await preview.scrollIntoViewIfNeeded();await until(async()=>await preview.getAttribute('data-document-preview-state')==='ready','PDF preview with denied storage');const before=pdfRanges();await tab(isolated.page,'media');await tab(isolated.page,'documents');await preview.scrollIntoViewIfNeeded();await until(async()=>await preview.getAttribute('data-document-preview-cache')==='hit','memory fallback after storage denial');assert.equal(pdfRanges(),before+1);await isolated.context.close();findings.push('Storage denial falls back to bounded memory without breaking PDF preview or navigation')}
   for(const config of [{locale:'en',width:1280,theme:'light'},{locale:'pt-BR',width:390,theme:'dark'}]){({page,context}=await contextFor(config.locale,config.width));await page.goto(docsURL(config.locale,config.theme));if(config.locale==='pt-BR'){
    state.failure=true;
    try{

@@ -80,12 +80,34 @@ function thumbnail(color,width=8,height=8){
    if(await control.isChecked()!==enabled)await page.locator('label[for="auto-image-downloads"]').click();
    assert.equal(await control.isChecked(),enabled);await page.keyboard.press('Escape');await page.waitForTimeout(250);
   };
-  const autoContext=await browser.newContext({viewport:{width:1440,height:1000},locale:'en'}),automaticPage=await autoContext.newPage();automaticPage.on('pageerror',e=>errors.push(e.message));
+  const autoContext=await browser.newContext({viewport:{width:1440,height:1000},locale:'en'});
+  await autoContext.addInitScript(()=>{
+   const NativeObserver=window.IntersectionObserver;
+   window.forwardPreviewObserverRoots=[];
+   window.IntersectionObserver=class extends NativeObserver{
+    constructor(callback,options){
+     super(callback,options);
+     if(options?.root?.closest('#forward-message-dialog'))window.forwardPreviewObserverRoots.push(options.root.id);
+    }
+   };
+  });
+  const automaticPage=await autoContext.newPage();automaticPage.on('pageerror',e=>errors.push(e.message));
   await automaticPage.goto(`${base}/?account=${account}&chat=${chat}&lang=en&theme=dark`);
   const automaticDraft='Keep this draft while nearby images load';await automaticPage.locator('#message-composer').fill(automaticDraft);await automaticPage.locator('#message-composer').focus();
   await until(()=>previews[3].downloadState==='ready','default nearby automatic image');await until(()=>previews.every(p=>!['queued','downloading'].includes(p.downloadState)),'automatic batch completes');
   assert(state.downloads>0);for(const count of state.ensureRequests.values())assert.equal(count,1);assert.equal(previews[4].downloadState,'not_downloaded');assert.equal(state.originalReads,0);assert.equal(await automaticPage.locator('#message-composer').inputValue(),automaticDraft);assert(await automaticPage.locator('#message-composer').evaluate(el=>document.activeElement===el));assert(await automaticPage.locator('[data-auto-image-downloads]').isChecked());
   findings.push('Automatic downloads default on for nearby raw images; distant old history is untouched and drafts/focus survive');
+  const forwardDialog=automaticPage.locator('#forward-message-dialog');
+  for(let i=0;i<3;i++){
+   await automaticPage.locator(`[data-message-id="${messages[22].id}"] [data-message-menu-trigger]`).click();
+   await automaticPage.locator(`#forward-message-${messages[22].id}`).click();
+   const image=forwardDialog.locator(`[data-preview-id="${previews[3].id}"] img`);
+   await until(async()=>await image.count()===1&&await image.evaluate(node=>node.naturalWidth>0),'forwarded image preview');
+   await automaticPage.keyboard.press('Escape');
+   await forwardDialog.waitFor({state:'hidden'});
+  }
+  assert.deepEqual(await automaticPage.evaluate(()=>window.forwardPreviewObserverRoots),['forward-message-dialog'],'reopening an image creates one stable forwarding observer root');
+  findings.push('Repeated forwarding image previews share the same dialog observer root');
   await changeSetting(automaticPage,false);assert.equal(await automaticPage.evaluate(key=>localStorage.getItem(key),preferenceKey),'false');
   resetImage(previews[3]);emit('message.preview_changed');const beforeOptOut=state.downloads;
   await until(async()=>await scope(automaticPage,previews[3]).getByRole('button',{name:'Load image',exact:true}).isVisible(),'opt-out manual action');await automaticPage.waitForTimeout(400);assert.equal(state.downloads,beforeOptOut);
