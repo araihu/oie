@@ -138,3 +138,27 @@ room. Four search workers offer 210 requests at four per second while one
 writer offers 20 archive messages per second. Global requests ask for 20
 results and room requests ask for 50. The measured latency includes queueing,
 engine verification, highlight generation and HTML transfer.
+
+| Scenario | Chronological SQL p95 | Experimental Bleve + SQL p95 |
+| --- | ---: | ---: |
+| Global `arqiuvo` | 14.82 s | 513 ms |
+| Global `docun` | 15.45 s | 659 ms |
+| Global `faturamento` | 14.59 s | 674 ms |
+| Global `viedo` | 14.58 s | 537 ms |
+| Room `arqiuvo` | 15.83 s | 675 ms |
+| Room `docun` | 16.32 s | 609 ms |
+| Room `maepar`, 50 long hits | 15.23 s | 2.03 s |
+| Archive message acceptance | 17.19 ms | 16.85 ms |
+
+This Linux arm64 shared-host run completed 30 requests per search scenario
+in each arm. Both arms committed all 1,050 archive messages. The experiment
+served 148 searches through Bleve and 62 through SQL. At 10 offered searches
+per second with the long-message scenario, a preliminary run returned an HTTP
+503 from the SQL control. The four-per-second run above completed both arms.
+Large SQL p95 values include time queued behind earlier requests.
+
+A separate Chromium run on the 551-message preview measured navigation to
+the visible global highlight or room highlight plus two animation frames,
+with 30 observations per case per arm and no concurrent archive ingestion.
+The global p95 was 685 ms with Bleve and 833 ms with forced SQL fallback.
+The room p95 was 1.37 s with Bleve and 1.93 s with forced SQL fallback.
