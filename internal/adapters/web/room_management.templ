@@ -395,7 +395,7 @@ templ roomDetailsForm(v view, revision string, canRename, canEditTopic bool) {
 		key := newOperationKey()
 		id := "manage-room-" + key
 	}}
-	@form.Form(form.Config{ID: id, Action: "/ui/rooms/manage", Method: "post", RootAttrs: templ.Attributes{"data-oie-action": "room-management"}}) {
+	@form.Form(form.Config{ID: id, Action: "/ui/rooms/manage", Method: "post", RootClass: "oie-room-details-form", RootAttrs: templ.Attributes{"data-oie-action": "room-management", "data-room-details-form": ""}}) {
 		@roomManagementFields(v, revision, "update_details", key)
 		if canRename {
 			<input type="hidden" name="originalName" value={ v.infoTitle() }/>
@@ -405,7 +405,7 @@ templ roomDetailsForm(v view, revision string, canRename, canEditTopic bool) {
 			<input type="hidden" name="originalTopic" value={ v.managementTopic() }/>
 			@textarea.Textarea(textarea.Config{ID: id + "-topic", Name: "topic", Label: v.Text.RoomTopic, Value: v.managementTopic(), Rows: 3, InputAttrs: templ.Attributes{"maxlength": "2000"}})
 		}
-		@button.Button(button.WithType("submit")) {
+		@button.Button(button.WithType("submit"), button.WithAttrs(templ.Attributes{"disabled": true})) {
 			{ v.Text.RoomSaveDetails }
 		}
 		<div data-form-feedback role="status" aria-live="polite"></div>

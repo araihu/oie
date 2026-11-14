@@ -51,6 +51,31 @@ window.OieRuntime.register('room-management', life => {
     }
   }
 
+  const detailsFields = [['name', 'originalName'], ['topic', 'originalTopic']];
+
+  function roomDetailsValue(name, value) {
+    const normalized = name === 'topic' ? value.replace(/\r\n?/g, '\n') : value;
+    return normalized.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, '');
+  }
+
+  function detailsChanged(form) {
+    return detailsFields.some(([name, original]) => {
+      const field = form.elements.namedItem(name);
+      const baseline = form.elements.namedItem(original);
+      return field && baseline && roomDetailsValue(name, field.value) !== roomDetailsValue(name, baseline.value);
+    });
+  }
+
+  function syncDetailsSave(form) {
+    form.querySelector('[type=submit]').disabled =
+      form.dataset.busy === 'true' || form.dataset.permissionLost === 'true' || !detailsChanged(form);
+  }
+
+  life.on(content, 'input', event => {
+    const form = event.target.form;
+    if (form?.hasAttribute('data-room-details-form')) syncDetailsSave(form);
+  });
+
   async function load(replace = true, announcement = '', avatarsOnly = false) {
     if (avatarsOnly && request) return;
     request?.abort();
@@ -91,7 +116,7 @@ window.OieRuntime.register('room-management', life => {
             const field = form.elements.namedItem(name);
             const original = name === 'name' ? 'originalName' : name === 'topic' ? 'originalTopic' : '';
             if (field && field.type !== 'hidden' && draft.has(name) &&
-                (!original || draft.get(name) !== draft.get(original))) {
+                (!original || roomDetailsValue(name, draft.get(name)) !== roomDetailsValue(name, draft.get(original)))) {
               if (field.type === 'file') {
                 const file = draft.get(name);
                 if (!file.size) continue;
@@ -124,9 +149,12 @@ window.OieRuntime.register('room-management', life => {
               continue;
             }
             if (form.dataset.permissionLost === 'true') {
-              const submit = form.querySelector('[type=submit]');
-              if (submit) submit.disabled = false;
               delete form.dataset.permissionLost;
+              if (form.hasAttribute('data-room-details-form')) syncDetailsSave(form);
+              else {
+                const submit = form.querySelector('[type=submit]');
+                if (submit) submit.disabled = false;
+              }
             }
             form.elements.expectedRevision.value = revision;
           }
@@ -322,11 +350,13 @@ window.OieRuntime.register('room-management', life => {
     pending.delete(form);
     const action = form.elements.managementAction.value;
     if (action === 'update_details') {
-      for (const [name, original] of [['name','originalName'],['topic','originalTopic']]) {
+      for (const [name, original] of detailsFields) {
         const field = form.elements.namedItem(name);
         const baseline = form.elements.namedItem(original);
         if (field && baseline && (result.ok || name === 'name' && result.state === 'name_confirmed')) baseline.value = field.value;
       }
+      // The live submit handler restores the form controls before this runs.
+      queueMicrotask(() => syncDetailsSave(form));
     }
     if (result.ok && action === 'invite') {
       form.elements.target.value = '';
