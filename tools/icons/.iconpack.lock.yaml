@@ -1,5 +1,45 @@
 schema: 1
 files:
+  - id: heroicons-archive/icon
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/archive-box-arrow-down.svg
+    path: .iconpack/sources/heroicons-archive/16/solid/archive-box-arrow-down.svg
+    size: 449
+    integrity: sha384-J7eelsReZjw+UTnKULkyYaaQqq9HC2YaBZvrr3+LZmURg7k/edI6MdL4cGT3BnbE
+  - id: heroicons-archive/license
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+    path: .iconpack/sources/heroicons-archive/LICENSE
+    size: 1071
+    integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
+  - id: heroicons-forward/icon
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-uturn-right.svg
+    path: .iconpack/sources/heroicons-forward/16/solid/arrow-uturn-right.svg
+    size: 396
+    integrity: sha384-j8nVXeCbK3MXKna/q/UCXfk2O6NtJNfChDzFa4dzjUi7rQONFiWD5OE5sl9tFly2
+  - id: heroicons-forward/license
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+    path: .iconpack/sources/heroicons-forward/LICENSE
+    size: 1071
+    integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
+  - id: heroicons-group/icon
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/user-group.svg
+    path: .iconpack/sources/heroicons-group/16/solid/user-group.svg
+    size: 598
+    integrity: sha384-Z3zoOh8RiG29jSnN5ICz4EfYLoq1XA+MjZf9Hq2lE8z+1FAcQBeqBVtwiBIQgl4x
+  - id: heroicons-group/license
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+    path: .iconpack/sources/heroicons-group/LICENSE
+    size: 1071
+    integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
+  - id: heroicons-navigation/icon
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-turn-right-down.svg
+    path: .iconpack/sources/heroicons-navigation/16/solid/arrow-turn-right-down.svg
+    size: 367
+    integrity: sha384-E3rn0QnVGmfaWrmnfVPQOZojikW8CHbcJL34RpF8AeqKw4weOUgp9lW20jQm4zqd
+  - id: heroicons-navigation/license
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+    path: .iconpack/sources/heroicons-navigation/LICENSE
+    size: 1071
+    integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
   - id: heroicons-photo/icon
     url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/photo.svg
     path: .iconpack/sources/heroicons-photo/16/solid/photo.svg

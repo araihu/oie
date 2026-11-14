@@ -30,6 +30,9 @@ actions:
           range_not_satisfiable: Range not satisfiable
           media_busy: Media service busy
           media_timeout: Media request timed out
+  - target: $.paths['/api/v1/messages/{messageId}/forward'].post
+    update:
+      x-cli-ignore: true
   # accounts
   - target: $.paths['/api/v1/avatars/{hash}'].get
     update:

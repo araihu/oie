@@ -27,6 +27,11 @@ import (
 //go:embed app.css
 var stylesheet []byte
 
+func versionedStylesheetURL(path string, content []byte) string {
+	digest := sha256.Sum256(content)
+	return fmt.Sprintf("%s?v=%x", path, digest[:8])
+}
+
 //go:embed appicons/sprite.svg
 var appIconSprite []byte
 
@@ -145,6 +150,13 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	StarredContent starredContent
+	PreviewScope   string
+
+	FavoritesPage                   *engineapi.StarredMessagePage
+	FavoritesCursor, FavoritesQuery string
+	FavoritesInvalid                bool
+
 	SchedulePage          *engineapi.ScheduledMessagePage
 	ScheduleEdit          *engineapi.Message
 	ScheduleDestinations  []engineapi.Conversation
@@ -216,6 +228,9 @@ type view struct {
 }
 
 type copy struct {
+	Forward, ForwardTitle, ForwardChooseRooms, ForwardSearchRooms, ForwardNoRooms, ForwardNoRoomsFound, ForwardLoading, ForwardSending string
+	ForwardAccepted, ForwardComplete, ForwardFailed, ForwardUnconfirmed, ForwardChanged                                                string
+
 	CheckingConversation, MessageRequest, AcceptMessageRequest, ArchiveRequest string
 	ScheduleSelectedConversations                                              string
 	ScheduleLoading, ScheduleViewAgenda, ScheduleCancelSend                    string
@@ -348,9 +363,9 @@ type copy struct {
 	InfoGroup                                                                                                                                                                                                string
 	InfoReportedOccupants                                                                                                                                                                                    string
 	InfoStarsUnavailable                                                                                                                                                                                     string
+	FavoritesEmpty, FavoritesEmptyHelp, FavoritesSearch, FavoritesNoResults                                                                                                                                  string
 	InfoStarsEmpty                                                                                                                                                                                           string
 	InfoNavigationFailed                                                                                                                                                                                     string
-	SharedAccount                                                                                                                                                                                            string
 	SearchAccounts, SearchAccountSelected, SearchAccountsSelected, SearchClearAccounts                                                                                                                       string
 	NoAccountsFound                                                                                                                                                                                          string
 	SharedTools                                                                                                                                                                                              string
@@ -495,7 +510,7 @@ type copy struct {
 	Unavailable, UnavailableBody, Retry                                                                                                                                  string
 	Skip, Languages, Appearance, System, Light                                                                                                                           string
 	Dark, Next, English, Portuguese, NotFound                                                                                                                            string
-	NotFoundBody, Chats, Favorites, Archived, SharedMedia                                                                                                                string
+	NotFoundBody, Chats, Favorites, Archived, ArchivedBackToChats, SharedMedia                                                                                           string
 	HistorySyncing, HistoryPartial, HistoryUnsupported, HistoryComplete, HistoryCount, RoomReadOnly                                                                      string
 	SwitchAccount, ManageAccounts                                                                                                                                        string
 	BackToAccounts, AdvancedConnection, AccountMissing, AddAccountHelp                                                                                                   string
@@ -503,7 +518,7 @@ type copy struct {
 	RoomInvitation, ViewRoom, RoomAddressConflict, ConversationChanged                                                                                                   string
 	CreateRoom, PreviewRoom, RoomAddress, RoomAddressPlaceholder, RoomOccupants, RoomName                                                                                string
 	RoomPreviewLoading, RoomPreviewUnavailable, RoomAddressInvalid, RoomNotFound, RoomExists, RoomCreationFailed                                                         string
-	SearchChats, NoResults, NoResultsBody, NewChat, More                                                                                                                 string
+	SearchChats, NoResults, NoResultsBody, NewChat, DirectConversation, More                                                                                             string
 	Preview, PreviewNote, Message, Send, Attach                                                                                                                          string
 	SendingUnavailable, Back, Today, Navigation, Active                                                                                                                  string
 	OpenNavigation, Close, Details, Participants, MediaEmpty                                                                                                             string
@@ -558,6 +573,9 @@ var previewsScript []byte
 //go:embed runtime.js
 var runtimeScript []byte
 
+//go:embed masonry.js
+var masonryScript []byte
+
 //go:embed timeline.js
 var timelineScript []byte
 
@@ -610,6 +628,10 @@ var inboxCacheScript []byte
 var roomArchiveScript []byte
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/ui/messages/forward" && r.Method == http.MethodGet {
+		s.prepareForward(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/rooms/preview" {
 		s.roomPreview(w, r)
 		return
@@ -694,9 +716,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		body []byte
 	}{
 		"/ui/draft-link-preview.js": {"text/javascript", draftLinkPreviewScript}, "/ui/draft-link-preview.css": {"text/css", draftLinkPreviewStylesheet},
+		"/ui/forwarding.js":        {"text/javascript", forwardingScript},
 		"/ui/scheduling.js":        {"text/javascript", schedulingScript},
 		"/ui/scheduling.css":       {"text/css", schedulingStylesheet},
 		"/ui/sidebar.js":           {"text/javascript", sidebarScript},
+		"/ui/masonry.js":           {"text/javascript", masonryScript},
 		"/ui/presentation-time.js": {"text/javascript", presentationTimeScript},
 		"/ui/reset-data.js":        {"text/javascript", resetDataScript},
 		"/ui/event-stream.js":      {"text/javascript", eventStreamScript},
@@ -847,6 +871,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	}
 	accountsOnly := fragment == "accounts"
 	scheduledOnly := fragment == "scheduled" && v.Section == "scheduled"
+	favoritesOnly := fragment == "favorites" && v.Section == "favorites"
 	if fragment == "appearance" {
 		return
 	}
@@ -875,14 +900,14 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		s.loadMessageSearch(ctx, v)
 		return
 	}
-	if !listOnly && !paneOnly && !scheduledOnly && !accountsOnly {
+	if !listOnly && !paneOnly && !scheduledOnly && !accountsOnly && !favoritesOnly {
 		v.AccountUnread = s.accountUnread(ctx)
 	}
 	for _, a := range v.Accounts {
 		if !editorOnly && !scheduledOnly {
 			s.loadAvatars(ctx, v, a.Id)
 		}
-		if listOnly || paneOnly || scheduledOnly {
+		if listOnly || paneOnly || scheduledOnly || favoritesOnly {
 			continue
 		}
 		if !v.Preview && v.accountScreen() == "detail" && a.Id == v.managedAccountID() {
@@ -893,7 +918,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		}
 		s.loadAccountConnection(ctx, v, a.Id, editor)
 	}
-	if !listOnly && !paneOnly && !scheduledOnly {
+	if !listOnly && !paneOnly && !scheduledOnly && !favoritesOnly {
 		s.loadCapabilities(ctx, v)
 	}
 	if accountsOnly {
@@ -901,6 +926,11 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	}
 	if v.Section == "scheduled" {
 		s.loadScheduled(ctx, v, !scheduledOnly)
+		return
+	}
+	if v.Section == "favorites" {
+		v.FavoritesPage, v.FavoritesInvalid = s.loadStarredMessages(ctx, v.AccountFilter, "", v.FavoritesCursor, v.FavoritesQuery)
+		s.loadStarredContent(ctx, v, v.FavoritesPage)
 		return
 	}
 	if v.Section == "media" {
@@ -954,7 +984,7 @@ func (s *Server) loadInbox(ctx context.Context, v *view, editors ...engineapi.Re
 		yes := true
 		params.UnreadOnly = &yes
 	}
-	if v.Filter == "favorites" || v.Section == "favorites" {
+	if v.Filter == "favorites" {
 		yes := true
 		params.FavoritesOnly = &yes
 	}
@@ -1211,12 +1241,16 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	if r.Header.Get("HX-Request") == "true" {
 		component = appFragment(v)
 		switch r.Header.Get("X-Oie-Fragment") {
+		case "favorites":
+			if v.Section == "favorites" {
+				component = favoritesResults(v)
+			}
 		case "inbox":
-			if r.URL.Path == "/" && v.Section != "media" && v.Section != "scheduled" {
+			if r.URL.Path == "/" && v.Section != "media" && v.Section != "scheduled" && v.Section != "favorites" {
 				component = inboxList(v)
 			}
 		case "conversation", "source-pane":
-			if v.Section != "media" && v.Section != "scheduled" {
+			if v.Section != "media" && v.Section != "scheduled" && v.Section != "favorites" {
 				component = conversationPane(v)
 			}
 		case "source":

@@ -25,6 +25,11 @@ func (v view) replyHref(m messageView) string {
 	if !replyNavigable(m.Reply) {
 		return ""
 	}
+	if v.PreviewScope != "" {
+		target := m.Message
+		target.Id = *m.Reply.MessageId
+		return v.infoSourceHref(target)
+	}
 	return v.href("chat", m.ConversationId, "message", *m.Reply.MessageId, "lang", v.Locale, "theme", v.Theme)
 }
 func (v view) latestHref() string {

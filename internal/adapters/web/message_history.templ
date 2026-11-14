@@ -107,7 +107,7 @@ templ messageHistoryDocument(v view, h historyPageView) {
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<title>{ v.Text.EditHistory }</title>
 			@head.Dependencies(head.WithLocalRuntime())
-			<link rel="stylesheet" href="/ui/app.css"/>
+			<link rel="stylesheet" href={templ.URL(versionedStylesheetURL("/ui/app.css",stylesheet))}/>
 			<link rel="stylesheet" href="/ui/message-history.css"/>
 			<script src="/ui/theme.js"></script><script src="/ui/presentation-time.js" defer></script>
 			<script src="/ui/message-history.js" defer></script>

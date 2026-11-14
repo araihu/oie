@@ -55,7 +55,7 @@ window.OieRuntime.register('room-entry', life => {
 
   function openDrawer(id, trigger, address) {
     activeDrawer = id;
-    if (trigger) lastTrigger = trigger;
+    lastTrigger = trigger;
     if (address && join && join.dataset.busy !== 'true') {
       const currentAccount = document.body.dataset.accountId;
       const account = join.elements.accountId;
@@ -76,13 +76,18 @@ window.OieRuntime.register('room-entry', life => {
   }
 
   life.on(document, 'click', event => {
-    const trigger = event.target.closest('[data-room-invitation],[data-room-entry-open]');
+    const trigger = event.target.closest('[data-room-invitation]');
     if (!trigger || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-    const id = trigger.dataset.roomEntryOpen || 'join-room';
+    const id = 'join-room';
     if (!document.getElementById(id + '-body')) return;
     event.preventDefault();
-    if (trigger.dataset.roomEntryOpen) drawer('close', 'newchat');
     openDrawer(id, trigger, trigger.dataset.roomInvitation);
+  });
+
+  life.on(document, 'oie:new-conversation', event => {
+    const id = event.detail?.id;
+    if (!['newchat', 'join-room', 'create-room'].includes(id) || !document.getElementById(id + '-body')) return;
+    openDrawer(id, document.querySelector('[data-new-conversation]'));
   });
 
   if (join) {
@@ -99,7 +104,7 @@ window.OieRuntime.register('room-entry', life => {
     if (!activeDrawer || event.detail?.id !== activeDrawer) return;
     activeDrawer = undefined;
     if (request && !request.signal.aborted && preview?.textContent === preview.dataset.loading) clearPreview();
-    const trigger = lastTrigger?.matches('[data-room-entry-open]') ? document.querySelector('[data-new-conversation]') : lastTrigger;
+    const trigger = lastTrigger;
     life.timeout(() => trigger?.isConnected && trigger.focus({preventScroll: true}), 220);
   }
   life.on(window, 'drawer:close-request', restoreFocus);

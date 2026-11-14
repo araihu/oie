@@ -84,7 +84,7 @@ func draftLinkPreviewBody(v view) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<img data-draft-link-image alt=\"\" width=\"44\" height=\"44\" hidden></span><div class=\"oie-link-card-copy\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<img data-draft-link-image alt=\"\" width=\"44\" height=\"44\" hidden></span><div class=\"oie-preview-copy\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

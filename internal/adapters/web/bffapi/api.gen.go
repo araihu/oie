@@ -126,6 +126,7 @@ const (
 	App            RenderWorkspaceParamsXOieFragment = "app"
 	Appearance     RenderWorkspaceParamsXOieFragment = "appearance"
 	Conversation   RenderWorkspaceParamsXOieFragment = "conversation"
+	Favorites      RenderWorkspaceParamsXOieFragment = "favorites"
 	Inbox          RenderWorkspaceParamsXOieFragment = "inbox"
 	Info           RenderWorkspaceParamsXOieFragment = "info"
 	ScheduleEditor RenderWorkspaceParamsXOieFragment = "schedule-editor"
@@ -146,6 +147,8 @@ func (e RenderWorkspaceParamsXOieFragment) Valid() bool {
 	case Appearance:
 		return true
 	case Conversation:
+		return true
+	case Favorites:
 		return true
 	case Inbox:
 		return true
@@ -386,6 +389,37 @@ type BrowserEditTarget struct {
 	//
 	// Example: {"accountId":"019a5df0-0000-7000-8000-000000000001","conversationId":"019a5df0-0000-7000-8000-000000000002","currentRevisionId":"019a5df0-0000-7000-8000-000000000004","eligible":true,"messageId":"019a5df0-0000-7000-8000-000000000003","originalText":"Text to correct"}
 	Target externalRef0.MessageEditTarget `json:"target"`
+}
+
+// BrowserForward Browser forwarding confirmation for one destination.
+type BrowserForward struct {
+	// ConversationId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	ConversationId externalRef0.ID `json:"conversationId"`
+
+	// Csrf Example: browser-csrf-token
+	Csrf string `json:"csrf"`
+
+	// EngineId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	EngineId externalRef0.ID `json:"engineId"`
+
+	// MessageId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	MessageId externalRef0.ID `json:"messageId"`
+
+	// OperationKey Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	OperationKey externalRef0.ID `json:"operationKey"`
+
+	// RevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	RevisionId externalRef0.ID `json:"revisionId"`
 }
 
 // BrowserReactionIntent Complete immutable reaction choice retained for receipt reconciliation.
@@ -758,6 +792,15 @@ type SubmissionReceipt struct {
 
 // RenderWorkspaceParams defines parameters for RenderWorkspace.
 type RenderWorkspaceParams struct {
+	// Section Workspace section. Use favorites to browse starred messages across conversations, scoped to the selected account when present.
+	Section *string `form:"section,omitempty" json:"section,omitempty"`
+
+	// FavoritesQuery Search messages in the Favorites workspace.
+	FavoritesQuery *string `form:"favoritesQuery,omitempty" json:"favoritesQuery,omitempty"`
+
+	// FavoritesCursor Continuation cursor for the starred-message workspace in the current account scope.
+	FavoritesCursor *string `form:"favoritesCursor,omitempty" json:"favoritesCursor,omitempty"`
+
 	// HXRequest Set to true to request an HTML fragment.
 	HXRequest *RenderWorkspaceParamsHXRequest `json:"HX-Request,omitempty"`
 
@@ -941,6 +984,15 @@ type SearchBrowserMessagesParamsLang string
 // SearchBrowserMessagesParamsPresentation defines parameters for SearchBrowserMessages.
 type SearchBrowserMessagesParamsPresentation string
 
+// PrepareBrowserForwardParams defines parameters for PrepareBrowserForward.
+type PrepareBrowserForwardParams struct {
+	// MessageId Retained source message.
+	MessageId externalRef0.ID `form:"messageId" json:"messageId"`
+
+	// EngineId Engine owning the source message.
+	EngineId externalRef0.ID `form:"engineId" json:"engineId"`
+}
+
 // RefreshWorkspaceParams defines parameters for RefreshWorkspace.
 type RefreshWorkspaceParams struct {
 	// XOieInboxScope Scope of the list mounted in the current tab.
@@ -1048,6 +1100,9 @@ type SubmitBrowserMessageEditFormdataRequestBody = BrowserEditIntent
 
 // ReconcileBrowserMessageEditFormdataRequestBody defines body for ReconcileBrowserMessageEdit for application/x-www-form-urlencoded ContentType.
 type ReconcileBrowserMessageEditFormdataRequestBody = BrowserEditIntent
+
+// SubmitBrowserForwardFormdataRequestBody defines body for SubmitBrowserForward for application/x-www-form-urlencoded ContentType.
+type SubmitBrowserForwardFormdataRequestBody = BrowserForward
 
 // ReconcileBrowserMessageReactionsFormdataRequestBody defines body for ReconcileBrowserMessageReactions for application/x-www-form-urlencoded ContentType.
 type ReconcileBrowserMessageReactionsFormdataRequestBody = BrowserReactionIntent

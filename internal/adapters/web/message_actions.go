@@ -21,6 +21,14 @@ func messageActions(v view, id string) []dropdown.Section {
 		{ID: "star-message-" + id, Icon: glyph(heroicons.Icon16SolidStar), Label: v.starLabel(id), OnClick: "void 0", Disabled: !v.StarsKnown, Tooltip: v.Text.StarUnavailable},
 		{ID: "reply-message-" + id, Icon: glyph(heroicons.Icon16SolidArrowUturnLeft), Label: v.Text.ReplyMessage, OnClick: "void 0", Disabled: !v.replyAllowed(), Tooltip: v.Text.ReplyUnavailable},
 	}}}
+	if !v.Preview {
+		for _, message := range v.Messages {
+			if message.Id == id && message.SendState != "cancelled" {
+				sections[0].Items = append(sections[0].Items, forwardAction(v, "", id))
+				break
+			}
+		}
+	}
 	if _, known := v.Reactions[id]; known {
 		sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "react-message-" + id, Icon: glyph(heroicons.Icon16SolidFaceSmile), Label: v.Text.ReactMessage, OnClick: "void 0", Disabled: !v.reactionAllowed(id), Tooltip: v.Text.ReactionUnavailable}}})
 	}
@@ -57,8 +65,8 @@ func messageActions(v view, id string) []dropdown.Section {
 }
 func imageActions(v view, p engineapi.MessagePreview) []dropdown.Section {
 	return []dropdown.Section{{Items: []dropdown.Item{
-		{ID: "open-preview-" + p.Id, Icon: glyph(heroicons.Icon16SolidMagnifyingGlass), Label: v.Text.OpenImage, OnClick: "void 0"},
-		{ID: "info-preview-" + p.Id, Icon: glyph(heroicons.Icon16SolidInformationCircle), Label: v.Text.ImageInfo, OnClick: "void 0"},
-		{ID: "save-preview-" + p.Id, Icon: glyph(heroicons.Icon16SolidArrowDownTray), Label: v.Text.SaveOriginalImage, OnClick: "void 0", Disabled: mediaSource(p.FileHash) == ""},
+		{ID: v.previewControlID("open-preview", p.Id), Icon: glyph(heroicons.Icon16SolidMagnifyingGlass), Label: v.Text.OpenImage, OnClick: "void 0"},
+		{ID: v.previewControlID("info-preview", p.Id), Icon: glyph(heroicons.Icon16SolidInformationCircle), Label: v.Text.ImageInfo, OnClick: "void 0"},
+		{ID: v.previewControlID("save-preview", p.Id), Icon: glyph(heroicons.Icon16SolidArrowDownTray), Label: v.Text.SaveOriginalImage, OnClick: "void 0", Disabled: mediaSource(p.FileHash) == ""},
 	}}}
 }

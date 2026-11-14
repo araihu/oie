@@ -19,7 +19,7 @@ templ draftLinkPreviewBody(v view) {
 			@glyph(heroicons.Icon16SolidLink)
 			<img data-draft-link-image alt="" width="44" height="44" hidden/>
 		</span>
-		<div class="oie-link-card-copy">
+		<div class="oie-preview-copy">
 			@link.Link("#",link.WithRootClass("oie-draft-link-title"),link.WithAttrs(templ.Attributes{"data-draft-link-title":"","target":"_blank","rel":"noopener noreferrer"})) {}
 			<p class="oie-preview-excerpt" data-draft-link-description></p>
 			<p class="oie-preview-site" data-draft-link-host></p>

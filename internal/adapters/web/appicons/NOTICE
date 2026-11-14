@@ -2,6 +2,22 @@ heroicons
 Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/chat-bubble-left.svg
 License: MIT
 
+heroicons-archive
+Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/archive-box-arrow-down.svg
+License: MIT
+
+heroicons-forward
+Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-uturn-right.svg
+License: MIT
+
+heroicons-group
+Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/user-group.svg
+License: MIT
+
+heroicons-navigation
+Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-turn-right-down.svg
+License: MIT
+
 heroicons-photo
 Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/photo.svg
 License: MIT

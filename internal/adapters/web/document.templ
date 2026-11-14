@@ -6,12 +6,15 @@ import (
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/link"
  "github.com/araihu/goshtoso/components/modal"
+ "github.com/araihu/goshtoso/components/toast"
+ "github.com/araihu/goshtoso/components/tooltip"
+ "github.com/araihu/goshtoso/expressions"
  "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
 templ documentCard(v view,item engineapi.SharedContentItem){
 <section class="oie-document-card" data-document-item={item.Id} data-document-revision={item.RevisionId} data-document-message-revision={item.Message.RevisionId} data-document-engine={v.EngineID} data-document-account={item.Message.AccountId} data-document-conversation={item.Message.ConversationId} data-document-message={item.Message.Id} data-document-filename={v.sharedTitle(item)} data-document-format={documentFormat(item)} data-document-source={documentSource(v,item)} data-document-url={safePreviewURL(item.Url)}>
-@card.Card(card.Config{Body:documentCardAction(v,item),Density:card.DensityCompact,RootClass:"oie-document-card-surface"})
+@card.Card(card.Config{Body:documentCardAction(v,item),Density:card.DensityCompact,RootClass:"oie-preview-card oie-document-card-surface"})
 </section>
 }
 templ documentCardAction(v view,item engineapi.SharedContentItem){
@@ -19,18 +22,27 @@ templ documentCardAction(v view,item engineapi.SharedContentItem){
 {{ attrs:=templ.Attributes{"data-document-open":"","aria-label":v.Text.DocumentOpen+": "+v.sharedTitle(item)} }}
 {{ if caption!="" { attrs["aria-describedby"]=sharedActionID(v,item,"document-caption") } }}
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-document-primary"),button.WithAttrs(attrs)){
-<span class="oie-document-thumbnail" data-document-preview aria-hidden="true"><span data-document-placeholder>@glyph(heroicons.Icon16SolidDocumentText)</span></span>
-<span class="oie-document-summary">
-<span class="oie-document-name">@glyph(heroicons.Icon16SolidDocumentText)<span>{v.sharedTitle(item)}</span></span>
-if caption!="" {
-<span class="oie-document-caption" data-document-caption id={sharedActionID(v,item,"document-caption")}>{caption}</span>
+<span class="oie-preview-frame oie-document-thumbnail" data-document-preview aria-hidden="true">
+if v.SharedInDetails {
+<span data-document-placeholder>@glyph(heroicons.Icon16SolidDocumentText)</span>
 }
+</span>
+<span class="oie-preview-summary">
+if v.SharedInDetails {
+<span class="oie-preview-symbol" aria-hidden="true">@glyph(heroicons.Icon16SolidDocumentText)</span>
+}
+<span class="oie-preview-copy">
+<span class="oie-preview-title oie-document-name">{v.sharedTitle(item)}</span>
+if caption!="" {
+<span class="oie-preview-excerpt oie-document-caption" data-document-caption id={sharedActionID(v,item,"document-caption")}>{caption}</span>
+}
+</span>
 </span>
 }
 }
 
 templ documentViewer(v view){
-<div data-document-copy hidden data-loading={v.Text.DocumentLoading} data-failed={v.Text.DocumentLoadFailed} data-unsupported={v.Text.DocumentUnsupported} data-empty={v.Text.DocumentEmpty} data-page={v.Text.DocumentPage}></div>
+<div data-document-copy hidden data-loading={v.Text.DocumentLoading} data-unsupported={v.Text.DocumentUnsupported} data-empty={v.Text.DocumentEmpty} data-page={v.Text.DocumentPage}></div>
 @modal.Dialog(modal.DialogConfig{ID:"oie-document-viewer",Title:v.Text.DocumentViewer,HeaderContent:documentHeader(v),Content:documentContent(v),FullscreenMobile:true})
 }
 templ documentHeader(v view){
@@ -45,7 +57,6 @@ templ documentHeader(v view){
 }
 templ documentContent(v view){
 <div class="oie-document-viewer-body">
-<p data-document-status role="status" aria-live="polite"></p>
 <div class="oie-document-pdf-controls" data-document-pdf-controls hidden>
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-document-previous":"","aria-label":v.Text.DocumentPrevious,"title":v.Text.DocumentPrevious})){@glyph(heroicons.Icon16SolidChevronLeft)}
 <span data-document-page></span>
@@ -54,6 +65,7 @@ templ documentContent(v view){
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-document-zoom-out":"","aria-label":v.Text.DocumentZoomOut,"title":v.Text.DocumentZoomOut})){<span aria-hidden="true">−</span>}
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-document-zoom-in":"","aria-label":v.Text.DocumentZoomIn,"title":v.Text.DocumentZoomIn})){@glyph(heroicons.Icon16SolidPlus)}
 </div>
+<div class="oie-document-stage">
 <div class="oie-document-scroll" data-document-scroll tabindex="0" aria-label={v.Text.DocumentViewer}>
 <pre class="oie-document-text" data-document-text hidden></pre>
 <div class="oie-document-markdown" data-document-markdown hidden></div>
@@ -62,6 +74,20 @@ templ documentContent(v view){
 <div class="textLayer" data-document-text-layer></div>
 </div>
 </div>
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-document-retry":"","hidden":true})){ {v.Text.DocumentRetry} }
+<p data-document-status role="status"></p>
+<div class="oie-document-retry" data-document-retry-region hidden>
+@tooltip.Tooltip("oie-document-retry-tip",v.Text.DocumentRetry,tooltip.WithTrigger(documentRetryButton(v)))
 </div>
+<div class="oie-document-toast" data-document-toast></div>
+<template data-document-error>
+@toast.Toast(toast.Config{Tone:toast.ToneDanger,Message:v.Text.DocumentLoadFailed}).WithExpressions(expressions.Toast{DismissAriaLabel:v.Text.Close})
+</template>
+</div>
+</div>
+}
+
+templ documentRetryButton(v view){
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-document-action"),button.WithAttrs(templ.Attributes{"data-document-retry":"","aria-label":v.Text.DocumentRetry})){
+@glyph(heroicons.Icon16SolidArrowPath)
+}
 }

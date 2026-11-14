@@ -1,10 +1,37 @@
 package web
 
 import (
+	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
+
+func TestSharedPaginationUsesCatalogAccountSelection(t *testing.T) {
+	parse := func(query string) view {
+		v := view{EngineID: testEngine, Locale: "en"}
+		v.configureWorkspace(httptest.NewRequest("GET", "/?section=media&"+query, nil))
+		return v
+	}
+	inherited := parse("account=" + testAccount)
+	explicit := parse("account=" + testAccount + "&contentAccount=" + testAccount)
+	cleared := parse("account=" + testAccount + "&contentAccount=")
+	all := parse("")
+	if inherited.sharedPageScope() != explicit.sharedPageScope() || cleared.sharedPageScope() != all.sharedPageScope() || inherited.sharedPageScope() == cleared.sharedPageScope() {
+		t.Fatal("pagination identity should follow the effective catalog selection")
+	}
+	for _, href := range []string{cleared.sharedHref("contentType", "links"), cleared.sharedHref("contentCursor", "next")} {
+		target, err := url.Parse(href)
+		if err != nil {
+			t.Fatal(err)
+		}
+		q := target.Query()
+		if q.Get("account") != testAccount || !q.Has("contentAccount") || q.Get("contentAccount") != "" {
+			t.Fatalf("lost global account or cleared catalog filter: %v", q)
+		}
+	}
+}
 
 func TestSharedPaginationScopeSeparatesCollectionsFromPages(t *testing.T) {
 	v := view{EngineID: testEngine, AccountFilter: testAccount, SharedType: "media", Query: "café", Locale: "pt-BR", Theme: "dark"}

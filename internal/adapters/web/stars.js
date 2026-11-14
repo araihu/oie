@@ -28,7 +28,12 @@ window.OieRuntime.register('stars', life => {
     for(const button of document.querySelectorAll('[data-star-message],[id^="star-message-"]')){
       if(button.id?.startsWith('star-message-'))button.dataset.starMessage=button.id.slice(13);
       const id=button.dataset.starMessage,current=states.get(id),pending=id&&journal(id),known=!!current?.known;
-      button.hidden=!known;button.disabled=!known||busy.has(id);
+      button.hidden=!known;
+      if(button.closest('#favorites-results')){
+        // Keep keyboard focus on the action while the row awaits confirmation.
+        button.disabled=!known;
+        button.setAttribute('aria-disabled',String(!known||busy.has(id)));
+      }else button.disabled=!known||busy.has(id);
       const label=pending?labels.retry:current?.starred?labels.unstar:labels.star;
       button.setAttribute('aria-label',label||'');button.title=label||'';
       if(button.id?.startsWith('star-message-')){button.setAttribute('role','menuitem');button.removeAttribute('aria-pressed');
@@ -48,21 +53,86 @@ window.OieRuntime.register('stars', life => {
   read(document);
   function readInfo(root){if(!root)return;for(const data of root.querySelectorAll('[data-info-star-states]'))if(data.dataset.known==='true'){for(const row of data.querySelectorAll('[data-star-state]'))states.set(row.dataset.starSource,{known:true,starred:row.dataset.starred==='true',revision:row.dataset.revision||null});}render();}
   readInfo(document);
-  life.on(document,'oie:info-content',event=>{if(event.detail.generation===generation)readInfo(event.detail.root);else{render();document.dispatchEvent(new CustomEvent('oie:refresh-request'));}});
+
+  window.OieMasonry?.layout(document.getElementById('favorites-results'));
+  life.on(document,'oie:info-content',event=>{
+    const {root, generation: requestedGeneration} = event.detail;
+    if (root.id === 'favorites-results') window.OieMasonry?.layout(root);
+    if(requestedGeneration===generation)readInfo(root);else{render();document.dispatchEvent(new CustomEvent('oie:refresh-request'));}
+  });
 
   life.on(document,'oie:actions-refreshed',render);
-  function refreshInfo(page){
-    const current=document.querySelector('[data-info-stars]'),fresh=page.querySelector('#live-info-content [data-info-stars]');
+  function refreshStarredPage(current,fresh,scroll,heading){
     if(!current||!fresh||current.dataset.version===fresh.dataset.version)return;
-    const scroll=document.getElementById('details-body'),top=scroll?.scrollTop;
-    const active=current.contains(document.activeElement)?document.activeElement:null,message=active?.closest('[data-info-star-message]')?.dataset.infoStarMessage,wasStar=active?.matches('[data-star-message]');
-    const apply=()=>{for(const child of current.children)window.Alpine?.destroyTree(child);current.innerHTML=fresh.innerHTML;current.dataset.version=fresh.dataset.version;for(const child of current.children)window.Alpine?.initTree(child);};
+    const top=scroll?.scrollTop;
+    const active=current.contains(document.activeElement)?document.activeElement:null;
+    const message=active?.closest('[data-info-star-message]')?.dataset.infoStarMessage;
+    const action=active?.matches('[data-star-message]')?'[data-star-message]':'[data-favorite-menu-trigger]';
+    const visibleTop=scroll?.getBoundingClientRect().top;
+    const anchors=scroll?[...current.querySelectorAll('[data-info-star-message]')]
+      .filter(row=>row.getBoundingClientRect().bottom>visibleTop)
+      .map(row=>[row.dataset.infoStarMessage,row.getBoundingClientRect().top]):[];
+    const findRow=id=>current.querySelector(`[data-info-star-message="${CSS.escape(id)}"]`);
+    const rows='[data-info-star-message]';
+    const apply=()=>{
+      let cursor=current.firstElementChild;
+      for(const next of fresh.children){
+        const id=next.dataset.infoStarMessage;
+        let child=id?findRow(id):null;
+        if(!child&&cursor&&!cursor.matches(rows)&&!next.matches(rows)){
+          // The incoming pagination has no client-computed span.
+          if(cursor.style.gridRowEnd)next.style.gridRowEnd=cursor.style.gridRowEnd;
+          if(cursor.isEqualNode(next))child=cursor;
+        }
+        if(!child){
+          child=next.cloneNode(true);
+          current.insertBefore(child,cursor);
+          window.Alpine?.initTree(child);
+        }else{
+          if(child!==cursor)current.insertBefore(child,cursor);
+          if(id&&child.dataset.version!==next.dataset.version&&!child.querySelector('[role="menu"]:focus-within') && !child.querySelector('.oie-message-body :focus')){
+            if(!window.OieVideos?.swap(child,next.innerHTML)){
+              for(const element of child.children)window.Alpine?.destroyTree(element);
+              child.innerHTML=next.innerHTML;
+              for(const element of child.children)window.Alpine?.initTree(element);
+            }
+            for(const name of ['data-version','data-source-revision','data-message-source'])child.setAttribute(name,next.getAttribute(name));
+          }
+        }
+        cursor=child.nextElementSibling;
+      }
+      while(cursor){
+        const next=cursor.nextElementSibling;
+        window.Alpine?.destroyTree(cursor);
+        cursor.remove();
+        cursor=next;
+      }
+      current.dataset.version=[...fresh.querySelectorAll(rows)].every(row=>findRow(row.dataset.infoStarMessage)?.dataset.version===row.dataset.version)?fresh.dataset.version:'';
+    };
     if(window.Alpine?.mutateDom)window.Alpine.mutateDom(apply);else apply();
-    if(active){const row=message&&current.querySelector(`[data-info-star-message="${CSS.escape(message)}"]`);const target=wasStar?row?.querySelector('[data-star-message]'):row?.querySelector('[data-info-source]');(target||current.querySelector('[data-info-star-message] [data-star-message]')||current.querySelector('[data-info-heading]'))?.focus({preventScroll:true});}
-    if(scroll&&top!==undefined)scroll.scrollTop=top;
+    window.OieTime?.localize(current);
+    if(current.id==='favorites-results')window.OieMasonry?.layout(current);
+    if(active&&!active.isConnected){
+      const row=message&&findRow(message);
+      (row?.querySelector(action)||current.querySelector(rows+' '+action)||heading())?.focus({preventScroll:true});
+    }
+    if(scroll&&top!==undefined){
+      const anchor=anchors.find(([id])=>findRow(id));
+      scroll.scrollTop=anchor?top+findRow(anchor[0]).getBoundingClientRect().top-anchor[1]:top;
+    }
     document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));
+    document.dispatchEvent(new CustomEvent('oie:starred-content',{detail:{current,fresh}}));
   }
-  life.on(document,'oie:stars-refresh',event=>{if(event.detail.generation===generation){refreshInfo(event.detail.page);read(event.detail.page);readInfo(event.detail.page);}});
+  life.on(document,'oie:stars-refresh',event=>{
+    if(event.detail.generation!==generation)return;
+    const page=event.detail.page;
+    const info=document.querySelector('[data-info-stars]');
+    refreshStarredPage(info,page.querySelector('#live-info-content [data-info-stars]'),
+      document.getElementById('details-body'),()=>info.querySelector('[data-info-heading]'));
+    refreshStarredPage(document.getElementById('favorites-results'),page.querySelector('#favorites-results'),
+      document.getElementById('favorites-scroll'),()=>document.getElementById('favorites-heading'));
+    read(page);readInfo(page);
+  });
   let viewerRead=false,viewerAgain=false;
   async function refreshViewer(){
     if(!viewerMessage)return;if(viewerRead){viewerAgain=true;return;}viewerRead=true;

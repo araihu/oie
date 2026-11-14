@@ -134,14 +134,20 @@ JOIN message_stars AS s ON s.message_id=(
 WHERE s.starred=1
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id)
-AND (CAST(?1 AS TEXT)='' OR m.account_id=CAST(?1 AS TEXT))
-AND (CAST(?2 AS TEXT)='' OR m.conversation_id=CAST(?2 AS TEXT))
-AND (CAST(?3 AS TEXT)='' OR
- (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)<(SELECT COALESCE(x.timeline_at_ms,x.created_at_ms),x.id FROM messages AS x WHERE x.id=CAST(?3 AS TEXT)))
-ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT ?4
+AND (CAST(?1 AS TEXT)='' OR oie_search_match(
+ COALESCE(json_extract(COALESCE(h.payload,m.payload),'$.OriginalText'),'') || ' ' ||
+ COALESCE(json_extract(m.payload,'$.Sender.DisplayName'),'') || ' ' ||
+ COALESCE(json_extract(c.payload,'$.Title'),'') || ' ' || c.address,
+ CAST(?1 AS TEXT))=1)
+AND (CAST(?2 AS TEXT)='' OR m.account_id=CAST(?2 AS TEXT))
+AND (CAST(?3 AS TEXT)='' OR m.conversation_id=CAST(?3 AS TEXT))
+AND (CAST(?4 AS TEXT)='' OR
+ (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)<(SELECT COALESCE(x.timeline_at_ms,x.created_at_ms),x.id FROM messages AS x WHERE x.id=CAST(?4 AS TEXT)))
+ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT ?5
 `
 
 type ListStarredMessagesParams struct {
+	Search         string
 	AccountID      string
 	ConversationID string
 	PageCursor     string
@@ -157,6 +163,7 @@ type ListStarredMessagesRow struct {
 
 func (q *Queries) ListStarredMessages(ctx context.Context, arg ListStarredMessagesParams) ([]ListStarredMessagesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listStarredMessages,
+		arg.Search,
 		arg.AccountID,
 		arg.ConversationID,
 		arg.PageCursor,

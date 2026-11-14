@@ -1,0 +1,131 @@
+package web
+
+import (
+	"strconv"
+	"time"
+
+	"github.com/araihu/goshtoso/components/avatar"
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/chatbubble"
+	"github.com/araihu/goshtoso/components/dropdown"
+	"github.com/araihu/goshtoso/components/icon/heroicons"
+	"github.com/araihu/goshtoso/components/emptystate"
+	"github.com/araihu/goshtoso/components/link"
+	"github.com/araihu/goshtoso/components/textinput"
+	"github.com/araihu/goshtoso/expressions"
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+)
+
+templ favoritesWorkspace(v view) {
+	<section id="workspace" class="oie-shared-workspace" aria-labelledby="favorites-heading">
+		<header class="oie-shared-header">
+			@navigationControl(v)
+			<h2 id="favorites-heading" tabindex="-1">{ v.Text.InfoStarred }</h2>
+		</header>
+		<form id="favorites-search-form" action="/" method="get" class="oie-favorites-search" role="search" aria-label={ v.Text.FavoritesSearch } hx-sync="this:replace">
+			<input type="hidden" name="section" value="favorites"/>
+			if v.AccountFilter != "" {
+				<input type="hidden" name="account" value={ v.AccountFilter }/>
+			}
+			<input type="hidden" name="lang" value={ v.Locale }/>
+			<input type="hidden" name="theme" value={ v.Theme }/>
+			@textinput.TextInput(textinput.Config{ID:"favorites-search", Name:"favoritesQuery", Type:textinput.TypeSearch, Value:v.FavoritesQuery, Placeholder:v.Text.FavoritesSearch, MaxLength:200, InputAttrs:templ.Attributes{"aria-controls":"favorites-results"}}).WithExpressions(expressions.TextInput{SearchAriaLabel:v.Text.FavoritesSearch})
+		</form>
+		<div id="favorites-scroll" class="oie-shared-scroll">
+			@favoritesResults(v)
+		</div>
+	</section>
+}
+
+templ favoritesResults(v view) {
+	<div id="favorites-results" data-masonry-grid data-engine-id={ v.EngineID } data-search-query={ v.FavoritesQuery } data-version={ v.starredPageVersion(v.FavoritesPage, v.FavoritesInvalid) }>
+		@starredPageStates(v.FavoritesPage)
+		if v.FavoritesInvalid {
+			<p role="status">{ v.Text.SharedPageUnavailable }</p>
+			@link.Link(v.favoritesHref("")) { { v.Text.SharedNewest } }
+		} else if v.FavoritesPage == nil {
+			<p role="status">{ v.Text.InfoStarsUnavailable }</p>
+			@link.Link(v.favoritesHref(v.FavoritesCursor)) { { v.Text.Retry } }
+		} else {
+			if len(v.FavoritesPage.Items) == 0 {
+				if v.FavoritesQuery != "" {
+					<div role="status">@emptystate.EmptyState(emptystate.Config{Title: v.Text.FavoritesNoResults})</div>
+				} else {
+					@emptystate.EmptyState(emptystate.Config{Title: v.Text.FavoritesEmpty, Description: v.Text.FavoritesEmptyHelp})
+				}
+			} else {
+				{{ starView := v.starredPageView(v.FavoritesPage, "favorites") }}
+				for _, item := range v.FavoritesPage.Items {
+					@starredMessageRow(starView, item, true)
+				}
+			}
+			if v.FavoritesCursor != "" || v.FavoritesPage.NextCursor != nil {
+				<nav class="oie-favorites-pagination" aria-label={ v.Text.InfoStarred }>
+					if v.FavoritesCursor != "" {
+						@link.Link(v.favoritesHref("")) { { v.Text.SharedNewest } }
+					}
+					if v.FavoritesPage.NextCursor != nil {
+						@link.Link(v.favoritesHref(*v.FavoritesPage.NextCursor)) { { v.Text.SharedNext } }
+					}
+				</nav>
+			}
+		}
+	</div>
+}
+
+templ starredPageStates(page *engineapi.StarredMessagePage) {
+	<div data-info-star-states data-known={ strconv.FormatBool(page != nil) } hidden>
+		if page != nil {
+			for _, item := range page.Items {
+				<span data-star-state data-star-source={ item.Message.Id } data-starred={ strconv.FormatBool(item.Star.Starred) } data-revision={ starRevision(item.Star) }></span>
+			}
+		}
+	</div>
+}
+
+templ starredMessageRow(v view, item engineapi.StarredMessage, showSource bool) {
+	{{
+			position := messageTimelineTime(item.Message)
+			m := v.starredMessage(item)
+			v.Selected = &item.Conversation
+		}}
+	<article class="oie-info-star" data-info-star-message={ item.Message.Id } data-version={ v.starredRowVersion(item) } data-source-revision={ m.RevisionId } data-favorite-source data-message-source={ originalMessageJSON(item.Message.OriginalText) }>
+		<header>
+			@profileAvatar(v,m.AccountId,v.messageAvatarAddress(m),avatar.Config{Name:m.Sender.DisplayName,Size:avatar.SizeXS})
+			<strong>{ item.Message.Sender.DisplayName }</strong>
+			@starButton(v, item.Message.Id)
+			{{ scope := "info"; if showSource { scope = "global" } }}
+			@dropdown.Dropdown(dropdown.Config{ID: "favorite-menu-" + scope + "-" + item.Message.Id, Label: v.Text.MessageActions, Trigger: favoriteMenuTrigger(v), RootClass: "oie-shared-menu", MenuAlign: dropdown.AlignEnd, Sections: favoriteActions(v, item.Message, scope)})
+		</header>
+		if showSource {
+			<p class="oie-favorite-source">
+				{ item.Conversation.Title }
+				if v.AccountFilter == "" && len(v.Accounts) > 1 {
+					if account := v.accountLabel(item.Conversation.AccountId); account != "" {
+						<span> · { account }</span>
+					}
+				}
+			</p>
+		}
+		@viewerSource(v,m)
+		<div class={"oie-starred-bubble",templ.KV("oie-message-own",m.IsOwn)}>
+			@chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),RootClass:"oie-bubble",MessageContent:starredBubbleBody(v,m,position)})
+		</div>
+	</article>
+}
+
+templ starredBubbleBody(v view, m messageView, position time.Time) {
+	<div class="oie-message-body">
+		@messageBody(v,m)
+		@outgoingAttachments(v,m.Message)
+		<div class="oie-message-stamp">
+			<time data-shared-source-date datetime={ position.Format("2006-01-02T15:04:05Z07:00") }>{ position.Format("2006-01-02 15:04") }</time>
+		</div>
+	</div>
+}
+
+templ favoriteMenuTrigger(v view) {
+	@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-shared-menu-trigger"), button.WithAttrs(templ.Attributes{"data-favorite-menu-trigger": "", "aria-label": v.Text.MessageActions, "title": v.Text.MessageActions})){
+		@glyph(heroicons.Icon16SolidChevronDown)
+	}
+}

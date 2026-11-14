@@ -4,11 +4,13 @@ window.OieRuntime.register('documents', life => {
  const labels=document.querySelector('[data-document-copy]')?.dataset||{},status=dialog.querySelector('[data-document-status]'),text=dialog.querySelector('[data-document-text]'),markdown=dialog.querySelector('[data-document-markdown]'),canvas=dialog.querySelector('[data-document-canvas]'),layer=dialog.querySelector('[data-document-text-layer]'),sheet=dialog.querySelector('[data-document-pdf-page]'),controls=dialog.querySelector('[data-document-pdf-controls]'),scroll=dialog.querySelector('[data-document-scroll]'),counter=dialog.querySelector('[data-document-page]'),retry=dialog.querySelector('[data-document-retry]');
  const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
  let current=null,opener=null,origin='',generation=0,renderGeneration=0,request,loadingTask,pdf,renderTask,textLayer,page=1,zoom=1,pdfjs;
- function feedback(key,state){status.textContent=labels[key]||'';status.dataset.state=state;status.setAttribute('role',state==='failed'?'alert':'status')}
+ const toast=dialog.querySelector('[data-document-toast]'),error=dialog.querySelector('[data-document-error]'),retryRegion=retry.closest('[data-document-retry-region]');
+ function feedback(key,state){status.textContent=labels[key]||'';status.dataset.state=state}
  function reset(){
+  toast.replaceChildren();
   generation++;renderGeneration++;request?.abort();request=null;renderTask?.cancel();renderTask=null;textLayer?.cancel();textLayer=null;
   const task=loadingTask,document=pdf;loadingTask=null;pdf=null;if(task)task.destroy().catch(()=>{});else document?.destroy().catch(()=>{});
-  text.textContent='';text.hidden=true;markdown.replaceChildren();markdown.hidden=true;layer.replaceChildren();canvas.width=0;canvas.height=0;canvas.style.width='';canvas.style.height='';sheet.hidden=true;sheet.style.width='';sheet.style.height='';controls.hidden=true;counter.textContent='';delete counter.dataset.current;delete counter.dataset.total;retry.hidden=true;page=1;zoom=1;scroll.scrollTop=0;scroll.scrollLeft=0;
+  text.textContent='';text.hidden=true;markdown.replaceChildren();markdown.hidden=true;layer.replaceChildren();canvas.width=0;canvas.height=0;canvas.style.width='';canvas.style.height='';sheet.hidden=true;sheet.style.width='';sheet.style.height='';controls.hidden=true;counter.textContent='';delete counter.dataset.current;delete counter.dataset.total;retryRegion.hidden=true;page=1;zoom=1;scroll.scrollTop=0;scroll.scrollLeft=0;
  }
  function validSource(card){
   const data=card.dataset;if(![data.documentItem,data.documentEngine,data.documentAccount,data.documentConversation,data.documentMessage].every(uuid)||data.documentEngine!==document.body.dataset.engineId)return null;
@@ -17,7 +19,12 @@ window.OieRuntime.register('documents', life => {
   let original='';try{const url=new URL(data.documentUrl);if(['http:','https:'].includes(url.protocol)&&!url.username&&!url.password)original=url.href}catch{}
   return {id:data.documentItem,engine:data.documentEngine,account:data.documentAccount,conversation:data.documentConversation,message:data.documentMessage,revision:data.documentRevision,messageRevision:data.documentMessageRevision,format:data.documentFormat,filename:data.documentFilename||labels.page||'',source:source.pathname+source.search,original};
  }
- function failure(unsupported=false){text.hidden=true;markdown.hidden=true;sheet.hidden=true;controls.hidden=true;feedback(unsupported?'unsupported':'failed','failed');retry.hidden=!current||current.format==='unsupported'}
+ function failure(unsupported=false){
+  text.hidden=true;markdown.hidden=true;sheet.hidden=true;controls.hidden=true;
+  feedback(unsupported?'unsupported':'','failed');
+  retryRegion.hidden=!current||current.format==='unsupported';
+  if(!unsupported)toast.replaceChildren(error.content.cloneNode(true));
+ }
  function decode(bytes){
   if(bytes.length>=4&&((bytes[0]===0&&bytes[1]===0&&bytes[2]===254&&bytes[3]===255)||(bytes[0]===255&&bytes[1]===254&&bytes[2]===0&&bytes[3]===0)))throw Error('encoding');
   let encoding='utf-8',offset=0;if(bytes[0]===255&&bytes[1]===254){encoding='utf-16le';offset=2}else if(bytes[0]===254&&bytes[1]===255){encoding='utf-16be';offset=2}
@@ -64,10 +71,17 @@ window.OieRuntime.register('documents', life => {
  // Card previews only read bounded bytes for visible documents. Originals still
  // use the existing explicit viewer path, independently of preview failures.
  const previewChunk=64*1024,previewBudget=2*1024*1024,previewQueue=[],previewSeen=new WeakSet(),previewRequests=new Set();let previewActive=0;
- async function previewRange(record,start,end,controller,partial=false){
-  const response=await life.fetch(record.source,{credentials:'same-origin',cache:'default',redirect:'error',headers:{Range:`bytes=${start}-${end-1}`},signal:controller.signal});
+ function validPreviewTag(tag){return typeof tag==='string'&&tag.length<=1024&&/^(?:W\/)?"[\x21\x23-\x7e]*"$/.test(tag)}
+ const validPreviewDigest=value=>typeof value==='string'&&/^[0-9a-f]{64}$/.test(value);
+ async function previewRange(record,start,end,controller,{partial=false,etag='',ifRange=''}={}){
+  const headers={Range:`bytes=${start}-${end-1}`};
+  if(etag)headers['If-None-Match']=etag;
+  if(ifRange)headers['If-Range']=ifRange;
+  const response=await life.fetch(record.source,{credentials:'same-origin',cache:'no-store',redirect:'error',headers,signal:controller.signal});
+  if(response.status===304&&etag)return {unchanged:true};
   if(!response.ok)throw Error('unavailable');
   const kind=response.headers.get('Content-Type')?.split(';')[0].trim();if(kind!==(record.format==='pdf'?'application/pdf':'text/plain'))throw Error('type');
+  const responseTag=response.headers.get('ETag');
   const header=response.headers.get('Content-Range'),range=header&&/^bytes (\d+)-(\d+)\/(\d+)$/.exec(header),length=Number(response.headers.get('Content-Length'));
   if(response.status===206&&(!range||Number(range[1])!==start||Number(range[2])>=end||Number(range[3])<=Number(range[2])))throw Error('range');
   if(response.status!==206&&(start!==0||(!partial&&length>end))) {await response.body?.cancel();throw Error('range')}
@@ -75,14 +89,29 @@ window.OieRuntime.register('documents', life => {
   try{while(size<end-start){const {done,value}=await reader.read();if(done)break;const chunk=value.subarray(0,end-start-size);chunks.push(chunk);size+=chunk.length;if(chunk.length!==value.length&&!partial)throw Error('large')}if(partial)await reader.cancel();else{const rest=await reader.read();if(!rest.done)throw Error('large')}}finally{await reader.cancel().catch(()=>{});reader.releaseLock()}
   const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length}
   if(range&&size!==Number(range[2])-start+1)throw Error('range');
-  return {bytes,total:range?Number(range[3]):size,range:!!range};
+  return {bytes,total:range?Number(range[3]):length||size,etag:validPreviewTag(responseTag)?responseTag:''};
  }
- async function producePreview(record,{signal}){
+ async function producePreview(record,{signal,previous}){
   const controller=new AbortController(),cancel=()=>controller.abort();signal.addEventListener('abort',cancel,{once:true});if(signal.aborted)controller.abort();
-  try{return await renderDocumentPreview(record,controller)}finally{signal.removeEventListener('abort',cancel);controller.abort()}
+  try{
+   const initial=await previewRange(record,0,previewChunk,controller,{partial:record.format!=='pdf',etag:previous?.etag});
+   if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
+   if(initial.unchanged)return previous;
+   // For sources without an ETag, only reuse a render if we can verify all its
+   // inputs. Text rendering uses this excerpt; PDF.js may need other ranges.
+   let digest='';
+   if(!initial.etag&&globalThis.crypto?.subtle&&(record.format!=='pdf'||initial.total===initial.bytes.length)){
+    const input=new Uint8Array(initial.bytes.length+1);
+    input.set(initial.bytes);input[input.length-1]=Number(initial.total>initial.bytes.length);
+    const hash=await crypto.subtle.digest('SHA-256',input);
+    digest=Array.from(new Uint8Array(hash),byte=>byte.toString(16).padStart(2,'0')).join('');
+    if(previous?.digest===digest)return previous;
+   }
+   const value=await renderDocumentPreview(record,controller,initial);
+   return {...value,etag:initial.etag,digest};
+  }finally{signal.removeEventListener('abort',cancel);controller.abort()}
  }
- async function renderDocumentPreview(record,controller){
-  const initial=await previewRange(record,0,previewChunk,controller,record.format!=='pdf');if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
+ async function renderDocumentPreview(record,controller,initial){
   if(record.format!=='pdf'){
    // A range can end inside a UTF-8 sequence. Decode incrementally without
    // flushing that final incomplete code point into a replacement character.
@@ -100,7 +129,7 @@ window.OieRuntime.register('documents', life => {
     if(!Number.isSafeInteger(begin)||!Number.isSafeInteger(end)||begin<0||end<=begin||end>initial.total||(spent+=end-begin)>previewBudget){failed(Error('large'));return}
     // PDF.js can request several disjoint objects at once. Serialize each
     // document's ranges so two preview jobs still use at most two HTTP readers.
-    rangeQueue=rangeQueue.then(async()=>{if(controller.signal.aborted)return;const part=await previewRange(record,begin,end,controller);if(!controller.signal.aborted){if(part.total!==initial.total)throw Error('changed');this.onDataRange(begin,part.bytes)}}).catch(error=>{if(!controller.signal.aborted)failed(error)});
+    rangeQueue=rangeQueue.then(async()=>{if(controller.signal.aborted)return;const part=await previewRange(record,begin,end,controller,{ifRange:initial.etag.startsWith('"')?initial.etag:''});if(!controller.signal.aborted){if(part.total!==initial.total||part.etag!==initial.etag)throw Error('changed');this.onDataRange(begin,part.bytes)}}).catch(error=>{if(!controller.signal.aborted)failed(error)});
    }
    abort(){controller.abort()}
   }
@@ -110,13 +139,32 @@ window.OieRuntime.register('documents', life => {
    return await Promise.race([(async()=>{const pdf=await task.promise,first=await pdf.getPage(1);if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');const base=first.getViewport({scale:1}),scale=Math.min(400/base.width,180/base.height),viewport=first.getViewport({scale}),output=record.output;const node=document.createElement('canvas');node.width=Math.ceil(viewport.width*output);node.height=Math.ceil(viewport.height*output);node.style.width=viewport.width+'px';node.style.height=viewport.height+'px';await first.render({canvasContext:node.getContext('2d'),viewport,transform:output===1?null:[output,0,0,output,0,0],annotationMode:library.AnnotationMode.DISABLE}).promise;if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');const blob=await new Promise(resolve=>node.toBlob(resolve,'image/png'));if(!blob)throw Error('preview_encoding');return {kind:'image',blob,width:viewport.width,height:viewport.height}})(),failure]);
   }finally{controller.signal.removeEventListener('abort',cancel);if(task)await task.destroy().catch(()=>{})}
  }
+ const previewMarkdownTags=new Set('article section div figure figcaption h1 h2 h3 h4 h5 h6 p ul ol li blockquote pre code span strong em del s hr br table thead tbody tfoot tr th td dl dt dd sup sub'.split(' '));
  async function validStoredPreview(value,record){
+  if(!validPreviewTag(value?.etag)&&!validPreviewDigest(value?.digest))return false;
+  if(record.format==='text')return value?.kind==='text'&&typeof value.text==='string'&&value.text.length<=1800&&!value.text.includes('\u0000');
+  if(record.format==='markdown'){
+   if(value?.kind!=='markdown'||typeof value.html!=='string'||value.html.length>1024*1024)return false;
+   // Check persistent fragments in an inert template before they can enter the page.
+   const template=document.createElement('template');template.innerHTML=value.html;
+   return Array.from(template.content.querySelectorAll('*')).every(node=>previewMarkdownTags.has(node.localName)&&!node.hasAttributes());
+  }
   if(value?.kind!=='image'||!(value.blob instanceof Blob)||value.blob.type!=='image/png'||value.blob.size<24||value.blob.size>1024*1024||!(value.width>0&&value.width<=400.01&&value.height>0&&value.height<=180.01))return false;
   let bitmap;try{bitmap=await createImageBitmap(value.blob);return bitmap.width===Math.ceil(value.width*record.output)&&bitmap.height===Math.ceil(value.height*record.output)}catch{return false}finally{bitmap?.close()}
  }
- const cachedPreview=window.OieCache.decorate({namespace:'document-preview-pdfjs6.5.438-margo1-v2',key:record=>[record.engine,record.account,record.conversation,record.message,record.id,record.revision,record.messageRevision,record.original,record.format,record.output],load:producePreview,ttl:(value,record)=>record.format==='markdown'&&value.kind==='text'?30000:30*60*1000,size:value=>value.kind==='image'?value.blob.size:(value.text??value.html).length*2,storage:window.OieCache.indexedDBStore({name:'oie.pdf-previews.v1',store:'thumbnails'}),persist:record=>record.format==='pdf',validate:validStoredPreview});
+ const cachedPreview=window.OieCache.decorate({
+  namespace:'document-preview-pdfjs6.5.438-margo1-v2',
+  key:record=>[record.engine,record.account,record.conversation,record.message,record.id,record.revision,record.messageRevision,record.original,record.format,record.output],
+  load:producePreview,
+  ttl:(value,record)=>record.format==='markdown'&&value.kind==='text'?30000:30*60*1000,
+  size:value=>value.kind==='image'?value.blob.size:(value.text??value.html).length*2,
+  storage:window.OieCache.indexedDBStore({name:'oie.pdf-previews.v1',store:'thumbnails'}),
+  persist:(record,value)=>value===undefined||(Boolean(value.etag||value.digest)&&(record.format!=='markdown'||value.kind==='markdown')),
+  validate:validStoredPreview,
+  revalidate:true,
+ });
  async function paintPreview(card,record,controller){
-  record={...record,output:Math.min(devicePixelRatio||1,2)};
+  record={...record,output:record.format==='pdf'?Math.min(devicePixelRatio||1,2):1};
   let hit=false,stored=false;const preview=await cachedPreview(record,{signal:controller.signal,onHit:()=>hit=true,onStored:()=>stored=true});
   if(controller.signal.aborted||!card.isConnected)return;
   const target=card.querySelector('[data-document-preview]');if(!target)return;
@@ -126,7 +174,8 @@ window.OieRuntime.register('documents', life => {
    const node=document.createElement('img'),source=URL.createObjectURL(preview.blob);let released=false;
    const release=()=>{if(released)return;released=true;URL.revokeObjectURL(source);controller.signal.removeEventListener('abort',release);node.onload=null;node.onerror=null};
    const loaded=new Promise((resolve,reject)=>{const cancel=()=>{release();reject(new DOMException('Aborted','AbortError'))};controller.signal.addEventListener('abort',cancel,{once:true});node.onload=()=>{controller.signal.removeEventListener('abort',cancel);resolve()};node.onerror=()=>{controller.signal.removeEventListener('abort',cancel);reject(Error('preview_image'))}});
-   node.alt='';node.width=Math.ceil(preview.width);node.height=Math.ceil(preview.height);node.style.width='100%';node.style.height='100%';node.dataset.documentPdfPreview='';node.src=source;target.replaceChildren(node);try{await loaded}finally{release()}
+   node.alt='';node.width=Math.ceil(preview.width);node.height=Math.ceil(preview.height);node.dataset.documentPdfPreview='';node.src=source;
+   try{await loaded;if(!controller.signal.aborted&&card.isConnected)target.replaceChildren(node)}finally{release()}
   }
   card.dataset.documentPreviewCache=hit?'hit':'miss';if(stored)card.dataset.documentPreviewStored='true';card.dataset.documentPreviewState='ready';
  }
@@ -141,7 +190,8 @@ window.OieRuntime.register('documents', life => {
  life.on(document,'click',event=>{
   const open=event.target.closest('[data-document-open]');if(open){const card=open.closest('[data-document-item]'),record=card&&validSource(card);if(!record)return;event.preventDefault();opener=open;origin=card.closest('#info-shared-results')?'info':'global';current=record;dialog.querySelector('[data-document-title]').textContent=record.filename;dialog.setAttribute('aria-labelledby','oie-document-title');const download=dialog.querySelector('[data-document-download]'),original=dialog.querySelector('[data-document-original]');download.href=record.source+'&download=1';download.hidden=record.format==='unsupported';original.href=record.original||'#';original.hidden=!record.original;window.dispatchEvent(new CustomEvent('modal:open',{detail:{id:'oie-document-viewer'}}));load();return}
   if(event.target.closest('[data-document-close]')){event.preventDefault();close();return}
-  if(event.target.closest('[data-document-retry]')){event.preventDefault();load();return}
+  if(event.target.closest('[data-document-retry]')){event.preventDefault();scroll.focus({preventScroll:true});load();return}
+  if(event.target.closest('[data-document-toast] button')&&!retryRegion.hidden){retry.focus({preventScroll:true});return}
   const button=event.target.closest('[data-document-previous],[data-document-next],[data-document-fit],[data-document-zoom-in],[data-document-zoom-out]');if(!button||button.disabled||!pdf)return;event.preventDefault();if(button.hasAttribute('data-document-previous'))page=Math.max(1,page-1);if(button.hasAttribute('data-document-next'))page=Math.min(pdf.numPages,page+1);if(button.hasAttribute('data-document-fit'))zoom=1;if(button.hasAttribute('data-document-zoom-in'))zoom=Math.min(3,zoom*1.25);if(button.hasAttribute('data-document-zoom-out'))zoom=Math.max(0.5,zoom/1.25);renderPage(generation);
  });
  life.on(dialog,'close',()=>{const id=current?.id;reset();current=null;status.textContent='';const target=opener?.isConnected?opener:document.querySelector((origin==='info'?'#info-shared-results':'#shared-content-results')+` [data-document-item="${CSS.escape(id||'')}"] [data-document-open]`);life.raf(()=>target?.focus({preventScroll:true}))});

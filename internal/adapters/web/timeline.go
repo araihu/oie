@@ -187,10 +187,13 @@ func (v *view) setTimelineMessages(items []engineapi.Message, extras map[string]
 
 func (v *view) formatTimelineMessages(ctx context.Context) {
 	for i := range v.Messages {
-		m := &v.Messages[i]
-		m.Presentation = videoPresentation(imagePresentation(m.displayBody(), v.MessagePreviews[m.Id]), v.messageVideos(m.Id))
-		m.Formatted, m.RoomInvitations = formattedMessageWithInvitations(ctx, m.Presentation, invitationScope{m.AccountId, m.ConversationId, v.Locale})
+		v.formatMessage(ctx, &v.Messages[i])
 	}
+}
+
+func (v view) formatMessage(ctx context.Context, m *messageView) {
+	m.Presentation = videoPresentation(imagePresentation(m.displayBody(), v.MessagePreviews[m.Id]), v.messageVideos(m.Id))
+	m.Formatted, m.RoomInvitations = formattedMessageWithInvitations(ctx, m.Presentation, invitationScope{m.AccountId, m.ConversationId, v.Locale})
 }
 
 // timelinePage is an internal, same-origin HTML representation of canonical

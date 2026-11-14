@@ -7,7 +7,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const text=await fs.readFile(path.join(__dirname,'fixtures/tiny-document.txt')),pdfBytes=await fs.readFile(path.join(__dirname,'fixtures/tiny-document.pdf'));
  const markdownBytes=Buffer.from('# Release notes\n\n**Fixed** a bug.\n\n- First change\n- Second change\n\n> A quoted note\n\n```go\nfmt.Println("Olá")\n```\n\n[Documentation](https://docs.example.test/)\n');
  const engine=id(1),account=id(2),other=id(3),chat=id(4),revision=id(5),good=id(20),pdf=id(21),bad=id(22),held=id(23),oversize=id(24),foreign=id(25),streams=new Set();
- const state={seq:0,failure:true,hold:false,foreignEngine:false,pdfCatalog:null,reads:[],peakReaders:0,activeReaders:0,busyReaders:0,pending:[],aborted:[],writes:0};
+ const state={seq:0,failure:true,hold:false,foreignEngine:false,pdfCatalog:null,reads:[],versions:new Map(),peakReaders:0,activeReaders:0,busyReaders:0,pending:[],aborted:[],writes:0};
  const unsupported=id(35),sparse=id(36),budget=id(37),burst=id(38);
  // Unused stream data can be skipped with sparse ranges. A long comment before
  // required page content needs more bytes and must stop at the preview budget.
@@ -39,11 +39,11 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(u.pathname.match(new RegExp('^/api/v1/conversations/'+chat+'/messages/[^/]+/context$')))return send(200,{targetId:items[0].message.id,items:[items[0].message],hasOlder:false,hasNewer:false});
   if(u.pathname==='/api/v1/shared-content'){
    const catalog=items.filter(item=>state.pdfCatalog?state.pdfCatalog.includes(item.id):![sparse,budget,burst].includes(item.id));
-   let selected=['documents','document'].includes(u.searchParams.get('type'))?[...catalog]:[];if(u.searchParams.get('accountId'))selected=selected.filter(item=>item.message.accountId===u.searchParams.get('accountId'));if(u.searchParams.get('conversationId'))selected=selected.filter(item=>item.message.conversationId===u.searchParams.get('conversationId'));const ids=u.searchParams.getAll('messageId');if(ids.length)selected=selected.filter(item=>ids.includes(item.message.id));if(u.searchParams.get('q'))selected=selected.filter(item=>item.fileName.includes(u.searchParams.get('q')));selected.sort((a,b)=>Date.parse(b.message.createdAt)-Date.parse(a.message.createdAt)||b.id.localeCompare(a.id));return send(200,{items:selected,indexing:{state:'complete',indexedMessages:catalog.length,totalMessages:catalog.length}});
+   let selected=['documents','document'].includes(u.searchParams.get('type'))?[...catalog]:[];if(u.searchParams.get('accountId'))selected=selected.filter(item=>item.message.accountId===u.searchParams.get('accountId'));const owners=u.searchParams.getAll('accountIds');if(owners.length)selected=selected.filter(item=>owners.includes(item.message.accountId));if(u.searchParams.get('conversationId'))selected=selected.filter(item=>item.message.conversationId===u.searchParams.get('conversationId'));const ids=u.searchParams.getAll('messageId');if(ids.length)selected=selected.filter(item=>ids.includes(item.message.id));if(u.searchParams.get('q'))selected=selected.filter(item=>item.fileName.includes(u.searchParams.get('q')));selected.sort((a,b)=>Date.parse(b.message.createdAt)-Date.parse(a.message.createdAt)||b.id.localeCompare(a.id));return send(200,{items:selected,indexing:{state:'complete',indexedMessages:catalog.length,totalMessages:catalog.length}});
   }
   const match=u.pathname.match(/^\/api\/v1\/shared-content\/([^/]+)\/content$/);
   if(match){assert.equal(u.search,'');const file=definitions.find(file=>file.id===match[1]);if(!file)return send(404,{status:404});state.reads.push({id:file.id,range:req.headers.range||''});
-   const respond=()=>{if(file.id===bad&&state.failure)return send(404,{type:'urn:oie:problem:not_found',title:'Not found',status:404,code:'not_found'});const body=file.id===burst?burstBytes:file.id===budget?budgetBytes:file.id===sparse?sparseBytes:file.id===pdf?pdfBytes:file.id===oversize?Buffer.alloc((2<<20)+1,120):file.name.endsWith('.md')?markdownBytes:text;let start=0,end=body.length-1,status=200;if(req.headers.range){const range=/^bytes=(\d+)-(\d*)$/.exec(req.headers.range);if(!range||Number(range[1])>=body.length){res.setHeader('Content-Range','bytes */'+body.length);return send(416,{status:416,code:'invalid_range'})}start=Number(range[1]);if(range[2])end=Math.min(Number(range[2]),end);status=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${body.length}`)}res.setHeader('Content-Type',file.mime==='application/pdf'?'application/pdf':'text/plain');res.setHeader('Content-Length',end-start+1);res.setHeader('Content-Disposition','inline; filename="'+file.name+'"');res.setHeader('Accept-Ranges','bytes');res.setHeader('ETag','"original-document-v1"');res.writeHead(status);res.end(body.subarray(start,end+1))};
+   const respond=()=>{if(file.id===bad&&state.failure)return send(404,{type:'urn:oie:problem:not_found',title:'Not found',status:404,code:'not_found'});const version=state.versions.get(file.id),tag=version?version.tag:'"original-document-v1"';const body=version?.body??(file.id===burst?burstBytes:file.id===budget?budgetBytes:file.id===sparse?sparseBytes:file.id===pdf?pdfBytes:file.id===oversize?Buffer.alloc((2<<20)+1,120):file.name.endsWith('.md')?markdownBytes:text);let start=0,end=body.length-1,status=200;if(req.headers.range&&(!req.headers['if-range']||req.headers['if-range']===tag)){const range=/^bytes=(\d+)-(\d*)$/.exec(req.headers.range);if(!range||Number(range[1])>=body.length){res.setHeader('Content-Range','bytes */'+body.length);return send(416,{status:416,code:'invalid_range'})}start=Number(range[1]);if(range[2])end=Math.min(Number(range[2]),end);status=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${body.length}`)}res.setHeader('Content-Type',file.mime==='application/pdf'?'application/pdf':'text/plain');res.setHeader('Content-Length',end-start+1);res.setHeader('Content-Disposition','inline; filename="'+file.name+'"');res.setHeader('Accept-Ranges','bytes');if(tag)res.setHeader('ETag',tag);res.writeHead(status);res.end(body.subarray(start,end+1))};
    if(file.id===held&&state.hold&&!req.headers.range){res.setHeader('Content-Type','text/plain');res.setHeader('Content-Length',text.length);res.setHeader('Content-Disposition','inline; filename="pending.txt"');res.writeHead(200);res.write(text.subarray(0,20));const request={res,respond:()=>res.end(text.subarray(20))};state.pending.push(request);res.on('close',()=>{if(!res.writableEnded)state.aborted.push(file.id)});return}if(req.headers.range){state.activeReaders++;state.peakReaders=Math.max(state.peakReaders,state.activeReaders);if(state.activeReaders>4){state.activeReaders--;state.busyReaders++;return send(503,{status:503,code:'media_busy'})}res.once('close',()=>state.activeReaders--);setTimeout(()=>{if(!res.destroyed&&!res.writableEnded)respond()},40);return}return respond();
   }
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
@@ -62,11 +62,14 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const downloaded=async(page,item)=>{const event=page.waitForEvent('download');await viewer(page).locator('[data-document-download]').click();const download=await event;assert.equal(await download.failure(),null);const original=await fs.readFile(await download.path());assert.deepEqual(original,item===pdf?pdfBytes:item===id(31)?markdownBytes:text);assert.equal(download.suggestedFilename(),definitions.find(file=>file.id===item).name)};
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
-  let {page,context}=await contextFor();await page.goto(docsURL());await card(page,good).waitFor({state:'visible'});await card(page,good).scrollIntoViewIfNeeded();await until(async()=>await card(page,good).getAttribute('data-document-preview-state')==='ready','automatic text excerpt');assert.equal(count(good),0);assert(await card(page,good).locator('[data-document-excerpt]').textContent().then(value=>value.includes('<script>')));assert.equal(await card(page,good).locator('[data-document-open]').textContent().then(value=>value.includes('Open document')),false);await card(page,pdf).scrollIntoViewIfNeeded();await until(async()=>await card(page,pdf).getAttribute('data-document-preview-state')==='ready'&&await card(page,pdf).locator('[data-document-preview] img[data-document-pdf-preview]').count()===1,'automatic first-page PDF preview');assert.equal(count(pdf),0);
+  let {page,context}=await contextFor();await page.goto(docsURL());await card(page,good).waitFor({state:'visible'});await until(async()=>{await card(page,good).scrollIntoViewIfNeeded();return await card(page,good).getAttribute('data-document-preview-state')==='ready'},'automatic text excerpt');assert.equal(count(good),0);assert(await card(page,good).locator('[data-document-excerpt]').textContent().then(value=>value.includes('<script>')));assert.equal(await card(page,good).locator('[data-document-open]').textContent().then(value=>value.includes('Open document')),false);await card(page,pdf).scrollIntoViewIfNeeded();await until(async()=>await card(page,pdf).getAttribute('data-document-preview-state')==='ready'&&await card(page,pdf).locator('[data-document-preview] img[data-document-pdf-preview]').count()===1,'automatic first-page PDF preview');assert.equal(count(pdf),0);
+  const conditional=[];
+  page.on('response',response=>{const match=new URL(response.url()).pathname.match(/\/ui\/shared-content\/([^/]+)\/content$/);if(match&&response.request().headers()['if-none-match'])conditional.push({id:match[1],status:response.status()})});
+  const revalidations=(item,status=304)=>conditional.filter(entry=>entry.id===item&&entry.status===status).length;
   // Exercise the large fixtures together to retain range concurrency coverage.
   state.pdfCatalog=[sparse,budget,burst];
   await page.reload();
-  await card(page,sparse).scrollIntoViewIfNeeded();await until(async()=>await card(page,sparse).getAttribute('data-document-preview-state')==='ready','sparse first-page preview');const sparseRanges=state.reads.filter(read=>read.id===sparse);assert(sparseRanges.length>1&&sparseRanges.every(read=>read.range),'large PDF preview uses only ranges');const sparseTransferred=sparseRanges.reduce((total,read)=>{const range=/bytes=(\d+)-(\d+)/.exec(read.range);return total+Number(range[2])-Number(range[1])+1},0);assert(sparseTransferred<=2*1024*1024&&sparseTransferred<sparseBytes.length/2,'large PDF preview stays within its byte budget');assert.equal(count(sparse),0);await card(page,budget).scrollIntoViewIfNeeded();await until(async()=>await card(page,budget).getAttribute('data-document-preview-state')==='unavailable','PDF byte-budget fallback');const budgetRanges=state.reads.filter(read=>read.id===budget);assert(budgetRanges.length>1&&budgetRanges.every(read=>read.range));const budgetTransferred=budgetRanges.reduce((total,read)=>{const range=/bytes=(\d+)-(\d+)/.exec(read.range);return total+Number(range[2])-Number(range[1])+1},0);assert(budgetTransferred<=2*1024*1024&&budgetTransferred<budgetBytes.length,'PDF thumbnail stops before fetching full original');assert.equal(await card(page,budget).locator('[data-document-placeholder]').count(),1);assert.equal(await card(page,budget).locator('[data-document-open]').count(),1);assert.equal(count(budget),0);await card(page,burst).scrollIntoViewIfNeeded();await until(async()=>await card(page,burst).getAttribute('data-document-preview-state')==='ready','parallel PDF resource references under engine reader limit');assert(state.reads.filter(read=>read.id===burst&&read.range).length>=8,'PDF fixture resolves several separated resource ranges');assert(state.peakReaders<=2&&state.busyReaders===0,'PDF range bursts preserve the two-reader preview concurrency limit');
+  await card(page,sparse).scrollIntoViewIfNeeded();await until(async()=>await card(page,sparse).getAttribute('data-document-preview-state')==='ready','sparse first-page preview');const sparseRanges=state.reads.filter(read=>read.id===sparse);assert(sparseRanges.length>1&&sparseRanges.every(read=>read.range),'large PDF preview uses only ranges');const sparseTransferred=sparseRanges.reduce((total,read)=>{const range=/bytes=(\d+)-(\d+)/.exec(read.range);return total+Number(range[2])-Number(range[1])+1},0);assert(sparseTransferred<=2*1024*1024&&sparseTransferred<sparseBytes.length/2,'large PDF preview stays within its byte budget');assert.equal(count(sparse),0);await card(page,budget).scrollIntoViewIfNeeded();await until(async()=>await card(page,budget).getAttribute('data-document-preview-state')==='unavailable','PDF byte-budget fallback');const budgetRanges=state.reads.filter(read=>read.id===budget);assert(budgetRanges.length>1&&budgetRanges.every(read=>read.range));const budgetTransferred=budgetRanges.reduce((total,read)=>{const range=/bytes=(\d+)-(\d+)/.exec(read.range);return total+Number(range[2])-Number(range[1])+1},0);assert(budgetTransferred<=2*1024*1024&&budgetTransferred<budgetBytes.length,'PDF thumbnail stops before fetching full original');assert(await card(page,budget).locator('[data-document-preview]').isHidden(),'failed preview hides its frame');assert.equal(await card(page,budget).locator('.oie-preview-symbol').count(),0,'failed previews omit the document icon');assert.equal(await card(page,budget).locator('[data-document-open]').count(),1);assert.equal(count(budget),0);await card(page,burst).scrollIntoViewIfNeeded();await until(async()=>await card(page,burst).getAttribute('data-document-preview-state')==='ready','parallel PDF resource references under engine reader limit');assert(state.reads.filter(read=>read.id===burst&&read.range).length>=8,'PDF fixture resolves several separated resource ranges');assert(state.peakReaders<=2&&state.busyReaders===0,'PDF range bursts preserve the two-reader preview concurrency limit');
   // Generated PDF thumbnails survive both fragment navigation and reloads.
   // Keep the PDF in view while the browser restores scroll on reload. The
   // larger catalogs above exercise lazy visibility and competing range reads.
@@ -79,13 +82,20 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    await until(async()=>await card(page,pdf).getAttribute('data-document-preview-state')==='ready',label);
   };
   const cacheEntries=()=>page.evaluate(()=>new Promise((resolve,reject)=>{const request=indexedDB.open('oie.pdf-previews.v1',1);request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,tx=db.transaction('thumbnails','readonly'),get=tx.objectStore('thumbnails').getAll();get.onsuccess=()=>resolve(get.result.map(e=>({key:e.key,bytes:e.bytes,createdAt:e.createdAt,usedAt:e.usedAt})));tx.oncomplete=()=>db.close()}}));
-  await pdfReady();await until(async()=>await card(page,pdf).getAttribute('data-document-preview-stored')==='true','persistent PDF thumbnail committed');const cachedRanges=pdfRanges();
-  await tab(page,'media');await tab(page,'documents');await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'hit');assert((await page.evaluate(()=>OieCache.stats())).entries>=1);assert.equal(pdfRanges(),cachedRanges,'fragment navigation must reuse the generated PNG without PDF reads');
-  await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'hit');assert.equal(pdfRanges(),cachedRanges,'a reload must reuse IndexedDB without PDF range reads');
-  const pdfItem=items.find(item=>item.id===pdf),previousRevision=pdfItem.revisionId;pdfItem.revisionId=id(777);await page.reload();await pdfReady('new catalog revision PDF preview');assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>cachedRanges,'a new catalog revision must generate a new thumbnail');pdfItem.revisionId=previousRevision;
-  const beforeAccount=pdfRanges();pdfItem.message.accountId=other;await page.goto(docsURL('en','dark',other));await pdfReady('other account PDF preview');assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>beforeAccount,'a different account must not receive the previous account thumbnail');pdfItem.message.accountId=account;await page.goto(docsURL());await pdfReady();
+  await pdfReady();await until(async()=>await card(page,pdf).getAttribute('data-document-preview-stored')==='true','persistent PDF thumbnail committed');const cachedRanges=pdfRanges(),cachedValidations=revalidations(pdf);
+  await tab(page,'media');await tab(page,'documents');await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'hit');assert((await page.evaluate(()=>OieCache.stats())).entries>=1);assert.equal(pdfRanges(),cachedRanges+1);assert.equal(revalidations(pdf),cachedValidations+1,'fragment navigation reuses the PNG after a bodyless conditional read');
+  await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'hit');assert.equal(pdfRanges(),cachedRanges+2);assert.equal(revalidations(pdf),cachedValidations+2,'reload reuses the persisted PNG after a bodyless conditional read');
+  const beforeRefresh=await card(page,pdf).locator('[data-document-pdf-preview]').screenshot();
+  state.versions.set(pdf,{tag:'"original-document-v2"',body:Buffer.from(pdfBytes.toString().replace('Oie document fixture','New document fixture'))});
+  await page.reload();await pdfReady();
+  assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');
+  assert.equal(revalidations(pdf,206),1);
+  assert.notDeepEqual(await card(page,pdf).locator('[data-document-pdf-preview]').screenshot(),beforeRefresh,'a changed ETag regenerates the PNG at the same URL');
+  state.versions.delete(pdf);
+  const pdfItem=items.find(item=>item.id===pdf),previousRevision=pdfItem.revisionId;const beforeRevision=pdfRanges();pdfItem.revisionId=id(777);await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>beforeRevision,'a new catalog revision must generate a new thumbnail');pdfItem.revisionId=previousRevision;
+  const beforeAccount=pdfRanges();pdfItem.message.accountId=other;await page.goto(docsURL('en','dark',other));await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>beforeAccount,'a different account must not receive the previous account thumbnail');pdfItem.message.accountId=account;await page.goto(docsURL());await pdfReady();
   // Persisted corruption must be discarded without making the source unusable.
-  await page.evaluate(()=>new Promise(resolve=>{const request=indexedDB.open('oie.pdf-previews.v1',1);request.onsuccess=()=>{const db=request.result,tx=db.transaction('thumbnails','readwrite'),store=tx.objectStore('thumbnails'),get=store.getAll();get.onsuccess=()=>{for(const entry of get.result){entry.value.blob=new Blob(['broken'],{type:'image/png'});store.put(entry)}};tx.oncomplete=()=>{db.close();resolve()}}}));const corruptRanges=pdfRanges();await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>corruptRanges,'corrupt PNG must regenerate from bounded PDF bytes');
+  await page.evaluate(()=>new Promise(resolve=>{const request=indexedDB.open('oie.pdf-previews.v1',1);request.onsuccess=()=>{const db=request.result,tx=db.transaction('thumbnails','readwrite'),store=tx.objectStore('thumbnails'),get=store.getAll();get.onsuccess=()=>{for(const entry of get.result)if(entry.value.kind==='image'){entry.value.blob=new Blob(['broken'],{type:'image/png'});store.put(entry)}};tx.oncomplete=()=>{db.close();resolve()}}}));const corruptRanges=pdfRanges();await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>corruptRanges,'corrupt PNG must regenerate from bounded PDF bytes');
   // LRU cleanup applies only to this preview store, with both count and byte caps.
   await page.evaluate(()=>new Promise((resolve,reject)=>{
    const request=indexedDB.open('oie.pdf-previews.v1',1);
@@ -100,12 +110,112 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   }));
   await page.reload();await pdfReady();
   await until(async()=>{const entries=await cacheEntries();return entries.length<=64&&entries.reduce((sum,e)=>sum+e.bytes,0)<=16*1024*1024&&!entries.some(e=>e.key==='fixture-69')},'preview cache count, byte and expiry eviction');
+
+  const markdown=id(31);
+  state.pdfCatalog=[good,markdown];
+  let markdownRequests=0;
+  page.on('request',request=>{if(new URL(request.url()).pathname==='/ui/document-markdown')markdownRequests++});
+  const ready=async(item,cache)=>until(async()=>await card(page,item).getAttribute('data-document-preview-state')==='ready'&&
+   (!cache||await card(page,item).getAttribute('data-document-preview-cache')===cache),'text or Markdown preview ready');
+  await page.reload();
+  await ready(good);await ready(markdown);
+  assert.equal(await card(page,good).getAttribute('data-document-preview-stored'),'true');
+  assert.equal(await card(page,markdown).getAttribute('data-document-preview-stored'),'true');
+  const rangeReads=()=>state.reads.filter(read=>read.range&&[good,markdown].includes(read.id)).length;
+  const beforeReload={reads:rangeReads(),renders:markdownRequests};
+  await page.reload();
+  await ready(good,'hit');await ready(markdown,'hit');
+  assert.equal(rangeReads(),beforeReload.reads+2);
+  assert.equal(markdownRequests,beforeReload.renders,'reload restores both previews without rendering their unchanged sources');
+  assert(revalidations(good)>0&&revalidations(markdown)>0,'text and Markdown both receive a bodyless conditional response');
+  assert.equal(await card(page,markdown).locator('[data-document-markdown-preview] h1').textContent(),'Release notes');
+
+  await page.evaluate(()=>new Promise((resolve,reject)=>{
+   const request=indexedDB.open('oie.pdf-previews.v1',1);
+   request.onerror=()=>reject(request.error);
+   request.onsuccess=()=>{
+    const db=request.result,tx=db.transaction('thumbnails','readwrite'),store=tx.objectStore('thumbnails'),entries=store.getAll();
+    entries.onsuccess=()=>{
+     for(const entry of entries.result)if(entry.value.kind==='markdown'){
+      entry.value.html='<p x-init="window.documentExecuted=true">Invalid preview</p>';
+      store.put(entry);
+     }
+    };
+    tx.oncomplete=()=>{db.close();resolve()};
+    tx.onabort=()=>{db.close();reject(tx.error)};
+   };
+  }));
+  await page.reload();
+  await ready(markdown,'miss');
+  assert.equal(markdownRequests,beforeReload.renders+1,'invalid HTML triggers regeneration');
+  assert.equal(await card(page,markdown).locator('[data-document-markdown-preview] h1').textContent(),'Release notes');
+  assert.equal(await card(page,markdown).locator('[data-document-markdown-preview] [x-init]').count(),0);
+
+  state.versions.set(good,{tag:'"original-document-v2"',body:Buffer.from('Updated text at its original URL.')});
+  state.versions.set(markdown,{tag:'"original-document-v2"',body:Buffer.from('# Updated Markdown\n\nSame URL, same catalog revision.\n')});
+  await page.reload();await ready(good,'miss');await ready(markdown,'miss');
+  assert.equal((await card(page,good).locator('[data-document-excerpt]').textContent()).trim(),'Updated text at its original URL.');
+  assert.equal(await card(page,markdown).locator('[data-document-markdown-preview] h1').textContent(),'Updated Markdown');
+  assert(revalidations(good,206)>0&&revalidations(markdown,206)>0,'changed originals arrive in the conditional range response');
+
+  state.versions.set(markdown,{tag:'',body:Buffer.from('# Markdown without an ETag\n')});
+  await page.reload();await ready(markdown,'miss');
+  assert.equal(await card(page,markdown).getAttribute('data-document-preview-stored'),'true');
+  const beforeDigest=markdownRequests;
+  await page.reload();await ready(markdown,'hit');
+  assert.equal(markdownRequests,beforeDigest,'unchanged Markdown without an ETag reuses the render after hashing the excerpt');
+  state.versions.set(markdown,{tag:'',body:Buffer.from('# Updated Markdown without an ETag\n')});
+  await page.reload();await ready(markdown,'miss');
+  assert.equal(await card(page,markdown).locator('[data-document-markdown-preview] h1').textContent(),'Updated Markdown without an ETag');
+  assert.equal(markdownRequests,beforeDigest+1);
+  state.versions.delete(good);state.versions.delete(markdown);
+
+  const markdownItem=items.find(item=>item.id===markdown),priorMarkdownRevision=markdownItem.revisionId;
+  markdownItem.revisionId=id(778);
+  await page.route('**/ui/document-markdown',route=>route.fulfill({status:503,body:''}));
+  await page.reload();
+  await ready(markdown,'miss');
+  assert(await card(page,markdown).locator('[data-document-excerpt]').isVisible());
+  assert.equal(await card(page,markdown).getAttribute('data-document-preview-stored'),null);
+  await page.unroute('**/ui/document-markdown');
+  await page.reload();await ready(markdown,'miss');
+  assert.equal(await card(page,markdown).getAttribute('data-document-preview-stored'),'true');
+  markdownItem.revisionId=priorMarkdownRevision;
+  findings.push('Rendered text and Markdown survive reload after ETag validation or matching bounded excerpts; changed sources and invalid fragments regenerate');
   state.pdfCatalog=null;
   await page.reload();
-  findings.push('PDF PNG previews reuse memory across fragments and IndexedDB across reloads without provider reads; revision/account isolation, corrupt-cache recovery and bounded LRU/expiry verified');
-  const contextText=await card(page,good).locator('[data-document-caption]').textContent();assert(contextText.includes('Original document fixture.txt'));assert(!contextText.includes(items.find(item=>item.id===good).url));const frame=await card(page,good).locator('[data-document-preview]').boundingBox();assert(frame.width<=113&&frame.height<=97,'document thumbnail must remain compact');const surface=await card(page,good).boundingBox(),summary=await card(page,good).locator('.oie-document-summary').boundingBox();assert(summary.x>frame.x+frame.width&&summary.x+summary.width>=surface.x+surface.width-51,JSON.stringify({frame,surface,summary}));
+  findings.push('PDF PNG previews reuse memory across fragments and IndexedDB across reloads after ETag validation; provider changes, revision/account isolation, corrupt-cache recovery and bounded LRU/expiry verified');
+  await until(async()=>{
+   await card(page,good).scrollIntoViewIfNeeded();
+   return await card(page,good).getAttribute('data-document-preview-state')==='ready';
+  },'text card preview ready');
+  const contextText=await card(page,good).locator('[data-document-caption]').textContent();
+  assert(contextText.includes('Original document fixture.txt'));
+  assert(!contextText.includes(items.find(item=>item.id===good).url));
+  const frame=await card(page,good).locator('[data-document-preview]').boundingBox();
+  const summary=await card(page,good).locator('.oie-preview-summary').boundingBox();
+  assert.equal(await card(page,good).locator('.oie-preview-symbol').count(),0,'document titles omit the icon');
+  const title=await card(page,good).locator('.oie-document-name').boundingBox();
+  assert.equal(title.x,summary.x,'the filename uses the full left edge of the summary');
+  assert(frame.width>200&&frame.height>=136&&summary.y>=frame.y+frame.height,'loaded preview occupies the width above the filename');
+  assert(await card(page,unsupported).locator('[data-document-preview]').isHidden());
+  assert.equal(await card(page,unsupported).locator('.oie-preview-symbol').count(),0,'unsupported documents omit the icon');
+  const action=card(page,good).locator('[data-document-open]');
+  await page.mouse.move(0,0);
+  const paint=node=>({background:getComputedStyle(node).backgroundColor,decoration:getComputedStyle(node).textDecorationLine});
+  const resting=await action.evaluate(paint);
+  await action.hover();
+  assert.deepEqual(await action.evaluate(paint),resting,'hover leaves document card styling in place');
+  const menu=page.locator(`[data-shared-item="${good}"] [data-shared-menu-trigger]`);
+  await until(()=>menu.evaluate(node=>getComputedStyle(node).opacity==='1'),'the card menu still appears on hover');
+  const layout=await page.locator('#shared-content-results .oie-shared-grid').first().evaluate(grid=>{
+   const rects=[...grid.children].map(card=>card.getBoundingClientRect());
+   return {masonry:grid.hasAttribute('data-masonry'), columns:new Set(rects.map(rect=>rect.x)).size,
+    overlap:rects.some((a,i)=>rects.slice(i+1).some(b=>a.x===b.x&&a.y<b.bottom&&b.y<a.bottom))};
+  });
+  assert.deepEqual(layout,{masonry:true,columns:3,overlap:false});
   const existingText=items.find(item=>item.id===good).message.originalText;items.find(item=>item.id===good).message.originalText=items.find(item=>item.id===good).url;await page.reload();await card(page,good).scrollIntoViewIfNeeded();assert.equal(await card(page,good).locator('[data-document-caption]').count(),0,'a bare file reference must not be repeated as a caption');items.find(item=>item.id===good).message.originalText=existingText;await page.reload();await card(page,good).scrollIntoViewIfNeeded();
-  findings.push('Compact document rows use a small contained thumbnail and the remaining width for bounded source-message context; bare references are omitted');
+  findings.push('Masonry document cards show a larger preview when available and compact text for unsupported or failed previews; bare references are omitted');
   await open(page,good);await loaded(page);assert.equal(count(good),1);emit();await page.waitForTimeout(250);assert.equal(count(good),1);assert.equal(await plaintext(page).locator('script,img,iframe').count(),0);assert.equal(await page.evaluate(()=>window.documentExecuted),undefined);assert.equal(await viewer(page).locator('[data-document-original]').getAttribute('href'),items.find(item=>item.id===good).url);await downloaded(page,good);assert.equal(count(good),2);await page.keyboard.press('Escape');await viewer(page).waitFor({state:'hidden'});assert(await card(page,good).locator('[data-document-open]').evaluate(button=>document.activeElement===button));await until(async()=>await plaintext(page).textContent()==='','close releases original text');
   for(const file of definitions.filter(file=>['log','md','csv','json','xml'].some(extension=>file.name.endsWith('.'+extension)))){
    if(file.name.endsWith('.md')){
@@ -117,21 +227,98 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   }
   await open(page,unsupported);await until(async()=>await viewer(page).locator('[data-document-status]').getAttribute('data-state')==='failed','unsupported document fallback');assert.equal(count(unsupported),0);assert(await viewer(page).locator('[data-document-original]').isVisible());assert(await viewer(page).locator('[data-document-download]').isHidden());assert(await viewer(page).locator('[data-document-retry]').isHidden());await close(page);
   findings.push('Visible document cards read bounded ranges for safe text excerpts and actual PDF first-page previews; one primary action opens the original; TXT, LOG, CSV, JSON and XML remain escaped; Markdown uses Margo headings, formatting and lists with plain-text fallback; original downloads preserve bytes');
-  await open(page,bad);await until(async()=>await viewer(page).locator('[data-document-retry]').isVisible(),'explicit document failure');const failed=count(bad);emit();await page.waitForTimeout(350);assert.equal(count(bad),failed);state.failure=false;await viewer(page).locator('[data-document-retry]').click();await loaded(page);assert.equal(count(bad),failed+1);await close(page);
+  let releaseFailure,heldFailure=false;
+  const failureGate=new Promise(resolve=>releaseFailure=resolve);
+  const failurePath=url=>url.pathname==='/ui/shared-content/'+bad+'/content';
+  const holdFailure=async route=>{
+   if(route.request().headers().range){await route.continue();return}
+   heldFailure=true;
+   await failureGate;
+   await route.continue();
+  };
+  await page.route(failurePath,holdFailure);
+  const loadError=viewer(page).locator('[data-document-toast] [role=alert]');
+  const retry=viewer(page).locator('[data-document-retry]');
+  const viewport=viewer(page).locator('[data-document-scroll]');
+  await open(page,bad);
+  await until(()=>heldFailure,'pending document failure');
+  const initial=await viewport.boundingBox();
+  await page.evaluate(()=>{
+   const scroll=document.querySelector('#oie-document-viewer [data-document-scroll]');
+   const sample={active:true,frames:[]};
+   window.documentFailureFrames=sample;
+   const record=()=>{
+    if(!sample.active)return;
+    const {x,y,width,height}=scroll.getBoundingClientRect();
+    sample.frames.push({x,y,width,height});
+    requestAnimationFrame(record);
+   };
+   requestAnimationFrame(record);
+  });
+  assert.equal(await loadError.count(),0);
+  releaseFailure();
+  await loadError.waitFor({state:'visible'});
+  assert.equal((await loadError.innerText()).trim(),'The document could not be loaded. Try again.');
+  assert(await viewer(page).locator('[data-document-status]').isHidden());
+  assert(await retry.isVisible());
+  assert.equal(await retry.getAttribute('aria-label'),'Try again');
+  assert.equal(await retry.innerText(),'');
+  assert.equal(await retry.locator('use[href$="#hi-16-solid-arrow-path"]').count(),1);
+  const retryTip=viewer(page).getByRole('tooltip',{name:'Try again',exact:true});
+  await retry.hover();
+  await until(()=>retryTip.evaluate(node=>getComputedStyle(node).opacity==='1'),'retry tooltip appears on hover');
+  assert(await retryTip.evaluate(node=>{
+   const {left,top,right,bottom}=node.getBoundingClientRect(),dialog=node.closest('dialog').getBoundingClientRect();
+   return left>=dialog.left&&right<=dialog.right&&top>=dialog.top&&bottom<=dialog.bottom;
+  }),'retry tooltip stays inside the dialog');
+  assert(await loadError.evaluate(node=>{
+   const {left,top,width,height}=node.getBoundingClientRect();
+   return node.contains(document.elementFromPoint(left+width/2,top+height/2));
+  }),'toast is above the document viewport inside the modal');
+  const failed=count(bad);emit();await page.waitForTimeout(350);assert.equal(count(bad),failed);
+  await loadError.getByRole('button',{name:'Close',exact:true}).click();
+  await loadError.waitFor({state:'hidden'});
+  assert(await retry.evaluate(node=>document.activeElement===node));
+  await until(()=>retryTip.evaluate(node=>getComputedStyle(node).opacity==='1'),'retry tooltip appears on focus');
+  const frames=await page.evaluate(()=>{window.documentFailureFrames.active=false;return window.documentFailureFrames.frames});
+  assert(frames.length>0);
+  for(const frame of frames)for(const key of ['x','y','width','height'])assert(Math.abs(frame[key]-initial[key])<=1,'loading, toast and retry keep the document viewport stable');
+  await page.unroute(failurePath,holdFailure);
+  state.failure=false;
+  await retry.click();
+  await loaded(page);
+  assert.equal(count(bad),failed+1);
+  await close(page);
   await context.setOffline(true);const offline=count(good);await open(page,good);await until(async()=>await viewer(page).locator('[data-document-retry]').isVisible(),'offline document failure');assert.equal(count(good),offline);await context.setOffline(false);await viewer(page).locator('[data-document-retry]').click();await loaded(page);assert.equal(count(good),offline+1);await close(page);
   await open(page,oversize);await until(async()=>await viewer(page).locator('[data-document-retry]').isVisible(),'oversized text rejected');assert.equal(await plaintext(page).isVisible(),false);await close(page);findings.push('404, offline and text-size failures retain a recoverable viewer without automatic fetch loops; explicit retry recovers once');
   state.hold=true;state.pending=[];state.aborted=[];await open(page,held);await until(()=>state.pending.length===1,'held document read');await page.keyboard.press('Escape');await viewer(page).waitFor({state:'hidden'});await until(()=>state.aborted.length===1,'close aborts engine read');await open(page,good);await loaded(page);release();await page.waitForTimeout(150);assert.equal(await viewer(page).locator('[data-document-title]').textContent(),definitions.find(file=>file.id===good).name);await close(page);
   // Browser Back remains available while a modal is open and must dispose it.
   await tab(page,'media');await tab(page,'documents');await card(page,held).waitFor({state:'visible'});state.hold=true;state.pending=[];state.aborted=[];await open(page,held);await until(()=>state.pending.length===1,'held document before history navigation');await page.goBack();await until(async()=>new URL(page.url()).searchParams.get('contentType')==='media','route changes during document read');await until(()=>state.aborted.length===1,'route aborts document read');release();await page.waitForTimeout(150);assert.equal(await viewer(page).isVisible(),false);findings.push('Close and history navigation abort in-flight reads; stale responses cannot replace the next document or reopen a removed viewer');
-  await page.goto(docsURL('en','dark',other));assert.equal(await page.locator('[data-shared-item]').count(),1);await page.getByRole('combobox',{name:'Account',exact:true}).click();await page.getByRole('option',{name:'Personal · alice@fixture',exact:true}).click();await until(async()=>new URL(page.url()).searchParams.get('account')===account&&await card(page,held).isVisible(),'account scope before pending document');state.hold=true;state.pending=[];state.aborted=[];await open(page,held);await until(()=>state.pending.length===1,'pending document before account Back');await page.goBack();await until(async()=>new URL(page.url()).searchParams.get('account')===other&&await page.locator('[data-shared-item]').count()===1,'Back switches account scope');await until(()=>state.aborted.length===1,'account scope aborts pending document');release();await page.waitForTimeout(150);assert.equal(await viewer(page).isVisible(),false);assert.equal(await page.locator(`[data-document-item="${foreign}"]`).count(),1);assert.equal(count(foreign),0);await page.goForward();await until(async()=>new URL(page.url()).searchParams.get('account')===account,'Forward restores account');assert.equal(await viewer(page).isVisible(),false);findings.push('Account Back/Forward resets modal state and aborts the previous account read without fetching a foreign document');
+  await page.goto(docsURL('en','dark',other));assert.equal(await page.locator('[data-shared-item]').count(),1);await page.getByRole('combobox',{name:'Accounts',exact:true}).click();await page.getByRole('option',{name:'Personal · alice@fixture',exact:true}).click();await until(()=>new URL(page.url()).searchParams.getAll('contentAccount').length===2,'both accounts before narrowing');await page.getByRole('option',{name:'Work · work@fixture',exact:true}).click();await until(async()=>new URL(page.url()).searchParams.getAll('contentAccount').join(',')===account&&await card(page,held).isVisible(),'account scope before pending document');await page.keyboard.press('Escape');state.hold=true;state.pending=[];state.aborted=[];await open(page,held);await until(()=>state.pending.length===1,'pending document before account Back');await page.goBack();await until(async()=>new URL(page.url()).searchParams.getAll('contentAccount').length===2&&await card(page,foreign).isVisible(),'Back restores both accounts');await until(()=>state.aborted.length===1,'account scope aborts pending document');release();await page.waitForTimeout(150);assert.equal(await viewer(page).isVisible(),false);assert.equal(await page.locator(`[data-document-item="${foreign}"]`).count(),1);assert.equal(count(foreign),0);await page.goForward();await until(async()=>new URL(page.url()).searchParams.getAll('contentAccount').join(',')===account,'Forward restores account');assert.equal(await viewer(page).isVisible(),false);findings.push('Account Back/Forward resets modal state and aborts the previous account read without fetching a foreign document');
   await page.goto(docsURL());await open(page,pdf);const canvas=viewer(page).locator('[data-document-canvas]'),counter=viewer(page).locator('[data-document-page]');await until(async()=>await counter.getAttribute('data-current')==='1'&&await counter.getAttribute('data-total')==='2'&&await canvas.evaluate(canvas=>canvas.width>0&&canvas.height>0),'actual two-page PDF decode');
   const painted=await canvas.evaluate(canvas=>{const bytes=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;let dark=0,light=0;for(let n=0;n<bytes.length;n+=4){if(bytes[n]<80&&bytes[n+1]<80&&bytes[n+2]<80&&bytes[n+3]>200)dark++;if(bytes[n]>230&&bytes[n+1]>230&&bytes[n+2]>230&&bytes[n+3]>200)light++}return{dark,light}});assert(painted.dark>50&&painted.light>50,'PDF page has actual painted text and background');const pdfProof={bytes:pdfBytes.length,pages:2,nativeViewerEnabled:await page.evaluate(()=>navigator.pdfViewerEnabled===true),painted};assert(pdfAssets.some(url=>new URL(url).pathname==='/ui/pdfjs/build/pdf.mjs'));assert.equal(await viewer(page).locator('iframe,object,embed').count(),0);assert(await viewer(page).locator('[data-document-previous]').isDisabled());await viewer(page).locator('[data-document-next]').click();await until(async()=>await counter.getAttribute('data-current')==='2','PDF next page');assert(await viewer(page).locator('[data-document-next]').isDisabled());await viewer(page).locator('[data-document-previous]').click();await until(async()=>await counter.getAttribute('data-current')==='1','PDF previous page');
   const beforeZoom=await canvas.evaluate(canvas=>canvas.width);await viewer(page).locator('[data-document-zoom-in]').click();await until(async()=>await canvas.evaluate(canvas=>canvas.width)>beforeZoom,'PDF zoom re-renders original page');await viewer(page).locator('[data-document-fit]').click();await downloaded(page,pdf);await close(page);await until(async()=>await canvas.getAttribute('width')==='0','PDF close releases canvas');findings.push('PDF.js decodes the original two-page PDF into painted canvas pixels; page bounds, navigation, zoom/fit and exact original download work without a native PDF plugin');
   // The drawer uses the same viewer and current engine/account/source identity.
   await page.goto(base+'/?'+new URLSearchParams({chat,account,lang:'en',theme:'dark'}));await page.locator('[data-open-details]').click();await page.locator('[data-info-entry=media]').click();await page.locator('[data-shared-tab=documents]').click();await page.locator('#info-shared-results [data-document-open]').first().waitFor({state:'visible'});const drawer=page.locator(`#info-shared-results [data-document-item="${good}"] [data-document-open]`);await drawer.click();await loaded(page);await close(page);assert(await drawer.evaluate(button=>document.activeElement===button));await page.keyboard.press('Escape');findings.push('Conversation drawer document cards reuse the scoped viewer and restore focus to their original opener');await context.close();
   // Browser storage denial still permits the generated preview and memory reuse.
-  {const isolated=await contextFor();await isolated.context.addInitScript(()=>{indexedDB.open=()=>{throw new DOMException('Blocked','SecurityError')}});await isolated.page.goto(docsURL());const preview=card(isolated.page,pdf);await preview.scrollIntoViewIfNeeded();await until(async()=>await preview.getAttribute('data-document-preview-state')==='ready','PDF preview with denied storage');const before=pdfRanges();await tab(isolated.page,'media');await tab(isolated.page,'documents');await preview.scrollIntoViewIfNeeded();await until(async()=>await preview.getAttribute('data-document-preview-cache')==='hit','memory fallback after storage denial');assert.equal(pdfRanges(),before);await isolated.context.close();findings.push('Storage denial falls back to bounded memory without breaking PDF preview or navigation')}
-  for(const config of [{locale:'en',width:1280,theme:'light'},{locale:'pt-BR',width:390,theme:'dark'}]){({page,context}=await contextFor(config.locale,config.width));await page.goto(docsURL(config.locale,config.theme));await open(page,good);await loaded(page);await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(axe.violations.map(value=>({id:value.id,nodes:value.nodes.map(node=>node.target)})),[]);assert(await viewer(page).evaluate(dialog=>dialog.getBoundingClientRect().right<=innerWidth&&dialog.getBoundingClientRect().bottom<=innerHeight));const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,`documents-${config.locale}-${config.width}.png`)});await close(page);await context.close()}
+  {const isolated=await contextFor();await isolated.context.addInitScript(()=>{indexedDB.open=()=>{throw new DOMException('Blocked','SecurityError')}});await isolated.page.goto(docsURL());const preview=card(isolated.page,pdf);await preview.scrollIntoViewIfNeeded();await until(async()=>await preview.getAttribute('data-document-preview-state')==='ready','PDF preview with denied storage');const before=pdfRanges();await tab(isolated.page,'media');await tab(isolated.page,'documents');await preview.scrollIntoViewIfNeeded();await until(async()=>await preview.getAttribute('data-document-preview-cache')==='hit','memory fallback after storage denial');assert.equal(pdfRanges(),before+1);await isolated.context.close();findings.push('Storage denial falls back to bounded memory without breaking PDF preview or navigation')}
+  for(const config of [{locale:'en',width:1280,theme:'light'},{locale:'pt-BR',width:390,theme:'dark'}]){({page,context}=await contextFor(config.locale,config.width));await page.goto(docsURL(config.locale,config.theme));if(config.locale==='pt-BR'){
+   state.failure=true;
+   try{
+    await open(page,bad);
+    const toast=viewer(page).locator('[data-document-toast] [role=alert]');
+    await toast.waitFor({state:'visible'});
+    assert.equal((await toast.innerText()).trim(),'Não foi possível carregar o documento. Tente novamente.');
+    await toast.getByRole('button',{name:'Fechar',exact:true}).waitFor({state:'visible'});
+    const retry=viewer(page).getByRole('button',{name:'Tentar novamente',exact:true});
+    await retry.focus();
+    const tip=viewer(page).getByRole('tooltip',{name:'Tentar novamente',exact:true});
+    await until(()=>tip.evaluate(node=>getComputedStyle(node).opacity==='1'),'localized retry tooltip on mobile');
+    assert(await toast.evaluate(node=>{const box=node.getBoundingClientRect();return box.left>=0&&box.right<=innerWidth&&box.top>=0&&box.bottom<=innerHeight}));
+    await close(page);
+    await toast.waitFor({state:'detached'});
+   }finally{state.failure=false}
+  }await open(page,good);await loaded(page);await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(axe.violations.map(value=>({id:value.id,nodes:value.nodes.map(node=>node.target)})),[]);assert(await viewer(page).evaluate(dialog=>dialog.getBoundingClientRect().right<=innerWidth&&dialog.getBoundingClientRect().bottom<=innerHeight));const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,`documents-${config.locale}-${config.width}.png`)});await close(page);await context.close()}
   assert.equal(state.writes,0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await fs.writeFile(path.join(artifacts,'documents-report.json'),JSON.stringify({findings,pdf:pdfProof,sparsePDF:{originalBytes:sparseBytes.length,previewBytes:sparseTransferred,rangeRequests:sparseRanges.length},budgetPDF:{originalBytes:budgetBytes.length,previewBytes:budgetTransferred,rangeRequests:budgetRanges.length},rangeConcurrency:{peakReaders:state.peakReaders,busyReaders:state.busyReaders},contentReads:state.reads,unexpectedMutations:state.writes,pageErrors:errors,externalBrowserRequests:external},null,2));console.log('PASS: on-demand original documents, escaped text, actual PDF rendering/navigation, exact downloads, retry/offline/abort, drawer focus and localized accessible layouts');
  }catch(error){if(debugPage&&!debugPage.isClosed())console.error('Document failure evidence',JSON.stringify(await debugPage.evaluate(()=>({url:location.href,nativePDF:navigator.pdfViewerEnabled,viewer:document.querySelector('#oie-document-viewer')?.outerHTML.slice(0,5000),focus:document.activeElement?.outerHTML.slice(0,300)})).catch(()=>({unavailable:true}))),JSON.stringify({reads:state.reads,pending:state.pending.length,aborted:state.aborted,errors,errorEvidence}));throw error}finally{release();await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(resolve=>api.close(resolve))}
 })().catch(error=>{console.error(error);process.exitCode=1});

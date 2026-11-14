@@ -1,5 +1,19 @@
 schemaVersion: 1
 sources:
+  - id: heroicons-group
+    kind: file
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/user-group.svg
+    path: 16/solid/user-group.svg
+    license: MIT
+    licensePath: LICENSE
+    licenseUrl: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+  - id: heroicons-archive
+    kind: file
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/archive-box-arrow-down.svg
+    path: 16/solid/archive-box-arrow-down.svg
+    license: MIT
+    licensePath: LICENSE
+    licenseUrl: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
   - id: heroicons
     kind: file
     url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/chat-bubble-left.svg
@@ -11,6 +25,20 @@ sources:
     kind: file
     url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/photo.svg
     path: 16/solid/photo.svg
+    license: MIT
+    licensePath: LICENSE
+    licenseUrl: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+  - id: heroicons-forward
+    kind: file
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-uturn-right.svg
+    path: 16/solid/arrow-uturn-right.svg
+    license: MIT
+    licensePath: LICENSE
+    licenseUrl: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+  - id: heroicons-navigation
+    kind: file
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-turn-right-down.svg
+    path: 16/solid/arrow-turn-right-down.svg
     license: MIT
     licensePath: LICENSE
     licenseUrl: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE

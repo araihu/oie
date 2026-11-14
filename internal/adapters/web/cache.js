@@ -11,7 +11,7 @@
   const prototype=Object.getPrototypeOf(value);if(!Array.isArray(value)&&prototype!==Object.prototype&&prototype!==null)return false;
   return Object.values(value).every(child=>dataOnly(child,depth+1));
  }
- function decorate({namespace,key,load,size,ttl=30*60*1000,failureTTL=30000,storage, persist=()=>true,validate=()=>true}){
+ function decorate({namespace,key,load,size,ttl=30*60*1000,failureTTL=30000,storage,persist=()=>true,validate=()=>true,revalidate=false}){
   if(!namespace||typeof key!=='function'||typeof load!=='function'||typeof size!=='function')throw TypeError('cache configuration');
   return async(input,{signal,refresh=false,onHit,onStored}={})=>{
    if(signal?.aborted)throw aborted();
@@ -20,22 +20,30 @@
    if(refresh){cache?.delete(identity);await storage?.delete(identity)}
    if(signal?.aborted)throw aborted();
    const hit=cache?.get(identity);
-   if(hit){if(hit.failed)throw Error('cached_preview_failure');onHit?.();if(hit.persisted)onStored?.();return hit.value}
+   if(hit?.failed)throw Error('cached_preview_failure');
+   if(hit&&!revalidate){onHit?.();if(hit.persisted)onStored?.();return hit.value}
    let job=pending.get(identity);if(job?.controller.signal.aborted){pending.delete(identity);job=null}
    if(!job){
     if(jobs.size>=16)throw Error('cache_capacity');
     job={controller:new AbortController(),users:0,persisted:false,cached:false};pending.set(identity,job);jobs.add(job);
     job.promise=Promise.resolve().then(async()=>{
-     const stored=storage&&persist(input)?await storage.get(identity):null;
+     const stored=!hit&&storage&&persist(input)?await storage.get(identity):null;
      if(job.controller.signal.aborted)throw aborted();
-     if(stored&&await validate(stored.value,input)){job.persisted=true;job.cached=true;return stored.value}
-     if(stored)await storage.delete(identity);
-     return load(input,{signal:job.controller.signal});
+     const valid=stored&&await validate(stored.value,input);
+     if(stored&&!valid)await storage.delete(identity);
+     const previous=hit?hit.value:valid?stored.value:undefined;
+     const value=!revalidate&&valid?previous:await load(input,{signal:job.controller.signal,previous});
+     job.cached=Boolean(hit||valid)&&Object.is(value,previous);
+     job.persisted=job.cached&&Boolean(hit?.persisted||valid);
+     return value;
     }).then(async value=>{
      if(job.controller.signal.aborted)throw aborted();
      const weight=size(value)+identity.length*2+128;
-     if(!job.controller.signal.aborted&&dataOnly(value)&&Number.isSafeInteger(weight)&&weight>0&&weight<=2*1024*1024){
-      if(storage&&persist(input)&&!job.persisted)job.persisted=await storage.set(identity,value,weight);
+     if(!(job.cached&&hit)&&dataOnly(value)&&Number.isSafeInteger(weight)&&weight>0&&weight<=2*1024*1024){
+      if(storage&&!job.persisted){
+       if(persist(input,value))job.persisted=await storage.set(identity,value,weight);
+       else if(revalidate)await storage.delete(identity);
+      }
       if(!job.controller.signal.aborted)cache?.set(identity,{value,persisted:job.persisted},{size:weight,ttl:typeof ttl==='function'?ttl(value,input):ttl});
      }
      return value;

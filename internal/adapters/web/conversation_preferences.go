@@ -110,8 +110,8 @@ func (v view) conversationPreferenceSection() dropdown.Section {
 	return dropdown.Section{Items: []dropdown.Item{
 		{ID: "archive-conversation-" + id, Label: v.Text.ArchiveConversation, Icon: glyph(heroicons.Icon16SolidFolder), OnClick: "$dispatch('oie:conversation-preference', {field: 'archived'})", Disabled: v.Preview},
 		{ID: "unarchive-conversation-" + id, Label: v.Text.UnarchiveConversation, Icon: glyph(heroicons.Icon16SolidFolder), OnClick: "$dispatch('oie:conversation-preference', {field: 'archived'})", Disabled: v.Preview},
-		{ID: "favorite-conversation-" + id, Label: v.Text.FavoriteConversation, Icon: glyph(heroicons.Icon16SolidStar), OnClick: "$dispatch('oie:conversation-preference', {field: 'favorite'})", Disabled: v.Preview},
-		{ID: "unfavorite-conversation-" + id, Label: v.Text.UnfavoriteConversation, Icon: glyph(heroicons.Icon16SolidStar), OnClick: "$dispatch('oie:conversation-preference', {field: 'favorite'})", Disabled: v.Preview},
+		{ID: "favorite-conversation-" + id, Label: v.Text.FavoriteConversation, Icon: glyph(heroicons.Icon16SolidHeart), OnClick: "$dispatch('oie:conversation-preference', {field: 'favorite'})", Disabled: v.Preview},
+		{ID: "unfavorite-conversation-" + id, Label: v.Text.UnfavoriteConversation, Icon: glyph(heroicons.Icon16SolidHeart), OnClick: "$dispatch('oie:conversation-preference', {field: 'favorite'})", Disabled: v.Preview},
 		{ID: "retry-archive-conversation-" + id, Label: v.Text.RetryConversationPreference, Icon: glyph(heroicons.Icon16SolidArrowPath), OnClick: "$dispatch('oie:conversation-preference', {field: 'archived'})", Disabled: v.Preview},
 		{ID: "retry-favorite-conversation-" + id, Label: v.Text.RetryConversationPreference, Icon: glyph(heroicons.Icon16SolidArrowPath), OnClick: "$dispatch('oie:conversation-preference', {field: 'favorite'})", Disabled: v.Preview},
 	}}

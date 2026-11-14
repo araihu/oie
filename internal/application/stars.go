@@ -3,6 +3,8 @@ package application
 import (
 	"context"
 	"errors"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/araihu/oie/internal/domain"
 )
@@ -23,6 +25,7 @@ type StarResult struct {
 
 type StarQuery struct {
 	AccountID, ConversationID, Cursor domain.ID
+	Search                            string
 	Limit                             int
 }
 
@@ -100,7 +103,8 @@ func (e *Engine) SetMessageStar(ctx context.Context, key, id, expected domain.ID
 }
 
 func (e *Engine) StarredMessages(ctx context.Context, in StarQuery) ([]domain.StarredMessage, error) {
-	if in.Limit < 1 || in.Limit > 100 {
+	in.Search = strings.TrimSpace(in.Search)
+	if in.Limit < 1 || in.Limit > 100 || !utf8.ValidString(in.Search) || utf8.RuneCountInString(in.Search) > 200 {
 		return nil, ErrInvalid
 	}
 	if in.AccountID != "" {

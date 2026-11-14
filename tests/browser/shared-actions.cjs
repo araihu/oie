@@ -146,8 +146,10 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
    requestAnimationFrame(frame);
   },items[0].message.id);
   await watchSnapshot();
+  const sourceAction=menu(0).getByRole('menuitem',{name:'Go to message',exact:true});
+  assert.equal(await sourceAction.locator('use[href$="#heroicons-navigation-16-solid-arrow-turn-right-down"]').count(),1);
   const jumpResponse=page.waitForResponse(r=>r.request().headers()['x-oie-fragment']==='source');
-  await menu(0).getByRole('menuitem',{name:'Go to message',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#message-timeline'));assert.equal(documents.length,1);assert.equal(new URL(page.url()).searchParams.get('message'),items[0].message.id);
+  await sourceAction.click();await page.waitForFunction(()=>document.querySelector('#message-timeline'));assert.equal(documents.length,1);assert.equal(new URL(page.url()).searchParams.get('message'),items[0].message.id);
   const response=await jumpResponse;
   assert.equal(await response.headerValue('content-encoding'),'gzip');
   assert(!(await response.text()).includes('data-route-settings'));

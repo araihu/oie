@@ -11,16 +11,19 @@ import (
 // A cursor identifies one page; the scope identifies the collection that may
 // receive it. Drawer navigation keeps the surrounding inbox filters intact.
 func (v view) sharedPageScope() string {
-	account, conversation, query := v.AccountFilter, v.SharedConversation, v.Query
-	accounts := v.SharedAccountIDs
+	conversation, query := v.SharedConversation, v.Query
+	accounts := v.sharedCatalogAccounts()
 	if v.SharedInDetails {
-		accounts = nil
 		query = v.InfoQuery
 		if v.Selected != nil {
-			account, conversation = v.Selected.AccountId, v.Selected.Id
+			accounts = []string{v.Selected.AccountId}
+			conversation = v.Selected.Id
 		}
 	}
-	data, _ := json.Marshal([]any{v.EngineID, v.SharedInDetails, account, accounts, conversation, v.SharedType, query, v.Locale})
+	if len(accounts) == 0 {
+		accounts = nil
+	}
+	data, _ := json.Marshal([]any{v.EngineID, v.SharedInDetails, accounts, conversation, v.SharedType, query, v.Locale})
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:])
 }

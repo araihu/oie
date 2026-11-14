@@ -105,12 +105,16 @@ type ConversationMutation struct {
 	Conversation domain.Conversation
 	RoomEntry    *domain.RoomSession
 }
+type ForwardSource struct {
+	MessageID, RevisionID domain.ID
+}
 type MessageMutation struct {
 	Operation                Operation
 	Fingerprint              string
 	Message                  domain.Message
 	ConversationRevisionID   domain.ID
 	ExpectedConversationKind string
+	ForwardSource            *ForwardSource
 }
 type CancelMutation struct {
 	Operation                                 Operation
@@ -308,14 +312,14 @@ func (e *Engine) SendCompositionWithReplyReview(ctx context.Context, key, conver
 	return e.SendCompositionForKind(ctx, key, conversationID, in, at, review, "")
 }
 
-func (e *Engine) SendCompositionForKind(ctx context.Context, key, conversationID domain.ID, in domain.OutgoingComposition, at *time.Time, review ReplyReview, expectedKind string) (result MessageResult, err error) {
+func (e *Engine) SendCompositionForKind(ctx context.Context, key, conversationID domain.ID, in domain.OutgoingComposition, at *time.Time, review ReplyReview, expectedKind string) (MessageResult, error) {
 	if !validID(key) || !validID(conversationID) || (expectedKind != "" && expectedKind != "direct" && expectedKind != "room") {
 		return MessageResult{}, ErrInvalid
 	}
 	if err := validateComposition(in); err != nil {
 		return MessageResult{}, err
 	}
-	at, err = normalizeScheduledAt(at)
+	at, err := normalizeScheduledAt(at)
 	if err != nil {
 		return MessageResult{}, err
 	}
@@ -335,12 +339,23 @@ func (e *Engine) SendCompositionForKind(ctx context.Context, key, conversationID
 			ReplyReview
 		}{conversationID, in, at, review})
 	}
+	return e.sendComposition(ctx, key, conversationID, in, at, review, compositionAcceptance{
+		expectedKind: expectedKind, fingerprint: requestFingerprint,
+	})
+}
+
+type compositionAcceptance struct {
+	expectedKind, fingerprint string
+	forwardSource             *ForwardSource
+}
+
+func (e *Engine) sendComposition(ctx context.Context, key, conversationID domain.ID, in domain.OutgoingComposition, at *time.Time, review ReplyReview, accept compositionAcceptance) (result MessageResult, err error) {
 	repo, err := e.messaging()
 	if err != nil {
 		return MessageResult{}, err
 	}
 	if replay, ok := e.repo.(MessageReplayRepository); ok {
-		m, err := replay.ReplayAcceptedMessage(ctx, key, requestFingerprint)
+		m, err := replay.ReplayAcceptedMessage(ctx, key, accept.fingerprint)
 		if err != nil {
 			return MessageResult{}, err
 		}
@@ -352,7 +367,7 @@ func (e *Engine) SendCompositionForKind(ctx context.Context, key, conversationID
 			if !errors.Is(err, ErrReplySourceChanged) || ctx.Err() != nil {
 				return
 			}
-			m, replayErr := replay.ReplayAcceptedMessage(ctx, key, requestFingerprint)
+			m, replayErr := replay.ReplayAcceptedMessage(ctx, key, accept.fingerprint)
 			if replayErr != nil {
 				err = replayErr
 			} else if m != nil {
@@ -360,27 +375,9 @@ func (e *Engine) SendCompositionForKind(ctx context.Context, key, conversationID
 			}
 		}()
 	}
-	c, err := e.Conversation(ctx, conversationID)
+	c, err := e.messageDestination(ctx, conversationID, accept.expectedKind)
 	if err != nil {
 		return MessageResult{}, err
-	}
-	if c.Request != "" || (expectedKind != "" && c.Kind != expectedKind) {
-		return MessageResult{}, ErrStateConflict
-	}
-	if c.Kind != "direct" && c.Kind != "room" {
-		return MessageResult{}, ErrProtocolUnavailable
-	}
-	if c.Kind == "room" {
-		if _, ok := e.protocols.(RoomProtocol); !ok {
-			return MessageResult{}, ErrProtocolUnavailable
-		}
-		intent, err := e.roomIntent(ctx, c.ID)
-		if err != nil {
-			return MessageResult{}, err
-		}
-		if !intent.Active {
-			return MessageResult{}, ErrRoomNotJoined
-		}
 	}
 	a, err := e.Account(ctx, c.AccountID)
 	if err != nil {
@@ -407,11 +404,41 @@ func (e *Engine) SendCompositionForKind(ctx context.Context, key, conversationID
 	if err != nil {
 		return MessageResult{}, err
 	}
-	result, err = repo.AcceptMessage(ctx, MessageMutation{Operation: Operation{ID: key, ResourceID: id, CreatedAt: now, Kind: "send_message"}, Fingerprint: requestFingerprint, Message: m, ConversationRevisionID: cr, ExpectedConversationKind: c.Kind})
+	result, err = repo.AcceptMessage(ctx, MessageMutation{
+		Operation:   Operation{ID: key, ResourceID: id, CreatedAt: now, Kind: "send_message"},
+		Fingerprint: accept.fingerprint, Message: m, ConversationRevisionID: cr,
+		ExpectedConversationKind: c.Kind, ForwardSource: accept.forwardSource,
+	})
 	if err == nil {
 		e.outgoingWorkCommitted()
 	}
 	return result, err
+}
+
+func (e *Engine) messageDestination(ctx context.Context, conversationID domain.ID, expectedKind string) (domain.Conversation, error) {
+	c, err := e.Conversation(ctx, conversationID)
+	if err != nil {
+		return domain.Conversation{}, err
+	}
+	if c.Request != "" || (expectedKind != "" && c.Kind != expectedKind) {
+		return domain.Conversation{}, ErrStateConflict
+	}
+	if c.Kind != "direct" && c.Kind != "room" {
+		return domain.Conversation{}, ErrProtocolUnavailable
+	}
+	if c.Kind == "room" {
+		if _, ok := e.protocols.(RoomProtocol); !ok {
+			return domain.Conversation{}, ErrProtocolUnavailable
+		}
+		intent, err := e.roomIntent(ctx, c.ID)
+		if err != nil {
+			return domain.Conversation{}, err
+		}
+		if !intent.Active {
+			return domain.Conversation{}, ErrRoomNotJoined
+		}
+	}
+	return c, nil
 }
 
 func (e *Engine) Message(ctx context.Context, id domain.ID) (domain.Message, error) {

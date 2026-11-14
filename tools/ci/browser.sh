@@ -62,6 +62,7 @@ consumer() (
 
 integration() {
   run_case shared-actions
+  run_case forwarding
   run_case settings-entry
   run_case reset-data
   run_case appearance-settings

@@ -1,6 +1,17 @@
 package web
 
-import "github.com/a-h/templ"
+import (
+	"github.com/a-h/templ"
+	"github.com/araihu/oie/internal/adapters/web/appicons"
+)
+
+func goToMessageIcon() templ.Component {
+	return appicons.Icon(appicons.Config{
+		Symbol:     appicons.IconHeroiconsNavigation16SolidArrowTurnRightDown,
+		Decorative: true,
+		RootClass:  "oie-icon",
+	})
+}
 
 func sidebarNavigationAttrs() templ.Attributes {
 	attrs := navigationAttrs("oie-route", "app", "outerHTML settle:0ms show:none")

@@ -14,25 +14,33 @@ func (s *Server) loadConversationDetails(ctx context.Context, v *view) {
 	if v.Selected == nil {
 		return
 	}
-	response, err := s.client.GetConversationDetailsWithResponse(ctx, v.Selected.Id)
+	v.ConversationInfo = s.conversationDetails(ctx, *v.Selected)
+}
+
+func (s *Server) conversationDetails(ctx context.Context, chat engineapi.Conversation) *engineapi.ConversationDetails {
+	response, err := s.client.GetConversationDetailsWithResponse(ctx, chat.Id)
 	if err != nil || response.JSON200 == nil {
-		return
+		return nil
 	}
-	v.applyConversationDetails(response.JSON200)
+	return validConversationDetails(chat, response.JSON200)
 }
 
 func (v *view) applyConversationDetails(d *engineapi.ConversationDetails) {
-	if d == nil {
-		return
+	if v.Selected != nil {
+		v.ConversationInfo = validConversationDetails(*v.Selected, d)
 	}
-	if d.ConversationId != v.Selected.Id || d.AccountId != v.Selected.AccountId || d.AccountConnection.AccountId != v.Selected.AccountId || !d.AccountConnection.State.Valid() || d.Address != v.Selected.Address || string(d.Kind) != string(v.Selected.Kind) {
-		return
+}
+
+func validConversationDetails(chat engineapi.Conversation, d *engineapi.ConversationDetails) *engineapi.ConversationDetails {
+	if d == nil || d.ConversationId != chat.Id || d.AccountId != chat.AccountId || d.AccountConnection.AccountId != chat.AccountId || !d.AccountConnection.State.Valid() || d.Address != chat.Address || string(d.Kind) != string(chat.Kind) {
+		return nil
 	}
 	if (d.Kind == "room" && d.Participants.Scope != "occupants") || (d.Kind == "direct" && d.Participants.Scope != "peer") {
-		return
+		return nil
 	}
-	v.ConversationInfo = d
+	return d
 }
+
 func (v view) detailsHref() string {
 	return v.href("open", "details", "lang", v.Locale, "theme", v.Theme)
 }

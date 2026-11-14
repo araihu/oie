@@ -189,8 +189,10 @@ client completion. Logs are `/tmp/oie-document-context-dagger.log`,
 
 Preview reuse now goes through the generic cache decorators described in
 [cache decorators](cache.md). The RAM tier uses `lru-cache` with shared byte/count
-limits and TTL; the existing PDF IndexedDB retention is isolated in a generic
-storage adapter. TXT and Markdown previews also reuse their rendered results
-across fragment navigation. Scoped original streams with provider validators
-permit private browser storage with revalidation. Explicit downloads stay
-`no-store`. Original documents are never stored in the preview cache.
+limits and TTL. The IndexedDB adapter retains the rendered PDF, text and
+Markdown previews across fragment navigation and reloads. A conditional range
+request revalidates the preview against the provider's representation. A 304
+lets the card reuse the rendered preview. If the source has no ETag, a matching
+digest can establish reuse for bounded text excerpts and PDFs that fit in the
+initial range. Explicit downloads stay `no-store`. The preview cache stores
+derived renders only.

@@ -290,6 +290,15 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 		}
 		return application.MessageResult{Message: m, Replayed: true}, err
 	}
+	if source := in.ForwardSource; source != nil {
+		m, err := visibleMessageProjection(ctx, q, source.MessageID)
+		if err != nil {
+			return application.MessageResult{}, err
+		}
+		if m.ID != source.MessageID || m.RevisionID != source.RevisionID || m.SendState == "cancelled" {
+			return application.MessageResult{}, application.StateConflict{Current: m}
+		}
+	}
 	row, err := q.GetConversation(ctx, string(in.Message.ConversationID))
 	if err != nil {
 		return application.MessageResult{}, notFound(err)
@@ -341,21 +350,26 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 	in.Message.ReplyReference = nil
 	return application.MessageResult{Message: in.Message}, nil
 }
-func (s *Store) Message(ctx context.Context, id domain.ID) (domain.Message, error) {
-	canonical, err := resolveMessageAlias(ctx, s.read, id)
+func visibleMessageProjection(ctx context.Context, q *dbgen.Queries, id domain.ID) (domain.Message, error) {
+	canonical, err := resolveMessageAlias(ctx, q, id)
 	if err != nil {
 		return domain.Message{}, err
 	}
-	row, err := s.read.GetVisibleMessage(ctx, string(canonical))
+	row, err := q.GetVisibleMessage(ctx, string(canonical))
 	if err != nil {
 		return domain.Message{}, notFound(err)
 	}
 	m, err := decodeMessage(row)
 	if err == nil {
-		err = hydrateMessageProjection(ctx, s.read, &m)
-		if err == nil {
-			err = hydrateReply(ctx, s.read, &m)
-		}
+		err = hydrateMessageProjection(ctx, q, &m)
+	}
+	return m, err
+}
+
+func (s *Store) Message(ctx context.Context, id domain.ID) (domain.Message, error) {
+	m, err := visibleMessageProjection(ctx, s.read, id)
+	if err == nil {
+		err = hydrateReply(ctx, s.read, &m)
 		if err == nil {
 			err = hydrateReferences(ctx, s.read, &m)
 		}

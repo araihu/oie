@@ -15,13 +15,6 @@ import (
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
-templ roomEntryLinks(v view) {
-	<div class="oie-room-entry-links">
-		@link.Link(v.href("open","join-room"),link.WithAttrs(templ.Attributes{"data-room-entry-open":"join-room"})){ {v.Text.JoinRoom} @glyph(heroicons.Icon16SolidChevronRight) }
-		@link.Link(v.href("open","create-room"),link.WithAttrs(templ.Attributes{"data-room-entry-open":"create-room"})){ @glyph(heroicons.Icon16SolidPlus) {v.Text.CreateRoom} }
-	</div>
-}
-
 func roomEntryAccounts(v view, target string) []selectfield.Option {
 	selected := v.selectedAccount()
 	if v.FormTarget == target && v.field("accountId") != "" {
