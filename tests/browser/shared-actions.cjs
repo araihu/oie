@@ -82,7 +82,9 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
   },{engine,account,chat,source:items[0].message.id});
   const snapshotApplied=()=>page.evaluate(()=>{const s=window.catalogActionSettlement;return s.snapshotGeneration===window.OieRuntime.generation&&s.copy?.isConnected&&s.copy===document.getElementById(s.copy.id)});
   await watchSnapshot();
-  await menu(0).getByRole('menuitem',{name:'Go to message',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#message-timeline'));assert.equal(documents.length,1);assert.equal(new URL(page.url()).searchParams.get('message'),items[0].message.id);
+  const sourceAction=menu(0).getByRole('menuitem',{name:'Go to message',exact:true});
+  assert.equal(await sourceAction.locator('use[href$="#heroicons-navigation-16-solid-arrow-turn-right-down"]').count(),1);
+  await sourceAction.click();await page.waitForFunction(()=>document.querySelector('#message-timeline'));assert.equal(documents.length,1);assert.equal(new URL(page.url()).searchParams.get('message'),items[0].message.id);
   // Network completion is earlier than application consumption. Wait for the
   // actual source-route settlement and its scoped SSE snapshot to be applied.
   await until(async()=>await snapshotApplied()&&await page.evaluate(()=>{const s=window.catalogActionSettlement,generation=window.OieRuntime.generation;return s.routeGeneration===generation&&s.swapGeneration===generation&&generation===s.previousGeneration+1&&document.querySelector('#message-timeline')?.dataset.timelineBusy==='false'}),'source route and initial live snapshot applied');

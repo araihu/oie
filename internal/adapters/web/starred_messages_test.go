@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/adapters/web/appicons"
 )
 
 func TestFavoritesWorkspaceShowsStarredMessagesAcrossConversations(t *testing.T) {
@@ -84,7 +85,7 @@ func TestFavoritesWorkspaceShowsStarredMessagesAcrossConversations(t *testing.T)
 		path       string
 		want, omit []string
 	}{
-		{"/?section=favorites&filter=favorites", []string{"<strong>Starred in the room</strong>", "/ui/media/" + imageHash, "data-preview-expand", "Archived room", "Starred in a direct conversation", "Direct conversation", "favoritesCursor=" + directID, "chat=" + roomID, "message=" + testMessage}, []string{`id="conversation-list"`, `href="` + imageURL + `"`, "foreign-preview"}},
+		{"/?section=favorites&filter=favorites", []string{"<strong>Starred in the room</strong>", "/ui/media/" + imageHash, "data-preview-expand", "Archived room", "Starred in a direct conversation", "Direct conversation", "favoritesCursor=" + directID, "chat=" + roomID, "message=" + testMessage, appicons.SpriteURL + "#" + string(appicons.IconHeroiconsNavigation16SolidArrowTurnRightDown)}, []string{`id="conversation-list"`, `href="` + imageURL + `"`, "foreign-preview"}},
 		{"/?section=favorites&account=" + testAccount, []string{"Starred in the room", "favoritesCursor=" + testMessage}, []string{"Starred in a direct conversation"}},
 		{"/?section=favorites&favoritesCursor=" + directID, []string{"Starred in the room", "Show newest items"}, []string{"Starred in a direct conversation"}},
 		{"/?section=favorites&account=" + otherAccount + "&lang=pt-BR", []string{"Nenhuma mensagem favorita"}, []string{"Starred in the room", "Starred in a direct conversation"}},

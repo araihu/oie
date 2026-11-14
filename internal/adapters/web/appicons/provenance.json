@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "tool": "goshtoso-iconpack",
-  "release": "iconpack-23e6a0569808",
-  "catalogSha256": "23e6a05698083d8c9724593ee009a7ae5ba9bb1b4a22bebfbbba9081cba6b479",
+  "release": "iconpack-ba23267ccda5",
+  "catalogSha256": "ba23267ccda55b3757158d42e8eeea491a2c496ca68806c03c0ae53b017aa278",
   "sourceKind": "muamba-snapshot",
   "archiveSha256": "",
-  "sourceConfigSha256": "23e6a05698083d8c9724593ee009a7ae5ba9bb1b4a22bebfbbba9081cba6b479",
-  "sourceLockSha256": "6a20a06f743734316668af69007822767d0c6aefd1f1287c70a9dd8197d5720f",
+  "sourceConfigSha256": "ba23267ccda55b3757158d42e8eeea491a2c496ca68806c03c0ae53b017aa278",
+  "sourceLockSha256": "f28dbef33751cd3bf1a7f1e3ed9b76571d548a070c21481fcb568de1ff8d4e10",
   "sources": [
     {
       "namespace": "custom",
@@ -14,7 +14,7 @@
       "spritePath": "",
       "spriteSha256": "",
       "manifestPath": ".iconpack.yaml",
-      "manifestSha256": "23e6a05698083d8c9724593ee009a7ae5ba9bb1b4a22bebfbbba9081cba6b479",
+      "manifestSha256": "ba23267ccda55b3757158d42e8eeea491a2c496ca68806c03c0ae53b017aa278",
       "provenancePath": "",
       "provenanceSha256": "",
       "licensePath": "heroicons/LICENSE",
@@ -26,7 +26,7 @@
       "spritePath": "",
       "spriteSha256": "",
       "manifestPath": ".iconpack.yaml",
-      "manifestSha256": "23e6a05698083d8c9724593ee009a7ae5ba9bb1b4a22bebfbbba9081cba6b479",
+      "manifestSha256": "ba23267ccda55b3757158d42e8eeea491a2c496ca68806c03c0ae53b017aa278",
       "provenancePath": "",
       "provenanceSha256": "",
       "licensePath": "heroicons-archive/LICENSE",
@@ -38,7 +38,7 @@
       "spritePath": "",
       "spriteSha256": "",
       "manifestPath": ".iconpack.yaml",
-      "manifestSha256": "23e6a05698083d8c9724593ee009a7ae5ba9bb1b4a22bebfbbba9081cba6b479",
+      "manifestSha256": "ba23267ccda55b3757158d42e8eeea491a2c496ca68806c03c0ae53b017aa278",
       "provenancePath": "",
       "provenanceSha256": "",
       "licensePath": "heroicons-forward/LICENSE",
@@ -50,10 +50,22 @@
       "spritePath": "",
       "spriteSha256": "",
       "manifestPath": ".iconpack.yaml",
-      "manifestSha256": "23e6a05698083d8c9724593ee009a7ae5ba9bb1b4a22bebfbbba9081cba6b479",
+      "manifestSha256": "ba23267ccda55b3757158d42e8eeea491a2c496ca68806c03c0ae53b017aa278",
       "provenancePath": "",
       "provenanceSha256": "",
       "licensePath": "heroicons-group/LICENSE",
+      "licenseSha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    },
+    {
+      "namespace": "custom",
+      "product": "heroicons-navigation",
+      "spritePath": "",
+      "spriteSha256": "",
+      "manifestPath": ".iconpack.yaml",
+      "manifestSha256": "ba23267ccda55b3757158d42e8eeea491a2c496ca68806c03c0ae53b017aa278",
+      "provenancePath": "",
+      "provenanceSha256": "",
+      "licensePath": "heroicons-navigation/LICENSE",
       "licenseSha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
     }
   ],
@@ -85,6 +97,13 @@
       "license": "MIT",
       "path": "heroicons-group/16/solid/user-group.svg",
       "sha256": "cababd306febb0fbb9f886b6c750c35b5454524bbca56816c24fa6617fe501e6"
+    },
+    {
+      "canonicalName": "heroicons-navigation-16-solid-arrow-turn-right-down",
+      "source": "https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-turn-right-down.svg:16/solid/arrow-turn-right-down.svg",
+      "license": "MIT",
+      "path": "heroicons-navigation/16/solid/arrow-turn-right-down.svg",
+      "sha256": "01b8fe0b45f168051c99c8d679392893a180b49e56226dba1472d7c9f522b4aa"
     }
   ]
 }

@@ -45,7 +45,7 @@ func sharedActionDownload(v view, item engineapi.SharedContentItem) string {
 
 func sharedActions(v view, item engineapi.SharedContentItem) []dropdown.Section {
 	items := []dropdown.Item{
-		{ID: sharedActionID(v, item, "source"), Label: v.Text.SharedGoToMessage, Href: v.sharedSourceHref(item), Icon: glyph(heroicons.Icon16SolidArrowUturnLeft)},
+		{ID: sharedActionID(v, item, "source"), Label: v.Text.SharedGoToMessage, Href: v.sharedSourceHref(item), Icon: goToMessageIcon()},
 		{ID: sharedActionID(v, item, "copy"), Label: v.Text.SharedCopyLink, OnClick: "void 0", Icon: glyph(heroicons.Icon16SolidDocumentDuplicate)},
 		{ID: sharedActionID(v, item, "open"), Label: v.Text.SharedOpenLink, Href: safePreviewURL(item.Url), Target: "_blank", Rel: "noopener noreferrer", Icon: glyph(heroicons.Icon16SolidArrowTopRightOnSquare)},
 	}
