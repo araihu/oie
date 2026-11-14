@@ -78,7 +78,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await page.route(match,handler);
   return {release,handler};
  }
- const watch=async context=>{await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==base){external.push(route.request().url());route.abort()}else route.continue()});context.on('page',page=>page.on('pageerror',e=>errors.push(e.message)))};
+ const watch=async context=>{await context.addInitScript(()=>{try{localStorage.setItem('oie.device.auto-video-previews.v1','false')}catch{}});await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==base){external.push(route.request().url());route.abort()}else route.continue()});context.on('page',page=>page.on('pageerror',e=>errors.push(e.message)))};
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
   for(const {width,locale,mode,columns} of [

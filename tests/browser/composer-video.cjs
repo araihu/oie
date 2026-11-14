@@ -64,8 +64,19 @@ async function launch() {
         response.flushHeaders();
         return;
       }
-      if (range) response.setHeader('Content-Range', 'bytes 0-' + (bytes.length - 1) + '/' + bytes.length);
-      return response.writeHead(range ? 206 : 200,{'Content-Type':'video/webm','Content-Length':bytes.length,'Accept-Ranges':'bytes'}).end(bytes);
+      let content = bytes;
+      if (range) {
+        const [, from, to] = /^bytes=(\d+)-(\d*)$/.exec(range) || [];
+        const start = Number(from);
+        const end = to ? Math.min(Number(to), bytes.length - 1) : bytes.length - 1;
+        if (!Number.isInteger(start) || start > end) {
+          response.setHeader('Content-Range', 'bytes */' + bytes.length);
+          return send(416,{status:416});
+        }
+        response.setHeader('Content-Range', 'bytes ' + start + '-' + end + '/' + bytes.length);
+        content = bytes.subarray(start,end + 1);
+      }
+      return response.writeHead(range ? 206 : 200,{'Content-Type':'video/webm','Content-Length':content.length,'Accept-Ranges':'bytes'}).end(content);
     }
     if (chat && url.pathname.includes('/staged-attachments/')) {
       const key = chat.id + '/' + name;
@@ -220,16 +231,33 @@ async function launch() {
       await row.locator('[data-remove-attachment]').click();
       assert.equal(await composer.inputValue(),caption);
 
+      let cancelRelease;
+      const cancelGate = new Promise(resolve => { cancelRelease = resolve; });
+      await page.route('**/ui/scheduling/stage?*', async route => {
+        await cancelGate;
+        await route.continue().catch(() => {});
+      }, {times:1});
+      await picker.setInputFiles(video);
+      await row.locator('[data-remove-attachment]').click();
+      cancelRelease();
+      await row.waitFor({state:'hidden'});
+      assert.equal(await composer.inputValue(),caption);
+
       if (index === 1) {
         await page.evaluate(() => localStorage.setItem('oie.device.auto-video-previews.v1','false'));
         await page.reload();
         state.oversize = true;
         const response = await page.request.get(base + '/ui/shared-content/' + clips[index].id + '/content?engineId=' + engine + '&preview=1');
         assert.equal(response.status(),422);
+        await videoCard.locator('[data-video-thumbnail-load]').click();
+        await videoCard.locator('[data-video-thumbnail-load][aria-label="Tentar novamente"]').waitFor();
+        assert.equal(await player.getAttribute('src'),null);
         state.oversize = false;
-        await page.evaluate(() => localStorage.removeItem('oie.device.auto-video-previews.v1'));
-        await page.reload();
-        if (process.env.OIE_VIDEO_RECEIVED_SCREENSHOT) await videoCard.screenshot({path:process.env.OIE_VIDEO_RECEIVED_SCREENSHOT});
+        if (process.env.OIE_VIDEO_RECEIVED_SCREENSHOT) {
+          await videoCard.locator('[data-video-thumbnail-load]').click();
+          await receive.waitFor({state:'visible'});
+          await videoCard.screenshot({path:process.env.OIE_VIDEO_RECEIVED_SCREENSHOT});
+        }
       }
       await videoCard.locator('[data-video-play]').click();
       await waitPlayback('[data-video-item="' + clips[index].id + '"] video');
