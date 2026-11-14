@@ -443,6 +443,8 @@ catalog browsing and bounded source-message navigation while import and live
 updates are active. See [indexed catalog reads](media-gallery-scroll.md#indexed-catalog-reads) and
 [opening a shared source](timeline-pagination.md#opening-a-shared-source).
 Long-term history storage is a separate design decision tracked in O17 and B35.
+The [DuckDB evaluation](duckdb-search-evaluation.md) records the rejected
+proposal for interactive search and the measurements behind that decision.
 
 **RECOMMENDED R08:** a bounded, paced backfill queue with checkpoints, resumable pages, backoff, foreground/live-message priority, and explicit partial-history status. Scope serialization and limits deliberately rather than launching one unbounded worker per room.
 
