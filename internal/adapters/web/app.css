@@ -599,7 +599,14 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 [data-forward-form] { display: grid; gap: 1rem; }
 .oie-forward-preview { max-block-size: min(34dvh, 19rem); min-inline-size: 0; overflow: auto; }
 .oie-forward-preview .oie-starred-bubble { margin-block-start: 0; }
-.oie-forward-rooms { min-inline-size: 0; scrollbar-gutter: stable; max-block-size: min(36dvh, 21rem); overflow-y: auto; margin: 0; padding: .375rem 0 0; border: 0; }
+.oie-forward-rooms { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
+.oie-forward-room-list {
+  max-block-size: min(46dvh, 24rem);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding: .375rem;
+  scroll-padding-block: .375rem;
+}
 .oie-forward-rooms legend { font-size: .875rem; font-weight: 600; }
 .oie-forward-room { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: .75rem; }
 .oie-forward-room + .oie-forward-room { border-block-start: 1px solid var(--oie-border); }

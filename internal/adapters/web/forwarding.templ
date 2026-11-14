@@ -36,27 +36,29 @@ templ forwardForm(v view, source messageView, rooms []forwardRoom) {
 			@textinput.TextInput(textinput.Config{ID: "forward-search", Label: v.Text.ForwardSearchRooms, Type: textinput.TypeSearch, InputAttrs: templ.Attributes{"data-forward-search": "", "aria-controls": "forward-rooms"}})
 			<fieldset id="forward-rooms" class="oie-forward-rooms" aria-describedby="forward-no-results">
 				<legend>{ v.Text.ForwardChooseRooms }</legend>
-				for _, room := range rooms {
-					{{ id := "forward-room-" + room.Id; labelID := id + "-title"; infoID := id + "-info" }}
-					<div data-forward-room data-room-address={ room.Address } class="oie-forward-room">
-						@checkbox.Checkbox(checkbox.Config{ID: id, Name: "conversationId", Value: room.Id, InputAttrs: templ.Attributes{"data-key": newOperationKey(), "aria-labelledby": labelID, "aria-describedby": infoID}})
-						<label for={ id } class="oie-forward-room-label" data-forward-room-label>
-							<span aria-hidden="true">
-								@avatar.Avatar(avatar.Config{Name:room.Title, Src:v.avatarSource(room.AccountId,room.Address), Size:avatar.SizeSM})
-							</span>
-							<span class="oie-forward-room-text">
-								<strong id={ labelID }>{ room.Title }</strong>
-								<span id={ infoID } class="oie-forward-room-info">
-									if room.Topic != "" {
-										<span class="oie-forward-topic" title={ room.Topic }>{ room.Topic }</span>
-									}
-									<small>{ v.accountLabel(room.AccountId) }</small>
+				<div class="oie-forward-room-list">
+					for _, room := range rooms {
+						{{ id := "forward-room-" + room.Id; labelID := id + "-title"; infoID := id + "-info" }}
+						<div data-forward-room data-room-address={ room.Address } class="oie-forward-room">
+							@checkbox.Checkbox(checkbox.Config{ID: id, Name: "conversationId", Value: room.Id, InputAttrs: templ.Attributes{"data-key": newOperationKey(), "aria-labelledby": labelID, "aria-describedby": infoID}})
+							<label for={ id } class="oie-forward-room-label" data-forward-room-label>
+								<span aria-hidden="true">
+									@avatar.Avatar(avatar.Config{Name:room.Title, Src:v.avatarSource(room.AccountId,room.Address), Size:avatar.SizeSM})
 								</span>
-							</span>
-						</label>
-						<p class="oie-forward-result" data-forward-result role="status"></p>
-					</div>
-				}
+								<span class="oie-forward-room-text">
+									<strong id={ labelID }>{ room.Title }</strong>
+									<span id={ infoID } class="oie-forward-room-info">
+										if room.Topic != "" {
+											<span class="oie-forward-topic" title={ room.Topic }>{ room.Topic }</span>
+										}
+										<small>{ v.accountLabel(room.AccountId) }</small>
+									</span>
+								</span>
+							</label>
+							<p class="oie-forward-result" data-forward-result role="status"></p>
+						</div>
+					}
+				</div>
 			</fieldset>
 			<p id="forward-no-results" data-forward-no-results role="status" hidden>{ v.Text.ForwardNoRoomsFound }</p>
 			<footer class="oie-forward-footer">
