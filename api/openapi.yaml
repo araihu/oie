@@ -234,6 +234,12 @@ paths:
         schema:
           type: boolean
           default: false
+      - name: includeMessageStars
+        in: query
+        description: Include the current star state of each returned item's source message.
+        schema:
+          type: boolean
+          default: false
       responses:
         '200':
           description: Shared items and catalog indexing progress in the selected account/conversation scope
@@ -4338,6 +4344,8 @@ components:
           $ref: '#/components/schemas/MessagePreview'
         thumbnail:
           $ref: '#/components/schemas/VideoThumbnail'
+        star:
+          $ref: '#/components/schemas/MessageStar'
     SharedContentIndexing:
       type: object
       description: Local source-message indexing progress, scoped by account/conversation but independent of tab/search.

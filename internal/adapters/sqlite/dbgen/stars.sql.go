@@ -62,7 +62,7 @@ func (q *Queries) InsertMessageStarRevision(ctx context.Context, arg InsertMessa
 	return err
 }
 
-const listConversationMessageStars = `-- name: ListConversationMessageStars :many
+const listMessageStars = `-- name: ListMessageStars :many
 WITH requested AS (
  SELECT DISTINCT COALESCE(a.canonical_id,CAST(j.value AS TEXT)) AS id
  FROM json_each(CAST(?2 AS TEXT)) AS j
@@ -72,7 +72,8 @@ SELECT CAST(COALESCE(m.id,'') AS TEXT) AS id,
  CAST(COALESCE(m.account_id,'') AS TEXT) AS account_id,
  CAST(COALESCE(m.conversation_id,'') AS TEXT) AS conversation_id,s.payload
 FROM requested
-LEFT JOIN messages AS m ON m.id=requested.id AND m.conversation_id=?1
+LEFT JOIN messages AS m ON m.id=requested.id
+ AND (CAST(?1 AS TEXT)='' OR m.conversation_id=CAST(?1 AS TEXT))
 LEFT JOIN message_stars AS s ON s.message_id=(
  SELECT candidate.message_id FROM message_stars AS candidate
  WHERE candidate.message_id=m.id OR candidate.message_id IN (
@@ -81,27 +82,27 @@ LEFT JOIN message_stars AS s ON s.message_id=(
 )
 `
 
-type ListConversationMessageStarsParams struct {
+type ListMessageStarsParams struct {
 	ConversationID string
 	MessageIds     string
 }
 
-type ListConversationMessageStarsRow struct {
+type ListMessageStarsRow struct {
 	ID             string
 	AccountID      string
 	ConversationID string
 	Payload        *string
 }
 
-func (q *Queries) ListConversationMessageStars(ctx context.Context, arg ListConversationMessageStarsParams) ([]ListConversationMessageStarsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listConversationMessageStars, arg.ConversationID, arg.MessageIds)
+func (q *Queries) ListMessageStars(ctx context.Context, arg ListMessageStarsParams) ([]ListMessageStarsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMessageStars, arg.ConversationID, arg.MessageIds)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListConversationMessageStarsRow{}
+	items := []ListMessageStarsRow{}
 	for rows.Next() {
-		var i ListConversationMessageStarsRow
+		var i ListMessageStarsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.AccountID,

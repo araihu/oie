@@ -32,6 +32,7 @@ func (s *Server) ListSharedContent(ctx context.Context, r engineapi.ListSharedCo
 		q.Limit = *r.Params.Limit
 	}
 	q.IncludeFirstPageCounts = r.Params.IncludeFirstPageCounts != nil && *r.Params.IncludeFirstPageCounts
+	q.IncludeMessageStars = r.Params.IncludeMessageStars != nil && *r.Params.IncludeMessageStars
 	page, err := s.engine.SharedContent(ctx, q)
 	if err != nil {
 		return nil, err
@@ -53,6 +54,10 @@ func (s *Server) ListSharedContent(ctx context.Context, r engineapi.ListSharedCo
 
 func sharedContentItem(item domain.SharedContentItem) engineapi.SharedContentItem {
 	value := engineapi.SharedContentItem{Id: string(item.ID), RevisionId: string(item.RevisionID), Kind: engineapi.SharedContentItemKind(item.Kind), Url: item.URL, FileName: item.FileName, AccountLabel: item.AccountLabel, ConversationTitle: item.ConversationTitle, Message: message(item.Message)}
+	if item.Star != nil {
+		state := star(*item.Star)
+		value.Star = &state
+	}
 	if item.Preview != nil {
 		if item.Preview.Kind == "video" {
 			p := videoThumbnail(*item.Preview)

@@ -34,7 +34,11 @@ func (s *Store) MessageStar(ctx context.Context, id domain.ID) (domain.MessageSt
 }
 
 func (s *Store) MessageStars(ctx context.Context, conversation domain.ID, ids []domain.ID) ([]domain.MessageStar, error) {
-	rows, err := s.read.ListConversationMessageStars(ctx, dbgen.ListConversationMessageStarsParams{ConversationID: string(conversation), MessageIds: jsonText(ids)})
+	return readMessageStars(ctx, s.read, conversation, ids)
+}
+
+func readMessageStars(ctx context.Context, q *dbgen.Queries, conversation domain.ID, ids []domain.ID) ([]domain.MessageStar, error) {
+	rows, err := q.ListMessageStars(ctx, dbgen.ListMessageStarsParams{ConversationID: string(conversation), MessageIds: jsonText(ids)})
 	if err != nil {
 		return nil, err
 	}

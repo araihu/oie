@@ -27,10 +27,12 @@ window.OieRuntime.register('stars', life => {
     }
     for(const button of document.querySelectorAll('[data-star-message],[id^="star-message-"]')){
       if(button.id?.startsWith('star-message-'))button.dataset.starMessage=button.id.slice(13);
-      const id=button.dataset.starMessage,current=states.get(id),pending=id&&journal(id),known=!!current?.known;
+      const id=button.dataset.starMessage,shared=button.hasAttribute('data-shared-star');
+      if(shared&&!states.has(id))states.set(id,sharedState(button));
+      const current=states.get(id),pending=id&&journal(id),known=!!current?.known;
       button.hidden=!known;
-      if(button.closest('#favorites-results')){
-        // Keep keyboard focus on the action while the row awaits confirmation.
+      if(shared||button.closest('#favorites-results')){
+        // Keep keyboard focus on the action while it awaits confirmation.
         button.disabled=!known;
         button.setAttribute('aria-disabled',String(!known||busy.has(id)));
       }else button.disabled=!known||busy.has(id);
@@ -46,11 +48,19 @@ window.OieRuntime.register('stars', life => {
   }
   function read(root){
     const data=root.querySelector('#oie-star-data');if(!data)return;
-    if(data.dataset.known!=='true'){for(const value of states.values())value.known=false;render();return;}
+    if(data.dataset.known!=='true'){for(const value of states.values())value.known=false;return;}
     for(const row of data.querySelectorAll('[data-star-state]'))states.set(row.dataset.starSource,{known:true,starred:row.dataset.starred==='true',revision:row.dataset.revision||null});
-    render();
+  }
+  function sharedState(button){
+    return {known:true,starred:button.dataset.sharedStar==='true',revision:button.dataset.revision||null};
+  }
+  function readShared(root){
+    for(const button of root.querySelectorAll('[data-shared-star]')){
+      states.set(button.dataset.starMessage,sharedState(button));
+    }
   }
   read(document);
+  readShared(document);
   function readInfo(root){if(!root)return;for(const data of root.querySelectorAll('[data-info-star-states]'))if(data.dataset.known==='true'){for(const row of data.querySelectorAll('[data-star-state]'))states.set(row.dataset.starSource,{known:true,starred:row.dataset.starred==='true',revision:row.dataset.revision||null});}render();}
   readInfo(document);
 
@@ -58,7 +68,13 @@ window.OieRuntime.register('stars', life => {
   life.on(document,'oie:info-content',event=>{
     const {root, generation: requestedGeneration} = event.detail;
     if (root.id === 'favorites-results') window.OieMasonry?.layout(root);
-    if(requestedGeneration===generation)readInfo(root);else{render();document.dispatchEvent(new CustomEvent('oie:refresh-request'));}
+    if(requestedGeneration===generation){readShared(root);readInfo(root);}
+    else{render();document.dispatchEvent(new CustomEvent('oie:refresh-request'));}
+  });
+  life.on(document,'oie:shared-append',event=>{
+    const {page,starGeneration}=event.detail;
+    if(starGeneration===generation)readShared(page);
+    render();
   });
 
   life.on(document,'oie:actions-refreshed',render);
@@ -124,14 +140,14 @@ window.OieRuntime.register('stars', life => {
     document.dispatchEvent(new CustomEvent('oie:starred-content',{detail:{current,fresh}}));
   }
   life.on(document,'oie:stars-refresh',event=>{
-    if(event.detail.generation!==generation)return;
+    if(event.detail.generation!==generation){render();return;}
     const page=event.detail.page;
     const info=document.querySelector('[data-info-stars]');
     refreshStarredPage(info,page.querySelector('#live-info-content [data-info-stars]'),
       document.getElementById('details-body'),()=>info.querySelector('[data-info-heading]'));
     refreshStarredPage(document.getElementById('favorites-results'),page.querySelector('#favorites-results'),
       document.getElementById('favorites-scroll'),()=>document.getElementById('favorites-heading'));
-    read(page);readInfo(page);
+    read(page);readShared(page);readInfo(page);
   });
   let viewerRead=false,viewerAgain=false;
   async function refreshViewer(){
@@ -166,7 +182,7 @@ window.OieRuntime.register('stars', life => {
       const result=await response.json();
       if(life.signal.aborted)return;
       if(generation===operationGeneration&&result.star?.messageId===id)states.set(id,{known:true,starred:result.star.starred,revision:result.star.revisionId});
-      else if(generation===operationGeneration&&!result.ok)states.set(id,{...current,known:false});
+      else if(generation===operationGeneration&&!result.ok&&!button.hasAttribute('data-shared-star'))states.set(id,{...current,known:false});
       if(result.ok||result.rejected)clear(id);
       announce(result.message||labels.uncertain);
     }catch{if(!life.signal.aborted)announce(labels.uncertain);}

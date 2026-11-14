@@ -8,7 +8,7 @@ LEFT JOIN message_stars AS s ON s.message_id=(
 )
 WHERE m.id=COALESCE((SELECT requested.canonical_id FROM message_canonical_aliases AS requested WHERE requested.alias_id=CAST(sqlc.arg(message_id) AS TEXT)),CAST(sqlc.arg(message_id) AS TEXT));
 
--- name: ListConversationMessageStars :many
+-- name: ListMessageStars :many
 WITH requested AS (
  SELECT DISTINCT COALESCE(a.canonical_id,CAST(j.value AS TEXT)) AS id
  FROM json_each(CAST(sqlc.arg(message_ids) AS TEXT)) AS j
@@ -18,7 +18,8 @@ SELECT CAST(COALESCE(m.id,'') AS TEXT) AS id,
  CAST(COALESCE(m.account_id,'') AS TEXT) AS account_id,
  CAST(COALESCE(m.conversation_id,'') AS TEXT) AS conversation_id,s.payload
 FROM requested
-LEFT JOIN messages AS m ON m.id=requested.id AND m.conversation_id=sqlc.arg(conversation_id)
+LEFT JOIN messages AS m ON m.id=requested.id
+ AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
 LEFT JOIN message_stars AS s ON s.message_id=(
  SELECT candidate.message_id FROM message_stars AS candidate
  WHERE candidate.message_id=m.id OR candidate.message_id IN (

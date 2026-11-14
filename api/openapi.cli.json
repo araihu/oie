@@ -317,6 +317,15 @@
               "type": "boolean",
               "default": false
             }
+          },
+          {
+            "name": "includeMessageStars",
+            "in": "query",
+            "description": "Include the current star state of each returned item's source message.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
           }
         ],
         "responses": {
@@ -7002,6 +7011,9 @@
           },
           "thumbnail": {
             "$ref": "#/components/schemas/VideoThumbnail"
+          },
+          "star": {
+            "$ref": "#/components/schemas/MessageStar"
           }
         }
       },

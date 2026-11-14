@@ -29,7 +29,8 @@ const sharedContentPageSize = 50
 func (s *Server) loadSharedContent(ctx context.Context, v *view, includeFirstPageCounts bool) {
 	limit := sharedContentPageSize
 	kind := engineapi.ListSharedContentParamsType(v.SharedType)
-	params := &engineapi.ListSharedContentParams{Type: &kind, Limit: &limit}
+	includeStars := !v.Preview
+	params := &engineapi.ListSharedContentParams{Type: &kind, Limit: &limit, IncludeMessageStars: &includeStars}
 	if includeFirstPageCounts {
 		params.IncludeFirstPageCounts = &includeFirstPageCounts
 	}
@@ -61,7 +62,8 @@ func (s *Server) loadSharedContent(ctx context.Context, v *view, includeFirstPag
 	if result.JSON200 == nil {
 		return
 	}
-	for _, item := range result.JSON200.Items {
+	for i := range result.JSON200.Items {
+		item := &result.JSON200.Items[i]
 		m := item.Message
 		if !validOperationKey(item.Id) || !validOperationKey(m.Id) || !validOperationKey(m.AccountId) || !validOperationKey(m.ConversationId) || safePreviewURL(item.Url) == "" || v.account(m.AccountId).Address == "" {
 			return
@@ -71,6 +73,9 @@ func (s *Server) loadSharedContent(ctx context.Context, v *view, includeFirstPag
 		}
 		if (v.SharedType == "links" && item.Kind != "link") || (v.SharedType == "documents" && item.Kind != "document") || (v.SharedType == "media" && item.Kind != "image" && item.Kind != "audio" && item.Kind != "video") {
 			return
+		}
+		if item.Star != nil && (v.Preview || item.Star.MessageId != m.Id || !validTimelineStar(*item.Star, m.AccountId, m.ConversationId)) {
+			item.Star = nil
 		}
 		if p := item.Thumbnail; p != nil {
 			if item.Kind != "video" || !validVideoThumbnailStatus(*p, item.Id) || p.AccountId != m.AccountId || p.ConversationId != m.ConversationId || p.MessageId != m.Id || p.Url != item.Url {
@@ -108,9 +113,10 @@ func (v view) sharedSourceHref(item engineapi.SharedContentItem) string {
 	return v.href("section", "chats", "chat", item.Message.ConversationId, "message", item.Message.Id, "account", item.Message.AccountId, "q", "", "filter", "all", "contentType", "", "contentCursor", "", "contentConversation", "", "lang", v.Locale, "theme", v.Theme)
 }
 
-// Preview metadata refreshes independently from the canonical catalog item.
+// Preview metadata and stars refresh independently from the canonical catalog item.
 func sharedItemVersion(item engineapi.SharedContentItem) string {
 	item.Preview = nil
+	item.Star = nil
 	data, _ := json.Marshal(item)
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
@@ -124,6 +130,7 @@ func (v view) sharedVersion() string {
 	for i := range items {
 		items[i].Preview = nil
 		items[i].Thumbnail = nil
+		items[i].Star = nil
 	}
 	data, _ := json.Marshal(items)
 	hash := sha256.Sum256(data)

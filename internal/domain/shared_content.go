@@ -9,6 +9,7 @@ type SharedContentItem struct {
 	AccountLabel, ConversationTitle string
 	Message                         Message
 	Preview                         *MessagePreview
+	Star                            *MessageStar
 }
 type SharedContentIndex struct {
 	State                          string
@@ -34,4 +35,5 @@ type SharedContentQuery struct {
 	Type, Search, Cursor      string
 	Limit                     int
 	IncludeFirstPageCounts    bool
+	IncludeMessageStars       bool
 }

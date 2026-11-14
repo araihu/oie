@@ -376,8 +376,11 @@ The closed browser is not assumed to run a persistent background dispatcher. Swi
 
 ## 6. Sent-message actions and formatting
 
-Star or unstar a retained source message from the timeline or its image viewer.
-All images attached to that message share its star. This is app-owned metadata,
+Star or unstar a retained source message from the timeline, its image viewer,
+or a card in Media and Links, including in conversation details. All items from
+that message share its star. In the catalog, an unstarred card shows a gray
+star on hover or keyboard focus, and the action is always available on touch
+screens. A starred card always shows a yellow star. This is app-owned metadata,
 independent of protocol support, conversation favorites, and message content edits.
 
 **AGREED:** the sidebar Favorites workspace shows starred messages across direct conversations and rooms, including archived conversations. It follows the account selector. Each result identifies its source and renders the chat bubble with the same formatted text, replies, previews and attachments as the timeline. A result can open the original message or remove its star.

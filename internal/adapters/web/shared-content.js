@@ -66,9 +66,9 @@ window.OieRuntime.register('shared-content', life => {
   if(link){link.hidden=!c.next&&!failed;link.setAttribute('aria-disabled',String(c.busy));if(failed){link.textContent=page.dataset.sharedRetryLabel||'';try{link.href=requestURL(c,c.retryCursor).pathname+requestURL(c,c.retryCursor).search}catch{}}}
  }
  function refreshPager(c,html){c.pagerHTML=html;replace(c.pagination,html);const link=c.pagination.querySelector('[data-shared-next]');if(link&&c.href)link.setAttribute('href',c.href);observe(c)}
- function render(c,page,pagerHTML){
+ function render(c,page,pagerHTML,starGeneration){
   const top=c.scroll.scrollTop,anchor=[...c.results.querySelectorAll('[data-shared-item]')].find(item=>item.getBoundingClientRect().bottom>=c.scroll.getBoundingClientRect().top),anchorID=anchor?.dataset.sharedItem,anchorTop=anchor?.getBoundingClientRect().top,active=c.results.contains(document.activeElement)?document.activeElement:null,activeID=active?.id;
-  const activeItem=active?.closest("[data-shared-item]")?.dataset.sharedItem,activeAction=["data-preview-expand","data-preview-download","data-shared-source","data-image-menu-trigger","data-video-player","data-video-play","data-video-retry"].find(name=>active?.hasAttribute(name));
+  const activeItem=active?.closest("[data-shared-item]")?.dataset.sharedItem,activeAction=["data-preview-expand","data-preview-download","data-shared-source","data-image-menu-trigger","data-shared-star","data-video-player","data-video-play","data-video-retry"].find(name=>active?.hasAttribute(name));
   // Replacing a loading footer can clamp the scroll position before the new
   // rows are appended. Capture the anchor against the old footer first.
   if(pagerHTML!==undefined)refreshPager(c,pagerHTML);
@@ -98,7 +98,7 @@ window.OieRuntime.register('shared-content', life => {
   if(window.Alpine?.mutateDom)window.Alpine.mutateDom(apply);else apply();
   window.OieMasonry?.layout(c.results);
   if(active&&document.activeElement!==active){const item=activeItem&&c.results.querySelector(`[data-shared-item="${CSS.escape(activeItem)}"]`),target=active.isConnected?active:activeID?document.getElementById(activeID):activeAction?item?.querySelector('['+activeAction+']'):null;target?.focus({preventScroll:true});}
-  document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:page||document}));document.dispatchEvent(new CustomEvent('oie:shared-append',{detail:{page:page||document}}));document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));const correct=()=>{if(c.disposed||!c.results.isConnected)return;const same=anchorID&&c.results.querySelector(`[data-shared-item="${CSS.escape(anchorID)}"]`);if(same)c.scroll.scrollTop+=same.getBoundingClientRect().top-anchorTop;else c.scroll.scrollTop=top;c.top=c.scroll.scrollTop;save(c)};correct();life.raf(correct);
+  document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:page||document}));document.dispatchEvent(new CustomEvent('oie:shared-append',{detail:{page:page||document,starGeneration}}));document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));const correct=()=>{if(c.disposed||!c.results.isConnected)return;const same=anchorID&&c.results.querySelector(`[data-shared-item="${CSS.escape(anchorID)}"]`);if(same)c.scroll.scrollTop+=same.getBoundingClientRect().top-anchorTop;else c.scroll.scrollTop=top;c.top=c.scroll.scrollTop;save(c)};correct();life.raf(correct);
  }
  function mergeWindow(c,items,head=false,upper=null){
   const incoming=new Set(items.map(item=>item.id)),oldest=items.at(-1);
@@ -115,7 +115,7 @@ window.OieRuntime.register('shared-content', life => {
  async function load(c,manual=false,revalidate=null){
   const refreshing=revalidate!==null;if(c.busy||c.disposed||c.closed||!c.results.isConnected||(c.failed&&!manual)||(!refreshing&&!c.next))return;
   const cursor=revalidate??c.next,href=refreshing?null:c.href;let url;try{url=requestURL(c,cursor,href)}catch{c.failed=true;feedback(c,true);return}
-  const generation=++c.generation;c.busy=true;if(!refreshing)c.failed=false;feedback(c);const request=new AbortController();c.request=request;const timeout=life.timeout(()=>request.abort(),12000),oldest=sorted(c.items.values()).at(-1);
+  const generation=++c.generation,starGeneration=Number(document.body.dataset.starGeneration||0);c.busy=true;if(!refreshing)c.failed=false;feedback(c);const request=new AbortController();c.request=request;const timeout=life.timeout(()=>request.abort(),12000),oldest=sorted(c.items.values()).at(-1);
   try{
    const response=await life.fetch(url.pathname+url.search,{credentials:'same-origin',cache:'no-store',redirect:'error',headers:{'HX-Request':'true','X-Oie-Fragment':c.info?'info':'shared'},signal:request.signal});if(!response.ok)throw Error('unavailable');const page=new DOMParser().parseFromString(await response.text(),'text/html');if(c.disposed||c.closed||generation!==c.generation||!c.results.isConnected||controllers.get(c.prefix)!==c)return;
    capturePreviews(c);const data=pageData(page,c.info),items=check(c,data,cursor),newItems=items.filter(item=>!c.items.has(item.id)),upper=c.edges.get(cursor);if(items.some(item=>upper&&keyCompare(item,upper)>=0)||items.some(item=>c.items.has(item.id)&&c.items.get(item.id).ms!==item.ms))throw Error('invalid_boundary');if(!items.length&&data.next)throw Error('nonadvancing_page');if(!upper&&cursor!==c.base)throw Error('unknown_boundary');
@@ -124,7 +124,7 @@ window.OieRuntime.register('shared-content', life => {
    let pagerHTML;
    if(refreshing){const overlap=items.some(item=>c.items.has(item.id));mergeWindow(c,items,false,upper);if(!overlap&&data.next&&oldest&&items.length&&keyCompare(items.at(-1),oldest)>0)c.bridge=data.next;else if(c.bridge===cursor)c.bridge='';const extendsTail=items.length&&(!oldest||keyCompare(items.at(-1),oldest)<0);if(cursor===c.tailRequest||extendsTail){c.next=data.next;c.href=data.href;c.tailRequest=cursor;pagerHTML=data.pagination.innerHTML}if(!c.pages.includes(cursor))c.pages.push(cursor)}
    else{for(const item of items)if(!c.headIDs.has(item.id))c.items.set(item.id,item);c.pages.push(cursor);c.tailRequest=cursor;c.used.add(cursor);c.next=data.next;c.href=data.href;pagerHTML=data.pagination.innerHTML}
-   render(c,page,pagerHTML);c.failed=false;c.retryMode=null;
+   render(c,page,pagerHTML,starGeneration);c.failed=false;c.retryMode=null;
   }catch(error){if(c.disposed||c.closed||generation!==c.generation||life.signal.aborted)return;c.failed=true;c.retryMode=refreshing?'refresh':'append';c.retryCursor=cursor;feedback(c,true);c.observer?.disconnect()}
   finally{clearTimeout(timeout);if(!c.disposed&&generation===c.generation){c.busy=false;c.request=null;feedback(c,c.failed);observe(c);save(c)}}
  }

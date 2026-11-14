@@ -797,6 +797,9 @@ func build68(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("query", "includeFirstPageCounts", &params.IncludeFirstPageCounts); err != nil {
 		return nil, err
 	}
+	if err := input.Decode("query", "includeMessageStars", &params.IncludeMessageStars); err != nil {
+		return nil, err
+	}
 	return api.NewListSharedContentRequest(server, &params)
 }
 func build69(server string, input cliruntime.Input) (*http.Request, error) {

@@ -167,6 +167,23 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 		}
 		page.Items = append(page.Items, item)
 	}
+	if query.IncludeMessageStars && len(page.Items) > 0 {
+		ids := make([]domain.ID, 0, len(page.Items))
+		for _, item := range page.Items {
+			ids = append(ids, item.Message.ID)
+		}
+		stars, starErr := readMessageStars(ctx, queries, query.ConversationID, ids)
+		if starErr != nil {
+			return page, starErr
+		}
+		byID := make(map[domain.ID]*domain.MessageStar, len(stars))
+		for i := range stars {
+			byID[stars[i].MessageID] = &stars[i]
+		}
+		for i := range page.Items {
+			page.Items[i].Star = byID[page.Items[i].Message.ID]
+		}
+	}
 	if more && page.NextCursor == "" {
 		last := page.Items[len(page.Items)-1]
 		page.NextCursor = application.SharedContentCursor(last.Message.TimelineTime().UnixMilli(), last.ID)

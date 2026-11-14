@@ -48,7 +48,7 @@ func TestSharedContentHTTPAggregatesRetainedSourcesWithoutSending(t *testing.T) 
 		t.Fatal("global image catalog", page)
 	}
 	item := page.Items[0]
-	if item.Message.AccountId != string(c.AccountID) || item.Message.ConversationId != string(c.ID) || item.Preview == nil || item.Preview.MessageId != item.Message.Id || item.Message.CreatedAt.Year() != 2020 || item.Preview.DownloadState != "not_downloaded" {
+	if item.Message.AccountId != string(c.AccountID) || item.Message.ConversationId != string(c.ID) || item.Preview == nil || item.Preview.MessageId != item.Message.Id || item.Message.CreatedAt.Year() != 2020 || item.Preview.DownloadState != "not_downloaded" || item.Star != nil {
 		t.Fatal("source context/original time", item)
 	}
 	n := 1
@@ -69,14 +69,33 @@ func TestSharedContentHTTPAggregatesRetainedSourcesWithoutSending(t *testing.T) 
 		*withCounts.JSON200.FirstPageCounts != (engineapi.SharedContentFirstPageCounts{Media: 1, Links: 1, Documents: 1}) {
 		t.Fatalf("bounded first-page counts for a cursor request: %+v, %v", withCounts, err)
 	}
+	includeStars := true
+	starred, err := client.SetMessageStarWithResponse(t.Context(), item.Message.Id, &engineapi.SetMessageStarParams{IdempotencyKey: string(id())}, engineapi.SetMessageStar{Starred: true})
+	if err != nil || starred.JSON200 == nil {
+		t.Fatal("star source", err)
+	}
+	withStars, err := client.ListSharedContentWithResponse(t.Context(), &engineapi.ListSharedContentParams{IncludeMessageStars: &includeStars})
+	if err != nil || withStars.JSON200 == nil || len(withStars.JSON200.Items) != 2 {
+		t.Fatal("catalog with source stars", err)
+	}
+	stars := withStars.JSON200.Items
+	if state := stars[0].Star; state == nil || state.MessageId != item.Message.Id || !state.Starred || state.RevisionId == nil || *state.RevisionId != *starred.JSON200.RevisionId {
+		t.Fatal("existing source star missing", state)
+	}
+	if state := stars[1].Star; state == nil || state.MessageId != stars[1].Message.Id || state.Starred || state.RevisionId != nil {
+		t.Fatal("unstarred source missing", state)
+	}
 	search := "arvore"
 	account, conversation := string(c.AccountID), string(c.ID)
 	found, err := client.ListSharedContentWithResponse(t.Context(), &engineapi.ListSharedContentParams{
-		Q: &search, AccountId: &account, ConversationId: &conversation, IncludeFirstPageCounts: &includeCounts,
+		Q: &search, AccountId: &account, ConversationId: &conversation, IncludeFirstPageCounts: &includeCounts, IncludeMessageStars: &includeStars,
 	})
 	if err != nil || found.JSON200 == nil || len(found.JSON200.Items) != 1 || found.JSON200.FirstPageCounts == nil ||
 		*found.JSON200.FirstPageCounts != (engineapi.SharedContentFirstPageCounts{Media: 1}) {
 		t.Fatal("Unicode source metadata search", err)
+	}
+	if state := found.JSON200.Items[0].Star; state == nil || state.Starred || state.MessageId != found.JSON200.Items[0].Message.Id {
+		t.Fatal("search lost source star state", state)
 	}
 	kind := engineapi.ListSharedContentParamsType("documents")
 	docs, err := client.ListSharedContentWithResponse(t.Context(), &engineapi.ListSharedContentParams{Type: &kind})
