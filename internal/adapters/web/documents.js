@@ -117,13 +117,30 @@ window.OieRuntime.register('documents', life => {
    return await Promise.race([(async()=>{const pdf=await task.promise,first=await pdf.getPage(1);if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');const base=first.getViewport({scale:1}),scale=Math.min(400/base.width,180/base.height),viewport=first.getViewport({scale}),output=record.output;const node=document.createElement('canvas');node.width=Math.ceil(viewport.width*output);node.height=Math.ceil(viewport.height*output);node.style.width=viewport.width+'px';node.style.height=viewport.height+'px';await first.render({canvasContext:node.getContext('2d'),viewport,transform:output===1?null:[output,0,0,output,0,0],annotationMode:library.AnnotationMode.DISABLE}).promise;if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');const blob=await new Promise(resolve=>node.toBlob(resolve,'image/png'));if(!blob)throw Error('preview_encoding');return {kind:'image',blob,width:viewport.width,height:viewport.height}})(),failure]);
   }finally{controller.signal.removeEventListener('abort',cancel);if(task)await task.destroy().catch(()=>{})}
  }
+ const previewMarkdownTags=new Set('article section div figure figcaption h1 h2 h3 h4 h5 h6 p ul ol li blockquote pre code span strong em del s hr br table thead tbody tfoot tr th td dl dt dd sup sub'.split(' '));
  async function validStoredPreview(value,record){
+  if(record.format==='text')return value?.kind==='text'&&typeof value.text==='string'&&value.text.length<=1800&&!value.text.includes('\u0000');
+  if(record.format==='markdown'){
+   if(value?.kind!=='markdown'||typeof value.html!=='string'||value.html.length>1024*1024)return false;
+   // Check persistent fragments in an inert template before they can enter the page.
+   const template=document.createElement('template');template.innerHTML=value.html;
+   return Array.from(template.content.querySelectorAll('*')).every(node=>previewMarkdownTags.has(node.localName)&&!node.hasAttributes());
+  }
   if(value?.kind!=='image'||!(value.blob instanceof Blob)||value.blob.type!=='image/png'||value.blob.size<24||value.blob.size>1024*1024||!(value.width>0&&value.width<=400.01&&value.height>0&&value.height<=180.01))return false;
   let bitmap;try{bitmap=await createImageBitmap(value.blob);return bitmap.width===Math.ceil(value.width*record.output)&&bitmap.height===Math.ceil(value.height*record.output)}catch{return false}finally{bitmap?.close()}
  }
- const cachedPreview=window.OieCache.decorate({namespace:'document-preview-pdfjs6.5.438-margo1-v2',key:record=>[record.engine,record.account,record.conversation,record.message,record.id,record.revision,record.messageRevision,record.original,record.format,record.output],load:producePreview,ttl:(value,record)=>record.format==='markdown'&&value.kind==='text'?30000:30*60*1000,size:value=>value.kind==='image'?value.blob.size:(value.text??value.html).length*2,storage:window.OieCache.indexedDBStore({name:'oie.pdf-previews.v1',store:'thumbnails'}),persist:record=>record.format==='pdf',validate:validStoredPreview});
+ const cachedPreview=window.OieCache.decorate({
+  namespace:'document-preview-pdfjs6.5.438-margo1-v2',
+  key:record=>[record.engine,record.account,record.conversation,record.message,record.id,record.revision,record.messageRevision,record.original,record.format,record.output],
+  load:producePreview,
+  ttl:(value,record)=>record.format==='markdown'&&value.kind==='text'?30000:30*60*1000,
+  size:value=>value.kind==='image'?value.blob.size:(value.text??value.html).length*2,
+  storage:window.OieCache.indexedDBStore({name:'oie.pdf-previews.v1',store:'thumbnails'}),
+  persist:(record,value)=>record.format!=='markdown'||value?.kind!=='text',
+  validate:validStoredPreview,
+ });
  async function paintPreview(card,record,controller){
-  record={...record,output:Math.min(devicePixelRatio||1,2)};
+  record={...record,output:record.format==='pdf'?Math.min(devicePixelRatio||1,2):1};
   let hit=false,stored=false;const preview=await cachedPreview(record,{signal:controller.signal,onHit:()=>hit=true,onStored:()=>stored=true});
   if(controller.signal.aborted||!card.isConnected)return;
   const target=card.querySelector('[data-document-preview]');if(!target)return;

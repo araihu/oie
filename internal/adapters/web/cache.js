@@ -35,7 +35,7 @@
      if(job.controller.signal.aborted)throw aborted();
      const weight=size(value)+identity.length*2+128;
      if(!job.controller.signal.aborted&&dataOnly(value)&&Number.isSafeInteger(weight)&&weight>0&&weight<=2*1024*1024){
-      if(storage&&persist(input)&&!job.persisted)job.persisted=await storage.set(identity,value,weight);
+      if(storage&&!job.persisted&&persist(input,value))job.persisted=await storage.set(identity,value,weight);
       if(!job.controller.signal.aborted)cache?.set(identity,{value,persisted:job.persisted},{size:weight,ttl:typeof ttl==='function'?ttl(value,input):ttl});
      }
      return value;

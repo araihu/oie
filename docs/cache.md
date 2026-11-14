@@ -26,14 +26,16 @@ PDF workers and range transports are disposed by their renderer.
 
 Document preview keys include engine, account, conversation, message, catalog
 item, both revisions, source address, renderer version and output density.
-TXT excerpts and Margo Markdown fragments use the memory tier. Generated PDF
-PNG thumbnails also use the generic IndexedDB storage adapter, preserving the
-existing seven-day, 64-entry, 16-MiB device cache. It stores derived previews,
-never original PDFs. Its transactions apply the same library's TTL/eviction decisions to persisted
-records, instead of implementing a second LRU. Database connections are
-shared, closed on version change/page exit, and bounded by a store registry.
-Persistence failures fall back to RAM or normal rendering. Corrupt PNGs are
-discarded and regenerated. Legacy preview records are discarded on pruning.
+Plain-text excerpts, static Margo Markdown fragments and generated PDF PNG
+thumbnails use the same IndexedDB storage adapter. They share a seven-day,
+64-entry, 16-MiB device cache. Plain-text fallbacks for failed Markdown renders
+stay in RAM for 30 seconds. The existing database keeps PDF previews available
+through the upgrade. It stores derived previews. The same LRU library applies
+TTL and eviction inside transactions. Database connections are shared, closed
+on version change or page exit, and bounded by a store registry. Persistence
+failures fall back to RAM or normal rendering. Invalid entries are discarded
+and regenerated. Cached Markdown markup is checked against the static preview
+allowlist before it enters the page.
 This cache is distinct from drafts, pending submissions and retained files.
 
 ## HTTP representations
@@ -64,7 +66,7 @@ Vacuum validation and generation-drift checks. Engine original-stream contracts
 and provider-network policy remain unchanged. A provider ETag is a validator,
 not proof of a verified file hash. Server-generated document thumbnail storage
 and HTTP serving of those derived thumbnails remain a possible later adapter;
-this increment persists generated PDF thumbnails on the device.
+the current implementation stores derived previews in the browser.
 
 ## Verification
 

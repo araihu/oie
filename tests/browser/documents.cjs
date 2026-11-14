@@ -79,7 +79,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const pdfItem=items.find(item=>item.id===pdf),previousRevision=pdfItem.revisionId;pdfItem.revisionId=id(777);await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>cachedRanges,'a new catalog revision must generate a new thumbnail');pdfItem.revisionId=previousRevision;
   const beforeAccount=pdfRanges();pdfItem.message.accountId=other;await page.goto(docsURL('en','dark',other));await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>beforeAccount,'a different account must not receive the previous account thumbnail');pdfItem.message.accountId=account;await page.goto(docsURL());await pdfReady();
   // Persisted corruption must be discarded without making the source unusable.
-  await page.evaluate(()=>new Promise(resolve=>{const request=indexedDB.open('oie.pdf-previews.v1',1);request.onsuccess=()=>{const db=request.result,tx=db.transaction('thumbnails','readwrite'),store=tx.objectStore('thumbnails'),get=store.getAll();get.onsuccess=()=>{for(const entry of get.result){entry.value.blob=new Blob(['broken'],{type:'image/png'});store.put(entry)}};tx.oncomplete=()=>{db.close();resolve()}}}));const corruptRanges=pdfRanges();await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>corruptRanges,'corrupt PNG must regenerate from bounded PDF bytes');
+  await page.evaluate(()=>new Promise(resolve=>{const request=indexedDB.open('oie.pdf-previews.v1',1);request.onsuccess=()=>{const db=request.result,tx=db.transaction('thumbnails','readwrite'),store=tx.objectStore('thumbnails'),get=store.getAll();get.onsuccess=()=>{for(const entry of get.result)if(entry.value.kind==='image'){entry.value.blob=new Blob(['broken'],{type:'image/png'});store.put(entry)}};tx.oncomplete=()=>{db.close();resolve()}}}));const corruptRanges=pdfRanges();await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>corruptRanges,'corrupt PNG must regenerate from bounded PDF bytes');
   // LRU cleanup applies only to this preview store, with both count and byte caps.
   // Give eviction its own catalog so unrelated preview jobs do not run against
   // the oversized fixture during reload.
@@ -97,6 +97,57 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   }));
   await page.reload();await pdfReady();
   await until(async()=>{const entries=await cacheEntries();return entries.length<=64&&entries.reduce((sum,e)=>sum+e.bytes,0)<=16*1024*1024&&!entries.some(e=>e.key==='fixture-69')},'preview cache count, byte and expiry eviction');
+
+  const markdown=id(31);
+  state.pdfCatalog=[good,markdown];
+  let markdownRequests=0;
+  page.on('request',request=>{if(new URL(request.url()).pathname==='/ui/document-markdown')markdownRequests++});
+  const ready=async(item,cache)=>until(async()=>await card(page,item).getAttribute('data-document-preview-state')==='ready'&&
+   (!cache||await card(page,item).getAttribute('data-document-preview-cache')===cache),'text or Markdown preview ready');
+  await page.reload();
+  await ready(good);await ready(markdown);
+  assert.equal(await card(page,good).getAttribute('data-document-preview-stored'),'true');
+  assert.equal(await card(page,markdown).getAttribute('data-document-preview-stored'),'true');
+  const rangeReads=()=>state.reads.filter(read=>read.range&&[good,markdown].includes(read.id)).length;
+  const beforeReload={reads:rangeReads(),renders:markdownRequests};
+  await page.reload();
+  await ready(good,'hit');await ready(markdown,'hit');
+  assert.deepEqual({reads:rangeReads(),renders:markdownRequests},beforeReload,'reload restores both previews without reading or rendering their sources');
+  assert.equal(await card(page,markdown).locator('[data-document-markdown-preview] h1').textContent(),'Release notes');
+
+  await page.evaluate(()=>new Promise((resolve,reject)=>{
+   const request=indexedDB.open('oie.pdf-previews.v1',1);
+   request.onerror=()=>reject(request.error);
+   request.onsuccess=()=>{
+    const db=request.result,tx=db.transaction('thumbnails','readwrite'),store=tx.objectStore('thumbnails'),entries=store.getAll();
+    entries.onsuccess=()=>{
+     for(const entry of entries.result)if(entry.value.kind==='markdown'){
+      entry.value.html='<p x-init="window.documentExecuted=true">Invalid preview</p>';
+      store.put(entry);
+     }
+    };
+    tx.oncomplete=()=>{db.close();resolve()};
+    tx.onabort=()=>{db.close();reject(tx.error)};
+   };
+  }));
+  await page.reload();
+  await ready(markdown,'miss');
+  assert.equal(markdownRequests,beforeReload.renders+1,'invalid HTML triggers regeneration');
+  assert.equal(await card(page,markdown).locator('[data-document-markdown-preview] h1').textContent(),'Release notes');
+  assert.equal(await card(page,markdown).locator('[data-document-markdown-preview] [x-init]').count(),0);
+
+  const markdownItem=items.find(item=>item.id===markdown),priorMarkdownRevision=markdownItem.revisionId;
+  markdownItem.revisionId=id(778);
+  await page.route('**/ui/document-markdown',route=>route.fulfill({status:503,body:''}));
+  await page.reload();
+  await ready(markdown,'miss');
+  assert(await card(page,markdown).locator('[data-document-excerpt]').isVisible());
+  assert.equal(await card(page,markdown).getAttribute('data-document-preview-stored'),null);
+  await page.unroute('**/ui/document-markdown');
+  await page.reload();await ready(markdown,'miss');
+  assert.equal(await card(page,markdown).getAttribute('data-document-preview-stored'),'true');
+  markdownItem.revisionId=priorMarkdownRevision;
+  findings.push('Rendered text and Markdown survive reload without source reads; invalid fragments regenerate and transient Markdown fallbacks stay in memory');
   state.pdfCatalog=null;
   await page.reload();
   findings.push('PDF PNG previews reuse memory across fragments and IndexedDB across reloads without provider reads; revision/account isolation, corrupt-cache recovery and bounded LRU/expiry verified');
