@@ -103,12 +103,6 @@ func (v view) roomSessionLabel() string {
 	}
 	return v.Text.DetailsUnknown
 }
-func (v view) participantName(p engineapi.ConversationParticipant) string {
-	if p.DisplayName != "" {
-		return p.DisplayName
-	}
-	return v.Text.UnknownParticipant
-}
 func (v view) roomFeatureLabel(feature string) string {
 	labels := map[string]string{
 		"public": v.Text.RoomPublic, "hidden": v.Text.RoomHidden, "members_only": v.Text.RoomMembersOnly, "open": v.Text.RoomOpen,
@@ -147,10 +141,6 @@ func (v view) detailsVersion(section string) string {
 			metadata := *v.ConversationInfo
 			metadata.Participants = engineapi.ConversationParticipants{}
 			value = metadata
-		}
-	case "participants":
-		if v.ConversationInfo != nil {
-			value = v.ConversationInfo.Participants
 		}
 	}
 	data, _ := json.Marshal(value)

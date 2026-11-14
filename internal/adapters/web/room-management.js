@@ -1,4 +1,34 @@
+(() => {
+function filterRoomList(search, scope) {
+  const results = scope.querySelector('#' + search.getAttribute('aria-controls'));
+  const empty = results?.querySelector('[data-room-list-no-results]');
+  if (!empty) return;
+  const fold = value => value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
+  const query = fold(search.value);
+  let found = false;
+  for (const row of results.querySelectorAll('[data-room-list-match]')) {
+    row.hidden = !fold(row.dataset.roomListMatch).includes(query);
+    found ||= !row.hidden;
+  }
+  for (const group of results.querySelectorAll('.oie-room-participant-group')) {
+    group.hidden = !group.querySelector('[data-room-list-match]:not([hidden])');
+  }
+  empty.hidden = found;
+}
+
 window.OieRuntime.register('room-management', life => {
+  life.on(document, 'input', event => {
+    if (event.target.id === 'info-room-participants-search') {
+      filterRoomList(event.target, event.target.closest('[data-info-room-participants]'));
+    }
+  });
+  life.on(document, 'keydown', event => {
+    if (event.key !== 'Escape' || event.target.id !== 'info-room-participants-search' || !event.target.value) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.target.value = '';
+    event.target.dispatchEvent(new Event('input', {bubbles:true}));
+  }, true);
   const root = document.querySelector('[data-room-management]');
   if (!root) return;
   const content = root.querySelector('[data-room-management-content]');
@@ -157,23 +187,6 @@ window.OieRuntime.register('room-management', life => {
         panel.removeAttribute('aria-busy');
       }
     }
-  }
-
-  function filterRoomList(search, scope) {
-    const results = scope.querySelector('#' + search.getAttribute('aria-controls'));
-    const empty = results?.querySelector('[data-room-list-no-results]');
-    if (!empty) return;
-    const fold = value => value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
-    const query = fold(search.value);
-    let found = false;
-    for (const row of results.querySelectorAll('[data-room-list-match]')) {
-      row.hidden = !fold(row.dataset.roomListMatch).includes(query);
-      found ||= !row.hidden;
-    }
-    for (const group of results.querySelectorAll('.oie-room-participant-group')) {
-      group.hidden = !group.querySelector('[data-room-list-match]:not([hidden])');
-    }
-    empty.hidden = found;
   }
 
   function refreshParticipantAvatars(fragment) {
@@ -622,3 +635,4 @@ window.OieRuntime.register('room-management', life => {
     }, 0);
   });
 });
+})();

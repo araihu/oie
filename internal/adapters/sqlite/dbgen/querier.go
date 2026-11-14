@@ -26,6 +26,7 @@ type Querier interface {
 	DeletePendingReplyMetadata(ctx context.Context, messageID string) error
 	DeleteReactionObservation(ctx context.Context, ordinal int64) error
 	FindAvatar(ctx context.Context, arg FindAvatarParams) (Avatar, error)
+	FindAvatarHashes(ctx context.Context, arg FindAvatarHashesParams) ([]FindAvatarHashesRow, error)
 	FindConversation(ctx context.Context, arg FindConversationParams) (Conversation, error)
 	FindMessagePreview(ctx context.Context, arg FindMessagePreviewParams) (MessagePreview, error)
 	// Match the partial identity index used for messages with provider IDs.

@@ -176,6 +176,7 @@ type view struct {
 	RoomSession                                                                                   *engineapi.RoomSession
 	MessagingCapabilities                                                                         *engineapi.Capabilities
 	InfoView, InfoType, InfoCursor, InfoQuery, InfoFocus                                          string
+	InfoParticipants                                                                              *engineapi.RoomParticipants
 	InfoShared                                                                                    *engineapi.SharedContentPage
 	InfoStars                                                                                     *engineapi.StarredMessagePage
 	InfoInvalid, SharedInDetails                                                                  bool
@@ -314,6 +315,7 @@ type copy struct {
 	RoomDetailsTab                                                                                                                                                                                           string
 	RoomNoVisibleParticipants                                                                                                                                                                                string
 	RoomSearchParticipants                                                                                                                                                                                   string
+	RoomParticipantsLoading, RoomParticipantsUnavailable, RoomParticipantsJoinRequired                                                                                                                       string
 	RoomNoMatchingParticipants                                                                                                                                                                               string
 	RoomTopic                                                                                                                                                                                                string
 	RoomDetailsUnchanged                                                                                                                                                                                     string
@@ -476,9 +478,6 @@ type copy struct {
 	DetailsPeerPresence                                                                                                                                                  string
 	DetailsPeerPresenceHelp                                                                                                                                              string
 	DetailsParticipantsTruncated                                                                                                                                         string
-	DetailsNoParticipants                                                                                                                                                string
-	DetailsSourceDiscovery                                                                                                                                               string
-	DetailsSourcePresence                                                                                                                                                string
 	DetailsObservedAt                                                                                                                                                    string
 	UnknownParticipant                                                                                                                                                   string
 	PresenceAvailable                                                                                                                                                    string
@@ -925,7 +924,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	}
 	listOnly := fragment == "inbox"
 	editorOnly := fragment == "schedule-editor" && v.ChatID != ""
-	infoOnly := fragment == "info" && v.ChatID != ""
+	infoOnly := (fragment == "info" || r.URL.Path == "/ui/info") && v.ChatID != ""
 	paneOnly := (fragment == "conversation" || fragment == "timeline" || fragment == "source-pane") && v.ChatID != "" || editorOnly || infoOnly
 	if sourceFragmentRequest(r, v) && s.loadSourceNavigation(ctx, r, v, paneOnly) {
 		return
@@ -949,6 +948,10 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	v.EventCursor = engine.JSON200.EventCursor
 	v.Preview = engine.HTTPResponse.Header.Get("X-Oie-Mock") == "true"
 	v.Role = engine.JSON200.Role
+	if infoOnly && v.InfoView == "participants" {
+		s.loadConversation(ctx, r, v, true, false, true, editor)
+		return
+	}
 	limit := 100
 	accounts, err := s.client.ListAccountsWithResponse(ctx, &engineapi.ListAccountsParams{Limit: &limit}, editor)
 	if err != nil || accounts.JSON200 == nil {
@@ -1113,6 +1116,10 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		}
 		return
 	}
+	if infoOnly && v.InfoView == "participants" {
+		s.loadChatInfo(ctx, v, false)
+		return
+	}
 	if editorOnly {
 		s.loadMessaging(ctx, v)
 		return
@@ -1127,7 +1134,9 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		}
 	}
 	s.loadMessaging(ctx, v)
-	s.loadChatInfo(ctx, v, r.URL.Path == "/ui/refresh")
+	if v.InfoView != "participants" || r.URL.Path != "/ui/refresh" && (r.URL.Path == "/ui/info" || r.URL.Query().Get("open") == "details") {
+		s.loadChatInfo(ctx, v, r.URL.Path == "/ui/refresh")
+	}
 	if infoOnly || r.URL.Path == "/ui/info" {
 		return
 	}

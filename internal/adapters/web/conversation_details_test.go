@@ -52,35 +52,33 @@ func TestConversationDetailsRejectsForeignEvidence(t *testing.T) {
 		})
 	}
 }
-func TestRoomParticipantIdentityAndPresenceRemainScoped(t *testing.T) {
+func TestRoomParticipantsRenderReadOnlySnapshot(t *testing.T) {
 	catalogs, err := loadCatalogs()
 	if err != nil {
 		t.Fatal(err)
 	}
-	name := "alice@example.test"
-	status := "<script>bad()</script>"
-	v := view{Text: catalogs["en"], Selected: &engineapi.Conversation{Id: testChat, AccountId: testAccount, Kind: "room", Title: "Room", Address: "room@example.test"}, Avatars: map[avatarIdentity]string{{Account: testAccount, Address: name}: strings.Repeat("a", 64)}, ConversationInfo: &engineapi.ConversationDetails{AccountConnection: engineapi.Connection{AccountId: testAccount, State: "not_connected"}, Participants: engineapi.ConversationParticipants{State: "partial", Scope: "occupants", Truncated: true, Items: []engineapi.ConversationParticipant{{Id: "room/nick", DisplayName: name, Source: "discovery", Presence: engineapi.PresenceObservation{State: "unknown", StatusText: &status}}}}}}
+	hash := strings.Repeat("a", 64)
+	v := view{
+		Text:     catalogs["en"],
+		InfoView: "participants",
+		Selected: &engineapi.Conversation{Id: testChat, AccountId: testAccount, Kind: "room", Title: "Room", Address: "room@example.test"},
+		InfoParticipants: &engineapi.RoomParticipants{State: "available", Participants: []engineapi.RoomSessionParticipant{
+			{Nickname: "Visitor", Role: "visitor", Affiliation: "none"},
+			{Nickname: "<script>Owner</script>", Role: "moderator", Affiliation: "owner", AvatarHash: &hash},
+		}},
+	}
 	var out bytes.Buffer
-	if err := detailsParticipants(v).Render(context.Background(), &out); err != nil {
+	if err := chatInfoContent(v).Render(t.Context(), &out); err != nil {
 		t.Fatal(err)
 	}
 	html := out.String()
-	if strings.Contains(html, "<img") || strings.Contains(html, "/ui/avatars/") || strings.Contains(html, "<script>") {
-		t.Fatal("unverified occupant gained a photo or executable status text")
+	if !strings.Contains(html, "/ui/avatars/"+hash) || !strings.Contains(html, "&lt;script&gt;Owner&lt;/script&gt;") ||
+		!strings.Contains(html, `id="info-room-participants-search"`) || strings.Index(html, ">Owners<") >= strings.Index(html, ">Visitors<") {
+		t.Fatalf("read-only roster: %s", html)
 	}
-	if !strings.Contains(html, "Presence unknown") || !strings.Contains(html, "Public room listing") || !strings.Contains(html, "data-participants-truncated") {
-		t.Fatal("participant observation lost its limited scope")
-	}
-	if v.presenceLabel("") != v.Text.PresenceUnknown || v.presenceLabel("unknown") == v.presenceLabel("unavailable") {
-		t.Fatal("missing presence became unavailable")
-	}
-	if v.detailsAccountView().connectionLabel(testAccount) != v.Text.NotConnected {
-		t.Fatal("own account connection was not authoritative")
-	}
-	before := v.detailsVersion("participants")
-	identity := v.detailsVersion("identity")
-	v.ConversationInfo.Participants.Items[0].Presence.State = "away"
-	if v.detailsVersion("participants") == before || v.detailsVersion("identity") != identity {
-		t.Fatal("section versions lost scoped invalidation")
+	for _, forbidden := range []string{"<script>", "<form", "data-room-participant-open", "room@example.test"} {
+		if strings.Contains(html, forbidden) {
+			t.Fatalf("unexpected %q in read-only roster", forbidden)
+		}
 	}
 }

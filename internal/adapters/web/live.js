@@ -898,7 +898,7 @@ window.OieRuntime.register('live', life => {
       const detailsRegion=page.querySelector('#live-conversation-details');
       if(detailsRegion?.dataset.detailsConversation===body.dataset.conversationId){
         const detailsScroll=document.getElementById('details-body')?.scrollTop;
-        for(const section of ['identity','description','account','metadata','participants']){
+        for(const section of ['identity','description','account','metadata']){
           const existing=document.getElementById('conversation-details-'+section),fresh=detailsRegion.querySelector('#live-details-'+section);
           if(existing&&fresh&&existing.dataset.version!==fresh.dataset.version&&!existing.contains(document.activeElement)){
             mutateDOM(existing,fresh.innerHTML);existing.dataset.version=fresh.dataset.version;

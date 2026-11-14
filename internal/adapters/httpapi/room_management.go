@@ -8,6 +8,28 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
+func (s *Server) GetRoomParticipants(ctx context.Context, r engineapi.GetRoomParticipantsRequestObject) (engineapi.GetRoomParticipantsResponseObject, error) {
+	data, err := s.engine.RoomParticipants(ctx, domain.ID(r.ConversationId))
+	if err != nil {
+		return nil, err
+	}
+	out := engineapi.GetRoomParticipants200JSONResponse{
+		State: engineapi.RoomParticipantsState(data.State), Truncated: data.Truncated,
+		Participants: make([]engineapi.RoomSessionParticipant, 0, len(data.Participants)),
+	}
+	for _, p := range data.Participants {
+		item := engineapi.RoomSessionParticipant{
+			Nickname: p.Nickname, Role: engineapi.RoomRole(p.Role), Affiliation: engineapi.RoomAffiliation(p.Affiliation),
+			AvatarHash: optionalRoomText(p.AvatarHash),
+		}
+		if p.Self {
+			item.Self = &p.Self
+		}
+		out.Participants = append(out.Participants, item)
+	}
+	return out, nil
+}
+
 func (s *Server) GetRoomManagement(ctx context.Context, r engineapi.GetRoomManagementRequestObject) (engineapi.GetRoomManagementResponseObject, error) {
 	var affiliation string
 	if r.Params.Affiliation != nil {

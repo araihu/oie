@@ -19,6 +19,20 @@ func (s *Store) Avatar(ctx context.Context, id domain.ID, address string) (domai
 	err = json.Unmarshal([]byte(row.Payload), &a)
 	return a, err
 }
+func (s *Store) AvatarHashes(ctx context.Context, id domain.ID, addresses []string) (map[string]string, error) {
+	if len(addresses) == 0 {
+		return nil, nil
+	}
+	rows, err := s.read.FindAvatarHashes(ctx, dbgen.FindAvatarHashesParams{AccountID: string(id), Addresses: addresses})
+	if err != nil {
+		return nil, err
+	}
+	hashes := make(map[string]string, len(rows))
+	for _, row := range rows {
+		hashes[row.Address] = row.ImageHash
+	}
+	return hashes, nil
+}
 func (s *Store) Avatars(ctx context.Context, id, after domain.ID, limit int) ([]domain.Avatar, error) {
 	rows, err := s.read.ListAvatars(ctx, dbgen.ListAvatarsParams{AccountID: string(id), ID: string(after), Limit: int64(limit)})
 	if err != nil {

@@ -104,7 +104,7 @@ templ roomManagementParticipants(v view, state engineapi.RoomManagement) {
 		if len(state.Occupants) > 0 {
 			@roomListSearch("room-participant-search", "room-participant-results", v.Text.RoomSearchParticipants)
 			<div id="room-participant-results">
-				for _, group := range roomParticipantGroups(v.Text, state.Occupants) {
+		for _, group := range roomParticipantGroups(v.Text, state.Occupants, managedParticipantGroup) {
 					<section class="oie-room-participant-group">
 						<h3>{ group.label }</h3>
 						<ul class="oie-room-participants">
@@ -133,31 +133,40 @@ templ roomProfileSlot(id, label, accessibleLabel string) {
 	</div>
 }
 
-type roomParticipantGroup struct {
+type roomParticipantGroup[T any] struct {
 	label     string
-	occupants []engineapi.RoomManagedOccupant
+	occupants []T
 }
 
-func roomParticipantGroups(text copy, occupants []engineapi.RoomManagedOccupant) []roomParticipantGroup {
-	groups := []roomParticipantGroup{
+func roomParticipantGroups[T any](text copy, occupants []T, groupFor func(T) int) []roomParticipantGroup[T] {
+	groups := []roomParticipantGroup[T]{
 		{label: text.RoomOwners}, {label: text.RoomAdministrators}, {label: text.RoomModerators},
 		{label: text.Participants}, {label: text.RoomVisitors},
 	}
 	for _, occupant := range occupants {
-		index := 3
-		switch {
-		case occupant.Affiliation == "owner":
-			index = 0
-		case occupant.Affiliation == "admin":
-			index = 1
-		case occupant.Role == "moderator":
-			index = 2
-		case occupant.Role == "visitor":
-			index = 4
-		}
+		index := groupFor(occupant)
 		groups[index].occupants = append(groups[index].occupants, occupant)
 	}
-	return slices.DeleteFunc(groups, func(group roomParticipantGroup) bool { return len(group.occupants) == 0 })
+	return slices.DeleteFunc(groups, func(group roomParticipantGroup[T]) bool { return len(group.occupants) == 0 })
+}
+
+func managedParticipantGroup(occupant engineapi.RoomManagedOccupant) int {
+	return participantGroupIndex(string(occupant.Role), string(occupant.Affiliation))
+}
+
+func participantGroupIndex(role, affiliation string) int {
+	switch {
+	case affiliation == "owner":
+		return 0
+	case affiliation == "admin":
+		return 1
+	case role == "moderator":
+		return 2
+	case role == "visitor":
+		return 4
+	default:
+		return 3
+	}
 }
 
 templ roomManagementBans(v view, state engineapi.RoomManagement) {
@@ -289,22 +298,29 @@ func roomParticipantID(occupant engineapi.RoomManagedOccupant) string {
 }
 
 func roomParticipantName(text copy, occupant engineapi.RoomManagedOccupant) string {
-	if occupant.Self != nil && *occupant.Self {
-		return occupant.Nickname + " (" + text.You + ")"
+	return roomParticipantLabel(text, occupant.Nickname, occupant.Self)
+}
+
+func roomParticipantLabel(text copy, nickname string, self *bool) string {
+	if self != nil && *self {
+		return nickname + " (" + text.You + ")"
 	}
-	return occupant.Nickname
+	return nickname
 }
 
 templ roomParticipantAvatar(occupant engineapi.RoomManagedOccupant, size avatar.Size) {
-	{{
-		config := avatar.Config{Name: occupant.Nickname, Size: size}
-		if occupant.AvatarHash != nil {
-			config.Src = avatarImageSource(*occupant.AvatarHash)
-		}
-	}}
+	{{ config := roomParticipantAvatarConfig(occupant.Nickname, occupant.AvatarHash, size) }}
 	<span class="oie-room-participant-avatar" aria-hidden="true" data-room-participant-avatar={ occupant.Id + ":" + string(size) } data-avatar-image={ config.Src }>
 		@avatar.Avatar(config)
 	</span>
+}
+
+func roomParticipantAvatarConfig(nickname string, hash *string, size avatar.Size) avatar.Config {
+	config := avatar.Config{Name: nickname, Size: size}
+	if hash != nil {
+		config.Src = avatarImageSource(*hash)
+	}
+	return config
 }
 
 templ roomParticipantRow(v view, occupant engineapi.RoomManagedOccupant) {

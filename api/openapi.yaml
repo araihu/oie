@@ -1872,6 +1872,33 @@ paths:
             example:
               accountId: 019a5df0-0000-7000-8000-000000000001
               address: bob@localhost
+  /api/v1/conversations/{conversationId}/room-participants:
+    parameters:
+    - $ref: '#/components/parameters/ConversationID'
+    get:
+      operationId: getRoomParticipants
+      tags: [Conversations]
+      summary: Read current room participants
+      description: Returns participants observed by the joined account in its current room session. The read does not join the room or query its public directory.
+      responses:
+        '200':
+          description: Current room participants.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RoomParticipants'}
+              example:
+                state: available
+                participants:
+                - {nickname: Marina, role: moderator, affiliation: owner, self: true}
+                truncated: false
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /api/v1/conversations/{conversationId}/room-management:
     parameters:
     - $ref: '#/components/parameters/ConversationID'
@@ -5515,6 +5542,38 @@ components:
       type: string
       enum: [moderator, participant, visitor, none]
       description: Temporary role of a current occupant. None removes the occupant.
+    RoomParticipants:
+      description: Read-only snapshot of occupants observed by this joined account.
+      type: object
+      additionalProperties: false
+      required: [state, participants, truncated]
+      properties:
+        state:
+          type: string
+          enum: [available, not_joined, unavailable]
+          example: available
+        participants:
+          type: array
+          items: {$ref: '#/components/schemas/RoomSessionParticipant'}
+          example: [{nickname: Marina, role: moderator, affiliation: owner, self: true}]
+        truncated:
+          type: boolean
+          description: More participants were observed than the session list retains.
+          example: true
+    RoomSessionParticipant:
+      description: One observed occupant with their room nickname and permissions.
+      type: object
+      additionalProperties: false
+      required: [nickname, role, affiliation]
+      properties:
+        nickname: {type: string}
+        role: {$ref: '#/components/schemas/RoomRole'}
+        affiliation: {$ref: '#/components/schemas/RoomAffiliation'}
+        self: {type: boolean}
+        avatarHash:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+          description: Cached profile image when the room disclosed a verified identity to this account.
     RoomManagement:
       description: Actions and occupants observed in the current joined room session.
       type: object

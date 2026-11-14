@@ -4,10 +4,17 @@ const assert=require('node:assert/strict'),http=require('node:http'),path=requir
 const {spawn}=require('node:child_process'),{once}=require('node:events'),{chromium}=require('playwright');
 const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 (async()=>{
- const engine=id(1),account=id(2),direct=id(3),room=id(5),revision=id(4),streams=new Set(),state={seq:0,mode:'known',peer:'unknown',occupant:'unknown',connection:'connected',reads:0,writes:0};
+ const engine=id(1),account=id(2),direct=id(3),room=id(5),revision=id(4),streams=new Set(),state={seq:0,mode:'known',peer:'unknown',roster:'available',rosterReads:0,delayRoster:false,connection:'connected',reads:0,writes:0};
  const conversations=[{id:direct,revisionId:revision,accountId:account,kind:'direct',address:'bob@fixture',title:'Bob',lastMessage:'Hello',updatedAt:'2026-11-08T12:00:00Z',unreadCount:0,archived:false,favorite:false},{id:room,revisionId:revision,accountId:account,kind:'room',address:'room@fixture',title:'Saved room',lastMessage:'Archived room message',updatedAt:'2026-11-08T12:00:00Z',unreadCount:0,archived:false,favorite:false}];
  const presence=(value,status)=>({state:value,statusText:status,observedAt:value==='unknown'?undefined:'2026-11-08T12:00:00Z'});
- const details=chat=>({conversationId:chat.id,accountId:state.mode==='foreign'?id(9):account,address:chat.address,kind:chat.kind,accountConnection:{accountId:account,state:state.connection,updatedAt:'2026-11-08T12:00:00Z'},state:['pending','partial','forbidden','unavailable','not_connected','unsupported','unknown'].includes(state.mode)?state.mode:'known',checkedAt:state.mode==='pending'?undefined:'2026-11-08T12:00:00Z',name:chat.kind==='room'?'Room <script>plain name</script>':undefined,description:chat.kind==='room'?'A public room with retained history':undefined,topic:chat.kind==='room'?'Topic <img src=x onerror="bad()">\nSecond line':undefined,roomSession:chat.kind==='room'?'not_joined':undefined,occupantCount:chat.kind==='room'&&!['pending','unknown'].includes(state.mode)?42:undefined,features:chat.kind==='room'?['public','persistent','moderated','members_only','anonymous']:[],participants:{scope:chat.kind==='room'?'occupants':'peer',state:state.mode==='forbidden'?'forbidden':state.mode==='pending'?'pending':'partial',truncated:chat.kind==='room'&&!['forbidden','pending','unknown'].includes(state.mode),checkedAt:'2026-11-08T12:00:00Z',items:chat.kind==='room'&&!['forbidden','pending','unknown'].includes(state.mode)?Array.from({length:18},(_,n)=>({id:'room/nick-'+n,displayName:n===0?'Nickname <img src=x>':'Participant '+n,source:n===0?'discovery':'presence',presence:presence(n===0?state.occupant:n===1?'away':n===2?'busy':'unknown',n===0&&state.occupant!=='unknown'?'Observed <script>status</script>':undefined)})):[]},peerPresence:chat.kind==='direct'?presence(state.peer,state.peer==='unknown'?undefined:'Working <img src=x onerror="bad()">'):undefined});
+ const details=chat=>({conversationId:chat.id,accountId:state.mode==='foreign'?id(9):account,address:chat.address,kind:chat.kind,accountConnection:{accountId:account,state:state.connection,updatedAt:'2026-11-08T12:00:00Z'},state:['pending','partial','forbidden','unavailable','not_connected','unsupported','unknown'].includes(state.mode)?state.mode:'known',checkedAt:state.mode==='pending'?undefined:'2026-11-08T12:00:00Z',name:chat.kind==='room'?'Room <script>plain name</script>':undefined,description:chat.kind==='room'?'A public room with retained history':undefined,topic:chat.kind==='room'?'Topic <img src=x onerror="bad()">\nSecond line':undefined,roomSession:chat.kind==='room'?'not_joined':undefined,occupantCount:chat.kind==='room'&&!['pending','unknown'].includes(state.mode)?42:undefined,features:chat.kind==='room'?['public','persistent','moderated','members_only','anonymous']:[],participants:{scope:chat.kind==='room'?'occupants':'peer',state:state.mode==='forbidden'?'forbidden':state.mode==='pending'?'pending':'partial',truncated:chat.kind==='room'&&!['forbidden','pending','unknown'].includes(state.mode),checkedAt:'2026-11-08T12:00:00Z',items:chat.kind==='room'&&!['forbidden','pending','unknown'].includes(state.mode)?Array.from({length:18},(_,n)=>({id:'room/nick-'+n,displayName:n===0?'Nickname <img src=x>':'Participant '+n,source:n===0?'discovery':'presence',presence:presence(n===1?'away':n===2?'busy':'unknown')})):[]},peerPresence:chat.kind==='direct'?presence(state.peer,state.peer==='unknown'?undefined:'Working <img src=x onerror="bad()">'):undefined});
+ const roster=[
+  {nickname:'Zélia',role:'moderator',affiliation:'owner',self:true,avatarHash:'a'.repeat(64)},
+  {nickname:'Amanda',role:'moderator',affiliation:'admin',self:false},
+  {nickname:'Caio',role:'moderator',affiliation:'member',self:false},
+  {nickname:'Teo',role:'visitor',affiliation:'none',self:false},
+  ...Array.from({length:34},(_,n)=>({nickname:n===0?'Cecília <img src=x>':'Participant '+n,role:'participant',affiliation:'none',self:false})),
+ ];
  const api=http.createServer((req,res)=>{const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(code,data)=>{res.statusCode=code;res.end(JSON.stringify(data))};
   if(req.method!=='GET'){state.writes++;return send(500,{status:500})}
   if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.9.0',eventCursor:engine+':'+state.seq});
@@ -19,6 +26,11 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   for(const chat of conversations){
    if(u.pathname===`/api/v1/conversations/${chat.id}`)return send(200,chat);
    if(u.pathname===`/api/v1/conversations/${chat.id}/details`){state.reads++;if(state.mode==='http_error')return send(503,{status:503});if(state.mode==='old_api')return send(404,{status:404});return send(200,details(chat))}
+   if(u.pathname===`/api/v1/conversations/${chat.id}/room-participants` && chat.kind==='room'){
+    state.rosterReads++;
+    const respond=()=>state.roster==='error'?send(503,{status:503}):send(200,{state:state.roster,participants:state.roster==='available'?roster:[],truncated:false});
+    return state.delayRoster?setTimeout(respond,850):respond();
+   }
    if(u.pathname===`/api/v1/conversations/${chat.id}/messages`)return send(200,{items:[{id:id(chat.kind==='room'?101:100),revisionId:revision,accountId:account,conversationId:chat.id,sender:{id:id(9),displayName:'Bob'},originalText:'Retained message',createdAt:'2026-11-08T12:00:00Z',isOwn:false,sendState:'received'}]});
   }
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
@@ -48,7 +60,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
   const context=await browser.newContext({viewport:{width:1440,height:1000},locale:'en',timezoneId:'America/Sao_Paulo'});await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==base){external.push(route.request().url());route.abort()}else route.continue()});const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
-  const params=new URLSearchParams({chat:direct,account,q:'Keep 😀',filter:'unread',lang:'en',theme:'dark'});await page.goto(base+'/?'+params);const draft='Keep my conversation draft 😀';await page.locator('#message-composer').fill(draft);const trigger=page.locator('[data-open-details]');await trigger.focus();await page.keyboard.press('Enter');await opened(page);assert.equal(await page.locator('[data-details-account-state]').getAttribute('data-details-account-state'),'connected');assert.equal(await page.locator('#conversation-details-identity [data-presence-state]').getAttribute('data-presence-state'),'unknown');assert.equal(await page.locator('[data-conversation-participant]').count(),0);assert.equal(await page.locator('[data-details-date]').first().textContent(),'Nov 8, 2026, 9:00 AM');assert((await page.locator('#conversation-details-metadata').textContent()).includes('No presence observation is available for this contact.'));
+  const params=new URLSearchParams({chat:direct,account,q:'Keep 😀',filter:'unread',lang:'en',theme:'dark'});await page.goto(base+'/?'+params);const draft='Keep my conversation draft 😀';await page.locator('#message-composer').fill(draft);const trigger=page.locator('[data-open-details]');await trigger.focus();await page.keyboard.press('Enter');await opened(page);assert.equal(await page.locator('[data-details-account-state]').getAttribute('data-details-account-state'),'connected');assert.equal(await page.locator('#conversation-details-identity [data-presence-state]').getAttribute('data-presence-state'),'unknown');assert.equal(await page.locator('[data-info-entry=participants]').count(),0);assert.equal(await page.locator('[data-details-date]').first().textContent(),'Nov 8, 2026, 9:00 AM');assert((await page.locator('#conversation-details-metadata').textContent()).includes('No presence observation is available for this contact.'));
   state.peer='away';state.connection='not_connected';await page.locator('[data-details-refresh]').focus();emit();await until(async()=>await page.locator('#conversation-details-identity [data-presence-state]').getAttribute('data-presence-state')==='away','observed peer presence');assert.equal(await page.locator('[data-details-account-state]').getAttribute('data-details-account-state'),'not_connected');assert(await page.locator('[data-details-refresh]').evaluate(el=>document.activeElement===el));assert.equal(await page.locator('#conversation-details-description img,#conversation-details-description script').count(),0);assert((await page.locator('#conversation-details-identity').textContent()).includes('Working <img'));assert.equal(await page.locator('#conversation-details-metadata').getByText('No presence observation is available for this contact.',{exact:true}).count(),0);assert.equal(await page.locator('#message-composer').inputValue(),draft);state.peer='unavailable';emit();await until(async()=>await page.locator('#conversation-details-identity [data-presence-state]').getAttribute('data-presence-state')==='unavailable','explicit peer unavailable');assert((await page.locator('#conversation-details-identity [data-presence-state]').textContent()).includes('Unavailable'));await page.keyboard.press('Escape');await page.getByRole('dialog',{name:'Conversation details',exact:true}).waitFor({state:'hidden'});await until(()=>trigger.evaluate(el=>document.activeElement===el),'drawer restores details trigger');
   findings.push('Native keyboard drawer shows own account status independently; missing peer presence stays unknown, explicit authorized presence and account disconnect refresh safely without losing draft/focus; Escape restores trigger');
   const fromMenu=await openFromMenu(page,'Conversation details',true);
@@ -56,19 +68,90 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await fromMenu.drawer.waitFor({state:'hidden'});
   await until(()=>fromMenu.trigger.evaluate(el=>document.activeElement===el),'drawer restores menu trigger');
   assert.equal(await page.locator('#message-composer').inputValue(),draft);
-  state.connection='connected';const roomParams=new URLSearchParams(params);roomParams.set('chat',room);await page.goto(base+'/?'+roomParams);await page.locator('[data-open-details]').click();await opened(page);assert.equal(await page.locator('[data-room-session]').textContent(),'Not joined');assert.equal(await page.locator('[data-occupant-count]').textContent(),'42');assert.equal(await page.locator('[data-conversation-participant]').count(),18);assert.equal(await page.locator('[data-participant-scope]').getAttribute('data-participant-scope'),'occupants');assert(await page.locator('[data-participants-truncated]').isVisible());assert.equal(await page.locator('[data-conversation-participant] img').count(),0);assert.equal(await page.locator('#conversation-details-description script,#conversation-details-description img').count(),0);assert((await page.locator('#conversation-details-description').textContent()).includes('Topic <img'));assert.equal(await page.locator('[data-conversation-participant="room/nick-0"] [data-presence-state]').getAttribute('data-presence-state'),'unknown');assert((await page.locator('[data-conversation-participant="room/nick-0"]').textContent()).includes('Public room listing'));
-  await page.locator('#details-body').evaluate(el=>el.scrollTop=420);await page.locator('[data-details-refresh]').focus();await page.locator('#details-body').evaluate(el=>el.scrollTop=420);const scroll=await page.locator('#details-body').evaluate(el=>el.scrollTop);await page.evaluate(()=>window.detailsIdentity=document.querySelector('#conversation-details-identity').firstElementChild);state.occupant='available';emit();await until(async()=>await page.locator('[data-conversation-participant="room/nick-0"] [data-presence-state]').getAttribute('data-presence-state')==='available','observed room presence');assert.equal(await page.locator('#details-body').evaluate(el=>el.scrollTop),scroll);assert(await page.locator('[data-details-refresh]').evaluate(el=>document.activeElement===el));assert(await page.evaluate(()=>detailsIdentity===document.querySelector('#conversation-details-identity').firstElementChild));
-  findings.push('Room metadata stays plain text; connected account remains separate from Not joined; reported42 occupants and18 bounded observations are distinct; room identities keep initials; live participant update preserves identity DOM, focus and drawer scroll');
-  for(const mode of ['pending','forbidden','unavailable','not_connected','unsupported','unknown']){state.mode=mode;await page.locator('[data-details-refresh]').click();await opened(page);await until(async()=>await page.locator('[data-details-state]').getAttribute('data-details-state')===mode,'refreshed detail state '+mode);assert.equal(await page.locator('[data-details-state]').getAttribute('data-details-state'),mode);if(['pending','unknown'].includes(mode))assert.equal(await page.locator('[data-occupant-count]').textContent(),'Unknown');if(['pending','unknown','forbidden'].includes(mode)){assert.equal(await page.locator('[data-conversation-participant]').count(),0);assert((await page.locator('[data-participants-empty]').textContent()).includes('does not mean the room is empty'))}}
-  for(const mode of ['http_error','foreign','old_api']){state.mode=mode;await page.locator('[data-details-refresh]').click();await opened(page);await until(async()=>(await page.locator('#conversation-details-metadata').textContent()).includes('Additional details could not be read'),'failed detail read '+mode);assert((await page.locator('#conversation-details-metadata').textContent()).includes('Additional details could not be read'));assert.equal(await page.locator('[data-conversation-participant]').count(),0);assert.equal(await page.locator('[data-details-account-state]').getAttribute('data-details-account-state'),'connected');state.mode='known';await page.locator('[data-details-refresh]').click();await opened(page);await until(async()=>await page.locator('[data-conversation-participant]').count()===18,'recovered participants');assert.equal(await page.locator('[data-conversation-participant]').count(),18)}
+  state.connection='connected';
+  const roomParams=new URLSearchParams(params);roomParams.set('chat',room);
+  await page.goto(base+'/?'+roomParams);
+  await page.locator('[data-open-details]').click();await opened(page);
+  assert.equal(await page.locator('[data-room-session]').textContent(),'Not joined');
+  assert.equal(await page.locator('[data-occupant-count]').textContent(),'42');
+  assert.equal(await page.locator('#conversation-details-description script,#conversation-details-description img').count(),0);
+  assert((await page.locator('#conversation-details-description').textContent()).includes('Topic <img'));
+  const entry=page.locator('[data-info-entry="participants"]');
+  assert.equal(await entry.evaluate(el=>el.parentElement.previousElementSibling.textContent),'room@fixture');
+  assert.equal(state.rosterReads,0);
+
+  const roomRead=page.locator('[data-info-room-participants]');
+  const search=page.locator('#info-room-participants-search');
+  const rows=roomRead.locator('[data-room-list-match]');
+  state.delayRoster=true;
+  await entry.click();
+  await page.locator('.oie-info-participants-loading').waitFor({state:'visible'});
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog',{name:'Conversation details',exact:true}).waitFor({state:'hidden'});
+  await page.waitForTimeout(950);
+  assert.equal(await roomRead.count(),0);
+  assert.equal(await page.locator('.oie-info-participants-loading').count(),0);
+  state.delayRoster=false;
+  await page.locator('[data-open-details]').click();
+  await entry.click();
+  await roomRead.waitFor();
+  assert.deepEqual(await roomRead.locator('section h3').allTextContents(),['Owners','Administrators','Moderators','Participants','Visitors']);
+  assert.equal(await rows.count(),38);
+  assert.equal(await rows.locator('img').count(),1);
+  assert.equal(await rows.locator('button, a, form').count(),0);
+  await search.fill('cecilia');
+  assert.equal(await rows.filter({visible:true}).count(),1);
+  assert.equal(await rows.filter({visible:true}).getAttribute('data-room-list-match'),'Cecília <img src=x>');
+  assert.equal(await rows.filter({visible:true}).locator('img').count(),0);
+  await search.fill('nothing-matches');
+  assert(await roomRead.locator('[data-room-list-no-results]').isVisible());
+  const loaded=state.rosterReads;
+  const eventRefresh=page.waitForResponse(response=>new URL(response.url()).pathname==='/ui/refresh');
+  emit();await eventRefresh;
+  assert.equal(state.rosterReads,loaded);
+  assert.equal(await search.inputValue(),'nothing-matches');
+  await search.press('Escape');
+  assert.equal(await rows.filter({visible:true}).count(),38);
+  await roomRead.locator('[data-info-back]').click();
+  await entry.waitFor();
+  await until(()=>entry.evaluate(el=>document.activeElement===el),'return focus on Participants');
+  assert.equal(state.rosterReads,loaded);
+
+  state.roster='error';await entry.click();
+  const retry=roomRead.getByRole('link',{name:'Try again',exact:true});
+  await retry.waitFor();
+  state.roster='not_joined';await retry.click();
+  await roomRead.getByText('Join the room to see its participants.').waitFor();
+  assert.equal(await rows.count(),0);
+  await roomRead.locator('[data-info-back]').click();
+  state.roster='available';
+  findings.push('Room participants load only on entry and retry. Closing cancels a delayed response. Search, permission groups and avatars are read-only and survive live conversation refreshes.');
+
+  for(const mode of ['pending','forbidden','unavailable','not_connected','unsupported','unknown']){
+   state.mode=mode;await page.locator('[data-details-refresh]').click();await opened(page);
+   await until(async()=>await page.locator('[data-details-state]').getAttribute('data-details-state')===mode,'refreshed detail state '+mode);
+   if(['pending','unknown'].includes(mode))assert.equal(await page.locator('[data-occupant-count]').textContent(),'Unknown');
+  }
+  for(const mode of ['http_error','foreign','old_api']){
+   state.mode=mode;await page.locator('[data-details-refresh]').click();await opened(page);
+   await until(async()=>(await page.locator('#conversation-details-metadata').textContent()).includes('Additional details could not be read'),'failed detail read '+mode);
+   assert.equal(await page.locator('[data-details-account-state]').getAttribute('data-details-account-state'),'connected');
+   state.mode='known';await page.locator('[data-details-refresh]').click();await opened(page);
+   await until(async()=>await page.locator('[data-details-state]').getAttribute('data-details-state')==='known','recovered details');
+  }
   await page.goto(base+'/?'+params);assert.equal(await page.locator('#message-composer').inputValue(),draft);for(const [key,value]of params)assert.equal(new URL(page.url()).searchParams.get(key),value);
-  findings.push('Pending/forbidden/unavailable/disconnected/unsupported/unknown remain explicit; empty observations never become an empty roster; HTTP/foreign/old API failures retain identity/account with GET retry; original direct draft and filters survive');
+  findings.push('Room metadata states and GET retry remain independent of Participants. The direct draft and filters survive.');
   const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});
   for(const width of [390,1440])for(const theme of ['goshtoso','minimal'])for(const mode of ['light','dark'])for(const locale of ['en','pt-BR']){
-   state.mode='known';const p=await browser.newPage({viewport:{width,height:1000},locale,timezoneId:'America/Sao_Paulo',hasTouch:width===390});p.on('pageerror',e=>errors.push(e.message));const q=new URLSearchParams(roomParams);q.set('lang',locale);q.set('theme',mode);await p.goto(base+'/?'+q);await openFromMenu(p,locale==='en'?'Conversation details':'Detalhes da conversa');await p.waitForTimeout(230);await p.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const box=await p.locator('.oie-conversation-details-drawer').boundingBox();assert(box.x>=-1&&box.x+box.width<=width+1);assert.equal(await p.locator('[data-conversation-participant]').count(),18);
+   state.mode='known';const p=await browser.newPage({viewport:{width,height:1000},locale,timezoneId:'America/Sao_Paulo',hasTouch:width===390});p.on('pageerror',e=>errors.push(e.message));const q=new URLSearchParams(roomParams);q.set('lang',locale);q.set('theme',mode);await p.goto(base+'/?'+q);await openFromMenu(p,locale==='en'?'Conversation details':'Detalhes da conversa');await p.waitForTimeout(230);await p.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const box=await p.locator('.oie-conversation-details-drawer').boundingBox();assert(box.x>=-1&&box.x+box.width<=width+1);assert.equal(await p.locator('[data-info-room-participants]').count(),0);
    await p.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],`${width} ${theme} ${mode} ${locale}`);
-   if(theme==='goshtoso'){await p.screenshot({path:path.join(artifacts,`conversation-details-${width}-${mode}-${locale}.png`)});await p.locator('[data-conversation-participant]').first().scrollIntoViewIfNeeded();await p.screenshot({path:path.join(artifacts,`conversation-participants-${width}-${mode}-${locale}.png`)});}findings.push({width,theme,mode,locale,axe:0});await p.close();
+   if(theme==='goshtoso')await p.screenshot({path:path.join(artifacts,`conversation-details-${width}-${mode}-${locale}.png`)});
+   await p.locator('[data-info-entry="participants"]').click();await p.locator('[data-info-room-participants]').waitFor();
+   assert.equal(await p.locator('[data-info-room-participants] [data-room-list-match]').count(),38);
+   const participantAxe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));
+   assert.deepEqual(participantAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],`Participants ${width} ${theme} ${mode} ${locale}`);
+   if(theme==='goshtoso')await p.screenshot({path:path.join(artifacts,`conversation-participants-${width}-${mode}-${locale}.png`)});findings.push({width,theme,mode,locale,axe:0});await p.close();
   }
-  assert.equal(state.writes,0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);await fs.writeFile(path.join(artifacts,'conversation-details-report.json'),JSON.stringify({findings,cachedReadCount:state.reads,mutationEffects:state.writes,pageErrors:errors,externalBrowserRequests:external},null,2));console.log('PASS: scoped conversation details, truthful room/peer presence, partial roster, safe identity/status metadata, live focus/scroll/drafts,16 responsive variants and zero mutations');
+  assert.equal(state.writes,0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);await fs.writeFile(path.join(artifacts,'conversation-details-report.json'),JSON.stringify({findings,cachedReadCount:state.reads,mutationEffects:state.writes,pageErrors:errors,externalBrowserRequests:external},null,2));console.log('PASS: scoped conversation details, room/peer status, lazy read-only participant roster, safe identity/status metadata, live focus/scroll/drafts,16 responsive variants and zero mutations');
  }finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(r=>api.close(r))}
 })().catch(error=>{console.error(error);process.exitCode=1});

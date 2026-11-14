@@ -195,6 +195,22 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 		t.Fatalf("entry did not reuse room: %+v %v", joinedBob, err)
 	}
 	waitRoom(joinedBob.Conversation.ID, "joined")
+	if err := engine.StoreAvatar(ctx, bob, "bob@localhost", "room-roster-fixture", avatar.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	readerAvatar, err := engine.Avatar(ctx, bob, "bob@localhost")
+	if err != nil || readerAvatar.ImageHash == "" {
+		t.Fatalf("cache reader avatar: %+v %v", readerAvatar, err)
+	}
+	eventually(t, func() bool {
+		roster, err := engine.RoomParticipants(ctx, joinedBob.Conversation.ID)
+		return err == nil && roster.State == "available" && !roster.Truncated && len(roster.Participants) == 2 &&
+			slices.ContainsFunc(roster.Participants, func(p domain.RoomSessionParticipant) bool {
+				return p.Self && p.Nickname == "Reader" && p.Role == "participant" && p.AvatarHash == readerAvatar.ImageHash
+			}) && slices.ContainsFunc(roster.Participants, func(p domain.RoomSessionParticipant) bool {
+			return !p.Self && p.Nickname == "Host" && p.Affiliation == "owner" && p.AvatarHash == ""
+		})
+	})
 	directory, err := engine.DiscoverRooms(ctx, bob, "conference.localhost")
 	if err != nil || !slices.ContainsFunc(directory.Rooms, func(item domain.RoomDirectoryItem) bool { return item.Address == address }) {
 		t.Fatalf("public room missing: %+v %v", directory, err)
@@ -372,6 +388,9 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitRoom(created.Conversation.ID, "not_joined")
+	if roster, err := engine.RoomParticipants(ctx, created.Conversation.ID); err != nil || roster.State != "not_joined" || len(roster.Participants) != 0 {
+		t.Fatalf("roster after leaving: %+v %v", roster, err)
+	}
 	if _, err := engine.ConfigureConnection(ctx, alice, application.ConnectionInput{Password: "alice-local-only", Endpoint: xmppEndpoint()}); err != nil {
 		t.Fatal(err)
 	}

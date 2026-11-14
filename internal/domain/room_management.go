@@ -21,6 +21,17 @@ type RoomManagedOccupant struct {
 	Self                            bool
 }
 
+type RoomParticipants struct {
+	State        string
+	Participants []RoomSessionParticipant
+	Truncated    bool
+}
+
+type RoomSessionParticipant struct {
+	Nickname, Role, Affiliation, AvatarHash string
+	Self                                    bool
+}
+
 type RoomManagementCommand struct {
 	Action, ExpectedRevision, Target, Value, Reason string
 	MessageID                                       ID

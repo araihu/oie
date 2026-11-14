@@ -34,6 +34,17 @@ func (e *Engine) Avatar(ctx context.Context, id domain.ID, address string) (doma
 	}
 	return r.Avatar(ctx, id, address)
 }
+
+// AvatarHashes reads cached images only for the supplied addresses.
+func (e *Engine) AvatarHashes(ctx context.Context, id domain.ID, addresses []string) (map[string]string, error) {
+	r, ok := e.repo.(interface {
+		AvatarHashes(context.Context, domain.ID, []string) (map[string]string, error)
+	})
+	if !ok {
+		return nil, ErrProtocolUnavailable
+	}
+	return r.AvatarHashes(ctx, id, addresses)
+}
 func (e *Engine) Avatars(ctx context.Context, id, after domain.ID, limit int) ([]domain.Avatar, error) {
 	if limit < 1 || limit > 100 || (after != "" && !validID(after)) {
 		return nil, ErrInvalid

@@ -16,6 +16,31 @@ type RoomManagementProtocol interface {
 	ManageRoom(context.Context, domain.Account, domain.Conversation, domain.ID, domain.RoomManagementCommand, domain.Message) (string, domain.RoomAffiliationTarget)
 }
 
+type RoomParticipantsProtocol interface {
+	RoomParticipants(context.Context, domain.Account, domain.Conversation, domain.ID) (domain.RoomParticipants, error)
+}
+
+func (e *Engine) RoomParticipants(ctx context.Context, id domain.ID) (domain.RoomParticipants, error) {
+	out := domain.RoomParticipants{State: "unavailable"}
+	a, c, err := e.managementRoom(ctx, id)
+	if err != nil {
+		return out, err
+	}
+	provider, ok := e.protocols.(RoomParticipantsProtocol)
+	if !ok {
+		return out, nil
+	}
+	intent, err := e.roomIntent(ctx, id)
+	if err != nil {
+		return out, err
+	}
+	if !intent.Active || intent.CreationName != nil {
+		out.State = "not_joined"
+		return out, nil
+	}
+	return provider.RoomParticipants(ctx, a, c, intent.IntentRevisionID)
+}
+
 type RoomManagementRepository interface {
 	ClaimRoomManagement(context.Context, Operation, string) (string, error)
 	FinishRoomManagement(context.Context, Operation, string, string, domain.ID, string, domain.RoomAffiliationTarget) error

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"errors"
+	"maps"
 	"net"
 	"slices"
 	"strings"
@@ -34,6 +35,7 @@ type roomManagement struct {
 	revision  string
 	flags     roomManagementFlags
 	busy      bool
+	truncated bool
 }
 
 type roomManagementFlags struct {
@@ -136,6 +138,8 @@ func observeRoomManagement(slot *roomSlot, p incomingPresence, self bool) {
 			state.revision = ""
 		}
 		state.occupants[nick] = occupant
+	} else {
+		state.truncated = true
 	}
 }
 
@@ -225,6 +229,76 @@ func activeManagementSlot(e *entry, c domain.Conversation) *roomSlot {
 		return nil
 	}
 	return slot
+}
+
+func (m *Manager) RoomParticipants(ctx context.Context, a domain.Account, c domain.Conversation, intent domain.ID) (domain.RoomParticipants, error) {
+	out := domain.RoomParticipants{State: "unavailable"}
+	e, _, err := m.roomEntry(a, c)
+	if err != nil || e == nil {
+		return out, err
+	}
+	e.mu.Lock()
+	slot := activeManagementSlot(e, c)
+	if slot == nil || slot.snapshot.IntentRevisionID != intent {
+		e.mu.Unlock()
+		out.State = "not_joined"
+		return out, nil
+	}
+	addresses := []string{a.Address}
+	if slot.management.canShowParticipantAvatars() {
+		for _, occupant := range slot.management.occupants {
+			if occupant.address != "" && occupant.address != a.Address {
+				addresses = append(addresses, occupant.address)
+			}
+		}
+	}
+	e.avatarRoom = c.Address
+	e.mu.Unlock()
+	m.wakeAvatars(e)
+
+	var hashes map[string]string
+	if host, ok := m.host.(interface {
+		AvatarHashes(context.Context, domain.ID, []string) (map[string]string, error)
+	}); ok {
+		hashes, _ = host.AvatarHashes(ctx, a.ID, addresses)
+	}
+	if !m.roomEntryCurrent(ctx, c.ID, intent, false) {
+		out.State = "not_joined"
+		return out, nil
+	}
+
+	// Re-read presence after the cache lookup. Use an image only if the
+	// current occupant still has a disclosed identity and it was cached.
+	e.mu.RLock()
+	if activeManagementSlot(e, c) != slot || slot.snapshot.IntentRevisionID != intent {
+		e.mu.RUnlock()
+		out.State = "not_joined"
+		return out, nil
+	}
+	own := slot.management.self
+	if own.role == "" {
+		e.mu.RUnlock()
+		return out, nil
+	}
+	allowAvatars := slot.management.canShowParticipantAvatars()
+	occupants := slices.Collect(maps.Values(slot.management.occupants))
+	truncated := slot.management.truncated
+	e.mu.RUnlock()
+
+	slices.SortFunc(occupants, func(a, b roomOccupant) int { return strings.Compare(a.nickname, b.nickname) })
+	participants := make([]domain.RoomSessionParticipant, 0, len(occupants)+1)
+	participants = append(participants, domain.RoomSessionParticipant{
+		Nickname: own.nickname, Role: own.role, Affiliation: own.affiliation, Self: true, AvatarHash: hashes[a.Address],
+	})
+	for _, occupant := range occupants {
+		p := domain.RoomSessionParticipant{Nickname: occupant.nickname, Role: occupant.role, Affiliation: occupant.affiliation}
+		if allowAvatars && occupant.address != a.Address {
+			p.AvatarHash = hashes[occupant.address]
+		}
+		participants = append(participants, p)
+	}
+	out.State, out.Participants, out.Truncated = "available", participants, truncated
+	return out, nil
 }
 
 func (m *Manager) RoomManagement(ctx context.Context, a domain.Account, c domain.Conversation, affiliation string) (domain.RoomManagement, error) {
