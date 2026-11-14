@@ -8,8 +8,8 @@ global page of `docun` → `documento`, where the proposed FTS5 trigram plan
 fell back to SQL at 1,479 ms. Both indexes accelerated selective queries
 they could cover, with the lead varying by page. Small rooms and common
 terms favored the chronological SQL path. The prototype supports advancing
-the Bleve design and leaves the production choice open until write and
-recovery costs are measured. [Benchmark and reproduction](message-search-index-benchmark.md)
+the Bleve design. Local and hosted pre-alpha engines now start the index
+by default. [Benchmark and reproduction](message-search-index-benchmark.md)
 
 ## Engine and query boundary
 
@@ -156,12 +156,12 @@ fit depends on separate latency, storage and privacy evaluation. Synonyms
 and language-specific stemming can change recall and belong to a relevance
 experiment with explicit expected results. [Bleve query types](https://blevesearch.com/docs/Query/) · [Facets](https://blevesearch.com/docs/Result-Faceting/) · [Scoring](https://github.com/blevesearch/bleve/blob/v2.6.1/docs/scoring.md)
 
-## Evidence for activation
+## Operational evidence
 
-The first phase runs behind `OIE_EXPERIMENTAL_BLEVE_SEARCH=1`. See the
-[engine experiment](message-search-bleve-experiment.md) for the implemented
-publication protocol, activation and recovery behavior, and concurrent-ingest
-measurement.
+Local and hosted engines maintain the index in the background. The SQLite
+fallback serves searches while a usable index is unavailable. The
+[implementation and measurements](message-search-bleve-experiment.md)
+cover publication, recovery and concurrent ingest.
 
 Measure the actual engine endpoint across global and room queries, common
 and short selective terms, deep pages and histories with edits and cached
@@ -173,5 +173,4 @@ plans, including when switching plans between pages. Exercise writes
 during rebuild, crashes before and after batch acknowledgement, restore,
 reset, metadata changes, alias changes and deletion. Validate highlight
 parity across Unicode, transpositions, metadata, plain text and rendered
-Markdown. Production activation depends on parity and a repeatable gain
-in the target workload. [Benchmark and its limits](message-search-index-benchmark.md)
+Markdown. [Benchmark and its limits](message-search-index-benchmark.md)

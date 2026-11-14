@@ -28,15 +28,15 @@ type Store struct {
 	closeOnce          sync.Once
 	closeErr           error
 	messageIndex       *messageIndex
-	experimentalSearch bool
+	searchIndexEnabled bool
 }
 
 // Option configures a SQLite store before opening its data directory.
 type Option func(*Store)
 
-// WithExperimentalSearch enables the derived Bleve index for this store.
-func WithExperimentalSearch() Option {
-	return func(s *Store) { s.experimentalSearch = true }
+// WithMessageSearchIndex starts background maintenance of the derived Bleve index.
+func WithMessageSearchIndex() Option {
+	return func(s *Store) { s.searchIndexEnabled = true }
 }
 
 func Open(ctx context.Context, dir string, initialID domain.ID, options ...Option) (_ *Store, err error) {
@@ -141,7 +141,7 @@ func (s *Store) openDatabase(ctx context.Context, initialID domain.ID) (err erro
 	}
 	s.db, s.queries = db, queries
 	s.readDB, s.read = readDB, dbgen.New(readDB)
-	if s.experimentalSearch {
+	if s.searchIndexEnabled {
 		s.startMessageIndex()
 	}
 	return nil

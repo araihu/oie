@@ -1,15 +1,11 @@
-# Experimental Bleve index in the engine
+# Bleve index in the engine
 
-**Experimental implementation of R08.** Start the local or hosted engine
-with `OIE_EXPERIMENTAL_BLEVE_SEARCH=1` in its environment. The engine can
-serve SQL searches as soon as SQLite opens. Restart without the variable
-to use the existing search path. Migration 30 runs at database upgrade,
-including in engines with the feature off. The existing upgrade backup and
-the creation of the global timeline index are synchronous. Before the
-first activation, message writes create no pending entries. After first
-activation, SQLite keeps recording a coalesced pending entry per changed
-message even while the feature is off, so the index can catch up on the
-next activation.
+**Pre-alpha implementation of R08.** Local and hosted engines start Bleve
+index maintenance in the background by default. Search can use SQL as
+soon as SQLite opens. Migration 30 runs at database upgrade. The upgrade
+backup and creation of the global timeline index are synchronous. Once the
+worker registers the generation, message writes create a coalesced pending
+entry per changed message in SQLite.
 
 ## Index and query behavior
 
@@ -115,8 +111,7 @@ searches and candidate lookup declined for 66. Pending work peaked at 11
 sampled IDs and drained within 6.74 s of the last write. Both runs
 recorded zero fallbacks for crossed publications. All four arms committed
 all 240 messages. The two runs show how much latency and ingest cost can
-vary with the host. O08 still needs a target environment and repeated
-measurements before production activation.
+vary with the host.
 
 This workload covers first-page global search after initial indexing,
 during local archive receipt. Room, deep-page, history, and XMPP transport

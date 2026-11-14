@@ -106,7 +106,7 @@ func TestExperimentalMessageIndexIngestionBenchmark(t *testing.T) {
 
 		var options []Option
 		if mode == "bleve" {
-			options = append(options, WithExperimentalSearch())
+			options = append(options, WithMessageSearchIndex())
 		}
 		startBuild := time.Now()
 		store, err := Open(t.Context(), dir, migrationID(), options...)

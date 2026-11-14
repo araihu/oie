@@ -150,7 +150,7 @@ func TestMessageSearchIndexMigratesFromRoomBanNicknames(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	upgraded, err := Open(ctx, store.dir, migrationID(), WithExperimentalSearch())
+	upgraded, err := Open(ctx, store.dir, migrationID(), WithMessageSearchIndex())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,7 @@ func TestMessageSearchPreviewMigratesWithoutDiscardingMessages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	upgraded, err := Open(ctx, store.dir, migrationID(), WithExperimentalSearch())
+	upgraded, err := Open(ctx, store.dir, migrationID(), WithMessageSearchIndex())
 	if err != nil {
 		t.Fatal(err)
 	}

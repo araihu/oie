@@ -152,7 +152,7 @@ func TestExperimentalMessageIndexParity(t *testing.T) {
 	receiveCorrection(t, e, c, "two", "texto atualizado", "one", "proof:bob", "bob", at.Add(2*time.Second))
 	requireIndexTest(t, old.Close())
 
-	s, err := Open(t.Context(), dir, migrationID(), WithExperimentalSearch())
+	s, err := Open(t.Context(), dir, migrationID(), WithMessageSearchIndex())
 	requireIndexTest(t, err)
 	defer func() { _ = s.Close() }()
 	waitIndexReady(t, s, "")
@@ -203,7 +203,7 @@ func TestExperimentalMessageIndexScopesTheOverlayBeforeCounting(t *testing.T) {
 	localException := replySeed(t, old, chat, strings.Repeat("x ", searchIndexMaxDocumentBytes/2)+" arquivo", at, nil, nil)
 	dir := old.dir
 	requireIndexTest(t, old.Close())
-	s, err := Open(t.Context(), dir, migrationID(), WithExperimentalSearch())
+	s, err := Open(t.Context(), dir, migrationID(), WithMessageSearchIndex())
 	requireIndexTest(t, err)
 	t.Cleanup(func() { _ = s.Close() })
 	waitIndexReady(t, s, "")
@@ -269,7 +269,7 @@ func TestExperimentalMessageIndexRecovery(t *testing.T) {
 	requireIndexTest(t, old.Close())
 
 	open := func() *Store {
-		s, err := Open(t.Context(), dir, migrationID(), WithExperimentalSearch())
+		s, err := Open(t.Context(), dir, migrationID(), WithMessageSearchIndex())
 		requireIndexTest(t, err)
 		t.Cleanup(func() { _ = s.Close() })
 		return s
@@ -513,7 +513,7 @@ func TestExperimentalMessageIndexResumesBuildCheckpoint(t *testing.T) {
 	requireIndexTest(t, g.index.Close())
 	requireIndexTest(t, s.Close())
 
-	reopened, err := Open(t.Context(), dir, migrationID(), WithExperimentalSearch())
+	reopened, err := Open(t.Context(), dir, migrationID(), WithMessageSearchIndex())
 	requireIndexTest(t, err)
 	defer func() { _ = reopened.Close() }()
 	ready := waitIndexReady(t, reopened, "")

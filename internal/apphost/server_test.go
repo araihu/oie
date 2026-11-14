@@ -3,6 +3,7 @@ package apphost
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -505,6 +507,37 @@ func TestDataOnlyRolesExposeEngineWithoutPresentation(t *testing.T) {
 		if err := validate(cfg); err == nil {
 			t.Fatal("accepted incompatible data-only composition")
 		}
+	}
+}
+
+func TestEngineRolesStartMessageSearchIndexByDefault(t *testing.T) {
+	for _, role := range []string{"local", "hosted"} {
+		t.Run(role, func(t *testing.T) {
+			dir := t.TempDir()
+			testServer(t, Config{Role: role, Listen: "127.0.0.1:0", DataDir: dir})
+			path := url.URL{Scheme: "file", Path: filepath.Join(dir, "oie.sqlite"), RawQuery: "mode=ro"}
+			db, err := sql.Open("sqlite", path.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = db.Close() }()
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			ticker := time.NewTicker(10 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				var ready bool
+				err = db.QueryRowContext(ctx, "SELECT ready FROM message_search_index WHERE singleton=1").Scan(&ready)
+				if err == nil && ready {
+					return
+				}
+				select {
+				case <-ctx.Done():
+					t.Fatalf("message search index did not become ready: %v", err)
+				case <-ticker.C:
+				}
+			}
+		})
 	}
 }
 
