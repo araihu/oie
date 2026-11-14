@@ -180,7 +180,9 @@ window.OieRuntime.register('room-management', life => {
       const focusedParticipant = !!focused?.closest('[data-room-participant-detail]');
       for (const panel of currentTabs.querySelectorAll('[role=tabpanel]')) {
         const incoming = template.content.getElementById(panel.id);
+        const listScroll = panel.querySelector('.oie-room-bans-list [data-goshtoso-scroll-viewport]')?.scrollTop;
         panel.replaceChildren(...incoming.childNodes);
+        if (listScroll) panel.querySelector('.oie-room-bans-list [data-goshtoso-scroll-viewport]').scrollTop = listScroll;
       }
       showParticipant(participant, focusedParticipant);
       if (!focusedParticipant && focusedAction && !content.contains(focused)) {
@@ -320,7 +322,8 @@ window.OieRuntime.register('room-management', life => {
 
   life.on(document, 'keydown', event => {
     if (!active || event.key !== 'Escape' || !event.target.closest) return;
-    const confirmation = event.target.closest('form[data-room-action-confirmation]:not([hidden])');
+    const confirmation = event.target.closest('form[data-room-action-confirmation]:not([hidden])') ||
+      event.target.closest('.oie-room-ban-footer')?.querySelector('form:not([hidden])');
     const detail = event.target.closest('[data-room-participant-detail]');
     if (!confirmation && (!participant || !detail)) return;
     event.preventDefault();
@@ -364,7 +367,11 @@ window.OieRuntime.register('room-management', life => {
     for (const input of form.querySelectorAll('input:not([type=hidden]),textarea')) input.readOnly = false;
     const refreshContent = result.ok && (action === 'role' || action === 'affiliation' || action === 'set_avatar' || action === 'remove_avatar');
     if (refreshContent) {
-      if (form.dataset.roomActionForm) setActionOpen(form, false);
+      if (form.dataset.roomActionForm) {
+        const focused = form.contains(document.activeElement);
+        const trigger = setActionOpen(form, false);
+        if (focused) trigger?.focus({preventScroll: true});
+      }
       clearInputs(form);
     }
     life.timeout(() => { if (active) void load(refreshContent); }, 0);

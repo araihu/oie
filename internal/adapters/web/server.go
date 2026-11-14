@@ -288,6 +288,7 @@ type copy struct {
 	RoomRevokeAccess                                                                                                                                                                                         string
 	RoomBans                                                                                                                                                                                                 string
 	RoomBan                                                                                                                                                                                                  string
+	RoomBanByAddress                                                                                                                                                                                         string
 	RoomUnban                                                                                                                                                                                                string
 	RoomUnbanConfirm                                                                                                                                                                                         string
 	RoomConfirmAction                                                                                                                                                                                        string

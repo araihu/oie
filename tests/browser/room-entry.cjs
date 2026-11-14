@@ -21,7 +21,9 @@ const accounts = [
   {id: bob, revisionId: revision, label: 'Bob', address: 'bob@fixture', protocol: 'xmpp', createdAt: at}
 ];
 const previews = [], commands = [], managementCommands = [], streams = new Set();
-let managementRevision = 'first-room-revision', managementBlocked = false, roomImage = avatarHash, banned = true;
+let managementRevision = 'first-room-revision', managementBlocked = false, roomImage = avatarHash;
+const bannedAddresses = new Set(['banido@fixture','sem-foto@fixture',
+  ...Array.from({length:30}, (_, index) => 'banido-' + index + '@fixture')]);
 let destination, roomState = 'joining', cursor = 0, conflict = false, trustedService = true;
 
 async function apiHandler(req, res) {
@@ -65,8 +67,7 @@ async function apiHandler(req, res) {
           {id:'occupant:admin',nickname:'Helena',role:'moderator',affiliation:'admin',roles:[],affiliations:[]},
           {id:'occupant:moderator',nickname:'Lucas',role:'moderator',affiliation:'member',roles:[],affiliations:[]},
         ],
-        affiliations:u.searchParams.get('affiliation') === 'outcast'
-          ? (banned ? ['banido@fixture','sem-foto@fixture'] : ['sem-foto@fixture']) : []});
+        affiliations:u.searchParams.get('affiliation') === 'outcast' ? [...bannedAddresses] : []});
     }
     let data = '';
     for await (const chunk of req) data += chunk;
@@ -79,7 +80,8 @@ async function apiHandler(req, res) {
       cursor++;
       for (const stream of streams) stream.write('id: ' + engine + ':' + cursor + '\nevent: profile.avatar_changed\ndata: {}\n\n');
     }
-    if (command.action === 'affiliation' && command.target === 'banido@fixture' && command.value === 'none') banned = false;
+    if (command.action === 'affiliation' && command.value === 'none') bannedAddresses.delete(command.target);
+    if (command.action === 'affiliation' && command.value === 'outcast') bannedAddresses.add(command.target);
     return send(200, {state:'confirmed'});
   }
   if (req.method === 'POST' && u.pathname.endsWith('/rooms')) {
@@ -482,6 +484,36 @@ async function waitFor(predicate) {
     assert.equal(managementCommands.at(-1).action,'affiliation');
     assert.equal(managementCommands.at(-1).target,'banido@fixture');
     assert.equal(managementCommands.at(-1).value,'none');
+    const banTabs = roomPanel.getByRole('tablist');
+    const banToggle = roomPanel.getByRole('button',{name:'Banir por endereço',exact:true});
+    const banAddress = roomPanel.getByRole('textbox',{name:'Endereço da pessoa',exact:true});
+    const bansList = roomPanel.locator('.oie-room-bans-list [data-goshtoso-scroll-viewport]');
+    assert.equal(await banAddress.isVisible(),false);
+    const footerBeforeScroll = await banToggle.boundingBox();
+    const tabsBeforeScroll = await banTabs.boundingBox();
+    const scrollTop = await bansList.evaluate(list => {
+      list.scrollTop = 200;
+      return list.scrollTop;
+    });
+    assert.equal(scrollTop,200);
+    assert.deepEqual(await banToggle.boundingBox(),footerBeforeScroll);
+    assert.deepEqual(await banTabs.boundingBox(),tabsBeforeScroll);
+    const beforeBan = managementCommands.length;
+    await banToggle.click();
+    await banAddress.fill('ainda-fora@fixture');
+    await page.keyboard.press('Escape');
+    await banAddress.waitFor({state:'hidden'});
+    assert.equal(await banToggle.evaluate(el => document.activeElement === el),true);
+    assert.equal(managementCommands.length,beforeBan);
+    await banToggle.click();
+    await banAddress.fill('ainda-fora@fixture');
+    await roomPanel.getByRole('button',{name:'Banir da sala',exact:true}).click();
+    await roomPanel.getByRole('button',{name:'Retirar banimento · ainda-fora@fixture'}).waitFor();
+    assert.equal(await banAddress.isVisible(),false);
+    assert.equal(await bansList.evaluate(list => list.scrollTop),scrollTop);
+    assert.equal(managementCommands.at(-1).value,'outcast');
+    assert.equal(managementCommands.at(-1).target,'ainda-fora@fixture');
+    assert.equal(managementCommands.length,beforeBan+1);
     await page.keyboard.press('Escape');
     await roomPanel.waitFor({state:'hidden'});
 

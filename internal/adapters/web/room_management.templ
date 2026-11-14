@@ -10,6 +10,7 @@ import (
 	"github.com/araihu/goshtoso/components/fileinput"
 	"github.com/araihu/goshtoso/components/form"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
+	"github.com/araihu/goshtoso/components/scrollregion"
 	"github.com/araihu/goshtoso/components/tabs"
 	"github.com/araihu/goshtoso/components/textarea"
 	"github.com/araihu/goshtoso/components/textinput"
@@ -136,6 +137,18 @@ func roomParticipantGroups(text copy, occupants []engineapi.RoomManagedOccupant)
 }
 
 templ roomManagementBans(v view, state engineapi.RoomManagement, bansLoaded bool) {
+	@scrollregion.ScrollRegion(scrollregion.Config{Content: roomBanList(v, state, bansLoaded), RootClass: "oie-room-bans-list"})
+	{{ id := "room-ban-by-address" }}
+	<footer class="oie-room-ban-footer">
+		@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-room-ban-toggle"), button.WithAttrs(templ.Attributes{"id": id, "data-room-action-open": "", "aria-expanded": "false", "aria-controls": id + "-form"})) {
+			@glyph(heroicons.Icon16SolidPlus)
+			{ v.Text.RoomBanByAddress }
+		}
+		@roomTargetAction(v, *state.Revision, id, "", "affiliation", "outcast", v.Text.RoomBan, button.ToneDanger, "")
+	</footer>
+}
+
+templ roomBanList(v view, state engineapi.RoomManagement, bansLoaded bool) {
 	if bansLoaded {
 		if len(state.Affiliations) == 0 {
 			<p>{ v.Text.RoomNoBans }</p>
@@ -157,7 +170,6 @@ templ roomManagementBans(v view, state engineapi.RoomManagement, bansLoaded bool
 			</ul>
 		}
 	}
-	@roomTargetAction(v, *state.Revision, "", "", "affiliation", "outcast", v.Text.RoomBan, button.ToneDanger, "")
 }
 
 templ roomUnbanButton(v view, id, address string) {
@@ -285,11 +297,8 @@ templ roomParticipantActionControl(v view, revision, id, target string, action r
 templ roomTargetAction(v view, revision, trigger, target, action, value, label string, tone button.Tone, confirmation string) {
 	{{
 		key := newOperationKey()
-		id := "manage-room-" + key
-		if trigger != "" {
-			id = trigger + "-form"
-		}
-		attrs := templ.Attributes{"data-oie-action": "room-management", "data-room-action-form": trigger, "hidden": trigger != ""}
+		id := trigger + "-form"
+		attrs := templ.Attributes{"data-oie-action": "room-management", "data-room-action-form": trigger, "hidden": true}
 		cancelAttrs := templ.Attributes{"data-room-action-cancel": ""}
 		if confirmation != "" {
 			attrs["data-room-action-confirmation"] = ""
@@ -314,10 +323,8 @@ templ roomTargetAction(v view, revision, trigger, target, action, value, label s
 			@button.Button(button.WithType("submit"), button.WithTone(tone), button.WithSize(button.SizeSmall)) {
 				{ label }
 			}
-			if trigger != "" {
-				@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(cancelAttrs)) {
-					{ v.Text.RoomCancelAction }
-				}
+			@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(cancelAttrs)) {
+				{ v.Text.RoomCancelAction }
 			}
 		</div>
 		<div data-form-feedback role="status" aria-live="polite"></div>

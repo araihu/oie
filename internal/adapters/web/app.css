@@ -552,11 +552,19 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-request-banner [data-form-feedback][data-error=true]{color:light-dark(#9e2626,#ffb4ab)}
 
 .oie-room-management{padding:16px}
+.oie-room-management:has(.oie-room-management-tabs){display:grid;grid-template-rows:auto minmax(0,1fr);height:100%}
 .oie-room-management [data-room-management-content]{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.oie-room-management-tabs{display:grid;grid-template-rows:auto minmax(0,1fr);min-height:0}
+.oie-room-management-tabs>div:has(>[role="tabpanel"]){min-height:0;padding-bottom:0}
 .oie-room-management-tabs [role="tab"]{padding-inline:8px}
-.oie-room-management-tabs [role="tabpanel"]{min-width:0}
+.oie-room-management-tabs [role="tabpanel"]{min-width:0;max-height:100%;overflow-y:auto;overscroll-behavior:contain;padding-bottom:8px}
 .oie-room-management [data-room-management-content]>form{border-bottom:1px solid var(--oie-border);padding-bottom:12px}
 .oie-room-management-tabs [role="tabpanel"]:not([x-cloak]){display:grid;gap:14px}
+.oie-room-management-tabs #tabpanelroom-management-tabsbans{height:100%;grid-template-rows:minmax(44px,1fr) auto;gap:0}
+.oie-room-ban-footer{display:grid;justify-items:stretch;gap:8px;border-top:1px solid var(--oie-border);padding-top:8px}
+.oie-room-ban-footer .oie-room-ban-toggle{justify-self:end;min-height:44px}
+.oie-room-ban-footer .oie-room-action-buttons{justify-content:flex-end}
+.oie-room-ban-footer [data-form-feedback]:empty{display:none}
 .oie-room-management-avatar{display:grid;justify-items:center;margin-block:4px}
 .oie-room-participants,.oie-room-addresses{margin:0;padding:0;list-style:none}
 .oie-room-management .oie-room-unban{width:44px;height:44px;padding:0;color:var(--oie-muted)}

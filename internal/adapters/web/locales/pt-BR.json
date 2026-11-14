@@ -498,6 +498,7 @@
   "RoomRevokeAccess": "Retirar acesso",
   "RoomBans": "Banimentos",
   "RoomBan": "Banir da sala",
+  "RoomBanByAddress": "Banir por endereço",
   "RoomUnban": "Retirar banimento",
   "RoomUnbanConfirm": "Retirar o banimento de {address}?",
   "RoomConfirmAction": "Confirmar",

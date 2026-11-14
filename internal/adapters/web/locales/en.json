@@ -498,6 +498,7 @@
   "RoomRevokeAccess": "Revoke affiliation",
   "RoomBans": "Bans",
   "RoomBan": "Ban from room",
+  "RoomBanByAddress": "Ban by address",
   "RoomUnban": "Lift ban",
   "RoomUnbanConfirm": "Lift the ban on {address}?",
   "RoomConfirmAction": "Confirm",
