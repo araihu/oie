@@ -47,7 +47,9 @@ func (s *Server) roomManagementFragment(w http.ResponseWriter, r *http.Request) 
 		s.loadConversationDetails(ctx, &v)
 	}
 	var params engineapi.GetRoomManagementParams
-	if affiliation := engineapi.RoomAffiliation(q.Get("affiliation")); affiliation.Valid() {
+	bansLoaded := messageID == "" && !invite && q.Get("affiliation") == "outcast"
+	if bansLoaded {
+		affiliation := engineapi.RoomAffiliationOutcast
 		params.Affiliation = &affiliation
 	}
 	if messageID != "" {
@@ -60,7 +62,7 @@ func (s *Server) roomManagementFragment(w http.ResponseWriter, r *http.Request) 
 	}
 	management := *result.JSON200
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = roomManagementContent(v, management, messageID, q.Get("affiliation"), invite).Render(ctx, w)
+	_ = roomManagementContent(v, management, messageID, invite, bansLoaded).Render(ctx, w)
 }
 
 func (s *Server) manageRoom(ctx context.Context, r *http.Request, text copy) (int, mutationResult) {

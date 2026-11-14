@@ -11,7 +11,7 @@ window.OieRuntime.register('room-management', life => {
   const openForms = new Set();
   const isPending = form => form.dataset.busy === 'true' || pending.has(form);
   const hasPending = () => [...content.querySelectorAll('form')].some(isPending);
-  let accessList = 'member', participant = '';
+  let participant = '';
   const participantDetails = () => [...content.querySelectorAll('[data-room-participant-detail]')];
 
   function updateAvatarActions() {
@@ -149,7 +149,6 @@ window.OieRuntime.register('room-management', life => {
     const sameTabs = currentTabs && incomingTabs && currentTabs.dataset.tabsConfig === incomingTabs.dataset.tabsConfig;
     if (sameTabs) {
       const focused = document.activeElement;
-      const focusedList = focused?.dataset.roomAffiliationList;
       const focusedAction = focused?.id || focused?.closest('form')?.dataset.roomActionForm;
       const focusedParticipant = !!focused?.closest('[data-room-participant-detail]');
       for (const panel of currentTabs.querySelectorAll('[role=tabpanel]')) {
@@ -157,9 +156,7 @@ window.OieRuntime.register('room-management', life => {
         panel.replaceChildren(...incoming.childNodes);
       }
       showParticipant(participant, focusedParticipant);
-      if (focusedList) {
-        currentTabs.querySelector(`[data-room-affiliation-list="${CSS.escape(focusedList)}"]`)?.focus({preventScroll:true});
-      } else if (!focusedParticipant && focusedAction && !content.contains(focused)) {
+      if (!focusedParticipant && focusedAction && !content.contains(focused)) {
         const replacement = document.getElementById(focusedAction);
         (replacement || currentTabs.querySelector('[role=tab][aria-selected=true]'))?.focus({preventScroll:true});
       }
@@ -251,21 +248,17 @@ window.OieRuntime.register('room-management', life => {
     }
     const tabButton = event.target.closest('[role=tab]');
     if (!content.contains(tabButton) || hasPending()) return;
-    const tab = tabButton.getAttribute('aria-controls');
-    if (!tab) return;
-    const next = tab.endsWith('tabsbans') ? 'outcast' : tab.endsWith('tabsaccess') ? accessList : affiliation;
-    if (next !== affiliation) {
-      affiliation = next;
+    if (tabButton.getAttribute('aria-controls') === 'tabpanelroom-management-tabsbans' && affiliation !== 'outcast') {
+      affiliation = 'outcast';
       void load();
     }
   });
 
   life.on(document, 'click', event => {
-    const trigger = event.target.closest('#chat-manage-room,#chat-invite-room,[id^=moderate-room-message-],[data-room-management-refresh],[data-room-affiliation-list]');
+    const trigger = event.target.closest('#chat-manage-room,#chat-invite-room,[id^=moderate-room-message-],[data-room-management-refresh]');
     if (!trigger) return;
-    if (trigger === refresh || trigger.hasAttribute('data-room-affiliation-list')) {
+    if (trigger === refresh) {
       if (hasPending()) return;
-      if (trigger.dataset.roomAffiliationList) affiliation = accessList = trigger.dataset.roomAffiliationList;
       void load();
       return;
     }

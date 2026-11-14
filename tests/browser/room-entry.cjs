@@ -326,14 +326,8 @@ async function waitFor(predicate) {
       assert.equal(await kickTrigger.getAttribute('aria-expanded'), 'false');
       await profile.getByRole('button',{name:'Voltar para participantes'}).click();
       await participant.waitFor();
-      const accessTab = management.getByRole('tab', {name:'Acesso', exact:true});
-      await accessTab.click();
-      await management.getByText('Nenhum endereço nesta lista.', {exact:true}).waitFor();
-      const accessList = management.getByRole('button', {name:'Administrador', exact:true});
-      await accessList.click();
-      await management.locator('[data-room-affiliation-list=admin][aria-pressed=true]').waitFor();
-      assert.equal(await accessList.evaluate(button => button === document.activeElement), true);
-      assert.equal(await accessTab.getAttribute('aria-selected'), 'true');
+      assert.deepEqual(await management.getByRole('tab').allTextContents(),
+        ['Detalhes','Participantes','Banimentos']);
       await management.getByRole('tab', {name:'Banimentos',exact:true}).click();
       await management.getByText('banido@fixture',{exact:true}).waitFor();
       assert.equal(await management.getByRole('button',{name:'Retirar banimento · banido@fixture'}).isVisible(), true);

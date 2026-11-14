@@ -2,7 +2,6 @@ package web
 
 import (
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/araihu/goshtoso/components/avatar"
@@ -12,7 +11,6 @@ import (
 	"github.com/araihu/goshtoso/components/form"
 	"github.com/araihu/goshtoso/components/icon"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
-	selectfield "github.com/araihu/goshtoso/components/select"
 	"github.com/araihu/goshtoso/components/tabs"
 	"github.com/araihu/goshtoso/components/textarea"
 	"github.com/araihu/goshtoso/components/textinput"
@@ -34,7 +32,7 @@ templ roomManagementDrawer(v view) {
 	}
 }
 
-templ roomManagementContent(v view, state engineapi.RoomManagement, messageID, affiliation string, invite bool) {
+templ roomManagementContent(v view, state engineapi.RoomManagement, messageID string, invite, bansLoaded bool) {
 	if state.State != "available" || state.Revision == nil {
 		if state.State == "not_joined" {
 			<p>{ v.Text.RoomJoinRequired }</p>
@@ -45,13 +43,13 @@ templ roomManagementContent(v view, state engineapi.RoomManagement, messageID, a
 		}
 	} else if invite {
 		if slices.Contains(state.Actions,engineapi.Invite) {
-			@roomManagementForm(v, *state.Revision, "invite", "", v.Text.RoomInvite, nil)
+			@roomManagementForm(v, *state.Revision, "invite", "", v.Text.RoomInvite)
 		} else {
 			<p>{ v.Text.RoomManagementDenied }</p>
 		}
 	} else if messageID != "" {
 		if slices.Contains(state.Actions,engineapi.RoomManagementAction("moderate_message")) {
-			@roomManagementForm(v, *state.Revision, "moderate_message", messageID, v.Text.RoomModerateMessage, nil)
+			@roomManagementForm(v, *state.Revision, "moderate_message", messageID, v.Text.RoomModerateMessage)
 		} else {
 			<p>{ v.Text.RoomManagementDenied }</p>
 		}
@@ -64,12 +62,7 @@ templ roomManagementContent(v view, state engineapi.RoomManagement, messageID, a
 			}
 		}}
 		if slices.Contains(state.Actions, engineapi.Affiliation) {
-			{{
-				pages = append(pages,
-					tabs.Tab{ID: "access", Label: v.Text.RoomAccessTab, Content: roomManagementAccess(v, state, affiliation)},
-					tabs.Tab{ID: "bans", Label: v.Text.RoomBans, Content: roomManagementBans(v, state, affiliation)},
-				)
-			}}
+			{{ pages = append(pages, tabs.Tab{ID: "bans", Label: v.Text.RoomBans, Content: roomManagementBans(v, state, bansLoaded)}) }}
 		}
 		@tabs.Tabs(tabs.Config{ID: "room-management-tabs", RootClass: "oie-room-management-tabs", Tabs: pages})
 	}
@@ -144,34 +137,8 @@ func roomParticipantGroups(text copy, occupants []engineapi.RoomManagedOccupant)
 	return slices.DeleteFunc(groups, func(group roomParticipantGroup) bool { return len(group.occupants) == 0 })
 }
 
-templ roomManagementAccess(v view, state engineapi.RoomManagement, affiliation string) {
-	<div class="oie-room-entry-links" aria-label={ v.Text.RoomAccess }>
-		for _, value := range []string{"member", "admin", "owner"} {
-			@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-room-affiliation-list": value, "aria-pressed": strconv.FormatBool(affiliation == value)})) {
-				{ roomManagementLabel(v.Text, value) }
-			}
-		}
-	</div>
-	if affiliation != "" && affiliation != "outcast" {
-		@roomAccessList(v, state.Affiliations)
-	}
-	@roomManagementForm(v, *state.Revision, "affiliation", "", v.Text.RoomSetAffiliation, roomOptions(v.Text, []string{"member", "admin", "owner", "none"}))
-}
-
-templ roomAccessList(v view, addresses []string) {
-	if len(addresses) == 0 {
-		<p>{ v.Text.RoomNoAddresses }</p>
-	} else {
-		<ul class="oie-room-addresses">
-			for _, address := range addresses {
-				<li>{ address }</li>
-			}
-		</ul>
-	}
-}
-
-templ roomManagementBans(v view, state engineapi.RoomManagement, affiliation string) {
-	if affiliation == "outcast" {
+templ roomManagementBans(v view, state engineapi.RoomManagement, bansLoaded bool) {
+	if bansLoaded {
 		if len(state.Affiliations) == 0 {
 			<p>{ v.Text.RoomNoBans }</p>
 		} else {
@@ -394,37 +361,19 @@ func (v view) managementTopic() string {
 	return ""
 }
 
-func roomOptions[T ~string](text copy, values []T) []selectfield.Option {
-	out := make([]selectfield.Option, 0, len(values))
-	for _, value := range values {
-		out = append(out, selectfield.Option{Value: string(value), Label: roomManagementLabel(text, string(value))})
-	}
-	return out
-}
-
-templ roomManagementForm(v view, revision, action, target, label string, options []selectfield.Option) {
+templ roomManagementForm(v view, revision, action, target, label string) {
 	{{
 		key := newOperationKey()
 		id := "manage-room-" + key
 	}}
 	@form.Form(form.Config{ID: id, Action: "/ui/rooms/manage", Method: "post", RootAttrs: templ.Attributes{"data-oie-action": "room-management"}}) {
 		@roomManagementFields(v, revision, action, key)
-		switch action {
-			case "moderate_message":
-				<input type="hidden" name="messageId" value={ target }/>
-			default:
-				if target=="" {
-					@textinput.TextInput(textinput.Config{ID: id + "-address", Name: "target", Label: v.Text.RoomUserAddress, Required: true, InputAttrs: templ.Attributes{"maxlength": "2047", "spellcheck": "false", "autocapitalize": "none"}})
-				} else {
-					<input type="hidden" name="target" value={ target }/>
-				}
-				if len(options)>0 {
-					@selectfield.Select(selectfield.Config{ID: id + "-value", Name: "value", Label: roomOptionLabel(v.Text, action), Options: options, Required: true, Placeholder: v.Text.RoomSelectAction})
-				}
+		if action == "moderate_message" {
+			<input type="hidden" name="messageId" value={ target }/>
+		} else {
+			@textinput.TextInput(textinput.Config{ID: id + "-address", Name: "target", Label: v.Text.RoomUserAddress, Required: true, InputAttrs: templ.Attributes{"maxlength": "2047", "spellcheck": "false", "autocapitalize": "none"}})
 		}
-		if action=="invite" || action=="moderate_message" || action=="role" || action=="affiliation" {
-			@textinput.TextInput(textinput.Config{ID: id + "-reason", Name: "reason", Label: v.Text.RoomReason, InputAttrs: templ.Attributes{"maxlength": "500"}})
-		}
+		@textinput.TextInput(textinput.Config{ID: id + "-reason", Name: "reason", Label: v.Text.RoomReason, InputAttrs: templ.Attributes{"maxlength": "500"}})
 		@button.Button(button.WithType("submit")) {
 			{ label }
 		}

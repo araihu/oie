@@ -10,8 +10,8 @@ The room may let other occupants edit the topic or invite people. **Participants
 the participant's role, affiliation, and the actions available to your account.
 Photos use the identity disclosed to this account by the room. An unavailable
 photo shows initials.
-Administrators and owners use **Access** to consult and change
-affiliations and **Bans** to consult bans, ban an address or lift a ban.
+Administrators and owners use **Bans** to consult bans, ban an address or
+lift a ban.
 A room can omit personal addresses even when it publishes nicknames.
 
 Room creation keeps the service's defaults with persistence enabled. Enter an

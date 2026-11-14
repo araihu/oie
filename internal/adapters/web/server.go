@@ -285,7 +285,6 @@ type copy struct {
 	RoomMakeAdmin                                                                                                                                                                                            string
 	RoomMakeOwner                                                                                                                                                                                            string
 	RoomRevokeAccess                                                                                                                                                                                         string
-	RoomAccessTab                                                                                                                                                                                            string
 	RoomBans                                                                                                                                                                                                 string
 	RoomBan                                                                                                                                                                                                  string
 	RoomUnban                                                                                                                                                                                                string
@@ -308,11 +307,8 @@ type copy struct {
 	RoomInvite                                                                                                                                                                                               string
 	RoomReason                                                                                                                                                                                               string
 	RoomSetRole                                                                                                                                                                                              string
-	RoomSetAffiliation                                                                                                                                                                                       string
 	RoomKick                                                                                                                                                                                                 string
 	RoomAccess                                                                                                                                                                                               string
-	RoomNoAddresses                                                                                                                                                                                          string
-	RoomSelectAction                                                                                                                                                                                         string
 	RoomRoleModerator                                                                                                                                                                                        string
 	RoomRoleParticipant                                                                                                                                                                                      string
 	RoomRoleVisitor                                                                                                                                                                                          string
