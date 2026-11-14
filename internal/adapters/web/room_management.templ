@@ -245,7 +245,7 @@ func roomParticipantActions(text copy, occupant engineapi.RoomManagedOccupant) [
 		{"affiliation", "admin", text.RoomMakeAdmin, glyph(heroicons.Icon16SolidCog6Tooth), button.TonePrimary},
 		{"affiliation", "member", text.RoomMakeMember, glyph(heroicons.Icon16SolidUser), button.TonePrimary},
 		{"affiliation", "none", text.RoomRevokeAccess, glyph(heroicons.Icon16SolidLockClosed), button.ToneWarning},
-		{"affiliation", "outcast", text.RoomBan, glyph(heroicons.Icon16SolidXCircle), button.ToneDanger},
+		{"affiliation", "outcast", text.RoomBan, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsNoSymbol16SolidNoSymbol, Decorative: true, RootClass: "oie-icon"}), button.ToneDanger},
 	}
 	var actions []roomParticipantAction
 	for _, action := range roleActions {
