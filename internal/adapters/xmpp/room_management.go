@@ -353,6 +353,15 @@ func (m *Manager) readRoomAffiliations(ctx context.Context, e *entry, session *m
 	return slices.Compact(out), nil
 }
 
+func (s roomManagement) occupantByID(id string) roomOccupant {
+	for _, occupant := range s.occupants {
+		if occupant.id == id {
+			return occupant
+		}
+	}
+	return roomOccupant{}
+}
+
 func (s roomManagement) payload(a domain.Account, c domain.Conversation, cmd domain.RoomManagementCommand, message domain.Message) (string, string) {
 	if !s.allows(cmd) {
 		return "", "denied"
@@ -369,12 +378,7 @@ func (s roomManagement) payload(a domain.Account, c domain.Conversation, cmd dom
 	case "role", "affiliation":
 		var occupant roomOccupant
 		if strings.HasPrefix(target, "occupant:") {
-			for _, observed := range s.occupants {
-				if observed.id == target {
-					occupant = observed
-					break
-				}
-			}
+			occupant = s.occupantByID(target)
 			if occupant.id == "" {
 				return "", "stale"
 			}
@@ -406,29 +410,30 @@ func (s roomManagement) payload(a domain.Account, c domain.Conversation, cmd dom
 	return "", ""
 }
 
-func (m *Manager) ManageRoom(ctx context.Context, a domain.Account, c domain.Conversation, intent domain.ID, cmd domain.RoomManagementCommand, message domain.Message) string {
+func (m *Manager) ManageRoom(ctx context.Context, a domain.Account, c domain.Conversation, intent domain.ID, cmd domain.RoomManagementCommand, message domain.Message) (string, domain.RoomAffiliationTarget) {
+	var noTarget domain.RoomAffiliationTarget
 	e, room, err := m.roomEntry(a, c)
 	if err != nil || e == nil {
-		return "unavailable"
+		return "unavailable", noTarget
 	}
 	ctx, cancel := context.WithTimeout(ctx, 7*time.Second)
 	defer cancel()
 	release, err := m.acquireArchive(ctx, c.Address, archiveMaintenance)
 	if err != nil {
-		return "unavailable"
+		return "unavailable", noTarget
 	}
 	defer release()
 	e.mu.RLock()
 	slot := activeManagementSlot(e, c)
 	if slot == nil || slot.management.busy || slot.management.revision != cmd.ExpectedRevision || slot.snapshot.IntentRevisionID != intent {
 		e.mu.RUnlock()
-		return "stale"
+		return "stale", noTarget
 	}
 	payload, outcome := slot.management.payload(a, c, cmd, message)
 	session, raw := e.session, e.raw
 	e.mu.RUnlock()
 	if outcome != "" {
-		return outcome
+		return outcome, noTarget
 	}
 	name := cmd.Name
 	if cmd.Action == "rename" {
@@ -437,22 +442,22 @@ func (m *Manager) ManageRoom(ctx context.Context, a domain.Account, c domain.Con
 	if name != nil {
 		form, err := readArchiveIQ(ctx, e, session, c.Address, stanza.GetIQ, roomOwnerQuery)
 		if err != nil {
-			return roomIQOutcome(err, false)
+			return roomIQOutcome(err, false), noTarget
 		}
 		payload, err = roomConfigSubmit(form, *name, false)
 		if err != nil {
-			return "unsupported"
+			return "unsupported", noTarget
 		}
 	}
 	avatarAction := cmd.Action == "set_avatar" || cmd.Action == "remove_avatar"
 	if avatarAction {
 		card, err := readArchiveIQ(ctx, e, session, c.Address, stanza.GetIQ, roomVCardQuery)
 		if err != nil && !errors.Is(err, errArchiveCursor) {
-			return roomIQOutcome(err, false)
+			return roomIQOutcome(err, false), noTarget
 		}
 		payload, err = updateRoomVCard(card, cmd.Image)
 		if err != nil {
-			return "unsupported"
+			return "unsupported", noTarget
 		}
 	}
 	messageAction := cmd.Action == "topic" || cmd.Action == "invite"
@@ -464,7 +469,7 @@ func (m *Manager) ManageRoom(ctx context.Context, a domain.Account, c domain.Con
 	if activeManagementSlot(e, c) != slot || slot.management.busy || slot.management.revision != cmd.ExpectedRevision || slot.snapshot.IntentRevisionID != intent ||
 		!m.roomEntryCurrent(ctx, c.ID, intent, false) {
 		e.mu.Unlock()
-		return "stale"
+		return "stale", noTarget
 	}
 	// Recheck occupant identity after waiting for the provider and the IQ lane.
 	if !slot.management.allows(cmd) {
@@ -475,9 +480,17 @@ func (m *Manager) ManageRoom(ctx context.Context, a domain.Account, c domain.Con
 	if outcome != "" || ctx.Err() != nil {
 		e.mu.Unlock()
 		if outcome != "" {
-			return outcome
+			return outcome, noTarget
 		}
-		return "unavailable"
+		return "unavailable", noTarget
+	}
+	target := domain.RoomAffiliationTarget{}
+	if cmd.Action == "affiliation" {
+		target.Address = cmd.Target
+		if strings.HasPrefix(cmd.Target, "occupant:") {
+			occupant := slot.management.occupantByID(cmd.Target)
+			target.Address, target.Nickname = occupant.address, occupant.nickname
+		}
 	}
 	slot.management.revision = ""
 	slot.management.busy = true
@@ -492,19 +505,22 @@ func (m *Manager) ManageRoom(ctx context.Context, a domain.Account, c domain.Con
 		if cmd.Action == "invite" {
 			kind = stanza.NormalMessage
 		}
-		return sendRoomManagementMessage(ctx, session, raw, room, kind, payload)
+		return sendRoomManagementMessage(ctx, session, raw, room, kind, payload), noTarget
 	}
 	if avatarAction {
 		_, err := readArchiveIQ(ctx, e, session, c.Address, stanza.SetIQ, payload)
 		if err == nil {
 			m.queueAvatar(e, room, "", false)
 		}
-		return roomIQOutcome(err, true)
+		return roomIQOutcome(err, true), noTarget
 	}
 	if name != nil || cmd.Action != "update_details" {
 		_, err = readArchiveIQ(ctx, e, session, c.Address, stanza.SetIQ, payload)
+		if err == nil && target.Address != "" {
+			return "confirmed", target
+		}
 		if err != nil || name == nil {
-			return roomIQOutcome(err, true)
+			return roomIQOutcome(err, true), noTarget
 		}
 		e.mu.Lock()
 		if activeManagementSlot(e, c) == slot {
@@ -514,7 +530,7 @@ func (m *Manager) ManageRoom(ctx context.Context, a domain.Account, c domain.Con
 		e.mu.Unlock()
 	}
 	if cmd.Topic == nil {
-		return "confirmed"
+		return "confirmed", noTarget
 	}
 	e.sendMu.Lock()
 	defer e.sendMu.Unlock()
@@ -528,9 +544,9 @@ func (m *Manager) ManageRoom(ctx context.Context, a domain.Account, c domain.Con
 		outcome = "stale"
 	}
 	if outcome != "submitted" && name != nil {
-		return "name_confirmed"
+		return "name_confirmed", noTarget
 	}
-	return outcome
+	return outcome, noTarget
 }
 
 func sendRoomManagementMessage(ctx context.Context, session *mx.Session, raw net.Conn, room jid.JID, kind stanza.MessageType, payload string) string {

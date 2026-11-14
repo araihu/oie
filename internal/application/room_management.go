@@ -13,12 +13,13 @@ import (
 
 type RoomManagementProtocol interface {
 	RoomManagement(context.Context, domain.Account, domain.Conversation, string) (domain.RoomManagement, error)
-	ManageRoom(context.Context, domain.Account, domain.Conversation, domain.ID, domain.RoomManagementCommand, domain.Message) string
+	ManageRoom(context.Context, domain.Account, domain.Conversation, domain.ID, domain.RoomManagementCommand, domain.Message) (string, domain.RoomAffiliationTarget)
 }
 
 type RoomManagementRepository interface {
 	ClaimRoomManagement(context.Context, Operation, string) (string, error)
-	FinishRoomManagement(context.Context, Operation, string, string, domain.ID) error
+	FinishRoomManagement(context.Context, Operation, string, string, domain.ID, string, domain.RoomAffiliationTarget) error
+	RoomBannedNicknames(context.Context, domain.ID) (map[string]string, error)
 }
 
 const RoomManagementOperation = "manage_room"
@@ -65,6 +66,20 @@ func (e *Engine) RoomManagementForMessage(ctx context.Context, id domain.ID, aff
 		return out, nil
 	}
 	out, err = p.RoomManagement(ctx, a, c, affiliation)
+	if err == nil && affiliation == "outcast" && len(out.Affiliations) != 0 {
+		if repo, ok := e.repo.(RoomManagementRepository); ok {
+			names, err := repo.RoomBannedNicknames(ctx, id)
+			if err != nil {
+				return out, err
+			}
+			out.BannedNicknames = make(map[string]string)
+			for _, address := range out.Affiliations {
+				if nickname := names[address]; nickname != "" {
+					out.BannedNicknames[address] = nickname
+				}
+			}
+		}
+	}
 	if err != nil || messageID == "" || !slices.Contains(out.Actions, "moderate_message") {
 		return out, err
 	}
@@ -202,8 +217,9 @@ func (e *Engine) ManageRoom(ctx context.Context, key, id domain.ID, cmd domain.R
 	// Claim before the wire attempt. A crash or lost reply leaves the receipt
 	// uncertain, so replay can never repeat a provider mutation.
 	state = "stale"
+	var target domain.RoomAffiliationTarget
 	if intent, err := e.roomIntent(ctx, id); err == nil && intent.Active && intent.CreationName == nil {
-		state = p.ManageRoom(ctx, a, c, intent.IntentRevisionID, cmd, message)
+		state, target = p.ManageRoom(ctx, a, c, intent.IntentRevisionID, cmd, message)
 	}
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 	defer cancel()
@@ -221,7 +237,7 @@ func (e *Engine) ManageRoom(ctx context.Context, key, id domain.ID, cmd domain.R
 			return "unknown", nil
 		}
 	}
-	if err := repo.FinishRoomManagement(persist, op, state, name, revision); err != nil {
+	if err := repo.FinishRoomManagement(persist, op, state, name, revision, cmd.Value, target); err != nil {
 		return "unknown", nil
 	}
 	if name != "" {

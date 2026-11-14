@@ -21,12 +21,12 @@ func (p *managementHTTPProtocol) RoomManagement(context.Context, domain.Account,
 	return domain.RoomManagement{State: "available", Revision: "room-revision", Actions: []string{"topic"}, Affiliations: []string{}}, nil
 }
 
-func (p *managementHTTPProtocol) ManageRoom(_ context.Context, _ domain.Account, _ domain.Conversation, _ domain.ID, cmd domain.RoomManagementCommand, _ domain.Message) string {
+func (p *managementHTTPProtocol) ManageRoom(_ context.Context, _ domain.Account, _ domain.Conversation, _ domain.ID, cmd domain.RoomManagementCommand, _ domain.Message) (string, domain.RoomAffiliationTarget) {
 	if cmd.ExpectedRevision != "room-revision" {
-		return "stale"
+		return "stale", domain.RoomAffiliationTarget{}
 	}
 	p.commands.Add(1)
-	return "submitted"
+	return "submitted", domain.RoomAffiliationTarget{}
 }
 
 func TestRoomManagementHTTPReplayAndScope(t *testing.T) {

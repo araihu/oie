@@ -1,6 +1,7 @@
 package web
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"fmt"
 	"slices"
@@ -159,7 +160,7 @@ templ roomManagementBans(v view, state engineapi.RoomManagement, bansLoaded bool
 		</footer>
 	</div>
 	for _, address := range state.Affiliations {
-		@roomBannedDetails(v, *state.Revision, address)
+		@roomBannedDetails(v, *state.Revision, address, roomBanNickname(state, address))
 	}
 }
 
@@ -181,7 +182,8 @@ templ roomBanList(v view, state engineapi.RoomManagement, bansLoaded bool) {
 			} else {
 				<ul class="oie-room-addresses" aria-label={ v.Text.RoomBannedAddresses }>
 					for _, address := range state.Affiliations {
-						@roomMemberRow(roomBannedID(address), address, address, roomBannedAvatar(v, address, avatar.SizeXS))
+						{{ nickname := roomBanNickname(state, address) }}
+						@roomMemberRow(roomBannedID(address), cmp.Or(nickname, address), nickname + " " + address, roomBannedAvatar(v, address, cmp.Or(nickname, address), avatar.SizeXS))
 					}
 				</ul>
 				<p data-room-list-no-results role="status" hidden>{ v.Text.RoomNoMatchingBans }</p>
@@ -196,26 +198,37 @@ func roomBannedID(address string) string {
 	return fmt.Sprintf("room-banned-%x", sha256.Sum256([]byte(address)))
 }
 
-templ roomBannedAvatar(v view, address string, size avatar.Size) {
+func roomBanNickname(state engineapi.RoomManagement, address string) string {
+	if state.BannedNicknames != nil {
+		return (*state.BannedNicknames)[address]
+	}
+	return ""
+}
+
+templ roomBannedAvatar(v view, address, name string, size avatar.Size) {
 	<div class="oie-room-participant-avatar" aria-hidden="true">
-		@profileAvatar(v, v.Selected.AccountId, address, avatar.Config{Name: address, Size: size})
+		@profileAvatar(v, v.Selected.AccountId, address, avatar.Config{Name: name, Size: size})
 	</div>
 }
 
-templ roomBannedDetails(v view, revision, address string) {
+templ roomBannedDetails(v view, revision, address, nickname string) {
 	{{ id := roomBannedID(address) }}
+	{{ name := cmp.Or(nickname, address) }}
 	<section id={ id + "-details" } class="oie-room-participant-details" aria-labelledby={ id + "-name" } data-room-participant-detail={ id } hidden>
 		@roomParticipantBack(v.Text.RoomBans, v.Text.RoomBackToBans)
 		<header class="oie-room-participant-profile">
-			@roomBannedAvatar(v, address, avatar.SizeLG)
-			<h3 id={ id + "-name" } tabindex="-1">{ address }</h3>
+			@roomBannedAvatar(v, address, name, avatar.SizeLG)
+			<h3 id={ id + "-name" } tabindex="-1">{ name }</h3>
+			if name != address {
+				<p>{ address }</p>
+			}
 			<p>{ v.Text.RoomAffiliationOutcast }</p>
 		</header>
 		<div class="oie-room-participant-actions">
 			<h4>{ roomOptionLabel(v.Text, "affiliation") }</h4>
 			{{ unbanIcon := appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsCheckBadge16SolidCheckBadge, Decorative: true, RootClass: "oie-icon"}) }}
 			{{ action := roomParticipantAction{"affiliation", "none", v.Text.RoomUnban, unbanIcon, button.ToneSuccess} }}
-			@roomParticipantActionControl(v, revision, id, address, action, strings.ReplaceAll(v.Text.RoomUnbanConfirm, "{address}", address))
+			@roomParticipantActionControl(v, revision, id, address, action, strings.ReplaceAll(v.Text.RoomUnbanConfirm, "{address}", name))
 		</div>
 	</section>
 }

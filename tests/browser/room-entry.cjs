@@ -67,13 +67,14 @@ async function apiHandler(req, res) {
       return send(200, {state:'available', revision:managementRevision,
         actions:managementBlocked ? ['invite'] : ['rename','topic','invite','role','affiliation','set_avatar','remove_avatar'],
         occupants:[
-          {id:'occupant:reader',nickname:'Leitora',role:'participant',affiliation:'none',avatarHash,roles:['none','visitor','moderator'],affiliations:['member','outcast']},
+          {id:'occupant:reader',nickname:'Leitora',role:'participant',affiliation:'member',avatarHash,roles:['none','visitor','moderator'],affiliations:['outcast']},
           {id:'occupant:visitor',nickname:'Visitante',role:'visitor',affiliation:'none',roles:[],affiliations:[]},
           {id:'self',self:true,nickname:'Marina',role:'moderator',affiliation:'owner',roles:[],affiliations:[]},
           {id:'occupant:admin',nickname:'Helena',role:'moderator',affiliation:'admin',roles:[],affiliations:[]},
           {id:'occupant:moderator',nickname:'Lucas',role:'moderator',affiliation:'member',roles:[],affiliations:[]},
         ].filter(occupant => occupant.id !== 'occupant:reader' || !bannedAddresses.has(readerAddress)),
-        affiliations:u.searchParams.get('affiliation') === 'outcast' ? [...bannedAddresses] : []});
+        affiliations:u.searchParams.get('affiliation') === 'outcast' ? [...bannedAddresses] : [],
+        bannedNicknames:u.searchParams.get('affiliation') === 'outcast' && bannedAddresses.has(readerAddress) ? {[readerAddress]:'Leitora'} : undefined});
     }
     let data = '';
     for await (const chunk of req) data += chunk;
@@ -352,7 +353,7 @@ async function waitFor(predicate) {
       const profile = management.getByRole('region',{name:'Leitora',exact:true});
       await profile.getByRole('heading',{name:'Leitora',exact:true}).waitFor();
       assert.equal(await profile.getByRole('button',{name:'Tornar moderador',exact:true}).isVisible(),true);
-      assert.equal(await profile.getByRole('button',{name:'Tornar membro',exact:true}).isVisible(),true);
+      assert.equal(await profile.getByRole('button',{name:'Banir da sala',exact:true}).isVisible(),true);
       assert.equal(await participant.isVisible(),false);
       assert.equal(await search.isVisible(),false);
       await page.keyboard.press('Escape');
@@ -615,7 +616,15 @@ async function waitFor(predicate) {
     assert.equal(managementCommands.at(-1).target,'occupant:reader');
     assert.equal(managementCommands.at(-1).value,'outcast');
     await bansTab.click();
-    await roomPanel.getByRole('button',{name:readerAddress,exact:true}).waitFor();
+    const bannedReader = roomPanel.getByRole('button',{name:'Leitora',exact:true});
+    await bannedReader.waitFor();
+    await banSearch.fill('leitora');
+    assert.equal(await bansList.locator('li:visible').count(),1);
+    await banSearch.fill(readerAddress);
+    await bannedReader.click();
+    const bannedReaderProfile = roomPanel.getByRole('region',{name:'Leitora',exact:true});
+    await bannedReaderProfile.getByText(readerAddress,{exact:true}).waitFor();
+    await bannedReaderProfile.getByRole('button',{name:'Voltar para banimentos'}).click();
     await roomPanel.getByRole('tab',{name:'Participantes',exact:true}).click();
     assert.equal(await roomPanel.locator('#room-participant-results').getByRole('button',{name:'Leitora',exact:true}).count(),0);
     assert.equal(managementCommands.length,beforeBan+2);

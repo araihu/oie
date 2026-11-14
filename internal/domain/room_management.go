@@ -7,6 +7,11 @@ type RoomManagement struct {
 	Actions         []string
 	Occupants       []RoomManagedOccupant
 	Affiliations    []string
+	BannedNicknames map[string]string
+}
+
+type RoomAffiliationTarget struct {
+	Address, Nickname string
 }
 
 type RoomManagedOccupant struct {

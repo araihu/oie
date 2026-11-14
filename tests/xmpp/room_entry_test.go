@@ -335,11 +335,12 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitRoom(joinedBob.Conversation.ID, "joined")
+	manage(created.Conversation.ID, "affiliation", "bob@localhost", "member", "confirmed")
 	var rejoinedReader string
 	eventually(t, func() bool {
 		info, err := engine.RoomManagement(ctx, created.Conversation.ID, "")
 		for _, occupant := range info.Occupants {
-			if occupant.Nickname == "Reader" && occupant.ID != reader && slices.Contains(occupant.Affiliations, "outcast") {
+			if occupant.Nickname == "Reader" && occupant.ID != reader && occupant.Affiliation == "member" && slices.Contains(occupant.Affiliations, "outcast") {
 				rejoinedReader = occupant.ID
 			}
 		}
@@ -347,10 +348,14 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 	})
 	manage(created.Conversation.ID, "affiliation", rejoinedReader, "outcast", "confirmed")
 	bans, err := engine.RoomManagement(ctx, created.Conversation.ID, "outcast")
-	if err != nil || !slices.Contains(bans.Affiliations, "bob@localhost") {
+	if err != nil || !slices.Contains(bans.Affiliations, "bob@localhost") || bans.BannedNicknames["bob@localhost"] != "Reader" {
 		t.Fatalf("ban list: %+v %v", bans, err)
 	}
 	manage(created.Conversation.ID, "affiliation", "bob@localhost", "none", "confirmed")
+	names, err := store.RoomBannedNicknames(ctx, created.Conversation.ID)
+	if err != nil || len(names) != 0 {
+		t.Fatalf("nickname after lifting ban: %+v %v", names, err)
+	}
 	if _, err := engine.OpenRoom(ctx, id(), bob, address, "Reader", "", false); err != nil {
 		t.Fatal(err)
 	}

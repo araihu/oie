@@ -5537,6 +5537,10 @@ components:
           type: array
           description: Only addresses returned by the explicitly requested provider list.
           items: {type: string}
+        bannedNicknames:
+          type: object
+          description: Room nicknames observed when this account banned participants by their presence, keyed by addresses still returned by the room's ban list.
+          additionalProperties: {type: string}
       example:
         state: not_joined
         actions: []

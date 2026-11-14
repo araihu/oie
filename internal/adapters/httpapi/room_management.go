@@ -23,6 +23,9 @@ func (s *Server) GetRoomManagement(ctx context.Context, r engineapi.GetRoomManag
 		Occupants:    make([]engineapi.RoomManagedOccupant, 0, len(data.Occupants)),
 		Affiliations: data.Affiliations,
 	}
+	if len(data.BannedNicknames) > 0 {
+		out.BannedNicknames = &data.BannedNicknames
+	}
 	for _, item := range data.Occupants {
 		occupant := engineapi.RoomManagedOccupant{
 			Id: item.ID, Nickname: item.Nickname, Role: engineapi.RoomRole(item.Role), Affiliation: engineapi.RoomAffiliation(item.Affiliation),

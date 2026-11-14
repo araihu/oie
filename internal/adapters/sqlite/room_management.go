@@ -27,7 +27,7 @@ func (s *Store) ClaimRoomManagement(ctx context.Context, op application.Operatio
 	return "", tx.Commit()
 }
 
-func (s *Store) FinishRoomManagement(ctx context.Context, op application.Operation, state, name string, revision domain.ID) error {
+func (s *Store) FinishRoomManagement(ctx context.Context, op application.Operation, state, name string, revision domain.ID, affiliation string, target domain.RoomAffiliationTarget) error {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
 		return err
@@ -37,6 +37,20 @@ func (s *Store) FinishRoomManagement(ctx context.Context, op application.Operati
 		ID: string(op.ID), ResourceID: string(op.ResourceID), Result: jsonText(state),
 	}); err != nil {
 		return err
+	}
+	if state == "confirmed" && target.Address != "" {
+		if affiliation == "outcast" && target.Nickname != "" {
+			err = q.PutRoomBannedNickname(ctx, dbgen.PutRoomBannedNicknameParams{
+				ConversationID: string(op.ResourceID), Address: target.Address, Nickname: target.Nickname,
+			})
+		} else {
+			err = q.RemoveRoomBannedNickname(ctx, dbgen.RemoveRoomBannedNicknameParams{
+				ConversationID: string(op.ResourceID), Address: target.Address,
+			})
+		}
+		if err != nil {
+			return err
+		}
 	}
 	if name != "" {
 		row, err := q.GetConversation(ctx, string(op.ResourceID))
@@ -56,4 +70,16 @@ func (s *Store) FinishRoomManagement(ctx context.Context, op application.Operati
 		}
 	}
 	return tx.Commit()
+}
+
+func (s *Store) RoomBannedNicknames(ctx context.Context, id domain.ID) (map[string]string, error) {
+	rows, err := s.read.ListRoomBannedNicknames(ctx, string(id))
+	if err != nil {
+		return nil, err
+	}
+	names := make(map[string]string, len(rows))
+	for _, row := range rows {
+		names[row.Address] = row.Nickname
+	}
+	return names, nil
 }

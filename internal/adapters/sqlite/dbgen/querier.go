@@ -125,6 +125,7 @@ type Querier interface {
 	ListMessagesAfter(ctx context.Context, arg ListMessagesAfterParams) ([]Message, error)
 	ListPreviewSources(ctx context.Context, messageIds string) ([]ListPreviewSourcesRow, error)
 	ListRoomArchiveConversations(ctx context.Context, accountID string) ([]Conversation, error)
+	ListRoomBannedNicknames(ctx context.Context, conversationID string) ([]ListRoomBannedNicknamesRow, error)
 	ListRoomIntents(ctx context.Context) ([]RoomIntent, error)
 	ListScheduledMessages(ctx context.Context, arg ListScheduledMessagesParams) ([]ListScheduledMessagesRow, error)
 	// The catalog and a bounded timeline use different driving indexes.
@@ -154,6 +155,7 @@ type Querier interface {
 	PutMessageStar(ctx context.Context, arg PutMessageStarParams) error
 	PutRoomArchiveMode(ctx context.Context, arg PutRoomArchiveModeParams) error
 	PutRoomArchiveProgress(ctx context.Context, arg PutRoomArchiveProgressParams) error
+	PutRoomBannedNickname(ctx context.Context, arg PutRoomBannedNicknameParams) error
 	PutRoomIntent(ctx context.Context, arg PutRoomIntentParams) error
 	PutSharedContent(ctx context.Context, arg PutSharedContentParams) error
 	ReactionActorProfile(ctx context.Context, arg ReactionActorProfileParams) (ReactionActorProfileRow, error)
@@ -163,6 +165,7 @@ type Querier interface {
 	ReconcileReactionObservation(ctx context.Context, arg ReconcileReactionObservationParams) error
 	RecordOriginalTransmission(ctx context.Context, id string) error
 	RemoveModeratedSharedContent(ctx context.Context, messageID string) error
+	RemoveRoomBannedNickname(ctx context.Context, arg RemoveRoomBannedNicknameParams) error
 	ResetAllRoomReactionPrivacy(ctx context.Context) error
 	ResetRoomReactionPrivacy(ctx context.Context, accountID string) error
 	ResolveMessageAlias(ctx context.Context, aliasID string) (string, error)

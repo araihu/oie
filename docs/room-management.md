@@ -11,7 +11,9 @@ the participant's role, affiliation, and the actions available to your account.
 Photos use the identity disclosed to this account by the room. An unavailable
 photo shows initials.
 Administrators and owners use **Bans** to consult bans, ban an address or
-lift a ban.
+lift a ban. A ban made from a participant's profile appears under the nickname
+used in the room at that moment. Search by nickname or address. The profile
+shows the address used for the ban.
 A room can omit personal addresses even when it publishes nicknames.
 
 Room creation keeps the service's defaults with persistence enabled. Enter an

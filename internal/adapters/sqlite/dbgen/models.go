@@ -323,6 +323,12 @@ type RoomArchive struct {
 	Progress       string
 }
 
+type RoomBanNickname struct {
+	ConversationID string
+	Address        string
+	Nickname       string
+}
+
 type RoomIntent struct {
 	ConversationID         string
 	AccountID              string
