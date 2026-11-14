@@ -17,22 +17,20 @@ import (
 )
 
 templ scheduledWorkspace(v view) {
-	<section id="workspace" class="oie-schedule-workspace" aria-label={v.Text.Scheduled}>
-		<div class="oie-agenda">
-			<header class="oie-agenda-header">
-				<div class="oie-agenda-title">
-					@navigationControl(v)
-					<h1>{v.Text.Scheduled}</h1>
-				</div>
-				if v.SchedulePage != nil && !v.ScheduleUnavailable && !v.Unavailable {
-					<form method="get" action="/" class="oie-schedule-filter" data-schedule-filter data-filter-unavailable={v.Text.ScheduleUnavailable}>
-						<input type="hidden" name="section" value="scheduled"/>
-						<input type="hidden" name="lang" value={v.Locale}/>
-						<input type="hidden" name="theme" value={v.Theme}/>
-						@scheduleConversationFilter(v)
-					</form>
-				}
-			</header>
+	<section id="workspace" class="oie-shared-workspace oie-schedule-workspace" aria-labelledby="scheduled-heading">
+		<header class="oie-shared-header">
+			@navigationControl(v)
+			<h1 id="scheduled-heading">{v.Text.Scheduled}</h1>
+		</header>
+		if v.SchedulePage != nil && !v.ScheduleUnavailable && !v.Unavailable {
+			<form method="get" action="/" class="oie-shared-search oie-schedule-filter" data-schedule-filter data-filter-unavailable={v.Text.ScheduleUnavailable}>
+				<input type="hidden" name="section" value="scheduled"/>
+				<input type="hidden" name="lang" value={v.Locale}/>
+				<input type="hidden" name="theme" value={v.Theme}/>
+				@scheduleConversationFilter(v)
+			</form>
+		}
+		<div class="oie-shared-results-inset">
 			if v.ScheduleUnavailable || v.Unavailable {
 				<div class="oie-agenda-empty">
 					<p role="status">{v.Text.ScheduleUnavailable}</p>
@@ -120,7 +118,7 @@ templ scheduledAgenda(v view, inDrawer bool) {
 			<p>{v.Text.ScheduleEmpty}</p>
 		</div>
 	} else {
-		<ul class="oie-schedule-list" data-schedule-agenda>
+		<ul class="oie-schedule-list" role="list" data-schedule-agenda>
 			{{ previousDay := "" }}
 			for _, item := range v.SchedulePage.Items {
 				{{ day := agendaDate(item.Message.ScheduledAt,"2006-01-02") }}
@@ -132,7 +130,7 @@ templ scheduledAgenda(v view, inDrawer bool) {
 }
 
 templ scheduledRow(v view,item engineapi.ScheduledMessageItem, sameDay,inDrawer bool) {
-	<li class="oie-schedule-row" data-scheduled-row={item.Message.Id}>
+	<li class="oie-schedule-row" role="listitem" data-scheduled-row={item.Message.Id}>
 		<h2 class="oie-agenda-day" hidden?={sameDay}>
 			<time data-scheduled-day datetime={scheduleDate(item.Message.ScheduledAt)}>{agendaDate(item.Message.ScheduledAt,"2006-01-02")}</time>
 		</h2>

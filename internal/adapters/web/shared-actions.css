@@ -17,6 +17,6 @@
 .oie-shared-source{margin-top:0}
 
 /* Preserve the shared-content viewport while category results change. */
-#shared-content-scroll{scrollbar-gutter:stable;transition:opacity 75ms ease;opacity:1}
+#shared-content-scroll{transition:opacity 75ms ease;opacity:1}
 #shared-content-scroll.htmx-swapping{opacity:0}
 @media(prefers-reduced-motion:reduce){#shared-content-scroll{transition:none}}
