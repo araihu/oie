@@ -12,15 +12,20 @@ import (
 	"time"
 
 	"github.com/araihu/goshtoso/components/dropdown"
-	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/adapters/web/appicons"
 )
 
 //go:embed forwarding.js
 var forwardingScript []byte
 
 func forwardAction(v view, prefix, id string) dropdown.Item {
-	return dropdown.Item{ID: "forward-message-" + prefix + id, Label: v.Text.Forward, Icon: glyph(heroicons.Icon16SolidArrowTopRightOnSquare), OnClick: "void 0"}
+	return dropdown.Item{
+		ID:      "forward-message-" + prefix + id,
+		Label:   v.Text.Forward,
+		Icon:    appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsForward16SolidArrowUturnRight, Decorative: true, RootClass: "oie-icon"}),
+		OnClick: "void 0",
+	}
 }
 
 func (s *Server) prepareForward(w http.ResponseWriter, r *http.Request) {
