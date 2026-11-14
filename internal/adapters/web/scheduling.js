@@ -379,6 +379,12 @@ window.OieRuntime.register('scheduling', life => {
     const template = attachments.querySelector('template');
     const attachTrigger = composer.querySelector('[data-attach-menu]');
     const pending = new Map();
+    const videos = new Map();
+    const playerDialog = attachments.querySelector('[data-draft-video-dialog]');
+    const player = playerDialog.querySelector('video');
+    const playbackError = playerDialog.querySelector('[data-draft-video-error]');
+    const maxFileSize = 20 * 1024 * 1024;
+    let currentVideo, playerURL, playback, previewing;
     const selectionOrder = new Map();
     let sequence = 0;
     let dragDepth = 0;
@@ -390,7 +396,7 @@ window.OieRuntime.register('scheduling', life => {
     function renderFiles() {
       const active = document.activeElement;
       const focused = active?.closest('[data-draft-attachment]');
-      const action = ['data-file-download', 'data-retry-attachment', 'data-remove-attachment']
+      const action = ['data-file-download', 'data-draft-video-play', 'data-retry-attachment', 'data-remove-attachment']
         .find(attribute => active?.hasAttribute(attribute));
       items.replaceChildren();
       attachments.hidden = !files.length && !pending.size;
@@ -410,8 +416,16 @@ window.OieRuntime.register('scheduling', life => {
           download.hidden = false;
           name.hidden = true;
         }
-        const thumbnail = row.querySelector('img');
-        const source = file.file ? file.thumbnail : raster(file.mediaType) ? fileURL(file.id) : '';
+        const thumbnail = row.querySelector('[data-draft-thumbnail]');
+        const draftVideo = videos.get(file.id);
+        if (draftVideo) {
+          row.dataset.draftVideo = '';
+          const play = row.querySelector('[data-draft-video-play]');
+          play.hidden = false;
+          play.setAttribute('aria-label', labels.videoPlayLabel + ' · ' + file.fileName);
+          play.title = labels.videoPlayLabel;
+        }
+        const source = draftVideo?.poster || (file.file ? file.thumbnail : raster(file.mediaType) ? fileURL(file.id) : '');
         if (source) {
           thumbnail.src = source;
           thumbnail.hidden = false;
@@ -449,8 +463,119 @@ window.OieRuntime.register('scheduling', life => {
     function syncPending() {
       composer.toggleAttribute('data-attachments-pending', pending.size > 0 || !!nativeSelection);
       composer.dispatchEvent(new Event('oie:attachment-staging'));
+      syncVideos();
       renderFiles();
     }
+
+    function draftVideoType(file) {
+      const type = file.file?.type || file.mediaType;
+      if (type && type !== 'application/octet-stream') return type.startsWith('video/') ? type : '';
+      const extension = file.fileName.match(/\.([a-z0-9]+)$/i)?.[1].toLowerCase();
+      return ({mp4:'video/mp4', m4v:'video/mp4', mov:'video/quicktime', webm:'video/webm',
+        ogv:'video/ogg', mkv:'video/x-matroska', avi:'video/x-msvideo'})[extension] || '';
+    }
+
+    async function videoBlob(entry, signal) {
+      if (entry.file) return entry.file;
+      const {boundedVideoBlob} = await import('/ui/video-frames.js');
+      const response = await life.fetch(fileURL(entry.id), {signal, cache:'no-store'});
+      return boundedVideoBlob(response, maxFileSize, entry.type, signal);
+    }
+
+    function syncVideos() {
+      const retained = new Set();
+      for (const file of [...files, ...pending.values()]) {
+        const type = draftVideoType(file);
+        if (!type) continue;
+        retained.add(file.id);
+        if (!videos.has(file.id)) videos.set(file.id, {id:file.id, name:file.fileName, type, file:file.file});
+      }
+      for (const [id, entry] of videos) {
+        if (retained.has(id)) continue;
+        if (entry === currentVideo) closeVideo();
+        if (previewing?.entry === entry) previewing.controller.abort();
+        if (entry.poster) URL.revokeObjectURL(entry.poster);
+        videos.delete(id);
+      }
+      previewNext();
+    }
+
+    function previewNext() {
+      if (previewing || life.signal.aborted) return;
+      const entry = [...videos.values()].find(item => !item.attempted);
+      if (!entry) return;
+      entry.attempted = true;
+      const controller = new AbortController();
+      previewing = {entry, controller};
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      void (async () => {
+        try {
+          const {videoFrame} = await import('/ui/video-frames.js');
+          const blob = await videoFrame(await videoBlob(entry, controller.signal), {signal:controller.signal, maxSide:160});
+          if (controller.signal.aborted || videos.get(entry.id) !== entry) return;
+          entry.poster = URL.createObjectURL(blob);
+          const thumbnail = items.querySelector('[data-draft-attachment="' + CSS.escape(entry.id) + '"] [data-draft-thumbnail]');
+          if (thumbnail) {
+            thumbnail.src = entry.poster;
+            thumbnail.hidden = false;
+          }
+        } catch {
+          // Thumbnail generation is independent of staging and playback.
+        } finally {
+          clearTimeout(timeout);
+          if (!pending.has(entry.id)) delete entry.file;
+          previewing = null;
+          previewNext();
+        }
+      })();
+    }
+
+    function closeVideo(restoreFocus = true) {
+      if (!currentVideo) return;
+      const id = currentVideo.id;
+      currentVideo = null;
+      playback?.abort();
+      player.pause();
+      player.removeAttribute('src');
+      player.load();
+      if (playerURL) URL.revokeObjectURL(playerURL);
+      playerURL = '';
+      if (playerDialog.open) playerDialog.close();
+      if (restoreFocus) {
+        const play = items.querySelector('[data-draft-attachment="' + CSS.escape(id) + '"] [data-draft-video-play]');
+        (play || input).focus({preventScroll:true});
+      }
+    }
+
+    async function playVideo(entry) {
+      if (!entry || currentVideo) return;
+      currentVideo = entry;
+      playback = new AbortController();
+      const {signal} = playback;
+      playbackError.hidden = true;
+      playerDialog.querySelector('[data-draft-video-title]').textContent = entry.name;
+      playerDialog.showModal();
+      const timeout = setTimeout(() => playback?.signal === signal && playback.abort(), 12000);
+      try {
+        const file = await videoBlob(entry, signal);
+        signal.throwIfAborted();
+        playerURL = URL.createObjectURL(file);
+        player.src = playerURL;
+        await player.play();
+      } catch (error) {
+        if (currentVideo === entry && playback.signal === signal && error.name !== 'NotAllowedError') {
+          playbackError.hidden = false;
+        }
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    life.on(playerDialog.querySelector('[data-draft-video-close]'), 'click', () => closeVideo());
+    life.on(playerDialog, 'cancel', event => { event.preventDefault(); closeVideo(); });
+    life.on(playerDialog, 'close', () => { if (!playerDialog.open) closeVideo(); });
+    life.on(player, 'error', () => { if (currentVideo) playbackError.hidden = false; });
+    life.on(window, 'pagehide', () => closeVideo(false));
 
     function forget(file) {
       file.request?.abort();
@@ -499,6 +624,8 @@ window.OieRuntime.register('scheduling', life => {
           throw Error('draft unavailable');
         }
         if (file.thumbnail) URL.revokeObjectURL(file.thumbnail);
+        const entry = videos.get(file.id);
+        if (entry?.attempted && previewing?.entry !== entry) delete entry.file;
       } catch {
         if (life.signal.aborted || pending.get(file.id) !== file) return;
         file.failed = true;
@@ -518,7 +645,7 @@ window.OieRuntime.register('scheduling', life => {
         errorToast(labels.unavailable);
         return;
       }
-      if (files.length + pending.size + picked.length > 16 || picked.some(file => file.size > 20 * 1024 * 1024)) {
+      if (files.length + pending.size + picked.length > 16 || picked.some(file => file.size > maxFileSize)) {
         errorToast(labels.limit);
         return;
       }
@@ -535,20 +662,29 @@ window.OieRuntime.register('scheduling', life => {
       stageNext();
     }
 
+    syncVideos();
     renderFiles();
     life.on(composer, 'oie:composer-attachments', event => {
       const changed = JSON.stringify(files) !== JSON.stringify(event.detail.files);
       files = event.detail.files;
       locked = event.detail.locked;
-      if (changed) renderFiles();
-      else syncAttachmentControls();
+      if (changed) {
+        syncVideos();
+        renderFiles();
+      } else syncAttachmentControls();
       stageNext();
     });
     function discardPending() {
       nativeSelection = null;
       for (const file of pending.values()) forget(file);
     }
-    life.cleanup(discardPending);
+    life.cleanup(() => {
+      discardPending();
+      closeVideo(false);
+      previewing?.controller.abort();
+      for (const entry of videos.values()) if (entry.poster) URL.revokeObjectURL(entry.poster);
+      videos.clear();
+    });
     life.on(composer, 'oie:attachment-draft-changing', () => {
       discardPending();
       selectionOrder.clear();
@@ -635,7 +771,12 @@ window.OieRuntime.register('scheduling', life => {
     life.on(items, 'click', event => {
       const button = event.target.closest('button');
       const id = button?.closest('[data-draft-attachment]')?.dataset.draftAttachment;
-      if (!id || locked || nativeSelection) return;
+      if (!id) return;
+      if (button.hasAttribute('data-draft-video-play')) {
+        void playVideo(videos.get(id));
+        return;
+      }
+      if (locked || nativeSelection) return;
       const file = pending.get(id);
       if (button.hasAttribute('data-retry-attachment')) {
         if (!file?.failed || !available()) return;

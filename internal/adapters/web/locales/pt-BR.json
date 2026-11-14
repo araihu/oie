@@ -67,7 +67,7 @@
   "ReactionRemove": "Remover reação",
 
   "AutoVideoThumbnails": "Gerar prévias de vídeo automaticamente",
-  "AutoVideoThumbnailsHelp": "Lê uma amostra limitada, de até 5 MiB por vídeo, para guardar uma prévia. A reprodução completa começa ao pressionar Play.",
+  "AutoVideoThumbnailsHelp": "Mostra uma imagem do vídeo quando disponível. Para assistir, selecione Reproduzir vídeo.",
   "VideoThumbnailLoad": "Carregar prévia do vídeo",
   "VideoThumbnailLoading": "Preparando prévia do vídeo…",
   "VideoThumbnailFailed": "Prévia indisponível. Você ainda pode reproduzir o vídeo.",

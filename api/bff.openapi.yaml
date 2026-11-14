@@ -306,6 +306,30 @@ paths:
         '404': {description: Resource unavailable}
         '409': {description: Engine or account changed}
         '503': {description: Engine unavailable}
+  /ui/shared-content/{id}/content:
+    get:
+      operationId: getBrowserSharedMedia
+      tags: [Messages]
+      summary: Stream an engine-scoped media item for playback or a bounded video preview
+      parameters:
+      - {name: id, in: path, required: true, description: Retained shared-content item., schema: {type: string, format: uuid}}
+      - {name: engineId, in: query, description: Expected engine identity., schema: {type: string, format: uuid}}
+      - {name: download, in: query, description: Save the original file., schema: {type: string, enum: ['1']}}
+      - name: preview
+        in: query
+        description: Requires engineId and excludes download. Returns at most the first 5 MiB of video.
+        schema: {type: string, enum: ['1']}
+      responses:
+        '200': {description: Complete media or small preview sample}
+        '206': {description: Partial media or bounded preview sample}
+        '400': {description: Invalid request}
+        '404': {description: Media not found}
+        '409': {description: Engine changed}
+        '415': {description: Unsupported media}
+        '416': {description: Unsatisfied range}
+        '422': {description: Preview sample unavailable within the video byte budget}
+        '502': {description: Invalid upstream response}
+        '503': {description: Media unavailable}
   /ui/api/v1/shared-content/{id}/thumbnail:
     parameters:
     - {in: path, name: id, required: true, description: Scoped resource identity., schema: {type: string, format: uuid}}

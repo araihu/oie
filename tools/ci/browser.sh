@@ -71,6 +71,7 @@ integration() {
   run_case link-fallbacks
   run_case video
   run_case video-thumbnails
+  run_case composer-video
   run_case documents
   run_case shared-search
   run_case message-search

@@ -19,7 +19,7 @@ func videoPoster(item engineapi.SharedContentItem) string {
 func videoThumbnailState(item engineapi.SharedContentItem) string {
 	p := videoThumbnailPreview(item)
 	if p == nil {
-		return ""
+		return "not_requested"
 	}
 	return string(p.State)
 }

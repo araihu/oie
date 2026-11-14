@@ -3,7 +3,8 @@
 Use the plus menu to pick an image or file. Pasting a file into the composer or
 dropping it on the chat pane also adds it directly to the draft. The message box
 holds the caption. Each attachment can be removed individually, and supported
-images have a thumbnail in the draft. Previews wrap onto new rows when space
+images and videos have a thumbnail in the draft. Select the play button on a
+video to watch it before sending. Previews wrap onto new rows when space
 is limited. Use the composer to send or schedule
 the message. Flatpak opens the native chooser for both menu entries. Click a
 staged filename to download its original bytes. The desktop app opens the
@@ -26,6 +27,8 @@ Browser staging uses the existing conversation-scoped multipart endpoint. Files 
 one at a time, with a separate timeout for each request. Send and Schedule
 become available after all selected files finish staging or the user
 removes the remaining selections. Staged attachments survive a reload.
+Thumbnail extraction runs independently of staging and send eligibility.
+Unsupported video formats still have filename and removal controls.
 Unfinished file selections are held in the current view. The Flatpak chooser
 stages portal-granted files in the desktop process and returns the completed
 attachments to the active draft. A file whose request

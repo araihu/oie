@@ -249,7 +249,7 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.oie-draft-attachment:has(img[hidden]) :is([data-file-name], [data-file-download], [data-file-state]) { grid-column: 1 / 3; }
+.oie-draft-attachment:not([data-draft-video]):has(img[hidden]) :is([data-file-name], [data-file-download], [data-file-state]) { grid-column: 1 / 3; }
 .oie-draft-attachment [data-file-download] { grid-row: 1 / 3; }
 .oie-draft-attachment [data-file-state] {
   grid-area: 2 / 2;
@@ -260,6 +260,45 @@
 }
 .oie-draft-attachment [data-retry-attachment] { grid-area: 1 / 3 / 3 / 4; }
 .oie-draft-attachment [data-remove-attachment] { grid-area: 1 / 4 / 3 / 5; }
+.oie-draft-attachment [data-draft-video-play] {
+  grid-area: 1 / 1 / 3 / 2;
+  z-index: 1;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  min-inline-size: 0;
+  min-block-size: 0;
+  padding: .55rem;
+  background: #111a;
+  color: white;
+  border-radius: .25rem;
+}
+.oie-draft-attachment [data-draft-video-play]:hover {
+  background: #111d;
+  color: white;
+}
+.oie-draft-video-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  inline-size: min(42rem, calc(100vw - 2rem));
+  padding: .75rem;
+  border: 1px solid var(--oie-border);
+  border-radius: .75rem;
+  background: var(--oie-raised);
+  color: var(--oie-text);
+}
+.oie-draft-video-dialog::backdrop { background: #0009; }
+.oie-draft-video-dialog header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.oie-draft-video-dialog strong { overflow-wrap: anywhere; }
+.oie-draft-video-dialog video {
+  display: block;
+  inline-size: 100%;
+  aspect-ratio: 16 / 9;
+  max-block-size: 65dvh;
+  margin-block-start: .5rem;
+  object-fit: contain;
+  background: #111;
+}
 .oie-message-attachments[hidden] { display: none; }
 .oie-message-attachments a { min-inline-size: 0; overflow-wrap: anywhere; }
 .oie-message-attachments img {

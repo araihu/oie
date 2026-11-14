@@ -1,28 +1,45 @@
-# Video card previews
+# Video previews and playback
 
-The native engine queues static video thumbnails independently of playback. Catalog and conversation cards render a cached same-origin poster behind their centered circular play control. Native browser controls still receive the video source only after Play.
+The [accepted media requirements](oie-spec.md#8-media-and-downloaded-files)
+cover draft attachments and received video cards in direct chats and rooms.
+The same received-video cards appear in the Media catalog and conversation
+details. Video plays only after an explicit action.
 
-The API defines `GET` and `POST /api/v1/shared-content/{itemId}/thumbnail`. GET only ensures local metadata; POST reuses cached results or queues serial work. State is `not_requested`, `queued`, `ready`, or `unavailable`. Catalog items expose a separate optional `thumbnail` field, preserving the existing image/link `preview` contract. The BFF validates engine, source identities and CSRF for mutations. No operation accepts an arbitrary remote URL from the browser.
+## Draft attachments
 
-The engine prefers a retained HTTP(S) thumbnail from XMPP stateless file sharing (XEP-0447 with XEP-0446/0264 metadata) associated with a video URL in the message body. Only the first usable PNG/JPEG/GIF hint per source is retained, at most four hints per message. Retrieval uses the existing public-address/DNS/redirect policy, reads at most 1 MiB, and normalizes the image through the media store. CID/BoB, encrypted attachments, file-only messages without a body reference and other sharing envelopes remain outside this increment. This does not advertise full SFS/file-transfer support.
+The composer decodes the chosen browser File directly using an off-screen
+video element. A canvas captures a small JPEG near one second. Extraction and
+staging proceed independently. A fixed thumbnail slot holds the play control
+even if a still frame is unavailable. Native playback opens in a dialog.
+After a reload, or after selection through the Flatpak file chooser, the
+browser can regenerate the thumbnail from the conversation's staged file
+within the existing 20 MiB per-file limit. Removing the attachment, changing
+drafts or leaving the view releases the preview resources.
 
-Without a usable supplied image, optional `ffmpeg` on PATH (or `--ffmpeg /path/to/ffmpeg`) extracts a representative frame from a temporary sparse sample. A job lasts at most 15 seconds; each decode lasts at most five seconds. Reads are capped at a 4 MiB prefix and, if needed, a 1 MiB suffix. Disjoint samples require a matching strong ETag or Last-Modified validator. A server that ignores a suffix range is rejected without consuming the remainder. Small videos may fit entirely in the sample. The temporary sample is removed after processing; only the normalized image is cached outside SQLite.
+## Received video
 
-FFmpeg receives a local path, never the provider URL or credentials. Allowed containers/protocols, probing, threads, per-allocation size and output size are limited. Frames are at most 640 pixels wide and decoder output at most 1 MiB. These are execution and allocation limits, not a hard whole-process memory quota. MP4 metadata or the necessary video packets may fall outside the budget; unavailable previews retain ordinary playback and explicit retry. Missing FFmpeg does not prevent app startup or supplied-image previews. FFmpeg is an external optional executable, not an application module or linked dependency; deployers choose a distribution/build consistent with their licensing requirements.
+The card first uses a cached image, including posters created by older releases.
+The existing engine thumbnail API can retrieve a small image supplied with a
+video in XMPP stateless file sharing. It checks the current message reference
+and stores the normalized image. The engine uses its existing outbound HTTP
+policy and a 1 MiB image limit.
 
-The existing persisted preview queue/cache provides coalescing, restart recovery and content-hash media reuse. Video failures do not enter automatic timed retries. The worker checks the current canonical source before reading and again before publication; removed/replaced source references cannot publish stale frames. SQLite retains metadata and hashes, without a new schema migration or changes to existing data directories.
+When the engine has no usable image, the browser requests a sample through
+the same-origin media route. The BFF requests the first 5 MiB at most and
+rejects an oversized response before forwarding its body. It reuses the
+canonical media source, MIME checks and outbound network policy used for
+playback. A partial video can lack the needed metadata or frames. A different
+codec or container may also be unsupported by the browser or WebView. In
+both cases the card still offers Play and explicit thumbnail retry. Oiê
+does not invoke FFmpeg.
 
-The device-local “Video previews” setting defaults on and requests previews near the viewport. Turning it off leaves manual loading available. Existing queued jobs can still be polled and cached posters displayed. Neither mode loads or plays an original speculatively. Browser route disposal aborts pending UI fetches. Appending catalog pages preserves existing video players.
+The existing device setting controls automatic preview requests near the
+viewport. The browser runs at most two received preview jobs at a time. JPEGs
+are scoped to the engine, account, conversation, message revision and item.
+They use the shared bounded cache with device storage where available. Jobs
+stop when their cards leave the page. Original video playback keeps its
+existing same-origin streaming and range support.
 
-Verification covers real FFmpeg extraction from the local WebM fixture; read/validator limits; supplied metadata; API coalescing, source correction and queued restart recovery; BFF identity/CSRF validation; cached posters, manual opt-out, keyboard activation, mobile accessibility and explicit native playback. No real account or third-party video is needed for these checks.
-
-References: [XEP-0447](https://xmpp.org/extensions/xep-0447.html), [XEP-0446](https://xmpp.org/extensions/xep-0446.html), [XEP-0264](https://xmpp.org/extensions/xep-0264.html), [FFmpeg formats](https://ffmpeg.org/ffmpeg-formats.html), [FFmpeg filters](https://ffmpeg.org/ffmpeg-filters.html#thumbnail).
-
-## Local validation of this increment
-
-- `make check`: passed, including contract lint, generation checks, Go lint/vet, root/CLI tests and Compose validation. The host's storage quota required placing temporary build files under `/run/user/501`; no shared caches or data directories were deleted.
-- Dagger checks container: `make check test-race build build-cli`, followed by the mock engine build, completed without errors. The Dagger CLI remained stuck after the final `Container.stdout DONE` and was terminated during cleanup; a clean runner shutdown was not verified.
-- Browser fixtures `video-thumbnails.cjs`, `video.cjs`, `shared-actions.cjs` and `shared-content-scroll.cjs`: passed, including real native WebM playback, cached poster reuse, explicit/manual loading, mobile keyboard/axe checks and preservation through appended catalog pages.
-- Broader `fragment-navigation.cjs`: reached same-document sidebar and Back/Forward checks, then timed out at line 91 waiting for a new page after a Ctrl/middle-click gesture. The remainder of that fixture was not verified by this run. Navigation behavior was not changed to resolve that separate failure.
-
-The isolated live demonstration uses only the repository's tiny WebM fixture and its extracted frame; it does not demonstrate retrieval from a connected account or deploy these commits to the separate main-session engine.
+XMPP references: [XEP-0447](https://xmpp.org/extensions/xep-0447.html),
+[XEP-0446](https://xmpp.org/extensions/xep-0446.html),
+[XEP-0264](https://xmpp.org/extensions/xep-0264.html).

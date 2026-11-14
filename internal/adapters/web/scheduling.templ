@@ -304,12 +304,13 @@ templ composerAttachments(v view) {
 	<div data-composer-attachments class="oie-composer-attachments" hidden
 		data-failed={v.Text.AttachmentFailed} data-limit={v.Text.AttachmentLimit}
 		data-unavailable={v.Text.AttachmentUnavailable} data-remove-label={v.Text.RemoveAttachment}
-		data-preparing={v.Text.AttachmentPreparing} data-retry={v.Text.Retry}>
+		data-preparing={v.Text.AttachmentPreparing} data-retry={v.Text.Retry} data-video-play-label={v.Text.VideoPlay}>
 		<div data-attachment-items></div>
 		<span class="sr-only" data-attachment-status role="status"></span>
 		<template>
 			<div class="oie-draft-attachment">
-				<img alt="" width="40" height="40" loading="lazy" hidden/>
+				<img data-draft-thumbnail alt="" width="40" height="40" loading="lazy" hidden/>
+				@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-draft-video-play":"","hidden":true})) { @glyph(heroicons.Icon16SolidPlay) }
 				<span data-file-name dir="auto"></span>
 				<a data-file-download hidden></a>
 				<span data-file-state hidden></span>
@@ -317,6 +318,14 @@ templ composerAttachments(v view) {
 				@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-remove-attachment":""})) { @glyph(heroicons.Icon16SolidXMark) }
 			</div>
 		</template>
+		<dialog class="oie-draft-video-dialog" data-draft-video-dialog aria-label={v.Text.SharedVideo}>
+			<header>
+				<strong data-draft-video-title dir="auto"></strong>
+				@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-draft-video-close":"","aria-label":v.Text.Close})) { @glyph(heroicons.Icon16SolidXMark) }
+			</header>
+			<video controls playsinline preload="none" aria-label={v.Text.SharedVideo}></video>
+			<p data-draft-video-error role="status" hidden>{v.Text.VideoUnsupported}</p>
+		</dialog>
 	</div>
 }
 

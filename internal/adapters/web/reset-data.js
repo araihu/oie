@@ -28,6 +28,7 @@
       // Open cache connections close on versionchange. The deletion request
       // survives navigation and runs before a new tab can reopen this database.
       window.indexedDB?.deleteDatabase('oie.pdf-previews.v1');
+      window.indexedDB?.deleteDatabase('oie.video-previews.v1');
     } catch {}
     let destination = '/';
     if (confirmed) {

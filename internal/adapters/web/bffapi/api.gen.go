@@ -309,6 +309,36 @@ func (e GetBrowserMessageSenderParamsLang) Valid() bool {
 	}
 }
 
+// Defines values for GetBrowserSharedMediaParamsDownload.
+const (
+	GetBrowserSharedMediaParamsDownloadN1 GetBrowserSharedMediaParamsDownload = "1"
+)
+
+// Valid indicates whether the value is a known member of the GetBrowserSharedMediaParamsDownload enum.
+func (e GetBrowserSharedMediaParamsDownload) Valid() bool {
+	switch e {
+	case GetBrowserSharedMediaParamsDownloadN1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetBrowserSharedMediaParamsPreview.
+const (
+	GetBrowserSharedMediaParamsPreviewN1 GetBrowserSharedMediaParamsPreview = "1"
+)
+
+// Valid indicates whether the value is a known member of the GetBrowserSharedMediaParamsPreview enum.
+func (e GetBrowserSharedMediaParamsPreview) Valid() bool {
+	switch e {
+	case GetBrowserSharedMediaParamsPreviewN1:
+		return true
+	default:
+		return false
+	}
+}
+
 // BrowserEditIntent Frozen command, never a mutation of a pending original send.
 //
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","csrf":"browser-csrf-token","engineId":"019a5df0-0000-7000-8000-000000000001","expectedRevisionId":"019a5df0-0000-7000-8000-000000000005","messageId":"019a5df0-0000-7000-8000-000000000004","operationKey":"019a5df0-0000-7000-8000-000000000006","originalText":"Corrected text"}
@@ -1079,6 +1109,24 @@ type GetBrowserMessageSenderParams struct {
 
 // GetBrowserMessageSenderParamsLang defines parameters for GetBrowserMessageSender.
 type GetBrowserMessageSenderParamsLang string
+
+// GetBrowserSharedMediaParams defines parameters for GetBrowserSharedMedia.
+type GetBrowserSharedMediaParams struct {
+	// EngineId Expected engine identity.
+	EngineId *openapi_types.UUID `form:"engineId,omitempty" json:"engineId,omitempty"`
+
+	// Download Save the original file.
+	Download *GetBrowserSharedMediaParamsDownload `form:"download,omitempty" json:"download,omitempty"`
+
+	// Preview Requires engineId and excludes download. Returns at most the first 5 MiB of video.
+	Preview *GetBrowserSharedMediaParamsPreview `form:"preview,omitempty" json:"preview,omitempty"`
+}
+
+// GetBrowserSharedMediaParamsDownload defines parameters for GetBrowserSharedMedia.
+type GetBrowserSharedMediaParamsDownload string
+
+// GetBrowserSharedMediaParamsPreview defines parameters for GetBrowserSharedMedia.
+type GetBrowserSharedMediaParamsPreview string
 
 // MarkBrowserMessagesReadJSONRequestBody defines body for MarkBrowserMessagesRead for application/json ContentType.
 type MarkBrowserMessagesReadJSONRequestBody = externalRef0.MarkMessagesRead

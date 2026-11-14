@@ -67,7 +67,7 @@
   "ReactionRemove": "Remove reaction",
 
   "AutoVideoThumbnails": "Generate video previews automatically",
-  "AutoVideoThumbnailsHelp": "Reads a limited sample, up to 5 MiB per video, to cache a preview. Full playback still starts only when you press Play.",
+  "AutoVideoThumbnailsHelp": "Show a still image when available. Videos play when you select Play.",
   "VideoThumbnailLoad": "Load video preview",
   "VideoThumbnailLoading": "Preparing video preview…",
   "VideoThumbnailFailed": "Video preview unavailable. You can still play the video.",

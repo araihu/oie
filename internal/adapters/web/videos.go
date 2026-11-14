@@ -15,6 +15,8 @@ import (
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
+const videoSampleLimit = 5 << 20
+
 // A media source is a retained catalog identity, never a client-supplied URL.
 func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -31,12 +33,14 @@ func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
 	}
 	query := r.URL.Query()
 	for key, values := range query {
-		if key != "engineId" && key != "download" || len(values) != 1 {
+		if key != "engineId" && key != "download" && key != "preview" || len(values) != 1 {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	}
-	if query.Has("download") && query.Get("download") != "1" {
+	preview := query.Has("preview")
+	if query.Has("download") && query.Get("download") != "1" ||
+		preview && (query.Get("preview") != "1" || !query.Has("engineId") || query.Has("download")) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -56,14 +60,17 @@ func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	params := &engineapi.GetSharedContentMediaParams{}
-	if value := r.Header.Get("Range"); value != "" {
+	if preview {
+		value := "bytes=0-" + strconv.Itoa(videoSampleLimit-1)
+		params.Range = &value
+	} else if value := r.Header.Get("Range"); value != "" {
 		if len(value) > 128 {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		params.Range = &value
 	}
-	if value := r.Header.Get("If-Range"); value != "" {
+	if value := r.Header.Get("If-Range"); !preview && value != "" {
 		if len(value) > 1024 {
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -110,6 +117,11 @@ func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
 	}
 	if response.StatusCode == http.StatusPartialContent && !validSatisfiedVideoRange(response.Header.Get("Content-Range"), response.ContentLength, maximum) {
 		w.WriteHeader(http.StatusBadGateway)
+		return
+	}
+	if preview && (!videoMediaType(mediaType) || response.ContentLength == 0 || response.ContentLength > videoSampleLimit ||
+		response.StatusCode == http.StatusPartialContent && !strings.HasPrefix(response.Header.Get("Content-Range"), "bytes 0-")) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
 		return
 	}
 	w.Header().Set("Content-Type", mediaType)
