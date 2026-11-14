@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.31.0
+  version: 0.32.0
   description: >-
     Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
@@ -563,6 +563,38 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /api/v1/conversations/{conversationId}/messages/{messageId}/source-context:
+    parameters:
+    - $ref: '#/components/parameters/ConversationID'
+    - $ref: '#/components/parameters/MessageID'
+    get:
+      operationId: getMessageSourceContext
+      tags: [Messages]
+      x-cli-ignore: true
+      summary: Read the conversation and presentation data for a retained message jump
+      description: Returns the engine identity, owning conversation and a window of up to 16 visible messages around the source. Optional fields are scoped to that conversation and window. Missing optional fields represent unavailable data. Preview reads can register local preview metadata as on the corresponding preview endpoints. This operation does not fetch provider history or mark messages read.
+      responses:
+        '200':
+          description: Conversation, retained context and available presentation data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageSourceContext'
+              example:
+                engine: {id: '019a5df0-0000-7000-8000-000000000003', role: local, apiVersion: '0.32.0', eventCursor: '019a5df0-0000-7000-8000-000000000003:1'}
+                conversation: {id: '019a5df0-0000-7000-8000-000000000005', revisionId: '019a5df0-0000-7000-8000-000000000006', accountId: '019a5df0-0000-7000-8000-000000000002', address: 'bob@localhost', kind: direct, title: Bob, lastMessage: Hello, updatedAt: '2026-11-07T12:00:00Z', unreadCount: 0, archived: false, favorite: false}
+                context:
+                  targetId: '019a5df0-0000-7000-8000-000000000001'
+                  items:
+                  - {id: '019a5df0-0000-7000-8000-000000000001', revisionId: '019a5df0-0000-7000-8000-000000000004', accountId: '019a5df0-0000-7000-8000-000000000002', conversationId: '019a5df0-0000-7000-8000-000000000005', sender: {id: '019a5df0-0000-7000-8000-000000000007', displayName: Bob}, originalText: Hello, createdAt: '2026-11-07T12:00:00Z', isOwn: false, sendState: received}
+                  hasOlder: false
+                  hasNewer: false
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /api/v1/messages/{messageId}/star:
     parameters:
     - $ref: '#/components/parameters/MessageID'
@@ -1056,7 +1088,7 @@ paths:
               example:
                 id: 019a5df0-0000-7000-8000-000000000003
                 role: local
-                apiVersion: 0.31.0
+                apiVersion: 0.32.0
                 eventCursor: 019a5df0-0000-7000-8000-000000000003:1
         '503':
           $ref: '#/components/responses/Unavailable'
@@ -3248,7 +3280,7 @@ components:
       example:
         id: 019a5df0-0000-7000-8000-000000000003
         role: local
-        apiVersion: 0.31.0
+        apiVersion: 0.32.0
         eventCursor: 019a5df0-0000-7000-8000-000000000003:1
       additionalProperties: false
       required:
@@ -3275,6 +3307,7 @@ components:
           - 0.30.0
           - 0.30.1
           - 0.31.0
+          - 0.32.0
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -5106,6 +5139,51 @@ components:
         senderName: Bob
         excerpt: We should bake a cake.
         bodyText: Great idea!
+    MessageSourceContext:
+      type: object
+      description: Bounded navigation snapshot with optional metadata for the returned messages.
+      additionalProperties: false
+      required: [engine, conversation, context]
+      properties:
+        engine:
+          $ref: '#/components/schemas/Engine'
+        conversation:
+          $ref: '#/components/schemas/Conversation'
+        context:
+          $ref: '#/components/schemas/MessageContext'
+        details:
+          $ref: '#/components/schemas/ConversationDetails'
+        capabilities:
+          $ref: '#/components/schemas/Capabilities'
+        editTarget:
+          $ref: '#/components/schemas/MessageEditTarget'
+        roomSession:
+          $ref: '#/components/schemas/RoomSession'
+        roomArchive:
+          $ref: '#/components/schemas/RoomArchive'
+        previews:
+          type: array
+          example: []
+          items:
+            $ref: '#/components/schemas/MessagePreview'
+        videos:
+          type: array
+          maxItems: 48
+          example: []
+          items:
+            $ref: '#/components/schemas/SharedContentItem'
+        stars:
+          type: array
+          maxItems: 16
+          example: []
+          items:
+            $ref: '#/components/schemas/MessageStar'
+        reactions:
+          type: array
+          maxItems: 16
+          example: []
+          items:
+            $ref: '#/components/schemas/MessageReactions'
     MessageContext:
       type: object
       description: Bounded retained timeline window. Neighbor availability is relative to the returned extremes.

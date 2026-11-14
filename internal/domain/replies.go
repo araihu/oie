@@ -21,6 +21,10 @@ type MessageReply struct {
 	Available                     bool
 	SenderName, Excerpt, BodyText string
 }
+
+// SourceContextPageSize bounds the initial window for a shared-message jump.
+const SourceContextPageSize = 16
+
 type MessageContext struct {
 	RequestedTargetID  ID
 	TargetID           ID
