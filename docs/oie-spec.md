@@ -98,12 +98,8 @@ updates are deferred as B23.
 **AGREED:** the first macOS alpha ships without Developer ID signing or
 notarization.
 
-**AGREED:** FFmpeg remains an optional external dependency, installed separately.
-Its absence must not prevent installation or normal app startup. Locally
-generated video thumbnails require it; video playback remains independent and
-subject to the formats supported by the platform WebView. The installer can
-identify a missing optional FFmpeg executable and provide installation guidance,
-without downloading or installing it automatically.
+**AGREED:** video previews and playback use the browser or desktop WebView's
+media support. Oiê requires no FFmpeg executable for video previews.
 
 **RECOMMENDED:** retain any ad-hoc executable signing required by the native
 build tooling and document Apple's manual first-open procedure. The installer
@@ -611,7 +607,21 @@ Allow media sharing when effective protocol/server capabilities permit. Expose k
 
 Incoming images **download automatically as they enter view** by default, configurable per device. Turning automatic image downloads off keeps supplied small previews automatic and full originals on demand; in that mode, do not download an original merely to generate a thumbnail. Other file types keep small previews automatic and full files on demand.
 
-**AGREED:** video cards show a cached static frame behind a centered play control when a preview is available. Prefer a usable small thumbnail supplied with the source message; otherwise the native engine may extract a frame with an optional FFmpeg executable. Generation reads a bounded sample, never retains the original video, and does not start playback. Video preview requests are enabled by default near the viewport, with a per-device opt-out. Global and conversation media catalogs use a common responsive 4:3 preview frame for images and videos; playback preserves the full video within that frame. Manual load and failed-preview retry actions belong in the shared card actions menu. Failed extraction remains explicit and does not trigger repeated automatic retries. Failure leaves playback usable and retry explicit. Preview cache retention and quotas remain open under O09.
+**AGREED:** show a static thumbnail for a supported video attached to a draft.
+Generate it in the browser from the chosen file, independently of staging.
+A missing thumbnail leaves the filename, removal and send actions available.
+The draft offers explicit playback without sending the message.
+
+**AGREED:** received video cards in direct conversations and rooms show a static
+frame behind the play control when available. Prefer a cached or supplied
+thumbnail. For other videos the browser may read a bounded sample through Oiê's
+same-origin media route and extract a frame. The engine does not run a video
+decoder. Video previews remain automatic near the viewport unless disabled on
+the device. Opening a card or loading a preview never starts playback. Use
+native controls for playback after Play, even when extraction fails. Keep
+failed-preview retry explicit. Global and conversation media catalogs keep
+their responsive 4:3 preview frames. Preview cache retention and quotas remain
+open under O09.
 
 Downloaded-file retention is configurable per device and defaults to **retain until explicit deletion**. The PWA's evictable message cache is a separate policy; it does not silently authorize downloaded-original eviction.
 
