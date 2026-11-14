@@ -127,7 +127,7 @@ func readEditCandidate(ctx context.Context, q *dbgen.Queries, id domain.ID, conv
 }
 
 func (s *Store) ReadMessageEditTarget(ctx context.Context, id domain.ID, conversation bool) (application.MessageEditCandidate, error) {
-	tx, q, err := begin(ctx, s)
+	tx, q, err := beginRead(ctx, s)
 	if err != nil {
 		return application.MessageEditCandidate{}, err
 	}

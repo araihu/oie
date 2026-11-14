@@ -83,7 +83,7 @@ func (s *Store) IndexSharedContent(ctx context.Context, batch []domain.SharedCon
 }
 func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQuery) (domain.SharedContentPage, error) {
 	page := domain.SharedContentPage{Items: []domain.SharedContentItem{}}
-	tx, queries, err := begin(ctx, s)
+	tx, queries, err := beginRead(ctx, s)
 	if err != nil {
 		return page, err
 	}

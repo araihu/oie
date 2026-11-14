@@ -188,7 +188,7 @@ func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) erro
 }
 
 func (s *Store) hydrateReplies(ctx context.Context, items []domain.Message) ([]domain.Message, error) {
-	return hydrateMessageRows(ctx, s.queries, items)
+	return hydrateMessageRows(ctx, s.read, items)
 }
 
 func hydrateMessageRows(ctx context.Context, q *dbgen.Queries, items []domain.Message) ([]domain.Message, error) {
@@ -204,7 +204,7 @@ func hydrateMessageRows(ctx context.Context, q *dbgen.Queries, items []domain.Me
 }
 
 func (s *Store) MessageContext(ctx context.Context, conversation, target domain.ID, limit int) (domain.MessageContext, error) {
-	tx, q, err := begin(ctx, s)
+	tx, q, err := beginRead(ctx, s)
 	if err != nil {
 		return domain.MessageContext{}, err
 	}
@@ -269,11 +269,15 @@ func hydrateReferences(ctx context.Context, q *dbgen.Queries, m *domain.Message)
 	if err != nil {
 		return err
 	}
+	return applyMessageReferences(m, rows)
+}
+
+func applyMessageReferences(m *domain.Message, rows []dbgen.ListCanonicalMessageReferencesRow) error {
 	m.References = nil
 	seen := map[domain.MessageReference]bool{}
 	for _, row := range rows {
 		var source domain.Message
-		if err = json.Unmarshal([]byte(row.MessagePayload), &source); err != nil {
+		if err := json.Unmarshal([]byte(row.MessagePayload), &source); err != nil {
 			return err
 		}
 		if bodyHash(source.OriginalText) != row.SourceHash {

@@ -11,7 +11,7 @@ func (s *Store) MessagesAfter(ctx context.Context, conversation, cursor domain.I
 	if limit < 1 || limit > 101 || cursor == "" {
 		return nil, application.ErrInvalid
 	}
-	tx, q, err := begin(ctx, s)
+	tx, q, err := beginRead(ctx, s)
 	if err != nil {
 		return nil, err
 	}

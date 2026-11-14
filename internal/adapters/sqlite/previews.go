@@ -2,7 +2,9 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
@@ -11,7 +13,7 @@ import (
 )
 
 func (s *Store) PreviewSources(ctx context.Context, conversation domain.ID, ids []domain.ID) ([]application.PreviewSource, error) {
-	rows, err := s.queries.ListPreviewSources(ctx, jsonText(ids))
+	rows, err := s.read.ListPreviewSources(ctx, jsonText(ids))
 	if err != nil {
 		return nil, err
 	}
@@ -57,9 +59,17 @@ func decodePreview(row dbgen.MessagePreview, err error) (domain.MessagePreview, 
 	return p, err
 }
 func (s *Store) Preview(ctx context.Context, id domain.ID) (domain.MessagePreview, error) {
-	return decodePreview(s.queries.GetMessagePreview(ctx, string(id)))
+	return decodePreview(s.read.GetMessagePreview(ctx, string(id)))
 }
 func (s *Store) EnsurePreview(ctx context.Context, p domain.MessagePreview) (domain.MessagePreview, error) {
+	params := dbgen.FindMessagePreviewParams{MessageID: string(p.MessageID), Url: p.URL}
+	existing, err := s.read.FindMessagePreview(ctx, params)
+	if err == nil {
+		return decodePreview(existing, nil)
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return p, err
+	}
 	tx, q, err := begin(ctx, s)
 	if err != nil {
 		return p, err
@@ -70,7 +80,7 @@ func (s *Store) EnsurePreview(ctx context.Context, p domain.MessagePreview) (dom
 		return p, err
 	}
 	if n == 0 {
-		p, err = decodePreview(q.FindMessagePreview(ctx, dbgen.FindMessagePreviewParams{MessageID: string(p.MessageID), Url: p.URL}))
+		p, err = decodePreview(q.FindMessagePreview(ctx, params))
 		if err != nil {
 			return p, err
 		}

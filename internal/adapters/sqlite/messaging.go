@@ -125,14 +125,17 @@ func promoteRoomPlaceholder(ctx context.Context, q *dbgen.Queries, current, room
 }
 
 func (s *Store) Conversation(ctx context.Context, id domain.ID) (domain.Conversation, error) {
-	row, err := s.queries.GetConversation(ctx, string(id))
+	return readConversation(ctx, s.read, id)
+}
+func readConversation(ctx context.Context, q *dbgen.Queries, id domain.ID) (domain.Conversation, error) {
+	row, err := q.GetConversation(ctx, string(id))
 	if err != nil {
 		return domain.Conversation{}, notFound(err)
 	}
 	return decodeConversation(row)
 }
 func (s *Store) Conversations(ctx context.Context, in application.ConversationQuery) ([]domain.Conversation, error) {
-	rows, err := s.queries.ListConversations(ctx, dbgen.ListConversationsParams{
+	rows, err := s.read.ListConversations(ctx, dbgen.ListConversationsParams{
 		Cursor: in.Cursor, AccountID: string(in.AccountID), AccountIds: jsonText(nonNilIDs(in.AccountIDs)),
 		Archived: number(in.Archived), FavoritesOnly: number(in.FavoritesOnly), UnreadOnly: number(in.UnreadOnly),
 		Kind: in.Kind, Query: in.Query, PageLimit: int64(in.Limit),
@@ -339,36 +342,36 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 	return application.MessageResult{Message: in.Message}, nil
 }
 func (s *Store) Message(ctx context.Context, id domain.ID) (domain.Message, error) {
-	canonical, err := resolveMessageAlias(ctx, s.queries, id)
+	canonical, err := resolveMessageAlias(ctx, s.read, id)
 	if err != nil {
 		return domain.Message{}, err
 	}
-	row, err := s.queries.GetVisibleMessage(ctx, string(canonical))
+	row, err := s.read.GetVisibleMessage(ctx, string(canonical))
 	if err != nil {
 		return domain.Message{}, notFound(err)
 	}
 	m, err := decodeMessage(row)
 	if err == nil {
-		err = hydrateMessageProjection(ctx, s.queries, &m)
+		err = hydrateMessageProjection(ctx, s.read, &m)
 		if err == nil {
-			err = hydrateReply(ctx, s.queries, &m)
+			err = hydrateReply(ctx, s.read, &m)
 		}
 		if err == nil {
-			err = hydrateReferences(ctx, s.queries, &m)
+			err = hydrateReferences(ctx, s.read, &m)
 		}
 		if err == nil {
-			err = hydrateSenderIdentity(ctx, s.queries, &m)
+			err = hydrateSenderIdentity(ctx, s.read, &m)
 		}
 	}
 	return m, err
 }
 func (s *Store) Messages(ctx context.Context, id, cursor domain.ID, limit int) ([]domain.Message, error) {
-	canonical, err := resolveMessageAlias(ctx, s.queries, cursor)
+	canonical, err := resolveMessageAlias(ctx, s.read, cursor)
 	if err != nil {
 		return nil, err
 	}
 	cursor = canonical
-	rows, err := s.queries.ListMessages(ctx, dbgen.ListMessagesParams{PageConversationID: string(id), PageCursor: string(cursor), PageLimit: int64(limit)})
+	rows, err := s.read.ListMessages(ctx, dbgen.ListMessagesParams{PageConversationID: string(id), PageCursor: string(cursor), PageLimit: int64(limit)})
 	if err != nil {
 		return nil, err
 	}

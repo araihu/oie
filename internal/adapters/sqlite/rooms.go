@@ -23,7 +23,7 @@ func decodeRoomIntent(row dbgen.RoomIntent) (domain.RoomSession, error) {
 	return domain.RoomSession{AccountID: domain.ID(row.AccountID), ConversationID: domain.ID(row.ConversationID), IntentID: domain.ID(row.ID), IntentRevisionID: domain.ID(row.RevisionID), Active: row.Active == 1, Nickname: row.Nickname, CreationName: row.CreationName, LastErrorCode: row.LastErrorCode, UpdatedAt: at, State: state}, err
 }
 func (s *Store) RoomIntent(ctx context.Context, id domain.ID) (domain.RoomSession, error) {
-	row, err := s.queries.GetRoomIntent(ctx, string(id))
+	row, err := s.read.GetRoomIntent(ctx, string(id))
 	if err != nil {
 		return domain.RoomSession{}, notFound(err)
 	}

@@ -72,3 +72,10 @@ keeps its mounted settings and viewer panels and negotiates gzip for the
 fragment. The event stream stays connected while the foreground jump defers
 the automatic HTML refresh. Refresh resumes on the destination or after a
 failed or cancelled jump.
+
+SQLite keeps one writer and a small pool of read-only connections in WAL
+mode. The event cursor, timeline and retained metadata can read committed
+data while archive imports and indexing write. A reaction batch loads the
+requested messages in one read transaction and shares conversation and
+account checks across the batch. Cached previews use a read before falling
+back to the transactional insert for missing entries.
