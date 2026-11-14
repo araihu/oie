@@ -8,7 +8,7 @@
 .oie-shared-menu-trigger:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:2px}
 .oie-shared-action-status{position:absolute;inset-inline-end:8px;top:42px;z-index:3;width:max-content;max-width:calc(100% - 16px);margin:0;padding:8px 10px;border:1px solid var(--oie-border);border-radius:8px;background:var(--oie-panel);color:var(--oie-text);box-shadow:0 2px 8px #0002;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
 .oie-shared-action-status[hidden]{display:none}
-.oie-shared-item>.oie-document-card .oie-document-card-surface,.oie-shared-item>.oie-shared-reference{padding-inline-end:38px}
+.oie-shared-item>.oie-shared-reference{padding-inline-end:38px}
 @media(hover:none),(pointer:coarse){.oie-shared-menu-trigger{opacity:1}}
 @media(prefers-reduced-motion:reduce){.oie-shared-menu-trigger{transition:none}}
 

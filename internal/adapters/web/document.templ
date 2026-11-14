@@ -11,7 +11,7 @@ import (
 
 templ documentCard(v view,item engineapi.SharedContentItem){
 <section class="oie-document-card" data-document-item={item.Id} data-document-revision={item.RevisionId} data-document-message-revision={item.Message.RevisionId} data-document-engine={v.EngineID} data-document-account={item.Message.AccountId} data-document-conversation={item.Message.ConversationId} data-document-message={item.Message.Id} data-document-filename={v.sharedTitle(item)} data-document-format={documentFormat(item)} data-document-source={documentSource(v,item)} data-document-url={safePreviewURL(item.Url)}>
-@card.Card(card.Config{Body:documentCardAction(v,item),Density:card.DensityCompact,RootClass:"oie-document-card-surface"})
+@card.Card(card.Config{Body:documentCardAction(v,item),Density:card.DensityCompact,RootClass:"oie-preview-card oie-document-card-surface"})
 </section>
 }
 templ documentCardAction(v view,item engineapi.SharedContentItem){
@@ -19,12 +19,15 @@ templ documentCardAction(v view,item engineapi.SharedContentItem){
 {{ attrs:=templ.Attributes{"data-document-open":"","aria-label":v.Text.DocumentOpen+": "+v.sharedTitle(item)} }}
 {{ if caption!="" { attrs["aria-describedby"]=sharedActionID(v,item,"document-caption") } }}
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-document-primary"),button.WithAttrs(attrs)){
-<span class="oie-document-thumbnail" data-document-preview aria-hidden="true"><span data-document-placeholder>@glyph(heroicons.Icon16SolidDocumentText)</span></span>
-<span class="oie-document-summary">
-<span class="oie-document-name">@glyph(heroicons.Icon16SolidDocumentText)<span>{v.sharedTitle(item)}</span></span>
+<span class="oie-preview-frame oie-document-thumbnail" data-document-preview aria-hidden="true"><span data-document-placeholder>@glyph(heroicons.Icon16SolidDocumentText)</span></span>
+<span class="oie-preview-summary">
+<span class="oie-preview-symbol" aria-hidden="true">@glyph(heroicons.Icon16SolidDocumentText)</span>
+<span class="oie-preview-copy">
+<span class="oie-preview-title oie-document-name">{v.sharedTitle(item)}</span>
 if caption!="" {
-<span class="oie-document-caption" data-document-caption id={sharedActionID(v,item,"document-caption")}>{caption}</span>
+<span class="oie-preview-excerpt oie-document-caption" data-document-caption id={sharedActionID(v,item,"document-caption")}>{caption}</span>
 }
+</span>
 </span>
 }
 }

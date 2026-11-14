@@ -171,7 +171,7 @@ func linkFallbackBody(v view, p engineapi.MessagePreview) templ.Component {
 			}
 			templ.ReleaseBuffer(templ_7745c5c3_Buffer)
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "><img class=\"oie-link-card-image\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "><img class=\"oie-preview-frame oie-link-card-image\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -194,7 +194,7 @@ func linkFallbackBody(v view, p engineapi.MessagePreview) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, " alt=\"\" x-cloak x-show=\"previewImage && !previewImageFailed\" x-bind:src=\"previewImage || null\" x-effect=\"previewImage; previewImageFailed=false\" x-on:error=\"previewImageFailed=true\" x-init=\"$nextTick(()=>{if($el.getAttribute('src') && $el.complete && !$el.naturalWidth)previewImageFailed=true})\"><div class=\"oie-link-card-summary\"><span class=\"oie-link-card-symbol\" aria-hidden=\"true\"><img class=\"oie-link-card-favicon\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, " alt=\"\" x-cloak x-show=\"previewImage && !previewImageFailed\" x-bind:src=\"previewImage || null\" x-effect=\"previewImage; previewImageFailed=false\" x-on:error=\"previewImageFailed=true\" x-init=\"$nextTick(()=>{if($el.getAttribute('src') && $el.complete && !$el.naturalWidth)previewImageFailed=true})\"><div class=\"oie-preview-summary\"><span class=\"oie-preview-symbol\" aria-hidden=\"true\"><img class=\"oie-link-card-favicon\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -225,7 +225,7 @@ func linkFallbackBody(v view, p engineapi.MessagePreview) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</span></span><div class=\"oie-link-card-copy\"><p class=\"oie-preview-title\" data-link-title x-text=\"previewLinkTitle\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</span></span><div class=\"oie-preview-copy\"><p class=\"oie-preview-title\" data-link-title x-text=\"previewLinkTitle\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
