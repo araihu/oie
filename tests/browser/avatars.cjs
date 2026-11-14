@@ -67,7 +67,10 @@ function thumbnail(color){
   await page.goto(`${base}/?account=${account}&chat=${direct}&lang=en&theme=dark`);
   await until(()=>streams.size>0,'SSE connection');
   const own=`[data-avatar-account="${account}"][data-avatar-address="alice@fixture"]`,peer=`#chat-header [data-avatar-address="bob@fixture"] img`;
+  const inboxPeer=page.locator(`#conversation-list [data-avatar-account="${account}"][data-avatar-address="bob@fixture"]`);
   assert.equal(await page.locator(peer).count(),0);assert.equal(await page.locator('[data-avatar-account] img:visible').count(),0);
+  assert.equal(await inboxPeer.getAttribute('data-inbox-avatar-deferred'),'');
+  const inboxBounds=await inboxPeer.boundingBox();
   const draft='Keep this draft while profile photos arrive';await page.locator('#message-composer').fill(draft);
   await page.locator('[data-account-switcher]:visible').click();const choice=page.locator(`[data-switch-account="${other}"]:visible`);await choice.focus();
   await page.evaluate(()=>{window.avatarFocus=document.activeElement;window.avatarRow=document.querySelector('[data-message-id]');const timeline=document.querySelector('#message-timeline');timeline.scrollTop=200;window.avatarScroll=timeline.scrollTop});
@@ -85,6 +88,9 @@ function thumbnail(color){
    assert.deepEqual(await stack.boundingBox(),initialBounds);
   }finally{releaseAvatar();}
   await until(async()=>await photoLayer.evaluate(node=>getComputedStyle(node).opacity==='1'),'avatar fade completed');
+  await until(async()=>await inboxPeer.locator('img').evaluate(img=>img.naturalWidth>0),'inbox photo activates on first source');
+  assert.equal(await inboxPeer.getAttribute('data-inbox-avatar-deferred'),null);
+  assert.deepEqual(await inboxPeer.boundingBox(),inboxBounds);
   assert(await initialsLayer.isHidden());
   assert.deepEqual(await stack.boundingBox(),initialBounds);
   await page.unroute(avatarURL);
@@ -97,6 +103,7 @@ function thumbnail(color){
   state.fail=true;emit();await new Promise(r=>setTimeout(r,500));assert.equal(await page.locator(peer).getAttribute('src'),'/ui/avatars/'+hashes[0]);state.fail=false;
   findings.push('A failed metadata request retains the current browser photo');
   set(account,'bob@fixture','');emit();await until(async()=>await page.locator(peer).count()===0,'explicit photo removal');assert(await page.locator('#chat-header [data-avatar-initials]').isVisible());
+  await until(async()=>await inboxPeer.locator('img').count()===0,'inbox initials return after photo removal');
   assert(await page.evaluate(()=>document.activeElement===window.avatarFocus));assert.equal(await page.locator('#message-composer').inputValue(),draft);
   findings.push('An explicit empty image hash removes the image node and restores clean initials without closing the focused popover');
   set(account,'bob@fixture',bad);emit();await until(async()=>await page.locator(peer).evaluate(img=>img.getAttribute('src')?.endsWith('f'.repeat(64))&&img.complete&&img.naturalWidth===0),'missing photo request');

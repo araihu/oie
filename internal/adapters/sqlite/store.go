@@ -21,6 +21,8 @@ import (
 type Store struct {
 	db        *sql.DB
 	queries   *dbgen.Queries
+	readDB    *sql.DB
+	read      *dbgen.Queries
 	lock      *flock.Flock
 	dir       string
 	closeOnce sync.Once
@@ -100,27 +102,53 @@ func (s *Store) openDatabase(ctx context.Context, initialID domain.ID) (err erro
 	if err = queries.InsertEngineIdentity(ctx, string(initialID)); err != nil {
 		return err
 	}
-	if _, err = db.ExecContext(ctx, "PRAGMA journal_mode=WAL"); err != nil {
+	var journalMode string
+	if err = db.QueryRowContext(ctx, "PRAGMA journal_mode=WAL").Scan(&journalMode); err != nil {
 		return err
+	}
+	if journalMode != "wal" {
+		return errors.New("SQLite WAL mode unavailable")
 	}
 	if err = os.MkdirAll(filepath.Join(dir, "media"), 0700); err != nil {
 		return err
 	}
+	// Keep writes serialized. WAL lets short foreground reads use committed
+	// snapshots while archive ingestion or indexing holds the writer.
+	q.Set("mode", "ro")
+	u.RawQuery = q.Encode()
+	readDB, err := sql.Open("sqlite", u.String())
+	if err != nil {
+		return err
+	}
+	const readConnections = 4
+	readDB.SetMaxOpenConns(readConnections)
+	readDB.SetMaxIdleConns(readConnections)
+	if err = readDB.PingContext(ctx); err != nil {
+		return errors.Join(err, readDB.Close())
+	}
 	s.db, s.queries = db, queries
+	s.readDB, s.read = readDB, dbgen.New(readDB)
 	return nil
 }
 func (s *Store) Close() error {
 	s.closeOnce.Do(func() {
-		if s.db != nil {
-			s.closeErr = s.db.Close()
-		}
-		s.closeErr = errors.Join(s.closeErr, s.lock.Close())
+		s.closeErr = errors.Join(s.closeDatabase(), s.lock.Close())
 	})
 	return s.closeErr
 }
+func (s *Store) closeDatabase() error {
+	var err error
+	if s.readDB != nil {
+		err = s.readDB.Close()
+	}
+	if s.db != nil {
+		err = errors.Join(err, s.db.Close())
+	}
+	return err
+}
 func (s *Store) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
 func (s *Store) Snapshot(ctx context.Context) (domain.ID, int64, error) {
-	row, err := s.queries.Snapshot(ctx)
+	row, err := s.read.Snapshot(ctx)
 	return domain.ID(row.ID), row.Sequence, err
 }
 func stamp(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000000000Z") }
@@ -143,6 +171,13 @@ func begin(ctx context.Context, s *Store) (*sql.Tx, *dbgen.Queries, error) {
 		return nil, nil, err
 	}
 	return tx, s.queries.WithTx(tx), nil
+}
+func beginRead(ctx context.Context, s *Store) (*sql.Tx, *dbgen.Queries, error) {
+	tx, err := s.readDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, nil, err
+	}
+	return tx, s.read.WithTx(tx), nil
 }
 func operation(ctx context.Context, q *dbgen.Queries, op application.Operation, hash string, value any) (*dbgen.Operation, error) {
 	changed, err := q.InsertOperation(ctx, dbgen.InsertOperationParams{ID: string(op.ID), Fingerprint: hash, ResourceID: string(op.ResourceID), Result: jsonText(value), CreatedAt: stamp(op.CreatedAt), Kind: op.Kind})
@@ -201,7 +236,7 @@ func (s *Store) Register(ctx context.Context, in application.Registration) (appl
 	return application.RegistrationResult{Account: a}, nil
 }
 func (s *Store) Account(ctx context.Context, id domain.ID) (domain.Account, error) {
-	data, err := s.queries.GetAccount(ctx, string(id))
+	data, err := s.read.GetAccount(ctx, string(id))
 	if err != nil {
 		return domain.Account{}, notFound(err)
 	}
@@ -210,7 +245,7 @@ func (s *Store) Account(ctx context.Context, id domain.ID) (domain.Account, erro
 	return a, err
 }
 func (s *Store) Accounts(ctx context.Context, after domain.ID, limit int) ([]domain.Account, error) {
-	rows, err := s.queries.ListAccounts(ctx, dbgen.ListAccountsParams{ID: string(after), Limit: int64(limit)})
+	rows, err := s.read.ListAccounts(ctx, dbgen.ListAccountsParams{ID: string(after), Limit: int64(limit)})
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +268,7 @@ func (s *Store) Operation(ctx context.Context, id domain.ID) (application.Operat
 	return application.Operation{ID: domain.ID(row.ID), ResourceID: domain.ID(row.ResourceID), CreatedAt: at, Kind: row.Kind}, err
 }
 func (s *Store) Events(ctx context.Context, after int64, limit int) ([]application.Event, error) {
-	rows, err := s.queries.ListChanges(ctx, dbgen.ListChangesParams{Sequence: after, Limit: int64(limit)})
+	rows, err := s.read.ListChanges(ctx, dbgen.ListChangesParams{Sequence: after, Limit: int64(limit)})
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +315,7 @@ func (s *Store) Events(ctx context.Context, after int64, limit int) ([]applicati
 			return nil, err
 		}
 		if e.Message != nil {
-			if err = hydrateReply(ctx, s.queries, e.Message); err != nil {
+			if err = hydrateReply(ctx, s.read, e.Message); err != nil {
 				return nil, err
 			}
 		}

@@ -33,7 +33,7 @@ func (v view) latestHref() string {
 
 // Context is bounded and account/conversation-scoped by the canonical engine.
 // Validate the projection before exposing it, including the requested target.
-func (s *Server) contextMessages(ctx context.Context, v *view, account string) ([]engineapi.Message, bool) {
+func (s *Server) contextMessages(ctx context.Context, v *view, account string, limit int) ([]engineapi.Message, bool) {
 	if v.FocusMessage == "" {
 		return nil, false
 	}
@@ -41,7 +41,6 @@ func (s *Server) contextMessages(ctx context.Context, v *view, account string) (
 		v.ContextMissing = true
 		return nil, false
 	}
-	limit := 50
 	response, err := s.client.GetMessageContextWithResponse(ctx, v.ChatID, v.FocusMessage, &engineapi.GetMessageContextParams{Limit: &limit})
 	if err != nil {
 		v.Unavailable = true
@@ -55,15 +54,21 @@ func (s *Server) contextMessages(ctx context.Context, v *view, account string) (
 		v.Unavailable = true
 		return nil, true
 	}
-	page := response.JSON200
-	if !validContextTarget(*page, v.FocusMessage, v.ChatID, account) {
+	if !v.applyMessageContext(*response.JSON200, account) {
 		v.Unavailable = true
 		return nil, true
+	}
+	return response.JSON200.Items, true
+}
+
+func (v *view) applyMessageContext(page engineapi.MessageContext, account string) bool {
+	if !validContextTarget(page, v.FocusMessage, v.ChatID, account) {
+		return false
 	}
 	v.FocusMessage = page.TargetId
 	v.ContextHasNewer = page.HasNewer
 	v.ContextHasOlder = page.HasOlder
-	return page.Items, true
+	return true
 }
 
 // An alias can change only the canonical target, never its ownership. The engine

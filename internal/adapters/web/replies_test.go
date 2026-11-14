@@ -99,7 +99,7 @@ func TestContextReadIsBoundedAndConversationScoped(t *testing.T) {
 				t.Fatal(err)
 			}
 			v := view{ChatID: testChat, FocusMessage: testMessage}
-			items, used := ui.contextMessages(context.Background(), &v, testAccount)
+			items, used := ui.contextMessages(context.Background(), &v, testAccount, timelinePageSize)
 			if v.ContextMissing != tc.missing || v.Unavailable != tc.unavailable {
 				t.Fatalf("unsafe context result %#v", v)
 			}
@@ -162,7 +162,7 @@ func TestContextAliasRequiresExactProofAndCanonicalOwnership(t *testing.T) {
 				t.Fatal(err)
 			}
 			v := view{ChatID: testChat, FocusMessage: alias}
-			items, used := ui.contextMessages(context.Background(), &v, testAccount)
+			items, used := ui.contextMessages(context.Background(), &v, testAccount, timelinePageSize)
 			source, status := ui.retainedReplySource(context.Background(), testChat, testAccount, alias)
 			if name == "valid" {
 				if !used || v.Unavailable || v.FocusMessage != canonical || len(items) != 1 || source == nil || source.Id != canonical || status != 200 {

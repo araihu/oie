@@ -11,6 +11,7 @@ window.OieRuntime.register('live', life => {
   const events = window.OieEvents, inbox = window.OieInbox;
   const csrf = document.querySelector('meta[name="oie-csrf"]')?.content || '';
   let pendingRequests = 0, refreshTimer, refreshing = false, refreshAgain = false;
+  let sourceNavigation, refreshController;
   let stopped = false, storageDenied = false;
   life.cleanup(()=>{stopped=true;});
   let accountsVersion = [...document.querySelectorAll('#account-blocks>[data-account-id]')].map(e => e.dataset.accountId+';').join('');
@@ -30,9 +31,21 @@ window.OieRuntime.register('live', life => {
   function applyAvatars(root = document) {
     for (const scope of root.querySelectorAll('[data-avatar-account]')) {
       const src = avatarSources.get(avatarKey(scope.dataset.avatarAccount,scope.dataset.avatarAddress)) || '';
-      scope.dataset.avatarSrc = src;
+      if(scope.hasAttribute('data-inbox-avatar-deferred')){
+        if(!src)continue;
+        scope.dataset.avatarSrc=src;
+        if(!window.Alpine)continue;
+        window.Alpine.mutateDom(()=>{
+          window.Alpine.destroyTree(scope);
+          scope.removeAttribute('x-ignore');
+          scope.removeAttribute('data-inbox-avatar-deferred');
+          window.Alpine.initTree(scope);
+        });
+        continue;
+      }
+      if(scope.dataset.avatarSrc!==src)scope.dataset.avatarSrc=src;
       const data = window.Alpine?.$data?.(scope);
-      if (data && 'oieAvatarSrc' in data) data.oieAvatarSrc = src;
+      if (data && 'oieAvatarSrc' in data && data.oieAvatarSrc!==src) data.oieAvatarSrc = src;
     }
   }
   readAvatars(document);
@@ -745,7 +758,7 @@ window.OieRuntime.register('live', life => {
   }
   async function refresh() {
     if (stopped || mock) return;
-    if (pendingRequests || refreshing) { refreshAgain = true; return; }
+    if (pendingRequests || refreshing || sourceNavigation) { refreshAgain = true; return; }
     refreshing = true;
     const starGeneration=Number(body.dataset.starGeneration||0);
     const preferenceGeneration=Number(body.dataset.conversationPreferenceGeneration||0);
@@ -763,14 +776,15 @@ window.OieRuntime.register('live', life => {
       headers['X-Oie-Inbox-Cursor'] = events.latest(list.dataset.inboxCursor);
     }
     const controller = new AbortController(); const timeout = life.timeout(() => controller.abort(), 12000);
+    refreshController=controller;
     try {
       await reconcilePending(controller.signal);
       const reactionStartedAt=performance.now();
       const response = await life.fetch('/ui/refresh?'+refreshQuery, {credentials:'same-origin',cache:'no-store',headers,signal:controller.signal});
-      if(life.signal.aborted)return;
+      if(life.signal.aborted||controller.signal.aborted)return;
       if (!response.ok) throw new Error('refresh unavailable');
       const page = new DOMParser().parseFromString(await response.text(), 'text/html');
-      if(life.signal.aborted)return;
+      if(life.signal.aborted||controller.signal.aborted)return;
       if(requestedSearch!==location.search){refreshAgain=true;return;}
       const regions = page.querySelector('#oie-live-regions');
       if (!regions || regions.dataset.unavailable === 'true') { announce(text('liveRetry')); return; }
@@ -909,12 +923,25 @@ window.OieRuntime.register('live', life => {
       }
       if(composer&&regions.dataset.conversationId===body.dataset.conversationId){composer.dataset.latestEditMessage=regions.dataset.editMessage||'';for(const action of document.querySelectorAll('[id^="edit-message-"]'))action.hidden=action.id!=='edit-message-'+composer.dataset.latestEditMessage;renderEdit();}
       document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));document.dispatchEvent(new CustomEvent("oie:shared-refresh",{detail:page}));document.dispatchEvent(new CustomEvent('oie:reaction-snapshots',{detail:{page,startedAt:reactionStartedAt}}));applyAvatars();document.dispatchEvent(new CustomEvent("oie:stars-refresh",{detail:{page,generation:starGeneration}}));document.dispatchEvent(new CustomEvent("oie:previews-refresh",{detail:page}));localizeTimes();syncRoomLeave();
-    } catch { if(!life.signal.aborted)announce(text('liveRetry')); }
+    } catch { if(!life.signal.aborted&&!sourceNavigation)announce(text('liveRetry')); }
     finally {
-      clearTimeout(timeout);if(life.signal.aborted)return; refreshing = false;
+      clearTimeout(timeout);if(life.signal.aborted)return; refreshing = false;refreshController=undefined;
       if (refreshAgain) { refreshAgain = false; scheduleRefresh(); }
     }
   }
+  life.on(document,'htmx:before:request',event=>{
+    const ctx=event.detail.ctx,fragment=ctx?.request?.headers?.['X-Oie-Fragment'];
+    if(fragment!=='source'&&fragment!=='source-pane')return;
+    sourceNavigation=ctx;
+    clearTimeout(refreshTimer);
+    refreshController?.abort();
+  });
+  life.on(document,'htmx:finally:request',event=>{
+    if(!sourceNavigation||event.detail.ctx!==sourceNavigation)return;
+    sourceNavigation=undefined;
+    if(life.signal.aborted)return;
+    scheduleRefresh();
+  });
   life.on(document,'oie:timeline-content',event=>{renderEditMarkers();readAvatars(event.detail.page);applyAvatars();localizeTimes();if(highlightedMessage)document.querySelector(`#message-timeline [data-message-id="${CSS.escape(highlightedMessage)}"]`)?.classList.add('oie-reply-highlight');});
   life.on(document,'oie:timeline-latest',()=>{
     clearTimeout(highlightTimer);highlightedMessage='';
@@ -943,7 +970,7 @@ window.OieRuntime.register('live', life => {
   life.on(document,'oie:shared-append',event=>{if(event.detail?.page)readAvatars(event.detail.page);applyAvatars();localizeTimes();});
   for(const name of ['oie:shared-search-settled','oie:info-shared-search-settled'])life.on(document,name,event=>{if(event.detail?.page)readAvatars(event.detail.page);applyAvatars();localizeTimes();});
   life.on(document,'oie:refresh-request',()=>scheduleRefresh());
-  function scheduleRefresh() { if(stopped||life.signal.aborted)return;clearTimeout(refreshTimer); refreshTimer = life.timeout(refresh,100); }
+  function scheduleRefresh() { if(stopped||life.signal.aborted)return;if(sourceNavigation){refreshAgain=true;return}clearTimeout(refreshTimer); refreshTimer = life.timeout(refresh,100); }
 
   function needsReplyRefresh(reply) {
     return reply && (!editingSchedule || reply.messageId !== scheduledMessage?.composition?.replyToMessageId || canonicalID(reply.revisionId));

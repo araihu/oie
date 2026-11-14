@@ -21,8 +21,8 @@ func (s *Store) Reset(ctx context.Context, id domain.ID) error {
 	if err = marker.Close(); err != nil {
 		return err
 	}
-	err = s.db.Close()
-	s.db, s.queries = nil, nil
+	err = s.closeDatabase()
+	s.db, s.queries, s.readDB, s.read = nil, nil, nil, nil
 	if err != nil {
 		return err
 	}

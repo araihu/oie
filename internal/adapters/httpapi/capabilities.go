@@ -11,6 +11,10 @@ func (s *Server) GetAccountCapabilities(ctx context.Context, r engineapi.GetAcco
 	if err != nil {
 		return nil, err
 	}
+	return engineapi.GetAccountCapabilities200JSONResponse(capabilities(report)), nil
+}
+
+func capabilities(report domain.Capabilities) engineapi.Capabilities {
 	out := engineapi.Capabilities{AccountId: string(report.AccountID), State: engineapi.CapabilitiesState(report.State), Reason: engineapi.CapabilitiesReason(report.Reason), Features: []engineapi.CapabilityFeature{}, Discovery: engineapi.CapabilityDiscovery{State: engineapi.CapabilityDiscoveryState(report.Discovery.State), Services: []engineapi.DiscoveredService{}}}
 	if report.DirectText {
 		out.DirectText = &report.DirectText
@@ -45,5 +49,5 @@ func (s *Server) GetAccountCapabilities(ctx context.Context, r engineapi.GetAcco
 		}
 		out.Discovery.Services = append(out.Discovery.Services, item)
 	}
-	return engineapi.GetAccountCapabilities200JSONResponse(out), nil
+	return out
 }

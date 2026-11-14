@@ -1,6 +1,12 @@
 package web
 
 import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"io"
 	"net/http"
 	"strings"
@@ -82,5 +88,64 @@ func TestNavigationResponsesKeepFragmentAndDocumentBoundaries(t *testing.T) {
 	}
 	if fixture.effectCount() != 0 {
 		t.Fatal("presentation navigation created a protocol effect")
+	}
+}
+
+func TestSourceNavigationUsesShortContextAndKeepsPaging(t *testing.T) {
+	fixture := &liveFixture{}
+	backend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/conversations/"+testChat+"/messages/"+testMessage+"/context" {
+			fixture.ServeHTTP(w, r)
+			return
+		}
+		limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		items := make([]engineapi.Message, limit)
+		for i := range items {
+			m := fixture.message()
+			m.SendState = "received"
+			m.Id = fmt.Sprintf("019a5df0-0000-7000-8000-%012d", i+300)
+			m.CreatedAt = m.CreatedAt.Add(-time.Duration(i) * time.Second)
+			items[i] = m
+		}
+		items[limit/2].Id = testMessage
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(engineapi.MessageContext{Items: items, TargetId: testMessage, HasOlder: true, HasNewer: true})
+	})
+	ui, client, _ := liveUI(t, backend)
+	for _, fragment := range []string{"app", "source", "source-pane"} {
+		t.Run(fragment, func(t *testing.T) {
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, ui.URL+"/?chat="+testChat+"&message="+testMessage, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("HX-Request", "true")
+			req.Header.Set("X-Oie-Fragment", fragment)
+			res, err := client.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = res.Body.Close() }()
+			raw, err := io.ReadAll(res.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := string(raw)
+			limit := timelinePageSize
+			if fragment != "app" {
+				limit = sourceContextPageSize
+			}
+			if res.StatusCode != http.StatusOK || strings.Count(body, "data-message-id=") != limit ||
+				!strings.Contains(body, `data-focus-message="`+testMessage+`"`) ||
+				!strings.Contains(body, `data-has-older="true" data-has-newer="true"`) {
+				t.Fatalf("source window for %s returned HTTP %d and %d rows", fragment, res.StatusCode, strings.Count(body, "data-message-id="))
+			}
+			if fragment == "source-pane" && strings.Contains(body, `id="conversation-list"`) {
+				t.Fatal("conversation fragment included the inbox")
+			}
+		})
 	}
 }

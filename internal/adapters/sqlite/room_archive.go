@@ -14,7 +14,7 @@ import (
 
 func (s *Store) RoomArchive(ctx context.Context, id domain.ID) (domain.RoomArchive, error) {
 	a := domain.RoomArchive{ConversationID: id, Mode: "gradual"}
-	row, err := s.queries.GetRoomArchive(ctx, string(id))
+	row, err := s.read.GetRoomArchive(ctx, string(id))
 	if err == nil {
 		a.Mode = row.Mode
 		err = json.Unmarshal([]byte(row.Progress), &a.RoomArchiveProgress)

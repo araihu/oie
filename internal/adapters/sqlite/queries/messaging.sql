@@ -52,7 +52,8 @@ SELECT m.* FROM messages AS m WHERE m.id=?
 AND EXISTS (SELECT 1 FROM conversations c WHERE c.id=m.conversation_id AND json_extract(c.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id);
 -- name: FindProviderMessage :one
-SELECT * FROM messages WHERE account_id=? AND conversation_id=? AND provider_id=? AND is_own=?;
+-- Match the partial identity index used for messages with provider IDs.
+SELECT * FROM messages WHERE account_id=? AND conversation_id=? AND provider_id=? AND is_own=? AND provider_id<>'';
 -- name: ListMessages :many
 SELECT m.* FROM messages AS m WHERE m.conversation_id=sqlc.arg(page_conversation_id)
 AND EXISTS (SELECT 1 FROM conversations c WHERE c.id=m.conversation_id AND json_extract(c.payload,'$.Request') IS NULL)

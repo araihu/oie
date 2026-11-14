@@ -141,6 +141,17 @@ func TestSharedCatalogBackfillsAllHistoryAndKeepsMessageScope(t *testing.T) {
 	if err != nil || len(filtered.Items) != 70 {
 		t.Fatal("Unicode metadata/scope", len(filtered.Items), err)
 	}
+	scoped := domain.SharedContentQuery{
+		Type: "links", AccountID: c.AccountID, ConversationID: c.ID,
+		MessageIDs: []domain.ID{originals[0].ID, originals[1].ID},
+		Search:     "árvore", Limit: 10, IncludeFirstPageCounts: true,
+	}
+	page, err := e.SharedContent(t.Context(), scoped)
+	if err != nil || len(page.Items) != 2 || page.Indexing.State != "complete" ||
+		page.Indexing.TotalMessages != 2 || page.Indexing.IndexedMessages != 2 ||
+		page.FirstPageCounts == nil || *page.FirstPageCounts != (domain.SharedContentFirstPageCounts{Media: 2, Links: 2, Documents: 2}) {
+		t.Fatalf("message scope and search must apply to counts: %+v, %v", page, err)
+	}
 	docs, err := e.SharedContent(t.Context(), domain.SharedContentQuery{Type: "documents", ConversationID: c.ID, Limit: 100})
 	if err != nil || len(docs.Items) != 70 {
 		t.Fatal(len(docs.Items), err)
@@ -348,5 +359,62 @@ func TestVideoCatalogUsesEffectiveKindBeforePagination(t *testing.T) {
 				t.Fatal("effective image can be opened as video", err)
 			}
 		}
+	}
+}
+
+func TestCatalogProjectionBackfillKeepsReferenceAndVisibility(t *testing.T) {
+	s, _, chat := outboxFixture(t)
+	ctx := t.Context()
+	message := replySeed(t, s, chat, "https://example.test/legacy.pdf", time.Now().UTC(), nil, nil)
+	driver, err := migratesqlite.WithInstance(s.db, &migratesqlite.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := iofs.New(migrations, "migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = source.Close() }()
+	runner, err := migrate.NewWithInstance("iofs", source, "sqlite", driver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = runner.Migrate(26); err != nil {
+		t.Fatal(err)
+	}
+	ref := application.SharedReferences(message.OriginalText)[0]
+	ref.ID, ref.RevisionID = migrationID(), migrationID()
+	if err = s.IndexSharedContent(ctx, []domain.SharedContentMutation{{
+		Message: message, References: []domain.SharedReference{ref}, ParserVersion: application.SharedContentVersion,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err = runner.Up(); err != nil {
+		t.Fatal(err)
+	}
+	for _, scope := range []domain.SharedContentQuery{
+		{}, {AccountID: chat.AccountID}, {ConversationID: chat.ID}, {AccountIDs: []domain.ID{chat.AccountID}},
+	} {
+		scope.Type, scope.Limit, scope.IncludeFirstPageCounts = "documents", 1, true
+		page, err := s.SharedContent(ctx, scope)
+		if err != nil || len(page.Items) != 1 || page.Items[0].ID != ref.ID ||
+			page.Indexing.TotalMessages != 1 || page.Indexing.IndexedMessages != 1 ||
+			page.FirstPageCounts == nil || page.FirstPageCounts.Documents != 1 {
+			t.Fatalf("migration lost scoped reference or counts: %+v, %v", page, err)
+		}
+	}
+	if _, err = s.db.ExecContext(ctx, "UPDATE conversations SET payload=json_set(payload,'$.Request','message_request') WHERE id=?", chat.ID); err != nil {
+		t.Fatal(err)
+	}
+	page, err := s.SharedContent(ctx, domain.SharedContentQuery{Type: "documents", Limit: 1})
+	if err != nil || len(page.Items) != 0 || page.Indexing.TotalMessages != 0 {
+		t.Fatalf("visibility transition left catalog rows: %+v, %v", page, err)
+	}
+	if _, err = s.db.ExecContext(ctx, "UPDATE conversations SET payload=json_remove(payload,'$.Request') WHERE id=?", chat.ID); err != nil {
+		t.Fatal(err)
+	}
+	page, err = s.SharedContent(ctx, domain.SharedContentQuery{Type: "documents", Limit: 1})
+	if err != nil || len(page.Items) != 1 || page.Items[0].ID != ref.ID {
+		t.Fatalf("visibility transition lost reference: %+v, %v", page, err)
 	}
 }

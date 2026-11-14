@@ -349,6 +349,45 @@ type RoomReactionPrivacy struct {
 	Epoch        int64
 }
 
+type SharedCatalogCount struct {
+	ConversationID string
+	ParserVersion  int64
+	Messages       int64
+}
+
+type SharedCatalogOrder struct {
+	Scope       string
+	Tab         string
+	PositionMs  int64
+	ReferenceID string
+}
+
+type SharedCatalogOrderRow struct {
+	Scope       interface{}
+	Tab         interface{}
+	PositionMs  int64
+	ReferenceID string
+	MessageID   string
+}
+
+type SharedCatalogRefresh struct {
+	MessageID string
+}
+
+type SharedCatalogSource struct {
+	MessageID      string
+	ConversationID string
+	PositionMs     int64
+	ParserVersion  int64
+}
+
+type SharedCatalogVisibleSource struct {
+	MessageID      string
+	ConversationID string
+	PositionMs     int64
+	ParserVersion  int64
+}
+
 type SharedContent struct {
 	ID         string
 	RevisionID string

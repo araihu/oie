@@ -9,6 +9,92 @@ import (
 	"context"
 )
 
+const countCatalogPage = `-- name: CountCatalogPage :one
+SELECT COUNT(*) FROM (
+ SELECT 1 FROM shared_catalog_order o
+ JOIN shared_content sc ON sc.id=o.reference_id
+ JOIN shared_catalog_sources s ON s.message_id=sc.message_id
+ WHERE o.scope=?1 AND o.tab=?2 AND s.parser_version>=?3
+ LIMIT ?4
+)
+`
+
+type CountCatalogPageParams struct {
+	Scope         string
+	Tab           string
+	ParserVersion int64
+	PageLimit     int64
+}
+
+func (q *Queries) CountCatalogPage(ctx context.Context, arg CountCatalogPageParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countCatalogPage,
+		arg.Scope,
+		arg.Tab,
+		arg.ParserVersion,
+		arg.PageLimit,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSharedContentFirstPage = `-- name: CountSharedContentFirstPage :one
+WITH scoped_references AS (
+    SELECT id, revision_id, message_id, url, kind, file_name FROM shared_content WHERE CAST(?8 AS TEXT)='[]'
+    UNION ALL
+    SELECT id, revision_id, message_id, url, kind, file_name FROM shared_content
+    WHERE message_id IN (SELECT value FROM json_each(CAST(?8 AS TEXT)))
+)
+SELECT COUNT(*) FROM (
+    SELECT 1
+    FROM scoped_references AS sc CROSS JOIN messages AS m ON m.id=sc.message_id
+    JOIN shared_content_state AS s ON s.message_id=m.id AND s.parser_version>=?1
+    JOIN conversations AS c ON c.id=m.conversation_id JOIN accounts AS a ON a.id=m.account_id
+    LEFT JOIN message_previews AS p ON p.message_id=m.id AND p.url=sc.url
+    WHERE (CAST(?2 AS TEXT)='' OR m.account_id=CAST(?2 AS TEXT))
+    AND (CAST(?3 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?3 AS TEXT))))
+    AND json_extract(c.payload,'$.Request') IS NULL
+    AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
+    AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id)
+    AND (CAST(?4 AS TEXT)='' OR m.conversation_id=CAST(?4 AS TEXT))
+    AND ((CAST(?5 AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
+     OR (CAST(?5 AS TEXT)='video' AND sc.kind='video' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
+     OR (CAST(?5 AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
+     OR (CAST(?5 AS TEXT)='documents' AND sc.kind='document' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image'))
+    AND (CAST(?6 AS TEXT)='' OR oie_search_match(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),''),CAST(?6 AS TEXT))=1)
+    LIMIT ?7
+)
+`
+
+type CountSharedContentFirstPageParams struct {
+	ParserVersion  int64
+	AccountID      string
+	AccountIds     string
+	ConversationID string
+	ContentType    string
+	Search         string
+	PageLimit      int64
+	MessageIds     string
+}
+
+// Match ListSharedContent's scope, categories and search. Any matching rows
+// suffice for the capped count, so stop at the limit without sorting them.
+func (q *Queries) CountSharedContentFirstPage(ctx context.Context, arg CountSharedContentFirstPageParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSharedContentFirstPage,
+		arg.ParserVersion,
+		arg.AccountID,
+		arg.AccountIds,
+		arg.ConversationID,
+		arg.ContentType,
+		arg.Search,
+		arg.PageLimit,
+		arg.MessageIds,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteObsoleteSharedContent = `-- name: DeleteObsoleteSharedContent :exec
 DELETE FROM shared_content WHERE message_id=?1
 AND url NOT IN (SELECT value FROM json_each(CAST(?2 AS TEXT)))
@@ -78,48 +164,140 @@ func (q *Queries) InvalidateSharedContent(ctx context.Context, messageID string)
 	return err
 }
 
+const listCatalogPage = `-- name: ListCatalogPage :many
+WITH page AS (
+ SELECT o.reference_id,o.position_ms FROM shared_catalog_order o
+ WHERE o.scope=?1 AND tab=?2
+ AND position_ms<=CAST(?3 AS INTEGER)
+ AND (position_ms,reference_id)<(CAST(?3 AS INTEGER),CAST(?4 AS TEXT))
+ AND EXISTS (SELECT 1 FROM shared_content sc JOIN shared_catalog_sources s ON s.message_id=sc.message_id
+             WHERE sc.id=o.reference_id AND s.parser_version>=?5)
+ ORDER BY position_ms DESC,reference_id DESC LIMIT ?6
+)
+SELECT sc.id,sc.revision_id,
+ CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,
+ sc.url,sc.file_name,CAST(COALESCE(h.payload,m.payload) AS TEXT) AS message_payload,
+ m.timeline_at_ms,c.payload AS conversation_payload,a.label AS account_label,p.payload AS preview_payload,page.position_ms
+FROM page CROSS JOIN shared_content sc ON sc.id=page.reference_id
+JOIN messages m ON m.id=sc.message_id
+JOIN conversations c ON c.id=m.conversation_id JOIN accounts a ON a.id=m.account_id
+LEFT JOIN message_content_heads h ON h.canonical_id=m.id
+LEFT JOIN message_previews p ON p.message_id=m.id AND p.url=sc.url
+ORDER BY page.position_ms DESC,page.reference_id DESC
+`
+
+type ListCatalogPageParams struct {
+	Scope         string
+	Tab           string
+	BeforeMs      int64
+	BeforeID      string
+	ParserVersion int64
+	PageLimit     int64
+}
+
+type ListCatalogPageRow struct {
+	ID                  string
+	RevisionID          string
+	Kind                string
+	Url                 string
+	FileName            string
+	MessagePayload      string
+	TimelineAtMs        *int64
+	ConversationPayload string
+	AccountLabel        string
+	PreviewPayload      *string
+	PositionMs          int64
+}
+
+// Keep selection ahead of joins on the bounded browse path.
+func (q *Queries) ListCatalogPage(ctx context.Context, arg ListCatalogPageParams) ([]ListCatalogPageRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCatalogPage,
+		arg.Scope,
+		arg.Tab,
+		arg.BeforeMs,
+		arg.BeforeID,
+		arg.ParserVersion,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCatalogPageRow{}
+	for rows.Next() {
+		var i ListCatalogPageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RevisionID,
+			&i.Kind,
+			&i.Url,
+			&i.FileName,
+			&i.MessagePayload,
+			&i.TimelineAtMs,
+			&i.ConversationPayload,
+			&i.AccountLabel,
+			&i.PreviewPayload,
+			&i.PositionMs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSharedContent = `-- name: ListSharedContent :many
+WITH scoped_references AS (
+    SELECT id, revision_id, message_id, url, kind, file_name FROM shared_content WHERE CAST(?10 AS TEXT)='[]'
+    UNION ALL
+    SELECT id, revision_id, message_id, url, kind, file_name FROM shared_content
+    WHERE message_id IN (SELECT value FROM json_each(CAST(?10 AS TEXT)))
+)
 SELECT sc.id, sc.revision_id,
 CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,
 sc.url, sc.file_name,
-CAST(CASE WHEN CAST(?1 AS INTEGER)=0 THEN COALESCE(h.payload,m.payload) ELSE '' END AS TEXT) AS message_payload,
+CAST(COALESCE(h.payload,m.payload) AS TEXT) AS message_payload,
 m.timeline_at_ms,
-CAST(CASE WHEN CAST(?1 AS INTEGER)=0 THEN c.payload ELSE '' END AS TEXT) AS conversation_payload,
+c.payload AS conversation_payload,
 a.label AS account_label,
 p.payload AS preview_payload
-FROM shared_content AS sc JOIN messages AS m ON m.id=sc.message_id
-LEFT JOIN message_content_heads AS h ON h.canonical_id=m.id AND CAST(?1 AS INTEGER)=0
-JOIN shared_content_state AS s ON s.message_id=m.id AND s.parser_version>=?2
+FROM scoped_references AS sc CROSS JOIN messages AS m ON m.id=sc.message_id
+LEFT JOIN message_content_heads AS h ON h.canonical_id=m.id
+JOIN shared_content_state AS s ON s.message_id=m.id AND s.parser_version>=?1
 JOIN conversations AS c ON c.id=m.conversation_id JOIN accounts AS a ON a.id=m.account_id
 LEFT JOIN message_previews AS p ON p.message_id=m.id AND p.url=sc.url
-WHERE (CAST(?3 AS TEXT)='' OR m.account_id=CAST(?3 AS TEXT))
-AND (CAST(?4 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?4 AS TEXT))))
-AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
+WHERE (CAST(?2 AS TEXT)='' OR m.account_id=CAST(?2 AS TEXT))
+AND (CAST(?3 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?3 AS TEXT))))
+AND json_extract(c.payload,'$.Request') IS NULL
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id)
-AND (CAST(?5 AS TEXT)='' OR m.conversation_id=CAST(?5 AS TEXT))
-AND (CAST(?6 AS TEXT)='[]' OR m.id IN (SELECT value FROM json_each(CAST(?6 AS TEXT))))
-AND ((CAST(?7 AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
- OR (CAST(?7 AS TEXT)='video' AND sc.kind='video' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
- OR (CAST(?7 AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
- OR (CAST(?7 AS TEXT)='documents' AND sc.kind='document' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image'))
-AND (CAST(?8 AS TEXT)='' OR (COALESCE(m.timeline_at_ms,m.created_at_ms),sc.id)<(CAST(?9 AS INTEGER),CAST(?8 AS TEXT)))
-AND (CAST(?10 AS TEXT)='' OR oie_search_match(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),''),CAST(?10 AS TEXT))=1)
-ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,sc.id DESC LIMIT ?11
+AND (CAST(?4 AS TEXT)='' OR m.conversation_id=CAST(?4 AS TEXT))
+AND ((CAST(?5 AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
+ OR (CAST(?5 AS TEXT)='video' AND sc.kind='video' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
+ OR (CAST(?5 AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
+ OR (CAST(?5 AS TEXT)='documents' AND sc.kind='document' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image'))
+AND (CAST(?6 AS TEXT)='' OR (COALESCE(m.timeline_at_ms,m.created_at_ms),sc.id)<(CAST(?7 AS INTEGER),CAST(?6 AS TEXT)))
+AND (CAST(?8 AS TEXT)='' OR oie_search_match(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),''),CAST(?8 AS TEXT))=1)
+ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,sc.id DESC LIMIT ?9
 `
 
 type ListSharedContentParams struct {
-	CountOnly      int64
 	ParserVersion  int64
 	AccountID      string
 	AccountIds     string
 	ConversationID string
-	MessageIds     string
 	ContentType    string
 	CursorID       string
 	CursorMs       int64
 	Search         string
 	PageLimit      int64
+	MessageIds     string
 }
 
 type ListSharedContentRow struct {
@@ -135,19 +313,19 @@ type ListSharedContentRow struct {
 	PreviewPayload      *string
 }
 
+// The catalog and a bounded timeline use different driving indexes.
 func (q *Queries) ListSharedContent(ctx context.Context, arg ListSharedContentParams) ([]ListSharedContentRow, error) {
 	rows, err := q.db.QueryContext(ctx, listSharedContent,
-		arg.CountOnly,
 		arg.ParserVersion,
 		arg.AccountID,
 		arg.AccountIds,
 		arg.ConversationID,
-		arg.MessageIds,
 		arg.ContentType,
 		arg.CursorID,
 		arg.CursorMs,
 		arg.Search,
 		arg.PageLimit,
+		arg.MessageIds,
 	)
 	if err != nil {
 		return nil, err
@@ -224,13 +402,78 @@ func (q *Queries) PutSharedContent(ctx context.Context, arg PutSharedContentPara
 	return err
 }
 
+const sharedCatalogMessageProgress = `-- name: SharedCatalogMessageProgress :one
+SELECT COUNT(*) AS total_messages,COUNT(CASE WHEN s.parser_version>=?1 THEN 1 END) AS indexed_messages
+FROM shared_catalog_sources s JOIN conversations c ON c.id=s.conversation_id
+WHERE s.message_id IN (SELECT value FROM json_each(CAST(?2 AS TEXT)))
+AND (CAST(?3 AS TEXT)='' OR c.account_id=CAST(?3 AS TEXT))
+AND (CAST(?4 AS TEXT)='[]' OR c.account_id IN (SELECT value FROM json_each(CAST(?4 AS TEXT))))
+AND s.conversation_id=CAST(?5 AS TEXT)
+`
+
+type SharedCatalogMessageProgressParams struct {
+	ParserVersion  int64
+	MessageIds     string
+	AccountID      string
+	AccountIds     string
+	ConversationID string
+}
+
+type SharedCatalogMessageProgressRow struct {
+	TotalMessages   int64
+	IndexedMessages int64
+}
+
+func (q *Queries) SharedCatalogMessageProgress(ctx context.Context, arg SharedCatalogMessageProgressParams) (SharedCatalogMessageProgressRow, error) {
+	row := q.db.QueryRowContext(ctx, sharedCatalogMessageProgress,
+		arg.ParserVersion,
+		arg.MessageIds,
+		arg.AccountID,
+		arg.AccountIds,
+		arg.ConversationID,
+	)
+	var i SharedCatalogMessageProgressRow
+	err := row.Scan(&i.TotalMessages, &i.IndexedMessages)
+	return i, err
+}
+
+const sharedCatalogProgress = `-- name: SharedCatalogProgress :one
+SELECT CAST(COALESCE(SUM(p.messages),0) AS INTEGER) AS total_messages,
+ CAST(COALESCE(SUM(CASE WHEN p.parser_version>=?1 THEN p.messages ELSE 0 END),0) AS INTEGER) AS indexed_messages
+FROM shared_catalog_counts p JOIN conversations c ON c.id=p.conversation_id
+WHERE (CAST(?2 AS TEXT)='' OR c.account_id=CAST(?2 AS TEXT))
+AND (CAST(?3 AS TEXT)='[]' OR c.account_id IN (SELECT value FROM json_each(CAST(?3 AS TEXT))))
+AND (CAST(?4 AS TEXT)='' OR p.conversation_id=CAST(?4 AS TEXT))
+`
+
+type SharedCatalogProgressParams struct {
+	ParserVersion  int64
+	AccountID      string
+	AccountIds     string
+	ConversationID string
+}
+
+type SharedCatalogProgressRow struct {
+	TotalMessages   int64
+	IndexedMessages int64
+}
+
+func (q *Queries) SharedCatalogProgress(ctx context.Context, arg SharedCatalogProgressParams) (SharedCatalogProgressRow, error) {
+	row := q.db.QueryRowContext(ctx, sharedCatalogProgress,
+		arg.ParserVersion,
+		arg.AccountID,
+		arg.AccountIds,
+		arg.ConversationID,
+	)
+	var i SharedCatalogProgressRow
+	err := row.Scan(&i.TotalMessages, &i.IndexedMessages)
+	return i, err
+}
+
 const sharedContentCandidates = `-- name: SharedContentCandidates :many
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
-WHERE (s.message_id IS NULL OR s.parser_version<?1)
-AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
-AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
-AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
-ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT ?2
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM shared_catalog_sources AS s CROSS JOIN messages AS m ON m.id=s.message_id
+WHERE s.parser_version<?1
+ORDER BY s.parser_version,s.position_ms DESC,s.message_id DESC LIMIT ?2
 `
 
 type SharedContentCandidatesParams struct {
@@ -270,42 +513,4 @@ func (q *Queries) SharedContentCandidates(ctx context.Context, arg SharedContent
 		return nil, err
 	}
 	return items, nil
-}
-
-const sharedContentIndexStatus = `-- name: SharedContentIndexStatus :one
-SELECT COUNT(*) AS total_messages,COUNT(CASE WHEN s.parser_version>=?1 THEN 1 END) AS indexed_messages
-FROM messages AS m LEFT JOIN shared_content_state AS s ON s.message_id=m.id
-WHERE (CAST(?2 AS TEXT)='' OR m.account_id=CAST(?2 AS TEXT))
-AND (CAST(?3 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?3 AS TEXT))))
-AND (CAST(?4 AS TEXT)='' OR m.conversation_id=CAST(?4 AS TEXT))
-AND (CAST(?5 AS TEXT)='[]' OR m.id IN (SELECT value FROM json_each(CAST(?5 AS TEXT))))
-AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
-AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
-AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
-`
-
-type SharedContentIndexStatusParams struct {
-	ParserVersion  int64
-	AccountID      string
-	AccountIds     string
-	ConversationID string
-	MessageIds     string
-}
-
-type SharedContentIndexStatusRow struct {
-	TotalMessages   int64
-	IndexedMessages int64
-}
-
-func (q *Queries) SharedContentIndexStatus(ctx context.Context, arg SharedContentIndexStatusParams) (SharedContentIndexStatusRow, error) {
-	row := q.db.QueryRowContext(ctx, sharedContentIndexStatus,
-		arg.ParserVersion,
-		arg.AccountID,
-		arg.AccountIds,
-		arg.ConversationID,
-		arg.MessageIds,
-	)
-	var i SharedContentIndexStatusRow
-	err := row.Scan(&i.TotalMessages, &i.IndexedMessages)
-	return i, err
 }

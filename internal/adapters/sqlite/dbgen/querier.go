@@ -17,13 +17,18 @@ type Querier interface {
 	ClearRoomReactionVisibility(ctx context.Context, arg ClearRoomReactionVisibilityParams) error
 	ConversationUnreadSummary(ctx context.Context, conversationID string) (ConversationUnreadSummaryRow, error)
 	CorrectionNeighbors(ctx context.Context, arg CorrectionNeighborsParams) ([]CorrectionNeighborsRow, error)
+	CountCatalogPage(ctx context.Context, arg CountCatalogPageParams) (int64, error)
 	CountRoomArchiveMessages(ctx context.Context, arg CountRoomArchiveMessagesParams) (int64, error)
+	// Match ListSharedContent's scope, categories and search. Any matching rows
+	// suffice for the capped count, so stop at the limit without sorting them.
+	CountSharedContentFirstPage(ctx context.Context, arg CountSharedContentFirstPageParams) (int64, error)
 	DeleteObsoleteSharedContent(ctx context.Context, arg DeleteObsoleteSharedContentParams) error
 	DeletePendingReplyMetadata(ctx context.Context, messageID string) error
 	DeleteReactionObservation(ctx context.Context, ordinal int64) error
 	FindAvatar(ctx context.Context, arg FindAvatarParams) (Avatar, error)
 	FindConversation(ctx context.Context, arg FindConversationParams) (Conversation, error)
 	FindMessagePreview(ctx context.Context, arg FindMessagePreviewParams) (MessagePreview, error)
+	// Match the partial identity index used for messages with provider IDs.
 	FindProviderMessage(ctx context.Context, arg FindProviderMessageParams) (Message, error)
 	FindReactionObservation(ctx context.Context, arg FindReactionObservationParams) ([]MessageReactionObservation, error)
 	// Look up the remote reference before checking its conversation.
@@ -105,6 +110,8 @@ type Querier interface {
 	ListAvatars(ctx context.Context, arg ListAvatarsParams) ([]Avatar, error)
 	ListCanonicalMessageReferences(ctx context.Context, canonicalID string) ([]ListCanonicalMessageReferencesRow, error)
 	ListCanonicalSenderIdentities(ctx context.Context, arg ListCanonicalSenderIdentitiesParams) ([]ListCanonicalSenderIdentitiesRow, error)
+	// Keep selection ahead of joins on the bounded browse path.
+	ListCatalogPage(ctx context.Context, arg ListCatalogPageParams) ([]ListCatalogPageRow, error)
 	ListChanges(ctx context.Context, arg ListChangesParams) ([]Change, error)
 	ListContactRecords(ctx context.Context, accountID string) ([]Contact, error)
 	ListContactSources(ctx context.Context, arg ListContactSourcesParams) ([]ListContactSourcesRow, error)
@@ -118,11 +125,14 @@ type Querier interface {
 	ListRoomArchiveConversations(ctx context.Context, accountID string) ([]Conversation, error)
 	ListRoomIntents(ctx context.Context) ([]RoomIntent, error)
 	ListScheduledMessages(ctx context.Context, arg ListScheduledMessagesParams) ([]ListScheduledMessagesRow, error)
+	// The catalog and a bounded timeline use different driving indexes.
 	ListSharedContent(ctx context.Context, arg ListSharedContentParams) ([]ListSharedContentRow, error)
 	ListStarredMessages(ctx context.Context, arg ListStarredMessagesParams) ([]ListStarredMessagesRow, error)
 	MarkOutboxWireStarted(ctx context.Context, messageID string) error
 	MarkSharedContentIndexed(ctx context.Context, arg MarkSharedContentIndexedParams) error
+	// Bound the leading expression so SQLite seeks into messages_timeline.
 	MessagesAfterTarget(ctx context.Context, arg MessagesAfterTargetParams) ([]Message, error)
+	// Bound the leading expression so SQLite seeks into messages_timeline.
 	MessagesAtOrBeforeTarget(ctx context.Context, arg MessagesAtOrBeforeTargetParams) ([]Message, error)
 	OriginalSendReceipt(ctx context.Context, resourceID string) (Operation, error)
 	PendingDirectHistoryChecks(ctx context.Context, accountID string) ([]Conversation, error)
@@ -159,8 +169,9 @@ type Querier interface {
 	SetOperationResult(ctx context.Context, arg SetOperationResultParams) error
 	SetRoomObservation(ctx context.Context, arg SetRoomObservationParams) error
 	SetRoomReactionPrivacy(ctx context.Context, arg SetRoomReactionPrivacyParams) (int64, error)
+	SharedCatalogMessageProgress(ctx context.Context, arg SharedCatalogMessageProgressParams) (SharedCatalogMessageProgressRow, error)
+	SharedCatalogProgress(ctx context.Context, arg SharedCatalogProgressParams) (SharedCatalogProgressRow, error)
 	SharedContentCandidates(ctx context.Context, arg SharedContentCandidatesParams) ([]Message, error)
-	SharedContentIndexStatus(ctx context.Context, arg SharedContentIndexStatusParams) (SharedContentIndexStatusRow, error)
 	ShiftArchivedReactions(ctx context.Context, arg ShiftArchivedReactionsParams) error
 	Snapshot(ctx context.Context) (SnapshotRow, error)
 	UpdateAvatar(ctx context.Context, arg UpdateAvatarParams) error

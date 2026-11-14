@@ -157,6 +157,7 @@ type view struct {
 	CachedInboxFirst string
 	Role             engineapi.EngineRole
 	CanResetData     bool
+	CompactSource    bool
 	LatestEditTarget *engineapi.MessageEditTarget
 
 	SenderInfo                                                                                    *senderInfoView
@@ -840,7 +841,10 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	listOnly := fragment == "inbox"
 	editorOnly := fragment == "schedule-editor" && v.ChatID != ""
 	infoOnly := fragment == "info" && v.ChatID != ""
-	paneOnly := (fragment == "conversation" || fragment == "timeline") && v.ChatID != "" || editorOnly || infoOnly
+	paneOnly := (fragment == "conversation" || fragment == "timeline" || fragment == "source-pane") && v.ChatID != "" || editorOnly || infoOnly
+	if sourceFragmentRequest(r, v) && s.loadSourceNavigation(ctx, r, v, paneOnly) {
+		return
+	}
 	accountsOnly := fragment == "accounts"
 	scheduledOnly := fragment == "scheduled" && v.Section == "scheduled"
 	if fragment == "appearance" {
@@ -910,7 +914,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	first := r.Header.Get("X-Oie-Inbox-First")
 	// A query can match retained content outside the first row's fields.
 	canReuseImplicit := cursorMatches && v.Query == "" && (first == "" || validOperationKey(first))
-	reuseOnNavigation := fragment == "app" && v.Section == "chats" && !v.GlobalMessageSearch && cacheMatches &&
+	reuseOnNavigation := (fragment == "app" || fragment == "source") && v.Section == "chats" && !v.GlobalMessageSearch && cacheMatches &&
 		(explicitSelection || canReuseImplicit)
 	reuseOnRefresh := r.URL.Path == "/ui/refresh" && cacheMatches && cursorMatches && explicitSelection
 	v.ReuseInbox = reuseOnNavigation || reuseOnRefresh
@@ -934,7 +938,7 @@ func (s *Server) loadAccountConnection(ctx context.Context, v *view, accountID s
 	}
 }
 
-func (s *Server) loadInbox(ctx context.Context, v *view, editor engineapi.RequestEditorFn) bool {
+func (s *Server) loadInbox(ctx context.Context, v *view, editors ...engineapi.RequestEditorFn) bool {
 	limit := 100
 	includeCount := true
 	params := &engineapi.ListConversationsParams{Limit: &limit, IncludeLatestMessagePageCount: &includeCount}
@@ -958,7 +962,7 @@ func (s *Server) loadInbox(ctx context.Context, v *view, editor engineapi.Reques
 		kind := engineapi.ListConversationsParamsKindRoom
 		params.Kind = &kind
 	}
-	chats, err := s.client.ListConversationsWithResponse(ctx, params, editor)
+	chats, err := s.client.ListConversationsWithResponse(ctx, params, editors...)
 	if err != nil {
 		v.Unavailable = true
 		return false
@@ -1043,7 +1047,11 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		return
 	}
 	s.latestEditTarget(ctx, v)
-	items, usedContext := s.contextMessages(ctx, v, v.Selected.AccountId)
+	contextLimit := timelinePageSize
+	if r.Header.Get("HX-Request") == "true" && (r.Header.Get("X-Oie-Fragment") == "source" || r.Header.Get("X-Oie-Fragment") == "source-pane") {
+		contextLimit = sourceContextPageSize
+	}
+	items, usedContext := s.contextMessages(ctx, v, v.Selected.AccountId, contextLimit)
 	if v.Unavailable {
 		return
 	}
@@ -1067,7 +1075,11 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		v.TimelineOlder = v.ContextHasOlder
 		v.TimelineNewer = v.ContextHasNewer
 	}
-	if !validTimelineMessages(items, v.Selected.AccountId, v.ChatID, 50) {
+	limit := timelinePageSize
+	if usedContext {
+		limit = contextLimit
+	}
+	if !validTimelineMessages(items, v.Selected.AccountId, v.ChatID, limit) {
 		v.Unavailable = true
 		return
 	}
@@ -1203,9 +1215,13 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 			if r.URL.Path == "/" && v.Section != "media" && v.Section != "scheduled" {
 				component = inboxList(v)
 			}
-		case "conversation":
+		case "conversation", "source-pane":
 			if v.Section != "media" && v.Section != "scheduled" {
 				component = conversationPane(v)
+			}
+		case "source":
+			if v.CompactSource {
+				component = sourceRouteFragment(v)
 			}
 		case "timeline":
 			if v.Selected != nil {
@@ -1240,6 +1256,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Vary", "HX-Request, X-Oie-Fragment, X-Oie-Inbox-Scope, X-Oie-Inbox-First, X-Oie-Inbox-Cursor")
+	if v.CompactSource {
+		buf = encodeSourceFragment(w, r, buf)
+	}
 	if v.NotFound {
 		w.WriteHeader(http.StatusNotFound)
 	} else if v.Unavailable {
