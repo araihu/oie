@@ -76,7 +76,7 @@ func (s *Server) manageRoom(ctx context.Context, r *http.Request, text copy) (in
 		return http.StatusServiceUnavailable, mutationResult{Message: text.RoomCommandUnknown}
 	}
 	if owner.JSON200.Kind != "room" || owner.JSON200.AccountId != account {
-		return http.StatusConflict, mutationResult{Message: text.RoomConflict, Rejected: true}
+		return http.StatusConflict, mutationResult{Message: text.RoomManagementConflict, Rejected: true}
 	}
 	var message *string
 	if id := r.Form.Get("messageId"); id != "" {
@@ -130,7 +130,7 @@ func (s *Server) manageRoom(ctx context.Context, r *http.Request, text copy) (in
 	case "denied":
 		return http.StatusForbidden, mutationResult{Message: text.RoomManagementDenied, Rejected: true}
 	case "stale":
-		return http.StatusConflict, mutationResult{Message: text.RoomConflict, Rejected: true}
+		return http.StatusConflict, mutationResult{Message: text.RoomManagementConflict, Rejected: true}
 	case "unsupported", "unavailable":
 		return http.StatusServiceUnavailable, mutationResult{Message: text.RoomManagementUnavailable, Rejected: true}
 	default:

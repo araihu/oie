@@ -474,6 +474,7 @@
   "RoomDirectoryEmpty": "No public rooms found.",
   "RoomManage": "Manage room",
   "RoomManagementLoading": "Loading room actions…",
+  "RoomManagementConflict": "The room has changed. Review your changes before trying again.",
   "RoomManagementUnavailable": "Room actions are unavailable.",
   "RoomManagementDenied": "You don’t have permission for this action.",
   "RoomManagementConfirmed": "Change confirmed.",

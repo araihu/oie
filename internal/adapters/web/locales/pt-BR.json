@@ -474,6 +474,7 @@
   "RoomDirectoryEmpty": "Nenhuma sala pública encontrada.",
   "RoomManage": "Gerenciar sala",
   "RoomManagementLoading": "Carregando ações da sala…",
+  "RoomManagementConflict": "A sala mudou. Revise as alterações antes de tentar novamente.",
   "RoomManagementUnavailable": "As ações da sala estão indisponíveis.",
   "RoomManagementDenied": "Você não tem permissão para esta ação.",
   "RoomManagementConfirmed": "Alteração confirmada.",

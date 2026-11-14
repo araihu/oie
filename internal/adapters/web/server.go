@@ -264,6 +264,7 @@ type copy struct {
 	RoomDirectoryEmpty                                                                                                                                                                                       string
 	RoomManage                                                                                                                                                                                               string
 	RoomManagementLoading                                                                                                                                                                                    string
+	RoomManagementConflict                                                                                                                                                                                   string
 	RoomManagementUnavailable                                                                                                                                                                                string
 	RoomManagementDenied                                                                                                                                                                                     string
 	RoomManagementConfirmed                                                                                                                                                                                  string

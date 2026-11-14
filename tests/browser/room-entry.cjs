@@ -275,6 +275,7 @@ async function waitFor(predicate) {
       const management = page.locator('[data-room-management]');
       const saveDetails = management.getByRole('button', {name:'Salvar alterações'});
       await saveDetails.waitFor();
+      assert.equal(await management.getByRole('button',{name:'Atualizar',exact:true}).count(),0);
       assert.equal(await saveDetails.isDisabled(), true);
       const topic = management.getByRole('textbox', {name:'Tópico', exact:true});
       assert.equal(await topic.evaluate(input => input.tagName), 'TEXTAREA');
@@ -389,7 +390,7 @@ async function waitFor(predicate) {
         managementBlocked = true;
         const submit = management.getByRole('button', {name:'Salvar alterações'});
         await submit.click();
-        await management.getByText('O estado da sala mudou. Atualize antes de tentar novamente.', {exact:true}).waitFor();
+        await management.getByText('A sala mudou. Revise as alterações antes de tentar novamente.', {exact:true}).waitFor();
         await waitFor(() => managementCommands.length === 2);
         assert.equal(managementCommands[1].topic, 'Rascunho do tópico');
         assert.equal(managementCommands[1].name, undefined);
@@ -401,6 +402,15 @@ async function waitFor(predicate) {
     }
 
     managementBlocked = false;
+    await page.locator('[aria-controls=chat-options-panel]').click();
+    await page.locator('#chat-manage-room').click();
+    const recoveredPanel = page.locator('[data-room-management]');
+    await recoveredPanel.getByRole('textbox',{name:'Tópico',exact:true}).waitFor();
+    assert.equal(await recoveredPanel.getByRole('textbox',{name:'Tópico',exact:true}).inputValue(),'Rascunho do tópico');
+    assert.equal(await recoveredPanel.getByRole('button',{name:'Salvar alterações'}).isEnabled(),true);
+    await page.keyboard.press('Escape');
+    await recoveredPanel.waitFor({state:'hidden'});
+
     await page.locator('[aria-controls=chat-options-panel]').click();
     await page.getByRole('menuitem',{name:'Convidar pessoas'}).click();
     const invitePanel = page.locator('[data-room-management]');

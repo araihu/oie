@@ -3,7 +3,6 @@ window.OieRuntime.register('room-management', life => {
   if (!root) return;
   const content = root.querySelector('[data-room-management-content]');
   const status = root.querySelector('[data-room-management-status]');
-  const refresh = root.querySelector('[data-room-management-refresh]');
   let request, opener, message = '', affiliation = '', invite = false, active = false;
   const pending = new WeakMap();
   const title = document.getElementById("room-managementTitle");
@@ -286,13 +285,8 @@ window.OieRuntime.register('room-management', life => {
   });
 
   life.on(document, 'click', event => {
-    const trigger = event.target.closest('#chat-manage-room,#chat-invite-room,[id^=moderate-room-message-],[data-room-management-refresh]');
+    const trigger = event.target.closest('#chat-manage-room,#chat-invite-room,[id^=moderate-room-message-]');
     if (!trigger) return;
-    if (trigger === refresh) {
-      if (hasPending()) return;
-      void load();
-      return;
-    }
     opener = trigger.closest('[data-message-id]')?.querySelector('[data-message-menu-trigger]') ||
       document.querySelector('#chat-options [aria-controls="chat-options-panel"]');
     const menu = trigger.closest('[role=menu]');
