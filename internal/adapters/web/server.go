@@ -509,7 +509,7 @@ type copy struct {
 	RoomInvitation, ViewRoom, RoomAddressConflict, ConversationChanged                                                                                                   string
 	CreateRoom, PreviewRoom, RoomAddress, RoomAddressPlaceholder, RoomOccupants, RoomName                                                                                string
 	RoomPreviewLoading, RoomPreviewUnavailable, RoomAddressInvalid, RoomNotFound, RoomExists, RoomCreationFailed                                                         string
-	SearchChats, NoResults, NoResultsBody, NewChat, More                                                                                                                 string
+	SearchChats, NoResults, NoResultsBody, NewChat, DirectConversation, More                                                                                             string
 	Preview, PreviewNote, Message, Send, Attach                                                                                                                          string
 	SendingUnavailable, Back, Today, Navigation, Active                                                                                                                  string
 	OpenNavigation, Close, Details, Participants, MediaEmpty                                                                                                             string

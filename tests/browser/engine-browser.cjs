@@ -144,6 +144,7 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
     await closeAccounts(alicePage);
     await pickAccount(alicePage, 'Alice development', {empty: true});
     await alicePage.locator('[data-new-conversation]:visible').first().click();
+    await alicePage.locator('#new-conversation-direct').click();
     const newChat = alicePage.locator('#new-conversation-form');
     await newChat.waitFor({state: 'visible'});
     await choose(alicePage, newChat, 'Alice development');

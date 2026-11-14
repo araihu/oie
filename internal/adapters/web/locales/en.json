@@ -131,6 +131,7 @@
   "RoomNotFound": "Room not found.",
   "RoomExists": "A room already exists at this address.",
   "RoomCreationFailed": "Could not create the room.",
+  "DirectConversation": "Direct conversation",
   "NewChat": "New conversation",
   "More": "More options",
   "Preview": "Design preview",

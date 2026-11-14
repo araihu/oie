@@ -131,6 +131,7 @@
   "RoomNotFound": "Sala não encontrada.",
   "RoomExists": "Já existe uma sala neste endereço.",
   "RoomCreationFailed": "Não foi possível criar a sala.",
+  "DirectConversation": "Conversa direta",
   "NewChat": "Nova conversa",
   "More": "Mais opções",
   "Preview": "Prévia do visual",

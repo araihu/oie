@@ -231,7 +231,22 @@ async function waitFor(predicate) {
     await page.goto(base + '/?' + new URLSearchParams({chat, account: alice, lang: 'en'}));
     await page.locator('body[data-oie-live-ready=true]').waitFor();
     await page.locator('[data-new-conversation]').click();
-    await page.locator('#newchat-body [data-room-entry-open=create-room]').click();
+    const newMenu = page.locator('#new-conversation-menu').getByRole('menu');
+    assert.deepEqual((await newMenu.getByRole('menuitem').allTextContents()).map(label=>label.trim()), ['Direct conversation','Join room','Create room']);
+    await newMenu.getByRole('menuitem', {name:'Direct conversation'}).click();
+    await page.locator('#new-conversation-form').waitFor();
+    await newMenu.waitFor({state:'hidden'});
+    await page.keyboard.press('Escape');
+    await page.locator('#newchat-body').waitFor({state:'hidden'});
+    await page.waitForFunction(()=>document.activeElement?.hasAttribute('data-new-conversation'));
+    await page.keyboard.press('Enter');
+    await newMenu.getByRole('menuitem', {name:'Join room'}).click();
+    await page.locator('#join-room-form').waitFor();
+    await page.locator('#newchat-body').waitFor({state:'hidden'});
+    await page.keyboard.press('Escape');
+    await page.locator('#join-room-body').waitFor({state:'hidden'});
+    await page.locator('[data-new-conversation]').click();
+    await newMenu.getByRole('menuitem', {name:'Create room'}).click();
 
     const create = page.locator('#create-room-form');
     await create.locator('[name=address]').fill('new@rooms.fixture');
@@ -324,7 +339,7 @@ async function waitFor(predicate) {
             await view.waitForURL(url => !url.searchParams.has('chat'));
           }
           await view.locator('[data-new-conversation]').click();
-          await view.locator('#newchat-body [data-room-entry-open=create-room]').click();
+          await view.locator('#new-conversation-menu').getByRole('menuitem', {name:'Create room'}).click();
           await view.locator('#create-room-form').waitFor();
           const createdIssues = await scan('#create-room-body');
           assert.deepEqual(createdIssues.violations.map(value => value.id), [], ['create', width, theme, mode].join(' '));

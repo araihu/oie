@@ -1,6 +1,6 @@
 # XMPP room entry
 
-Open **New conversation** to enter a room by address or create a room. In a
+Open the **New conversation** menu and choose **Join room** or **Create room**. In a
 message, activate an `xmpp:room@service?join` link to open the same entry form
 with the address filled in. Visible invitations also show a compact room card
 in the message bubble. **View room** opens the same entry form. The card

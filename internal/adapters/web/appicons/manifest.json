@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
   "tool": "goshtoso-iconpack",
-  "release": "iconpack-73b8cdfa530d",
+  "release": "iconpack-23e6a0569808",
   "identityRevision": 1,
   "catalogSchemaVersion": 1,
-  "catalogSha256": "73b8cdfa530d1d3ad6a475b66d67046486d44c1c85948a3e156f13882de26e20",
+  "catalogSha256": "23e6a05698083d8c9724593ee009a7ae5ba9bb1b4a22bebfbbba9081cba6b479",
   "releaseJsonSha256": "",
   "checksumsSha256": "",
   "sourceKind": "muamba-snapshot",
   "archiveSha256": "",
-  "sourceConfigSha256": "73b8cdfa530d1d3ad6a475b66d67046486d44c1c85948a3e156f13882de26e20",
-  "sourceLockSha256": "5bc83b12c5f343c3f50d4bd10191cea4eeca7be877d5f9d824c7dfe02e78a0a2",
+  "sourceConfigSha256": "23e6a05698083d8c9724593ee009a7ae5ba9bb1b4a22bebfbbba9081cba6b479",
+  "sourceLockSha256": "6a20a06f743734316668af69007822767d0c6aefd1f1287c70a9dd8197d5720f",
   "package": "appicons",
   "constPrefix": "Icon",
   "spriteUrl": "/ui/icons/heroicons-extra.svg",
@@ -45,6 +45,16 @@
       "colorBehavior": "currentColor",
       "sha256": "9d451c7504b2940b65634723688c39445dc6eb96afb5f44aaf2ddf0e479f7004",
       "goIdentifier": "IconHeroiconsForward16SolidArrowUturnRight"
+    },
+    {
+      "canonicalName": "heroicons-group-16-solid-user-group",
+      "namespace": "custom",
+      "product": "heroicons-group",
+      "path": "heroicons-group/16/solid/user-group.svg",
+      "spriteSymbol": "heroicons-group-16-solid-user-group",
+      "colorBehavior": "currentColor",
+      "sha256": "cababd306febb0fbb9f886b6c750c35b5454524bbca56816c24fa6617fe501e6",
+      "goIdentifier": "IconHeroiconsGroup16SolidUserGroup"
     }
   ],
   "files": [
@@ -67,40 +77,46 @@
       "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
     },
     {
+      "path": "LICENSES/heroicons-group-LICENSE.txt",
+      "mode": "0644",
+      "bytes": 1071,
+      "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    },
+    {
       "path": "NOTICE",
       "mode": "0644",
-      "bytes": 533,
-      "sha256": "086281054489abe22d7fcb9d9d441461c2f993e9d25ed5eac909f10d7a2898a3"
+      "bytes": 703,
+      "sha256": "a83dff4227c248348c163c772dc7cdb6bb638089b06fb4f7410c0bcb5067afc0"
     },
     {
       "path": "PROVENANCE/.iconpack.yaml",
       "mode": "0644",
-      "bytes": 1208,
-      "sha256": "73b8cdfa530d1d3ad6a475b66d67046486d44c1c85948a3e156f13882de26e20"
+      "bytes": 1586,
+      "sha256": "23e6a05698083d8c9724593ee009a7ae5ba9bb1b4a22bebfbbba9081cba6b479"
     },
     {
       "path": "icons.json",
       "mode": "0644",
-      "bytes": 1486,
-      "sha256": "a2a4842897fe5d2e65c49120ee65a708f460b03b3ea58c0182204b910b070f03"
+      "bytes": 2116,
+      "sha256": "2daca9990e7caeb2c22d0451337d06d66f3d823896b03b8f127b3f551680dae2"
     },
     {
       "path": "icons_gen.go",
       "mode": "0644",
-      "bytes": 2361,
-      "sha256": "e4f3673588bc362c1fc19833a5654f0e715d35674817435ab35aa92a15e0f00f"
+      "bytes": 2784,
+      "sha256": "54e3775a69876e4b4d1f71632ecc35fc41ba3fec88f3da15af4c54b9f8ee1542"
     },
     {
       "path": "provenance.json",
       "mode": "0644",
-      "bytes": 3160,
-      "sha256": "5aa0999db29c13447270e68ba854d57e9abd8f63c2f48bf3166bc60347c96aea"
+      "bytes": 4030,
+      "sha256": "9356e92030f178574cdde7ced1071c9a4bff52b4fb600ab0f74d52728c0439b4"
     },
     {
       "path": "sprite.svg",
       "mode": "0644",
-      "bytes": 1432,
-      "sha256": "ee706acd85e34215cfc3d48db2b484ee0d1d130dc486a6ffa3535515db5e7218"
+      "bytes": 2047,
+      "sha256": "cfd25c749e02dfe3bc566e3364aa051b93056adf0823b9cc09e342a3b5c9d22a"
     }
   ]
 }
