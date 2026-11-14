@@ -17,7 +17,8 @@
         const storage = window[name];
         for (let index = storage.length - 1; index >= 0; index--) {
           const key = storage.key(index);
-          if (key?.startsWith('oie.')) storage.removeItem(key);
+          const legacyForwarding = name === 'sessionStorage' && key?.startsWith('forwarding-journals:');
+          if (key?.startsWith('oie.') || legacyForwarding) storage.removeItem(key);
         }
       } catch {}
     }

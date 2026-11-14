@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -137,4 +138,95 @@ func roomIntentRevision(t *testing.T, e *application.Engine, room domain.ID) dom
 		t.Fatal(err)
 	}
 	return session.IntentRevisionID
+}
+
+type blockingForwardMedia struct {
+	forwardingMedia
+	started chan struct{}
+	finish  chan struct{}
+}
+
+func (m blockingForwardMedia) OpenForwardAttachment(ctx context.Context, url string) (string, io.ReadCloser, error) {
+	m.started <- struct{}{}
+	select {
+	case <-m.finish:
+		return m.forwardingMedia.OpenForwardAttachment(ctx, url)
+	case <-ctx.Done():
+		return "", nil, ctx.Err()
+	}
+}
+
+func TestForwardRejectsSourceCancelledDuringAttachmentTransfer(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	defer cancel()
+	protocol := &schedulingProtocol{roomHTTPProtocol: &roomHTTPProtocol{protocolStub: &protocolStub{}, rooms: make(map[domain.ID]domain.RoomSession)}}
+	e, _, server := newMessagingEngine(t, t.TempDir(), protocol)
+	source := openTestConversation(t, e, "alice@localhost")
+	first, err := e.OpenRoom(ctx, id(), source.AccountID, "one@rooms.localhost", "", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := e.OpenRoom(ctx, id(), source.AccountID, "two@rooms.localhost", "", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, err := engineapi.NewClientWithResponses(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.SetMediaReader(forwardingMedia{})
+	original, err := e.SendComposition(ctx, id(), source.ID, domain.OutgoingComposition{OriginalText: "https://example.test/report.pdf"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	acceptedKey, racingKey := id(), id()
+	send := func(key, destination domain.ID) (*engineapi.ForwardMessageResponse, error) {
+		return client.ForwardMessageWithResponse(ctx, string(original.Message.ID),
+			&engineapi.ForwardMessageParams{IdempotencyKey: string(key)},
+			engineapi.ForwardMessage{ExpectedRevisionId: string(original.Message.RevisionID), ConversationId: string(destination)})
+	}
+	accepted, err := send(acceptedKey, first.Conversation.ID)
+	if err != nil || accepted.JSON202 == nil {
+		t.Fatalf("first forward: %+v %v", accepted, err)
+	}
+	media := blockingForwardMedia{started: make(chan struct{}, 1), finish: make(chan struct{})}
+	e.SetMediaReader(media)
+	type outcome struct {
+		response *engineapi.ForwardMessageResponse
+		err      error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		response, err := send(racingKey, second.Conversation.ID)
+		done <- outcome{response, err}
+	}()
+	select {
+	case <-media.started:
+	case result := <-done:
+		t.Fatalf("copy returned before staging its attachment: %+v", result)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	cancelled, err := e.CancelMessage(ctx, id(), original.Message.ID, original.Message.RevisionID)
+	if err != nil || cancelled.Message.SendState != "cancelled" {
+		t.Fatalf("source cancellation: %+v %v", cancelled, err)
+	}
+	close(media.finish)
+	result := <-done
+	if result.err != nil || result.response.StatusCode() != http.StatusConflict {
+		t.Fatalf("forward after source cancellation: %+v %v", result.response, result.err)
+	}
+	conflict := result.response.ApplicationproblemJSON409
+	if conflict == nil || conflict.CurrentMessage == nil || conflict.CurrentMessage.RevisionId != string(cancelled.Message.RevisionID) {
+		t.Fatalf("conflict must identify the changed source: %+v", conflict)
+	}
+	messages, err := e.Messages(ctx, second.Conversation.ID, "", 10)
+	if err != nil || len(messages) != 0 {
+		t.Fatalf("unexpected messages in the second room: %+v %v", messages, err)
+	}
+	replayed, err := send(acceptedKey, first.Conversation.ID)
+	if err != nil || replayed.JSON200 == nil || replayed.JSON200.Id != accepted.JSON202.Id {
+		t.Fatalf("previous acceptance after source cancellation: %+v %v", replayed, err)
+	}
 }

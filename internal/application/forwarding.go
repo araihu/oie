@@ -20,7 +20,7 @@ type ForwardAttachmentReader interface {
 	OpenForwardAttachment(context.Context, string) (string, io.ReadCloser, error)
 }
 
-func (e *Engine) ForwardMessage(ctx context.Context, key, sourceID, revisionID, destinationID domain.ID) (MessageResult, error) {
+func (e *Engine) ForwardMessage(ctx context.Context, key, sourceID, revisionID, destinationID domain.ID) (result MessageResult, err error) {
 	if !validID(key) || !validID(sourceID) || !validID(revisionID) || !validID(destinationID) {
 		return MessageResult{}, ErrInvalid
 	}
@@ -36,16 +36,21 @@ func (e *Engine) ForwardMessage(ctx context.Context, key, sourceID, revisionID, 
 	if accepted != nil {
 		return MessageResult{Message: *accepted, Replayed: true}, nil
 	}
+	defer func() {
+		// A concurrent retry can reach acceptance while this request is staging a file.
+		if err != nil && ctx.Err() == nil {
+			if accepted, replayErr := replay.ReplayAcceptedMessage(ctx, key, requestFingerprint); replayErr == nil && accepted != nil {
+				result, err = MessageResult{Message: *accepted, Replayed: true}, nil
+			}
+		}
+	}()
 
 	source, err := e.Message(ctx, sourceID)
 	if err != nil {
 		return MessageResult{}, err
 	}
-	if source.ID != sourceID || source.RevisionID != revisionID {
-		return MessageResult{}, ErrStateConflict
-	}
-	if source.SendState == "cancelled" {
-		return MessageResult{}, ErrStateConflict
+	if source.ID != sourceID || source.RevisionID != revisionID || source.SendState == "cancelled" {
+		return MessageResult{}, StateConflict{Current: source}
 	}
 	if _, err = e.messageDestination(ctx, destinationID, "room"); err != nil {
 		return MessageResult{}, err
@@ -81,7 +86,10 @@ func (e *Engine) ForwardMessage(ctx context.Context, key, sourceID, revisionID, 
 			return MessageResult{}, err
 		}
 	}
-	return e.sendComposition(ctx, key, destinationID, composition, nil, ReplyReview{}, "room", requestFingerprint)
+	return e.sendComposition(ctx, key, destinationID, composition, nil, ReplyReview{}, compositionAcceptance{
+		expectedKind: "room", fingerprint: requestFingerprint,
+		forwardSource: &ForwardSource{MessageID: sourceID, RevisionID: revisionID},
+	})
 }
 
 // Retries reuse attachment IDs even when a previous request ended before send.

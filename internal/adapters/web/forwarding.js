@@ -5,25 +5,57 @@ window.OieRuntime.register('forwarding', life => {
   const body = dialog?.querySelector('[data-forward-body]');
   if (!body) return;
 
-  const journalsKey = 'forwarding-journals:' + document.body.dataset.engineId;
+  const engine = document.body.dataset.engineId;
+  const journalsKey = 'oie.forwarding-journals:' + engine;
+  const legacyJournalsKey = 'forwarding-journals:' + engine;
   let saved;
-  try { saved = JSON.parse(sessionStorage.getItem(journalsKey)); } catch { /* Use the in-memory journal. */ }
-  const journals = window.OieRuntime.memory.get(journalsKey) || new Map(Array.isArray(saved) ? saved : []);
-  window.OieRuntime.memory.set(journalsKey, journals);
+  let legacy;
+  try {
+    saved = JSON.parse(sessionStorage.getItem(journalsKey));
+    if (!Array.isArray(saved)) legacy = JSON.parse(sessionStorage.getItem(legacyJournalsKey));
+  } catch { /* Use the in-memory journal. */ }
+  const memory = window.OieRuntime.memory;
+  const journals = memory.get(journalsKey) || new Map(Array.isArray(saved) ? saved : []);
+  memory.set(journalsKey, journals);
   function persist() {
-    try { sessionStorage.setItem(journalsKey, JSON.stringify([...journals])); } catch { /* Keep in-memory retries. */ }
+    if (life.signal.aborted) return;
+    try {
+      if (journals.size) sessionStorage.setItem(journalsKey, JSON.stringify([...journals]));
+      else sessionStorage.removeItem(journalsKey);
+      sessionStorage.removeItem(legacyJournalsKey);
+    } catch { /* Keep in-memory retries. */ }
+  }
+  if (Array.isArray(legacy)) {
+    for (const [key, receipt] of legacy) {
+      const [source, revision, room] = key.split(':');
+      const destination = source + ':' + room;
+      if (!journals.has(destination) || receipt.accepted) {
+        journals.set(destination, {key: receipt.key, revision, state: receipt.accepted ? 'accepted' : 'uncertain', selected: true, message: receipt.message});
+      }
+    }
+    persist();
   }
 
-  let source = '', opener, request, submitting = false;
+  let opener, request, submitting = false;
   const notify = (tone, message) => window.dispatchEvent(new CustomEvent('notify', {detail: {kind: 'toast', tone, message}}));
   const modal = action => window.dispatchEvent(new CustomEvent('modal:' + action, {detail: {id}}));
   const boxes = form => [...form.querySelectorAll('input[name=conversationId]')];
   const resultNode = box => box.closest('[data-forward-room]').querySelector('[data-forward-result]');
-  const receiptKey = (form, box) => [source, form.elements.revisionId.value, box.value].join(':');
+  const receiptKey = (form, box) => form.elements.messageId.value + ':' + box.value;
+  const roomReceipt = (form, box) => journals.get(receiptKey(form, box));
+  const superseded = (form, receipt) => receipt.revision !== form.elements.revisionId.value &&
+    (receipt.state === 'pending' || receipt.state === 'rejected');
   const pending = form => boxes(form).filter(box => box.checked && !box.disabled);
   const updateButton = form => {
     const button = form.querySelector('[data-forward-submit]');
-    if (button) button.setAttribute('aria-disabled', String(submitting || !pending(form).length));
+    if (!button) return;
+    const selected = pending(form);
+    button.setAttribute('aria-disabled', String(submitting || !selected.length));
+    const retry = selected.some(box => {
+      const receipt = roomReceipt(form, box);
+      return receipt && receipt.message && !superseded(form, receipt);
+    });
+    button.textContent = submitting ? body.dataset.sending : retry ? button.dataset.retry : button.dataset.send;
   };
 
   async function open(messageId, trigger) {
@@ -31,7 +63,6 @@ window.OieRuntime.register('forwarding', life => {
     request?.abort();
     const controller = new AbortController();
     request = controller;
-    source = messageId;
     opener = trigger || opener;
     const loading = document.createElement('p');
     loading.role = 'status';
@@ -57,12 +88,12 @@ window.OieRuntime.register('forwarding', life => {
       window.OieTime?.localize(fresh);
       document.dispatchEvent(new Event('oie:forward-content'));
       for (const box of boxes(fresh)) {
-        const receipt = journals.get(receiptKey(fresh, box));
-        if (!receipt) continue;
-        box.checked = true;
-        box.disabled = receipt.accepted;
+        const receipt = roomReceipt(fresh, box);
+        if (!receipt || superseded(fresh, receipt)) continue;
+        box.checked = receipt.selected;
+        box.disabled = receipt.state === 'accepted';
         resultNode(box).textContent = receipt.message;
-        resultNode(box).dataset.accepted = String(receipt.accepted);
+        resultNode(box).dataset.accepted = String(box.disabled);
       }
       updateButton(fresh);
       fresh.querySelector('[data-forward-search]')?.focus({preventScroll: true});
@@ -104,10 +135,15 @@ window.OieRuntime.register('forwarding', life => {
     body.querySelector('[data-forward-no-results]').hidden = visible !== 0;
   });
   life.on(body, 'change', event => {
-    if (event.target.name === 'conversationId') {
-      updateButton(event.target.form);
-      event.target.form.querySelector('[data-forward-search]').dispatchEvent(new Event('input', {bubbles: true}));
+    const box = event.target;
+    if (box.name !== 'conversationId') return;
+    const receipt = roomReceipt(box.form, box);
+    if (receipt) {
+      receipt.selected = box.checked;
+      persist();
     }
+    updateButton(box.form);
+    box.form.querySelector('[data-forward-search]').dispatchEvent(new Event('input', {bubbles: true}));
   });
   life.on(body, 'submit', async event => {
     const form = event.target;
@@ -119,54 +155,71 @@ window.OieRuntime.register('forwarding', life => {
     const available = boxes(form).filter(box => !box.disabled);
     for (const box of selected) {
       const key = receiptKey(form, box);
-      if (!journals.has(key)) journals.set(key, {key: box.dataset.key, accepted: false, message: ''});
+      let receipt = journals.get(key);
+      if (!receipt || superseded(form, receipt)) {
+        receipt = {key: box.dataset.key, revision: form.elements.revisionId.value, state: 'pending', selected: true, message: ''};
+        journals.set(key, receipt);
+      }
+      receipt.selected = true;
     }
     persist();
     const button = form.querySelector('[data-forward-submit]');
     updateButton(form);
-    button.textContent = body.dataset.sending;
     for (const box of available) box.disabled = true;
     try {
       for (const box of selected) {
         if (life.signal.aborted) return;
-        const key = receiptKey(form, box);
-        const receipt = journals.get(key);
+        const receipt = roomReceipt(form, box);
+        const wasUncertain = receipt.state === 'uncertain';
+        receipt.state = 'uncertain';
         receipt.message = body.dataset.unconfirmed;
         persist();
         const status = resultNode(box);
         status.textContent = body.dataset.sending;
         const data = new URLSearchParams();
-        for (const name of ['engineId','csrf','messageId','revisionId']) data.set(name, form.elements[name].value);
+        for (const name of ['engineId','csrf','messageId']) data.set(name, form.elements[name].value);
+        data.set('revisionId', receipt.revision);
         data.set('conversationId', box.value);
         data.set('operationKey', receipt.key);
         try {
           const response = await life.fetch('/ui/messages/forward', {method: 'POST', body: data, headers: {Accept: 'application/json'}});
           const result = await response.json();
-          receipt.accepted = response.ok && result.accepted === true;
+          if (life.signal.aborted) return;
+          if (response.ok && result.accepted === true) receipt.state = 'accepted';
+          else if (result.rejected && (!wasUncertain || result.code === 'source_changed')) {
+            receipt.state = 'rejected';
+            if (result.code === 'source_changed' && superseded(form, receipt)) {
+              box.checked = false;
+              receipt.selected = false;
+              // The checkbox already has a new key for the revision on screen.
+              journals.delete(receiptKey(form, box));
+            } else if (result.code === 'source_changed') {
+              // The user must reopen the dialog to review the current source.
+              box.dataset.forwardStale = '';
+            }
+          }
           receipt.message = result.message || body.dataset.unconfirmed;
         } catch { /* Keep this room and key available for an exact retry. */ }
+        if (life.signal.aborted) return;
         persist();
         status.textContent = receipt.message;
-        status.dataset.accepted = String(receipt.accepted);
+        status.dataset.accepted = String(receipt.state === 'accepted');
       }
       if (life.signal.aborted) return;
-      if (selected.every(box => journals.get(receiptKey(form, box))?.accepted) &&
-          boxes(form).every(box => !journals.has(receiptKey(form, box)) || journals.get(receiptKey(form, box)).accepted)) {
+      if (selected.every(box => roomReceipt(form, box)?.state === 'accepted')) {
         for (const box of boxes(form)) {
-          const key = receiptKey(form, box);
-          if (journals.get(key)?.accepted) journals.delete(key);
+          if (roomReceipt(form, box)?.state === 'accepted') journals.delete(receiptKey(form, box));
         }
         persist();
         if (dialog.open) modal('close');
         notify('success', body.dataset.complete);
         document.dispatchEvent(new CustomEvent('oie:refresh-request'));
       } else if (dialog.open) {
-        button.textContent = button.dataset.retry;
         button.focus({preventScroll: true});
       } else notify('danger', body.dataset.unconfirmed);
     } finally {
       submitting = false;
-      for (const box of available) box.disabled = journals.get(receiptKey(form, box))?.accepted || false;
+      for (const box of available) box.disabled = Object.hasOwn(box.dataset, 'forwardStale') || roomReceipt(form, box)?.state === 'accepted';
       updateButton(form);
     }
   });

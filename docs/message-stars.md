@@ -114,3 +114,5 @@ searches. Forwarding creates one ordinary outgoing message per selected room.
 | Source file missing or over the upload limit | Show the failure for that room. | No copy with a substitute source URL |
 | Response lost after acceptance | Retry that room with the same key and reconcile its receipt. | One message total for that room |
 | Another selected room already accepted | Show its result and skip it on retry. | No duplicate |
+| Source edited while a room's result is unknown | Retry the original revision and key before confirming the edit for that room. If the original was rejected, the new revision can be selected and confirmed. | No duplicate |
+| Deselect a room after a refusal | Confirm the remaining selection and leave the deselected room unchecked when reopening. | No send to the deselected room |

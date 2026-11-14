@@ -105,12 +105,16 @@ type ConversationMutation struct {
 	Conversation domain.Conversation
 	RoomEntry    *domain.RoomSession
 }
+type ForwardSource struct {
+	MessageID, RevisionID domain.ID
+}
 type MessageMutation struct {
 	Operation                Operation
 	Fingerprint              string
 	Message                  domain.Message
 	ConversationRevisionID   domain.ID
 	ExpectedConversationKind string
+	ForwardSource            *ForwardSource
 }
 type CancelMutation struct {
 	Operation                                 Operation
@@ -335,16 +339,23 @@ func (e *Engine) SendCompositionForKind(ctx context.Context, key, conversationID
 			ReplyReview
 		}{conversationID, in, at, review})
 	}
-	return e.sendComposition(ctx, key, conversationID, in, at, review, expectedKind, requestFingerprint)
+	return e.sendComposition(ctx, key, conversationID, in, at, review, compositionAcceptance{
+		expectedKind: expectedKind, fingerprint: requestFingerprint,
+	})
 }
 
-func (e *Engine) sendComposition(ctx context.Context, key, conversationID domain.ID, in domain.OutgoingComposition, at *time.Time, review ReplyReview, expectedKind, requestFingerprint string) (result MessageResult, err error) {
+type compositionAcceptance struct {
+	expectedKind, fingerprint string
+	forwardSource             *ForwardSource
+}
+
+func (e *Engine) sendComposition(ctx context.Context, key, conversationID domain.ID, in domain.OutgoingComposition, at *time.Time, review ReplyReview, accept compositionAcceptance) (result MessageResult, err error) {
 	repo, err := e.messaging()
 	if err != nil {
 		return MessageResult{}, err
 	}
 	if replay, ok := e.repo.(MessageReplayRepository); ok {
-		m, err := replay.ReplayAcceptedMessage(ctx, key, requestFingerprint)
+		m, err := replay.ReplayAcceptedMessage(ctx, key, accept.fingerprint)
 		if err != nil {
 			return MessageResult{}, err
 		}
@@ -356,7 +367,7 @@ func (e *Engine) sendComposition(ctx context.Context, key, conversationID domain
 			if !errors.Is(err, ErrReplySourceChanged) || ctx.Err() != nil {
 				return
 			}
-			m, replayErr := replay.ReplayAcceptedMessage(ctx, key, requestFingerprint)
+			m, replayErr := replay.ReplayAcceptedMessage(ctx, key, accept.fingerprint)
 			if replayErr != nil {
 				err = replayErr
 			} else if m != nil {
@@ -364,7 +375,7 @@ func (e *Engine) sendComposition(ctx context.Context, key, conversationID domain
 			}
 		}()
 	}
-	c, err := e.messageDestination(ctx, conversationID, expectedKind)
+	c, err := e.messageDestination(ctx, conversationID, accept.expectedKind)
 	if err != nil {
 		return MessageResult{}, err
 	}
@@ -393,7 +404,11 @@ func (e *Engine) sendComposition(ctx context.Context, key, conversationID domain
 	if err != nil {
 		return MessageResult{}, err
 	}
-	result, err = repo.AcceptMessage(ctx, MessageMutation{Operation: Operation{ID: key, ResourceID: id, CreatedAt: now, Kind: "send_message"}, Fingerprint: requestFingerprint, Message: m, ConversationRevisionID: cr, ExpectedConversationKind: c.Kind})
+	result, err = repo.AcceptMessage(ctx, MessageMutation{
+		Operation:   Operation{ID: key, ResourceID: id, CreatedAt: now, Kind: "send_message"},
+		Fingerprint: accept.fingerprint, Message: m, ConversationRevisionID: cr,
+		ExpectedConversationKind: c.Kind, ForwardSource: accept.forwardSource,
+	})
 	if err == nil {
 		e.outgoingWorkCommitted()
 	}

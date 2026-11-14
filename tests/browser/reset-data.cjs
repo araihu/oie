@@ -90,9 +90,11 @@ async function testReset(browser, url, fixture) {
 
     const peer = await context.newPage();
     await peer.goto(url + '/?lang=' + fixture.locale);
-    await page.evaluate(async () => {
+    await page.evaluate(async engine => {
       localStorage.setItem('oie.draft.test', 'remove me');
       sessionStorage.setItem('oie.test', 'remove me');
+      sessionStorage.setItem('oie.forwarding-journals:' + engine, 'remove current forwarding journal');
+      sessionStorage.setItem('forwarding-journals:' + engine, 'remove legacy forwarding journal');
       localStorage.setItem('unrelated', 'keep me');
       await new Promise((resolve, reject) => {
         const request = indexedDB.open('oie.pdf-previews.v1', 1);
@@ -100,7 +102,7 @@ async function testReset(browser, url, fixture) {
         request.onerror = reject;
         request.onsuccess = () => { request.result.close(); resolve(); };
       });
-    });
+    }, before.id);
     await entry.click();
     await input.fill('delete');
     if (fixture.blockCompletionStorage) await page.evaluate(() => history.replaceState(history.state, '', '/'));
@@ -153,12 +155,14 @@ async function testReset(browser, url, fixture) {
     await addAccount.waitFor();
     assert.equal(await peer.getByText(fixture.success, { exact: true }).count(), 0);
     await page.waitForFunction(async () => !(await indexedDB.databases()).some(db => db.name === 'oie.pdf-previews.v1'));
-    const storage = await page.evaluate(() => ({
+    const storage = await page.evaluate(engine => ({
       draft: localStorage.getItem('oie.draft.test'),
       session: sessionStorage.getItem('oie.test'),
+      forwarding: sessionStorage.getItem('oie.forwarding-journals:' + engine),
+      legacyForwarding: sessionStorage.getItem('forwarding-journals:' + engine),
       unrelated: localStorage.getItem('unrelated'),
-    }));
-    assert.deepEqual(storage, { draft: null, session: null, unrelated: 'keep me' });
+    }), before.id);
+    assert.deepEqual(storage, { draft: null, session: null, forwarding: null, legacyForwarding: null, unrelated: 'keep me' });
     assert(!(await context.cookies()).some(cookie => cookie.name === 'oie_theme' || cookie.name === 'oie_lang'));
     assert.deepEqual((await (await fetch(url + '/api/v1/accounts')).json()).items, []);
     await page.reload();

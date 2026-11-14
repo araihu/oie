@@ -213,15 +213,21 @@ func (s *Server) submitForward(ctx context.Context, r *http.Request, text copy) 
 	}
 	switch result.StatusCode() {
 	case http.StatusRequestEntityTooLarge:
-		return result.StatusCode(), mutationResult{Message: text.AttachmentTooLarge}
+		return result.StatusCode(), mutationResult{Message: text.AttachmentTooLarge, Rejected: true}
 	case http.StatusConflict:
 		var problem engineapi.Problem
-		if json.Unmarshal(result.Body, &problem) == nil && problem.CurrentRoomSession != nil && !problem.CurrentRoomSession.Active {
-			return result.StatusCode(), mutationResult{Message: text.RoomJoinRequired}
+		if json.Unmarshal(result.Body, &problem) == nil {
+			if current := problem.CurrentMessage; problem.Code == "state_conflict" && current != nil && validOperationKey(current.Id) &&
+				validOperationKey(current.RevisionId) && (current.Id != source || current.RevisionId != revision || current.SendState == "cancelled") {
+				return result.StatusCode(), mutationResult{Message: text.ForwardChanged, Rejected: true, Code: "source_changed"}
+			}
+			if problem.CurrentRoomSession != nil && !problem.CurrentRoomSession.Active {
+				return result.StatusCode(), mutationResult{Message: text.RoomJoinRequired, Rejected: true}
+			}
 		}
-		return result.StatusCode(), mutationResult{Message: text.ForwardChanged}
+		return result.StatusCode(), mutationResult{Message: text.ForwardChanged, Rejected: true}
 	case http.StatusNotFound, http.StatusBadRequest, http.StatusUnprocessableEntity, http.StatusUnsupportedMediaType, http.StatusBadGateway:
-		return result.StatusCode(), mutationResult{Message: text.ForwardFailed}
+		return result.StatusCode(), mutationResult{Message: text.ForwardFailed, Rejected: true}
 	default:
 		return http.StatusServiceUnavailable, mutationResult{Message: text.ForwardUnconfirmed}
 	}
