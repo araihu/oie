@@ -228,6 +228,8 @@ const messages = [source, message(12, 'Message with a rejected destination')];
         assert.notEqual(requests.at(-1).key, staleAttempt.key);
         assert.equal(requests.at(-1).expectedRevisionId, id(14));
 
+        // The refresh triggered by forwarding replaces this edited favorite's menu.
+        await page.locator(`[data-info-star-message="${source.id}"][data-source-revision="${id(14)}"]`).waitFor();
         await open(source);
         await choose(alpha);
         let attempts = 0;

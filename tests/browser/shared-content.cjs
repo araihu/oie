@@ -9,6 +9,16 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const accounts=[{id:alpha,revisionId:revision,label:'Personal',address:'alice@fixture',protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z'},{id:beta,revisionId:revision,label:'Work',address:'work@fixture',protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z'}];
  const chats=[{id:chatA,accountId:alpha,title:'Family',address:'family@fixture',kind:'room'},{id:chatB,accountId:beta,title:'Team',address:'team@fixture',kind:'direct'}].map(c=>({...c,revisionId:revision,updatedAt:'2026-11-08T12:00:00Z',unreadCount:0,archived:false,favorite:false,lastMessage:'Shared reference'}));
  const items=Array.from({length:63},(_,n)=>{const kind=n<54?'image':n===54?'audio':n===55?'video':n<59?'link':'document',owner=n<2?chats[0]:chats[n%2],url=kind==='link'?'https://social.example.test/post/'+n:'https://files.example.test/'+(kind==='document'?'invoice-'+n+'.pdf':kind==='audio'?'recording.mp3':kind==='video'?'video.mp4':'photo-'+n+'.png'),message={id:id(100+(n<2?0:n)),revisionId:revision,accountId:owner.accountId,conversationId:owner.id,sender:{id:id(20+n%2),displayName:n<2?'Bob':'Sender '+n},originalText:n<2?'Exact original 😀\r\nhttps://files.example.test/photo-0.png\r\nhttps://files.example.test/photo-1.png':'Caption café '+n+'\n'+url,createdAt:n<2?'2026-11-08T12:00:00Z':n===2?'2026-11-01T01:00:00Z':new Date(Date.UTC(2026,9,33-n,12)).toISOString(),isOwn:false,sendState:'received'};return{id:id(500+n),revisionId:revision,kind,url,fileName:kind==='link'?'':decodeURIComponent(new URL(url).pathname.split('/').at(-1)),accountLabel:accounts.find(a=>a.id===owner.accountId).label,conversationTitle:owner.title,message,...(['image','link'].includes(kind)?{preview:{id:id(300+n),revisionId:revision,accountId:message.accountId,conversationId:message.conversationId,messageId:message.id,url,kind,state:'ready',downloadState:'not_downloaded',...(kind==='link'?{title:'Article <script>safe</script> café',description:'Useful metadata',imageHash:hash}:{}),updatedAt:'2026-11-08T12:00:00Z'}}:{})}});
+ const favorites=items.slice(2,8).map(({message})=>({
+  message,
+  conversation:chats.find(chat=>chat.id===message.conversationId),
+  star:{messageId:message.id,accountId:message.accountId,conversationId:message.conversationId,starred:true,revisionId:revision,updatedAt:message.createdAt},
+ }));
+ const schedules=Array.from({length:6},(_,n)=>({
+  conversation:chats[n%2],
+  message:{...favorites[n].message,id:id(700+n),isOwn:true,sendState:'queued',
+   composition:{originalText:'Scheduled message '+n},scheduledAt:new Date(Date.UTC(2026,10,n<5?15:16,12+n)).toISOString()},
+ }));
  const emit=(type='message.preview_changed',data={})=>{state.seq++;for(const stream of streams)stream.write(`id: ${engine}:${state.seq}\nevent: ${type}\ndata: ${JSON.stringify(data)}\n\n`)};
  const currentStar=messageId=>state.stars.get(messageId)||{messageId,accountId:items.find(i=>i.message.id===messageId)?.message.accountId||alpha,conversationId:items.find(i=>i.message.id===messageId)?.message.conversationId||chatA,starred:false,revisionId:null,updatedAt:null};
  const api=http.createServer(async(req,res)=>{const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(code,data)=>{res.statusCode=code;res.end(JSON.stringify(data))};
@@ -40,6 +50,15 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    if(state.mode==='foreign'&&page.length)return send(200,{items:[{...page[0],message:{...page[0].message,accountId:id(99)}}],indexing:{state:'complete',indexedMessages:600,totalMessages:600}});
    return send(200,{items:page,firstPageCounts,nextCursor:selected.length>start+50?'page-2':undefined,indexing:{state:state.pending?'pending':'complete',indexedMessages:state.pending?250:600,totalMessages:600}});
   }
+  if(u.pathname==='/api/v1/starred-messages'){
+   const q=u.searchParams.get('q');
+   return send(200,{items:favorites.filter(({message})=>!q||message.originalText.includes(q))});
+  }
+  if(u.pathname==='/api/v1/scheduled-messages'){
+   const conversations=[...u.searchParams.getAll('conversationId'),...u.searchParams.getAll('conversationIds')];
+   const selected=schedules.filter(({conversation})=>!conversations.length||conversations.includes(conversation.id));
+   return send(200,{engineId:engine,items:selected});
+  }
   if(u.pathname==='/api/v1/conversations')return send(200,{items:chats});
   for(const chat of chats){if(u.pathname===`/api/v1/conversations/${chat.id}`)return send(200,chat);if(u.pathname===`/api/v1/conversations/${chat.id}/messages`)return send(200,{items:[...new Map(items.filter(i=>i.message.conversationId===chat.id).map(i=>[i.message.id,i.message])).values()].slice(0,50)});const context=u.pathname.match(new RegExp('^/api/v1/conversations/'+chat.id+'/messages/([^/]+)/context$'));if(context){const source=items.find(i=>i.message.id===context[1]&&i.message.conversationId===chat.id);return source?send(200,{targetId:source.message.id,items:[source.message],hasOlder:false,hasNewer:true}):send(404,{status:404})}}
   if(u.pathname.startsWith('/api/v1/media/')){res.setHeader('Content-Type','image/png');res.end(image);return}
@@ -62,6 +81,80 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const watch=async context=>{await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==base){external.push(route.request().url());route.abort()}else route.continue()});context.on('page',page=>page.on('pageerror',e=>errors.push(e.message)))};
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
+  for(const {width,locale,mode,columns} of [
+   {width:390,locale:'pt-BR',mode:'light',columns:1},
+   {width:1440,locale:'en',mode:'dark',columns:3},
+   {width:2160,locale:'pt-BR',mode:'dark',columns:5},
+  ]){
+   const ctx=await browser.newContext({viewport:{width,height:900},locale,timezoneId:'America/Sao_Paulo'});
+   await watch(ctx);
+   await ctx.addInitScript(key=>{if(location.origin!=='null')localStorage.setItem(key,'false')},preference);
+   const p=await ctx.newPage();
+   const open=section=>p.goto(base+'/?section='+section+'&contentType=links&lang='+locale+'&theme='+mode);
+   const closeTo=(actual,expected,label)=>assert(Math.abs(actual-expected)<=1,JSON.stringify({width,label,actual,expected}));
+   const geometry=selector=>p.locator(selector).evaluate(grid=>{
+    const bounds=node=>node.getBoundingClientRect().toJSON();
+    const items=[...grid.querySelectorAll('[data-favorite-source], .oie-agenda-card, [data-shared-item]')].map(bounds);
+    const days=[...grid.querySelectorAll('.oie-agenda-day:not([hidden])')].map(bounds);
+    return {grid:bounds(grid),items,days,columns:getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+     title:bounds(document.querySelector('.oie-shared-header :is(h1,h2)')),
+     overflow:[document.documentElement,document.getElementById('workspace'),grid].some(node=>node.scrollWidth>node.clientWidth+1)};
+   });
+   await open('media');
+   const media=await geometry('#shared-content-results .oie-shared-grid');
+   await open('favorites');
+   await p.locator('#favorites-results[data-masonry]').waitFor();
+   const starred=await geometry('#favorites-results');
+   await open('scheduled');
+   const scheduled=await geometry('#scheduled-results .oie-schedule-list');
+   assert.equal(starred.items.length,6);
+   assert.equal(scheduled.items.length,6);
+   assert.equal(await p.locator('[data-schedule-agenda]').getByRole('listitem').count(),6);
+   for(const result of [starred,scheduled]){
+    closeTo(result.grid.x,media.grid.x,'result alignment');
+    closeTo(result.grid.right,media.grid.right,'available result width');
+    closeTo(result.title.x,media.title.x,'heading alignment');
+    assert.equal(result.columns,columns);
+    assert.equal(result.overflow,false);
+   }
+   assert.equal(new Set(starred.items.map(item=>item.x)).size,starred.columns);
+   assert.equal(new Set(scheduled.items.slice(0,5).map(item=>item.x)).size,scheduled.columns);
+   assert.equal(scheduled.days.length,2);
+   for(const day of scheduled.days)closeTo(day.width,scheduled.grid.width,'date spans every column');
+   assert(scheduled.days[1].top>=Math.max(...scheduled.items.slice(0,5).map(item=>item.bottom)));
+   closeTo(scheduled.items[5].x,scheduled.items[0].x,'next day starts at the first column');
+
+   // Keep the heading and current cards steady while the agenda filter is pending.
+   const filter=p.locator('#schedule-conversation');
+   const trigger=filter.getByRole('combobox');
+   await trigger.click();
+   const match=url=>url.pathname==='/'&&url.searchParams.get('scheduleConversation')===chatA;
+   const held=await holdFirstPage(p,match);
+   try{
+    await filter.locator('[role=option][data-value="'+chatA+'"]').click();
+    await p.locator('#scheduled-results[aria-busy=true]').waitFor();
+    await p.evaluate(()=>{window.agendaRects=[];window.sampleAgenda=true;const sample=()=>{
+     if(!window.sampleAgenda)return;
+     window.agendaRects.push([...document.querySelectorAll('.oie-shared-header,[data-agenda-filter-control],.oie-agenda-card')].map(node=>{
+      const {x,y,width,height}=node.getBoundingClientRect();return [x,y,width,height];
+     }));
+     requestAnimationFrame(sample);
+    };requestAnimationFrame(sample)});
+    await p.waitForTimeout(150);
+    const frames=await p.evaluate(()=>{window.sampleAgenda=false;return window.agendaRects});
+    assert(frames.length>2,'pending filter has painted frames');
+    for(const frame of frames.slice(1))frame.forEach((rect,i)=>rect.forEach((value,k)=>closeTo(value,frames[0][i][k],'pending filter geometry')));
+   }finally{held.release()}
+   await p.waitForURL(match);
+   assert.equal(await p.locator('[data-scheduled-row]').count(),3);
+   await p.keyboard.press('Escape');
+   await until(()=>trigger.evaluate(node=>node===document.activeElement),'agenda filter restores focus');
+   await p.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+   const violations=await p.evaluate(async()=> (await axe.run(document.querySelector('#scheduled-results'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(({id})=>id));
+   assert.deepEqual(violations,[]);
+   await ctx.close();
+  }
+  findings.push('Favorites and Scheduled align with Media & links at 390, 1440 and 2160 px; same-day schedules fill available columns and stay put during filtering');
   const context=await browser.newContext({viewport:{width:1440,height:1000},locale:'en',timezoneId:'America/Sao_Paulo'});await watch(context);await context.addInitScript(key=>{if(location.origin!=='null')localStorage.setItem(key,'false');window.copied=[];Object.defineProperty(navigator,'clipboard',{value:{writeText:async text=>copied.push(text)}})},preference);const page=await context.newPage(),accountRequests=[];let pageDocuments=0;page.on('request',request=>{const url=new URL(request.url());if(request.isNavigationRequest()&&request.resourceType()==='document')pageDocuments++;if(url.origin===base&&url.pathname==='/'&&url.searchParams.has('q'))accountRequests.push({q:url.searchParams.get('q'),account:url.searchParams.get('account'),cursor:url.searchParams.get('contentCursor')})});
   const chatURL=`${base}/?chat=${chatA}&account=${alpha}&lang=en&theme=dark`;await page.goto(chatURL);const draft='Draft survives gallery and source navigation 😀';await page.evaluate(value=>localStorage.setItem(['oie.draft.v1',document.body.dataset.engineId,document.body.dataset.accountId,document.body.dataset.conversationId].join(':'),JSON.stringify({text:value,key:'',pending:false})),draft);
   const query=new URLSearchParams({section:'media',lang:'en',theme:'dark'});

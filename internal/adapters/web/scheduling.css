@@ -1,30 +1,7 @@
 .oie-schedule-workspace {
-  block-size: 100%;
-  min-inline-size: 0;
+  display: block;
   overflow: auto;
-  padding: clamp(1.25rem, 3vw, 2.5rem) clamp(1rem, 4vw, 3rem) 3rem;
-  color: var(--oie-text);
-  background: var(--oie-bg);
-  container-type: inline-size;
-}
-
-.oie-agenda { max-inline-size: 52rem; margin-inline: auto; }
-
-.oie-agenda-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(14rem, 19rem);
-  align-items: end;
-  gap: 1rem 2rem;
-  padding-block-end: 1.5rem;
-}
-
-.oie-agenda-title { display: flex; align-items: center; gap: .625rem; }
-.oie-agenda-title h1 {
-  margin: 0;
-  font-size: clamp(1.625rem, 4cqi, 2rem);
-  line-height: 1.2;
-  font-weight: 700;
-  letter-spacing: -.035em;
+  scrollbar-gutter: stable;
 }
 
 .oie-schedule-filter {
@@ -32,10 +9,24 @@
   --color-primary: var(--oie-accent);
   --color-primary-dark: var(--oie-accent);
 }
+@media (min-width: 721px) {
+  .oie-schedule-filter #schedule-conversation { max-inline-size: 19rem; }
+}
 .oie-schedule-filter [data-agenda-filter-control] { border-color: var(--oie-border); background: var(--oie-panel); }
 
 .oie-schedule-list { list-style: none; margin: 0; padding: 0; }
-.oie-schedule-row + .oie-schedule-row { margin-block-start: .625rem; }
+#scheduled-results .oie-schedule-list {
+  display: grid;
+  align-items: start;
+  gap: 10px 17px;
+}
+
+/* Day headings span the agenda grid while the cards follow message order. */
+#scheduled-results .oie-schedule-row { display: contents; }
+#scheduled-results .oie-agenda-day { grid-column: 1 / -1; margin: 0; }
+#scheduled-results .oie-schedule-row + .oie-schedule-row .oie-agenda-day { padding-block-start: .625rem; }
+
+.oie-conversation-schedules .oie-schedule-row + .oie-schedule-row { margin-block-start: .625rem; }
 .oie-agenda-day {
   display: flex;
   align-items: center;
@@ -45,7 +36,7 @@
   font-size: .8125rem;
   font-weight: 650;
 }
-.oie-schedule-row + .oie-schedule-row .oie-agenda-day { padding-block-start: .875rem; }
+.oie-conversation-schedules .oie-schedule-row + .oie-schedule-row .oie-agenda-day { padding-block-start: .875rem; }
 .oie-agenda-day[hidden] { display: none; }
 .oie-agenda-day::after { content: ""; flex: 1; border-block-start: 1px solid var(--oie-border); }
 .oie-agenda-day time { display: inline-block; }
@@ -54,11 +45,10 @@
 .oie-agenda-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-areas: "time destination actions" "time content content";
+  grid-template-areas: "time destination actions" "content content content";
   align-items: start;
-  column-gap: 1rem;
-  row-gap: .625rem;
-  padding: .875rem 1rem .875rem 0;
+  gap: .625rem;
+  padding: .625rem .75rem .75rem;
   border: 1px solid var(--oie-border);
   border-radius: .75rem;
   background: var(--oie-panel);
@@ -67,8 +57,7 @@
 .oie-agenda-hour {
   grid-area: time;
   align-self: stretch;
-  padding: .125rem .875rem;
-  min-inline-size: 5.25rem;
+  padding: .125rem .625rem .125rem 0;
   border-inline-end: 1px solid var(--oie-border);
   color: var(--oie-accent-text);
   font-size: .875rem;
@@ -214,16 +203,6 @@
 }
 .oie-conversation-schedules [data-conversation-schedules-more] { margin-block-start: .75rem; }
 .oie-conversation-schedules [hidden] { display: none; }
-
-@container (max-width: 32rem) {
-  .oie-agenda-header { grid-template-columns: minmax(0, 1fr); gap: .875rem; padding-block-end: 1.125rem; }
-  .oie-agenda-card {
-    grid-template-areas: "time destination actions" "content content content";
-    gap: .625rem;
-    padding: .625rem .75rem .75rem;
-  }
-  .oie-agenda-hour { padding-inline: 0 .625rem; min-inline-size: auto; }
-}
 
 .oie-schedule-edit-bar, .oie-message-attachments {
   display: flex;

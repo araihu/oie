@@ -22,7 +22,7 @@ templ favoritesWorkspace(v view) {
 			@navigationControl(v)
 			<h2 id="favorites-heading" tabindex="-1">{ v.Text.InfoStarred }</h2>
 		</header>
-		<form id="favorites-search-form" action="/" method="get" class="oie-favorites-search" role="search" aria-label={ v.Text.FavoritesSearch } hx-sync="this:replace">
+		<form id="favorites-search-form" action="/" method="get" class="oie-shared-search" role="search" aria-label={ v.Text.FavoritesSearch } hx-sync="this:replace">
 			<input type="hidden" name="section" value="favorites"/>
 			if v.AccountFilter != "" {
 				<input type="hidden" name="account" value={ v.AccountFilter }/>
