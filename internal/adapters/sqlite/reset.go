@@ -33,7 +33,7 @@ func (s *Store) Reset(ctx context.Context, id domain.ID) error {
 }
 
 func (s *Store) removeData() error {
-	for _, name := range []string{"oie.sqlite", "oie.sqlite-wal", "oie.sqlite-shm", "oie.sqlite-journal", "media", "private", migrationBackupsDir} {
+	for _, name := range []string{"oie.sqlite", "oie.sqlite-wal", "oie.sqlite-shm", "oie.sqlite-journal", "media", "private"} {
 		if err := os.RemoveAll(filepath.Join(s.dir, name)); err != nil {
 			return err
 		}

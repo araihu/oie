@@ -6,9 +6,11 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"io/fs"
 
 	"github.com/golang-migrate/migrate/v4"
 	migratesqlite "github.com/golang-migrate/migrate/v4/database/sqlite"
+	"github.com/golang-migrate/migrate/v4/source"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
@@ -16,9 +18,18 @@ import (
 var migrations embed.FS
 
 const schedulingMigration = 21
-const latestMigration = 27
 
 func migrateDatabase(ctx context.Context, db *sql.DB, dir string) error {
+	scripts, err := iofs.New(migrations, "migrations")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = scripts.Close() }()
+	latestMigration, err := lastMigrationVersion(scripts)
+	if err != nil {
+		return err
+	}
+
 	var legacy int
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&legacy); err != nil {
 		return err
@@ -37,20 +48,35 @@ func migrateDatabase(ctx context.Context, db *sql.DB, dir string) error {
 	var version int
 	var tracked, dirty bool
 	if hasJournal {
-		err := db.QueryRowContext(ctx, "SELECT version, dirty FROM schema_migrations LIMIT 1").Scan(&version, &dirty)
+		var entries int
+		err := db.QueryRowContext(ctx, `SELECT version, dirty,
+			(SELECT COUNT(*) FROM schema_migrations) FROM schema_migrations LIMIT 1`).Scan(&version, &dirty, &entries)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
+		}
+		if entries > 1 {
+			return errors.New("database migration journal has multiple versions")
 		}
 		tracked = err == nil
 	}
 	if dirty {
 		return fmt.Errorf("database migration %d is dirty; repair explicitly before starting", version)
 	}
+	if version < 0 {
+		return fmt.Errorf("invalid database migration version %d", version)
+	}
 	if version > latestMigration {
 		return fmt.Errorf("database migration %d is newer than supported version %d", version, latestMigration)
 	}
-	if version == latestMigration {
+	if tracked && version == latestMigration {
 		return nil
+	}
+	if tracked {
+		if _, err := scripts.Next(uint(version)); errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("database migration version %d is absent from the embedded migrations", version)
+		} else if err != nil {
+			return err
+		}
 	}
 	if !tracked && legacy == 1 {
 		var tables int
@@ -77,12 +103,7 @@ func migrateDatabase(ctx context.Context, db *sql.DB, dir string) error {
 	if err != nil {
 		return err
 	}
-	source, err := iofs.New(migrations, "migrations")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = source.Close() }()
-	runner, err := migrate.NewWithInstance("iofs", source, "sqlite", driver)
+	runner, err := migrate.NewWithInstance("iofs", scripts, "sqlite", driver)
 	if err != nil {
 		return err
 	}
@@ -111,6 +132,23 @@ func migrateDatabase(ctx context.Context, db *sql.DB, dir string) error {
 		return err
 	}
 	return nil
+}
+
+func lastMigrationVersion(scripts source.Driver) (int, error) {
+	version, err := scripts.First()
+	if err != nil {
+		return 0, err
+	}
+	for {
+		next, err := scripts.Next(version)
+		if errors.Is(err, fs.ErrNotExist) {
+			return int(version), nil
+		}
+		if err != nil {
+			return 0, err
+		}
+		version = next
+	}
 }
 
 // The request preview used version 25 for invitation credentials. Install the

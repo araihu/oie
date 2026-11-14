@@ -3,10 +3,13 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/araihu/oie/internal/application"
@@ -23,6 +26,34 @@ func migrationID() domain.ID {
 		panic(err)
 	}
 	return domain.ID(value.String())
+}
+
+func latestMigrationVersion(t *testing.T) int {
+	t.Helper()
+	scripts, err := iofs.New(migrations, "migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = scripts.Close() }()
+	version, err := lastMigrationVersion(scripts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return version
+}
+
+func TestLastMigrationVersionUsesEmbeddedSourceOrder(t *testing.T) {
+	scripts, err := iofs.New(fstest.MapFS{
+		"migrations/000001_first.up.sql": {},
+		"migrations/000042_last.up.sql":  {},
+	}, "migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = scripts.Close() }()
+	if version, err := lastMigrationVersion(scripts); err != nil || version != 42 {
+		t.Fatalf("last migration: %d, %v", version, err)
+	}
 }
 
 func migrateFixtureToVersion(t *testing.T, store *Store, version uint) {
@@ -97,7 +128,7 @@ func TestSchedulingPreviewMigratesWithoutDiscardingData(t *testing.T) {
 	}
 	var version int
 	var dirty bool
-	if err = upgraded.db.QueryRowContext(ctx, "SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestMigration || dirty {
+	if err = upgraded.db.QueryRowContext(ctx, "SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestMigrationVersion(t) || dirty {
 		t.Fatalf("migrate journal: %d %v %v", version, dirty, err)
 	}
 }
@@ -142,7 +173,7 @@ func TestReactionLookupPreviewMigratesWithoutDiscardingData(t *testing.T) {
 	}
 	var version int
 	var dirty bool
-	if err = upgraded.db.QueryRowContext(ctx, "SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestMigration || dirty {
+	if err = upgraded.db.QueryRowContext(ctx, "SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestMigrationVersion(t) || dirty {
 		t.Fatalf("migrate journal: %d %v %v", version, dirty, err)
 	}
 }
@@ -190,7 +221,7 @@ func TestConversationRequestPreviewMigratesWithoutDiscardingCredentials(t *testi
 	}
 	var version int
 	var dirty bool
-	if err = upgraded.db.QueryRowContext(ctx, "SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestMigration || dirty {
+	if err = upgraded.db.QueryRowContext(ctx, "SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestMigrationVersion(t) || dirty {
 		t.Fatalf("migrate journal: %d %v %v", version, dirty, err)
 	}
 }
@@ -257,7 +288,7 @@ func TestLegacyFoundationMigratesWithoutDiscardingData(t *testing.T) {
 	}
 	var version int
 	var dirty bool
-	if err = store.db.QueryRow("SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestMigration || dirty {
+	if err = store.db.QueryRow("SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty); err != nil || version != latestMigrationVersion(t) || dirty {
 		t.Fatalf("migrate journal: %d %v %v", version, dirty, err)
 	}
 }
@@ -267,7 +298,13 @@ func TestDirtyAndFutureMigrationsAreNotForced(t *testing.T) {
 		version int
 		dirty   bool
 		want    string
-	}{{"dirty", 2, true, "dirty"}, {"future", latestMigration + 1, false, "newer"}} {
+	}{
+		{"dirty", 2, true, "dirty"},
+		{"dirty before first migration", -1, true, "dirty"},
+		{"invalid negative version", -1, false, "invalid"},
+		{"unknown version", 0, false, "absent"},
+		{"future", latestMigrationVersion(t) + 1, false, "newer"},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			store, err := Open(t.Context(), dir, migrationID())
@@ -285,7 +322,26 @@ func TestDirtyAndFutureMigrationsAreNotForced(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("unsafe migration repair: %v", err)
 			}
+			if _, err := os.Stat(filepath.Join(dir, migrationBackupsDir)); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("rejected journal triggered a backup: %v", err)
+			}
 		})
+	}
+}
+
+func TestMigrationRejectsJournalWithMultipleVersions(t *testing.T) {
+	ctx := t.Context()
+	dir := t.TempDir()
+	store, err := Open(ctx, dir, migrationID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	if _, err := store.db.ExecContext(ctx, "INSERT INTO schema_migrations(version,dirty) VALUES(1, true)"); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateDatabase(ctx, store.db, dir); err == nil || !strings.Contains(err.Error(), "multiple versions") {
+		t.Fatalf("startup should reject a journal with multiple versions: %v", err)
 	}
 }
 

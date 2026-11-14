@@ -8,25 +8,38 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	sqlitedriver "modernc.org/sqlite"
 )
 
-const migrationBackupsDir = "migration-backups"
+const (
+	migrationBackupsDir = "private/migration-backups"
+	migrationStagingDir = ".pending"
+)
 
 func backupBeforeMigration(ctx context.Context, db *sql.DB, dir string, version int) error {
 	backupDir := filepath.Join(dir, migrationBackupsDir)
-	if err := os.MkdirAll(backupDir, 0700); err != nil {
+	privateDir := filepath.Dir(backupDir)
+	for _, path := range []string{privateDir, backupDir} {
+		if err := ensureBackupDirectory(path); err != nil {
+			return err
+		}
+	}
+	// The engine lock excludes other backups. Discard files from an interrupted copy.
+	staging := filepath.Join(backupDir, migrationStagingDir)
+	if err := os.RemoveAll(staging); err != nil {
 		return err
 	}
-	pattern := fmt.Sprintf(".oie-before-v%d-%s-*.partial", version, time.Now().UTC().Format("20060102T150405.000000000Z"))
-	file, err := os.CreateTemp(backupDir, pattern)
+	if err := os.Mkdir(staging, 0700); err != nil {
+		return err
+	}
+	defer func() { _ = os.RemoveAll(staging) }()
+	pattern := fmt.Sprintf("oie-before-v%d-%s-*.sqlite", version, time.Now().UTC().Format("20060102T150405.000000000Z"))
+	file, err := os.CreateTemp(staging, pattern)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.Remove(file.Name()) }()
 
 	err = copySQLiteBackup(ctx, db, file.Name())
 	if err == nil {
@@ -35,12 +48,11 @@ func backupBeforeMigration(ctx context.Context, db *sql.DB, dir string, version 
 	if err = errors.Join(err, file.Close()); err != nil {
 		return err
 	}
-	name := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(file.Name()), "."), ".partial") + ".sqlite"
-	if err := os.Rename(file.Name(), filepath.Join(backupDir, name)); err != nil {
+	if err := os.Rename(file.Name(), filepath.Join(backupDir, filepath.Base(file.Name()))); err != nil {
 		return err
 	}
 	// Persist the published filename and its containing directory before migrating.
-	for _, path := range []string{backupDir, dir} {
+	for _, path := range []string{backupDir, privateDir, dir} {
 		directory, err := os.Open(path)
 		if err != nil {
 			return err
@@ -48,6 +60,20 @@ func backupBeforeMigration(ctx context.Context, db *sql.DB, dir string, version 
 		if err := errors.Join(directory.Sync(), directory.Close()); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func ensureBackupDirectory(path string) error {
+	if err := os.Mkdir(path, 0700); err != nil && !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("backup path %s must be a directory", path)
 	}
 	return nil
 }
