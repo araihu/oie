@@ -30,10 +30,10 @@ const capabilityHeader = "X-Oie-Host-Capability"
 // to the native asset server without exposing the structured engine API.
 // DataOnly omits presentation and assets for local/hosted network engines.
 type Config struct {
-	Role, Listen, DataDir, EngineURL, FFmpeg, XMPPCAFile string
-	DevReload                                            bool
-	PrivateAPI                                           bool
-	DataOnly                                             bool
+	Role, Listen, DataDir, EngineURL, XMPPCAFile string
+	DevReload                                    bool
+	PrivateAPI                                   bool
+	DataOnly                                     bool
 }
 
 // Server owns one engine, optional protocol sessions, the BFF, and their shared
@@ -158,9 +158,6 @@ func defaults(cfg Config) Config {
 	}
 	if cfg.DataDir == "" {
 		cfg.DataDir = "./data"
-	}
-	if cfg.FFmpeg == "" {
-		cfg.FFmpeg = "ffmpeg"
 	}
 	return cfg
 }

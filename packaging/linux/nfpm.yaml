@@ -24,8 +24,6 @@ overrides:
       - libsoup-3.0-0
       - libwebkitgtk-6.0-4
       - libx11-6
-    suggests:
-      - ffmpeg
   rpm:
     depends:
       - ca-certificates
@@ -36,8 +34,6 @@ overrides:
       - libsoup-3.0.so.0()(64bit)
       - libwebkitgtk-6.0.so.4()(64bit)
       - libX11.so.6()(64bit)
-    suggests:
-      - ffmpeg
   archlinux:
     depends:
       - ca-certificates
@@ -47,8 +43,6 @@ overrides:
       - libsoup3
       - libx11
       - webkitgtk-6.0
-    suggests:
-      - "ffmpeg: generate local video thumbnails"
 
 contents:
   - src: payload/bin/oie-desktop

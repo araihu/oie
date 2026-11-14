@@ -17,7 +17,6 @@ import (
 type Config struct {
 	DataDir    string
 	EngineURL  string
-	FFmpeg     string
 	XMPPCAFile string
 	Language   string
 }
@@ -59,9 +58,6 @@ func normalizeConfig(c Config) (Config, error) {
 		return c, err
 	}
 	c.DataDir = resolved
-	if c.FFmpeg == "" {
-		c.FFmpeg = "ffmpeg"
-	}
 	if c.Language != "" && c.Language != "auto" && c.Language != "en" && c.Language != "pt-BR" {
 		return c, fmt.Errorf("unsupported desktop language %q", c.Language)
 	}

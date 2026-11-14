@@ -26,7 +26,6 @@ const (
 	xmppImage     = "prosodyim/prosody:13.0@sha256:c54842dec520463e3557a2d26df3312338003feb4cc943afa92d287a30c02b58"
 	nodeImage     = "node:24.19.0-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03"
 	desktopImage  = "ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852"
-	setupCommand  = "apt-get update -qq && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*"
 )
 
 type runner struct {
@@ -160,7 +159,7 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 	if mode == "desktop" {
 		return r.desktop(ctx, source)
 	}
-	// Install system tools before adding source, so edits reuse the apt layer.
+	// Prepare lint tools before adding source so edits reuse the tools layer.
 	base := client.Container().From(goImage).
 		WithMountedCache("/go/pkg/mod", client.CacheVolume("oie-ci-go-mod-v1")).
 		WithMountedCache("/root/.cache/go-build", client.CacheVolume("oie-ci-go-build-v1")).
@@ -168,12 +167,12 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 		// Bound both Go's runtime and its default package/build parallelism on
 		// shared runners. Child processes still keep their production deadlines.
 		WithEnvVariable("GOMAXPROCS", "4").
-		WithEnvVariable("GOWORK", "off").WithExec([]string{"sh", "-c", setupCommand})
+		WithEnvVariable("GOWORK", "off")
 	base, err := r.withLinters(ctx, base)
 	if err != nil {
 		return err
 	}
-	base, err = r.stage(ctx, "setup", base)
+	base, err = r.stage(ctx, "setup", base.WithExec([]string{"vacuum", "version"}))
 	if err != nil {
 		return err
 	}

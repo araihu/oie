@@ -205,5 +205,4 @@ EOF
   case ":${PATH:-}:" in *":$prefix/bin:"*) ;; *) printf 'Add %s/bin to your PATH to run oie-desktop from a terminal.\n' "$prefix" ;; esac
 fi
 complete=true
-if ! command -v ffmpeg >/dev/null 2>&1; then printf 'FFmpeg is optional. Install it separately to generate local video thumbnails.\n'; fi
 printf 'Installation complete. App data and preferences were preserved.\n'

@@ -47,7 +47,7 @@ func (s *runtimeService) ServiceStartup(ctx context.Context, _ application.Servi
 	if s.config.EngineURL != "" {
 		role = "bff"
 	}
-	server, err := apphost.Start(ctx, apphost.Config{Role: role, Listen: "127.0.0.1:0", DataDir: s.config.DataDir, EngineURL: s.config.EngineURL, FFmpeg: s.config.FFmpeg, XMPPCAFile: s.config.XMPPCAFile, PrivateAPI: true})
+	server, err := apphost.Start(ctx, apphost.Config{Role: role, Listen: "127.0.0.1:0", DataDir: s.config.DataDir, EngineURL: s.config.EngineURL, XMPPCAFile: s.config.XMPPCAFile, PrivateAPI: true})
 	if err != nil {
 		return err
 	}

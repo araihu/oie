@@ -5606,9 +5606,9 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/shared-content (the `ListSharedContent` operationId).
 	ListSharedContent(ctx context.Context, params *ListSharedContentParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetSharedContentMedia Stream an explicitly selected video or supported document reference
+	// GetSharedContentMedia Stream a retained video or supported document reference
 	//
-	// Reads the current retained canonical source before opening its URL through the engine's public-network policy. Never redirects the browser to the provider. Supports one byte range and If-Range; an upstream that ignores Range returns 200 rather than an invented 206. Video accepts MP4, WebM, Ogg video and QuickTime MIME types up to 2 GiB; codec playback remains a browser capability. Document references are restricted by URL extension and provider MIME: .txt/.log/.md/.csv/.json/.xml are served as text/plain up to 2 MiB and .pdf as application/pdf up to 100 MiB. Text MIME must be text/plain or the matching format's text/markdown, text/csv, application/json, text/json, application/xml or text/xml. HTML, SVG, office documents and mismatched MIME types are unsupported. A known complete size is required. This is explicit on-demand streaming, not a retained download: no full-file hash, sender verification, offline availability or transfer state is implied. Listing/mounting UI must not call this operation. Client disconnect cancels the upstream read. HEAD returns 405 without contacting the provider. Multiple or malformed ranges are invalid. JSON, XML and Markdown are returned as plain text, never active markup.
+	// Reads the current retained canonical source before opening its URL through the engine's public-network policy. Never redirects the browser to the provider. Supports one byte range and If-Range; an upstream that ignores Range returns 200 rather than an invented 206. Video accepts MP4, WebM, Ogg video and QuickTime MIME types up to 2 GiB; codec playback remains a browser capability. Document references are restricted by URL extension and provider MIME: .txt/.log/.md/.csv/.json/.xml are served as text/plain up to 2 MiB and .pdf as application/pdf up to 100 MiB. Text MIME must be text/plain or the matching format's text/markdown, text/csv, application/json, text/json, application/xml or text/xml. HTML, SVG, office documents and mismatched MIME types are unsupported. A known complete size is required. This is explicit on-demand streaming, not a retained download: no full-file hash, sender verification, offline availability or transfer state is implied. Playback requires explicit activation. A preview client may request only a bounded byte range and must stop reading at its preview budget. Client disconnect cancels the upstream read. HEAD returns 405 without contacting the provider. Multiple or malformed ranges are invalid. JSON, XML and Markdown are returned as plain text, never active markup.
 	//
 	// Corresponds with GET /api/v1/shared-content/{itemId}/content (the `GetSharedContentMedia` operationId).
 	GetSharedContentMedia(ctx context.Context, itemId ID, params *GetSharedContentMediaParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5622,7 +5622,7 @@ type ClientInterface interface {
 
 	// RequestVideoThumbnail Ensure a cached video thumbnail
 	//
-	// Queues bounded frame extraction for a current retained video reference. Concurrent requests share work; a ready thumbnail is reused. A failed extraction can be explicitly retried. A retained HTTP(S) thumbnail supplied in XMPP file metadata is preferred (at most 1 MiB). Otherwise background extraction reads at most 4 MiB from the beginning and 1 MiB from the end, with a 15 second job deadline, and never retains an original video. Small source videos may fit entirely within that budget. The source is revalidated before publication. Does not send messages or start playback. Missing both a supplied thumbnail and decoder capability returns 503 without provider retrieval.
+	// Queues retrieval of a retained HTTP(S) thumbnail supplied in XMPP file metadata (at most 1 MiB). Concurrent requests share work and a ready thumbnail is reused. A failed retrieval can be explicitly retried. The source is revalidated before publication. Without a retained or supplied thumbnail this operation returns 503 without retrieving video bytes. Clients may use a bounded media range to generate a preview locally.
 	//
 	// Corresponds with POST /api/v1/shared-content/{itemId}/thumbnail (the `RequestVideoThumbnail` operationId).
 	RequestVideoThumbnail(ctx context.Context, itemId ID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7268,9 +7268,9 @@ func (c *Client) ListSharedContent(ctx context.Context, params *ListSharedConten
 	return c.Client.Do(req)
 }
 
-// GetSharedContentMedia Stream an explicitly selected video or supported document reference
+// GetSharedContentMedia Stream a retained video or supported document reference
 //
-// Reads the current retained canonical source before opening its URL through the engine's public-network policy. Never redirects the browser to the provider. Supports one byte range and If-Range; an upstream that ignores Range returns 200 rather than an invented 206. Video accepts MP4, WebM, Ogg video and QuickTime MIME types up to 2 GiB; codec playback remains a browser capability. Document references are restricted by URL extension and provider MIME: .txt/.log/.md/.csv/.json/.xml are served as text/plain up to 2 MiB and .pdf as application/pdf up to 100 MiB. Text MIME must be text/plain or the matching format's text/markdown, text/csv, application/json, text/json, application/xml or text/xml. HTML, SVG, office documents and mismatched MIME types are unsupported. A known complete size is required. This is explicit on-demand streaming, not a retained download: no full-file hash, sender verification, offline availability or transfer state is implied. Listing/mounting UI must not call this operation. Client disconnect cancels the upstream read. HEAD returns 405 without contacting the provider. Multiple or malformed ranges are invalid. JSON, XML and Markdown are returned as plain text, never active markup.
+// Reads the current retained canonical source before opening its URL through the engine's public-network policy. Never redirects the browser to the provider. Supports one byte range and If-Range; an upstream that ignores Range returns 200 rather than an invented 206. Video accepts MP4, WebM, Ogg video and QuickTime MIME types up to 2 GiB; codec playback remains a browser capability. Document references are restricted by URL extension and provider MIME: .txt/.log/.md/.csv/.json/.xml are served as text/plain up to 2 MiB and .pdf as application/pdf up to 100 MiB. Text MIME must be text/plain or the matching format's text/markdown, text/csv, application/json, text/json, application/xml or text/xml. HTML, SVG, office documents and mismatched MIME types are unsupported. A known complete size is required. This is explicit on-demand streaming, not a retained download: no full-file hash, sender verification, offline availability or transfer state is implied. Playback requires explicit activation. A preview client may request only a bounded byte range and must stop reading at its preview budget. Client disconnect cancels the upstream read. HEAD returns 405 without contacting the provider. Multiple or malformed ranges are invalid. JSON, XML and Markdown are returned as plain text, never active markup.
 //
 // Corresponds with GET /api/v1/shared-content/{itemId}/content (the `GetSharedContentMedia` operationId).
 func (c *Client) GetSharedContentMedia(ctx context.Context, itemId ID, params *GetSharedContentMediaParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7304,7 +7304,7 @@ func (c *Client) GetVideoThumbnail(ctx context.Context, itemId ID, reqEditors ..
 
 // RequestVideoThumbnail Ensure a cached video thumbnail
 //
-// Queues bounded frame extraction for a current retained video reference. Concurrent requests share work; a ready thumbnail is reused. A failed extraction can be explicitly retried. A retained HTTP(S) thumbnail supplied in XMPP file metadata is preferred (at most 1 MiB). Otherwise background extraction reads at most 4 MiB from the beginning and 1 MiB from the end, with a 15 second job deadline, and never retains an original video. Small source videos may fit entirely within that budget. The source is revalidated before publication. Does not send messages or start playback. Missing both a supplied thumbnail and decoder capability returns 503 without provider retrieval.
+// Queues retrieval of a retained HTTP(S) thumbnail supplied in XMPP file metadata (at most 1 MiB). Concurrent requests share work and a ready thumbnail is reused. A failed retrieval can be explicitly retried. The source is revalidated before publication. Without a retained or supplied thumbnail this operation returns 503 without retrieving video bytes. Clients may use a bounded media range to generate a preview locally.
 //
 // Corresponds with POST /api/v1/shared-content/{itemId}/thumbnail (the `RequestVideoThumbnail` operationId).
 func (c *Client) RequestVideoThumbnail(ctx context.Context, itemId ID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -12165,9 +12165,9 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/shared-content (the `ListSharedContent` operationId).
 	ListSharedContentWithResponse(ctx context.Context, params *ListSharedContentParams, reqEditors ...RequestEditorFn) (*ListSharedContentResponse, error)
 
-	// GetSharedContentMediaWithResponse Stream an explicitly selected video or supported document reference
+	// GetSharedContentMediaWithResponse Stream a retained video or supported document reference
 	//
-	// Reads the current retained canonical source before opening its URL through the engine's public-network policy. Never redirects the browser to the provider. Supports one byte range and If-Range; an upstream that ignores Range returns 200 rather than an invented 206. Video accepts MP4, WebM, Ogg video and QuickTime MIME types up to 2 GiB; codec playback remains a browser capability. Document references are restricted by URL extension and provider MIME: .txt/.log/.md/.csv/.json/.xml are served as text/plain up to 2 MiB and .pdf as application/pdf up to 100 MiB. Text MIME must be text/plain or the matching format's text/markdown, text/csv, application/json, text/json, application/xml or text/xml. HTML, SVG, office documents and mismatched MIME types are unsupported. A known complete size is required. This is explicit on-demand streaming, not a retained download: no full-file hash, sender verification, offline availability or transfer state is implied. Listing/mounting UI must not call this operation. Client disconnect cancels the upstream read. HEAD returns 405 without contacting the provider. Multiple or malformed ranges are invalid. JSON, XML and Markdown are returned as plain text, never active markup.
+	// Reads the current retained canonical source before opening its URL through the engine's public-network policy. Never redirects the browser to the provider. Supports one byte range and If-Range; an upstream that ignores Range returns 200 rather than an invented 206. Video accepts MP4, WebM, Ogg video and QuickTime MIME types up to 2 GiB; codec playback remains a browser capability. Document references are restricted by URL extension and provider MIME: .txt/.log/.md/.csv/.json/.xml are served as text/plain up to 2 MiB and .pdf as application/pdf up to 100 MiB. Text MIME must be text/plain or the matching format's text/markdown, text/csv, application/json, text/json, application/xml or text/xml. HTML, SVG, office documents and mismatched MIME types are unsupported. A known complete size is required. This is explicit on-demand streaming, not a retained download: no full-file hash, sender verification, offline availability or transfer state is implied. Playback requires explicit activation. A preview client may request only a bounded byte range and must stop reading at its preview budget. Client disconnect cancels the upstream read. HEAD returns 405 without contacting the provider. Multiple or malformed ranges are invalid. JSON, XML and Markdown are returned as plain text, never active markup.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -12185,7 +12185,7 @@ type ClientWithResponsesInterface interface {
 
 	// RequestVideoThumbnailWithResponse Ensure a cached video thumbnail
 	//
-	// Queues bounded frame extraction for a current retained video reference. Concurrent requests share work; a ready thumbnail is reused. A failed extraction can be explicitly retried. A retained HTTP(S) thumbnail supplied in XMPP file metadata is preferred (at most 1 MiB). Otherwise background extraction reads at most 4 MiB from the beginning and 1 MiB from the end, with a 15 second job deadline, and never retains an original video. Small source videos may fit entirely within that budget. The source is revalidated before publication. Does not send messages or start playback. Missing both a supplied thumbnail and decoder capability returns 503 without provider retrieval.
+	// Queues retrieval of a retained HTTP(S) thumbnail supplied in XMPP file metadata (at most 1 MiB). Concurrent requests share work and a ready thumbnail is reused. A failed retrieval can be explicitly retried. The source is revalidated before publication. Without a retained or supplied thumbnail this operation returns 503 without retrieving video bytes. Clients may use a bounded media range to generate a preview locally.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -18640,9 +18640,9 @@ func (c *ClientWithResponses) ListSharedContentWithResponse(ctx context.Context,
 	return ParseListSharedContentResponse(rsp)
 }
 
-// GetSharedContentMediaWithResponse Stream an explicitly selected video or supported document reference
+// GetSharedContentMediaWithResponse Stream a retained video or supported document reference
 //
-// Reads the current retained canonical source before opening its URL through the engine's public-network policy. Never redirects the browser to the provider. Supports one byte range and If-Range; an upstream that ignores Range returns 200 rather than an invented 206. Video accepts MP4, WebM, Ogg video and QuickTime MIME types up to 2 GiB; codec playback remains a browser capability. Document references are restricted by URL extension and provider MIME: .txt/.log/.md/.csv/.json/.xml are served as text/plain up to 2 MiB and .pdf as application/pdf up to 100 MiB. Text MIME must be text/plain or the matching format's text/markdown, text/csv, application/json, text/json, application/xml or text/xml. HTML, SVG, office documents and mismatched MIME types are unsupported. A known complete size is required. This is explicit on-demand streaming, not a retained download: no full-file hash, sender verification, offline availability or transfer state is implied. Listing/mounting UI must not call this operation. Client disconnect cancels the upstream read. HEAD returns 405 without contacting the provider. Multiple or malformed ranges are invalid. JSON, XML and Markdown are returned as plain text, never active markup.
+// Reads the current retained canonical source before opening its URL through the engine's public-network policy. Never redirects the browser to the provider. Supports one byte range and If-Range; an upstream that ignores Range returns 200 rather than an invented 206. Video accepts MP4, WebM, Ogg video and QuickTime MIME types up to 2 GiB; codec playback remains a browser capability. Document references are restricted by URL extension and provider MIME: .txt/.log/.md/.csv/.json/.xml are served as text/plain up to 2 MiB and .pdf as application/pdf up to 100 MiB. Text MIME must be text/plain or the matching format's text/markdown, text/csv, application/json, text/json, application/xml or text/xml. HTML, SVG, office documents and mismatched MIME types are unsupported. A known complete size is required. This is explicit on-demand streaming, not a retained download: no full-file hash, sender verification, offline availability or transfer state is implied. Playback requires explicit activation. A preview client may request only a bounded byte range and must stop reading at its preview budget. Client disconnect cancels the upstream read. HEAD returns 405 without contacting the provider. Multiple or malformed ranges are invalid. JSON, XML and Markdown are returned as plain text, never active markup.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -18672,7 +18672,7 @@ func (c *ClientWithResponses) GetVideoThumbnailWithResponse(ctx context.Context,
 
 // RequestVideoThumbnailWithResponse Ensure a cached video thumbnail
 //
-// Queues bounded frame extraction for a current retained video reference. Concurrent requests share work; a ready thumbnail is reused. A failed extraction can be explicitly retried. A retained HTTP(S) thumbnail supplied in XMPP file metadata is preferred (at most 1 MiB). Otherwise background extraction reads at most 4 MiB from the beginning and 1 MiB from the end, with a 15 second job deadline, and never retains an original video. Small source videos may fit entirely within that budget. The source is revalidated before publication. Does not send messages or start playback. Missing both a supplied thumbnail and decoder capability returns 503 without provider retrieval.
+// Queues retrieval of a retained HTTP(S) thumbnail supplied in XMPP file metadata (at most 1 MiB). Concurrent requests share work and a ready thumbnail is reused. A failed retrieval can be explicitly retried. The source is revalidated before publication. Without a retained or supplied thumbnail this operation returns 503 without retrieving video bytes. Clients may use a bounded media range to generate a preview locally.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -23494,40 +23494,39 @@ var swaggerSpec = []string{
 	"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",
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

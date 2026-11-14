@@ -15,8 +15,8 @@ docker run -d --name oie \
 
 Open [Oiê in your browser](http://127.0.0.1:8080) and add an existing XMPP
 account. Keep the port on localhost or use an authenticated proxy for remote
-access, since Oiê has no built-in login. FFmpeg is omitted from the image, so
-server-generated video thumbnails are unavailable in this container.
+access, since Oiê has no built-in login. Video playback depends on the
+client browser’s supported formats.
 
 To update, pull the image and recreate the container with the same `oie-data`
 volume. If the package is private, authenticate to `ghcr.io` with access to
@@ -55,7 +55,7 @@ sudo apt update
 sudo apt install ca-certificates libgtk-4-1 libwebkitgtk-6.0-4 libsoup-3.0-0
 ```
 
-macOS supplies Cocoa and WebKit. FFmpeg is optional on both platforms.
+macOS supplies Cocoa and WebKit.
 The installer also needs `curl`, `tar`, `gzip` and either `sha256sum` or
 `shasum`. On Ubuntu, install `curl` separately if it is missing.
 
@@ -204,7 +204,6 @@ fi
 For a native Linux or Homebrew installation, the existing profile is under the
 normal XDG data location. Copy the complete profile with Oiê closed if you
 want to use it with Flatpak.
-The Flatpak uses FFmpeg from the GNOME runtime for local video thumbnails.
 
 Homebrew needs the generated `Casks/` and `Formula/` directories at the root of
 a Git tap. With that tap added, use its fully qualified package name:
@@ -354,7 +353,6 @@ toolchain. Setting `GOOS` or `GOARCH` alone is insufficient for this CGO build.
 | `pkg-config` | Yes on Linux. | No. |
 | GTK 4, WebKitGTK 6 and libsoup 3 | Development packages on Linux. | Shared runtime libraries on Linux. APT installs their transitive dependencies. |
 | System CA trust | Yes for HTTPS source/module downloads. | Yes for trusted TLS connections. Ubuntu provides `ca-certificates`; macOS supplies system trust. |
-| FFmpeg | Not needed to build. | Optional, for locally generated video thumbnails. |
 
 Source installation does not require the Wails CLI, Node/npm, Docker, Dagger,
 code-generation tools or a separate SQLite installation. Generated files and
@@ -500,32 +498,13 @@ The remote commit installation and fresh-checkout installation were both
 verified on the Mac. Build and integration details remain in
 [the desktop host documentation](desktop.md).
 
-## Optional FFmpeg
+## Video previews and playback
 
-Without FFmpeg, the application starts and messaging works, but it cannot
-generate video thumbnails locally. Video playback uses the WebView and does
-not require the FFmpeg executable.
-
-On Ubuntu:
-
-```sh
-sudo apt install ffmpeg
-```
-
-On macOS, install FFmpeg separately using your preferred distributor. Check
-that the app can find it in the launching environment:
-
-```sh
-command -v ffmpeg
-ffmpeg -version
-```
-
-Alternatively, supply its absolute path, which also avoids a different PATH
-when an app is launched outside Terminal:
-
-```sh
-"$HOME/.local/bin/oie-desktop" --ffmpeg /absolute/path/to/ffmpeg
-```
+Current source builds generate video previews in the browser or desktop WebView
+and use that same media support for playback. The engine still uses a cached
+or supplied preview image when available. No FFmpeg executable is required.
+The `--ffmpeg` option was removed. Installers built from earlier releases may
+still offer FFmpeg for their server-generated thumbnails.
 
 ## Data, updates and removal
 

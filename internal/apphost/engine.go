@@ -14,7 +14,6 @@ import (
 	"github.com/araihu/oie/internal/adapters/mediafiles"
 	"github.com/araihu/oie/internal/adapters/previewfetch"
 	"github.com/araihu/oie/internal/adapters/sqlite"
-	"github.com/araihu/oie/internal/adapters/videothumb"
 	xmpadapter "github.com/araihu/oie/internal/adapters/xmpp"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
@@ -80,7 +79,6 @@ func (h *engineHost) start() (_ *engineInstance, err error) {
 	engine.SetAvatarFiles(avatarfiles.New(filepath.Join(dir, "media", "avatars")))
 	engine.SetPreviewServices(fetcher, mediafiles.New(filepath.Join(dir, "media", "images")))
 	engine.SetMediaReader(fetcher)
-	engine.SetVideoThumbnailer(videothumb.New(h.cfg.FFmpeg))
 	instance.protocols = xmpadapter.New(filepath.Join(dir, "private", "connections"), h.roots)
 	engine.SetProtocols(instance.protocols)
 	if err = instance.protocols.Start(ctx, engine); err != nil {

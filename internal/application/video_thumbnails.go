@@ -10,15 +10,6 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
-// VideoThumbnailSource opens validated ranges from the current retained source.
-// The decoder never receives a provider address or protocol credentials.
-type VideoThumbnailSource func(context.Context, MediaReadRequest) (MediaRead, error)
-
-type VideoThumbnailer interface {
-	Available() bool
-	Thumbnail(context.Context, VideoThumbnailSource) ([]byte, error)
-}
-
 // SuppliedThumbnailFetcher retrieves only a small advertised image, never a video.
 type SuppliedThumbnailFetcher interface {
 	SmallThumbnail(context.Context, string) ([]byte, error)
@@ -58,10 +49,8 @@ func suppliedThumbnail(item domain.SharedContentItem) string {
 }
 func (e *Engine) canGenerateThumbnail(item domain.SharedContentItem) bool {
 	_, provided := e.previewFetcher.(SuppliedThumbnailFetcher)
-	return e.mediaFiles != nil && (provided && suppliedThumbnail(item) != "" || e.videoThumbnailer != nil && e.videoThumbnailer.Available() && e.mediaReader != nil)
+	return e.mediaFiles != nil && provided && suppliedThumbnail(item) != ""
 }
-
-func (e *Engine) SetVideoThumbnailer(decoder VideoThumbnailer) { e.videoThumbnailer = decoder }
 
 func (e *Engine) videoThumbnailItem(ctx context.Context, id domain.ID) (domain.SharedContentItem, error) {
 	if !validID(id) {
@@ -181,23 +170,13 @@ func (e *Engine) processVideoThumbnail(ctx context.Context, repo PreviewReposito
 	}
 	var data []byte
 	if err == nil {
-		if provided, ok := e.previewFetcher.(SuppliedThumbnailFetcher); ok && suppliedThumbnail(item) != "" {
-			data, _ = provided.SmallThumbnail(job, suppliedThumbnail(item))
+		provided, ok := e.previewFetcher.(SuppliedThumbnailFetcher)
+		address := suppliedThumbnail(item)
+		if !ok || address == "" || e.mediaFiles == nil {
+			err = PreviewFailure{Code: "thumbnail_unavailable"}
+		} else {
+			data, err = provided.SmallThumbnail(job, address)
 		}
-		// Invalid supplied images fall back to a bounded frame extraction too.
-		if len(data) > 0 {
-			if _, validation := e.mediaFiles.Thumbnail(job, data); validation != nil {
-				data = nil
-			}
-		}
-		if len(data) == 0 && (e.videoThumbnailer == nil || !e.videoThumbnailer.Available() || e.mediaReader == nil) {
-			err = PreviewFailure{Code: "decoder_unavailable"}
-		}
-	}
-	if err == nil && len(data) == 0 {
-		data, err = e.videoThumbnailer.Thumbnail(job, func(readCtx context.Context, request MediaReadRequest) (MediaRead, error) {
-			return e.SharedContentMedia(readCtx, p.SharedContentID, request)
-		})
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -206,7 +185,7 @@ func (e *Engine) processVideoThumbnail(ctx context.Context, repo PreviewReposito
 		current, checkErr := e.videoThumbnailItem(job, p.SharedContentID)
 		if checkErr != nil {
 			err = checkErr
-		} else if current.URL != p.URL || current.Message.ID != p.MessageID {
+		} else if current.URL != p.URL || current.Message.RevisionID != item.Message.RevisionID {
 			err = ErrNotFound
 		}
 	}
@@ -222,7 +201,7 @@ func (e *Engine) processVideoThumbnail(ctx context.Context, repo PreviewReposito
 	}
 	if err != nil {
 		p.State = "unavailable"
-		p.LastErrorCode = "frame_unavailable"
+		p.LastErrorCode = "thumbnail_unavailable"
 		var failure PreviewFailure
 		if errors.As(err, &failure) {
 			p.LastErrorCode = failure.Code

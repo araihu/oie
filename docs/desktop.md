@@ -8,7 +8,7 @@ one process. The browser/server command remains `cmd/oie`.
 
 See [desktop installation on macOS and Linux](installation.md) for release
 archives, the per-user installer, runtime/build dependencies, source installation,
-macOS linker flags, optional FFmpeg and manual updates.
+macOS linker flags and manual updates.
 That guide owns the installation commands; this document describes the host
 implementation and native verification.
 

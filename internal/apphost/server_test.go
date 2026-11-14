@@ -81,7 +81,7 @@ func stream(t *testing.T, url string) *http.Response {
 
 func TestCloseCancelsStreamsAndRestartPreservesIdentityAndAccounts(t *testing.T) {
 	dir := t.TempDir()
-	cfg := Config{Role: "local", Listen: "127.0.0.1:0", DataDir: dir, FFmpeg: filepath.Join(dir, "missing-ffmpeg")}
+	cfg := Config{Role: "local", Listen: "127.0.0.1:0", DataDir: dir}
 	first := testServer(t, cfg)
 	identity := engineIdentity(t, first)
 	client := engineClient(t, first)

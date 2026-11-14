@@ -77,13 +77,8 @@ native lifecycle runs and a separate real video/PDF probe. macOS file-chooser
 completion remains a manual check; the Linux lane drives the actual GTK chooser.
 
 The Go container limits `GOMAXPROCS` to four, which also bounds the Go command's
-default package/build parallelism on shared runners. The real FFmpeg fixture
-exceeded its five-second deadline during concurrent unrestricted race runs on
-the 12-CPU development runner. The decoder now caps PNG output encoding
-threads as well as decoding threads; the application deadline stays unchanged.
-Thirty local extractions before and after the output cap produced identical PNG
-sizes, with observed peak threads falling from 15 to 5. This measurement explains
-the resource change, rather than claiming a general performance benchmark.
+default package/build parallelism on shared runners. Video decoding is covered
+by browser fixtures using local sample bytes.
 
 Each concurrent session should select its own artifact directory:
 
@@ -290,8 +285,7 @@ part of `make check`. The CI module uses the `http2legacy` build tag for Dagger'
 gRPC dependency on Go 1.27. Its `distconsts` replacement points to the exact
 Dagger v0.21.9 commit because the published root module requires an unpublished
 nested-module tag. Neither workaround changes the application or generator
-dependency graphs. System packages install before source is added to the graph,
-so a source edit reuses the FFmpeg installation layer.
+dependency graphs. Lint binaries are prepared before source is added to the graph.
 
 The runner materializes current tracked and untracked source, including local
 edits. It excludes Git internals, data directories, credentials, binaries, browser

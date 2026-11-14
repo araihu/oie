@@ -87,7 +87,6 @@ type Engine struct {
 	now               func() time.Time
 	protocols         Protocols
 	avatarFiles       AvatarFiles
-	videoThumbnailer  VideoThumbnailer
 	previewFetcher    PreviewFetcher
 	mediaReader       MediaReader
 	mediaFiles        MediaFiles

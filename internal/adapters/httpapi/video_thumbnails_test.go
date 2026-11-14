@@ -16,32 +16,6 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
-type thumbnailFixture struct {
-	calls   atomic.Int32
-	entered chan struct{}
-	release chan struct{}
-	data    []byte
-}
-
-func (f *thumbnailFixture) Available() bool { return true }
-func (f *thumbnailFixture) Thumbnail(ctx context.Context, source application.VideoThumbnailSource) ([]byte, error) {
-	f.calls.Add(1)
-	read, err := source(ctx, application.MediaReadRequest{Range: &application.ByteRange{Start: 0, End: 31}})
-	if err != nil {
-		return nil, err
-	}
-	_ = read.Body.Close()
-	select {
-	case f.entered <- struct{}{}:
-	default:
-	}
-	select {
-	case <-f.release:
-		return f.data, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-}
 func thumbnailPNG(t *testing.T) []byte {
 	t.Helper()
 	var output bytes.Buffer
@@ -55,12 +29,12 @@ func TestVideoThumbnailAPICachesCoalescesAndKeepsSourceAuthority(t *testing.T) {
 	directory := t.TempDir()
 	e, store, server := newMessagingEngine(t, directory, &protocolStub{})
 	c := openTestConversation(t, e, "alice@localhost")
-	if err := e.Receive(t.Context(), application.Incoming{AccountID: c.AccountID, Address: c.Address, ProviderID: "thumb-source", OriginalText: "https://files.example/clip.mp4", Correction: &domain.MessageCorrection{Scope: "sender:peer", Author: "peer", ID: "thumb-source"}}); err != nil {
+	if err := e.Receive(t.Context(), application.Incoming{AccountID: c.AccountID, Address: c.Address, ProviderID: "thumb-source", OriginalText: "https://files.example/clip.mp4", MediaThumbnails: []domain.MediaThumbnail{{URL: "https://files.example/clip.mp4", ThumbnailURL: "https://files.example/poster.png"}}, Correction: &domain.MessageCorrection{Scope: "sender:peer", Author: "peer", ID: "thumb-source"}}); err != nil {
 		t.Fatal(err)
 	}
 	files := mediafiles.New(directory + "/media/images")
-	fetcher := &previewFixture{}
-	e.SetPreviewServices(fetcher, files)
+	thumbnail := &suppliedThumbnailFixture{previewFixture: previewFixture{data: thumbnailPNG(t)}, entered: make(chan struct{}, 1), release: make(chan struct{})}
+	e.SetPreviewServices(thumbnail, files)
 	reader := &streamedFixture{data: bytes.Repeat([]byte("video"), 100), closed: make(chan struct{}, 32)}
 	e.SetMediaReader(reader)
 	startMediaEngine(t, e)
@@ -74,19 +48,12 @@ func TestVideoThumbnailAPICachesCoalescesAndKeepsSourceAuthority(t *testing.T) {
 	if err != nil || initial.JSON200 == nil || initial.JSON200.Kind != "video" || initial.JSON200.State != "not_requested" || initial.JSON200.SharedContentId != string(item.ID) {
 		t.Fatal(initial, err)
 	}
-	missing, err := client.RequestVideoThumbnailWithResponse(t.Context(), string(item.ID))
-	if err != nil || missing.StatusCode() != 503 || reader.calls.Load() != 0 {
-		t.Fatal("missing decoder fetched provider", missing, err)
-	}
-	decoder := &thumbnailFixture{entered: make(chan struct{}, 1), release: make(chan struct{}), data: thumbnailPNG(t)}
-	e.SetVideoThumbnailer(decoder)
-	// Service wiring is complete before worker processing is requested.
 	requested, err := client.RequestVideoThumbnailWithResponse(t.Context(), string(item.ID))
 	if err != nil || requested.StatusCode() != 202 {
 		t.Fatal(requested, err)
 	}
 	select {
-	case <-decoder.entered:
+	case <-thumbnail.entered:
 	case <-time.After(5 * time.Second):
 		t.Fatal("thumbnail job did not start")
 	}
@@ -102,10 +69,10 @@ func TestVideoThumbnailAPICachesCoalescesAndKeepsSourceAuthority(t *testing.T) {
 		}()
 	}
 	requests.Wait()
-	if decoder.calls.Load() != 1 || reader.calls.Load() != 1 {
-		t.Fatal("duplicate decoder/source work", decoder.calls.Load(), reader.calls.Load())
+	if thumbnail.calls.Load() != 1 || reader.calls.Load() != 0 {
+		t.Fatal("duplicate thumbnail work or a video read", thumbnail.calls.Load(), reader.calls.Load())
 	}
-	close(decoder.release)
+	close(thumbnail.release)
 	var ready *engineapi.VideoThumbnail
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
@@ -131,7 +98,7 @@ func TestVideoThumbnailAPICachesCoalescesAndKeepsSourceAuthority(t *testing.T) {
 		t.Fatal(config, format, err)
 	}
 	again, err := client.RequestVideoThumbnailWithResponse(t.Context(), string(item.ID))
-	if err != nil || again.StatusCode() != 200 || decoder.calls.Load() != 1 {
+	if err != nil || again.StatusCode() != 200 || thumbnail.calls.Load() != 1 {
 		t.Fatal("cache miss after retention", again, err)
 	}
 	wrong, err := client.RequestVideoThumbnailWithResponse(t.Context(), string(id()))
@@ -139,7 +106,7 @@ func TestVideoThumbnailAPICachesCoalescesAndKeepsSourceAuthority(t *testing.T) {
 		t.Fatal("unknown source accepted", wrong, err)
 	}
 	pending, err := store.PendingMessages(t.Context(), time.Now().Add(time.Hour))
-	if err != nil || len(pending) != 0 || fetcher.links.Load() != 0 || fetcher.images.Load() != 0 {
+	if err != nil || len(pending) != 0 || thumbnail.links.Load() != 0 || thumbnail.images.Load() != 0 {
 		t.Fatal("thumbnail crossed message/image pipeline", pending, err)
 	}
 	if err = e.Receive(t.Context(), application.Incoming{AccountID: c.AccountID, Address: c.Address, ProviderID: "thumb-edit", OriginalText: "video removed", Correction: &domain.MessageCorrection{Scope: "sender:peer", Author: "peer", ID: "thumb-edit", TargetID: "thumb-source"}}); err != nil {
@@ -149,7 +116,7 @@ func TestVideoThumbnailAPICachesCoalescesAndKeepsSourceAuthority(t *testing.T) {
 	if err != nil || removed.StatusCode() != 404 {
 		t.Fatal("removed source retained authority", removed, err)
 	}
-	if reader.calls.Load() != 1 {
+	if reader.calls.Load() != 0 {
 		t.Fatal("removed source caused network request")
 	}
 }
@@ -158,11 +125,21 @@ type suppliedThumbnailFixture struct {
 	previewFixture
 	calls   atomic.Int32
 	address string
+	entered chan struct{}
+	release chan struct{}
 }
 
-func (f *suppliedThumbnailFixture) SmallThumbnail(_ context.Context, address string) ([]byte, error) {
+func (f *suppliedThumbnailFixture) SmallThumbnail(ctx context.Context, address string) ([]byte, error) {
 	f.calls.Add(1)
 	f.address = address
+	if f.entered != nil {
+		f.entered <- struct{}{}
+		select {
+		case <-f.release:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
 	return f.data, nil
 }
 
@@ -206,17 +183,15 @@ func TestVideoThumbnailPrefersRetainedProtocolImageWithoutDecoder(t *testing.T) 
 	t.Fatal("supplied thumbnail did not become ready")
 }
 
-func TestVideoThumbnailRejectsSourceRemovedDuringExtraction(t *testing.T) {
+func TestVideoThumbnailRejectsSourceRemovedDuringRetrieval(t *testing.T) {
 	dir := t.TempDir()
 	e, store, _ := newMessagingEngine(t, dir, &protocolStub{})
 	c := openTestConversation(t, e, "alice@localhost")
-	if err := e.Receive(t.Context(), application.Incoming{AccountID: c.AccountID, Address: c.Address, ProviderID: "pending-video", OriginalText: "https://files.example/pending.mp4", Correction: &domain.MessageCorrection{Scope: "sender:peer", Author: "peer", ID: "pending-video"}}); err != nil {
+	if err := e.Receive(t.Context(), application.Incoming{AccountID: c.AccountID, Address: c.Address, ProviderID: "pending-video", OriginalText: "https://files.example/pending.mp4", MediaThumbnails: []domain.MediaThumbnail{{URL: "https://files.example/pending.mp4", ThumbnailURL: "https://files.example/poster.png"}}, Correction: &domain.MessageCorrection{Scope: "sender:peer", Author: "peer", ID: "pending-video"}}); err != nil {
 		t.Fatal(err)
 	}
-	decoder := &thumbnailFixture{entered: make(chan struct{}, 1), release: make(chan struct{}), data: thumbnailPNG(t)}
-	e.SetPreviewServices(&previewFixture{}, mediafiles.New(dir+"/media/images"))
-	e.SetVideoThumbnailer(decoder)
-	e.SetMediaReader(&streamedFixture{data: bytes.Repeat([]byte("video"), 100), closed: make(chan struct{}, 32)})
+	thumbnail := &suppliedThumbnailFixture{previewFixture: previewFixture{data: thumbnailPNG(t)}, entered: make(chan struct{}, 1), release: make(chan struct{})}
+	e.SetPreviewServices(thumbnail, mediafiles.New(dir+"/media/images"))
 	startMediaEngine(t, e)
 	item := waitVideoCatalog(t, e).Items[0]
 	queued, err := e.RequestVideoThumbnail(t.Context(), item.ID)
@@ -224,14 +199,14 @@ func TestVideoThumbnailRejectsSourceRemovedDuringExtraction(t *testing.T) {
 		t.Fatal(err)
 	}
 	select {
-	case <-decoder.entered:
+	case <-thumbnail.entered:
 	case <-time.After(5 * time.Second):
-		t.Fatal("decoder not started")
+		t.Fatal("thumbnail retrieval not started")
 	}
 	if err := e.Receive(t.Context(), application.Incoming{AccountID: c.AccountID, Address: c.Address, ProviderID: "removed-video", OriginalText: "removed", Correction: &domain.MessageCorrection{Scope: "sender:peer", Author: "peer", ID: "removed-video", TargetID: "pending-video"}}); err != nil {
 		t.Fatal(err)
 	}
-	close(decoder.release)
+	close(thumbnail.release)
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		result, err := store.Preview(t.Context(), queued.ID)
@@ -253,11 +228,12 @@ func TestVideoThumbnailQueuedWorkAndCacheSurviveEngineRestart(t *testing.T) {
 	dir := t.TempDir()
 	e, store, initialServer := newMessagingEngine(t, dir, &protocolStub{})
 	c := openTestConversation(t, e, "alice@localhost")
-	if err := e.Receive(t.Context(), application.Incoming{AccountID: c.AccountID, Address: c.Address, ProviderID: "restart-video", OriginalText: "https://files.example/restart.mp4"}); err != nil {
+	if err := e.Receive(t.Context(), application.Incoming{AccountID: c.AccountID, Address: c.Address, ProviderID: "restart-video", OriginalText: "https://files.example/restart.mp4", MediaThumbnails: []domain.MediaThumbnail{{URL: "https://files.example/restart.mp4", ThumbnailURL: "https://files.example/poster.png"}}}); err != nil {
 		t.Fatal(err)
 	}
 	files := mediafiles.New(dir + "/media/images")
-	e.SetPreviewServices(&previewFixture{}, files)
+	thumbnail := &suppliedThumbnailFixture{previewFixture: previewFixture{data: thumbnailPNG(t)}}
+	e.SetPreviewServices(thumbnail, files)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() { done <- e.Run(ctx) }()
@@ -266,15 +242,11 @@ func TestVideoThumbnailQueuedWorkAndCacheSurviveEngineRestart(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
-	decoder := &thumbnailFixture{entered: make(chan struct{}, 1), release: make(chan struct{}), data: thumbnailPNG(t)}
-	close(decoder.release)
-	e.SetVideoThumbnailer(decoder)
-	e.SetMediaReader(&streamedFixture{data: bytes.Repeat([]byte("video"), 100), closed: make(chan struct{}, 32)})
 	queued, err := e.RequestVideoThumbnail(t.Context(), item.ID)
 	if err != nil || queued.State != "queued" {
 		t.Fatal(queued, err)
 	}
-	if decoder.calls.Load() != 0 {
+	if thumbnail.calls.Load() != 0 {
 		t.Fatal("stopped engine executed queued work")
 	}
 	initialServer.Close()
@@ -282,9 +254,7 @@ func TestVideoThumbnailQueuedWorkAndCacheSurviveEngineRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	resumed, resumedStore, resumedServer := newMessagingEngine(t, dir, &protocolStub{})
-	resumed.SetPreviewServices(&previewFixture{}, files)
-	resumed.SetVideoThumbnailer(decoder)
-	resumed.SetMediaReader(&streamedFixture{data: bytes.Repeat([]byte("video"), 100), closed: make(chan struct{}, 32)})
+	resumed.SetPreviewServices(thumbnail, files)
 	ctx2, cancel2 := context.WithCancel(t.Context())
 	done2 := make(chan error, 1)
 	go func() { done2 <- resumed.Run(ctx2) }()
@@ -313,8 +283,8 @@ func TestVideoThumbnailQueuedWorkAndCacheSurviveEngineRestart(t *testing.T) {
 			reopened, _, _ := newMessagingEngine(t, dir, &protocolStub{})
 			reopened.SetPreviewServices(&previewFixture{}, files)
 			cached, err := reopened.RequestVideoThumbnail(t.Context(), item.ID)
-			if err != nil || cached.State != "ready" || cached.ImageHash != ready.ImageHash || decoder.calls.Load() != 1 {
-				t.Fatal("retained cache required another decoder", cached, err)
+			if err != nil || cached.State != "ready" || cached.ImageHash != ready.ImageHash || thumbnail.calls.Load() != 1 {
+				t.Fatal("retained cache fetched another thumbnail", cached, err)
 			}
 			return
 		}

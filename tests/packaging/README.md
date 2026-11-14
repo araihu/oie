@@ -13,7 +13,7 @@ PATH shims. No download reaches the network, no provider account is used, and
 no package manager or privileged command may execute.
 
 Coverage includes platform selection, default and custom destinations, optional
-FFmpeg, missing runtime guidance, checksums and archive validation, literal
+missing runtime guidance, checksums and archive validation, literal
 Desktop Entry paths, updates, failed moves, rollback after SIGTERM, preservation
 of user data, and cleanup. Desktop Entry assertions decode both the general
 [string escapes](https://specifications.freedesktop.org/desktop-entry/latest/value-types.html)

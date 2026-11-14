@@ -227,7 +227,7 @@ sys.exit(97)
         self.assertIn(f"Default version: {VERSION}.", output)
         self.assertEqual(self.requested_urls(), [])
 
-    def test_linux_default_and_optional_ffmpeg(self):
+    def test_linux_default_without_optional_tools(self):
         self.assertFalse((self.commands / "ffmpeg").exists())
         self.install()
         self.assert_linux(self.user_dir / ".local")

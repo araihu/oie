@@ -25,13 +25,12 @@ func run() error {
 	dataOnly := flag.Bool("data-only", false, "serve the engine API without the web interface")
 	dataDir := flag.String("data-dir", "./data", "engine database and media directory")
 	engineURL := flag.String("engine-url", "", "engine base URL (required for bff role)")
-	ffmpeg := flag.String("ffmpeg", "ffmpeg", "FFmpeg executable for optional video thumbnails")
 	devReload := flag.Bool("dev-reload", false, "reload the development browser after BFF restarts (bff role only)")
 	xmppCA := flag.String("xmpp-ca-file", "", "additional trusted CA certificate PEM for XMPP TLS (development/private servers)")
 	flag.Parse()
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-	server, err := apphost.Start(ctx, apphost.Config{Role: *role, DataOnly: *dataOnly, Listen: *listen, DataDir: *dataDir, EngineURL: *engineURL, FFmpeg: *ffmpeg, DevReload: *devReload, XMPPCAFile: *xmppCA})
+	server, err := apphost.Start(ctx, apphost.Config{Role: *role, DataOnly: *dataOnly, Listen: *listen, DataDir: *dataDir, EngineURL: *engineURL, DevReload: *devReload, XMPPCAFile: *xmppCA})
 	if err != nil {
 		return err
 	}
