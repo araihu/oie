@@ -258,13 +258,16 @@ window.OieRuntime.register('scheduling', life => {
       drawerEditRequest = null;
     }, {capture: true});
   }
+  const messageForm = document.getElementById('send-message-form');
   const dialog = document.querySelector('[data-schedule-dialog]');
-  if (!dialog) return;
+  if (!dialog) {
+    const attachTrigger = messageForm?.querySelector('[data-attach-menu]');
+    if (attachTrigger) attachTrigger.disabled = true;
+    return;
+  }
   const composer = document.querySelector('[data-schedule-composer]');
   const picker = composer?.querySelector('[data-attachment-picker]');
-  const attach = composer?.querySelector('[data-attach-file]');
   const attachments = composer?.querySelector('[data-composer-attachments]');
-  const csrf = document.querySelector('meta[name="oie-csrf"]')?.content || '';
   const localTime = dialog.querySelector('#schedule-local-time');
   const offsets = dialog.querySelector('[data-schedule-offset]');
   const title = dialog.querySelector('h2');
@@ -344,32 +347,13 @@ window.OieRuntime.register('scheduling', life => {
   }
 
   function fileLink(file, preview) {
-    const raster = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'].includes(file.mediaType);
-    return attachmentLink(fileURL(file.id, true), file.fileName, preview && raster ? fileURL(file.id) : '');
+    return attachmentLink(fileURL(file.id, true), file.fileName, preview && raster(file.mediaType) ? fileURL(file.id) : '');
   }
 
   function snapshot() {
     const detail = {blocked: true};
     composer?.dispatchEvent(new CustomEvent('oie:schedule-snapshot', {detail}));
     return detail;
-  }
-
-  function renderFiles() {
-    if (!attachments) return;
-    attachments.replaceChildren();
-    attachments.hidden = !files.length;
-    for (const file of files) {
-      const item = document.createElement('span');
-      const remove = document.createElement('button');
-      remove.type = 'button';
-      remove.textContent = '×';
-      remove.setAttribute('aria-label', dialog.dataset.removeAttachment + ' · ' + file.fileName);
-      remove.disabled = locked || composer.dataset.staging === 'true';
-      remove.dataset.removeAttachment = file.id;
-      item.append(fileLink(file, false), remove);
-      attachments.append(item);
-    }
-    if (attach) attach.disabled = picker.disabled || locked || composer.dataset.staging === 'true';
   }
 
   function newID() {
@@ -382,77 +366,293 @@ window.OieRuntime.register('scheduling', life => {
     return [raw.slice(0, 8), raw.slice(8, 12), raw.slice(12, 16), raw.slice(16, 20), raw.slice(20)].join('-');
   }
 
-  life.on(composer, 'oie:composer-attachments', event => {
-    const changed = locked !== event.detail.locked || JSON.stringify(files) !== JSON.stringify(event.detail.files);
-    files = event.detail.files;
-    locked = event.detail.locked;
-    if (changed) renderFiles();
-  });
-  if (composer) { files = snapshot().files || []; renderFiles(); }
-  life.on(attach, 'click', () => {
-    const choose = window.OieDesktop?.attachFiles;
-    if (!choose) {
-      picker?.click();
-      return;
+  const chat = composer?.closest('.oie-chat-pane');
+  const input = composer?.elements.namedItem('originalText');
+  const csrf = document.querySelector('meta[name="oie-csrf"]')?.content || '';
+  const available = () => composer.dataset.attachmentAllowed === 'true';
+  const raster = type => ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'].includes(type);
+
+  if (attachments) {
+    const labels = attachments.dataset;
+    const items = attachments.querySelector('[data-attachment-items]');
+    const status = attachments.querySelector('[data-attachment-status]');
+    const template = attachments.querySelector('template');
+    const attachTrigger = composer.querySelector('[data-attach-menu]');
+    const pending = new Map();
+    const selectionOrder = new Map();
+    let sequence = 0;
+    let dragDepth = 0;
+    let uploading = false;
+    let nativeSelection = null;
+    files = snapshot().files || [];
+    locked = snapshot().editBlocked;
+
+    function renderFiles() {
+      const active = document.activeElement;
+      const focused = active?.closest('[data-draft-attachment]');
+      const action = ['data-file-download', 'data-retry-attachment', 'data-remove-attachment']
+        .find(attribute => active?.hasAttribute(attribute));
+      items.replaceChildren();
+      attachments.hidden = !files.length && !pending.size;
+      const order = file => selectionOrder.get(file.id) || 0;
+      const display = [...files, ...pending.values()].sort((a,b) => order(a) - order(b));
+      for (const file of display) {
+        const row = template.content.firstElementChild.cloneNode(true);
+        row.dataset.draftAttachment = file.id;
+        const name = row.querySelector('[data-file-name]');
+        name.textContent = file.fileName;
+        name.title = file.fileName;
+        if (!file.file) {
+          const download = row.querySelector('[data-file-download]');
+          download.href = fileURL(file.id, true);
+          download.download = download.textContent = file.fileName;
+          download.title = file.fileName;
+          download.hidden = false;
+          name.hidden = true;
+        }
+        const thumbnail = row.querySelector('img');
+        const source = file.file ? file.thumbnail : raster(file.mediaType) ? fileURL(file.id) : '';
+        if (source) {
+          thumbnail.src = source;
+          thumbnail.hidden = false;
+        }
+        const state = row.querySelector('[data-file-state]');
+        if (file.file) {
+          state.textContent = file.failed ? labels.failed : labels.preparing;
+          state.hidden = false;
+        }
+        const retry = row.querySelector('[data-retry-attachment]');
+        retry.hidden = !file.failed;
+        retry.setAttribute('aria-label', labels.retry + ' · ' + file.fileName);
+        row.querySelector('[data-remove-attachment]').setAttribute('aria-label', labels.removeLabel + ' · ' + file.fileName);
+        items.append(row);
+      }
+      if (focused && !focused.isConnected) {
+        const row = items.querySelector('[data-draft-attachment="' + CSS.escape(focused.dataset.draftAttachment) + '"]');
+        const target = (action && row?.querySelector('[' + action + ']:not([hidden])')) || row?.querySelector('[data-remove-attachment]') || input;
+        target.focus({preventScroll:true});
+      }
+      syncAttachmentControls();
     }
-    if (locked || composer.dataset.staging === 'true') return;
-    if (files.length >= 16) {
-      errorToast(dialog.dataset.attachmentLimit);
-      return;
+
+    function syncAttachmentControls() {
+      const disabled = !available() || locked || !!nativeSelection ||
+        (!!window.OieDesktop?.attachFiles && pending.size > 0);
+      attachTrigger.disabled = disabled;
+      for (const item of composer.querySelectorAll('#composer-attachments [role="menuitem"]')) {
+        item.disabled = disabled;
+      }
+      for (const remove of items.querySelectorAll('[data-remove-attachment]')) remove.disabled = locked || !!nativeSelection;
+      for (const retry of items.querySelectorAll('[data-retry-attachment]')) retry.disabled = !available() || locked;
     }
-    void stageFiles(async next => {
-      const result = await choose(data.engineId, data.conversationId, csrf, 16 - next.length);
-      next.push(...(result.files || []));
-      if (life.signal.aborted) return;
-      if (result.limit) errorToast(dialog.dataset.attachmentLimit);
-      if (result.error) errorToast(dialog.dataset.attachmentFailed);
-    });
-  });
-  life.on(attachments, 'click', event => {
-    const remove = event.target.closest('[data-remove-attachment]');
-    if (!remove || locked) return;
-    composer.dispatchEvent(new CustomEvent('oie:attachments-change', {detail: files.filter(file => file.id !== remove.dataset.removeAttachment)}));
-    attach?.focus();
-  });
-  life.on(picker, 'change', async () => {
-    const picked = [...picker.files];
-    picker.value = '';
-    if (!picked.length || locked || composer.dataset.staging === 'true') return;
-    if (files.length + picked.length > 16 || picked.some(file => file.size > 20 * 1024 * 1024)) {
-      errorToast(dialog.dataset.attachmentLimit);
-      return;
+
+    function syncPending() {
+      composer.toggleAttribute('data-attachments-pending', pending.size > 0 || !!nativeSelection);
+      composer.dispatchEvent(new Event('oie:attachment-staging'));
+      renderFiles();
     }
-    await stageFiles(async next => {
-      for (const file of picked) {
-        const id = newID(), form = new FormData();
-        form.set('file', file);
-        const response = await life.fetch(fileURL(id).replace('/file?', '/stage?'), {
-          method: 'POST', headers: {'X-CSRF-Token': csrf}, body: form,
+
+    function forget(file) {
+      file.request?.abort();
+      if (file.thumbnail) URL.revokeObjectURL(file.thumbnail);
+      pending.delete(file.id);
+    }
+
+    function stageNext() {
+      if (uploading || locked || !available() || life.signal.aborted) return;
+      const file = [...pending.values()].find(file => !file.failed);
+      if (file) void stage(file);
+    }
+
+    async function stage(file) {
+      uploading = true;
+      const controller = new AbortController();
+      file.request = controller;
+      const timeout = life.timeout(() => controller.abort(), 90000);
+      try {
+        if (/[\x00-\x1f\x7f]/.test(file.fileName)) throw Error('invalid filename');
+        // Encode the multipart quoted string directly so quotes and literal %22 stay distinct.
+        const boundary = 'oie-' + newID();
+        const filename = file.fileName.replace(/["\\]/g, '\\$&');
+        const mediaType = file.file.type || 'application/octet-stream';
+        const header = '--' + boundary + '\r\n' +
+          'Content-Disposition: form-data; name="file"; filename="' + filename + '"\r\n' +
+          'Content-Type: ' + mediaType + '\r\n\r\n';
+        const body = new Blob([header, file.file, '\r\n--' + boundary + '--\r\n']);
+        const response = await life.fetch(fileURL(file.id).replace('/file?', '/stage?'), {
+          method: 'POST', headers: {'X-CSRF-Token': csrf, 'Content-Type': 'multipart/form-data; boundary=' + boundary},
+          body, signal: controller.signal,
         });
         if (!response.ok) throw Error('staging');
         const metadata = await response.json();
-        if (metadata.id !== id || typeof metadata.fileName !== 'string' || metadata.size !== file.size) throw Error('staging');
-        next.push(metadata);
-      }
-    });
-  });
-
-  async function stageFiles(stage) {
-    composer.dataset.staging = 'true';
-    composer.dispatchEvent(new Event('oie:attachment-staging'));
-    renderFiles();
-    const next = [...files];
-    try {
-      await stage(next);
-    } catch {
-      if (!life.signal.aborted) errorToast(dialog.dataset.attachmentFailed);
-    } finally {
-      if (!life.signal.aborted) {
-        composer.dataset.staging = 'false';
-        composer.dispatchEvent(new CustomEvent('oie:attachments-change', {detail: next}));
-        renderFiles();
+        if (metadata?.id !== file.id || metadata.size !== file.file.size ||
+          metadata.fileName !== file.fileName ||
+          typeof metadata.mediaType !== 'string' || !/^[a-f0-9]{64}$/.test(metadata.sha256)) throw Error('staging');
+        if (life.signal.aborted || pending.get(file.id) !== file) return;
+        if (controller.signal.aborted || !available()) throw Error('staging unavailable');
+        pending.delete(file.id);
+        const order = item => selectionOrder.get(item.id) || 0;
+        const detail = {files: [...files, metadata].sort((a,b) => order(a) - order(b))};
+        composer.dispatchEvent(new CustomEvent('oie:attachments-change', {detail}));
+        if (!detail.applied) {
+          pending.set(file.id, file);
+          throw Error('draft unavailable');
+        }
+        if (file.thumbnail) URL.revokeObjectURL(file.thumbnail);
+      } catch {
+        if (life.signal.aborted || pending.get(file.id) !== file) return;
+        file.failed = true;
+        status.textContent = labels.failed;
+      } finally {
+        clearTimeout(timeout);
+        delete file.request;
+        if (!life.signal.aborted) syncPending();
+        uploading = false;
+        stageNext();
       }
     }
+
+    function addFiles(picked) {
+      if (!picked.length || !chat.getClientRects().length) return;
+      if (!available() || locked || nativeSelection || document.querySelector('dialog[open]')) {
+        errorToast(labels.unavailable);
+        return;
+      }
+      if (files.length + pending.size + picked.length > 16 || picked.some(file => file.size > 20 * 1024 * 1024)) {
+        errorToast(labels.limit);
+        return;
+      }
+      const selected = picked.map(file => ({
+        file, id: newID(), fileName: file.name, thumbnail: raster(file.type) ? URL.createObjectURL(file) : '',
+      }));
+      for (const file of selected) {
+        pending.set(file.id, file);
+        selectionOrder.set(file.id, ++sequence);
+      }
+      status.textContent = labels.preparing;
+      input.focus({preventScroll:true});
+      syncPending();
+      stageNext();
+    }
+
+    renderFiles();
+    life.on(composer, 'oie:composer-attachments', event => {
+      const changed = JSON.stringify(files) !== JSON.stringify(event.detail.files);
+      files = event.detail.files;
+      locked = event.detail.locked;
+      if (changed) renderFiles();
+      else syncAttachmentControls();
+      stageNext();
+    });
+    function discardPending() {
+      nativeSelection = null;
+      for (const file of pending.values()) forget(file);
+    }
+    life.cleanup(discardPending);
+    life.on(composer, 'oie:attachment-draft-changing', () => {
+      discardPending();
+      selectionOrder.clear();
+      syncPending();
+    });
+    async function chooseNativeFiles(choose, imagesOnly) {
+      if (pending.size) return;
+      const remaining = 16 - files.length;
+      if (remaining <= 0) {
+        errorToast(labels.limit);
+        return;
+      }
+      const selection = nativeSelection = {};
+      syncPending();
+      try {
+        const result = await choose(data.engineId, data.conversationId, csrf, remaining, imagesOnly);
+        if (nativeSelection !== selection) return;
+        if (result.files?.length) {
+          const detail = {files: [...files, ...result.files]};
+          composer.dispatchEvent(new CustomEvent('oie:attachments-change', {detail}));
+          if (!detail.applied) throw Error('draft unavailable');
+        }
+        if (result.limit) errorToast(labels.limit);
+        if (result.error) errorToast(labels.failed);
+      } catch {
+        if (nativeSelection === selection) errorToast(labels.failed);
+      } finally {
+        if (nativeSelection === selection) {
+          nativeSelection = null;
+          syncPending();
+          if (!locked && document.activeElement === document.body) input.focus({preventScroll:true});
+        }
+      }
+    }
+
+    life.on(composer, 'oie:compose-add', event => {
+      if (!['image', 'file'].includes(event.detail) || !available() || locked || nativeSelection) return;
+      const choose = window.OieDesktop?.attachFiles;
+      const imagesOnly = event.detail === 'image';
+      if (choose) {
+        void chooseNativeFiles(choose, imagesOnly);
+        return;
+      }
+      picker.accept = imagesOnly ? 'image/*' : '';
+      picker.click();
+    });
+    life.on(picker, 'change', () => {
+      const picked = [...picker.files];
+      picker.value = '';
+      addFiles(picked);
+    });
+    life.on(chat, 'paste', event => {
+      if (event.target !== input || !event.clipboardData?.files.length) return;
+      event.preventDefault();
+      addFiles([...event.clipboardData.files]);
+    });
+    const fileDrag = event => Array.from(event.dataTransfer?.types || []).includes('Files');
+    life.on(chat, 'dragenter', event => {
+      if (!fileDrag(event)) return;
+      event.preventDefault();
+      dragDepth++;
+      chat.toggleAttribute('data-file-drag', available() && !locked && !nativeSelection);
+    });
+    life.on(chat, 'dragover', event => {
+      if (!fileDrag(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = available() && !locked && !nativeSelection ? 'copy' : 'none';
+    });
+    life.on(chat, 'dragleave', event => {
+      if (!fileDrag(event)) return;
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (!dragDepth || (event.relatedTarget && !chat.contains(event.relatedTarget))) {
+        dragDepth = 0;
+        chat.removeAttribute('data-file-drag');
+      }
+    });
+    life.on(chat, 'drop', event => {
+      if (!fileDrag(event)) return;
+      event.preventDefault();
+      dragDepth = 0;
+      chat.removeAttribute('data-file-drag');
+      addFiles([...event.dataTransfer.files]);
+    });
+    life.on(items, 'click', event => {
+      const button = event.target.closest('button');
+      const id = button?.closest('[data-draft-attachment]')?.dataset.draftAttachment;
+      if (!id || locked || nativeSelection) return;
+      const file = pending.get(id);
+      if (button.hasAttribute('data-retry-attachment')) {
+        if (!file?.failed || !available()) return;
+        file.failed = false;
+        status.textContent = labels.preparing;
+        renderFiles();
+        stageNext();
+      } else if (file) {
+        selectionOrder.delete(id);
+        forget(file);
+        syncPending();
+      } else {
+        const detail = {files: files.filter(file => file.id !== id)};
+        composer.dispatchEvent(new CustomEvent('oie:attachments-change', {detail}));
+        if (detail.applied) selectionOrder.delete(id);
+      }
+    });
   }
 
   function open(form, initial, text, reply, links, reschedule) {

@@ -47,8 +47,6 @@ if v.requestKind()!="" {
 <div class="oie-timeline-frame">
 @conversationTimeline(v)
 </div>
-<button type="button" class="oie-jump-latest" data-jump-latest hidden?={!v.ContextHasNewer&&!v.ContextMissing}>{v.Text.JumpToLatest}</button>
-
 				@composer(v)
 }
 			} else {

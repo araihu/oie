@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/araihu/oie/internal/domain"
 )
@@ -15,6 +16,10 @@ func (s *Server) GetMessageContext(ctx context.Context, r engineapi.GetMessageCo
 	if err != nil {
 		return nil, err
 	}
+	return engineapi.GetMessageContext200JSONResponse(messageContext(result)), nil
+}
+
+func messageContext(result domain.MessageContext) engineapi.MessageContext {
 	out := engineapi.MessageContext{TargetId: string(result.TargetID), Items: make([]engineapi.Message, 0, len(result.Items)), HasOlder: result.HasOlder, HasNewer: result.HasNewer}
 	if result.RequestedTargetID != "" {
 		requested := string(result.RequestedTargetID)
@@ -23,5 +28,5 @@ func (s *Server) GetMessageContext(ctx context.Context, r engineapi.GetMessageCo
 	for _, m := range result.Items {
 		out.Items = append(out.Items, message(m))
 	}
-	return engineapi.GetMessageContext200JSONResponse(out), nil
+	return out
 }

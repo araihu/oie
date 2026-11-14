@@ -3,6 +3,7 @@
   const storageKey = 'oie.device.time-zone.v1';
   const formatters = new Map();
   const offsetFormatters = new Map();
+  const initializedPickers = new WeakSet();
   const deviceTimeZone = () => new Intl.DateTimeFormat().resolvedOptions().timeZone;
   let timeZone = '';
   let systemTimeZone = deviceTimeZone();
@@ -138,8 +139,9 @@
       picker.dispatchEvent(new CustomEvent('combobox:load', {
         bubbles: true, detail: {id: picker.id, options, values: [timeZone]},
       }));
+      initializedPickers.add(picker);
     }
-    syncPicker();
+    if (!initializedPickers.has(picker)) syncPicker();
     trigger.disabled = false;
 
     life.on(document, 'oie:time-zone', () => syncPicker(true));

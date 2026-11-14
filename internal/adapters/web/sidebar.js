@@ -4,6 +4,7 @@
   const root = document.documentElement;
   const storageKey = "oie.navigation.sidebar";
   const defaultWidth = 208;
+  const ranges = new WeakMap();
   let preferredWidth = defaultWidth;
   let collapsed = false;
   try {
@@ -32,10 +33,17 @@
     const splitter = sidebar?.querySelector("[data-sidebar-splitter]");
     if (!toggle || !splitter) return;
 
-    const styles = getComputedStyle(sidebar);
-    const min = Number(styles.getPropertyValue("--oie-sidebar-min"));
-    const max = Number(styles.getPropertyValue("--oie-sidebar-max"));
-    const share = Number(styles.getPropertyValue("--oie-sidebar-viewport-share")) / 100;
+    let range = ranges.get(sidebar);
+    if (!range) {
+      const styles = getComputedStyle(sidebar);
+      range = {
+        min: Number(styles.getPropertyValue("--oie-sidebar-min")),
+        max: Number(styles.getPropertyValue("--oie-sidebar-max")),
+        share: Number(styles.getPropertyValue("--oie-sidebar-viewport-share")) / 100,
+      };
+      ranges.set(sidebar, range);
+    }
+    const {min, max, share} = range;
     const maxWidth = () => Math.max(min, Math.min(max, Math.floor(window.innerWidth * share)));
     const visibleWidth = () => Math.min(maxWidth(), Math.max(min, Math.round(preferredWidth)));
     const narrow = matchMedia("(max-width: 720px)");

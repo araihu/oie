@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"mime"
 	"mime/multipart"
 	"testing"
 	"time"
@@ -178,6 +179,10 @@ func TestSchedulingAcrossRoomsAndAttachmentDispatchAfterRestart(t *testing.T) {
 	download, err := client.GetStagedMessageAttachmentWithResponse(ctx, room, fileID)
 	if err != nil || download.StatusCode() != 200 || string(download.Body) != content {
 		t.Fatalf("staged bytes not durable: %+v %v", download, err)
+	}
+	kind, params, err := mime.ParseMediaType(download.HTTPResponse.Header.Get("Content-Disposition"))
+	if err != nil || kind != "attachment" || params["filename"] != staged.JSON201.FileName {
+		t.Fatalf("staged attachment disposition: %q, %v", download.HTTPResponse.Header.Get("Content-Disposition"), err)
 	}
 	if replay := accept(room, keys[0], at, &files); replay.JSON200 == nil || replay.JSON200.Id != first.Id || !replay.JSON200.ScheduledAt.Equal(at) {
 		t.Fatal("acceptance snapshot not replayed after edit and restart")

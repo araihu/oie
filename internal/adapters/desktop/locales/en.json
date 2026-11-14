@@ -9,6 +9,7 @@
   "copy": "Copy",
   "paste": "Paste",
   "selectAll": "Select all",
+  "attachImages": "Select images",
   "attachFiles": "Select files",
   "saveFile": "Save file",
   "saveFailed": "Couldn't save this file."

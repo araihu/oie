@@ -2,8 +2,12 @@
 
 Selecting a conversation in the same inbox replaces `#conversation-pane`.
 The application shell, sidebar, conversation list, unfinished search input and
-list scroll position remain mounted. Account, search, section, locale or theme
-changes still replace the broader application region.
+list scroll position remain mounted. The sidebar's section links and history
+traversal between sections replace the workspace to the right. The desktop
+sidebar stays mounted, and its links receive their current destinations and
+active state in place. The mobile navigation control keeps its identity as it
+moves to the incoming section's header. Routes that change the locale or engine
+use the full application fragment.
 
 The BFF serves this region for a root GET with `HX-Request: true` and
 `X-Oie-Fragment: conversation`. It includes conversation-owned stars, avatar
@@ -23,6 +27,35 @@ instead of HTML changed by HTMX, avatar bindings or localized timestamps.
 Selection updates `aria-current` directly. A new conversation response does not
 mark the retained inbox data as current, so an intervening incoming message can
 still update its preview or unread count.
+
+## Returning from another sidebar section
+
+The tab retains one detached conversation-list node, including its scroll
+position. A matching Conversations route sends the inbox scope, its current
+event cursor and the first row's ID. For implicit desktop selection, the BFF
+uses that ID only when the cursor matches and the conversation remains eligible.
+Otherwise it loads the current list once and selects from that result. The
+browser reconciles those rows into the retained list during the swap and keeps
+the visible scroll anchor. The scope covers engine, account, section, filter,
+query, locale and theme. Native navigation loads the full view.
+
+One EventSource remains connected across fragment swaps. Route-owned handlers
+are disposed and reattached as the workspace changes. Conversation and message
+events invalidate the list, including while another section is visible.
+An explicit conversation or inbox-only route can restore the retained list and
+refresh it if the destination cursor is newer, including when SSE is buffered.
+If an event invalidates the list while a response that reused the first row is
+in flight, navigation retries with a fresh list before swapping the workspace.
+The BFF omits the list on live refreshes when the current inbox scope and engine
+cursor match. A disconnected stream triggers recovery through reconnection or
+the existing polling fallback. Engine changes and data reset discard the
+retained list.
+
+The fragment navigation fixture delays the sidebar response. It checks the
+original node and scroll anchor, the selected conversation, ordering, preview
+and unread badge. It counts visible inbox reads with delivered, buffered, and
+in-flight SSE events, and exercises an explicit conversation route, an
+archived first row, and an empty inbox receiving its first conversation.
 
 The fragment root is a flex column occupying one workspace grid cell. The chat
 fills that column and the details drawer stays inside it. Using `display:contents`

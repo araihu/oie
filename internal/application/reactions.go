@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -71,6 +72,7 @@ type MessageReactionObservation struct {
 }
 type MessageReactionRepository interface {
 	ReadMessageReactions(context.Context, domain.ID) (MessageReactionCandidate, error)
+	ReadConversationReactions(context.Context, domain.ID, []domain.ID) ([]MessageReactionCandidate, error)
 	ReplayMessageReaction(context.Context, domain.ID, string) (*domain.MessageReactionCommand, error)
 	AcceptMessageReaction(context.Context, MessageReactionMutation) (MessageReactionResult, error)
 	MessageReactionCommand(context.Context, domain.ID) (domain.PendingMessageReaction, error)
@@ -102,6 +104,39 @@ func (e *Engine) prepareReaction(ctx context.Context, id domain.ID) (MessageReac
 	if err != nil {
 		return candidate, domain.OutgoingReaction{}, err
 	}
+	return e.reactionEligibility(ctx, candidate, func() (reactionScope, error) {
+		return e.loadReactionScope(ctx, candidate.Source.ConversationID)
+	})
+}
+
+type reactionScope struct {
+	conversation domain.Conversation
+	account      domain.Account
+	intent       domain.ID
+	roomJoined   bool
+}
+
+func (e *Engine) loadReactionScope(ctx context.Context, id domain.ID) (reactionScope, error) {
+	c, err := e.Conversation(ctx, id)
+	if err != nil {
+		return reactionScope{}, err
+	}
+	a, err := e.Account(ctx, c.AccountID)
+	if err != nil {
+		return reactionScope{}, err
+	}
+	scope := reactionScope{conversation: c, account: a}
+	if c.Kind == "room" {
+		session, err := e.RoomSession(ctx, c.ID)
+		if err == nil && session.Active && session.State == "joined" {
+			scope.roomJoined = true
+			scope.intent = session.IntentRevisionID
+		}
+	}
+	return scope, nil
+}
+
+func (e *Engine) reactionEligibility(ctx context.Context, candidate MessageReactionCandidate, scope func() (reactionScope, error)) (MessageReactionCandidate, domain.OutgoingReaction, error) {
 	deny := func(reason string) (MessageReactionCandidate, domain.OutgoingReaction, error) {
 		candidate.Snapshot.Eligible = false
 		candidate.Snapshot.Reason = reason
@@ -114,21 +149,13 @@ func (e *Engine) prepareReaction(ctx context.Context, id domain.ID) (MessageReac
 	if !ok {
 		return deny("protocol_unavailable")
 	}
-	c, err := e.Conversation(ctx, candidate.Source.ConversationID)
+	loaded, err := scope()
 	if err != nil {
 		return candidate, domain.OutgoingReaction{}, err
 	}
-	a, err := e.Account(ctx, c.AccountID)
-	if err != nil {
-		return candidate, domain.OutgoingReaction{}, err
-	}
-	var intent domain.ID
-	if c.Kind == "room" {
-		session, err := e.RoomSession(ctx, c.ID)
-		if err != nil || !session.Active || session.State != "joined" {
-			return deny("session_changed")
-		}
-		intent = session.IntentRevisionID
+	c, a := loaded.conversation, loaded.account
+	if c.Kind == "room" && !loaded.roomJoined {
+		return deny("session_changed")
 	}
 	plan, err := provider.PrepareReaction(ctx, a, c, candidate.Source)
 	if err != nil || plan.TargetMessageID != candidate.Source.ID || plan.Reference.ID == "" || plan.Actor == "" || plan.Actor != a.Address || plan.SessionID == "" {
@@ -140,7 +167,7 @@ func (e *Engine) prepareReaction(ctx context.Context, id domain.ID) (MessageReac
 	if plan.MaxEmojis <= 0 || plan.AllowedEmojis != nil && len(plan.AllowedEmojis) == 0 {
 		return deny("target_unavailable")
 	}
-	plan.RoomIntentRevisionID = intent
+	plan.RoomIntentRevisionID = loaded.intent
 	candidate.Snapshot.MaxEmojis = plan.MaxEmojis
 	if candidate.Snapshot.MaxEmojis <= 0 || candidate.Snapshot.MaxEmojis > 8 {
 		candidate.Snapshot.MaxEmojis = 8
@@ -161,23 +188,27 @@ func (e *Engine) ConversationReactions(ctx context.Context, id domain.ID, ids []
 	if !validID(id) || len(ids) == 0 || len(ids) > 100 {
 		return nil, ErrInvalid
 	}
-	if _, err := e.Conversation(ctx, id); err != nil {
+	r, err := e.reactionRepository()
+	if err != nil {
 		return nil, err
 	}
-	out := []domain.MessageReactions{}
-	seen := map[domain.ID]bool{}
 	for _, source := range ids {
-		state, err := e.MessageReactions(ctx, source)
+		if !validID(source) {
+			return nil, ErrInvalid
+		}
+	}
+	candidates, err := r.ReadConversationReactions(ctx, id, ids)
+	if err != nil {
+		return nil, err
+	}
+	scope := sync.OnceValues(func() (reactionScope, error) { return e.loadReactionScope(ctx, id) })
+	out := make([]domain.MessageReactions, 0, len(candidates))
+	for _, candidate := range candidates {
+		resolved, _, err := e.reactionEligibility(ctx, candidate, scope)
 		if err != nil {
 			return nil, err
 		}
-		if state.ConversationID != id {
-			return nil, ErrNotFound
-		}
-		if !seen[state.MessageID] {
-			seen[state.MessageID] = true
-			out = append(out, state)
-		}
+		out = append(out, resolved.Snapshot)
 	}
 	return out, nil
 }

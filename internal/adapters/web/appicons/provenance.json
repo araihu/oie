@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "tool": "goshtoso-iconpack",
-  "release": "iconpack-2f11b88a2579",
-  "catalogSha256": "2f11b88a2579ee1d999619418f9eec42bf3e16bbf196d5a1bfea5357b413abde",
+  "release": "iconpack-b321b2190e00",
+  "catalogSha256": "b321b2190e00ceed517ab409d01047bcc2d3e670f59cb80f172b01646c5c47f4",
   "sourceKind": "muamba-snapshot",
   "archiveSha256": "",
-  "sourceConfigSha256": "2f11b88a2579ee1d999619418f9eec42bf3e16bbf196d5a1bfea5357b413abde",
-  "sourceLockSha256": "fac3c65d0145155c5002858982255fd2acd94d4b0659f95b4fc856823c97dcc1",
+  "sourceConfigSha256": "b321b2190e00ceed517ab409d01047bcc2d3e670f59cb80f172b01646c5c47f4",
+  "sourceLockSha256": "327e39371cec750d6723588051dabfa22ab11b6d4aea7b545800b36c7ecefed5",
   "sources": [
     {
       "namespace": "custom",
@@ -14,10 +14,22 @@
       "spritePath": "",
       "spriteSha256": "",
       "manifestPath": ".iconpack.yaml",
-      "manifestSha256": "2f11b88a2579ee1d999619418f9eec42bf3e16bbf196d5a1bfea5357b413abde",
+      "manifestSha256": "b321b2190e00ceed517ab409d01047bcc2d3e670f59cb80f172b01646c5c47f4",
       "provenancePath": "",
       "provenanceSha256": "",
       "licensePath": "heroicons/LICENSE",
+      "licenseSha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    },
+    {
+      "namespace": "custom",
+      "product": "heroicons-photo",
+      "spritePath": "",
+      "spriteSha256": "",
+      "manifestPath": ".iconpack.yaml",
+      "manifestSha256": "b321b2190e00ceed517ab409d01047bcc2d3e670f59cb80f172b01646c5c47f4",
+      "provenancePath": "",
+      "provenanceSha256": "",
+      "licensePath": "heroicons-photo/LICENSE",
       "licenseSha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
     },
     {
@@ -26,7 +38,7 @@
       "spritePath": "",
       "spriteSha256": "",
       "manifestPath": ".iconpack.yaml",
-      "manifestSha256": "2f11b88a2579ee1d999619418f9eec42bf3e16bbf196d5a1bfea5357b413abde",
+      "manifestSha256": "b321b2190e00ceed517ab409d01047bcc2d3e670f59cb80f172b01646c5c47f4",
       "provenancePath": "",
       "provenanceSha256": "",
       "licensePath": "heroicons-room-role/LICENSE",
@@ -38,7 +50,7 @@
       "spritePath": "",
       "spriteSha256": "",
       "manifestPath": ".iconpack.yaml",
-      "manifestSha256": "2f11b88a2579ee1d999619418f9eec42bf3e16bbf196d5a1bfea5357b413abde",
+      "manifestSha256": "b321b2190e00ceed517ab409d01047bcc2d3e670f59cb80f172b01646c5c47f4",
       "provenancePath": "",
       "provenanceSha256": "",
       "licensePath": "heroicons-room-voice/LICENSE",
@@ -52,6 +64,13 @@
       "license": "MIT",
       "path": "heroicons/16/solid/chat-bubble-left.svg",
       "sha256": "c59f230d1a64adc26e65ddb08284d89c61cb33768586057938efd44dc2e4efcd"
+    },
+    {
+      "canonicalName": "heroicons-photo-16-solid-photo",
+      "source": "https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/photo.svg:16/solid/photo.svg",
+      "license": "MIT",
+      "path": "heroicons-photo/16/solid/photo.svg",
+      "sha256": "881555a8b9c771588f2eb663d445779e146850c1dce7956f990817b80474f005"
     },
     {
       "canonicalName": "heroicons-room-role-16-solid-scale",

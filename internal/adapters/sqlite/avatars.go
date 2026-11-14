@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Store) Avatar(ctx context.Context, id domain.ID, address string) (domain.Avatar, error) {
-	row, err := s.queries.FindAvatar(ctx, dbgen.FindAvatarParams{AccountID: string(id), Address: address})
+	row, err := s.read.FindAvatar(ctx, dbgen.FindAvatarParams{AccountID: string(id), Address: address})
 	if err != nil {
 		return domain.Avatar{}, notFound(err)
 	}
@@ -20,7 +20,7 @@ func (s *Store) Avatar(ctx context.Context, id domain.ID, address string) (domai
 	return a, err
 }
 func (s *Store) Avatars(ctx context.Context, id, after domain.ID, limit int) ([]domain.Avatar, error) {
-	rows, err := s.queries.ListAvatars(ctx, dbgen.ListAvatarsParams{AccountID: string(id), ID: string(after), Limit: int64(limit)})
+	rows, err := s.read.ListAvatars(ctx, dbgen.ListAvatarsParams{AccountID: string(id), ID: string(after), Limit: int64(limit)})
 	if err != nil {
 		return nil, err
 	}

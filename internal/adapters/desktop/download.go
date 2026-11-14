@@ -24,15 +24,26 @@ func nativeDownloadURL(address string) (*url.URL, error) {
 	if err != nil || u.IsAbs() || u.Host != "" || u.User != nil || u.Fragment != "" || u.Opaque != "" || !strings.HasPrefix(u.Path, "/") || strings.HasPrefix(u.Path, "//") {
 		return nil, errors.New("invalid native download address")
 	}
+	query, err := url.ParseQuery(u.RawQuery)
+	if err != nil || query.Get("download") == "" || len(query["download"]) != 1 {
+		return nil, errors.New("invalid native download query")
+	}
+	if u.Path == "/ui/scheduling/file" {
+		if len(query) != 4 || query.Get("download") != "1" {
+			return nil, errors.New("invalid staged attachment download query")
+		}
+		for _, key := range []string{"engineId", "conversationId", "attachmentId"} {
+			if values := query[key]; len(values) != 1 || !validUUID(values[0]) {
+				return nil, errors.New("invalid staged attachment download scope")
+			}
+		}
+		return u, nil
+	}
 	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
 	media := len(parts) == 3 && parts[0] == "ui" && parts[1] == "media" && lowercaseHex(parts[2], 64)
 	shared := len(parts) == 4 && parts[0] == "ui" && parts[1] == "shared-content" && parts[3] == "content" && validUUID(parts[2])
 	if !media && !shared {
 		return nil, errors.New("unsupported native download address")
-	}
-	query, err := url.ParseQuery(u.RawQuery)
-	if err != nil || query.Get("download") == "" || len(query["download"]) != 1 {
-		return nil, errors.New("invalid native download query")
 	}
 	for key, values := range query {
 		if len(values) != 1 || (key != "download" && key != "engineId") {
@@ -124,7 +135,8 @@ func saveNativeDownload(ctx context.Context, handler http.Handler, address, targ
 		return writer.err
 	}
 	disposition, params, headerErr := mime.ParseMediaType(writer.header.Get("Content-Disposition"))
-	if headerErr != nil || disposition != "attachment" || params["filename"] == "" {
+	// Older engines omit the filename on staged downloads; the draft link names the file.
+	if headerErr != nil || disposition != "attachment" || (params["filename"] == "" && u.Path != "/ui/scheduling/file") {
 		return errors.New("download response is not an attachment")
 	}
 	if contentType, _, err := mime.ParseMediaType(writer.header.Get("Content-Type")); err != nil || contentType == "" {

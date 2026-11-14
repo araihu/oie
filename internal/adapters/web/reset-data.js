@@ -12,6 +12,8 @@
 
   function returnToEmptyApp(confirmed = false) {
     window.OieRuntime?.stop();
+    window.OieEvents?.stop();
+    window.OieInbox?.clear();
     for (const name of ['localStorage', 'sessionStorage']) {
       try {
         const storage = window[name];

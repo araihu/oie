@@ -156,8 +156,11 @@ type view struct {
 	ScheduleUnavailable   bool
 
 	InboxOnly        bool
+	ReuseInbox       bool
+	CachedInboxFirst string
 	Role             engineapi.EngineRole
 	CanResetData     bool
+	CompactSource    bool
 	LatestEditTarget *engineapi.MessageEditTarget
 
 	SenderInfo                                                                                    *senderInfoView
@@ -220,6 +223,8 @@ type copy struct {
 	ScheduleSelectedConversations                                              string
 	ScheduleLoading, ScheduleViewAgenda, ScheduleCancelSend                    string
 	ScheduleReviewChanged, AttachmentTooLarge                                  string
+	AttachmentPreparing, AttachmentUnavailable                                 string
+	AttachImage, AttachFile                                                    string
 	DismissLinkPreview                                                         string
 
 	Scheduled, Schedule, Reschedule, ScheduleWhen, ScheduleEmpty, ScheduleUnavailable, ScheduleReview, ScheduleBack, ScheduleCancel, ScheduleEditMode, ScheduleSave, ScheduleSaved, SendNow, ScheduleTimeInvalid, ScheduleTimeAmbiguous, AttachmentFailed, AttachmentLimit, RemoveAttachment string
@@ -671,6 +676,12 @@ var videosStylesheet []byte
 //go:embed live.js
 var liveScript []byte
 
+//go:embed event-stream.js
+var eventStreamScript []byte
+
+//go:embed inbox-cache.js
+var inboxCacheScript []byte
+
 //go:embed room-archive.js
 var roomArchiveScript []byte
 
@@ -772,6 +783,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/sidebar.js":           {"text/javascript", sidebarScript},
 		"/ui/presentation-time.js": {"text/javascript", presentationTimeScript},
 		"/ui/reset-data.js":        {"text/javascript", resetDataScript},
+		"/ui/event-stream.js":      {"text/javascript", eventStreamScript},
+		"/ui/inbox-cache.js":       {"text/javascript", inboxCacheScript},
 		"/ui/mentions.js":          {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
 		"/ui/room-management.js": {"text/javascript", roomManagementScript},
 		"/ui/room-entry.js":      {"text/javascript", roomEntryScript},
@@ -913,7 +926,10 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	listOnly := fragment == "inbox"
 	editorOnly := fragment == "schedule-editor" && v.ChatID != ""
 	infoOnly := fragment == "info" && v.ChatID != ""
-	paneOnly := (fragment == "conversation" || fragment == "timeline") && v.ChatID != "" || editorOnly || infoOnly
+	paneOnly := (fragment == "conversation" || fragment == "timeline" || fragment == "source-pane") && v.ChatID != "" || editorOnly || infoOnly
+	if sourceFragmentRequest(r, v) && s.loadSourceNavigation(ctx, r, v, paneOnly) {
+		return
+	}
 	accountsOnly := fragment == "accounts"
 	scheduledOnly := fragment == "scheduled" && v.Section == "scheduled"
 	if fragment == "appearance" {
@@ -976,7 +992,21 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		s.loadSharedContent(ctx, v, v.SharedCursor == "" || r.URL.Path == "/ui/refresh")
 		return
 	}
-	if !paneOnly && !s.loadInbox(ctx, v, editor) {
+	cacheScope := r.Header.Get("X-Oie-Inbox-Scope")
+	cacheMatches := cacheScope != "" && cacheScope == v.inboxCacheScope()
+	cursorMatches := v.EventCursor != "" && r.Header.Get("X-Oie-Inbox-Cursor") == v.EventCursor
+	explicitSelection := v.ChatID != "" || v.InboxOnly
+	first := r.Header.Get("X-Oie-Inbox-First")
+	// A query can match retained content outside the first row's fields.
+	canReuseImplicit := cursorMatches && v.Query == "" && (first == "" || validOperationKey(first))
+	reuseOnNavigation := (fragment == "app" || fragment == "source") && v.Section == "chats" && !v.GlobalMessageSearch && cacheMatches &&
+		(explicitSelection || canReuseImplicit)
+	reuseOnRefresh := r.URL.Path == "/ui/refresh" && cacheMatches && cursorMatches && explicitSelection
+	v.ReuseInbox = reuseOnNavigation || reuseOnRefresh
+	if reuseOnNavigation && !explicitSelection {
+		v.CachedInboxFirst = first
+	}
+	if !paneOnly && !v.ReuseInbox && !s.loadInbox(ctx, v, editor) {
 		return
 	}
 	if listOnly {
@@ -993,7 +1023,7 @@ func (s *Server) loadAccountConnection(ctx context.Context, v *view, accountID s
 	}
 }
 
-func (s *Server) loadInbox(ctx context.Context, v *view, editor engineapi.RequestEditorFn) bool {
+func (s *Server) loadInbox(ctx context.Context, v *view, editors ...engineapi.RequestEditorFn) bool {
 	limit := 100
 	includeCount := true
 	params := &engineapi.ListConversationsParams{Limit: &limit, IncludeLatestMessagePageCount: &includeCount}
@@ -1017,7 +1047,7 @@ func (s *Server) loadInbox(ctx context.Context, v *view, editor engineapi.Reques
 		kind := engineapi.ListConversationsParamsKindRoom
 		params.Kind = &kind
 	}
-	chats, err := s.client.ListConversationsWithResponse(ctx, params, editor)
+	chats, err := s.client.ListConversationsWithResponse(ctx, params, editors...)
 	if err != nil {
 		v.Unavailable = true
 		return false
@@ -1034,8 +1064,14 @@ func (s *Server) loadInbox(ctx context.Context, v *view, editor engineapi.Reques
 
 func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view, paneOnly, editorOnly, infoOnly bool, editor engineapi.RequestEditorFn) {
 	selected := v.ChatID
-	if selected == "" && !v.InboxOnly && len(v.Chats) > 0 {
-		selected = v.Chats[0].Id
+	fromCache := false
+	if selected == "" && !v.InboxOnly {
+		if len(v.Chats) > 0 {
+			selected = v.Chats[0].Id
+		} else if v.ReuseInbox {
+			selected = v.CachedInboxFirst
+			fromCache = true
+		}
 	}
 	if selected == "" {
 		return
@@ -1045,7 +1081,18 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		v.Unavailable = true
 		return
 	}
-	if conversation.JSON200 == nil {
+	c := conversation.JSON200
+	if fromCache && ((c == nil && (conversation.StatusCode() == 400 || conversation.StatusCode() == 404)) ||
+		(c != nil && (c.Archived || v.AccountFilter != "" && c.AccountId != v.AccountFilter ||
+			v.Filter == "unread" && c.UnreadCount == 0 || v.Filter == "favorites" && !c.Favorite ||
+			v.Filter == "groups" && c.Kind != "room"))) {
+		v.ReuseInbox = false
+		if s.loadInbox(ctx, v, editor) {
+			s.loadConversation(ctx, r, v, paneOnly, editorOnly, infoOnly, editor)
+		}
+		return
+	}
+	if c == nil {
 		if conversation.StatusCode() == 400 || conversation.StatusCode() == 404 {
 			v.NotFound = true
 		} else {
@@ -1053,11 +1100,11 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		}
 		return
 	}
-	if v.AccountFilter != "" && conversation.JSON200.AccountId != v.AccountFilter {
+	if v.AccountFilter != "" && c.AccountId != v.AccountFilter {
 		v.NotFound = true
 		return
 	}
-	v.Selected = conversation.JSON200
+	v.Selected = c
 	v.ChatID = selected
 	if v.requestKind() != "" {
 		s.loadAccountConnection(ctx, v, v.Selected.AccountId, editor)
@@ -1085,7 +1132,11 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		return
 	}
 	s.latestEditTarget(ctx, v)
-	items, usedContext := s.contextMessages(ctx, v, v.Selected.AccountId)
+	contextLimit := timelinePageSize
+	if r.Header.Get("HX-Request") == "true" && (r.Header.Get("X-Oie-Fragment") == "source" || r.Header.Get("X-Oie-Fragment") == "source-pane") {
+		contextLimit = sourceContextPageSize
+	}
+	items, usedContext := s.contextMessages(ctx, v, v.Selected.AccountId, contextLimit)
 	if v.Unavailable {
 		return
 	}
@@ -1109,7 +1160,11 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		v.TimelineOlder = v.ContextHasOlder
 		v.TimelineNewer = v.ContextHasNewer
 	}
-	if !validTimelineMessages(items, v.Selected.AccountId, v.ChatID, 50) {
+	limit := timelinePageSize
+	if usedContext {
+		limit = contextLimit
+	}
+	if !validTimelineMessages(items, v.Selected.AccountId, v.ChatID, limit) {
 		v.Unavailable = true
 		return
 	}
@@ -1245,9 +1300,13 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 			if r.URL.Path == "/" && v.Section != "media" && v.Section != "scheduled" {
 				component = inboxList(v)
 			}
-		case "conversation":
+		case "conversation", "source-pane":
 			if v.Section != "media" && v.Section != "scheduled" {
 				component = conversationPane(v)
+			}
+		case "source":
+			if v.CompactSource {
+				component = sourceRouteFragment(v)
 			}
 		case "timeline":
 			if v.Selected != nil {
@@ -1281,7 +1340,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Vary", "HX-Request, X-Oie-Fragment")
+	w.Header().Set("Vary", "HX-Request, X-Oie-Fragment, X-Oie-Inbox-Scope, X-Oie-Inbox-First, X-Oie-Inbox-Cursor")
+	if v.CompactSource {
+		buf = encodeSourceFragment(w, r, buf)
+	}
 	if v.NotFound {
 		w.WriteHeader(http.StatusNotFound)
 	} else if v.Unavailable {

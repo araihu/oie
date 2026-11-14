@@ -24,17 +24,23 @@ func (s *Server) loadMessagePreviews(ctx context.Context, v *view) {
 		return
 	}
 	ids := make([]engineapi.ID, 0, len(v.Messages))
-	visible := map[string]bool{}
 	for _, m := range v.Messages {
 		ids = append(ids, m.Id)
-		visible[m.Id] = true
 	}
 	response, err := s.client.ListConversationPreviewsWithResponse(ctx, v.Selected.Id, &engineapi.ListConversationPreviewsParams{MessageId: &ids})
 	if err != nil || response.JSON200 == nil {
 		return
 	}
+	v.applyMessagePreviews(response.JSON200.Items)
+}
+
+func (v *view) applyMessagePreviews(items []engineapi.MessagePreview) {
+	visible := make(map[string]bool, len(v.Messages))
+	for _, m := range v.Messages {
+		visible[m.Id] = true
+	}
 	v.PreviewsKnown = true
-	for _, p := range response.JSON200.Items {
+	for _, p := range items {
 		if p.ConversationId == v.Selected.Id && p.AccountId == v.Selected.AccountId && visible[p.MessageId] && safePreviewURL(p.Url) != "" {
 			v.MessagePreviews[p.MessageId] = append(v.MessagePreviews[p.MessageId], p)
 		}

@@ -35,6 +35,13 @@ templ pendingSendBody(v view) {
    @card.Card(card.Config{Body:pendingSendReplyExcerpt(),Density:card.DensityCompact,RootClass:"oie-reply-card"})
   </div>
   <div class="oie-plain-fallback" data-pending-send-text></div>
+ <div class="oie-message-attachments" data-pending-send-attachments hidden></div>
+ <template data-pending-send-file>
+  <a>
+   <img alt="" width="224" height="128" loading="lazy"/>
+   <span></span>
+  </a>
+ </template>
   <div class="oie-message-stamp">
    <span class="oie-send-state-slot">
     <span data-pending-state="sending" role="img" aria-label={v.Text.SendPending} title={v.Text.SendPending}>@spinner.Spinner(spinner.Config{Size:spinner.SizeSM,RootClass:"oie-send-spinner"})</span>

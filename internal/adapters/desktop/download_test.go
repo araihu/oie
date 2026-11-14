@@ -12,9 +12,13 @@ import (
 	"testing"
 )
 
+const stagedDownloadAddress = "/ui/scheduling/file?engineId=019a5df0-0000-7000-8000-000000000102" +
+	"&conversationId=019a5df0-0000-7000-8000-000000000103&attachmentId=019a5df0-0000-7000-8000-000000000104&download=1"
+
 func TestNativeDownloadValidatesSources(t *testing.T) {
 	hash := strings.Repeat("a", 64)
 	for _, address := range []string{
+		stagedDownloadAddress,
 		"/ui/media/" + hash + "?download=photo.jpg",
 		"/ui/shared-content/019a5df0-0000-7000-8000-000000000101/content?engineId=019a5df0-0000-7000-8000-000000000102&download=1",
 	} {
@@ -23,6 +27,11 @@ func TestNativeDownloadValidatesSources(t *testing.T) {
 		}
 	}
 	for _, address := range []string{
+		strings.Replace(stagedDownloadAddress, "&download=1", "", 1),
+		strings.Replace(stagedDownloadAddress, "download=1", "download=0", 1),
+		strings.Replace(stagedDownloadAddress, "conversationId=019a5df0-0000-7000-8000-000000000103", "conversationId=bad", 1),
+		stagedDownloadAddress + "&engineId=019a5df0-0000-7000-8000-000000000102",
+		stagedDownloadAddress + "&extra=1",
 		"https://outside.invalid/file", "//outside.invalid/ui/media/" + hash + "?download=image", "/api/v1/engine", "/ui/media/../private?download=x",
 		"/ui/media/" + hash, "/ui/media/" + hash + "?download=x&token=secret", "/ui/media/" + hash + "?download=x&download=y", "/ui/media/" + hash + "?download=x#fragment",
 		"/ui/shared-content/not-an-id/content?download=1", "/ui/shared-content/019a5df0-0000-7000-8000-000000000101/content?download=1",
@@ -171,5 +180,23 @@ func TestNativeDownloadRejectsTruncatedAndUnexpectedSuccessResponses(t *testing.
 		if err != nil || string(data) != "previous" {
 			t.Fatal("incomplete response changed destination", err)
 		}
+	}
+}
+
+func TestNativeStagedDownloadSupportsOlderEngineWithoutFilename(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "draft.txt")
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.RequestURI() != stagedDownloadAddress {
+			t.Errorf("unexpected download request: %s %s", r.Method, r.URL)
+		}
+		w.Header().Set("Content-Disposition", "attachment")
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write([]byte("retained attachment"))
+	})
+	if err := saveNativeDownload(t.Context(), handler, stagedDownloadAddress, target); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(target); err != nil || string(got) != "retained attachment" {
+		t.Fatalf("saved attachment = %q, %v", got, err)
 	}
 }

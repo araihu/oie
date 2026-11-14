@@ -13,6 +13,7 @@ import (
 	"github.com/araihu/goshtoso/components/splitbutton"
 	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/adapters/web/appicons"
 )
 
 templ scheduledWorkspace(v view) {
@@ -263,8 +264,7 @@ templ scheduleFields(v view) {
 	<input type="hidden" name="scheduledAt"/>
 	<input type="hidden" name="attachmentIds"/>
 	@scheduleEditor(v)
-	<input type="file" data-attachment-picker multiple hidden disabled?={!v.messagingImplemented("file_upload")}/>
-	<div data-composer-attachments class="oie-composer-attachments" hidden></div>
+	<input type="file" data-attachment-picker multiple hidden/>
 }
 
 templ scheduleEditor(v view) {
@@ -282,11 +282,50 @@ templ scheduleEditor(v view) {
 	</div>
 }
 
+templ attachmentMenu(v view) {
+	if v.scheduleAllowed() {
+	@dropdown.Dropdown(dropdown.Config{
+		ID: "composer-attachments",
+		Label: v.Text.Attach,
+		Trigger: attachmentMenuTrigger(v),
+		Sections: []dropdown.Section{{Items: []dropdown.Item{
+			{ID:"composer-attach-image", Label:v.Text.AttachImage, Icon:appicons.Icon(appicons.Config{Symbol:appicons.IconHeroiconsPhoto16SolidPhoto, Decorative:true, RootClass:"oie-icon"}), OnClick:"$dispatch('oie:compose-add','image')"},
+			{ID:"composer-attach-file", Label:v.Text.AttachFile, Icon:glyph(heroicons.Icon16SolidPaperClip), OnClick:"$dispatch('oie:compose-add','file')"},
+		}}},
+	})
+	} else {
+		@attachmentMenuTrigger(v)
+	}
+}
+
+templ attachmentMenuTrigger(v view) {
+	@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Attach,"data-attach-menu":"","disabled":!v.scheduleAllowed(),"x-ref":"trigger"})) { @glyph(heroicons.Icon16SolidPlus) }
+}
+
+templ composerAttachments(v view) {
+	<div data-composer-attachments class="oie-composer-attachments" hidden
+		data-failed={v.Text.AttachmentFailed} data-limit={v.Text.AttachmentLimit}
+		data-unavailable={v.Text.AttachmentUnavailable} data-remove-label={v.Text.RemoveAttachment}
+		data-preparing={v.Text.AttachmentPreparing} data-retry={v.Text.Retry}>
+		<div data-attachment-items></div>
+		<span class="sr-only" data-attachment-status role="status"></span>
+		<template>
+			<div class="oie-draft-attachment">
+				<img alt="" width="40" height="40" loading="lazy" hidden/>
+				<span data-file-name dir="auto"></span>
+				<a data-file-download hidden></a>
+				<span data-file-state hidden></span>
+				@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-retry-attachment":"","hidden":true})) { <span>{v.Text.Retry}</span> }
+				@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-remove-attachment":""})) { @glyph(heroicons.Icon16SolidXMark) }
+			</div>
+		</template>
+	</div>
+}
+
 templ scheduleDialog(v view) {
 	<dialog class="oie-schedule-dialog" data-schedule-dialog aria-labelledby="schedule-dialog-title"
 		data-create={v.Text.Schedule} data-update={v.Text.Reschedule} data-time-invalid={v.Text.ScheduleTimeInvalid} data-time-ambiguous={v.Text.ScheduleTimeAmbiguous}
-		data-review-changed={v.Text.ScheduleReviewChanged} data-unavailable={v.Text.ScheduleUnavailable}
-		data-attachment-failed={v.Text.AttachmentFailed} data-attachment-limit={v.Text.AttachmentLimit} data-remove-attachment={v.Text.RemoveAttachment}>
+		data-review-changed={v.Text.ScheduleReviewChanged} data-unavailable={v.Text.ScheduleUnavailable}>
 		<form method="dialog" data-schedule-confirm>
 			<h2 id="schedule-dialog-title">{v.Text.Schedule}</h2>
 			<section class="oie-schedule-preview" aria-label={v.Text.ScheduleReview}>
@@ -320,7 +359,7 @@ templ outgoingAttachments(v view,m engineapi.Message) {
 			for _, a := range *m.Attachments {
 				@link.Link(v.stagedAttachmentHref(m.ConversationId,a.Id,true),link.WithAttrs(templ.Attributes{"download":a.FileName})) {
 					if rasterAttachment(a.MediaType) {
-						<img src={templ.URL(v.stagedAttachmentHref(m.ConversationId,a.Id,false))} alt={a.FileName} width="224" height="128" loading="lazy"/>
+						<img src={templ.URL(v.stagedAttachmentHref(m.ConversationId,a.Id,false))} alt="" width="224" height="128" loading="lazy"/>
 					}
 					<span>{a.FileName}</span>
 				}

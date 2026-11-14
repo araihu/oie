@@ -249,7 +249,7 @@ func (s *Server) loadMessageVideos(ctx context.Context, v *view) {
 		}
 		for _, item := range response.JSON200.Items {
 			message, found := visible[item.Message.Id]
-			if !found || item.Kind != "video" || item.Message.AccountId != v.Selected.AccountId || item.Message.ConversationId != v.Selected.Id || item.Message.RevisionId != message.RevisionId || item.Message.OriginalText != message.OriginalText || !validOperationKey(item.Id) || safePreviewURL(item.Url) == "" || !hasVideoReference(message.displayBody(), item.Url) {
+			if !found || !validMessageVideo(item, message, v.Selected) {
 				return
 			}
 			if !seen[item.Id] && len(items[item.Message.Id]) < 3 {
@@ -262,6 +262,16 @@ func (s *Server) loadMessageVideos(ctx context.Context, v *view) {
 		}
 		params.Cursor = response.JSON200.NextCursor
 	}
+	v.applyMessageVideos(items)
+}
+
+func validMessageVideo(item engineapi.SharedContentItem, message messageView, owner *engineapi.Conversation) bool {
+	return item.Kind == "video" && item.Message.AccountId == owner.AccountId && item.Message.ConversationId == owner.Id &&
+		item.Message.RevisionId == message.RevisionId && item.Message.OriginalText == message.OriginalText &&
+		validOperationKey(item.Id) && safePreviewURL(item.Url) != "" && hasVideoReference(message.displayBody(), item.Url)
+}
+
+func (v *view) applyMessageVideos(items map[string][]engineapi.SharedContentItem) {
 	v.MessageVideos = items
 	for id, videos := range items {
 		urls := map[string]bool{}

@@ -16,6 +16,13 @@ func (v view) conversationScope() string {
 	return hex.EncodeToString(digest[:])
 }
 
+// Reuse requires the same row links and presentation, including filter and theme.
+func (v view) inboxCacheScope() string {
+	data, _ := json.Marshal([]string{v.conversationScope(), v.Filter, v.Theme})
+	digest := sha256.Sum256(data)
+	return hex.EncodeToString(digest[:])
+}
+
 // Compare server data rather than DOM enhanced by HTMX, avatars and local time.
 func (v view) conversationListVersion() string {
 	data, _ := json.Marshal([]any{v.Chats, v.Accounts, v.Locale, v.Section, v.Filter, v.Query})

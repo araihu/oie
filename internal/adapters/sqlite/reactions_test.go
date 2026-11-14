@@ -103,6 +103,26 @@ func observeReaction(t *testing.T, e *application.Engine, c domain.Conversation,
 		t.Fatal(err)
 	}
 }
+
+func TestConversationReactionBatchMatchesIndividualSnapshots(t *testing.T) {
+	store, engine, conversation := outboxFixture(t)
+	engine.SetProtocols(&reactionProtocol{max: 4})
+	first := ownSubmittedEdit(t, store, engine, conversation, "first source")
+	second := ownSubmittedEdit(t, store, engine, conversation, "second source")
+	observeReaction(t, engine, conversation, domain.MessageReference{ID: first.ProviderID}, conversation.Address, "first-observation", time.Now().UTC(), "👍")
+	want := []domain.MessageReactions{reactionSnapshot(t, engine, second.ID), reactionSnapshot(t, engine, first.ID)}
+	got, err := engine.ConversationReactions(t.Context(), conversation.ID, []domain.ID{second.ID, first.ID, second.ID})
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("batch snapshots = %+v, %v; want %+v", got, err, want)
+	}
+	other, err := engine.OpenConversation(t.Context(), migrationID(), conversation.AccountID, "other@localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = engine.ConversationReactions(t.Context(), other.Conversation.ID, []domain.ID{first.ID}); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("batch exposed a foreign message: %v", err)
+	}
+}
 func TestReactionsSetsOrderingDedupAndSourceIsolation(t *testing.T) {
 	s, e, c := outboxFixture(t)
 	e.SetProtocols(&reactionProtocol{max: 8})

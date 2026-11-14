@@ -15,13 +15,15 @@ window.OieRuntime.register('draft-link-preview', life => {
   let current = '', dismissed = '', timer, request;
 
   function firstLink(text) {
+    let privateLinks = [];
+    try { privateLinks = JSON.parse(form.dataset.privateMapLinks || '[]'); } catch {}
     const candidates = text.matchAll(/https?:\/\/[^\s<>"\x00-\x1f]+/gi);
     for (const [candidate] of candidates) {
       const address = candidate.replace(/[.,;!)\]}]+$/, '');
       if (address.length > 4096) continue;
       try {
         const url = new URL(address);
-        if (url.hostname && !url.username && !url.password && url.href.length <= 4096) return url;
+        if (!privateLinks.includes(url.href) && url.hostname && !url.username && !url.password && url.href.length <= 4096) return url;
       } catch { /* Keep looking for a complete URL. */ }
     }
     return null;

@@ -38,17 +38,7 @@ func (s *Server) ListSharedContent(ctx context.Context, r engineapi.ListSharedCo
 	}
 	out := engineapi.SharedContentPage{Items: []engineapi.SharedContentItem{}, Indexing: engineapi.SharedContentIndexing{State: engineapi.SharedContentIndexingState(page.Indexing.State), IndexedMessages: page.Indexing.IndexedMessages, TotalMessages: page.Indexing.TotalMessages}}
 	for _, item := range page.Items {
-		value := engineapi.SharedContentItem{Id: string(item.ID), RevisionId: string(item.RevisionID), Kind: engineapi.SharedContentItemKind(item.Kind), Url: item.URL, FileName: item.FileName, AccountLabel: item.AccountLabel, ConversationTitle: item.ConversationTitle, Message: message(item.Message)}
-		if item.Preview != nil {
-			if item.Preview.Kind == "video" {
-				p := videoThumbnail(*item.Preview)
-				value.Thumbnail = &p
-			} else {
-				p := preview(*item.Preview)
-				value.Preview = &p
-			}
-		}
-		out.Items = append(out.Items, value)
+		out.Items = append(out.Items, sharedContentItem(item))
 	}
 	if page.NextCursor != "" {
 		out.NextCursor = &page.NextCursor
@@ -59,4 +49,18 @@ func (s *Server) ListSharedContent(ctx context.Context, r engineapi.ListSharedCo
 		}
 	}
 	return engineapi.ListSharedContent200JSONResponse(out), nil
+}
+
+func sharedContentItem(item domain.SharedContentItem) engineapi.SharedContentItem {
+	value := engineapi.SharedContentItem{Id: string(item.ID), RevisionId: string(item.RevisionID), Kind: engineapi.SharedContentItemKind(item.Kind), Url: item.URL, FileName: item.FileName, AccountLabel: item.AccountLabel, ConversationTitle: item.ConversationTitle, Message: message(item.Message)}
+	if item.Preview != nil {
+		if item.Preview.Kind == "video" {
+			p := videoThumbnail(*item.Preview)
+			value.Thumbnail = &p
+		} else {
+			p := preview(*item.Preview)
+			value.Preview = &p
+		}
+	}
+	return value
 }

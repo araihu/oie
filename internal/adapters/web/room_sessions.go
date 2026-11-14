@@ -43,6 +43,18 @@ func (v view) messagingImplemented(feature string) bool {
 func (v view) composeAllowed() bool {
 	return !v.Preview && !v.Unavailable && v.Selected != nil && v.account(v.Selected.AccountId).Address != "" && (v.Selected.Kind == "direct" || v.RoomSession != nil)
 }
+func (v view) attachmentAllowed() bool {
+	if !v.scheduleAllowed() || !v.sendAllowed() {
+		return false
+	}
+	for _, feature := range v.MessagingCapabilities.Features {
+		if feature.Id == "file_upload" {
+			return (feature.AppSupport == "supported" || feature.AppSupport == "partial") &&
+				feature.ProtocolSupport == "supported" && feature.ServerSupport != "not_advertised" && feature.ServerSupport != "unsupported"
+		}
+	}
+	return false
+}
 func (v view) replyAllowed() bool {
 	return v.composeAllowed() && v.messagingImplemented("send_replies")
 }

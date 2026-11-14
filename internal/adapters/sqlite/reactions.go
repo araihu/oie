@@ -65,6 +65,10 @@ func reactionEvent(ctx context.Context, q *dbgen.Queries, id domain.ID, at time.
 	return err
 }
 func readReactions(ctx context.Context, q *dbgen.Queries, id domain.ID) (application.MessageReactionCandidate, error) {
+	return readScopedReactions(ctx, q, id, domain.Conversation{})
+}
+
+func readScopedReactions(ctx context.Context, q *dbgen.Queries, id domain.ID, c domain.Conversation) (application.MessageReactionCandidate, error) {
 	var out application.MessageReactionCandidate
 	canonical, err := resolveMessageAlias(ctx, q, id)
 	if err != nil {
@@ -78,21 +82,17 @@ func readReactions(ctx context.Context, q *dbgen.Queries, id domain.ID) (applica
 	if err != nil {
 		return out, err
 	}
+	if c.ID != "" && m.ConversationID != c.ID {
+		return out, application.ErrNotFound
+	}
 	if err = hydrateMessageProjection(ctx, q, &m); err != nil {
 		return out, err
 	}
-	if err = hydrateReferences(ctx, q, &m); err != nil {
-		return out, err
-	}
-	out.Source = m
-	state := domain.MessageReactions{MessageID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID, OwnEmojis: []string{}, Items: []domain.ReactionItem{}, Actors: []domain.ReactionActor{}, MaxEmojis: 8}
-	crow, err := q.GetConversation(ctx, string(m.ConversationID))
-	if err != nil {
-		return out, err
-	}
-	c, err := decodeConversation(crow)
-	if err != nil {
-		return out, err
+	if c.ID == "" {
+		c, err = readConversation(ctx, q, m.ConversationID)
+		if err != nil {
+			return out, err
+		}
 	}
 	var privacy dbgen.GetRoomReactionPrivacyRow
 	if c.Kind == "room" {
@@ -106,6 +106,11 @@ func readReactions(ctx context.Context, q *dbgen.Queries, id domain.ID) (applica
 	if err != nil {
 		return out, err
 	}
+	if err = applyMessageReferences(&m, refs); err != nil {
+		return out, err
+	}
+	out.Source = m
+	state := domain.MessageReactions{MessageID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID, OwnEmojis: []string{}, Items: []domain.ReactionItem{}, Actors: []domain.ReactionActor{}, MaxEmojis: 8}
 	type reference struct {
 		ID     string `json:"id"`
 		Scope  string `json:"scope"`
@@ -294,7 +299,7 @@ func reactionActor(ctx context.Context, q *dbgen.Queries, account domain.ID, in 
 }
 
 func (s *Store) ReadMessageReactions(ctx context.Context, id domain.ID) (application.MessageReactionCandidate, error) {
-	tx, q, err := begin(ctx, s)
+	tx, q, err := beginRead(ctx, s)
 	if err != nil {
 		return application.MessageReactionCandidate{}, err
 	}
@@ -302,6 +307,31 @@ func (s *Store) ReadMessageReactions(ctx context.Context, id domain.ID) (applica
 	out, err := readReactions(ctx, q, id)
 	if err != nil {
 		return out, err
+	}
+	return out, tx.Commit()
+}
+
+func (s *Store) ReadConversationReactions(ctx context.Context, conversation domain.ID, ids []domain.ID) ([]application.MessageReactionCandidate, error) {
+	tx, q, err := beginRead(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	c, err := readConversation(ctx, q, conversation)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]application.MessageReactionCandidate, 0, len(ids))
+	seen := make(map[domain.ID]bool, len(ids))
+	for _, id := range ids {
+		candidate, err := readScopedReactions(ctx, q, id, c)
+		if err != nil {
+			return nil, err
+		}
+		if !seen[candidate.Source.ID] {
+			seen[candidate.Source.ID] = true
+			out = append(out, candidate)
+		}
 	}
 	return out, tx.Commit()
 }

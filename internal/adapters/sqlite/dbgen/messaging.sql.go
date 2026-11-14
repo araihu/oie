@@ -58,7 +58,7 @@ func (q *Queries) FindConversation(ctx context.Context, arg FindConversationPara
 }
 
 const findProviderMessage = `-- name: FindProviderMessage :one
-SELECT id, revision_id, account_id, conversation_id, provider_id, is_own, state, payload, created_at_ms, timeline_at_ms FROM messages WHERE account_id=? AND conversation_id=? AND provider_id=? AND is_own=?
+SELECT id, revision_id, account_id, conversation_id, provider_id, is_own, state, payload, created_at_ms, timeline_at_ms FROM messages WHERE account_id=? AND conversation_id=? AND provider_id=? AND is_own=? AND provider_id<>''
 `
 
 type FindProviderMessageParams struct {
@@ -68,6 +68,7 @@ type FindProviderMessageParams struct {
 	IsOwn          int64
 }
 
+// Match the partial identity index used for messages with provider IDs.
 func (q *Queries) FindProviderMessage(ctx context.Context, arg FindProviderMessageParams) (Message, error) {
 	row := q.db.QueryRowContext(ctx, findProviderMessage,
 		arg.AccountID,

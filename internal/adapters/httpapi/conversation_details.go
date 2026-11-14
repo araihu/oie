@@ -21,6 +21,10 @@ func (s *Server) GetConversationDetails(ctx context.Context, r engineapi.GetConv
 	if err != nil {
 		return nil, err
 	}
+	return engineapi.GetConversationDetails200JSONResponse(conversationDetails(d)), nil
+}
+
+func conversationDetails(d domain.ConversationDetails) engineapi.ConversationDetails {
 	out := engineapi.ConversationDetails{ConversationId: string(d.ConversationID), AccountId: string(d.AccountID), Address: d.Address, Kind: engineapi.ConversationDetailsKind(d.Kind), AccountConnection: connection(d.AccountConnection), State: engineapi.DetailState(d.State), OccupantCount: d.OccupantCount, Features: []engineapi.ConversationDetailsFeatures{}, Participants: engineapi.ConversationParticipants{Scope: engineapi.ConversationParticipantsScope(d.Participants.Scope), State: engineapi.DetailState(d.Participants.State), Truncated: d.Participants.Truncated, Items: []engineapi.ConversationParticipant{}}}
 	if d.Name != "" {
 		out.Name = &d.Name
@@ -57,5 +61,5 @@ func (s *Server) GetConversationDetails(ctx context.Context, r engineapi.GetConv
 	if d.CanModerateMessages {
 		out.CanModerateMessages = &d.CanModerateMessages
 	}
-	return engineapi.GetConversationDetails200JSONResponse(out), nil
+	return out
 }

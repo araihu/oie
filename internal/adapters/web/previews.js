@@ -141,7 +141,12 @@ window.OieRuntime.register('previews', life => {
       const current=document.querySelector(`[data-message-menu-slot="${CSS.escape(id)}"]`);
       const panel=current?.querySelector('[role="menu"]'),next=fresh.querySelector('[role="menu"]');
       if(panel&&next&&!panel.contains(document.activeElement)&&panel.innerHTML!==next.innerHTML){
-        const replace=()=>{for(const child of panel.children)window.Alpine?.destroyTree(child);panel.innerHTML=next.innerHTML;for(const child of panel.children)window.Alpine?.initTree(child);};
+        const replace=()=>{
+          const deferred=current.hasAttribute('data-source-menu-deferred');
+          if(!deferred)for(const child of panel.children)window.Alpine?.destroyTree(child);
+          panel.innerHTML=next.innerHTML;
+          if(!deferred)for(const child of panel.children)window.Alpine?.initTree(child);
+        };
         if(window.Alpine?.mutateDom)window.Alpine.mutateDom(replace);else replace();
       }
     }

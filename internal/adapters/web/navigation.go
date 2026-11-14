@@ -3,14 +3,9 @@ package web
 import "github.com/a-h/templ"
 
 func sidebarNavigationAttrs() templ.Attributes {
-	attrs := applicationNavigationAttrs()
+	attrs := navigationAttrs("oie-route", "app", "outerHTML settle:0ms show:none")
 	attrs["data-oie-navigation-item"] = ""
 	return attrs
-}
-
-// Render navigation behavior before the client runtime's enhancement pass.
-func applicationNavigationAttrs() templ.Attributes {
-	return navigationAttrs("oie-app", "app", "outerHTML show:none")
 }
 
 func navigationAttrs(target, fragment, swap string) templ.Attributes {

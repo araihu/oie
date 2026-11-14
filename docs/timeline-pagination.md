@@ -54,3 +54,36 @@ error, as recorded in `/tmp/oie-video-reconcile-dagger-remote-proof.log`. Its
 client transport subsequently failed its health check, so that attempt does
 not provide a successful CLI completion. The preceding footer-removal Dagger
 run did exit successfully.
+
+## Opening a shared source
+
+The enhanced shared-item action starts with 16 messages around the source
+and keeps the existing older and newer paging controls. If the destination
+uses the mounted conversation scope, the response contains only the
+conversation panel. From the global catalog it uses the workspace route and
+reuses the parked inbox when its scope matches. Native links and ordinary
+conversation navigation use the existing timeline page size.
+
+The source-context engine endpoint provides the owning conversation and the
+window's presentation data in one response. The browser server reads the
+account list, selected account's avatars and cold inbox separately. It can
+still use the individual endpoints with an older engine. The source route
+keeps its mounted settings and viewer panels and negotiates gzip for the
+fragment. The event stream stays connected while the foreground jump defers
+the automatic HTML refresh. Refresh resumes on the destination or after a
+failed or cancelled jump.
+
+For a compact source route, Oiê validates the fragment HTMX already parsed
+before committing the URL and mounting the workspace. HTMX processes the new
+links once. The browser positions the source before the first painted frame.
+The message menus use the existing Goshtoso dropdown and initialize on the
+first pointer or keyboard activation. Inbox initials need no Alpine scope
+until a photo becomes available. When leaving the catalog, only items with
+live preview state need their cached markup reopened.
+
+SQLite keeps one writer and a small pool of read-only connections in WAL
+mode. The event cursor, timeline and retained metadata can read committed
+data while archive imports and indexing write. A reaction batch loads the
+requested messages in one read transaction and shares conversation and
+account checks across the batch. Cached previews use a read before falling
+back to the transactional insert for missing entries.

@@ -172,18 +172,26 @@ const messagesAfterTarget = `-- name: MessagesAfterTarget :many
 SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages m WHERE m.conversation_id=?1
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
-AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)>(SELECT COALESCE(t.timeline_at_ms,t.created_at_ms),t.id FROM messages t WHERE t.id=?2 AND t.conversation_id=?1)
-ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms),m.id LIMIT ?3
+AND COALESCE(m.timeline_at_ms,m.created_at_ms)>=?2
+AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)>(CAST(?2 AS INTEGER),CAST(?3 AS TEXT))
+ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms),m.id LIMIT ?4
 `
 
 type MessagesAfterTargetParams struct {
 	ConversationID string
+	TargetMs       *int64
 	TargetID       string
 	PageLimit      int64
 }
 
+// Bound the leading expression so SQLite seeks into messages_timeline.
 func (q *Queries) MessagesAfterTarget(ctx context.Context, arg MessagesAfterTargetParams) ([]Message, error) {
-	rows, err := q.db.QueryContext(ctx, messagesAfterTarget, arg.ConversationID, arg.TargetID, arg.PageLimit)
+	rows, err := q.db.QueryContext(ctx, messagesAfterTarget,
+		arg.ConversationID,
+		arg.TargetMs,
+		arg.TargetID,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -220,18 +228,26 @@ const messagesAtOrBeforeTarget = `-- name: MessagesAtOrBeforeTarget :many
 SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages m WHERE m.conversation_id=?1
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
-AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)<=(SELECT COALESCE(t.timeline_at_ms,t.created_at_ms),t.id FROM messages t WHERE t.id=?2 AND t.conversation_id=?1)
-ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT ?3
+AND COALESCE(m.timeline_at_ms,m.created_at_ms)<=?2
+AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)<=(CAST(?2 AS INTEGER),CAST(?3 AS TEXT))
+ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT ?4
 `
 
 type MessagesAtOrBeforeTargetParams struct {
 	ConversationID string
+	TargetMs       *int64
 	TargetID       string
 	PageLimit      int64
 }
 
+// Bound the leading expression so SQLite seeks into messages_timeline.
 func (q *Queries) MessagesAtOrBeforeTarget(ctx context.Context, arg MessagesAtOrBeforeTargetParams) ([]Message, error) {
-	rows, err := q.db.QueryContext(ctx, messagesAtOrBeforeTarget, arg.ConversationID, arg.TargetID, arg.PageLimit)
+	rows, err := q.db.QueryContext(ctx, messagesAtOrBeforeTarget,
+		arg.ConversationID,
+		arg.TargetMs,
+		arg.TargetID,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}

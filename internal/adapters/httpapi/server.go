@@ -281,12 +281,20 @@ func cursor(id domain.ID, sequence int64) string {
 }
 
 func (s *Server) GetEngine(ctx context.Context, _ engineapi.GetEngineRequestObject) (engineapi.GetEngineResponseObject, error) {
-	state, err := s.engine.Snapshot(ctx)
+	identity, err := s.engineIdentity(ctx)
 	if err != nil {
 		return nil, err
 	}
+	return engineapi.GetEngine200JSONResponse(identity), nil
+}
+
+func (s *Server) engineIdentity(ctx context.Context) (engineapi.Engine, error) {
+	state, err := s.engine.Snapshot(ctx)
+	if err != nil {
+		return engineapi.Engine{}, err
+	}
 	supported := s.reset != nil
-	return engineapi.GetEngine200JSONResponse{
+	return engineapi.Engine{
 		Id: string(state.ID), Role: engineapi.EngineRole(state.Role),
 		ApiVersion: s.apiVersion, EventCursor: cursor(state.ID, state.Sequence),
 		CanResetData: &supported,

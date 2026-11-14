@@ -34,7 +34,7 @@ type attachmentSelection struct {
 
 // AttachFiles stages the files selected in the Flatpak's native chooser. The
 // nested WebKit sandbox cannot read the paths provided by the Documents portal.
-func (s *runtimeService) AttachFiles(ctx context.Context, engineID, conversationID, csrf string, remaining int) (attachmentSelection, error) {
+func (s *runtimeService) AttachFiles(ctx context.Context, engineID, conversationID, csrf string, remaining int, imagesOnly bool) (attachmentSelection, error) {
 	server := s.server.Load()
 	if desktopAppID() != flatpakAppID || server == nil || !validUUID(engineID) || !validUUID(conversationID) || remaining < 1 || remaining > 16 {
 		return attachmentSelection{}, errors.New("invalid desktop attachment request")
@@ -46,10 +46,18 @@ func (s *runtimeService) AttachFiles(ctx context.Context, engineID, conversation
 	}
 
 	dialog := s.app.Dialog.OpenFile()
-	dialog.SetOptions(&wails.OpenFileDialogOptions{
+	options := wails.OpenFileDialogOptions{
 		Title: s.labels.AttachFiles, Window: s.app.Window.Current(),
-		CanChooseFiles: true, AllowsMultipleSelection: true, AllowsOtherFileTypes: true,
-	})
+		CanChooseFiles: true, AllowsMultipleSelection: true, AllowsOtherFileTypes: !imagesOnly,
+	}
+	if imagesOnly {
+		options.Title = s.labels.AttachImages
+		options.Filters = []wails.FileFilter{{
+			DisplayName: s.labels.AttachImages,
+			Pattern:     "*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.svg;*.bmp;*.ico;*.tiff;*.tif;*.heic;*.heif",
+		}}
+	}
+	dialog.SetOptions(&options)
 	paths, err := dialog.PromptForMultipleSelection()
 	if err != nil {
 		return attachmentSelection{}, err
@@ -87,7 +95,7 @@ func stageNativeAttachment(ctx context.Context, handler http.Handler, path, engi
 	if err != nil {
 		return engineapi.StagedAttachment{}, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() {
 		return engineapi.StagedAttachment{}, errors.New("attachment must be a regular file")
