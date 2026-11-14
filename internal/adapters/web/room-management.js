@@ -84,7 +84,7 @@ window.OieRuntime.register('room-management', life => {
         render(template);
         for (const form of content.querySelectorAll('form')) {
           const id = identity(form);
-          if (openForms.has(id)) form.hidden = false;
+          if (openForms.has(id)) setActionOpen(form, true);
           const draft = drafts.get(id);
           if (!draft) continue;
           for (const name of ['target','value','reason','name','topic','image']) {
@@ -177,6 +177,21 @@ window.OieRuntime.register('room-management', life => {
       form.elements.namedItem('messageId')?.value || '', value?.type === 'hidden' ? value.value : '']);
   }
 
+  function setActionOpen(form, open) {
+    form.hidden = !open;
+    const trigger = document.getElementById(form.dataset.roomActionForm);
+    if (trigger?.hasAttribute('aria-expanded')) trigger.setAttribute('aria-expanded', String(open));
+    return trigger;
+  }
+
+  function cancelAction(form) {
+    if (isPending(form)) return;
+    const trigger = setActionOpen(form, false);
+    clearInputs(form);
+    remember(form);
+    trigger?.focus({preventScroll:true});
+  }
+
   function clearInputs(form) {
     const key = form.elements.operationKey.value;
     const revision = form.elements.expectedRevision.value;
@@ -215,13 +230,7 @@ window.OieRuntime.register('room-management', life => {
     }
     const cancel = event.target.closest('[data-room-action-cancel]');
     if (cancel && content.contains(cancel)) {
-      const form = cancel.form;
-      if (isPending(form)) return;
-      form.hidden = true;
-      clearInputs(form);
-      remember(form);
-      const trigger = document.getElementById(form.dataset.roomActionForm);
-      trigger?.focus({preventScroll:true});
+      cancelAction(cancel.form);
       return;
     }
     const trigger = event.target.closest('[data-room-action-open]');
@@ -229,10 +238,14 @@ window.OieRuntime.register('room-management', life => {
       if (hasPending()) return;
       const form = content.querySelector(`[data-room-action-form="${CSS.escape(trigger.id)}"]`);
       if (!form) return;
-      for (const open of content.querySelectorAll('form[data-room-action-form]:not([hidden])')) {
-        if (open.dataset.roomActionForm) open.hidden = true;
+      if (!form.hidden && trigger.hasAttribute('aria-expanded')) {
+        setActionOpen(form, false);
+        return;
       }
-      form.hidden = false;
+      for (const open of content.querySelectorAll('form[data-room-action-form]:not([hidden])')) {
+        if (open.dataset.roomActionForm) setActionOpen(open, false);
+      }
+      setActionOpen(form, true);
       life.raf(() => form.querySelector('input:not([type=hidden]),[type=submit]')?.focus({preventScroll:true}));
       return;
     }
@@ -292,7 +305,10 @@ window.OieRuntime.register('room-management', life => {
     if (!participant || !event.target.closest('[data-room-participant-detail]')) return;
     event.preventDefault();
     event.stopPropagation();
-    if (!hasPending()) showParticipant('', true);
+    if (hasPending()) return;
+    const form = event.target.closest('[data-room-participant-detail]').querySelector('.oie-room-action form:not([hidden])');
+    if (form) cancelAction(form);
+    else showParticipant('', true);
   }, true);
 
   life.on(window, 'drawer:close-request', event => {
@@ -326,7 +342,7 @@ window.OieRuntime.register('room-management', life => {
     for (const input of form.querySelectorAll('input:not([type=hidden]),textarea')) input.readOnly = false;
     const refreshContent = result.ok && (action === 'role' || action === 'affiliation' || action === 'set_avatar' || action === 'remove_avatar');
     if (refreshContent) {
-      if (form.dataset.roomActionForm) form.hidden = true;
+      if (form.dataset.roomActionForm) setActionOpen(form, false);
       clearInputs(form);
     }
     life.timeout(() => { if (active) void load(refreshContent, refreshContent ? result.message : ''); }, 0);

@@ -10,6 +10,7 @@ import (
 	"github.com/araihu/goshtoso/components/drawer"
 	"github.com/araihu/goshtoso/components/fileinput"
 	"github.com/araihu/goshtoso/components/form"
+	"github.com/araihu/goshtoso/components/icon"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
 	selectfield "github.com/araihu/goshtoso/components/select"
 	"github.com/araihu/goshtoso/components/tabs"
@@ -182,57 +183,47 @@ templ roomManagementBans(v view, state engineapi.RoomManagement, affiliation str
 						@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"id": id, "data-room-action-open": "", "aria-label": v.Text.RoomUnban + " · " + address})) {
 							{ v.Text.RoomUnban }
 						}
-						@roomTargetAction(v, *state.Revision, id, address, "affiliation", "none", v.Text.RoomUnban, false)
+						@roomTargetAction(v, *state.Revision, id, address, "affiliation", "none", v.Text.RoomUnban, button.TonePrimary)
 					</li>
 				}
 			</ul>
 		}
 	}
-	@roomTargetAction(v, *state.Revision, "", "", "affiliation", "outcast", v.Text.RoomBan, true)
+	@roomTargetAction(v, *state.Revision, "", "", "affiliation", "outcast", v.Text.RoomBan, button.ToneDanger)
 }
 
 type roomParticipantAction struct {
 	action, value, label string
-	danger               bool
+	symbol               icon.Symbol
+	tone                 button.Tone
 }
 
 func roomParticipantActions(text copy, occupant engineapi.RoomManagedOccupant) []roomParticipantAction {
+	roleActions := []roomParticipantAction{
+		{"role", "moderator", text.RoomPromoteModerator, heroicons.Icon16SolidShieldCheck, button.TonePrimary},
+		{"role", "participant", text.RoomGrantVoice, heroicons.Icon16SolidMicrophone, button.ToneSuccess},
+		{"role", "visitor", text.RoomRevokeVoice, heroicons.Icon16SolidPause, button.ToneWarning},
+		{"role", "none", text.RoomKick, heroicons.Icon16SolidArrowTopRightOnSquare, button.ToneDanger},
+	}
+	if occupant.Role == "moderator" {
+		roleActions[1] = roomParticipantAction{"role", "participant", text.RoomDemoteModerator, heroicons.Icon16SolidArrowDown, button.ToneWarning}
+	}
+	accessActions := []roomParticipantAction{
+		{"affiliation", "owner", text.RoomMakeOwner, heroicons.Icon16SolidStar, button.TonePrimary},
+		{"affiliation", "admin", text.RoomMakeAdmin, heroicons.Icon16SolidCog6Tooth, button.TonePrimary},
+		{"affiliation", "member", text.RoomMakeMember, heroicons.Icon16SolidUser, button.TonePrimary},
+		{"affiliation", "none", text.RoomRevokeAccess, heroicons.Icon16SolidLockClosed, button.ToneWarning},
+		{"affiliation", "outcast", text.RoomBan, heroicons.Icon16SolidXCircle, button.ToneDanger},
+	}
 	var actions []roomParticipantAction
-	for _, role := range occupant.Roles {
-		var label string
-		switch role {
-		case "none":
-			label = text.RoomKick
-		case "visitor":
-			label = text.RoomRevokeVoice
-		case "participant":
-			label = text.RoomGrantVoice
-			if occupant.Role == "moderator" {
-				label = text.RoomDemoteModerator
-			}
-		case "moderator":
-			label = text.RoomPromoteModerator
-		}
-		if label != "" {
-			actions = append(actions, roomParticipantAction{"role", string(role), label, role == "none"})
+	for _, action := range roleActions {
+		if slices.Contains(occupant.Roles, engineapi.RoomRole(action.value)) {
+			actions = append(actions, action)
 		}
 	}
-	for _, affiliation := range occupant.Affiliations {
-		var label string
-		switch affiliation {
-		case "none":
-			label = text.RoomRevokeAccess
-		case "member":
-			label = text.RoomMakeMember
-		case "admin":
-			label = text.RoomMakeAdmin
-		case "owner":
-			label = text.RoomMakeOwner
-		case "outcast":
-			label = text.RoomBan
-		}
-		if label != "" {
-			actions = append(actions, roomParticipantAction{"affiliation", string(affiliation), label, affiliation == "outcast"})
+	for _, action := range accessActions {
+		if slices.Contains(occupant.Affiliations, engineapi.RoomAffiliation(action.value)) {
+			actions = append(actions, action)
 		}
 	}
 	return actions
@@ -296,11 +287,7 @@ templ roomParticipantDetails(v view, revision string, occupant engineapi.RoomMan
 					<h4>{ roomOptionLabel(v.Text, kind) }</h4>
 					for _, action := range actions {
 						if action.action == kind {
-							{{ trigger := id + "-" + action.action + "-" + action.value }}
-							@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-room-participant-action"), button.WithAttrs(templ.Attributes{"id": trigger, "data-room-action-open": ""})) {
-								{ action.label }
-							}
-							@roomTargetAction(v, revision, trigger, occupant.Id, action.action, action.value, action.label, action.danger)
+							@roomParticipantActionControl(v, revision, id, occupant.Id, action)
 						}
 					}
 				</div>
@@ -309,10 +296,25 @@ templ roomParticipantDetails(v view, revision string, occupant engineapi.RoomMan
 	</section>
 }
 
-templ roomTargetAction(v view, revision, trigger, target, action, value, label string, danger bool) {
+templ roomParticipantActionControl(v view, revision, id, target string, action roomParticipantAction) {
+	{{ trigger := id + "-" + action.action + "-" + action.value }}
+	<div class="oie-room-action" data-tone={ string(action.tone) }>
+		@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-room-participant-action"), button.WithAttrs(templ.Attributes{"id": trigger, "data-room-action-open": "", "aria-expanded": "false", "aria-controls": trigger + "-form"})) {
+			<span class="oie-room-action-icon">@glyph(action.symbol)</span>
+			<span>{ action.label }</span>
+			<span class="oie-room-action-chevron">@glyph(heroicons.Icon16SolidChevronDown)</span>
+		}
+		@roomTargetAction(v, revision, trigger, target, action.action, action.value, v.Text.RoomConfirmAction, action.tone)
+	</div>
+}
+
+templ roomTargetAction(v view, revision, trigger, target, action, value, label string, tone button.Tone) {
 	{{
 		key := newOperationKey()
 		id := "manage-room-" + key
+		if trigger != "" {
+			id = trigger + "-form"
+		}
 	}}
 	@form.Form(form.Config{ID: id, Action: "/ui/rooms/manage", RootAttrs: templ.Attributes{"data-oie-action": "room-management", "data-room-action-form": trigger, "hidden": trigger != ""}}) {
 		@roomManagementFields(v, revision, action, key)
@@ -326,13 +328,7 @@ templ roomTargetAction(v view, revision, trigger, target, action, value, label s
 			@textinput.TextInput(textinput.Config{ID: id + "-reason", Name: "reason", Label: v.Text.RoomReason, InputAttrs: templ.Attributes{"maxlength": "500"}})
 		}
 		<div class="oie-room-action-buttons">
-			{{
-				tone := button.TonePrimary
-				if danger {
-					tone = button.ToneDanger
-				}
-			}}
-			@button.Button(button.WithType("submit"), button.WithTone(tone)) {
+			@button.Button(button.WithType("submit"), button.WithTone(tone), button.WithSize(button.SizeSmall)) {
 				{ label }
 			}
 			if trigger != "" {

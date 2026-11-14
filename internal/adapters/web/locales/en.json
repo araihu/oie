@@ -499,6 +499,7 @@
   "RoomBans": "Bans",
   "RoomBan": "Ban from room",
   "RoomUnban": "Lift ban",
+  "RoomConfirmAction": "Confirm",
   "RoomCancelAction": "Cancel",
   "RoomChangeAvatar": "Change room image",
   "RoomRemoveAvatar": "Remove room image",
