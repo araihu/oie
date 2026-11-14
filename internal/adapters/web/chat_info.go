@@ -22,8 +22,8 @@ func (v view) infoHref(screen, kind string, pairs ...string) string {
 }
 func (v view) infoBackHref() string {
 	focus := v.InfoType
-	if v.InfoView == "stars" {
-		focus = "stars"
+	if v.InfoView == "stars" || v.InfoView == "participants" {
+		focus = v.InfoView
 	}
 	return v.infoHref("", "", "infoQuery", "", "infoFocus", focus)
 }
@@ -43,6 +43,15 @@ func (v view) infoSharedView() view {
 }
 func (s *Server) loadChatInfo(ctx context.Context, v *view, refresh bool) {
 	if v.Selected == nil {
+		return
+	}
+	if v.InfoView == "participants" {
+		if v.Selected.Kind == "room" && v.requestKind() == "" && !v.Preview {
+			result, err := s.client.GetRoomParticipantsWithResponse(ctx, v.Selected.Id)
+			if err == nil && result.JSON200 != nil && result.JSON200.State.Valid() {
+				v.InfoParticipants = result.JSON200
+			}
+		}
 		return
 	}
 	if v.InfoView == "shared" {

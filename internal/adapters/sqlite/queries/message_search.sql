@@ -14,6 +14,11 @@ WITH initial_revisions AS (
  LEFT JOIN initial_revisions head_initial ON head_initial.entity_id=h.source_id
  LEFT JOIN message_revisions head_source ON head_source.rowid=head_initial.revision_row
  WHERE NOT EXISTS(SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
+ AND NOT EXISTS (
+   SELECT 1 FROM message_references ref JOIN room_message_moderation moderation
+   ON moderation.account_id=m.account_id AND ref.scope='room:'||moderation.room_address AND ref.remote_id=moderation.stanza_id
+   WHERE ref.message_id=m.id OR ref.message_id IN (SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
+ )
  AND json_extract(c.payload,'$.Request') IS NULL
  AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
  AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))

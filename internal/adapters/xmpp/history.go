@@ -30,6 +30,7 @@ type archiveMessage struct {
 	replyMetadata
 	correctionMetadata
 	reactionMetadata
+	roomModerationMetadata
 	Body              string                 `xml:"jabber:client body"`
 	DirectInvitations []directRoomInvitation `xml:"jabber:x:conference x"`
 	Users             []struct {
@@ -121,6 +122,10 @@ func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResul
 }
 func archivedIncoming(account domain.Account, scope string, r *archiveResult, trust archiveTrust) (application.Incoming, bool, error) {
 	msg := r.Forwarded.Message
+	if msg != nil && (len(msg.Retractions) != 0 || len(msg.Tombstones) != 0 || len(msg.LegacyTombstones) != 0) {
+		in, ok := archivedRoomModeration(account, scope, r)
+		return in, ok, nil
+	}
 	if msg != nil && len(msg.Reactions) != 0 {
 		reaction, ok, err := archivedReaction(account, scope, r, trust)
 		return application.Incoming{AccountID: account.ID, Reaction: reaction}, ok, err

@@ -64,7 +64,7 @@ func (s *Server) JoinRoom(ctx context.Context, r engineapi.JoinRoomRequestObject
 	if r.Body.ExpectedConversationRevisionId != nil {
 		conversationRevision = domain.ID(*r.Body.ExpectedConversationRevisionId)
 	}
-	value, err := s.engine.JoinRoomInvitation(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.ConversationId), nickname, revision, conversationRevision)
+	value, err := s.engine.JoinRoomInvitation(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.ConversationId), nickname, revision, conversationRevision, roomText(r.Body.Password))
 	if err != nil {
 		return nil, err
 	}

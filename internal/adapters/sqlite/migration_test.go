@@ -76,6 +76,61 @@ func migrateFixtureToVersion(t *testing.T, store *Store, version uint) {
 	}
 }
 
+func TestRoomModerationPreviewMigratesIntoSharedCatalog(t *testing.T) {
+	ctx := t.Context()
+	store, engine, chat := outboxFixture(t)
+	engine.SetProtocols(&outboundProtocol{})
+	const room = "garden@rooms.localhost"
+	const stanzaID = "moderated"
+	at := time.Now().UTC()
+	for _, id := range []string{stanzaID, "visible"} {
+		if err := engine.Receive(ctx, application.Incoming{
+			AccountID: chat.AccountID, Kind: "room", Address: room, SenderName: "Guest",
+			CreatedAt: at, ProviderID: id, OriginalText: "https://example.test/" + id + ".pdf",
+			References: []domain.MessageReference{{Scope: "room:" + room, ID: id}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	migrateFixtureToVersion(t, store, 26)
+	if _, err := store.db.ExecContext(ctx, `
+		CREATE TABLE room_message_moderation (
+			account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+			room_address TEXT NOT NULL, stanza_id TEXT NOT NULL, moderated_at TEXT NOT NULL, reason TEXT NOT NULL,
+			PRIMARY KEY(account_id,room_address,stanza_id)
+		);
+		PRAGMA user_version=27;
+		UPDATE schema_migrations SET version=27;
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(ctx, "INSERT INTO room_message_moderation VALUES(?,?,?,?,?)",
+		chat.AccountID, room, stanzaID, stamp(at), "Room rules"); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateDatabase(ctx, store.db, store.dir); err != nil {
+		t.Fatal(err)
+	}
+	candidates, err := store.SharedContentCandidates(ctx, application.SharedContentVersion, 10)
+	if err != nil || len(candidates) != 1 || candidates[0].OriginalText != "https://example.test/visible.pdf" {
+		t.Fatalf("catalog candidates after preview migration: %+v, %v", candidates, err)
+	}
+	rooms, err := engine.Conversations(ctx, "", application.ConversationQuery{AccountID: chat.AccountID, Kind: "room", Limit: 10})
+	if err != nil || len(rooms) != 1 {
+		t.Fatalf("rooms after preview migration: %+v, %v", rooms, err)
+	}
+	messages, err := engine.Messages(ctx, rooms[0].ID, "", 10)
+	if err != nil || len(messages) != 2 {
+		t.Fatalf("messages after preview migration: %+v, %v", messages, err)
+	}
+	for _, message := range messages {
+		if message.Moderation != nil && message.Moderation.Reason == "Room rules" && message.OriginalText == "" {
+			return
+		}
+	}
+	t.Fatal("preview moderation was not preserved")
+}
+
 func TestSchedulingPreviewMigratesWithoutDiscardingData(t *testing.T) {
 	ctx := t.Context()
 	store, engine, conversation := outboxFixture(t)
@@ -92,7 +147,7 @@ func TestSchedulingPreviewMigratesWithoutDiscardingData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"000027_shared_catalog_projection", "000026_room_invitation_credentials", "000025_room_creation", "000024_reaction_target_lookups", "000023_dispatch_wire_stage", "000022_scheduled_timeline", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
+	for _, name := range []string{"000029_room_ban_nicknames", "000028_room_message_moderation", "000027_shared_catalog_projection", "000026_room_invitation_credentials", "000025_room_creation", "000024_reaction_target_lookups", "000023_dispatch_wire_stage", "000022_scheduled_timeline", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
 		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
 		if err != nil {
 			t.Fatal(err)

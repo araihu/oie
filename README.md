@@ -37,6 +37,11 @@ The independent read-only mock remains available for presentation tests.
 Existing account text archives now recover serially with durable checkpoints,
 original timestamps, replay deduplication and progress through the API/UI. Saved
 rooms support creation, explicit entry/leave, basic text and replies while joined. [XMPP room links](docs/room-entry.md) open a preview and let you choose an account before joining.
+Public room discovery and password-protected entry are available from New
+conversation. Joined rooms expose name, topic, invitations, role and
+affiliation controls according to current permissions. Moderated messages
+show a removal notice when the room supports XEP-0425. See
+[room management](docs/room-management.md).
 The composer schedules messages with supported attachments. The Scheduled view
 and each conversation's drawer let you manage pending sends. Device sync,
 PWA/offline queues and backup/restore remain later work.

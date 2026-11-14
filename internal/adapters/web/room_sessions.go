@@ -58,6 +58,14 @@ func (v view) attachmentAllowed() bool {
 func (v view) replyAllowed() bool {
 	return v.composeAllowed() && v.messagingImplemented("send_replies")
 }
+func (v view) canJoinRoom() bool {
+	return v.RoomSession != nil && !v.RoomSession.Active && v.messagingImplemented("room_messaging")
+}
+
+func (v view) canLeaveRoom() bool {
+	return v.RoomSession != nil && v.RoomSession.Active && v.messagingImplemented("room_messaging")
+}
+
 func (v view) roomLabel() string {
 	if v.RoomSession == nil {
 		return v.Text.RoomReadOnly
@@ -146,6 +154,9 @@ func (s *Server) changeRoom(ctx context.Context, r *http.Request, text copy, lea
 			nick = &nickname
 		}
 		join := engineapi.JoinRoom{ExpectedRevisionId: revision, Nickname: nick}
+		if password := r.Form.Get("password"); password != "" {
+			join.Password = &password
+		}
 		if expectedChat := r.Form.Get("expectedConversationRevisionId"); expectedChat != "" {
 			if !validOperationKey(expectedChat) || len(r.Form["expectedConversationRevisionId"]) != 1 {
 				return 422, mutationResult{Message: text.InvalidForm, Rejected: true}

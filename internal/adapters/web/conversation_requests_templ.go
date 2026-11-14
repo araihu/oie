@@ -527,6 +527,12 @@ func roomInvitationStatus(v view) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
+			if v.RoomSession.LastErrorCode != nil && *v.RoomSession.LastErrorCode == "not_authorized" {
+				templ_7745c5c3_Err = textinput.TextInput(textinput.Config{ID: "room-invitation-password", Name: "password", Label: v.Text.RoomPassword, Type: "password", InputAttrs: templ.Attributes{"maxlength": "1023", "autocomplete": "off"}}).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
 			if v.RoomSession.LastErrorCode != nil && *v.RoomSession.LastErrorCode == "nickname_conflict" {
 				templ_7745c5c3_Err = textinput.TextInput(textinput.Config{ID: "room-nickname", Name: "nickname", Label: v.Text.RoomNickname, Value: roomNickname(v), InputAttrs: templ.Attributes{"maxlength": strconv.Itoa(100)}}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
@@ -548,7 +554,7 @@ func roomInvitationStatus(v view) templ.Component {
 				var templ_7745c5c3_Var29 string
 				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.JoinRoom)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_requests.templ`, Line: 78, Col: 124}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_requests.templ`, Line: 81, Col: 124}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 				if templ_7745c5c3_Err != nil {
@@ -572,7 +578,7 @@ func roomInvitationStatus(v view) templ.Component {
 			var templ_7745c5c3_Var30 string
 			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.RoomUnavailable)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_requests.templ`, Line: 82, Col: 65}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_requests.templ`, Line: 85, Col: 65}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 			if templ_7745c5c3_Err != nil {

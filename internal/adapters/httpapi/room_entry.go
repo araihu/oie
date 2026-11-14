@@ -32,7 +32,7 @@ func (s *Server) OpenRoom(ctx context.Context, r engineapi.OpenRoomRequestObject
 		return nil, application.ErrInvalid
 	}
 	value, err := s.engine.OpenRoom(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.AccountId),
-		r.Body.Address, roomText(r.Body.Nickname), roomText(r.Body.Name), r.Body.Action == "create")
+		r.Body.Address, roomText(r.Body.Nickname), roomText(r.Body.Name), r.Body.Action == "create", roomText(r.Body.Password))
 	if err != nil {
 		return nil, err
 	}
@@ -44,4 +44,16 @@ func roomText(value *string) string {
 		return ""
 	}
 	return *value
+}
+
+func (s *Server) DiscoverRooms(ctx context.Context, r engineapi.DiscoverRoomsRequestObject) (engineapi.DiscoverRoomsResponseObject, error) {
+	result, err := s.engine.DiscoverRooms(ctx, domain.ID(r.AccountId), roomText(r.Params.Service))
+	if err != nil {
+		return nil, err
+	}
+	out := engineapi.DiscoverRooms200JSONResponse{State: engineapi.RoomDirectoryState(result.State), Rooms: make([]engineapi.RoomDirectoryItem, 0, len(result.Rooms))}
+	for _, room := range result.Rooms {
+		out.Rooms = append(out.Rooms, engineapi.RoomDirectoryItem{Address: room.Address, Name: optionalRoomText(room.Name)})
+	}
+	return out, nil
 }

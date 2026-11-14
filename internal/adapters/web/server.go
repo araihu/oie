@@ -47,6 +47,9 @@ var conversationPreferencesScript []byte
 //go:embed stars.js
 var starsScript []byte
 
+//go:embed room-management.js
+var roomManagementScript []byte
+
 //go:embed room-entry.js
 var roomEntryScript []byte
 
@@ -185,6 +188,7 @@ type view struct {
 	RoomSession                                                                                   *engineapi.RoomSession
 	MessagingCapabilities                                                                         *engineapi.Capabilities
 	InfoView, InfoType, InfoCursor, InfoQuery, InfoFocus                                          string
+	InfoParticipants                                                                              *engineapi.RoomParticipants
 	InfoShared                                                                                    *engineapi.SharedContentPage
 	InfoStars                                                                                     *engineapi.StarredMessagePage
 	InfoInvalid, SharedInDetails                                                                  bool
@@ -274,7 +278,81 @@ type copy struct {
 	SharedActionFailed                                                                                                                                                                                       string
 	SharedLinkCopied                                                                                                                                                                                         string
 	SharedDownloading                                                                                                                                                                                        string
-	RoomActions                                                                                                                                                                                              string
+	RoomDiscover                                                                                                                                                                                             string
+	RoomService                                                                                                                                                                                              string
+	RoomDirectoryUnavailable                                                                                                                                                                                 string
+	RoomDirectoryPartial                                                                                                                                                                                     string
+	RoomDirectoryEmpty                                                                                                                                                                                       string
+	RoomManage                                                                                                                                                                                               string
+	RoomManagementLoading                                                                                                                                                                                    string
+	RoomManagementConflict                                                                                                                                                                                   string
+	RoomManagementUnavailable                                                                                                                                                                                string
+	RoomManagementDenied                                                                                                                                                                                     string
+	RoomManagementConfirmed                                                                                                                                                                                  string
+	RoomManagementSubmitted                                                                                                                                                                                  string
+	RoomManagedName                                                                                                                                                                                          string
+	RoomRoleLabel                                                                                                                                                                                            string
+	RoomSaveDetails                                                                                                                                                                                          string
+	RoomDetailsPartial                                                                                                                                                                                       string
+	RoomOwners                                                                                                                                                                                               string
+	RoomAdministrators                                                                                                                                                                                       string
+	RoomModerators                                                                                                                                                                                           string
+	RoomVisitors                                                                                                                                                                                             string
+	RoomBackToParticipants                                                                                                                                                                                   string
+	RoomBackToBans                                                                                                                                                                                           string
+	RoomGrantVoice                                                                                                                                                                                           string
+	RoomRevokeVoice                                                                                                                                                                                          string
+	RoomPromoteModerator                                                                                                                                                                                     string
+	RoomDemoteModerator                                                                                                                                                                                      string
+	RoomMakeMember                                                                                                                                                                                           string
+	RoomMakeAdmin                                                                                                                                                                                            string
+	RoomMakeOwner                                                                                                                                                                                            string
+	RoomRevokeAccess                                                                                                                                                                                         string
+	RoomBans                                                                                                                                                                                                 string
+	RoomBan                                                                                                                                                                                                  string
+	RoomBanByAddress                                                                                                                                                                                         string
+	RoomBanByAddressHelp                                                                                                                                                                                     string
+	RoomUnban                                                                                                                                                                                                string
+	RoomUnbanConfirm                                                                                                                                                                                         string
+	RoomConfirmAction                                                                                                                                                                                        string
+	RoomCancelAction                                                                                                                                                                                         string
+	RoomChangeAvatar                                                                                                                                                                                         string
+	RoomRemoveAvatar                                                                                                                                                                                         string
+	RoomAvatarFile                                                                                                                                                                                           string
+	RoomAvatarHint                                                                                                                                                                                           string
+	RoomAvatarInvalid                                                                                                                                                                                        string
+	RoomAvatarBrowse                                                                                                                                                                                         string
+	RoomAvatarEmpty                                                                                                                                                                                          string
+	RoomNoBans                                                                                                                                                                                               string
+	RoomSearchBans                                                                                                                                                                                           string
+	RoomNoMatchingBans                                                                                                                                                                                       string
+	RoomBannedAddresses                                                                                                                                                                                      string
+	RoomDetailsTab                                                                                                                                                                                           string
+	RoomNoVisibleParticipants                                                                                                                                                                                string
+	RoomSearchParticipants                                                                                                                                                                                   string
+	RoomParticipantsLoading, RoomParticipantsUnavailable, RoomParticipantsJoinRequired                                                                                                                       string
+	RoomNoMatchingParticipants                                                                                                                                                                               string
+	RoomTopic                                                                                                                                                                                                string
+	RoomDetailsUnchanged                                                                                                                                                                                     string
+	RoomInvitePeople                                                                                                                                                                                         string
+	RoomInvite                                                                                                                                                                                               string
+	RoomReason                                                                                                                                                                                               string
+	RoomSetRole                                                                                                                                                                                              string
+	RoomKick                                                                                                                                                                                                 string
+	RoomAccess                                                                                                                                                                                               string
+	RoomRoleModerator                                                                                                                                                                                        string
+	RoomRoleParticipant                                                                                                                                                                                      string
+	RoomRoleVisitor                                                                                                                                                                                          string
+	RoomAffiliationOwner                                                                                                                                                                                     string
+	RoomAffiliationAdmin                                                                                                                                                                                     string
+	RoomAffiliationMember                                                                                                                                                                                    string
+	RoomAffiliationOutcast                                                                                                                                                                                   string
+	RoomAffiliationNone                                                                                                                                                                                      string
+	RoomModerateMessage                                                                                                                                                                                      string
+	RoomMessageModerated                                                                                                                                                                                     string
+	RoomUserAddress                                                                                                                                                                                          string
+	RoomPassword                                                                                                                                                                                             string
+	RoomSessionTitle                                                                                                                                                                                         string
 	DocumentOpen                                                                                                                                                                                             string
 	DocumentViewer                                                                                                                                                                                           string
 	DocumentDownload                                                                                                                                                                                         string
@@ -415,9 +493,6 @@ type copy struct {
 	DetailsPeerPresence                                                                                                                                                  string
 	DetailsPeerPresenceHelp                                                                                                                                              string
 	DetailsParticipantsTruncated                                                                                                                                         string
-	DetailsNoParticipants                                                                                                                                                string
-	DetailsSourceDiscovery                                                                                                                                               string
-	DetailsSourcePresence                                                                                                                                                string
 	DetailsObservedAt                                                                                                                                                    string
 	UnknownParticipant                                                                                                                                                   string
 	PresenceAvailable                                                                                                                                                    string
@@ -632,6 +707,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.prepareForward(w, r)
 		return
 	}
+	if r.URL.Path == "/ui/rooms/directory" {
+		s.roomDirectory(w, r)
+		return
+	}
+	if r.URL.Path == "/ui/rooms/manage-fragment" {
+		s.roomManagementFragment(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/rooms/preview" {
 		s.roomPreview(w, r)
 		return
@@ -726,10 +809,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/event-stream.js":      {"text/javascript", eventStreamScript},
 		"/ui/inbox-cache.js":       {"text/javascript", inboxCacheScript},
 		"/ui/mentions.js":          {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
-		"/ui/room-entry.js":   {"text/javascript", roomEntryScript},
-		appicons.SpriteURL:    {"image/svg+xml", appIconSprite},
-		"/ui/room-archive.js": {"text/javascript", roomArchiveScript},
-		"/ui/timeline.js":     {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
+		"/ui/room-management.js": {"text/javascript", roomManagementScript},
+		"/ui/room-entry.js":      {"text/javascript", roomEntryScript},
+		appicons.SpriteURL:       {"image/svg+xml", appIconSprite},
+		"/ui/room-archive.js":    {"text/javascript", roomArchiveScript},
+		"/ui/timeline.js":        {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/cache.js": {"text/javascript", cacheScript}, "/ui/cache/LICENSE.md": {"text/plain; charset=utf-8", cacheLibraryLicense}, "/ui/cache/lru-cache.min.mjs": {"text/javascript", cacheLibrary}, "/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
 		"/ui/video-thumbnails.js": {"text/javascript", videoThumbnailsScript}, "/ui/videos.js": {"text/javascript", videosScript}, "/ui/video.css": {"text/css", videosStylesheet},
 		"/ui/reactions.js": {"text/javascript", reactionsScript}, "/ui/reactions.css": {"text/css", reactionsStylesheet}, "/ui/message-correction.css": {"text/css", messageCorrectionStylesheet}, "/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/read-state.js": {"text/javascript", readStateScript}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/message-history.js": {"text/javascript", messageHistoryScript}, "/ui/message-history.css": {"text/css", messageHistoryStylesheet}, "/ui/sender.js": {"text/javascript", senderScript}, "/ui/message-search.js": {"text/javascript", messageSearchScript}, "/ui/message-search.css": {"text/css", messageSearchStylesheet}, "/ui/conversation-search.js": {"text/javascript", conversationSearchScript}, "/ui/conversation-search.css": {"text/css", conversationSearchStylesheet}, "/ui/conversation-preferences.js": {"text/javascript", conversationPreferencesScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
@@ -864,7 +948,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	}
 	listOnly := fragment == "inbox"
 	editorOnly := fragment == "schedule-editor" && v.ChatID != ""
-	infoOnly := fragment == "info" && v.ChatID != ""
+	infoOnly := (fragment == "info" || r.URL.Path == "/ui/info") && v.ChatID != ""
 	paneOnly := (fragment == "conversation" || fragment == "timeline" || fragment == "source-pane") && v.ChatID != "" || editorOnly || infoOnly
 	if sourceFragmentRequest(r, v) && s.loadSourceNavigation(ctx, r, v, paneOnly) {
 		return
@@ -889,6 +973,10 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	v.EventCursor = engine.JSON200.EventCursor
 	v.Preview = engine.HTTPResponse.Header.Get("X-Oie-Mock") == "true"
 	v.Role = engine.JSON200.Role
+	if infoOnly && v.InfoView == "participants" {
+		s.loadConversation(ctx, r, v, true, false, true, editor)
+		return
+	}
 	limit := 100
 	accounts, err := s.client.ListAccountsWithResponse(ctx, &engineapi.ListAccountsParams{Limit: &limit}, editor)
 	if err != nil || accounts.JSON200 == nil {
@@ -1058,6 +1146,10 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		}
 		return
 	}
+	if infoOnly && v.InfoView == "participants" {
+		s.loadChatInfo(ctx, v, false)
+		return
+	}
 	if editorOnly {
 		s.loadMessaging(ctx, v)
 		return
@@ -1072,7 +1164,9 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		}
 	}
 	s.loadMessaging(ctx, v)
-	s.loadChatInfo(ctx, v, r.URL.Path == "/ui/refresh")
+	if v.InfoView != "participants" || r.URL.Path != "/ui/refresh" && (r.URL.Path == "/ui/info" || r.URL.Query().Get("open") == "details") {
+		s.loadChatInfo(ctx, v, r.URL.Path == "/ui/refresh")
+	}
 	if infoOnly || r.URL.Path == "/ui/info" {
 		return
 	}
@@ -1199,7 +1293,7 @@ func (v view) timelineVersion() string {
 		out.WriteString(m.Id + ":" + m.RevisionId + ":" + string(m.SendState) + ";")
 		videos, _ := json.Marshal(v.messageVideos(m.Id))
 		_, _ = fmt.Fprintf(&out, "video:%x;", sha256.Sum256(videos))
-		reply, _ := json.Marshal([]any{m.Reply, m.Edited, m.EditedAt, m.MentionsYou, v.Reactions[m.Id]})
+		reply, _ := json.Marshal([]any{m.Reply, m.Edited, m.EditedAt, m.MentionsYou, m.Moderation, v.Reactions[m.Id]})
 		_, _ = fmt.Fprintf(&out, "%x;", sha256.Sum256(reply))
 	}
 	return out.String()
@@ -1208,7 +1302,7 @@ func (v view) headerVersion() string {
 	if v.Selected == nil {
 		return ""
 	}
-	return v.Selected.Id + v.Selected.RevisionId + strconv.FormatBool(v.Selected.Archived) + strconv.FormatBool(v.Selected.Favorite) + v.Selected.Title + v.accountLabel(v.Selected.AccountId) + v.connectionLabel(v.Selected.AccountId)
+	return v.Selected.Id + v.Selected.RevisionId + strconv.FormatBool(v.Selected.Archived) + strconv.FormatBool(v.Selected.Favorite) + v.Selected.Title + v.accountLabel(v.Selected.AccountId) + v.connectionLabel(v.Selected.AccountId) + strconv.FormatBool(v.canJoinRoom()) + strconv.FormatBool(v.canLeaveRoom()) + strconv.FormatBool(v.canInviteToRoom())
 }
 func (v view) accountVersion() string {
 	var out strings.Builder

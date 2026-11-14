@@ -2588,6 +2588,46 @@
           "$ref": "#/components/parameters/AccountID"
         }
       ],
+      "get": {
+        "operationId": "discoverRooms",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "List public rooms published by the account's room services",
+        "description": "Reads a bounded page from the selected XMPP service or from services advertised by the account server. This does not save or enter rooms.",
+        "parameters": [
+          {
+            "name": "service",
+            "in": "query",
+            "description": "Optional XMPP room service domain. Defaults to discovered services.",
+            "schema": {
+              "type": "string",
+              "maxLength": 253
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public room directory results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomDirectory"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      },
       "post": {
         "operationId": "openRoom",
         "tags": [
@@ -2910,6 +2950,168 @@
         "x-cli-name": "open"
       }
     },
+    "/api/v1/conversations/{conversationId}/room-participants": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationID"
+        }
+      ],
+      "get": {
+        "operationId": "getRoomParticipants",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Read current room participants",
+        "description": "Returns participants observed by the joined account in its current room session. The read does not join the room or query its public directory.",
+        "responses": {
+          "200": {
+            "description": "Current room participants.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomParticipants"
+                },
+                "example": {
+                  "state": "available",
+                  "participants": [
+                    {
+                      "nickname": "Marina",
+                      "role": "moderator",
+                      "affiliation": "owner",
+                      "self": true
+                    }
+                  ],
+                  "truncated": false
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversationId}/room-management": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationID"
+        }
+      ],
+      "get": {
+        "operationId": "getRoomManagement",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Read available room management actions",
+        "description": "Returns the current room session's permissions and visible occupants. Reading does not join the room. An optional affiliation filter reads the authorized provider list for that affiliation.",
+        "parameters": [
+          {
+            "name": "affiliation",
+            "in": "query",
+            "description": "Affiliation list to read from the room.",
+            "schema": {
+              "$ref": "#/components/schemas/RoomAffiliation"
+            }
+          },
+          {
+            "name": "messageId",
+            "in": "query",
+            "description": "Check whether this retained message can be moderated in the room.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Room management snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomManagement"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      },
+      "post": {
+        "operationId": "manageRoom",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Apply a room management action",
+        "description": "Rechecks the active room session, permissions and target before sending. Repeat an uncertain request with the same key to read its outcome without sending it again.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Stable operation UUID for this request.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Requested action and the room management revision reviewed by the caller.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManageRoom"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Provider outcome or submission receipt for this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomManagementResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/conversations/{conversationId}/room-session": {
       "parameters": [
         {
@@ -2956,7 +3158,7 @@
           "Conversations"
         ],
         "summary": "Explicitly request entry and reconnect recovery for a saved room",
-        "description": "Durably records the owning engine's join intent before protocol work. This increment supports rooms without a join password. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.",
+        "description": "Durably records the owning engine's join intent before protocol work. A room password may be supplied for initial entry or rejoin. Repeated operation keys do not repeat an established command; changed payloads or stale intent revisions conflict. Reads and reply preparation never join. Protocol confirmation is observed through getRoomSession.",
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -7539,6 +7741,14 @@
           "participants"
         ],
         "properties": {
+          "canInviteToRoom": {
+            "type": "boolean",
+            "description": "The current room session allows sending invitations."
+          },
+          "canModerateMessages": {
+            "type": "boolean",
+            "description": "Current room permissions and advertised message moderation support."
+          },
           "conversationId": {
             "$ref": "#/components/schemas/ID"
           },
@@ -8474,6 +8684,27 @@
           "hasNewer": true
         }
       },
+      "MessageModeration": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "at"
+        ],
+        "description": "Verified room moderation of this message. The text and media are omitted from the timeline projection.",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "example": {
+          "at": "2026-11-13T15:00:00Z"
+        }
+      },
       "Message": {
         "type": "object",
         "description": "Retained original text and actual send evidence. submitted means the stanza was written to the authenticated stream; it does not prove provider acceptance, recipient delivery, or read state. unknown is not automatically resent.",
@@ -8490,6 +8721,9 @@
           "sendState"
         ],
         "properties": {
+          "moderation": {
+            "$ref": "#/components/schemas/MessageModeration"
+          },
           "id": {
             "$ref": "#/components/schemas/ID"
           },
@@ -8695,6 +8929,349 @@
           "name": "Garden"
         }
       },
+      "RoomDirectory": {
+        "description": "A bounded listing of public rooms advertised by the selected XMPP services.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state",
+          "rooms"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "known",
+              "partial",
+              "unavailable",
+              "not_connected"
+            ]
+          },
+          "rooms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoomDirectoryItem"
+            }
+          }
+        },
+        "example": {
+          "state": "known",
+          "rooms": []
+        }
+      },
+      "RoomDirectoryItem": {
+        "description": "A public room address and its published display name.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "address"
+        ],
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "RoomAffiliation": {
+        "type": "string",
+        "enum": [
+          "owner",
+          "admin",
+          "member",
+          "outcast",
+          "none"
+        ],
+        "description": "Persistent access level in a room."
+      },
+      "RoomRole": {
+        "type": "string",
+        "enum": [
+          "moderator",
+          "participant",
+          "visitor",
+          "none"
+        ],
+        "description": "Temporary role of a current occupant. None removes the occupant."
+      },
+      "RoomParticipants": {
+        "description": "Read-only snapshot of occupants observed by this joined account.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state",
+          "participants",
+          "truncated"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "available",
+              "not_joined",
+              "unavailable"
+            ],
+            "example": "available"
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoomSessionParticipant"
+            },
+            "example": [
+              {
+                "nickname": "Marina",
+                "role": "moderator",
+                "affiliation": "owner",
+                "self": true
+              }
+            ]
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "More participants were observed than the session list retains.",
+            "example": true
+          }
+        }
+      },
+      "RoomSessionParticipant": {
+        "description": "One observed occupant with their room nickname and permissions.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "nickname",
+          "role",
+          "affiliation"
+        ],
+        "properties": {
+          "nickname": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/RoomRole"
+          },
+          "affiliation": {
+            "$ref": "#/components/schemas/RoomAffiliation"
+          },
+          "self": {
+            "type": "boolean"
+          },
+          "avatarHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "Cached profile image when the room disclosed a verified identity to this account."
+          }
+        }
+      },
+      "RoomManagement": {
+        "description": "Actions and occupants observed in the current joined room session.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state",
+          "actions",
+          "occupants",
+          "affiliations"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "available",
+              "not_joined",
+              "not_connected",
+              "unavailable"
+            ]
+          },
+          "revision": {
+            "type": "string",
+            "description": "Opaque observation revision. Recheck after a room or occupant change."
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoomManagementAction"
+            }
+          },
+          "occupants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoomManagedOccupant"
+            }
+          },
+          "affiliations": {
+            "type": "array",
+            "description": "Only addresses returned by the explicitly requested provider list.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "bannedNicknames": {
+            "type": "object",
+            "description": "Room nicknames observed when this account banned participants by their presence, keyed by addresses still returned by the room's ban list.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "example": {
+          "state": "not_joined",
+          "actions": [],
+          "occupants": [],
+          "affiliations": []
+        }
+      },
+      "RoomManagedOccupant": {
+        "description": "A visible occupant with the actions currently available for that occupant.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "nickname",
+          "role",
+          "affiliation",
+          "roles",
+          "affiliations"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Opaque target for this occupant's current presence."
+          },
+          "nickname": {
+            "type": "string"
+          },
+          "self": {
+            "type": "boolean",
+            "description": "The joined account's own occupant. No participant actions apply."
+          },
+          "avatarHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "Cached profile image when the room disclosed a verified identity to this account."
+          },
+          "role": {
+            "$ref": "#/components/schemas/RoomRole"
+          },
+          "affiliation": {
+            "$ref": "#/components/schemas/RoomAffiliation"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoomRole"
+            }
+          },
+          "affiliations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoomAffiliation"
+            }
+          }
+        }
+      },
+      "RoomManagementAction": {
+        "type": "string",
+        "enum": [
+          "rename",
+          "topic",
+          "invite",
+          "role",
+          "affiliation",
+          "moderate_message",
+          "update_details",
+          "set_avatar",
+          "remove_avatar"
+        ],
+        "description": "Room-scoped action subject to current provider permissions."
+      },
+      "ManageRoom": {
+        "description": "An explicit action scoped to an observed room session.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "expectedRevision"
+        ],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/RoomManagementAction"
+          },
+          "expectedRevision": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1
+          },
+          "target": {
+            "type": "string",
+            "maxLength": 2047,
+            "description": "Bare recipient address, opaque occupant ID, or bare affiliation address."
+          },
+          "messageId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Name, topic, role or affiliation to set."
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "New room name for update_details. Omit to keep the current name."
+          },
+          "topic": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "New room topic for update_details. An empty string clears it."
+          },
+          "image": {
+            "type": "string",
+            "format": "byte",
+            "maxLength": 699052,
+            "description": "Base64-encoded PNG, JPEG, or GIF, up to 512 KiB before encoding. Required for set_avatar only."
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Optional explanation sent to the provider."
+          }
+        },
+        "example": {
+          "action": "topic",
+          "expectedRevision": "7daf1f3c1fb40018de192844ab8180bf",
+          "value": "Garden planning"
+        }
+      },
+      "RoomManagementResult": {
+        "description": "The recorded result of a room command or its previous attempt.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "submitted",
+              "denied",
+              "stale",
+              "unsupported",
+              "unavailable",
+              "unknown",
+              "name_confirmed"
+            ]
+          }
+        },
+        "example": {
+          "state": "confirmed"
+        }
+      },
       "OpenRoom": {
         "description": "Explicit request to enter an existing room or create a new room at the given address.",
         "type": "object",
@@ -8726,6 +9303,12 @@
             "type": "string",
             "maxLength": 100,
             "description": "Optional published name for a newly created room."
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 1023,
+            "writeOnly": true,
+            "description": "Optional password for joining an existing room. Stored only by the owning engine for rejoin."
           }
         },
         "example": {
@@ -8835,6 +9418,12 @@
           },
           "expectedRevisionId": {
             "$ref": "#/components/schemas/NullableRevisionID"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 1023,
+            "writeOnly": true,
+            "description": "Optional replacement password for this room."
           }
         },
         "example": {

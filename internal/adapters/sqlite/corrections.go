@@ -55,7 +55,7 @@ func hydrateMessageProjection(ctx context.Context, q *dbgen.Queries, m *domain.M
 	}
 	head, err := q.GetContentHead(ctx, string(m.ID))
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil
+		return hydrateRoomModeration(ctx, q, m)
 	}
 	if err != nil {
 		return err
@@ -74,7 +74,7 @@ func hydrateMessageProjection(ctx context.Context, q *dbgen.Queries, m *domain.M
 	projected.Historical = m.Historical
 	projected.ProjectionSourceID = domain.ID(head.SourceID)
 	*m = projected
-	return nil
+	return hydrateRoomModeration(ctx, q, m)
 }
 func recordCorrectionMetadata(ctx context.Context, q *dbgen.Queries, id string, in domain.Message) error {
 	if !correctionValid(in.Correction) {

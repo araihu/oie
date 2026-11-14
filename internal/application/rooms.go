@@ -28,6 +28,7 @@ type RoomProtocolHost interface {
 	RoomSessionChanged(context.Context, domain.RoomSession) error
 }
 type RoomIntentMutation struct {
+	Password                                           string
 	Operation                                          Operation
 	Fingerprint                                        string
 	Session                                            domain.RoomSession
@@ -137,20 +138,24 @@ func (e *Engine) RoomSession(ctx context.Context, id domain.ID) (domain.RoomSess
 	return result, nil
 }
 func (e *Engine) JoinRoom(ctx context.Context, key, id domain.ID, nickname string, expected domain.ID) (RoomIntentResult, error) {
-	return e.setRoomIntent(ctx, key, id, nickname, expected, "", true)
+	return e.setRoomIntent(ctx, key, id, nickname, expected, "", "", true)
 }
-func (e *Engine) JoinRoomInvitation(ctx context.Context, key, id domain.ID, nickname string, expected, conversationRevision domain.ID) (RoomIntentResult, error) {
-	return e.setRoomIntent(ctx, key, id, nickname, expected, conversationRevision, true)
+func (e *Engine) JoinRoomInvitation(ctx context.Context, key, id domain.ID, nickname string, expected, conversationRevision domain.ID, password ...string) (RoomIntentResult, error) {
+	var secret string
+	if len(password) > 0 {
+		secret = password[0]
+	}
+	return e.setRoomIntent(ctx, key, id, nickname, expected, conversationRevision, secret, true)
 }
 func (e *Engine) LeaveRoom(ctx context.Context, key, id, expected domain.ID) (RoomIntentResult, error) {
-	return e.setRoomIntent(ctx, key, id, "", expected, "", false)
+	return e.setRoomIntent(ctx, key, id, "", expected, "", "", false)
 }
-func (e *Engine) setRoomIntent(ctx context.Context, key, id domain.ID, nickname string, expected, conversationRevision domain.ID, active bool) (RoomIntentResult, error) {
+func (e *Engine) setRoomIntent(ctx context.Context, key, id domain.ID, nickname string, expected, conversationRevision domain.ID, password string, active bool) (RoomIntentResult, error) {
 	if !validID(key) || !validID(id) || (expected != "" && !validID(expected)) || (conversationRevision != "" && !validID(conversationRevision)) {
 		return RoomIntentResult{}, ErrInvalid
 	}
 	nickname = strings.TrimSpace(nickname)
-	if active && !validRoomNickname(nickname) {
+	if active && (!validRoomNickname(nickname) || !validRoomPassword(password)) {
 		return RoomIntentResult{}, ErrInvalid
 	}
 	repo, ok := e.repo.(RoomIntentRepository)
@@ -164,6 +169,9 @@ func (e *Engine) setRoomIntent(ctx context.Context, key, id domain.ID, nickname 
 	parts := []string{string(id), nickname, string(expected)}
 	if conversationRevision != "" {
 		parts = append(parts, string(conversationRevision))
+	}
+	if password != "" {
+		parts = append(parts, "password", password)
 	}
 	fp := fingerprint(kind, parts)
 	replay, err := repo.ReplayRoomIntent(ctx, key, fp)
@@ -202,7 +210,7 @@ func (e *Engine) setRoomIntent(ctx context.Context, key, id domain.ID, nickname 
 		return RoomIntentResult{}, err
 	}
 	now := e.now().UTC()
-	result, err := repo.SetRoomIntent(ctx, RoomIntentMutation{Operation: Operation{ID: key, ResourceID: id, Kind: kind, CreatedAt: now}, Fingerprint: fp, Session: domain.RoomSession{AccountID: c.AccountID, ConversationID: id, IntentID: intentID, IntentRevisionID: rev, Active: active, Nickname: nickname, State: "not_joined", UpdatedAt: now}, ExpectedRevisionID: expected, ExpectedConversationRevisionID: conversationRevision})
+	result, err := repo.SetRoomIntent(ctx, RoomIntentMutation{Password: password, Operation: Operation{ID: key, ResourceID: id, Kind: kind, CreatedAt: now}, Fingerprint: fp, Session: domain.RoomSession{AccountID: c.AccountID, ConversationID: id, IntentID: intentID, IntentRevisionID: rev, Active: active, Nickname: nickname, State: "not_joined", UpdatedAt: now}, ExpectedRevisionID: expected, ExpectedConversationRevisionID: conversationRevision})
 	if err != nil {
 		var conflict RoomStateConflict
 		if errors.As(err, &conflict) {

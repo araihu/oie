@@ -67,7 +67,14 @@ templ roomEntryDrawer(v view, create bool) {
 						@textinput.TextInput(textinput.Config{ID:target+"-name",Name:"name",Label:v.Text.RoomName,Value:name,InputAttrs:templ.Attributes{"maxlength":"100"}})
 					} else {
 						@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-load-room-preview":""})){ {v.Text.PreviewRoom} }
+						@textinput.TextInput(textinput.Config{ID:target+"-password",Name:"password",Label:v.Text.RoomPassword,Type:"password",InputAttrs:templ.Attributes{"maxlength":"1023","autocomplete":"off"}})
 						<div class="oie-room-preview" data-room-preview role="status" aria-live="polite" data-loading={v.Text.RoomPreviewLoading} data-unavailable={v.Text.RoomPreviewUnavailable} data-invalid={v.Text.RoomAddressInvalid} hidden></div>
+						<details data-room-directory data-loading={v.Text.RoomManagementLoading} data-unavailable={v.Text.RoomDirectoryUnavailable}>
+							<summary>{v.Text.RoomDiscover}</summary>
+							@textinput.TextInput(textinput.Config{ID:"room-directory-service",Label:v.Text.RoomService,InputAttrs:templ.Attributes{"maxlength":"253","spellcheck":"false","autocapitalize":"none"}})
+							@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-room-discover":""})){ {v.Text.RoomDiscover} }
+							<div data-room-directory-results role="status" aria-live="polite"></div>
+						</details>
 					}
 					@textinput.TextInput(textinput.Config{ID:target+"-nickname",Name:"nickname",Label:v.Text.RoomNickname,Value:nickname,InputAttrs:templ.Attributes{"maxlength":"100"}})
 					@button.Button(button.WithType("submit"),button.WithAttrs(templ.Attributes{"data-room-entry-label":title})){ {title} }
@@ -152,4 +159,39 @@ templ roomInvitationSummary(text copy, preview engineapi.RoomPreview) {
 		<small title={ preview.Address }>{ preview.Address }</small>
 		<p title={ description }>{ description }</p>
 	</div>
+}
+
+templ roomDirectoryContent(text copy, result engineapi.RoomDirectory) {
+	switch result.State {
+		case "not_connected":
+			<p>{text.NotConnected}</p>
+		case "unavailable":
+			<p>{text.RoomDirectoryUnavailable}</p>
+		default:
+			if result.State=="partial" {
+				<p>{text.RoomDirectoryPartial}</p>
+			}
+			if len(result.Rooms)==0 {
+				<p>{text.RoomDirectoryEmpty}</p>
+			} else {
+				<ul class="oie-room-directory">
+					for _, room := range result.Rooms {
+						if bareRoomInput(room.Address) {
+							<li>
+								@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-room-directory-item":room.Address})) {
+									if room.Name!=nil && *room.Name!="" {
+										{*room.Name}
+									} else {
+										{room.Address}
+									}
+								}
+								if room.Name!=nil && *room.Name!="" {
+									<small>{room.Address}</small>
+								}
+							</li>
+						}
+					}
+				</ul>
+			}
+	}
 }

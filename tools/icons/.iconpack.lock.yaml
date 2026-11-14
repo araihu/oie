@@ -10,6 +10,16 @@ files:
     path: .iconpack/sources/heroicons-archive/LICENSE
     size: 1071
     integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
+  - id: heroicons-check-badge/icon
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/check-badge.svg
+    path: .iconpack/sources/heroicons-check-badge/16/solid/check-badge.svg
+    size: 774
+    integrity: sha384-9kyC2ZVaDvYPR4wvvOJ+3YyNLc60S41wJwlrOL2Vr7/L6e/A4EnJeiZxrfaMIj0a
+  - id: heroicons-check-badge/license
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+    path: .iconpack/sources/heroicons-check-badge/LICENSE
+    size: 1071
+    integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
   - id: heroicons-forward/icon
     url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-uturn-right.svg
     path: .iconpack/sources/heroicons-forward/16/solid/arrow-uturn-right.svg
@@ -40,6 +50,16 @@ files:
     path: .iconpack/sources/heroicons-navigation/LICENSE
     size: 1071
     integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
+  - id: heroicons-no-symbol/icon
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/no-symbol.svg
+    path: .iconpack/sources/heroicons-no-symbol/16/solid/no-symbol.svg
+    size: 334
+    integrity: sha384-RxEt/T2o3snuVAKkywQQDb7ZmGyZmUDZAHOtVhr4ilsuBrXug1543zUUVhtHJvwD
+  - id: heroicons-no-symbol/license
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+    path: .iconpack/sources/heroicons-no-symbol/LICENSE
+    size: 1071
+    integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
   - id: heroicons-photo/icon
     url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/photo.svg
     path: .iconpack/sources/heroicons-photo/16/solid/photo.svg
@@ -48,6 +68,46 @@ files:
   - id: heroicons-photo/license
     url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
     path: .iconpack/sources/heroicons-photo/LICENSE
+    size: 1071
+    integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
+  - id: heroicons-room-exit/icon
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-right-start-on-rectangle.svg
+    path: .iconpack/sources/heroicons-room-exit/16/solid/arrow-right-start-on-rectangle.svg
+    size: 613
+    integrity: sha384-skS5umtUuEQuGyC/5kqtVp4VA3WcoxHLw3UTky0m9nXrqkKuKlJjwBxNHRwnQ1Jo
+  - id: heroicons-room-exit/license
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+    path: .iconpack/sources/heroicons-room-exit/LICENSE
+    size: 1071
+    integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
+  - id: heroicons-room-role/icon
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/scale.svg
+    path: .iconpack/sources/heroicons-room-role/16/solid/scale.svg
+    size: 891
+    integrity: sha384-IcphUwyKp59KG2BxZZj7RXGyaw0YmtU2x9izoFYVr2oTeUGhoLl5h57vCIye1fTM
+  - id: heroicons-room-role/license
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+    path: .iconpack/sources/heroicons-room-role/LICENSE
+    size: 1071
+    integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
+  - id: heroicons-room-voice/icon
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/chat-bubble-left-ellipsis.svg
+    path: .iconpack/sources/heroicons-room-voice/16/solid/chat-bubble-left-ellipsis.svg
+    size: 571
+    integrity: sha384-VvJGwtEarksiG8aFEwL5ydWUWvfz3eui3olD50HlAhT3HnhbqF0Wf6VMbG4Uq5Q3
+  - id: heroicons-room-voice/license
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+    path: .iconpack/sources/heroicons-room-voice/LICENSE
+    size: 1071
+    integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
+  - id: heroicons-wrench-screwdriver/icon
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/wrench-screwdriver.svg
+    path: .iconpack/sources/heroicons-wrench-screwdriver/16/solid/wrench-screwdriver.svg
+    size: 939
+    integrity: sha384-aQ3j9QWd2eHa3FONQ1OloxVIuHB/LIW7OOBnXloLCyMKokERSCvxaA+wNMBi2geU
+  - id: heroicons-wrench-screwdriver/license
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+    path: .iconpack/sources/heroicons-wrench-screwdriver/LICENSE
     size: 1071
     integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
   - id: heroicons/icon

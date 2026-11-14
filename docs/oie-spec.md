@@ -242,7 +242,7 @@ Support, subject to protocol support and permissions:
 
 Do not imply that an available participant list is a complete persistent membership roster. Conversation details show available room metadata, visible occupants and connection/presence observations with their scope. The owning account connection is separate from room-session and participant presence. Missing observations remain unknown. Reading details does not automatically join a room or request presence subscriptions.
 
-Rejoin previously active rooms after reconnecting unless the user explicitly left or access was revoked. Preserve explicit leave decisions across restart. Leaving a room does not delete stored history. Leave room is a direct conversation-menu action with a leading icon. It is disabled while pending or inactive; an uncertain result opens the room controls for recovery. Room-session status and other join/leave/refresh controls are accessed on demand through the conversation action menu, rather than in a persistent block above the message timeline. Opening those controls does not change the room session. Kicking, banning, and role-management controls are backlogged; incoming removal/permission changes still need truthful handling.
+Rejoin previously active rooms after reconnecting unless the user explicitly left or access was revoked. Preserve explicit leave decisions across restart. Leaving a room does not delete stored history. Leave room is a direct conversation-menu action with a leading icon. It is disabled while pending or inactive; an uncertain result opens the room controls for recovery. For a saved room with inactive entry, **Enter room** in the conversation menu opens the entry form. The dialog shows session status and recovery actions when entry is requested or a command outcome is uncertain. Opening the dialog leaves the room session untouched. Kicking, banning, role and affiliation management, and message moderation follow the account’s room permissions. See [room management](room-management.md).
 
 **AGREED:** on account connection, honor modern and legacy XMPP bookmarks marked
 `autojoin=true` or `1`. When no local room intent exists, create an initial join
@@ -443,6 +443,8 @@ catalog browsing and bounded source-message navigation while import and live
 updates are active. See [indexed catalog reads](media-gallery-scroll.md#indexed-catalog-reads) and
 [opening a shared source](timeline-pagination.md#opening-a-shared-source).
 Long-term history storage is a separate design decision tracked in O17 and B35.
+The [DuckDB evaluation](duckdb-search-evaluation.md) records the rejected
+proposal for interactive search and the measurements behind that decision.
 
 **RECOMMENDED R08:** a bounded, paced backfill queue with checkpoints, resumable pages, backoff, foreground/live-message priority, and explicit partial-history status. Scope serialization and limits deliberately rather than launching one unbounded worker per room.
 
@@ -655,6 +657,8 @@ Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screen
 **AGREED:** the default conversation wallpaper uses a dense arrangement of subtle outline doodles. The artwork includes a hammer, sickle, GNU mascot, Brazil outline, Christ the Redeemer, football, mobile phone, paper plane, speech balloon, stars and Go gopher, along with Brazilian motifs such as the berimbau, caju, mandacaru and jangada. Small details fill the spaces between larger drawings. The 480 × 480 CSS-pixel tile joins seamlessly in both directions and stays subtle behind messages in light and dark themes.
 
 **AGREED:** keep conversation information in a sidebar/drawer, using the supplied group-info reference for identity, description/topic, available participants and access to that conversation's media, links, documents and starred messages. Content subviews stay within the drawer and provide a way back to chat information. Source-message stars are distinct from favorite conversations. Show only available operations and authoritative counts; an observed occupant list is not a persistent membership roster.
+
+**AGREED:** place Participants immediately after Starred messages in the room details navigation and open it as a read-only subview. Load the occupants observed in the current joined session when opening the subview, with search by nickname, cached avatars or initials, and groups ordered by permission. Keep this view independent of room management, public discovery, and membership lists.
 
 **AGREED:** clicking a message author avatar opens a user-information drawer without replacing the conversation. Show available name, cached avatar, account and conversation context. Direct peers may show observed presence. Room nicknames do not prove a personal identity or current presence; richer room profiles require explicit protocol identity evidence. Show the published full name, nickname and personal user@host address separately when available. Personal addresses for room authors must come from authenticated message-time protocol evidence, never a same-name current occupant or self-declared vCard JABBERID. Retain that evidence across restart and duplicate archive recovery without changing message content or edit history; contradictory addresses suppress identity. Opening the drawer makes no contact, presence-subscription, read-state or room-session changes.
 
@@ -908,7 +912,7 @@ included in v0.0.1-rc.1. IDs remain stable and do not imply order.
 | **B01** | Blocking/unblocking protocol identities. |
 | **B02** | Activity-based notification routing/suppression across devices. |
 | **B03** | Automatic idle/away detection and activity aggregation. |
-| **B04** | Room kicking, banning, and role/affiliation-management controls. |
+| **B04** | Implemented for XMPP rooms with [room management](room-management.md). |
 | **B05** | Voice and video calls. |
 | **B06** | Built-in voice-message recording. Audio attachments/playback remain alpha scope. |
 | **B07** | Full centralized sync coordination allowing pending-send control from any device without direct access to its original local engine. |
@@ -944,7 +948,7 @@ A separate native daemon is an accepted future option. Wails desktop packaging i
 | **B28** | Select multiple messages and export an individual conversation as a readable file. Start with copying selected messages. Bulk deletion depends on the deletion scopes and recovery behavior in section 9.1 and O10. |
 | **B29** | Organize chats across accounts. Start with filtering by existing contact groups. Explore user-defined workspaces that can contain direct chats and rooms from several accounts. |
 | **B30** | Start a private chat with a room occupant when the room does not disclose the occupant's personal address. Use the identity exposed by the room and respect room permissions. |
-| **B31** | Moderate messages sent by other room participants where the protocol and the user's permissions allow it. Represent received moderation events in the timeline. See section 6 for retraction of one's own messages and B04 for participant moderation. |
+| **B31** | Implemented for rooms advertising XEP-0425. See [room management](room-management.md) and section 6 for retraction of one’s own messages. |
 
 ### 16.2 Remaining packaging work (B22)
 
@@ -1027,7 +1031,7 @@ The supplied screenshots remain the visual reference. Do not reuse their private
 
 **AGREED:** use XEP-0461 references where a valid protocol message identifier exists and include XEP-0428-marked quoted fallback for clients without reply rendering. Client reply support is not gated on a server advertising the reply namespace. Group references require a verified room-issued stanza ID. Without one, send the quoted text without inventing a structured ID, retaining the app's local target association.
 
-**IMPLEMENTATION SCOPE:** include explicit entry/leave and basic text sending for saved public rooms so replies can be sent in the displayed group conversations. Reading history, opening details and preparing a reply do not join. Only confirmed self-presence establishes a joined session. Persist the owning engine's join intent and its revision; reconnect only active intents, and retain explicit leave/revocation. Pending room sends wait for confirmed membership. Room-password input, sending invitations and administration remain backlogged. Explicit creation and receiving `?join` links are covered by [room entry](room-entry.md).
+**IMPLEMENTATION SCOPE:** include explicit entry/leave and basic text sending for saved public rooms so replies can be sent in the displayed group conversations. Reading history, opening details and preparing a reply do not join. Only confirmed self-presence establishes a joined session. Persist the owning engine's join intent and its revision; reconnect only active intents, and retain explicit leave/revocation. Pending room sends wait for confirmed membership. Explicit creation, room passwords, and receiving `?join` links are covered by [room entry](room-entry.md). Sending invitations and administration are covered by [room management](room-management.md).
 
 ### Received correction presentation increment
 

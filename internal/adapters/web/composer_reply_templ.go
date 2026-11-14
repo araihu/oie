@@ -113,7 +113,7 @@ func composerReplyBody() templ.Component {
 }
 
 // Room controls stay mounted for live state and pending-operation recovery.
-// The conversation's action menu opens them only on demand.
+// Explicit entry and uncertain commands open the dialog.
 func roomSessionDialog(v view) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -132,7 +132,7 @@ func roomSessionDialog(v view) templ.Component {
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
 		if v.Selected != nil && v.Selected.Kind == "room" {
-			templ_7745c5c3_Err = modal.Dialog(modal.DialogConfig{ID: "room-session-dialog", Title: v.Text.RoomActions, Content: roomSessionStatus(v), FullscreenMobile: true}).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = modal.Dialog(modal.DialogConfig{ID: "room-session-dialog", Title: v.Text.RoomSessionTitle, Content: roomSessionStatus(v), FullscreenMobile: true}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -424,6 +424,10 @@ func roomSessionStatus(v view) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				if !v.RoomSession.Active {
+					templ_7745c5c3_Err = textinput.TextInput(textinput.Config{ID: "room-join-password", Name: "password", Label: v.Text.RoomPassword, Type: "password", InputAttrs: templ.Attributes{"maxlength": "1023", "autocomplete": "off"}}).Render(ctx, templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
 					templ_7745c5c3_Err = textinput.TextInput(textinput.Config{ID: "room-nickname", Name: "nickname", Label: v.Text.RoomNickname, Value: roomNickname(v), RootClass: "oie-room-nickname", InputAttrs: templ.Attributes{"maxlength": "100"}}).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
@@ -445,7 +449,7 @@ func roomSessionStatus(v view) templ.Component {
 						var templ_7745c5c3_Var25 string
 						templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.JoinRoom)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/composer_reply.templ`, Line: 56, Col: 16}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/composer_reply.templ`, Line: 57, Col: 16}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 						if templ_7745c5c3_Err != nil {
@@ -455,7 +459,7 @@ func roomSessionStatus(v view) templ.Component {
 						var templ_7745c5c3_Var26 string
 						templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.LeaveRoom)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/composer_reply.templ`, Line: 58, Col: 17}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/composer_reply.templ`, Line: 59, Col: 17}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 						if templ_7745c5c3_Err != nil {
@@ -488,7 +492,7 @@ func roomSessionStatus(v view) templ.Component {
 				var templ_7745c5c3_Var28 string
 				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.DetailsRefresh)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/composer_reply.templ`, Line: 64, Col: 140}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/composer_reply.templ`, Line: 65, Col: 140}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 				if templ_7745c5c3_Err != nil {

@@ -2,7 +2,9 @@ window.OieRuntime.register('room-entry', life => {
   'use strict';
   const join = document.querySelector('#join-room-form');
   const preview = join?.querySelector('[data-room-preview]');
-  let request;
+  let request, directoryRequest;
+  const directory = join?.querySelector('[data-room-directory]');
+  const results = directory?.querySelector('[data-room-directory-results]');
   let lastTrigger;
   let activeDrawer;
   let openedStatus = false;
@@ -53,6 +55,31 @@ window.OieRuntime.register('room-entry', life => {
     }
   }
 
+  function clearDirectory() {
+    directoryRequest?.abort();
+    directoryRequest = undefined;
+    if (results) results.textContent = '';
+  }
+
+  async function discover() {
+    clearDirectory();
+    const {accountId, engineId, lang} = join.elements;
+    if (!accountId.value) return;
+    const current = new AbortController();
+    directoryRequest = current;
+    results.textContent = directory.dataset.loading;
+    const service = directory.querySelector('#room-directory-service').value;
+    const params = new URLSearchParams({account: accountId.value, engine: engineId.value, lang: lang.value, service});
+    try {
+      const response = await life.fetch('/ui/rooms/directory?' + params, {signal: current.signal});
+      if (!response.ok) throw new Error();
+      const result = await response.text();
+      if (directoryRequest === current && !life.signal.aborted) results.innerHTML = result;
+    } catch {
+      if (directoryRequest === current && !life.signal.aborted) results.textContent = directory.dataset.unavailable;
+    }
+  }
+
   function openDrawer(id, trigger, address) {
     activeDrawer = id;
     lastTrigger = trigger;
@@ -93,9 +120,17 @@ window.OieRuntime.register('room-entry', life => {
   if (join) {
     life.on(join, 'click', event => {
       if (event.target.closest('[data-load-room-preview]')) void showPreview();
+      if (event.target.closest('[data-room-discover]')) void discover();
+      const item = event.target.closest('[data-room-directory-item]');
+      if (item && join.dataset.roomEntryPending !== 'true' && join.dataset.busy !== 'true') {
+        join.elements.address.value = item.dataset.roomDirectoryItem;
+        join.elements.address.focus({preventScroll:true});
+        void showPreview();
+      }
     });
     life.on(join.elements.address, 'input', clearPreview);
     life.on(join.elements.accountId, 'change', () => {
+      clearDirectory();
       if (join.elements.address.value.trim() && !preview.hidden) void showPreview();
     });
   }
@@ -103,6 +138,7 @@ window.OieRuntime.register('room-entry', life => {
   function restoreFocus(event) {
     if (!activeDrawer || event.detail?.id !== activeDrawer) return;
     activeDrawer = undefined;
+    clearDirectory();
     if (request && !request.signal.aborted && preview?.textContent === preview.dataset.loading) clearPreview();
     const trigger = lastTrigger;
     life.timeout(() => trigger?.isConnected && trigger.focus({preventScroll: true}), 220);

@@ -102,6 +102,7 @@ templ page(v view) {
 <script src="/ui/formatting.js"></script>
 <script src="/ui/forwarding.js" defer></script>
 <script src="/ui/room-entry.js"></script>
+<script src="/ui/room-management.js"></script>
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href={templ.URL(versionedStylesheetURL("/ui/app.css",stylesheet))}/>
 <link rel="stylesheet" href={templ.URL(versionedStylesheetURL("/ui/message-search.css",messageSearchStylesheet))}/>
@@ -447,7 +448,15 @@ if v.conversationSchedulesAvailable() {
 {{ sections[0].Items=append(sections[0].Items,dropdown.Item{Label:v.Text.Scheduled,Icon:glyph(heroicons.Icon16SolidClock),OnClick:"$dispatch('oie:conversation-drawer-open','conversation-schedules')"}) }}
 }
 if v.Selected.Kind=="room" {
-{{ sections=append(sections,dropdown.Section{Items:[]dropdown.Item{{ID:"chat-leave-room",Label:v.Text.LeaveRoom,Icon:glyph(heroicons.Icon16SolidArrowTopRightOnSquare),OnClick:"$dispatch('oie:leave-room')",Disabled:v.RoomSession==nil||!v.RoomSession.Active||!v.messagingImplemented("room_messaging")}}}) }}
+{{ roomItems:=[]dropdown.Item{{ID:"chat-manage-room",Label:v.Text.RoomManage,Icon:glyph(heroicons.Icon16SolidCog6Tooth),OnClick:"void 0"}} }}
+if v.canInviteToRoom() {
+{{ roomItems=append(roomItems,dropdown.Item{ID:"chat-invite-room",Label:v.Text.RoomInvitePeople,Icon:glyph(heroicons.Icon16SolidUsers),OnClick:"void 0"}) }}
+}
+{{ roomItems=append(roomItems,dropdown.Item{ID:"chat-leave-room",Label:v.Text.LeaveRoom,Icon:roomExitIcon(),OnClick:"$dispatch('oie:leave-room')",Disabled:!v.canLeaveRoom()}) }}
+if v.canJoinRoom() {
+{{ roomItems=append(roomItems,dropdown.Item{ID:"chat-join-room",Label:v.Text.JoinRoom,OnClick:"$dispatch('oie:join-saved-room')"}) }}
+}
+{{ sections=append(sections,dropdown.Section{Items:roomItems}) }}
 }
 		@dropdown.Dropdown(dropdown.Config{ID:"chat-options",Label:v.Text.More,Trigger:menuTrigger(v.Text.More),MenuAlign:dropdown.AlignEnd,Sections:sections})
 }
@@ -742,7 +751,6 @@ if v.InfoView=="shared" || v.InfoView=="stars" {
 <div id="live-details-identity" data-version={v.detailsVersion("identity")}>@detailsIdentity(v)</div>
 <div id="live-details-account" data-version={v.detailsVersion("account")}>@detailsAccount(v)</div>
 <div id="live-details-metadata" data-version={v.detailsVersion("metadata")}>@detailsMetadata(v)</div>
-<div id="live-details-participants" data-version={v.detailsVersion("participants")}>@detailsParticipants(v)</div>
 </div>
 }
 <div id="live-room-session">@roomSessionStatus(v)</div>
@@ -870,15 +878,24 @@ for identity,hash:=range v.Avatars {
 // positioning never depends on ChatBubble's private row or bubble selectors.
 templ messageBubbleBody(v view,m messageView,grouped bool){
 <div class={"oie-message-body",templ.KV("oie-message-body-compact",m.IsOwn||grouped)} data-message-bubble={m.Id}>
+if m.Moderation==nil {
 @messageReactionShortcut(v,m)
 <div class="oie-message-menu-slot" data-message-menu-slot={m.Id} x-ignore?={v.CompactSource} data-source-menu-deferred?={v.CompactSource}>
 @dropdown.Dropdown(dropdown.Config{ID:"message-menu-"+m.Id,Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,m.Id),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:messageActions(v,m.Id)})
 </div>
+}
 if !m.IsOwn && !grouped {
 <div class="oie-message-heading"><strong class={v.messageAvatarBorder(m)}>{m.Sender.DisplayName}</strong></div>
 }
+if m.Moderation!=nil {
+<p data-message-moderated><em>{v.Text.RoomMessageModerated}</em></p>
+if m.Moderation.Reason!=nil {
+<p>{*m.Moderation.Reason}</p>
+}
+}else{
 @messageBody(v,m)
 @outgoingAttachments(v,m.Message)
+}
 <div class="oie-message-stamp">
 @messageLeadingIndicators(v,m)
 @messageSendIndicator(v,m)
@@ -886,7 +903,9 @@ if !m.IsOwn && !grouped {
 {{ position := messageTimelineTime(m.Message) }}
 <time data-message-time datetime={position.Format("2006-01-02T15:04:05Z07:00")}>{position.Format("15:04")}</time>
 </div>
+if m.Moderation==nil {
 @messageReactions(v,m)
+}
 </div>
 }
 

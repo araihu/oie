@@ -1,5 +1,8 @@
 -- name: FindAvatar :one
 SELECT * FROM avatars WHERE account_id=? AND address=?;
+-- name: FindAvatarHashes :many
+SELECT address, CAST(COALESCE(json_extract(payload, '$.ImageHash'), '') AS TEXT) AS image_hash
+FROM avatars WHERE account_id = sqlc.arg(account_id) AND address IN (sqlc.slice(addresses));
 -- name: ListAvatars :many
 SELECT * FROM avatars WHERE account_id=? AND id>? ORDER BY id LIMIT ?;
 -- name: InsertAvatar :exec
