@@ -65,7 +65,9 @@ cases, including retained edits and oversized projection exceptions. They
 exercise clean reopen, resuming a partial scan with a concurrent change,
 a subprocess crash after the durable Bleve batch and before SQLite
 acknowledgement, a missing or corrupt sidecar, reset, and a newer write
-arriving after a batch reads its inputs.
+arriving after a batch reads its inputs. A paused lookup test also verifies
+that a query crossing a publication can still return the match from its
+original SQLite snapshot after Bleve drops the old posting.
 
 ## Measurement with concurrent archive ingestion
 
@@ -86,6 +88,29 @@ Each search term has 30 samples. The SQL control uses the chronological
 query on the same read pool with the same schema. The run checks that all
 archive IDs resolve to distinct retained messages and compares all pages
 for the newly ingested search term once the pending queue has drained.
+Both databases are loaded before the timed arms. The initial Bleve build
+finishes before the two arms run back to back.
+
+| p95 | SQL, lower host load | Bleve + SQL, lower host load | SQL, high host load | Bleve + SQL, high host load |
+| --- | ---: | ---: | ---: | ---: |
+| `arqiuvo` | 2.95 s | 54.1 ms | 44.18 s | 5.00 s |
+| `docun` | 3.60 s | 42.9 ms | 45.67 s | 11.56 s |
+| `faturamento` | 2.44 s | 39.1 ms | 43.65 s | 6.97 s |
+| `viedo` | 2.35 s | 30.0 ms | 43.58 s | 7.46 s |
+| Archive message acceptance | 22.9 ms | 22.4 ms | 147 ms | 3.24 s |
+
+Both runs used Linux arm64, Go 1.27.4, `GOMAXPROCS=4` and a tmpfs data
+directory on the same shared host. Under lower host load, initial index
+readiness took 38.4 s. The indexed path completed 60 of 120 searches,
+with 60 using SQL after candidate lookup declined. The pending queue
+peaked at 10 sampled IDs and drained within 109 ms of the last write.
+Under high host load, initial readiness took 1 min 24 s. Bleve served 54
+searches and candidate lookup declined for 66. Pending work peaked at 11
+sampled IDs and drained within 6.74 s of the last write. Both runs
+recorded zero fallbacks for crossed publications. All four arms committed
+all 240 messages. The two runs show how much latency and ingest cost can
+vary with the host. O08 still needs a target environment and repeated
+measurements before production activation.
 
 This workload covers first-page global search after initial indexing,
 during local archive receipt. Room, deep-page, history, and XMPP transport
