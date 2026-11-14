@@ -134,7 +134,57 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   }
   await open(page,unsupported);await until(async()=>await viewer(page).locator('[data-document-status]').getAttribute('data-state')==='failed','unsupported document fallback');assert.equal(count(unsupported),0);assert(await viewer(page).locator('[data-document-original]').isVisible());assert(await viewer(page).locator('[data-document-download]').isHidden());assert(await viewer(page).locator('[data-document-retry]').isHidden());await close(page);
   findings.push('Visible document cards read bounded ranges for safe text excerpts and actual PDF first-page previews; one primary action opens the original; TXT, LOG, CSV, JSON and XML remain escaped; Markdown uses Margo headings, formatting and lists with plain-text fallback; original downloads preserve bytes');
-  await open(page,bad);await until(async()=>await viewer(page).locator('[data-document-retry]').isVisible(),'explicit document failure');const failed=count(bad);emit();await page.waitForTimeout(350);assert.equal(count(bad),failed);state.failure=false;await viewer(page).locator('[data-document-retry]').click();await loaded(page);assert.equal(count(bad),failed+1);await close(page);
+  let releaseFailure,heldFailure=false;
+  const failureGate=new Promise(resolve=>releaseFailure=resolve);
+  const failurePath=url=>url.pathname==='/ui/shared-content/'+bad+'/content';
+  const holdFailure=async route=>{
+   if(route.request().headers().range){await route.continue();return}
+   heldFailure=true;
+   await failureGate;
+   await route.continue();
+  };
+  await page.route(failurePath,holdFailure);
+  const loadError=viewer(page).locator('[data-document-toast] [role=alert]');
+  const retry=viewer(page).locator('[data-document-retry]');
+  const viewport=viewer(page).locator('[data-document-scroll]');
+  await open(page,bad);
+  await until(()=>heldFailure,'pending document failure');
+  const initial=await viewport.boundingBox();
+  await page.evaluate(()=>{
+   const scroll=document.querySelector('#oie-document-viewer [data-document-scroll]');
+   const sample={active:true,frames:[]};
+   window.documentFailureFrames=sample;
+   const record=()=>{
+    if(!sample.active)return;
+    const {x,y,width,height}=scroll.getBoundingClientRect();
+    sample.frames.push({x,y,width,height});
+    requestAnimationFrame(record);
+   };
+   requestAnimationFrame(record);
+  });
+  assert.equal(await loadError.count(),0);
+  releaseFailure();
+  await loadError.waitFor({state:'visible'});
+  assert.equal((await loadError.innerText()).trim(),'The document could not be loaded. Try again.');
+  assert(await viewer(page).locator('[data-document-status]').isHidden());
+  assert(await retry.isVisible());
+  assert(await loadError.evaluate(node=>{
+   const {left,top,width,height}=node.getBoundingClientRect();
+   return node.contains(document.elementFromPoint(left+width/2,top+height/2));
+  }),'toast is above the document viewport inside the modal');
+  const failed=count(bad);emit();await page.waitForTimeout(350);assert.equal(count(bad),failed);
+  await loadError.getByRole('button',{name:'Close',exact:true}).click();
+  await loadError.waitFor({state:'hidden'});
+  assert(await retry.evaluate(node=>document.activeElement===node));
+  const frames=await page.evaluate(()=>{window.documentFailureFrames.active=false;return window.documentFailureFrames.frames});
+  assert(frames.length>0);
+  for(const frame of frames)for(const key of ['x','y','width','height'])assert(Math.abs(frame[key]-initial[key])<=1,'loading, toast and retry keep the document viewport stable');
+  await page.unroute(failurePath,holdFailure);
+  state.failure=false;
+  await retry.click();
+  await loaded(page);
+  assert.equal(count(bad),failed+1);
+  await close(page);
   await context.setOffline(true);const offline=count(good);await open(page,good);await until(async()=>await viewer(page).locator('[data-document-retry]').isVisible(),'offline document failure');assert.equal(count(good),offline);await context.setOffline(false);await viewer(page).locator('[data-document-retry]').click();await loaded(page);assert.equal(count(good),offline+1);await close(page);
   await open(page,oversize);await until(async()=>await viewer(page).locator('[data-document-retry]').isVisible(),'oversized text rejected');assert.equal(await plaintext(page).isVisible(),false);await close(page);findings.push('404, offline and text-size failures retain a recoverable viewer without automatic fetch loops; explicit retry recovers once');
   state.hold=true;state.pending=[];state.aborted=[];await open(page,held);await until(()=>state.pending.length===1,'held document read');await page.keyboard.press('Escape');await viewer(page).waitFor({state:'hidden'});await until(()=>state.aborted.length===1,'close aborts engine read');await open(page,good);await loaded(page);release();await page.waitForTimeout(150);assert.equal(await viewer(page).locator('[data-document-title]').textContent(),definitions.find(file=>file.id===good).name);await close(page);
@@ -148,7 +198,19 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await page.goto(base+'/?'+new URLSearchParams({chat,account,lang:'en',theme:'dark'}));await page.locator('[data-open-details]').click();await page.locator('[data-info-entry=media]').click();await page.locator('[data-shared-tab=documents]').click();await page.locator('#info-shared-results [data-document-open]').first().waitFor({state:'visible'});const drawer=page.locator(`#info-shared-results [data-document-item="${good}"] [data-document-open]`);await drawer.click();await loaded(page);await close(page);assert(await drawer.evaluate(button=>document.activeElement===button));await page.keyboard.press('Escape');findings.push('Conversation drawer document cards reuse the scoped viewer and restore focus to their original opener');await context.close();
   // Browser storage denial still permits the generated preview and memory reuse.
   {const isolated=await contextFor();await isolated.context.addInitScript(()=>{indexedDB.open=()=>{throw new DOMException('Blocked','SecurityError')}});await isolated.page.goto(docsURL());const preview=card(isolated.page,pdf);await preview.scrollIntoViewIfNeeded();await until(async()=>await preview.getAttribute('data-document-preview-state')==='ready','PDF preview with denied storage');const before=pdfRanges();await tab(isolated.page,'media');await tab(isolated.page,'documents');await preview.scrollIntoViewIfNeeded();await until(async()=>await preview.getAttribute('data-document-preview-cache')==='hit','memory fallback after storage denial');assert.equal(pdfRanges(),before);await isolated.context.close();findings.push('Storage denial falls back to bounded memory without breaking PDF preview or navigation')}
-  for(const config of [{locale:'en',width:1280,theme:'light'},{locale:'pt-BR',width:390,theme:'dark'}]){({page,context}=await contextFor(config.locale,config.width));await page.goto(docsURL(config.locale,config.theme));await open(page,good);await loaded(page);await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(axe.violations.map(value=>({id:value.id,nodes:value.nodes.map(node=>node.target)})),[]);assert(await viewer(page).evaluate(dialog=>dialog.getBoundingClientRect().right<=innerWidth&&dialog.getBoundingClientRect().bottom<=innerHeight));const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,`documents-${config.locale}-${config.width}.png`)});await close(page);await context.close()}
+  for(const config of [{locale:'en',width:1280,theme:'light'},{locale:'pt-BR',width:390,theme:'dark'}]){({page,context}=await contextFor(config.locale,config.width));await page.goto(docsURL(config.locale,config.theme));if(config.locale==='pt-BR'){
+   state.failure=true;
+   try{
+    await open(page,bad);
+    const toast=viewer(page).locator('[data-document-toast] [role=alert]');
+    await toast.waitFor({state:'visible'});
+    assert.equal((await toast.innerText()).trim(),'Não foi possível carregar o documento. Tente novamente.');
+    await toast.getByRole('button',{name:'Fechar',exact:true}).waitFor({state:'visible'});
+    assert(await toast.evaluate(node=>{const box=node.getBoundingClientRect();return box.left>=0&&box.right<=innerWidth&&box.top>=0&&box.bottom<=innerHeight}));
+    await close(page);
+    assert.equal(await toast.count(),0);
+   }finally{state.failure=false}
+  }await open(page,good);await loaded(page);await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(axe.violations.map(value=>({id:value.id,nodes:value.nodes.map(node=>node.target)})),[]);assert(await viewer(page).evaluate(dialog=>dialog.getBoundingClientRect().right<=innerWidth&&dialog.getBoundingClientRect().bottom<=innerHeight));const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,`documents-${config.locale}-${config.width}.png`)});await close(page);await context.close()}
   assert.equal(state.writes,0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await fs.writeFile(path.join(artifacts,'documents-report.json'),JSON.stringify({findings,pdf:pdfProof,sparsePDF:{originalBytes:sparseBytes.length,previewBytes:sparseTransferred,rangeRequests:sparseRanges.length},budgetPDF:{originalBytes:budgetBytes.length,previewBytes:budgetTransferred,rangeRequests:budgetRanges.length},rangeConcurrency:{peakReaders:state.peakReaders,busyReaders:state.busyReaders},contentReads:state.reads,unexpectedMutations:state.writes,pageErrors:errors,externalBrowserRequests:external},null,2));console.log('PASS: on-demand original documents, escaped text, actual PDF rendering/navigation, exact downloads, retry/offline/abort, drawer focus and localized accessible layouts');
  }catch(error){if(debugPage&&!debugPage.isClosed())console.error('Document failure evidence',JSON.stringify(await debugPage.evaluate(()=>({url:location.href,nativePDF:navigator.pdfViewerEnabled,viewer:document.querySelector('#oie-document-viewer')?.outerHTML.slice(0,5000),focus:document.activeElement?.outerHTML.slice(0,300)})).catch(()=>({unavailable:true}))),JSON.stringify({reads:state.reads,pending:state.pending.length,aborted:state.aborted,errors,errorEvidence}));throw error}finally{release();await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(resolve=>api.close(resolve))}
 })().catch(error=>{console.error(error);process.exitCode=1});

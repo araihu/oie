@@ -4,8 +4,10 @@ window.OieRuntime.register('documents', life => {
  const labels=document.querySelector('[data-document-copy]')?.dataset||{},status=dialog.querySelector('[data-document-status]'),text=dialog.querySelector('[data-document-text]'),markdown=dialog.querySelector('[data-document-markdown]'),canvas=dialog.querySelector('[data-document-canvas]'),layer=dialog.querySelector('[data-document-text-layer]'),sheet=dialog.querySelector('[data-document-pdf-page]'),controls=dialog.querySelector('[data-document-pdf-controls]'),scroll=dialog.querySelector('[data-document-scroll]'),counter=dialog.querySelector('[data-document-page]'),retry=dialog.querySelector('[data-document-retry]');
  const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
  let current=null,opener=null,origin='',generation=0,renderGeneration=0,request,loadingTask,pdf,renderTask,textLayer,page=1,zoom=1,pdfjs;
- function feedback(key,state){status.textContent=labels[key]||'';status.dataset.state=state;status.setAttribute('role',state==='failed'?'alert':'status')}
+ const toast=dialog.querySelector('[data-document-toast]'),error=dialog.querySelector('[data-document-error]');
+ function feedback(key,state){status.textContent=labels[key]||'';status.dataset.state=state}
  function reset(){
+  toast.replaceChildren();
   generation++;renderGeneration++;request?.abort();request=null;renderTask?.cancel();renderTask=null;textLayer?.cancel();textLayer=null;
   const task=loadingTask,document=pdf;loadingTask=null;pdf=null;if(task)task.destroy().catch(()=>{});else document?.destroy().catch(()=>{});
   text.textContent='';text.hidden=true;markdown.replaceChildren();markdown.hidden=true;layer.replaceChildren();canvas.width=0;canvas.height=0;canvas.style.width='';canvas.style.height='';sheet.hidden=true;sheet.style.width='';sheet.style.height='';controls.hidden=true;counter.textContent='';delete counter.dataset.current;delete counter.dataset.total;retry.hidden=true;page=1;zoom=1;scroll.scrollTop=0;scroll.scrollLeft=0;
@@ -17,7 +19,12 @@ window.OieRuntime.register('documents', life => {
   let original='';try{const url=new URL(data.documentUrl);if(['http:','https:'].includes(url.protocol)&&!url.username&&!url.password)original=url.href}catch{}
   return {id:data.documentItem,engine:data.documentEngine,account:data.documentAccount,conversation:data.documentConversation,message:data.documentMessage,revision:data.documentRevision,messageRevision:data.documentMessageRevision,format:data.documentFormat,filename:data.documentFilename||labels.page||'',source:source.pathname+source.search,original};
  }
- function failure(unsupported=false){text.hidden=true;markdown.hidden=true;sheet.hidden=true;controls.hidden=true;feedback(unsupported?'unsupported':'failed','failed');retry.hidden=!current||current.format==='unsupported'}
+ function failure(unsupported=false){
+  text.hidden=true;markdown.hidden=true;sheet.hidden=true;controls.hidden=true;
+  feedback(unsupported?'unsupported':'','failed');
+  retry.hidden=!current||current.format==='unsupported';
+  if(!unsupported)toast.replaceChildren(error.content.cloneNode(true));
+ }
  function decode(bytes){
   if(bytes.length>=4&&((bytes[0]===0&&bytes[1]===0&&bytes[2]===254&&bytes[3]===255)||(bytes[0]===255&&bytes[1]===254&&bytes[2]===0&&bytes[3]===0)))throw Error('encoding');
   let encoding='utf-8',offset=0;if(bytes[0]===255&&bytes[1]===254){encoding='utf-16le';offset=2}else if(bytes[0]===254&&bytes[1]===255){encoding='utf-16be';offset=2}
@@ -142,7 +149,8 @@ window.OieRuntime.register('documents', life => {
  life.on(document,'click',event=>{
   const open=event.target.closest('[data-document-open]');if(open){const card=open.closest('[data-document-item]'),record=card&&validSource(card);if(!record)return;event.preventDefault();opener=open;origin=card.closest('#info-shared-results')?'info':'global';current=record;dialog.querySelector('[data-document-title]').textContent=record.filename;dialog.setAttribute('aria-labelledby','oie-document-title');const download=dialog.querySelector('[data-document-download]'),original=dialog.querySelector('[data-document-original]');download.href=record.source+'&download=1';download.hidden=record.format==='unsupported';original.href=record.original||'#';original.hidden=!record.original;window.dispatchEvent(new CustomEvent('modal:open',{detail:{id:'oie-document-viewer'}}));load();return}
   if(event.target.closest('[data-document-close]')){event.preventDefault();close();return}
-  if(event.target.closest('[data-document-retry]')){event.preventDefault();load();return}
+  if(event.target.closest('[data-document-retry]')){event.preventDefault();scroll.focus({preventScroll:true});load();return}
+  if(event.target.closest('[data-document-toast] button')&&!retry.hidden){retry.focus({preventScroll:true});return}
   const button=event.target.closest('[data-document-previous],[data-document-next],[data-document-fit],[data-document-zoom-in],[data-document-zoom-out]');if(!button||button.disabled||!pdf)return;event.preventDefault();if(button.hasAttribute('data-document-previous'))page=Math.max(1,page-1);if(button.hasAttribute('data-document-next'))page=Math.min(pdf.numPages,page+1);if(button.hasAttribute('data-document-fit'))zoom=1;if(button.hasAttribute('data-document-zoom-in'))zoom=Math.min(3,zoom*1.25);if(button.hasAttribute('data-document-zoom-out'))zoom=Math.max(0.5,zoom/1.25);renderPage(generation);
  });
  life.on(dialog,'close',()=>{const id=current?.id;reset();current=null;status.textContent='';const target=opener?.isConnected?opener:document.querySelector((origin==='info'?'#info-shared-results':'#shared-content-results')+` [data-document-item="${CSS.escape(id||'')}"] [data-document-open]`);life.raf(()=>target?.focus({preventScroll:true}))});

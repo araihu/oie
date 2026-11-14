@@ -105,7 +105,7 @@ templ page(v view) {
 			<link rel="stylesheet" href="/ui/shared-actions.css"/><link rel="stylesheet" href="/ui/message-star.css"/>
 <link rel="stylesheet" href="/ui/timeline.css"/>
 <link rel="stylesheet" href="/ui/video.css"/>
-<link rel="stylesheet" href="/ui/document.css"/>
+<link rel="stylesheet" href={templ.URL(versionedStylesheetURL("/ui/document.css",documentStylesheet))}/>
 <link rel="stylesheet" href="/ui/emoji-picker.css"/><link rel="stylesheet" href="/ui/mentions.css"/>
 <script src="/ui/actions.js" defer></script>
 <script src="/ui/masonry.js" defer></script>
