@@ -530,7 +530,7 @@ and a raster thumbnail when available. Preview only the URL through the owning
 engine and discard stale responses when the draft or conversation changes.
 Dismissing the card leaves the draft text intact.
 
-**RECOMMENDED R08/R10:** SQLite FTS5 as a derived index; source-linked catalog records; bounded, cached link-preview enrichment independent of history fetching. **OPEN O08:** indexing/tokenization, filters/ranking, preview fetching/refresh policy, cache limits, and provider capability fallbacks.
+**RECOMMENDED R08/R10:** use a rebuildable message search index, source-linked catalog records, and bounded, cached link-preview enrichment independent of history fetching. Evaluate engine-owned Bleve with SQLite verification and chronological SQL fallback. Retain the SQLite FTS5 trial as a comparison. **OPEN O08:** activation criteria, indexing/tokenization, filters/ranking, preview fetching/refresh policy, cache limits, and provider capability fallbacks. [Bleve design complement](message-search-bleve.md)
 
 ## 8. Media and downloaded files
 
@@ -830,7 +830,7 @@ Everything in this section is **RECOMMENDED**, rather than a previously accepted
 | **R05** | Store logical entities and immutable revision payloads separately from mutable projections. Track parent links and per-field changes; derive current message heads. Use provider-scoped identity mappings and canonical aliases to converge independently observed copies. Do not derive causality from UUID order. |
 | **R06** | Separate replicated send visibility from executing ownership. Persist attempt/evidence state and reconcile uncertain acceptance before retransmission. Use a due/retry queue that does not let future schedules block eligible sends. On restore, import stale executable intents as review-required recovery records; preserve newer terminal evidence. |
 | **R07** | Add a public Margo chat profile and semantic projection for text/spans/blocks. Reuse its current parser and existing templ composition. Treat unsupported document constructs readably; keep raw HTML, frontmatter consumption, document runtime features, and Markdown image fetching from bypassing chat/media policy. |
-| **R08** | Use SQLite FTS5 and rebuildable projections. Start with one in-flight archive request per server, paced across accounts using that server, with a fair queue, live/foreground priority, backoff, opaque scoped cursors, and checkpointed coverage/gaps. Keep provider archive cursors, read positions, and UI SSE cursors distinct. |
+| **R08** | Evaluate a rebuildable Bleve message index with SQLite verification and chronological SQL fallback. Compare with SQLite FTS5 and test write and recovery costs before activation. [Search design](message-search-bleve.md) Start with one in-flight archive request per server, paced across accounts using that server, with a fair queue, live/foreground priority, backoff, opaque scoped cursors, and checkpointed coverage/gaps. Keep provider archive cursors, read positions, and UI SSE cursors distinct. |
 | **R09** | Use IndexedDB for durable device records and pending submissions, plus versioned Cache Storage/BFF snapshots for offline presentation. Scope cache identity by selected engine, device, locale, and schema. Coordinate tab ownership and stale controls; local persistence failure must keep the draft and report failure rather than claim queued success. Exact browser rendering/storage fit needs a prototype. |
 | **R10** | Stream attachment bytes into durable staging, hash incrementally, compare supported expected digests, and finalize only when complete. Store algorithm/provenance/outcome, using SHA-256 for a computed-only baseline. Keep binary data separate from SQLite; retain shared-reference accounting. Use a bounded cached preview resolver with URL/redirect/content-size controls, without blocking message acceptance or history backfill. |
 | **R11** | Share a type-specific merge implementation between sync and backup import. Replicate missing revisions/records incrementally, process known scoped tombstones, and rebuild indexes. Keep per-device exclusions separate from shared content deletion. Use monotonic read progress plus an independently versioned manual-unread reminder rather than regressing receipt evidence. |
@@ -884,7 +884,7 @@ These are design tasks, not another mandatory interview checklist. They should b
 | **O05** | Full OpenAPI schemas/paths/versioning, operation lookup, error codes, idempotency lifetime, revision preconditions, SSE recovery/expiry contract. | R03; HTTP/SSE and vacuum/oapi-codegen are agreed. |
 | **O06** | Ambiguous acceptance, terminal failures and safe retry UI, send ordering, attachment dispatch barrier, engine migration/takeover, future centralized send control. | R06; preserve actual evidence and one executing owner. Recurrence is not selected. |
 | **O07** | Margo semantic API/chat profile, unsupported syntax/newline treatment, Markdown toggle scope, provider formatting conversion, correction/retraction limits. | R07 and R18; preserve existing syntax and accepted visible revision/retraction behavior. |
-| **O08** | Search tokenization/ranking, extra filters, URL normalization/grouping, preview generation opt-out/refresh/fetch policy, catalog update details. | R08/R10; immediate URL cataloging with bounded enrichment; metadata-only search. |
+| **O08** | Search index activation, tokenization, highlighting offsets, ranking, filters, facets, URL normalization/grouping, preview generation opt-out/refresh/fetch policy, and catalog updates. | R08/R10 and the [Bleve design complement](message-search-bleve.md). Immediate URL cataloging and bounded metadata enrichment. |
 | **O09** | Exact attachment types/limits, multi-file operations, durable staging and transfer cancellation/resume, preview retention, storage quotas, orphaned retained-file management. | R10/R17; no silent link fallback, no automatic downloaded-original eviction. |
 | **O10** | Per-device deletion/exclusion in a shared hosted engine, tombstone schema/retention, reference-aware physical purge, quoted snapshots/previews derived from deleted messages. | R11; every accepted deletion scope and filter must remain effective. |
 | **O11** | Sync transport/enrollment, durable device identity, account credentials, trust/encryption, service quotas/retention, checkpoints, retirement of old devices. | R11/R20; sync-only hosting and hosted engine have different credential boundaries. App auth remains deferred. |
@@ -1064,6 +1064,12 @@ composer. Both have native GET fallbacks and reject stale query/scope responses.
 Offline search, document
 extraction, retraction and deletion remain outside this increment. See
 [retained message search](message-search.md).
+
+**RECOMMENDED R08:** use the [Bleve design complement](message-search-bleve.md)
+to guide the engine index, build and update lifecycle, highlight experiment and
+search capability evaluation. Keep the current message semantics as the
+compatibility baseline. The candidate index and its operational tradeoffs are
+measured in the [comparative prototype](message-search-index-benchmark.md).
 
 ### Retained edit-history browsing increment
 
