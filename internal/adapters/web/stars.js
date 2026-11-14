@@ -54,49 +54,10 @@ window.OieRuntime.register('stars', life => {
   function readInfo(root){if(!root)return;for(const data of root.querySelectorAll('[data-info-star-states]'))if(data.dataset.known==='true'){for(const row of data.querySelectorAll('[data-star-state]'))states.set(row.dataset.starSource,{known:true,starred:row.dataset.starred==='true',revision:row.dataset.revision||null});}render();}
   readInfo(document);
 
-  // Keep the articles in source order. Measured row spans let each column
-  // advance independently while the regular grid works before JavaScript loads.
-  let masonryFrame;
-  const measuredItems = new Set();
-  const masonrySizes = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
-    if (!masonryFrame) masonryFrame = life.raf(() => {
-      masonryFrame = 0;
-      layoutFavorites(document.getElementById('favorites-results'));
-    });
-  }) : null;
-  life.cleanup(() => masonrySizes?.disconnect());
-
-  function layoutFavorites(grid) {
-    if (!masonrySizes || !grid) return;
-    const items = [...grid.children].filter(item => !item.hidden);
-    const hasMessages = items.some(item => item.hasAttribute('data-favorite-source'));
-    const current = new Set(hasMessages ? items : []);
-    for (const item of measuredItems) {
-      if (!current.has(item)) {
-        masonrySizes.unobserve(item);
-        measuredItems.delete(item);
-      }
-    }
-    grid.toggleAttribute('data-masonry', hasMessages);
-    if (!hasMessages) {
-      for (const item of items) item.style.removeProperty('grid-row-end');
-      return;
-    }
-    const gap = parseFloat(getComputedStyle(grid).columnGap);
-    const spans = items.map(item => `span ${Math.ceil(item.offsetHeight + gap)}`);
-    items.forEach((item, index) => {
-      if (item.style.gridRowEnd !== spans[index]) item.style.gridRowEnd = spans[index];
-      if (!measuredItems.has(item)) {
-        masonrySizes.observe(item);
-        measuredItems.add(item);
-      }
-    });
-  }
-
-  layoutFavorites(document.getElementById('favorites-results'));
+  window.OieMasonry?.layout(document.getElementById('favorites-results'));
   life.on(document,'oie:info-content',event=>{
     const {root, generation: requestedGeneration} = event.detail;
-    if (root.id === 'favorites-results') layoutFavorites(root);
+    if (root.id === 'favorites-results') window.OieMasonry?.layout(root);
     if(requestedGeneration===generation)readInfo(root);else{render();document.dispatchEvent(new CustomEvent('oie:refresh-request'));}
   });
 
@@ -150,7 +111,7 @@ window.OieRuntime.register('stars', life => {
     };
     if(window.Alpine?.mutateDom)window.Alpine.mutateDom(apply);else apply();
     window.OieTime?.localize(current);
-    if(current.id==='favorites-results')layoutFavorites(current);
+    if(current.id==='favorites-results')window.OieMasonry?.layout(current);
     if(active&&!active.isConnected){
       const row=message&&findRow(message);
       (row?.querySelector(action)||current.querySelector(rows+' '+action)||heading())?.focus({preventScroll:true});

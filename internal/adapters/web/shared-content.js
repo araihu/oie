@@ -6,6 +6,8 @@ window.OieRuntime.register('shared-content', life => {
  const keyCompare=(a,b)=>a.ms===b.ms?(a.id>b.id?1:a.id<b.id?-1:0):(a.ms>b.ms?1:-1),sorted=items=>[...items].sort((a,b)=>-keyCompare(a,b));
  function rawItem(node){
   const copy=node.cloneNode(true);
+  copy.style.removeProperty('grid-row-end');
+  if (!copy.style.length) copy.removeAttribute('style');
   for(const media of copy.querySelectorAll('video,audio')){media.removeAttribute('src');media.hidden=true;media.removeAttribute('autoplay')}
   for(const source of copy.querySelectorAll('source'))source.removeAttribute('src');
   for(const card of copy.querySelectorAll('[data-video-item]')){const cover=card.querySelector('[data-video-cover]'),retry=card.querySelector('[data-video-retry]'),status=card.querySelector('[data-video-status]'),metadata=card.querySelector('[data-video-metadata]'),compact=card.hasAttribute('data-video-compact');if(cover)cover.hidden=false;if(retry)retry.hidden=true;if(metadata&&compact)metadata.hidden=true;if(status){status.textContent=compact?'':card.dataset.videoReady||'';status.dataset.state='ready';status.setAttribute('role','status')}}
@@ -16,12 +18,24 @@ window.OieRuntime.register('shared-content', life => {
   for(const item of root.querySelectorAll('[data-shared-item]')){const id=item.dataset.sharedItem,ms=Number(item.dataset.sharedCreatedMs);if(!uuid(id)||!Number.isSafeInteger(ms)||!/^[-]?\d+$/.test(item.dataset.sharedCreatedMs||'')||seen.has(id))throw Error('invalid_items');seen.add(id);found.push({id,ms,version:item.dataset.sharedRecordVersion||rawItem(item),html:rawItem(item)})}
   for(let index=1;index<found.length;index++)if(keyCompare(found[index-1],found[index])<=0)throw Error("unordered_items");return found;
  }
+ function monthSection(results, month, date) {
+  const section = document.createElement('section'), heading = document.createElement('h3'), grid = document.createElement('div');
+  section.className = 'oie-shared-date-group';
+  section.dataset.sharedMonth = month;
+  heading.className = 'oie-shared-month';
+  heading.textContent = window.OieTime.format(date, {month:'long',year:'numeric'});
+  grid.className = 'oie-shared-grid';
+  if (results.id === 'shared-content-results' && results.dataset.contentType !== 'documents') grid.setAttribute('data-masonry-grid', '');
+  section.append(heading, grid);
+  return section;
+ }
  function group(results){
   if(!results||results.querySelector(':scope>.oie-shared-date-group'))return;
   const items=[...results.querySelectorAll('[data-shared-item]')];if(!items.length)return;
   const fragment=document.createDocumentFragment();let previous='',grid;
-  for(const item of items){const date=new Date(Number(item.dataset.sharedCreatedMs));if(Number.isNaN(date.getTime()))continue;const month=window.OieTime.dateKey(date,'month');if(month!==previous){previous=month;const section=document.createElement('section'),heading=document.createElement('h3');section.className='oie-shared-date-group';section.dataset.sharedMonth=month;heading.className='oie-shared-month';heading.textContent=window.OieTime.format(date,{month:'long',year:'numeric'});grid=document.createElement('div');grid.className='oie-shared-grid';section.append(heading,grid);fragment.append(section)}grid.append(item)}
+  for(const item of items){const date=new Date(Number(item.dataset.sharedCreatedMs));if(Number.isNaN(date.getTime()))continue;const month=window.OieTime.dateKey(date,'month');if(month!==previous){previous=month;const section=monthSection(results,month,date);grid=section.lastElementChild;fragment.append(section)}grid.append(item)}
   results.replaceChildren(fragment);
+  window.OieMasonry?.layout(results);
  }
  function replace(target,html){if(window.OieVideos?.swap(target,html))return;const apply=()=>{for(const child of target.children)window.Alpine?.destroyTree(child);target.innerHTML=html;for(const child of target.children)window.Alpine?.initTree(child)};if(window.Alpine?.mutateDom)window.Alpine.mutateDom(apply);else apply()}
  function pageData(root,info,live=false){
@@ -64,7 +78,7 @@ window.OieRuntime.register('shared-content', life => {
    const keys=[...months.keys()];
    for(let index=0;index<keys.length;index++){
     const key=keys[index],month=months.get(key);let section=sections.get(key);
-    if(!section){section=document.createElement('section');section.className='oie-shared-date-group';section.dataset.sharedMonth=key;const heading=document.createElement('h3');heading.className='oie-shared-month';heading.textContent=window.OieTime.format(month.date,{month:'long',year:'numeric'});const grid=document.createElement('div');grid.className='oie-shared-grid';section.append(heading,grid);const before=keys.slice(index+1).map(key=>sections.get(key)).find(node=>node?.isConnected)||null;c.results.insertBefore(section,before);sections.set(key,section)}
+    if(!section){section=monthSection(c.results,key,month.date);const before=keys.slice(index+1).map(key=>sections.get(key)).find(node=>node?.isConnected)||null;c.results.insertBefore(section,before);sections.set(key,section)}
     const grid=section.querySelector('.oie-shared-grid');
     for(let n=0;n<month.items.length;n++){
      const item=month.items[n];let node=existing.get(item.id);
@@ -79,6 +93,7 @@ window.OieRuntime.register('shared-content', life => {
    for(const [key,node]of sections)if(!months.has(key)){window.OieVideos?.release(node);window.Alpine?.destroyTree(node);node.remove()}
   };
   if(window.Alpine?.mutateDom)window.Alpine.mutateDom(apply);else apply();
+  window.OieMasonry?.layout(c.results);
   if(active&&document.activeElement!==active){const item=activeItem&&c.results.querySelector(`[data-shared-item="${CSS.escape(activeItem)}"]`),target=active.isConnected?active:activeID?document.getElementById(activeID):activeAction?item?.querySelector('['+activeAction+']'):null;target?.focus({preventScroll:true});}
   document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:page||document}));document.dispatchEvent(new CustomEvent('oie:shared-append',{detail:{page:page||document}}));document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));const correct=()=>{if(c.disposed||!c.results.isConnected)return;const same=anchorID&&c.results.querySelector(`[data-shared-item="${CSS.escape(anchorID)}"]`);if(same)c.scroll.scrollTop+=same.getBoundingClientRect().top-anchorTop;else c.scroll.scrollTop=top;c.top=c.scroll.scrollTop;save(c)};correct();life.raf(correct);
  }

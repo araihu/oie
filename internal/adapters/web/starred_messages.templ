@@ -38,7 +38,7 @@ templ favoritesWorkspace(v view) {
 }
 
 templ favoritesResults(v view) {
-	<div id="favorites-results" data-engine-id={ v.EngineID } data-search-query={ v.FavoritesQuery } data-version={ v.starredPageVersion(v.FavoritesPage, v.FavoritesInvalid) }>
+	<div id="favorites-results" data-masonry-grid data-engine-id={ v.EngineID } data-search-query={ v.FavoritesQuery } data-version={ v.starredPageVersion(v.FavoritesPage, v.FavoritesInvalid) }>
 		@starredPageStates(v.FavoritesPage)
 		if v.FavoritesInvalid {
 			<p role="status">{ v.Text.SharedPageUnavailable }</p>

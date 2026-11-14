@@ -491,7 +491,9 @@ Provide searchable **Media, Files, and Links** views. Catalog shared URLs automa
 **AGREED:** when opening Media and Links through in-app navigation or replacing
 its first results page, show a skeleton after 250 ms. On the catalog screen,
 cover the results area while keeping search and filter controls usable. Media
-uses the responsive card grid. Links and Documents use full-width rows. Use
+and Links use responsive columns with independently spaced cards in each date
+group. Documents use full-width rows. Loading placeholders follow the active
+tab's column count. Use
 first-page counts supplied for all three tabs when the catalog opens, when
 its first page changes, and in the existing live snapshot. Each count uses the
 same account selection, conversation filter, and search as the active catalog
@@ -511,7 +513,7 @@ the drawer controls available.
 
 Provide WhatsApp-like rich link cards using structured engine metadata. Preview enrichment must not require a provider client in the browser.
 
-**AGREED:** link-card fallbacks prefer the available preview image. Without an image, use a compact card with page title, available description and the domain once. Use a cached site icon when available; otherwise use a local link icon. When metadata is unavailable, show a readable URL path and domain, preserving the full URL as the destination. Do not reserve an empty image column. Keep message cards compact and catalog cards full-width. Metadata failures leave the basic card usable; More options offers an explicit metadata refresh without changing the message.
+**AGREED:** link-card fallbacks prefer the available preview image. Without an image, use a compact card with page title, available description and the domain once. Use a cached site icon when available; otherwise use a local link icon. When metadata is unavailable, show a readable URL path and domain, preserving the full URL as the destination. Do not reserve an empty image column. Keep message cards compact and catalog cards the full width of their column. Metadata failures leave the basic card usable; More options offers an explicit metadata refresh without changing the message.
 
 Search matches the latest message revision by default. **Include edit history** explicitly enables retained earlier versions, with historical matches labeled. Retracted content is hidden from search and Media/Files/Links by default; **Include retracted** enables deliberate retrieval. These filters are independent and never bypass explicit deletion.
 

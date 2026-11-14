@@ -59,7 +59,7 @@ if v.SharedConversation!="" {
 </div>
 }
 templ sharedSkeleton(v view,entry bool){
-<div class="oie-shared-skeleton" data-shared-skeleton?={!entry} data-shared-entry-skeleton?={entry} hidden>
+<div class="oie-shared-skeleton" data-shared-skeleton?={!entry} data-shared-entry-skeleton?={entry} data-shared-catalog?={!v.SharedInDetails} hidden>
  <div class="sr-only" role="status">{v.Text.SharedLoading}</div>
  <div class="oie-shared-grid" data-shared-placeholders aria-hidden="true"></div>
  <template data-shared-placeholder>

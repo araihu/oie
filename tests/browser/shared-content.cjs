@@ -119,10 +119,23 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await catalogSkeleton.waitFor({state:'visible'});
   assert.equal(await catalogSkeleton.getAttribute('data-content-type'),'links');
   assert.equal(await catalogSkeleton.locator('.oie-shared-placeholder').count(),4,'first switch uses the refreshed count for the unvisited tab');
-  assert(await catalogSkeleton.locator('.oie-shared-placeholder').evaluateAll(cards=>cards.every(card=>card.getBoundingClientRect().x===cards[0].getBoundingClientRect().x)));
+  assert(await catalogSkeleton.locator('.oie-shared-placeholder').evaluateAll(cards=>new Set(cards.map(card=>card.getBoundingClientRect().x)).size>1));
   assert.deepEqual(await page.locator('#shared-content-scroll').evaluate(node=>node.getBoundingClientRect().toJSON()),viewport.rect);assert.equal(await page.locator('#shared-content-scroll').evaluate(node=>node.scrollTop),viewport.scroll);
   releaseTab();
   await until(async()=>await page.locator('[data-shared-tab=links]').getAttribute('aria-current')==='true'&&await page.locator('[data-shared-item]').count()===4,'partial links settle');
+  await page.waitForFunction(()=>document.querySelector('#shared-content-results [data-masonry-grid][data-masonry]'));
+  const linkColumns=await page.locator('#shared-content-results [data-shared-item]').evaluateAll(cards=>{
+   const columns=new Map();
+   for(const card of cards){
+    const rect=card.getBoundingClientRect();
+    if(!columns.has(rect.x))columns.set(rect.x,[]);
+    columns.get(rect.x).push({top:rect.top,bottom:rect.bottom});
+   }
+   return [...columns.values()];
+  });
+  assert.equal(linkColumns.length,3);
+  const stacked=linkColumns.find(column=>column.length===2);
+  assert(stacked&&Math.abs(stacked[1].top-stacked[0].bottom-17)<=1,'short link cards use their own column height');
   await page.unroute(linksRoute,holdLinks);
   assert(await page.evaluate(()=>tabNodes.every(node=>node===document.getElementById(node.id))),'tab navigation replaced persistent shell nodes');assert.equal(await page.locator('#shared-content-search input[name=contentType]').inputValue(),'links');assert.deepEqual(await page.locator('#shared-content-scroll').evaluate(node=>node.getBoundingClientRect().toJSON()),viewport.rect);
   await page.goBack();await until(async()=>await page.locator('[data-shared-item]').count()===56&&await page.locator('#shared-content-scroll').evaluate(node=>node.scrollTop)===viewport.scroll,'Back restores media window and scroll');

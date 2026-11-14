@@ -564,6 +564,9 @@ var previewsScript []byte
 //go:embed runtime.js
 var runtimeScript []byte
 
+//go:embed masonry.js
+var masonryScript []byte
+
 //go:embed timeline.js
 var timelineScript []byte
 
@@ -702,6 +705,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/scheduling.js":        {"text/javascript", schedulingScript},
 		"/ui/scheduling.css":       {"text/css", schedulingStylesheet},
 		"/ui/sidebar.js":           {"text/javascript", sidebarScript},
+		"/ui/masonry.js":           {"text/javascript", masonryScript},
 		"/ui/presentation-time.js": {"text/javascript", presentationTimeScript},
 		"/ui/reset-data.js":        {"text/javascript", resetDataScript},
 		"/ui/mentions.js":          {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
