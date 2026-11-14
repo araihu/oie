@@ -4,6 +4,10 @@ Recorded on 2026-11-10 from testing a fresh standalone installation.
 Tracking item: **B25, required for alpha v0.0.1**. The room recovery changes
 described under Implementation are included in v0.0.1-rc.1.
 
+The later [message retention policy](oie-spec.md#71-message-retention) supersedes
+the retention and archive-range decisions recorded here. Its cutoff also bounds
+the 48-hour initial target, the 128-message fallback and remote search.
+
 ## Agreed goals and release boundary
 
 - Fresh-install room-history recovery currently makes the app unpleasant to use.

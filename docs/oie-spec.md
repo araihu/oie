@@ -401,7 +401,7 @@ Support emoji reactions where supported, using provider-normalized targets and r
 
 Support retraction of the user's own sent messages where supported, with a distinct **Retract message** action and a removed-message placeholder. Show real request/failure state; removal of other clients' copies cannot be guaranteed.
 
-Retain already-stored retracted messages, including incoming retractions, behind **Message retracted** and **Reveal original**. Retraction does not perform Oiê history deletion.
+Keep already-stored retracted messages, including incoming retractions, behind **Message retracted** and **Reveal original** for as long as the [retention policy](#71-message-retention) retains them. Retraction does not perform Oiê history deletion.
 
 Allow manual forwarding across conversations/accounts using the destination account and its capabilities. Forward as a new outgoing message through that account's outbox. Use a generic **Forwarded** label where supported. Original sender/conversation attribution is omitted unless explicitly chosen. This does not select automatic cross-protocol relaying.
 
@@ -428,21 +428,21 @@ Needed public Margo API additions are authorized, provided existing behavior is 
 ## 7. History, search, and shared links
 
 Persist history independently of protocol-server retention. By default,
-gradually backfill **all available authorized history** with paced, serial
-requests per server. Allow on-demand recovery per room. Both modes load the
-initial history target and retain new messages and retrieved pages. For XMPP,
-key the queue by the normalized domain of the archive address. Rooms on the
-same domain share its limits across accounts. Different domains can recover
-history in parallel. Serve retained history when reopening a conversation.
-
-Keep retrieved history until explicit user deletion, even after the provider expires it. Optional Oiê history sync also transfers records no longer available from the provider. Oiê cannot retrieve history that neither the provider nor a participating Oiê store still possesses.
+gradually backfill available authorized history within the effective retention
+window, with paced, serial requests per server. Allow on-demand recovery per
+room. Both modes load the initial history target and store new messages and
+retrieved pages under the same retention policy. For XMPP, key the queue by the
+normalized domain of the archive address. Rooms on the same domain share its
+limits across accounts. Different domains can recover history in parallel.
+Serve retained history when reopening a conversation. It can include messages
+whose provider copies have expired.
 
 As retained history grows, SQLite storage and indexes can increase the cost of
 reads, writes and maintenance. The first performance pass covers indexed
 catalog browsing and bounded source-message navigation while import and live
 updates are active. See [indexed catalog reads](media-gallery-scroll.md#indexed-catalog-reads) and
 [opening a shared source](timeline-pagination.md#opening-a-shared-source).
-Long-term history storage is a separate design decision tracked in O17 and B35.
+Storage maintenance and long-term archive options are tracked in O17 and B35.
 The [DuckDB evaluation](duckdb-search-evaluation.md) records the rejected
 proposal for interactive search and the measurements behind that decision.
 
@@ -452,30 +452,33 @@ proposal for interactive search and the measurements behind that decision.
 rc.0 may retain the current initial-recovery behavior. Initial room recovery
 must let the user interact while older authorized history continues in the
 background. **AGREED INITIAL TARGET:** prioritize the last 48 hours for each
-room. Fix the window when recovery starts for that room, persist both bounds
-in UTC and reuse them when resuming. If that interval contains fewer than 128
-messages, include immediately preceding messages until reaching 128 or
-exhausting the available authorized archive. Start with the newest page of the
-open room when it needs recovery, then alternate pages among rooms on each
-server with preference for the open room. Show each page as it is stored. Fetch
-older history gradually in the default mode or as needed for navigation and
-search in on-demand mode. Advance the cursor after storing the entire page.
-If the cursor expires, resume from the inclusive timestamp at the last
-confirmed page boundary within the original window and deduplicate reread
-messages. Record page limits and turn frequency in
+room, within the effective retention window. Fix the initial target window when
+recovery starts for that room, persist both bounds in UTC and reuse them when
+resuming, subject to the current retention cutoff. If that interval contains
+fewer than 128 messages, include immediately preceding messages until reaching
+128 or exhausting the available authorized archive within the retention window.
+Start with the newest page of the open room when it needs recovery, then
+alternate pages among rooms on each server with preference for the open room.
+Show each page as it is stored. Fetch older eligible history gradually in the
+default mode or as needed for navigation and search in on-demand mode. Advance
+the cursor after storing the entire page. If the cursor expires, resume from the
+inclusive timestamp at the last confirmed page boundary within the original
+window, subject to the retention cutoff, and deduplicate reread messages.
+Record page limits and turn frequency in
 [the initial-history discussion](history-bootstrap-discussion.md).
 
 Search across accounts/sources in the selected engine and within a direct/group conversation. Alpha indexes message text, captions, filenames, URLs, page titles/descriptions, and available media metadata. Document-body extraction, image OCR, and audio transcription are backlogged.
 
 **AGREED:** room text search queries SQLite and the room archive in parallel
-when remote text search is supported. Show local results as they become
-available and add authorized remote matches as they arrive. Dispatch remote
-search after a short typing pause and keep only the latest term queued for
-each active room search. Apply responses to the matching search. Retain those
-messages with canonical deduplication and track contiguous history coverage
-separately. After the current query finishes, give search and scroll requests
-the next available turn on that server. Space automatic backfill pages at
-least one second apart per server. Search and scroll requests can use that
+when remote text search is supported. Show local results, including matching
+retained starred messages older than the cutoff, as they become available.
+Add authorized remote matches within the retention window as they arrive.
+Dispatch remote search after a short typing pause and keep only the latest term
+queued for each active room search. Apply responses to the matching search.
+Store the matches with canonical deduplication and track contiguous history
+coverage separately. After the current query finishes, give search and scroll
+requests the next available turn on that server. Space automatic backfill pages
+at least one second apart per server. Search and scroll requests can use that
 interval.
 
 **AGREED:** use the existing conversation-list search field as one unified global
@@ -533,6 +536,30 @@ engine and discard stale responses when the draft or conversation changes.
 Dismissing the card leaves the draft text intact.
 
 **RECOMMENDED R08/R10:** SQLite FTS5 as a derived index; source-linked catalog records; bounded, cached link-preview enrichment independent of history fetching. **OPEN O08:** indexing/tokenization, filters/ranking, preview fetching/refresh policy, cache limits, and provider capability fallbacks.
+
+### 7.1 Message retention
+
+| Conversation type | Global policy | Conversation override |
+| --- | --- | --- |
+| Rooms | **180 days** by default, configurable. | A room-specific policy takes precedence over the global room policy. Clearing the override restores inheritance. |
+| Direct conversations | **Unlimited by default**. A finite period can be enabled independently of the room policy. | A conversation can set its own period or disable expiry. Clearing the override restores the global direct-conversation policy. |
+
+A finite policy sets a rolling cutoff based on the original message timestamp.
+Oiê purges unstarred messages older than the cutoff from the engine database,
+including their revisions and message-derived search and shared-content entries.
+A star on the message itself keeps it in the database beyond the cutoff. An
+older message becomes eligible for purge if its star is removed. The purge
+applies to message history. Downloaded files follow section 8, and pending sends
+follow section 5.
+
+The same cutoff is the earliest timestamp Oiê can retrieve from the XMPP
+archive. Apply it to initial reconstruction, automatic backfill, catch-up after
+reconnection, on-demand paging and remote search. The star exception applies
+only to the copy already stored in Oiê. With an unlimited policy, Oiê can
+retrieve the full available, authorized archive.
+
+Purge cadence and how retention interacts with sync and backup restore remain
+open under O17.
 
 ## 8. Media and downloaded files
 
@@ -897,7 +924,7 @@ These are design tasks, not another mandatory interview checklist. They should b
 | **O14** | Locale regional matching/plurals, timestamp precision/encoding, DST input ambiguity, exact formatting and catalog tooling. | English/pt-BR, per-device selection, English fallback, and UTC underneath are agreed. |
 | **O15** | Backup archive/schema versions, snapshot consistency while running, merge recovery, credential inclusion/encryption, active outbox/sync interaction. | R14/R20; merge into existing data and review restored sends are agreed. |
 | **O16** | Compatible pinned Goshtoso/App Shells/Margo releases or PR pseudo-versions; generic APIs for G01/G02/Margo; driver/UUID libraries and implementation toolchain. | R13; inspected versions are evidence, not a completed consumer compatibility test. |
-| **O17** | Long-term storage for large message histories. Options for discussion include opt-in retention limits, exporting or backing up older history before removing it from the active database, and a secondary database for cold history. | B35; the current default is retention until explicit deletion. Discuss the options, triggers and implications for search, access, deletion and restore when B35 is taken up. |
+| **O17** | Purge scheduling and storage maintenance, how retention policies and expired history interact with sync and backup restore, and whether to offer a separate export or cold archive. | Section 7.1 defines the agreed policy defaults, overrides, star protection and XMPP cutoff. B35 covers performance measurements and long-term storage options. |
 
 Manual link stars/export, separate threads, automatic protocol relaying, multi-engine UI aggregation, recurring schedules, and native mobile packaging have **not been selected**. Do not silently implement them as either confirmed alpha scope or explicitly approved backlog.
 
@@ -988,9 +1015,10 @@ These scenarios validate **AGREED** behavior; proposed mechanisms such as a part
 | Scheduling | Do not send before the UTC instant. A timezone display change does not move it. A missed schedule sends on next owning-engine availability unless cancelled. Backup-recovered schedules remain paused. |
 | Offline Send | Offline explicit Send persists a pending submission and later submits automatically. A saved draft does not. Lost acceptance responses do not create a second logical send; storage failure does not claim success or discard the draft. |
 | Ownership | Synced pending items are visible without another engine dispatching them. Alpha remote changes require owning-engine confirmation. Copying history or changing the selected engine does not silently take over sends. |
-| History | Gradually import available authorized history by default and fetch older pages as needed in on-demand rooms. Resume after interruption and retain imported messages beyond provider expiry. Reopening a conversation uses retained messages. |
+| History | Gradually import authorized history within the effective retention window by default and fetch eligible older pages as needed in on-demand rooms. Resume after interruption within the cutoff. Reopening a conversation uses retained messages, including those whose provider copies have expired. |
+| Message retention | With default settings, a 181-day-old unstarred room message is purged and a starred one stays available locally. XMPP reconstruction and remote search skip both at that age, even when the server has them. A 90-day room override applies a 90-day cutoff to both purge and retrieval. Direct conversations retain and recover older messages by default. A finite direct policy bounds both operations, and a conversation override can change the period or disable expiry. Removing an override restores the corresponding global policy. |
 | Search | Global/per-conversation metadata search returns source context. Latest versions are default; historical/retracted matches require their independent filters. Offline results clearly cover only cached data. |
-| Retraction | Supported own retraction uses its separate action. Stored retracted originals display a placeholder/Reveal original and remain outside ordinary search/library views. No guarantee of erasing another client's copy is shown. |
+| Retraction | Supported own retraction uses its separate action. While retained, retracted originals display a placeholder/Reveal original and remain outside ordinary search/library views. No guarantee of erasing another client's copy is shown. |
 | Deletion | Device-local deletion leaves other device copies intact, including with a shared hosted engine. All-copy deletion propagates on sync. All revisions/derived entries disappear within scope, including under both Include filters; known deletion markers prevent revival. |
 | Downloaded files | Small previews default automatic, originals on demand, preferences per device. Downloads persist until explicit deletion under the default. Optional file removal preserves shared references. A supported digest mismatch is not shown as verified success. |
 | Forwarding | Destination account/capabilities govern the new outgoing message. Source attribution is opt-in. Media is obtained/uploaded with progress/errors; unavailable files do not silently become forwarded source links. |
