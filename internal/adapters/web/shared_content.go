@@ -12,21 +12,13 @@ import (
 )
 
 func sharedAccountCombobox(v view) combobox.Config {
-	if len(v.SharedAccountIDs) > 0 {
-		config := v.searchableAccountCombobox("shared-account", "contentAccount", v.SharedAccountIDs)
-		config.RootClass = "oie-shared-account-filter"
-		return config
+	selected := v.SharedAccountIDs
+	if len(selected) == 0 && v.AccountFilter != "" {
+		selected = []string{v.AccountFilter}
 	}
-	options := make([]combobox.Option, 0, len(v.Accounts)+1)
-	for _, option := range accountOptions(v, true) {
-		options = append(options, combobox.Option{Value: option.Value, Label: option.Label})
-	}
-	return combobox.Config{
-		ID: "shared-account", Name: "account", Label: v.Text.SharedAccount,
-		RootClass: "oie-shared-account-filter", Mode: combobox.ModeSingle,
-		Source: combobox.Source{Static: options}, Selected: []string{v.AccountFilter},
-		EnableSearch: true, DisablePersistence: true,
-	}
+	config := v.searchableAccountCombobox("shared-account", "contentAccount", selected)
+	config.RootClass = "oie-shared-account-filter"
+	return config
 }
 
 const sharedContentPageSize = 50

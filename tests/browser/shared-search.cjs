@@ -62,18 +62,49 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    await page.locator('[data-shared-tab=documents]').click();await until(async()=>new URL(page.url()).searchParams.get('contentType')==='documents'&&await page.locator('[data-shared-item]').count()===2,'return to matching documents');
    // Clearing also updates results without Enter and retains account/category context.
    await input.fill('');await until(async()=>!new URL(page.url()).searchParams.get('q')&&await page.locator('[data-shared-item]').count()===50,'clear search');
-   assert.equal(new URL(page.url()).searchParams.get('account'),alpha.id);assert.equal(new URL(page.url()).searchParams.get('contentType'),'documents');assert.equal(documents,1);assert.equal(writes,0);
+   assert.equal(new URL(page.url()).searchParams.get('contentAccount'),alpha.id);assert.equal(new URL(page.url()).searchParams.get('contentType'),'documents');assert.equal(documents,1);assert.equal(writes,0);
    // Picker typeahead stays local; committing an account applies it immediately.
    await input.fill('faturamneto');await until(()=>new URL(page.url()).searchParams.get('q')==='faturamneto','query before scope change');
    await page.evaluate(()=>{window.catalogForm=document.getElementById('shared-content-search')});
    let accountStreams=0;
    page.on('request',request=>{if(request.resourceType()==='eventsource')accountStreams++;});
-   const pickerRequests=requests.length,pickerURL=page.url();await page.getByRole('combobox',{name:config.locale==='en'?'Account':'Conta',exact:true}).click();await page.locator('#shared-account [data-combobox-search]').fill('Work');await page.waitForTimeout(350);assert.equal(requests.length,pickerRequests,'account typeahead must not search the catalog');assert.equal(page.url(),pickerURL);await page.getByRole('option',{name:'Work · beta@fixture.invalid',exact:true}).click();
-   await until(async()=>new URL(page.url()).searchParams.get('account')===beta.id&&await page.locator('[data-shared-item]').count()===1,'account scope applied');
+   const pickerRequests=requests.length,pickerURL=page.url();await page.getByRole('combobox',{name:config.locale==='en'?'Accounts':'Contas',exact:true}).click();await page.locator('#shared-account [data-combobox-search]').fill('Work');await page.waitForTimeout(350);assert.equal(requests.length,pickerRequests,'account typeahead must not search the catalog');assert.equal(page.url(),pickerURL);await page.getByRole('option',{name:'Work · beta@fixture.invalid',exact:true}).click();
+   await until(async()=>new URL(page.url()).searchParams.getAll('contentAccount').length===2&&await page.locator('[data-shared-item]').count()===3,'both accounts applied');
+   await page.locator('#shared-account [data-combobox-search]').fill('Personal');
+   await page.getByRole('option',{name:'Personal · alpha@fixture.invalid',exact:true}).click();
+   await until(async()=>new URL(page.url()).searchParams.getAll('contentAccount').join(',')===beta.id&&await page.locator('[data-shared-item]').count()===1,'account scope applied');
    assert(await page.evaluate(()=>window.catalogForm===document.getElementById('shared-content-search')));
    assert.equal(await page.evaluate(()=>window.OieRuntime.generation),generation);
    assert.equal(accountStreams,0);
-   assert.equal(new URL(page.url()).searchParams.get('q'),'faturamneto');assert.equal(new URL(page.url()).searchParams.get('contentType'),'documents');assert.equal(new URL(page.url()).searchParams.get('contentCursor'),null);assert.equal(requests.length,pickerRequests+1,'one account commit produces one fragment request');assert.equal(documents,1);assert.equal(writes,0);assert((await page.locator('[data-account-switcher]').first().textContent()).includes('Work'));assert.equal(await page.locator('body').getAttribute('data-account-id'),'');
+   assert.equal(new URL(page.url()).searchParams.get('q'),'faturamneto');assert.equal(new URL(page.url()).searchParams.get('contentType'),'documents');assert.equal(new URL(page.url()).searchParams.get('contentCursor'),null);assert.equal(requests.length,pickerRequests+2,'each checkbox change produces one fragment request');assert.equal(documents,1);assert.equal(writes,0);assert.equal(await page.locator('body').getAttribute('data-account-id'),'');
+   const bothAccounts=url=>url.origin===base&&url.pathname==='/'&&url.searchParams.get('contentType')==='documents'&&url.searchParams.getAll('contentAccount').length===2;
+   const accountSearch=page.locator('#shared-account [data-combobox-search]');
+   const personal=page.getByRole('option',{name:'Personal · alpha@fixture.invalid',exact:true});
+   let releaseAccounts,accountsHeld=false;
+   const accountsGate=new Promise(resolve=>releaseAccounts=resolve);
+   const holdAccounts=async route=>{
+    const response=await route.fetch();accountsHeld=true;await accountsGate;
+    try{await route.fulfill({response})}catch{}
+   };
+   await page.route(bothAccounts,holdAccounts);
+   const pickerBounds=await page.locator('#shared-account-trigger').boundingBox(),inputBounds=await input.boundingBox();
+   try{
+    await personal.click();await until(()=>accountsHeld,'two-account result held');
+    assert.equal(await personal.getAttribute('aria-selected'),'true');
+    assert.equal(await accountSearch.inputValue(),'Personal');
+    assert.deepEqual(await page.locator('#shared-account-trigger').boundingBox(),pickerBounds);
+    assert.deepEqual(await input.boundingBox(),inputBounds);
+    await personal.click();
+    await until(async()=>await personal.getAttribute('aria-selected')==='false'&&await page.locator('#shared-search-results').getAttribute('aria-busy')===null,'new selection replaces delayed request');
+   }finally{releaseAccounts();await page.unroute(bothAccounts,holdAccounts)}
+   await page.route(bothAccounts,route=>route.fulfill({status:503,body:'Unavailable'}));
+   await personal.click();
+   await until(async()=>await personal.getAttribute('aria-selected')==='false'&&await page.locator('#shared-search-results').getAttribute('aria-busy')===null,'failed account request restores selection');
+   assert.equal(new URL(page.url()).searchParams.getAll('contentAccount').join(','),beta.id);
+   assert.equal(await page.locator('[data-shared-item]').count(),1);
+   assert.equal(await accountSearch.inputValue(),'Personal');
+   await page.unroute(bothAccounts);
+   await page.keyboard.press('Escape');
    await page.locator('#shared-account [role=listbox]').waitFor({state:'hidden'});
    await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
    const axe=await page.evaluate(async()=>{

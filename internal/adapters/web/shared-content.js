@@ -183,7 +183,7 @@ window.OieRuntime.register('shared-search', life => {
    const values=new FormData(form),root=info?form.closest('#chat-info-content'):form.closest('#workspace');
    for(const link of root?.querySelectorAll('[data-shared-tab]')||[]){const url=new URL(link.href);for(const key of info?['infoQuery']:['q','account','contentAccount']){url.searchParams.delete(key);for(const value of values.getAll(key).filter(Boolean).sort())url.searchParams.append(key,value)}if(info)url.searchParams.delete('infoCursor');link.href=url.pathname+url.search}
   }
-  const owned=ctx=>ctx?.target?.id===targetID&&ctx.sourceElement===input;
+  const owned=ctx=>ctx?.target?.id===targetID&&(ctx.sourceElement===input||!info&&ctx.sourceElement===form);
   function cancel(){clearTimeout(pending);for(const ctx of active)ctx.request.abort();active.clear();accepted=null;region()?.removeAttribute('aria-busy')}
   function schedule(){clearTimeout(pending);pending=setTimeout(()=>{if(connected()&&!composing&&input.value!==region()?.dataset.searchQuery)input.dispatchEvent(new CustomEvent('oie:shared-search',{bubbles:true}))},300)}
   const binding={form,dispose(){disposed=true;cancel();events.abort()},pause(){paused=true;cancel()},resume(){paused=false;alignTabs();if(input.value!==region()?.dataset.searchQuery)schedule()}};bindings.set(info,binding);
@@ -195,9 +195,9 @@ window.OieRuntime.register('shared-search', life => {
    alignTabs();
    if(info||event.detail?.id!=='shared-account'||!connected())return;
    cancel();
-   if(new FormData(form).getAll('contentAccount').some(Boolean))input.dispatchEvent(new CustomEvent('oie:shared-search',{bubbles:true}));
-   else form.requestSubmit();
+   form.requestSubmit();
   });
+  on(form,'oie:shared-account-restored',alignTabs);
   on(document,'htmx:before:request',event=>{
    const ctx=event.detail.ctx;if(['oie-app','chat-info-content','shared-content-scroll'].includes(ctx?.target?.id))cancel();if(!owned(ctx)||!connected())return;
    active.add(ctx);if(!info)return;ctx.oieSearch={form,scope:scope(),generation:Number(document.body.dataset.starGeneration||0),engine:document.body.dataset.engineId,conversation:document.body.dataset.conversationId};accepted=null;region()?.setAttribute('aria-busy','true');

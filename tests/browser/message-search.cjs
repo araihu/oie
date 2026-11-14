@@ -218,9 +218,9 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     // Full app fragments are parsed with scripting disabled. Native fallback
     // controls must not override the enhanced search's selected account after it.
     const beforeSectionSwap=await page.evaluate(()=>window.OieRuntime?.generation||0);
-    await page.locator('nav a[href*="section=archived"]:visible').click();await page.waitForFunction(generation=>window.OieRuntime.generation>generation,beforeSectionSwap);
+    await page.locator('.oie-archived-row:visible').click();await page.waitForFunction(generation=>window.OieRuntime.generation>generation,beforeSectionSwap);
     const beforeInboxSwap=await page.evaluate(()=>window.OieRuntime.generation);
-    await page.locator('nav').getByRole('link',{name:'Chats',exact:true}).click();await page.waitForFunction(generation=>window.OieRuntime.generation>generation,beforeInboxSwap);
+    await page.getByRole('link',{name:'Archived, back to chats',exact:true}).click();await page.waitForFunction(generation=>window.OieRuntime.generation>generation,beforeInboxSwap);
     await page.locator('#message-composer').waitFor({state:'visible'});
     const draft='Retain this exact device draft 😀';await page.locator('#message-composer').fill(draft);
     await page.waitForFunction(()=>window.OieRuntime?.generation>0);await until(async()=>await page.locator('#message-timeline').evaluate(n=>n.scrollHeight-n.scrollTop-n.clientHeight<80),'initial timeline reaches latest before reading');

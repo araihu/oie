@@ -356,7 +356,6 @@ type copy struct {
 	FavoritesEmpty, FavoritesEmptyHelp, FavoritesSearch, FavoritesNoResults                                                                                                                                  string
 	InfoStarsEmpty                                                                                                                                                                                           string
 	InfoNavigationFailed                                                                                                                                                                                     string
-	SharedAccount                                                                                                                                                                                            string
 	SearchAccounts, SearchAccountSelected, SearchAccountsSelected, SearchClearAccounts                                                                                                                       string
 	NoAccountsFound                                                                                                                                                                                          string
 	SharedTools                                                                                                                                                                                              string
