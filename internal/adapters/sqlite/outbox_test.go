@@ -33,6 +33,36 @@ func outboxFixture(t *testing.T) (*Store, *application.Engine, domain.Conversati
 	}
 	return store, e, result.Conversation
 }
+
+func TestProviderRejectionRacingDispatchCompletion(t *testing.T) {
+	store, engine, chat := outboxFixture(t)
+	ctx := t.Context()
+	sent, err := engine.SendMessage(ctx, migrationID(), chat.ID, "rejected by its provider")
+	if err != nil {
+		t.Fatal(err)
+	}
+	messageID := sent.Message.ID
+	now := time.Now().UTC()
+	if _, err = store.TransitionMessage(ctx, messageID, "queued", "dispatching", migrationID(), now, now); err != nil {
+		t.Fatal(err)
+	}
+	// Complete the write after Reject reads dispatching, before it records the error.
+	receiver, err := application.New(store, "local", func() (domain.ID, error) {
+		_, err := store.TransitionMessage(ctx, messageID, "dispatching", "submitted", migrationID(), now, now)
+		return migrationID(), err
+	}, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = receiver.Reject(ctx, application.Rejected{AccountID: chat.AccountID, MessageID: string(messageID), Address: chat.Address}); err != nil {
+		t.Fatal(err)
+	}
+	current, err := engine.Message(ctx, messageID)
+	if err != nil || current.SendState != "failed" {
+		t.Fatalf("rejection racing dispatch left state %q: %v", current.SendState, err)
+	}
+}
+
 func TestMessageAndOutboxAcceptanceRollBackTogether(t *testing.T) {
 	for _, failure := range []string{"BEFORE INSERT ON message_revisions", "BEFORE UPDATE ON conversations"} {
 		t.Run(failure, func(t *testing.T) {

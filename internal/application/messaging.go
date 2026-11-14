@@ -922,9 +922,17 @@ func (e *Engine) Reject(ctx context.Context, in Rejected) error {
 		return err
 	}
 	now := e.now().UTC()
-	_, err = r.TransitionMessage(ctx, m.ID, m.SendState, "failed", rev, now, now)
+	current, err := r.TransitionMessage(ctx, m.ID, m.SendState, "failed", rev, now, now)
+	// The outbox can finish its write while we handle a provider rejection.
+	if errors.Is(err, ErrStateConflict) && m.SendState == "dispatching" &&
+		(current.SendState == Submitted || current.SendState == Unknown) {
+		_, err = r.TransitionMessage(ctx, m.ID, current.SendState, "failed", rev, now, now)
+	}
 	if errors.Is(err, ErrStateConflict) {
 		return nil
+	}
+	if err == nil {
+		e.notifyEvents()
 	}
 	return err
 }
