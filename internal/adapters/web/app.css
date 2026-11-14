@@ -508,6 +508,7 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-link-card-favicon{display:block;max-width:24px;max-height:24px;object-fit:contain}
 .oie-preview-copy{flex:1;min-width:0}
 .oie-preview-copy .oie-preview-title{font-size:14px;margin:0 0 4px;color:var(--oie-text)}
+.oie-link-card .oie-preview-title{padding-block-start:4px}
 .oie-preview-copy .oie-preview-site{margin-bottom:0}
 .oie-link-refresh-feedback:empty{display:none}
 .oie-link-refresh-feedback{font-size:12px;color:var(--oie-muted);margin:6px 0}

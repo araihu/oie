@@ -99,8 +99,8 @@ templ page(v view) {
 <script src="/ui/forwarding.js" defer></script>
 <script src="/ui/room-entry.js"></script>
 			@head.Dependencies(head.WithLocalRuntime())
-			<link rel="stylesheet" href="/ui/app.css"/>
-<link rel="stylesheet" href={templ.URL(messageSearchStylesheetURL())}/>
+			<link rel="stylesheet" href={templ.URL(versionedStylesheetURL("/ui/app.css",stylesheet))}/>
+<link rel="stylesheet" href={templ.URL(versionedStylesheetURL("/ui/message-search.css",messageSearchStylesheet))}/>
 <link rel="stylesheet" href="/ui/conversation-search.css"/>
 			<link rel="stylesheet" href="/ui/shared-actions.css"/><link rel="stylesheet" href="/ui/message-star.css"/>
 <link rel="stylesheet" href="/ui/timeline.css"/>

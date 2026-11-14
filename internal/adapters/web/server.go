@@ -27,6 +27,11 @@ import (
 //go:embed app.css
 var stylesheet []byte
 
+func versionedStylesheetURL(path string, content []byte) string {
+	digest := sha256.Sum256(content)
+	return fmt.Sprintf("%s?v=%x", path, digest[:8])
+}
+
 //go:embed appicons/sprite.svg
 var appIconSprite []byte
 

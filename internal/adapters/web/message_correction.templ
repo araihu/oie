@@ -57,7 +57,7 @@ templ messageEditDocument(v view, preparation *editPreparation, values url.Value
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<title>{ v.Text.EditMessage }</title>
 			@head.Dependencies(head.WithLocalRuntime())
-			<link rel="stylesheet" href="/ui/app.css"/>
+			<link rel="stylesheet" href={templ.URL(versionedStylesheetURL("/ui/app.css",stylesheet))}/>
 			<link rel="stylesheet" href="/ui/message-correction.css"/><script src="/ui/theme.js"></script>
 		</head>
 		<body>

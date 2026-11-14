@@ -2,9 +2,7 @@ package web
 
 import (
 	"context"
-	"crypto/sha256"
 	_ "embed"
-	"fmt"
 	"net/http"
 	"net/url"
 	"slices"
@@ -80,11 +78,6 @@ func shortenSearchExcerpt(text string, limit int) string {
 		return text
 	}
 	return strings.TrimSpace(string(runes[:limit-1])) + "…"
-}
-
-func messageSearchStylesheetURL() string {
-	digest := sha256.Sum256(messageSearchStylesheet)
-	return fmt.Sprintf("/ui/message-search.css?v=%x", digest[:8])
 }
 
 type messageSearchView struct {

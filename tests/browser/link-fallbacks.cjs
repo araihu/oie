@@ -35,6 +35,16 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
   const context=await browser.newContext({viewport:{width:1440,height:1000},locale:'en',reducedMotion:'reduce'});context.on('page',p=>p.on('pageerror',e=>errors.push(e.message)));await context.route('**/*',route=>new URL(route.request().url()).origin===base?route.continue():(external.push(route.request().url()),route.abort()));const page=await context.newPage();debugPage=page;
   await page.goto(base+'/?section=media&contentType=links&lang=en&theme=dark');const scope=n=>page.locator(`[data-preview-id="${previews[n].id}"]`),card=n=>page.locator(`[data-shared-item="${previews[n].id}"]`);
   await until(async()=>await scope(1).locator('.oie-link-card-favicon').evaluate(img=>img.complete&&img.naturalWidth===32),'favicon ready');
+  const appStylesheet=page.locator('link[rel=stylesheet][href^="/ui/app.css"]');
+  assert.match(await appStylesheet.getAttribute('href'),/^\/ui\/app\.css\?v=[0-9a-f]{16}$/,'app styles are versioned with the rendered markup');
+  for(const index of [0,1,3]){
+   const positions=await scope(index).locator('.oie-preview-summary').evaluate(summary=>{
+    const symbol=summary.querySelector('.oie-preview-symbol').getBoundingClientRect(),title=summary.querySelector('[data-link-title]');
+    const style=getComputedStyle(title),lineCenter=title.getBoundingClientRect().top+parseFloat(style.paddingTop)+parseFloat(style.lineHeight)/2;
+    return {gap:title.getBoundingClientRect().left-symbol.right,offset:Math.abs(symbol.top+symbol.height/2-lineCenter)};
+   });
+   assert(positions.gap>0&&positions.offset<=1,'link icon or favicon aligns with the first line of the title');
+  }
   assert.equal(await scope(1).locator('[data-link-title]').innerText(),previews[1].title);assert.equal(await scope(1).locator('[data-link-domain]').innerText(),'en.wikipedia.org');assert.equal(await scope(1).locator('.oie-preview-media').count(),0);
   const box=await scope(1).locator('[data-link-card]').boundingBox(),title=await scope(1).locator('[data-link-title]').boundingBox();assert(title.x-box.x<65&&box.height<150,'empty image column remains');const widthProof=await scope(2).evaluate(node=>{const card=node.querySelector('.oie-link-fallback-card').getBoundingClientRect(),link=node.querySelector('[data-preview-page]').getBoundingClientRect(),title=node.querySelector('[data-link-title]'),rect=title.getBoundingClientRect();return{card:card.width,available:link.width,titleWidth:rect.width,copyWidth:title.parentElement.getBoundingClientRect().width}});assert(Math.abs(widthProof.card-widthProof.available)<1,'catalog card leaves unused row width');assert(Math.abs(widthProof.titleWidth-widthProof.copyWidth)<1,'title uses the full width available inside its masonry column');
   assert.equal(await scope(3).locator('[data-link-title]').innerText(),'/readable path');assert.equal(await scope(3).locator('[data-preview-page]').getAttribute('href'),previews[3].url);assert(!(await scope(3).innerText()).includes('secret'));
