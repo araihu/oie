@@ -234,7 +234,9 @@ retain the user profile.
 Push a version tag such as `v0.0.1` or `v0.0.1-rc.3` from a commit that contains
 the **Desktop release** workflow. Use `vMAJOR.MINOR.PATCH` with an optional
 SemVer prerelease suffix. It builds the macOS and Linux binaries and
-corresponding source. Each platform installs and launches its binary and
+corresponding source. The macOS job uses the pinned Wails CLI to assemble
+`Oie.app` and generate the icon, then signs the bundle ad hoc and archives it.
+Each platform installs and launches its binary and
 rebuilds from the source archive with Go module downloads disabled. The
 workflow then builds the native packages, Flatpak bundle and Homebrew recipes.
 It uploads all assets and `SHA256SUMS` to a draft and verifies GitHub's asset

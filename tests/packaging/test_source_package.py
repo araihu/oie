@@ -76,6 +76,10 @@ class SourcePackageTest(unittest.TestCase):
                     "go-sources/example.com/!some!module/v1.0.0.zip": dep.read_bytes(),
                     "source-info.json": json.dumps({"version": "v0.0.1", "revision": "a" * 40}).encode(),
                     "browser-sources/runtime.tgz": browser.read_bytes(),
+                    "release-tooling/packaging/macos/wails.yaml.in":
+                        (ROOT / "packaging/macos/wails.yaml.in").read_bytes(),
+                    "release-tooling/tools/go.mod": (ROOT / "tools/go.mod").read_bytes(),
+                    "release-tooling/tools/go.sum": (ROOT / "tools/go.sum").read_bytes(),
                     "release-tooling/packaging/licenses/pdfjs/LICENSE_BROTLI":
                         (ROOT / "packaging/licenses/pdfjs/LICENSE_BROTLI").read_bytes(),
                 }.items():

@@ -65,8 +65,10 @@ shutil.copyfile(Path(os.environ["OIE_TEST_ASSETS"]) / url.removeprefix(base), ar
             plist = plistlib.loads((bundle / "Contents/Info.plist").read_bytes())
             require(plist["CFBundleIdentifier"] == "org.araihu.oie", "unexpected bundle identifier")
             require(plist["OieVersion"] == args.version and plist["OieSourceRevision"] == args.revision, "incorrect bundle source/version")
+            icon = bundle / "Contents/Resources" / plist["CFBundleIconFile"]
+            require(icon.name == "oie.icns" and icon.read_bytes().startswith(b"icns"), "missing or invalid Oiê bundle icon")
             subprocess.run(["codesign", "--verify", "--deep", "--strict", str(bundle)], check=True)
-            report["checks"].append("verified and installed ad-hoc signed bundle with matching version/source into a path containing spaces")
+            report["checks"].append("verified and installed ad-hoc signed bundle with matching version/source and valid icon into a path containing spaces")
             # NSRunningApplication is public AppKit metadata. This does not use
             # Accessibility automation, read other app content or grant permissions.
             swift = root / "probe.swift"

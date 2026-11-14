@@ -1,0 +1,10 @@
+version: 3
+project:
+  name: oie
+  product_name: Oiê
+  binary_name: oie-desktop
+  identifier: org.araihu.oie
+  version: "@SHORT_VERSION@"
+  icon: icon.png
+darwin:
+  info_plist: Info.plist

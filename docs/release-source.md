@@ -29,7 +29,9 @@ On macOS, the release targets macOS 13.0. To match that deployment target, set
 `CGO_CFLAGS='-O2 -g -mmacosx-version-min=13.0'` and set `CGO_LDFLAGS`
 to the same flags before building. The bundle recipe in
 `release-tooling/scripts/package-desktop.sh` also sets the linker flag and
-applies the ad-hoc signature.
+uses the Wails CLI pinned in `release-tooling/tools/go.mod` to assemble the
+app and generate its icon. The recipe adds the release notices and applies
+the ad-hoc signature before archiving.
 
 Rebuild the OCI executable from the Linux source archive with the server
 configuration. Set `GOARCH=arm64` for the arm64 image:

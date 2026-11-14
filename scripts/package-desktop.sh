@@ -84,7 +84,7 @@ printf '%s\n' "$go_version" | LC_ALL=C awk '
 
 build_os= build_sdk= deployment_target=
 if [ "$target_os" = darwin ]; then
-  for tool in sips iconutil plutil codesign xcrun; do command -v "$tool" >/dev/null 2>&1 || fail "missing macOS build tool: $tool"; done
+  for tool in plutil codesign xcrun; do command -v "$tool" >/dev/null 2>&1 || fail "missing macOS build tool: $tool"; done
   deployment_target=13.0
   build_os=$(sw_vers -productVersion)
   build_sdk=$(xcrun --sdk macosx --show-sdk-version)
@@ -135,14 +135,8 @@ trap 'exit 143' TERM
 payload="$stage/payload"
 mkdir -p "$payload"
 if [ "$target_os" = darwin ]; then
-  bundle="$payload/Oie.app"
-  executable="$bundle/Contents/MacOS/oie-desktop"
-  resources="$bundle/Contents/Resources"
-  doc_dir="$resources"
-  mkdir -p "$(dirname "$executable")" "$resources"
-  sed -e "s|@VERSION@|$version|g" -e "s|@SHORT_VERSION@|$short_version|g" -e "s|@SOURCE_REVISION@|$revision|g" \
-    "$tooling_dir/packaging/macos/Info.plist.in" > "$bundle/Contents/Info.plist"
-  plutil -lint "$bundle/Contents/Info.plist"
+  executable="$stage/bin/oie-desktop"
+  mkdir -p "$stage/bin"
 else
   executable="$payload/bin/oie-desktop"
   doc_dir="$payload/share/doc/oie"
@@ -154,6 +148,28 @@ fi
 printf '%s\n' "Building $version ($revision) for $target_os/$target_arch" >&2
 (cd "$source_dir" && go build -mod=readonly -tags production -trimpath -buildvcs="$build_vcs" -ldflags "$link_flags" -o "$executable" ./cmd/oie-desktop)
 chmod 0755 "$executable"
+if [ "$target_os" = darwin ]; then
+  bundle="$payload/Oie.app"
+  doc_dir="$bundle/Contents/Resources"
+  sed -e "s|@VERSION@|$version|g" -e "s|@SHORT_VERSION@|$short_version|g" -e "s|@SOURCE_REVISION@|$revision|g" \
+    "$tooling_dir/packaging/macos/Info.plist.in" > "$stage/Info.plist"
+  sed "s|@SHORT_VERSION@|$short_version|g" "$tooling_dir/packaging/macos/wails.yaml.in" > "$stage/wails.yaml"
+  copy_file "$source_dir/internal/adapters/desktop/assets/icon.png" "$stage/icon.png"
+  CGO_ENABLED=0 go -C "$tooling_dir/tools" build -mod=readonly -o "$stage/wails3" github.com/wailsapp/wails/v3/cmd/wails3
+  (
+    cd "$stage"
+    export WAILS_EXP_USE_WAKE=1
+    set -- ./wails3 build --targets darwin/arm64 --skip-build
+    plan=$("$@" --plan --json)
+    app=$(printf '%s\n' "$plan" | python3 -c 'import json, sys; (app,) = json.load(sys.stdin)["artifacts"]; print(app["path"])')
+    "$@"
+    mv "$app" "$bundle"
+  )
+  mv "$doc_dir/icons.icns" "$doc_dir/oie.icns"
+  # The embedded Wails catalog is template artwork. Oiê uses its generated ICNS.
+  rm -f "$doc_dir/Assets.car"
+  plutil -lint "$bundle/Contents/Info.plist"
+fi
 copy_file "$source_dir/LICENSE" "$source_dir/THIRD_PARTY_NOTICES.md" "$doc_dir/"
 mkdir -p "$doc_dir/licenses"
 go_root=$(cd "$source_dir" && go env GOROOT)
@@ -206,19 +222,8 @@ Target: $target_os/$target_arch
 SOURCE
 
 if [ "$target_os" = darwin ]; then
-  iconset="$stage/oie.iconset"
-  mkdir -p "$iconset"
-  for size in 16 32 128 256 512; do
-    sips -z "$size" "$size" "$source_dir/internal/adapters/desktop/assets/icon.png" --out "$iconset/icon_${size}x${size}.png" >/dev/null
-    double=$((size * 2))
-    sips -z "$double" "$double" "$source_dir/internal/adapters/desktop/assets/icon.png" --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
-  done
-  iconutil -c icns "$iconset" -o "$resources/oie.icns"
   codesign --force --deep --sign - --timestamp=none "$bundle"
   codesign --verify --deep --strict --verbose=2 "$bundle"
-  plutil -lint "$bundle/Contents/Info.plist"
-fi
-if [ "$target_os" = darwin ]; then
   COPYFILE_DISABLE=1 tar -czf "$stage/$archive_name" -C "$payload" Oie.app
 else
   tar -czf "$stage/$archive_name" -C "$payload" bin share

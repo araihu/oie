@@ -17,7 +17,10 @@ implementation and native verification.
 The application source for `v0.0.1-rc.0` is fixed at
 `e8ffe5d0d924727478b8a5cbe3567a4240d7ae48`. Packaging tooling from later commits
 builds the macOS `Oie.app` bundle and Linux `bin`/`share` archive without moving
-that tag. Each archive includes source/build metadata and license notices. The
+that tag. For new macOS builds, the Wails CLI pinned in `tools/go.mod` assembles
+the bundle and generates its icon from the tagged artwork. The release script
+adds source and license files before signing and archiving the bundle.
+Each archive includes source/build metadata and license notices. The
 release's `packaging-receipt.json` records the source revision, packaging-tooling
 revision, source archive hash, platform metadata and artifact hashes separately.
 

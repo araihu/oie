@@ -110,7 +110,7 @@ def package(source, tooling, version, revision, output):
                 archive.add(vendors / "cli", arcname=f"{prefix}/oie/cli/vendor")
                 for path in ("scripts/package-desktop.sh", "scripts/package-source.py",
                              "scripts/verify-source-package.py", "scripts/collect-licenses.sh",
-                             "scripts/install.sh", "packaging", "tests/packaging"):
+                             "scripts/install.sh", "packaging", "tests/packaging", "tools/go.mod", "tools/go.sum"):
                     archive.add(tooling / path, arcname=f"{prefix}/release-tooling/{path}",
                                 filter=lambda m: None if "__pycache__" in Path(m.name).parts else m)
                 # Module archives retain generation inputs omitted by go mod vendor,
