@@ -12,5 +12,5 @@ var conversationSearchScript []byte
 var conversationSearchStylesheet []byte
 
 func (v view) conversationSearchCloseHref() string {
-	return v.href("chatSearch", "", "chatQuery", "", "chatIncludeHistory", "")
+	return v.href("chatSearch", "", "chatQuery", "", "chatIncludeHistory", "", "chatSearchRevision", "")
 }

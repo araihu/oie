@@ -5,10 +5,46 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
 )
+
+// Match reports whether text satisfies the retained message and catalog search policy.
+func Match(text, query string) bool {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return true
+	}
+	if utf8.RuneCountInString(query) > 200 {
+		return false
+	}
+	haystack, needle := Fold(text), Fold(query)
+	if needle == "" {
+		return false
+	}
+	if strings.Contains(haystack, needle) {
+		return true
+	}
+	terms := Words(needle)
+	if len(terms) == 0 {
+		return false
+	}
+	words := Words(haystack)
+	for _, term := range terms {
+		if strings.Contains(haystack, term) {
+			continue
+		}
+		query := []rune(term)
+		if !slices.ContainsFunc(words, func(word string) bool {
+			return ApproximatePrefix(query, []rune(word)) > 0
+		}) {
+			return false
+		}
+	}
+	return true
+}
 
 // Fold normalizes case, accents and compatibility characters for search.
 func Fold(value string) string {
@@ -50,14 +86,22 @@ func Words(value string) []string {
 // ApproximatePrefix returns the length in runes of the closest prefix under the
 // search edit limit. Adjacent transpositions count as one edit.
 func ApproximatePrefix(query, word []rune) int {
+	limit := EditLimit(query)
+	if limit == 0 {
+		return 0
+	}
+	return editPrefix(query, word, limit)
+}
+
+// EditLimit returns the typo budget for a normalized query term.
+func EditLimit(query []rune) int {
 	if len(query) < 4 || !slices.ContainsFunc(query, unicode.IsLetter) {
 		return 0
 	}
-	limit := 1
 	if len(query) >= 8 {
-		limit = 2
+		return 2
 	}
-	return editPrefix(query, word, limit)
+	return 1
 }
 
 // editPrefix is a banded optimal-string-alignment distance. Adjacent swapped

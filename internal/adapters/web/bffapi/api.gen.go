@@ -122,49 +122,49 @@ func (e RenderWorkspaceParamsHXRequest) Valid() bool {
 
 // Defines values for RenderWorkspaceParamsXOieFragment.
 const (
-	Accounts       RenderWorkspaceParamsXOieFragment = "accounts"
-	App            RenderWorkspaceParamsXOieFragment = "app"
-	Appearance     RenderWorkspaceParamsXOieFragment = "appearance"
-	Conversation   RenderWorkspaceParamsXOieFragment = "conversation"
-	Favorites      RenderWorkspaceParamsXOieFragment = "favorites"
-	Inbox          RenderWorkspaceParamsXOieFragment = "inbox"
-	Info           RenderWorkspaceParamsXOieFragment = "info"
-	ScheduleEditor RenderWorkspaceParamsXOieFragment = "schedule-editor"
-	Scheduled      RenderWorkspaceParamsXOieFragment = "scheduled"
-	Shared         RenderWorkspaceParamsXOieFragment = "shared"
-	Source         RenderWorkspaceParamsXOieFragment = "source"
-	SourcePane     RenderWorkspaceParamsXOieFragment = "source-pane"
-	Timeline       RenderWorkspaceParamsXOieFragment = "timeline"
+	RenderWorkspaceParamsXOieFragmentAccounts       RenderWorkspaceParamsXOieFragment = "accounts"
+	RenderWorkspaceParamsXOieFragmentApp            RenderWorkspaceParamsXOieFragment = "app"
+	RenderWorkspaceParamsXOieFragmentAppearance     RenderWorkspaceParamsXOieFragment = "appearance"
+	RenderWorkspaceParamsXOieFragmentConversation   RenderWorkspaceParamsXOieFragment = "conversation"
+	RenderWorkspaceParamsXOieFragmentFavorites      RenderWorkspaceParamsXOieFragment = "favorites"
+	RenderWorkspaceParamsXOieFragmentInbox          RenderWorkspaceParamsXOieFragment = "inbox"
+	RenderWorkspaceParamsXOieFragmentInfo           RenderWorkspaceParamsXOieFragment = "info"
+	RenderWorkspaceParamsXOieFragmentScheduleEditor RenderWorkspaceParamsXOieFragment = "schedule-editor"
+	RenderWorkspaceParamsXOieFragmentScheduled      RenderWorkspaceParamsXOieFragment = "scheduled"
+	RenderWorkspaceParamsXOieFragmentShared         RenderWorkspaceParamsXOieFragment = "shared"
+	RenderWorkspaceParamsXOieFragmentSource         RenderWorkspaceParamsXOieFragment = "source"
+	RenderWorkspaceParamsXOieFragmentSourcePane     RenderWorkspaceParamsXOieFragment = "source-pane"
+	RenderWorkspaceParamsXOieFragmentTimeline       RenderWorkspaceParamsXOieFragment = "timeline"
 )
 
 // Valid indicates whether the value is a known member of the RenderWorkspaceParamsXOieFragment enum.
 func (e RenderWorkspaceParamsXOieFragment) Valid() bool {
 	switch e {
-	case Accounts:
+	case RenderWorkspaceParamsXOieFragmentAccounts:
 		return true
-	case App:
+	case RenderWorkspaceParamsXOieFragmentApp:
 		return true
-	case Appearance:
+	case RenderWorkspaceParamsXOieFragmentAppearance:
 		return true
-	case Conversation:
+	case RenderWorkspaceParamsXOieFragmentConversation:
 		return true
-	case Favorites:
+	case RenderWorkspaceParamsXOieFragmentFavorites:
 		return true
-	case Inbox:
+	case RenderWorkspaceParamsXOieFragmentInbox:
 		return true
-	case Info:
+	case RenderWorkspaceParamsXOieFragmentInfo:
 		return true
-	case ScheduleEditor:
+	case RenderWorkspaceParamsXOieFragmentScheduleEditor:
 		return true
-	case Scheduled:
+	case RenderWorkspaceParamsXOieFragmentScheduled:
 		return true
-	case Shared:
+	case RenderWorkspaceParamsXOieFragmentShared:
 		return true
-	case Source:
+	case RenderWorkspaceParamsXOieFragmentSource:
 		return true
-	case SourcePane:
+	case RenderWorkspaceParamsXOieFragmentSourcePane:
 		return true
-	case Timeline:
+	case RenderWorkspaceParamsXOieFragmentTimeline:
 		return true
 	default:
 		return false
@@ -260,13 +260,16 @@ func (e SearchBrowserMessagesParamsLang) Valid() bool {
 
 // Defines values for SearchBrowserMessagesParamsPresentation.
 const (
-	Compact SearchBrowserMessagesParamsPresentation = "compact"
+	SearchBrowserMessagesParamsPresentationCompact      SearchBrowserMessagesParamsPresentation = "compact"
+	SearchBrowserMessagesParamsPresentationConversation SearchBrowserMessagesParamsPresentation = "conversation"
 )
 
 // Valid indicates whether the value is a known member of the SearchBrowserMessagesParamsPresentation enum.
 func (e SearchBrowserMessagesParamsPresentation) Valid() bool {
 	switch e {
-	case Compact:
+	case SearchBrowserMessagesParamsPresentationCompact:
+		return true
+	case SearchBrowserMessagesParamsPresentationConversation:
 		return true
 	default:
 		return false
@@ -831,6 +834,9 @@ type RenderWorkspaceParams struct {
 	// FavoritesCursor Continuation cursor for the starred-message workspace in the current account scope.
 	FavoritesCursor *string `form:"favoritesCursor,omitempty" json:"favoritesCursor,omitempty"`
 
+	// ChatSearchRevision Historical result revision to restore for the focused message in the conversation search.
+	ChatSearchRevision *externalRef0.ID `form:"chatSearchRevision,omitempty" json:"chatSearchRevision,omitempty"`
+
 	// HXRequest Set to true to request an HTML fragment.
 	HXRequest *RenderWorkspaceParamsHXRequest `json:"HX-Request,omitempty"`
 
@@ -1004,7 +1010,7 @@ type SearchBrowserMessagesParams struct {
 	// Lang Result locale.
 	Lang *SearchBrowserMessagesParamsLang `form:"lang,omitempty" json:"lang,omitempty"`
 
-	// Presentation Use compact excerpts that start near the first visible match in the floating search dialog.
+	// Presentation Compact excerpts for the floating dialog, or content ranges and excerpts for a conversation-scoped timeline search.
 	Presentation *SearchBrowserMessagesParamsPresentation `form:"presentation,omitempty" json:"presentation,omitempty"`
 }
 

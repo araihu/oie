@@ -131,6 +131,76 @@ func TestRoomModerationPreviewMigratesIntoSharedCatalog(t *testing.T) {
 	t.Fatal("preview moderation was not preserved")
 }
 
+func TestMessageSearchIndexMigratesFromRoomBanNicknames(t *testing.T) {
+	ctx := t.Context()
+	store, _, chat := outboxFixture(t)
+	migrateFixtureToVersion(t, store, 29)
+	at := time.Now().UTC()
+	room := domain.Conversation{
+		ID: migrationID(), RevisionID: migrationID(), AccountID: chat.AccountID, PeerID: migrationID(),
+		Kind: "room", Address: "search@rooms.localhost", Title: "Search room", UpdatedAt: at,
+	}
+	message := replySeed(t, store, room, "Arquivo de antes da atualização", at, nil, nil)
+	const address = "removed@localhost"
+	const nickname = "Former member"
+	if _, err := store.db.ExecContext(ctx, "INSERT INTO room_ban_nicknames VALUES(?, ?, ?)", room.ID, address, nickname); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	upgraded, err := Open(ctx, store.dir, migrationID(), WithExperimentalSearch())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = upgraded.Close() }()
+	var retained string
+	if err = upgraded.db.QueryRowContext(ctx, "SELECT nickname FROM room_ban_nicknames WHERE conversation_id=? AND address=?", room.ID, address).Scan(&retained); err != nil || retained != nickname {
+		t.Fatalf("room ban nickname after upgrade: %q, %v", retained, err)
+	}
+	waitIndexReady(t, upgraded, "")
+	assertIndexedCandidate(t, upgraded, "arqiuvo", message.ID)
+	checkIndexParity(t, upgraded, domain.MessageSearchQuery{Search: "arqiuvo", Limit: 10})
+}
+
+func TestMessageSearchPreviewMigratesWithoutDiscardingMessages(t *testing.T) {
+	ctx := t.Context()
+	store, _, chat := outboxFixture(t)
+	message := replySeed(t, store, chat, "Arquivo da prévia", time.Now().UTC(), nil, nil)
+	migrateFixtureToVersion(t, store, 27)
+	migration, err := migrations.ReadFile("migrations/000030_message_search_index.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.db.ExecContext(ctx, string(migration)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.db.ExecContext(ctx, `
+		INSERT INTO message_search_index VALUES(1, 'preview', 1, 'preview', '', 1);
+		PRAGMA user_version=28;
+		UPDATE schema_migrations SET version=28;
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	upgraded, err := Open(ctx, store.dir, migrationID(), WithExperimentalSearch())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = upgraded.Close() }()
+	var moderation bool
+	if err = upgraded.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM sqlite_schema WHERE name='shared_catalog_moderation_insert')").Scan(&moderation); err != nil || !moderation {
+		t.Fatalf("moderation trigger after preview upgrade: %t, %v", moderation, err)
+	}
+	waitIndexReady(t, upgraded, "preview")
+	assertIndexedCandidate(t, upgraded, "arqiuvo", message.ID)
+	checkIndexParity(t, upgraded, domain.MessageSearchQuery{Search: "arqiuvo", Limit: 10})
+}
+
 func TestSchedulingPreviewMigratesWithoutDiscardingData(t *testing.T) {
 	ctx := t.Context()
 	store, engine, conversation := outboxFixture(t)
@@ -147,7 +217,7 @@ func TestSchedulingPreviewMigratesWithoutDiscardingData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"000029_room_ban_nicknames", "000028_room_message_moderation", "000027_shared_catalog_projection", "000026_room_invitation_credentials", "000025_room_creation", "000024_reaction_target_lookups", "000023_dispatch_wire_stage", "000022_scheduled_timeline", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
+	for _, name := range []string{"000030_message_search_index", "000029_room_ban_nicknames", "000028_room_message_moderation", "000027_shared_catalog_projection", "000026_room_invitation_credentials", "000025_room_creation", "000024_reaction_target_lookups", "000023_dispatch_wire_stage", "000022_scheduled_timeline", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
 		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
 		if err != nil {
 			t.Fatal(err)

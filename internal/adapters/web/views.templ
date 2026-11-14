@@ -975,7 +975,7 @@ templ messageStarIndicator(v view,id string){
 templ messageBody(v view,m messageView){
 @replyCard(v,m)
 {{ scope := invitationScope{m.AccountId,m.ConversationId,v.Locale} }}
-<div data-message-presentation data-presentation-known={strconv.FormatBool(m.PresentationKnown)} data-presentation-version={originalMessageJSON(m.presentationText())}>
+<div data-message-presentation data-presentation-known={strconv.FormatBool(m.PresentationKnown)} data-presentation-version={originalMessageJSON(m.presentationText())} data-search-source-digest={searchSourceDigest(m.OriginalText)}>
 <div class="oie-rendered-message" data-rendered-message>
 if m.Formatted!=nil {
 @m.Formatted

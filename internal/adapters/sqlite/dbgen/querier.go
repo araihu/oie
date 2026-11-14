@@ -9,15 +9,20 @@ import (
 )
 
 type Querier interface {
+	AcknowledgeMessageSearchPending(ctx context.Context, arg AcknowledgeMessageSearchPendingParams) error
 	AcquireWriteLock(ctx context.Context) error
+	AdvanceMessageSearchIndex(ctx context.Context, arg AdvanceMessageSearchIndexParams) (int64, error)
 	ArchivedReactionNeighbors(ctx context.Context, arg ArchivedReactionNeighborsParams) (ArchivedReactionNeighborsRow, error)
 	CanPromoteRoomPlaceholder(ctx context.Context, roomID string) (*bool, error)
 	ClearCanonicalAliases(ctx context.Context, ids string) error
 	ClearContentHeads(ctx context.Context, ids string) error
+	ClearMessageSearchExceptions(ctx context.Context) error
+	ClearMessageSearchPending(ctx context.Context) error
 	ClearRoomReactionVisibility(ctx context.Context, arg ClearRoomReactionVisibilityParams) error
 	ConversationUnreadSummary(ctx context.Context, conversationID string) (ConversationUnreadSummaryRow, error)
 	CorrectionNeighbors(ctx context.Context, arg CorrectionNeighborsParams) ([]CorrectionNeighborsRow, error)
 	CountCatalogPage(ctx context.Context, arg CountCatalogPageParams) (int64, error)
+	CountMessageSearchRoomPrefix(ctx context.Context, arg CountMessageSearchRoomPrefixParams) (int64, error)
 	CountRoomArchiveMessages(ctx context.Context, arg CountRoomArchiveMessagesParams) (int64, error)
 	// Match ListSharedContent's scope, categories and search. Any matching rows
 	// suffice for the capped count, so stop at the limit without sorting them.
@@ -55,6 +60,7 @@ type Querier interface {
 	GetMessageReactionCommand(ctx context.Context, id string) (MessageReactionCommand, error)
 	GetMessageReferences(ctx context.Context, arg GetMessageReferencesParams) ([]GetMessageReferencesRow, error)
 	GetMessageReply(ctx context.Context, arg GetMessageReplyParams) (string, error)
+	GetMessageSearchIndex(ctx context.Context) (MessageSearchIndex, error)
 	GetMessageStar(ctx context.Context, messageID string) (GetMessageStarRow, error)
 	GetOperation(ctx context.Context, id string) (Operation, error)
 	GetOutbox(ctx context.Context, messageID string) (Outbox, error)
@@ -121,6 +127,12 @@ type Querier interface {
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]ListConversationsRow, error)
 	ListMessageHistoryProofs(ctx context.Context, arg ListMessageHistoryProofsParams) ([]ListMessageHistoryProofsRow, error)
 	ListMessageHistorySources(ctx context.Context, arg ListMessageHistorySourcesParams) ([]ListMessageHistorySourcesRow, error)
+	ListMessageSearchBuildIDs(ctx context.Context, arg ListMessageSearchBuildIDsParams) ([]string, error)
+	// This superset includes hidden messages, link metadata awaiting parser
+	// reconciliation, and first revisions of aliases before verifying edit facts.
+	ListMessageSearchDocuments(ctx context.Context, messageIds string) ([]ListMessageSearchDocumentsRow, error)
+	ListMessageSearchPending(ctx context.Context, batchLimit int64) ([]MessageSearchPending, error)
+	ListMessageSearchUnindexed(ctx context.Context, maxIds int64) ([]string, error)
 	ListMessageStars(ctx context.Context, arg ListMessageStarsParams) ([]ListMessageStarsRow, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
 	ListMessagesAfter(ctx context.Context, arg ListMessagesAfterParams) ([]Message, error)
@@ -129,6 +141,9 @@ type Querier interface {
 	ListRoomBannedNicknames(ctx context.Context, conversationID string) ([]ListRoomBannedNicknamesRow, error)
 	ListRoomIntents(ctx context.Context) ([]RoomIntent, error)
 	ListScheduledMessages(ctx context.Context, arg ListScheduledMessagesParams) ([]ListScheduledMessagesRow, error)
+	// Filter against the retained message in the same snapshot. Deleted IDs can
+	// still need index maintenance, but cannot contribute a search result.
+	ListScopedMessageSearchUnindexed(ctx context.Context, arg ListScopedMessageSearchUnindexedParams) ([]string, error)
 	// The catalog and a bounded timeline use different driving indexes.
 	ListSharedContent(ctx context.Context, arg ListSharedContentParams) ([]ListSharedContentRow, error)
 	ListStarredMessages(ctx context.Context, arg ListStarredMessagesParams) ([]ListStarredMessagesRow, error)
@@ -165,6 +180,7 @@ type Querier interface {
 	ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error
 	ReconcileReactionObservation(ctx context.Context, arg ReconcileReactionObservationParams) error
 	RecordOriginalTransmission(ctx context.Context, id string) error
+	RemoveMessageSearchException(ctx context.Context, messageID string) error
 	RemoveModeratedSharedContent(ctx context.Context, messageID string) error
 	RemoveRoomBannedNickname(ctx context.Context, arg RemoveRoomBannedNicknameParams) error
 	ResetAllRoomReactionPrivacy(ctx context.Context) error
@@ -173,6 +189,9 @@ type Querier interface {
 	SearchContacts(ctx context.Context, arg SearchContactsParams) ([]SearchContactsRow, error)
 	SearchMessagePreviews(ctx context.Context, arg SearchMessagePreviewsParams) ([]SearchMessagePreviewsRow, error)
 	SearchMessages(ctx context.Context, arg SearchMessagesParams) ([]SearchMessagesRow, error)
+	SearchMessagesChronological(ctx context.Context, arg SearchMessagesChronologicalParams) ([]SearchMessagesChronologicalRow, error)
+	SearchRoomMessagesChronological(ctx context.Context, arg SearchRoomMessagesChronologicalParams) ([]SearchRoomMessagesChronologicalRow, error)
+	SetMessageSearchException(ctx context.Context, messageID string) error
 	SetMessageTimelineAt(ctx context.Context, arg SetMessageTimelineAtParams) error
 	SetOperationResult(ctx context.Context, arg SetOperationResultParams) error
 	SetRoomObservation(ctx context.Context, arg SetRoomObservationParams) error
@@ -182,6 +201,7 @@ type Querier interface {
 	SharedContentCandidates(ctx context.Context, arg SharedContentCandidatesParams) ([]Message, error)
 	ShiftArchivedReactions(ctx context.Context, arg ShiftArchivedReactionsParams) error
 	Snapshot(ctx context.Context) (SnapshotRow, error)
+	StartMessageSearchIndex(ctx context.Context, arg StartMessageSearchIndexParams) error
 	UpdateAvatar(ctx context.Context, arg UpdateAvatarParams) error
 	UpdateConversation(ctx context.Context, arg UpdateConversationParams) error
 	UpdateConversationPreferences(ctx context.Context, arg UpdateConversationPreferencesParams) (int64, error)
@@ -191,6 +211,7 @@ type Querier interface {
 	UpdateMessageReactionCommand(ctx context.Context, arg UpdateMessageReactionCommandParams) error
 	UpdateOutbox(ctx context.Context, arg UpdateOutboxParams) error
 	UpsertRoomInvitationCredential(ctx context.Context, arg UpsertRoomInvitationCredentialParams) error
+	VerifyIndexedMessages(ctx context.Context, arg VerifyIndexedMessagesParams) ([]VerifyIndexedMessagesRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -4,7 +4,7 @@
 const resultSelector='a:is([data-message-search-source],[data-message-search-conversation],[data-message-search-contact])';
 const moreSelector='a[data-message-search-next]';
 const searchKeys=['searchMode','searchQuery','searchAccount','searchType','searchConversation','searchCursor','searchEngine','includeEditHistory'];
-const chatSearchKeys=['chatSearch','chatQuery','chatIncludeHistory'];
+const chatSearchKeys=['chatSearch','chatQuery','chatIncludeHistory','chatSearchRevision'];
 
 function searchResponseMatches(response,state,cursor){
  const data=response?.dataset;
@@ -96,7 +96,7 @@ window.OieRuntime.register('message-search',life=>{
   }
   for(const link of categoryNav.querySelectorAll('[data-message-search-category]')){
    const url=new URL(link.href,location.href);
-   for(const name of [...searchKeys,'chatSearch','chatQuery','chatIncludeHistory','chat','message'])url.searchParams.delete(name);
+   for(const name of [...searchKeys,'chatSearch','chatQuery','chatIncludeHistory','chatSearchRevision','chat','message'])url.searchParams.delete(name);
    url.searchParams.set('q',query.value.trim());
    url.searchParams.delete('account');
    url.searchParams.delete('contentAccount');
@@ -184,7 +184,7 @@ window.OieRuntime.register('message-search',life=>{
    if(category.value!==selected){category.value=selected;changed();}
    return;
   }
-  if(node.hasAttribute('data-message-search-source')||node.hasAttribute('data-message-search-conversation')||node.hasAttribute('data-message-search-contact')){const url=new URL(node.href,location.href);if(!native){applyURL(url,value());if(originalQuery)url.searchParams.set('q',originalQuery);else url.searchParams.delete('q');url.searchParams.set('filter',root.dataset.inboxFilter||'all');url.searchParams.set('section',root.dataset.inboxSection||'chats');}if(url.searchParams.get('chat')!==document.body.dataset.conversationId)for(const name of ['chatSearch','chatQuery','chatIncludeHistory'])url.searchParams.delete(name);memory.set('message-search-source-pending',engine);rememberPending();const finished=()=>{if(life.signal.aborted)return;memory.delete('message-search-source-pending');memory.delete('message-search-pending-open');if(opened)address();};Promise.resolve(window.OieNavigation?.go(url)).then(finished,finished);return}if(node.hasAttribute('data-message-search-clear-scope')){conversation.value='';root.querySelector('[data-message-search-scope]').hidden=true;changed();return}if(node.hasAttribute('data-message-search-next'))request(node.dataset.searchCursor);else{abort();if(node.hasAttribute('data-message-search-restart')&&engineChanged){const params=requestParams(value());params.set('lang',form.elements.lang.value);params.set('theme',form.elements.theme.value);params.delete('engineId');window.OieNavigation?.go('/search?'+params);return;}request(node.hasAttribute('data-message-search-restart')?'':lastCursor);}},true);
+  if(node.hasAttribute('data-message-search-source')||node.hasAttribute('data-message-search-conversation')||node.hasAttribute('data-message-search-contact')){const url=new URL(node.href,location.href);if(!native){applyURL(url,value());if(originalQuery)url.searchParams.set('q',originalQuery);else url.searchParams.delete('q');url.searchParams.set('filter',root.dataset.inboxFilter||'all');url.searchParams.set('section',root.dataset.inboxSection||'chats');}if(url.searchParams.get('chat')!==document.body.dataset.conversationId)for(const name of ['chatSearch','chatQuery','chatIncludeHistory','chatSearchRevision'])url.searchParams.delete(name);memory.set('message-search-source-pending',engine);rememberPending();const finished=()=>{if(life.signal.aborted)return;memory.delete('message-search-source-pending');memory.delete('message-search-pending-open');if(opened)address();};Promise.resolve(window.OieNavigation?.go(url)).then(finished,finished);return}if(node.hasAttribute('data-message-search-clear-scope')){conversation.value='';root.querySelector('[data-message-search-scope]').hidden=true;changed();return}if(node.hasAttribute('data-message-search-next'))request(node.dataset.searchCursor);else{abort();if(node.hasAttribute('data-message-search-restart')&&engineChanged){const params=requestParams(value());params.set('lang',form.elements.lang.value);params.set('theme',form.elements.theme.value);params.delete('engineId');window.OieNavigation?.go('/search?'+params);return;}request(node.hasAttribute('data-message-search-restart')?'':lastCursor);}},true);
  const url=new URL(location.href),pending=memory.get('message-search-pending-open');memory.delete('message-search-pending-open');memory.delete('message-search-source-pending');
  if(initial)consume(initial);
  if(native){categories();show(true);}
@@ -298,6 +298,7 @@ window.OieRuntime.register('quick-message-search',life=>{
    url.searchParams.delete(key);
    for(const value of current.searchParams.getAll(key))url.searchParams.append(key,value);
   }
+  if(url.searchParams.get('message')!==current.searchParams.get('message'))url.searchParams.delete('chatSearchRevision');
   url.searchParams.set('lang',app.dataset.routeLocale);
   url.searchParams.set('theme',app.dataset.routeTheme);
   return url;

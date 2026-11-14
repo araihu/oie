@@ -133,6 +133,11 @@ func migrateDatabase(ctx context.Context, db *sql.DB, dir string) error {
 			return err
 		}
 	}
+	if version == 28 && legacy == 28 {
+		if err := adoptMessageSearchPreview(ctx, db); err != nil {
+			return err
+		}
+	}
 	if err := runner.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return err
 	}
@@ -154,6 +159,36 @@ func lastMigrationVersion(scripts source.Driver) (int, error) {
 		}
 		version = next
 	}
+}
+
+// The Bleve preview used version 28 before main assigned it to moderation.
+// Replace its derived schema with the missing moderation migration. Migration
+// 30 reinstalls search and the worker rebuilds from the retained messages.
+func adoptMessageSearchPreview(ctx context.Context, db *sql.DB) error {
+	var preview bool
+	if err := db.QueryRowContext(ctx, `SELECT
+		EXISTS(SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'message_search_index')
+		AND NOT EXISTS(SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'room_message_moderation')`).Scan(&preview); err != nil {
+		return err
+	}
+	if !preview {
+		return nil
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, name := range []string{"000030_message_search_index.down.sql", "000028_room_message_moderation.up.sql"} {
+		migration, err := migrations.ReadFile("migrations/" + name)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, string(migration)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // The room-management preview used version 27 for moderation. Install the

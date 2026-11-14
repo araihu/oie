@@ -19,17 +19,27 @@ import (
 )
 
 type Store struct {
-	db        *sql.DB
-	queries   *dbgen.Queries
-	readDB    *sql.DB
-	read      *dbgen.Queries
-	lock      *flock.Flock
-	dir       string
-	closeOnce sync.Once
-	closeErr  error
+	db                 *sql.DB
+	queries            *dbgen.Queries
+	readDB             *sql.DB
+	read               *dbgen.Queries
+	lock               *flock.Flock
+	dir                string
+	closeOnce          sync.Once
+	closeErr           error
+	messageIndex       *messageIndex
+	experimentalSearch bool
 }
 
-func Open(ctx context.Context, dir string, initialID domain.ID) (_ *Store, err error) {
+// Option configures a SQLite store before opening its data directory.
+type Option func(*Store)
+
+// WithExperimentalSearch enables the derived Bleve index for this store.
+func WithExperimentalSearch() Option {
+	return func(s *Store) { s.experimentalSearch = true }
+}
+
+func Open(ctx context.Context, dir string, initialID domain.ID, options ...Option) (_ *Store, err error) {
 	if _, err = domain.ParseID(string(initialID)); err != nil {
 		return nil, err
 	}
@@ -50,6 +60,9 @@ func Open(ctx context.Context, dir string, initialID domain.ID) (_ *Store, err e
 		}
 	}()
 	store := &Store{lock: owner, dir: dir}
+	for _, option := range options {
+		option(store)
+	}
 	if _, markerErr := os.Lstat(filepath.Join(dir, resetMarker)); markerErr == nil {
 		if err = store.removeData(); err != nil {
 			return nil, err
@@ -128,6 +141,9 @@ func (s *Store) openDatabase(ctx context.Context, initialID domain.ID) (err erro
 	}
 	s.db, s.queries = db, queries
 	s.readDB, s.read = readDB, dbgen.New(readDB)
+	if s.experimentalSearch {
+		s.startMessageIndex()
+	}
 	return nil
 }
 func (s *Store) Close() error {
@@ -137,6 +153,11 @@ func (s *Store) Close() error {
 	return s.closeErr
 }
 func (s *Store) closeDatabase() error {
+	if s.messageIndex != nil {
+		s.messageIndex.cancel()
+		<-s.messageIndex.done
+		s.messageIndex = nil
+	}
 	var err error
 	if s.readDB != nil {
 		err = s.readDB.Close()
