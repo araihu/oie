@@ -131,6 +131,10 @@ const messages = [source, message(12, 'Message with a rejected destination')];
           if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.press('Enter');
           await action.press('Enter');
           await dialog.locator('[data-forward-form]').waitFor();
+          await dialog.locator('[data-forward-search]').evaluate(input => {
+            if (document.activeElement === input) return;
+            return new Promise(resolve => input.addEventListener('focus', resolve, { once: true }));
+          });
         };
         const close = async () => {
           await page.keyboard.press('Escape');
