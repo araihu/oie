@@ -514,6 +514,8 @@
   "RoomBannedAddresses": "Endereços banidos",
   "RoomDetailsTab": "Detalhes",
   "RoomNoVisibleParticipants": "Nenhum participante para mostrar.",
+  "RoomSearchParticipants": "Pesquisar participantes",
+  "RoomNoMatchingParticipants": "Nenhum participante encontrado.",
   "RoomTopic": "Tópico",
   "RoomInvitePeople": "Convidar pessoas",
   "RoomDetailsUnchanged": "Nenhuma alteração para salvar.",

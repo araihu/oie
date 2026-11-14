@@ -316,6 +316,14 @@ async function waitFor(predicate) {
       const photo = participant.locator('img');
       await photo.waitFor();
       assert.equal(await photo.getAttribute('src'), '/ui/avatars/'+avatarHash);
+      const search = management.getByRole('searchbox',{name:'Pesquisar participantes',exact:true});
+      await search.fill('  LEITÓ  ');
+      assert.deepEqual(await management.locator('.oie-room-participant-group:visible h3').allTextContents(),['Participantes']);
+      await search.fill('sem resultado');
+      await management.getByText('Nenhum participante encontrado.',{exact:true}).waitFor();
+      await page.keyboard.press('Escape');
+      assert.equal(await search.inputValue(),'');
+      await search.fill('leit');
       await participant.focus();
       await page.keyboard.press('Enter');
       const profile = management.getByRole('region',{name:'Leitora',exact:true});
@@ -323,9 +331,11 @@ async function waitFor(predicate) {
       assert.equal(await profile.getByRole('button',{name:'Tornar moderador',exact:true}).isVisible(),true);
       assert.equal(await profile.getByRole('button',{name:'Tornar membro',exact:true}).isVisible(),true);
       assert.equal(await participant.isVisible(),false);
+      assert.equal(await search.isVisible(),false);
       await page.keyboard.press('Escape');
       await profile.waitFor({state:'hidden'});
       assert.equal(await participant.evaluate(el => document.activeElement === el),true);
+      assert.equal(await search.inputValue(),'leit');
       await participant.click();
       const kickTrigger = profile.getByRole('button', {name:'Remover da sala',exact:true});
       const promote = profile.getByRole('button', {name:'Tornar moderador',exact:true});
@@ -359,6 +369,10 @@ async function waitFor(predicate) {
       await initials.waitFor();
       assert.equal((await initials.innerText()).trim(),'SF');
       assert.equal(await management.getByRole('button',{name:'Retirar banimento · banido@fixture'}).isVisible(), true);
+      await participantsTab.click();
+      assert.equal(await search.inputValue(),'leit');
+      assert.deepEqual(await management.locator('.oie-room-participant-group:visible h3').allTextContents(),['Participantes']);
+      await search.clear();
       await detailsTab.click();
 
       if (width === 1440 && process.env.OIE_ROOM_MANAGEMENT_SCREENSHOT) {

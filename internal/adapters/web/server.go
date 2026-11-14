@@ -304,6 +304,8 @@ type copy struct {
 	RoomBannedAddresses                                                                                                                                                                                      string
 	RoomDetailsTab                                                                                                                                                                                           string
 	RoomNoVisibleParticipants                                                                                                                                                                                string
+	RoomSearchParticipants                                                                                                                                                                                   string
+	RoomNoMatchingParticipants                                                                                                                                                                               string
 	RoomTopic                                                                                                                                                                                                string
 	RoomDetailsUnchanged                                                                                                                                                                                     string
 	RoomInvitePeople                                                                                                                                                                                         string
