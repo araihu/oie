@@ -278,7 +278,8 @@ def linux_dialog_diagnostics(stage, app, target):
             prefix.with_suffix("." + kind + ".txt").write_text(result.stdout + result.stderr)
     if shutil.which("scrot"):
         subprocess.run(["scrot", "-o", str(prefix.with_suffix(".png"))], capture_output=True, timeout=10)
-    state = {"target": str(target), "targetExists": target.exists(), "contentReads": Fixture.content_reads}
+    state = {"target": str(target), "targetExists": target.exists(), "contentReads": Fixture.content_reads,
+             "directoryEntries": sorted(entry.name for entry in target.parent.iterdir())}
     try:
         state["app"] = app.tool("app_info")
     except (OSError, RuntimeError) as error:
@@ -315,10 +316,16 @@ def linux_save_dialog(app, target, cancel=False, draft=False):
         require(Fixture.content_reads == previous_reads, "cancel unnecessarily read the original")
         return
     subprocess.run(["xdotool", "key", "--clearmodifiers", "ctrl+l"], check=True, timeout=5)
-    # GTK selects the filename stem here and retains its extension. Replace all.
-    subprocess.run(["xdotool", "key", "--clearmodifiers", "ctrl+a"], check=True, timeout=5)
+    if draft:
+        # Keep the name supplied by Oiê. xdotool can drop accented characters
+        # when typing a replacement on the Xvfb keyboard map.
+        subprocess.run(["xdotool", "key", "--clearmodifiers", "Home"], check=True, timeout=5)
+        destination = str(target.parent) + os.sep
+    else:
+        subprocess.run(["xdotool", "key", "--clearmodifiers", "ctrl+a"], check=True, timeout=5)
+        destination = str(target)
     linux_dialog_diagnostics("location-focus", app, target)
-    subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "1", str(target)], check=True, timeout=5)
+    subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "1", destination], check=True, timeout=5)
     linux_dialog_diagnostics("path-entered", app, target)
     subprocess.run(["xdotool", "key", "--clearmodifiers", "Return"], check=True, timeout=5)
     time.sleep(.5)
