@@ -26,12 +26,20 @@ window.OieRuntime.register('forwarding', life => {
     } catch { /* Keep in-memory retries. */ }
   }
   if (Array.isArray(legacy)) {
+    const byDestination = new Map();
     for (const [key, receipt] of legacy) {
       const [source, revision, room] = key.split(':');
       const destination = source + ':' + room;
-      if (!journals.has(destination) || receipt.accepted) {
-        journals.set(destination, {key: receipt.key, revision, state: receipt.accepted ? 'accepted' : 'uncertain', selected: true, message: receipt.message});
-      }
+      if (!byDestination.has(destination)) byDestination.set(destination, []);
+      byDestination.get(destination).push({key: receipt.key, revision, state: receipt.accepted ? 'accepted' : 'uncertain', selected: true, message: receipt.message});
+    }
+    for (const [destination, attempts] of byDestination) {
+      // An accepted legacy attempt already settles the destination. Other
+      // keys remain recorded but are unsafe to retry as additional sends.
+      const accepted = attempts.findIndex(receipt => receipt.state === 'accepted');
+      const [receipt] = attempts.splice(Math.max(0, accepted), 1);
+      if (attempts.length) receipt.remaining = attempts;
+      journals.set(destination, receipt);
     }
     persist();
   }
@@ -120,6 +128,18 @@ window.OieRuntime.register('forwarding', life => {
   });
   life.on(dialog, 'close', () => {
     request?.abort();
+    const form = body.querySelector('[data-forward-form]');
+    if (!submitting && form && !boxes(form).some(box => {
+      const receipt = roomReceipt(form, box);
+      return receipt && receipt.state !== 'accepted' && !superseded(form, receipt);
+    })) {
+      // Dismissing a settled legacy batch acknowledges its displayed receipts.
+      for (const box of boxes(form)) {
+        const receipt = roomReceipt(form, box);
+        if (receipt?.state === 'accepted' && receipt.remaining?.length) journals.delete(receiptKey(form, box));
+      }
+      persist();
+    }
     window.OieVideos?.release(body);
     if (opener?.isConnected) opener.focus({preventScroll: true});
   });
@@ -145,6 +165,57 @@ window.OieRuntime.register('forwarding', life => {
     updateButton(box.form);
     box.form.querySelector('[data-forward-search]').dispatchEvent(new Event('input', {bubbles: true}));
   });
+
+  async function submitRoom(form, box) {
+    const key = receiptKey(form, box);
+    const status = resultNode(box);
+    let receipt = journals.get(key);
+    while (receipt && !life.signal.aborted) {
+      const wasUncertain = receipt.state === 'uncertain';
+      receipt.state = 'uncertain';
+      receipt.message = body.dataset.unconfirmed;
+      persist();
+      status.textContent = body.dataset.sending;
+      const data = new URLSearchParams();
+      for (const name of ['engineId','csrf','messageId']) data.set(name, form.elements[name].value);
+      data.set('revisionId', receipt.revision);
+      data.set('conversationId', box.value);
+      data.set('operationKey', receipt.key);
+      try {
+        const response = await life.fetch('/ui/messages/forward', {method: 'POST', body: data, headers: {Accept: 'application/json'}});
+        const result = await response.json();
+        if (life.signal.aborted) return;
+        if (response.ok && result.accepted === true) receipt.state = 'accepted';
+        else if (result.rejected && (!wasUncertain || result.code === 'source_changed')) {
+          receipt.state = 'rejected';
+          if (result.code === 'source_changed') {
+            const [next, ...remaining] = receipt.remaining || [];
+            if (next) {
+              next.selected = receipt.selected;
+              if (remaining.length) next.remaining = remaining;
+              journals.set(key, next);
+              receipt = next;
+              continue;
+            }
+            if (superseded(form, receipt)) {
+              box.checked = false;
+              journals.delete(key);
+            } else {
+              // The user must reopen the dialog to review the current source.
+              box.dataset.forwardStale = '';
+            }
+          }
+        }
+        receipt.message = result.message || body.dataset.unconfirmed;
+      } catch { /* Keep this room and key available for an exact retry. */ }
+      if (life.signal.aborted) return;
+      persist();
+      status.textContent = receipt.message;
+      status.dataset.accepted = String(receipt.state === 'accepted');
+      break;
+    }
+  }
+
   life.on(body, 'submit', async event => {
     const form = event.target;
     if (!form.matches('[data-forward-form]')) return;
@@ -169,46 +240,13 @@ window.OieRuntime.register('forwarding', life => {
     try {
       for (const box of selected) {
         if (life.signal.aborted) return;
-        const receipt = roomReceipt(form, box);
-        const wasUncertain = receipt.state === 'uncertain';
-        receipt.state = 'uncertain';
-        receipt.message = body.dataset.unconfirmed;
-        persist();
-        const status = resultNode(box);
-        status.textContent = body.dataset.sending;
-        const data = new URLSearchParams();
-        for (const name of ['engineId','csrf','messageId']) data.set(name, form.elements[name].value);
-        data.set('revisionId', receipt.revision);
-        data.set('conversationId', box.value);
-        data.set('operationKey', receipt.key);
-        try {
-          const response = await life.fetch('/ui/messages/forward', {method: 'POST', body: data, headers: {Accept: 'application/json'}});
-          const result = await response.json();
-          if (life.signal.aborted) return;
-          if (response.ok && result.accepted === true) receipt.state = 'accepted';
-          else if (result.rejected && (!wasUncertain || result.code === 'source_changed')) {
-            receipt.state = 'rejected';
-            if (result.code === 'source_changed' && superseded(form, receipt)) {
-              box.checked = false;
-              receipt.selected = false;
-              // The checkbox already has a new key for the revision on screen.
-              journals.delete(receiptKey(form, box));
-            } else if (result.code === 'source_changed') {
-              // The user must reopen the dialog to review the current source.
-              box.dataset.forwardStale = '';
-            }
-          }
-          receipt.message = result.message || body.dataset.unconfirmed;
-        } catch { /* Keep this room and key available for an exact retry. */ }
-        if (life.signal.aborted) return;
-        persist();
-        status.textContent = receipt.message;
-        status.dataset.accepted = String(receipt.state === 'accepted');
+        await submitRoom(form, box);
       }
       if (life.signal.aborted) return;
       if (selected.every(box => roomReceipt(form, box)?.state === 'accepted')) {
         for (const box of boxes(form)) {
-          if (roomReceipt(form, box)?.state === 'accepted') journals.delete(receiptKey(form, box));
+          const receipt = roomReceipt(form, box);
+          if (receipt?.state === 'accepted') journals.delete(receiptKey(form, box));
         }
         persist();
         if (dialog.open) modal('close');

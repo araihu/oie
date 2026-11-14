@@ -126,9 +126,10 @@ const messages = [source, message(12, 'Message with a rejected destination')];
         const open = async original => {
           const row = page.locator(`[data-info-star-message="${original.id}"]`);
           const trigger = row.locator('[data-favorite-menu-trigger]');
-          await row.hover();
-          if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
-          await row.getByRole('menuitem', { name: fixture.forward, exact: true }).click();
+          const action = row.getByRole('menuitem', { name: fixture.forward, exact: true });
+          await trigger.focus();
+          if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.press('Enter');
+          await action.press('Enter');
           await dialog.locator('[data-forward-form]').waitFor();
         };
         const close = async () => {
@@ -232,12 +233,89 @@ const messages = [source, message(12, 'Message with a rejected destination')];
         await dialog.waitFor({ state: 'hidden' });
         assert.notEqual(requests.at(-1).key, reconciledAttempt.key);
         assert.equal(requests.at(-1).expectedRevisionId, id(15));
+
+        const legacy = 'forwarding-journals:' + engine;
+        const current = 'oie.' + legacy;
+        const olderKey = id(fixture.width + 1), newerKey = id(fixture.width + 2);
+        const previousRevision = id(14);
+        const data = { expectedRevisionId: source.revisionId, conversationId: alpha.id };
+        accepted.set(newerKey, { data, copy: { ...source, id: id(50 + accepted.size), conversationId: alpha.id, sendState: 'queued' } });
+        await page.evaluate(({ legacy, current, rows }) => {
+          sessionStorage.removeItem(current);
+          sessionStorage.setItem(legacy, JSON.stringify(rows));
+        }, { legacy, current, rows: [
+          [`${source.id}:${previousRevision}:${alpha.id}`, { key: olderKey, accepted: false, message: 'Unknown' }],
+          [`${source.id}:${source.revisionId}:${alpha.id}`, { key: newerKey, accepted: false, message: 'Unknown' }],
+        ] });
+        await page.reload();
+        await page.waitForFunction(() => window.OieRuntime?.generation > 0);
+        await open(source);
+        assert(await checkbox(alpha).isChecked());
+        const beforeLegacyRetry = requests.length;
+        await page.route(drop, async route => {
+          if (route.request().method() === 'POST' && route.request().postData()?.includes(newerKey)) {
+            await route.fetch();
+            await route.abort();
+          } else await route.continue();
+        });
+        await button.click();
+        await waitForRetry();
+        await page.unroute(drop);
+        assert.deepEqual(requests.slice(beforeLegacyRetry).map(({ key }) => key), [olderKey, newerKey]);
+        await page.reload();
+        await page.waitForFunction(() => window.OieRuntime?.generation > 0);
+        await open(source);
+        assert(await checkbox(alpha).isChecked());
+        await button.click();
+        await dialog.waitFor({ state: 'hidden' });
+        assert.deepEqual(requests.slice(beforeLegacyRetry).map(({ key }) => key), [olderKey, newerKey, newerKey]);
+
+        await page.evaluate(({ legacy, current, rows }) => {
+          sessionStorage.removeItem(current);
+          sessionStorage.setItem(legacy, JSON.stringify(rows));
+        }, { legacy, current, rows: [
+          [`${source.id}:${previousRevision}:${alpha.id}`, { key: olderKey, accepted: false, message: 'Unknown' }],
+          [`${source.id}:${source.revisionId}:${alpha.id}`, { key: newerKey, accepted: true, message: 'Queued' }],
+        ] });
+        await page.reload();
+        await page.waitForFunction(() => window.OieRuntime?.generation > 0);
+        await open(source);
+        await status(alpha).getByText('Queued', { exact: true }).waitFor();
+        assert(await checkbox(alpha).isDisabled());
+        const stored = await page.evaluate(key => JSON.parse(sessionStorage.getItem(key)), current);
+        assert.equal(stored[0][1].key, newerKey);
+        assert.equal(stored[0][1].remaining[0].key, olderKey);
+        await choose(charlie);
+        const beforeOtherDestination = requests.length;
+        await button.click();
+        await dialog.waitFor({ state: 'hidden' });
+        assert.deepEqual(requests.slice(beforeOtherDestination).map(({ conversationId }) => conversationId), [charlie.id]);
+        await page.reload();
+        await page.waitForFunction(() => window.OieRuntime?.generation > 0);
+        await open(source);
+        assert(await checkbox(alpha).isEnabled());
+        assert.equal(await checkbox(alpha).isChecked(), false);
+        await close();
+        await page.evaluate(({ key, rows }) => sessionStorage.setItem(key, JSON.stringify(rows)), {
+          key: legacy, rows: [
+            [`${source.id}:${previousRevision}:${alpha.id}`, { key: olderKey, accepted: false, message: 'Unknown' }],
+            [`${source.id}:${source.revisionId}:${alpha.id}`, { key: newerKey, accepted: true, message: 'Queued' }],
+          ],
+        });
+        await page.reload();
+        await page.waitForFunction(() => window.OieRuntime?.generation > 0);
+        await open(source);
+        await status(alpha).getByText('Queued', { exact: true }).waitFor();
+        assert(await checkbox(alpha).isDisabled());
+        await close();
+        await open(source);
+        assert(await checkbox(alpha).isEnabled());
         assert.deepEqual(errors, []);
       } finally {
         await context.close();
       }
     }
-    console.log('PASS: interrupted forwarding retries the original revision, accepted rooms are skipped and deselected rooms stay unchecked in English and Portuguese');
+    console.log('PASS: interrupted forwarding and legacy receipts retry original keys, skip accepted rooms and keep deselected rooms unchecked in English and Portuguese');
   } finally {
     await browser.close();
     if (child.exitCode === null) {
