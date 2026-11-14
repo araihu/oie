@@ -547,6 +547,14 @@ repeat their `go install` command with the desired tag. Repeating the same
 version reinstalls it; it does not select newer application code. Both methods
 preserve the separate profile.
 
+When startup needs to upgrade an existing SQLite database, Oiê saves a copy
+under `migration-backups/` in the profile first. The filename starts with
+`oie-before-v` and includes the previous schema version and a UTC timestamp.
+Allow disk space for a second copy of the database. If Oiê cannot save the
+backup, startup stops before applying the migration. The copies contain the
+database, and the media files stay in the profile. Backups are retained across
+updates and are deleted when you use **Delete all data**.
+
 To uninstall a default Linux release installation, quit the app and remove only
 these application files:
 

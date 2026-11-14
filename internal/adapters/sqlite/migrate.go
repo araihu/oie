@@ -18,15 +18,61 @@ var migrations embed.FS
 const schedulingMigration = 21
 const latestMigration = 27
 
-func migrateDatabase(ctx context.Context, db *sql.DB) error {
-	// Catalog introspection is bootstrap housekeeping, not application queries.
-	var legacy, tables int
+func migrateDatabase(ctx context.Context, db *sql.DB, dir string) error {
+	var legacy int
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&legacy); err != nil {
 		return err
 	}
 	if legacy > latestMigration {
 		return fmt.Errorf("database schema %d is newer than supported version %d", legacy, latestMigration)
 	}
+	// WithInstance creates the migration journal. Inspect the database before
+	// opening the migration driver so the backup includes the original schema.
+	var hasJournal, hasSchema bool
+	if err := db.QueryRowContext(ctx, `SELECT
+		EXISTS(SELECT 1 FROM sqlite_schema WHERE type='table' AND name='schema_migrations'),
+		EXISTS(SELECT 1 FROM sqlite_schema WHERE tbl_name<>'schema_migrations' AND name NOT GLOB 'sqlite_*')`).Scan(&hasJournal, &hasSchema); err != nil {
+		return err
+	}
+	var version int
+	var tracked, dirty bool
+	if hasJournal {
+		err := db.QueryRowContext(ctx, "SELECT version, dirty FROM schema_migrations LIMIT 1").Scan(&version, &dirty)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		tracked = err == nil
+	}
+	if dirty {
+		return fmt.Errorf("database migration %d is dirty; repair explicitly before starting", version)
+	}
+	if version > latestMigration {
+		return fmt.Errorf("database migration %d is newer than supported version %d", version, latestMigration)
+	}
+	if version == latestMigration {
+		return nil
+	}
+	if !tracked && legacy == 1 {
+		var tables int
+		if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('accounts','revisions','operations','changes','engine_identity')").Scan(&tables); err != nil {
+			return err
+		}
+		if tables != 5 {
+			return errors.New("unrecognized legacy database; refusing migration baseline")
+		}
+	} else if !tracked && legacy != 0 {
+		return errors.New("untracked non-legacy database; refusing migration baseline")
+	}
+	if tracked || hasSchema {
+		backupVersion := version
+		if !tracked {
+			backupVersion = legacy
+		}
+		if err := backupBeforeMigration(ctx, db, dir, backupVersion); err != nil {
+			return fmt.Errorf("back up database before migration: %w", err)
+		}
+	}
+
 	driver, err := migratesqlite.WithInstance(db, &migratesqlite.Config{})
 	if err != nil {
 		return err
@@ -40,29 +86,11 @@ func migrateDatabase(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	version, dirty, err := runner.Version()
-	if err != nil && !errors.Is(err, migrate.ErrNilVersion) {
-		return err
-	}
-	if dirty {
-		return fmt.Errorf("database migration %d is dirty; repair explicitly before starting", version)
-	}
-	if err == nil && version > latestMigration {
-		return fmt.Errorf("database migration %d is newer than supported version %d", version, latestMigration)
-	}
-	if errors.Is(err, migrate.ErrNilVersion) && legacy == 1 {
-		if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('accounts','revisions','operations','changes','engine_identity')").Scan(&tables); err != nil {
-			return err
-		}
-		if tables != 5 {
-			return errors.New("unrecognized legacy database; refusing migration baseline")
-		}
+	if !tracked && legacy == 1 {
 		// The only automatic baseline is the shipped, pre-migrate foundation v1.
 		if err := runner.Force(1); err != nil {
 			return err
 		}
-	} else if errors.Is(err, migrate.ErrNilVersion) && legacy != 0 {
-		return errors.New("untracked non-legacy database; refusing migration baseline")
 	}
 	if version >= 18 && version < schedulingMigration {
 		if err := adoptSchedulingPreview(ctx, db, runner, version, legacy); err != nil {
@@ -143,7 +171,7 @@ func adoptReactionLookupPreview(ctx context.Context, db *sql.DB) error {
 
 // The scheduling preview used version 18 before main assigned it to reactions.
 // Apply the missing reaction migration and keep the already installed schedule schema.
-func adoptSchedulingPreview(ctx context.Context, db *sql.DB, runner *migrate.Migrate, version uint, legacy int) error {
+func adoptSchedulingPreview(ctx context.Context, db *sql.DB, runner *migrate.Migrate, version, legacy int) error {
 	var scheduled, roomPrivacy bool
 	if err := db.QueryRowContext(ctx, `SELECT
 		EXISTS(SELECT 1 FROM pragma_table_info('outbox') WHERE name = 'scheduled_at')
