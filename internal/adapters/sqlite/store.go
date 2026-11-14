@@ -91,7 +91,7 @@ func (s *Store) openDatabase(ctx context.Context, initialID domain.ID) (err erro
 		}
 	}()
 	db.SetMaxOpenConns(1)
-	if err = migrateDatabase(ctx, db); err != nil {
+	if err = migrateDatabase(ctx, db, filepath.Dir(path)); err != nil {
 		return err
 	}
 	queries := dbgen.New(db)

@@ -743,7 +743,7 @@ func TestRoomReactionReplayRepairsV17BackwardPageOrder(t *testing.T) {
 	}
 	// Downgrade the scratch database to the actual V17 migration state.
 	migrateFixtureToVersion(t, s, 17)
-	if err := migrateDatabase(t.Context(), s.db); err != nil {
+	if err := migrateDatabase(t.Context(), s.db, s.dir); err != nil {
 		t.Fatal(err)
 	}
 	// Read both events together, in the authoritative order from the archive.
