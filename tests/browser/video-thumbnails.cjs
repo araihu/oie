@@ -101,36 +101,44 @@ async function until(fn, label) { for(let n=0;n<180;n++){if(await fn())return;aw
   state.ensures = 0;
   state.holdThumbnail = true;
   state.releaseThumbnail = null;
-  const held = [];
-  await queuePage.route('**/ui/videos/thumbnail', route => {
-   held.push(route);
-   return new Promise(resolve => { route.release = resolve; });
+  let held = 0;
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  await queuePage.route('**/ui/videos/thumbnail', async route => {
+   held++;
+   await gate;
+   await route.abort().catch(()=>{});
   });
-  await queuePage.goto(base+'/?section=media&lang=en');
-  await until(()=>held.length===1,'first automatic preview request is held');
-  await queuePage.evaluate(ids=>{
-   const original = document.querySelector('[data-video-item]');
-   for (const id of ids) {
-    const clone = original.cloneNode(true);
-    clone.dataset.videoItem = id;
-    clone.dataset.videoThumbnailState = 'not_requested';
-    original.after(clone);
-   }
-  },[id(101),id(102)]);
-  await until(()=>held.length===2,'automatic preview concurrency capped at two');
-  await until(()=>queuePage.locator('[data-video-thumbnail-state="queued"]').count().then(count=>count===3),'third preview waits in queue');
-  await queuePage.evaluate(()=>{
-   const toggle = document.createElement('input');
-   toggle.type = 'checkbox';
-   toggle.dataset.autoVideoThumbnails = '';
-   document.body.append(toggle);
-   toggle.dispatchEvent(new Event('change',{bubbles:true}));
-   toggle.remove();
-  });
-  await until(()=>queuePage.locator('[data-video-thumbnail-state="queued"]').count().then(count=>count===0),'opting out resets all automatic preview controls');
-  for (const route of held) { await route.abort().catch(()=>{}); route.release(); }
-  await sleep(350);
-  assert.equal(held.length,2,'no queued request starts after opting out');
+  try {
+   await queuePage.goto(base+'/?section=media&lang=en',{waitUntil:'domcontentloaded'});
+   await until(()=>held===1,'first automatic preview request is held');
+   await queuePage.evaluate(ids=>{
+    const original = document.querySelector('[data-video-item]');
+    for (const id of ids) {
+     const clone = original.cloneNode(true);
+     clone.dataset.videoItem = id;
+     clone.dataset.videoThumbnailState = 'not_requested';
+     Object.assign(clone.style,{position:'fixed',top:'0',left:'0',width:'20px',height:'20px'});
+     document.querySelector('#oie-app').append(clone);
+    }
+   },[id(101),id(102)]);
+   await until(()=>held===2,'automatic preview concurrency capped at two');
+   await until(()=>queuePage.locator('[data-video-thumbnail-state="queued"]').count().then(count=>count===3),'third preview waits in queue');
+   await queuePage.evaluate(()=>{
+    const toggle = document.createElement('input');
+    toggle.type = 'checkbox';
+    toggle.dataset.autoVideoThumbnails = '';
+    document.body.append(toggle);
+    toggle.dispatchEvent(new Event('change',{bubbles:true}));
+    toggle.remove();
+   });
+   await until(()=>queuePage.locator('[data-video-thumbnail-state="queued"]').count().then(count=>count===0),'opting out resets all automatic preview controls');
+   release();
+   await sleep(350);
+   assert.equal(held,2,'no queued request starts after opting out');
+  } finally {
+   release();
+  }
   await queue.close();
   assert.deepEqual(errors,[]);console.log('PASS: default automatic previews, uniform 4:3 image/video frames, stable playback, cache reuse, manual opt-out, failed-preview retry and mobile accessibility');
  }catch(error){console.error(log);throw error}finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(resolve=>api.close(resolve))}
