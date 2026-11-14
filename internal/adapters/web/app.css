@@ -505,6 +505,7 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-preview-summary{display:flex;gap:10px;min-width:0;padding-inline-end:28px;align-items:flex-start}
 .oie-preview-symbol{display:flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;height:28px;border-radius:6px;color:var(--oie-muted);background:var(--oie-panel)}
 .oie-preview-symbol .oie-icon{width:16px;height:16px}
+#shared-content-results .oie-document-card:not([data-document-format=unsupported],[data-document-preview-state=unavailable]) .oie-preview-symbol{display:none}
 .oie-link-card-favicon{display:block;max-width:24px;max-height:24px;object-fit:contain}
 .oie-preview-copy{flex:1;min-width:0}
 .oie-preview-copy .oie-preview-title{font-size:14px;margin:0 0 4px;color:var(--oie-text)}
