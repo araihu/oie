@@ -46,8 +46,10 @@ SELECT i.personal_address,i.source_hash,m.payload AS message_payload
 FROM message_sender_identities i JOIN messages m ON m.id=i.message_id
 WHERE i.account_id=?1 AND i.conversation_id=?2
 AND m.account_id=i.account_id AND m.conversation_id=i.conversation_id
-AND (i.message_id=?3 OR i.message_id IN
- (SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=?3))
+AND i.message_id IN (
+ SELECT CAST(?3 AS TEXT)
+ UNION ALL SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=?3
+)
 ORDER BY i.message_id,i.personal_address,i.source_hash LIMIT 129
 `
 

@@ -15,6 +15,9 @@ import (
 )
 
 func (s *Store) SearchMessages(ctx context.Context, query domain.MessageSearchQuery) (domain.MessageSearchPage, error) {
+	if s.messageIndex != nil {
+		return s.searchMessages(ctx, query, beginRead, s.messageIndex.selectRows)
+	}
 	return s.searchMessages(ctx, query, begin, func(ctx context.Context, _ *sql.Tx, q *dbgen.Queries, p dbgen.SearchMessagesParams) ([]dbgen.SearchMessagesRow, error) {
 		return q.SearchMessages(ctx, p)
 	})

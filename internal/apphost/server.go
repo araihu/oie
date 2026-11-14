@@ -104,7 +104,11 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 		if idErr != nil {
 			return nil, idErr
 		}
-		store, err = sqlite.Open(ctx, cfg.DataDir, candidateID)
+		if os.Getenv("OIE_EXPERIMENTAL_BLEVE_SEARCH") == "1" {
+			store, err = sqlite.Open(ctx, cfg.DataDir, candidateID, sqlite.WithExperimentalSearch())
+		} else {
+			store, err = sqlite.Open(ctx, cfg.DataDir, candidateID)
+		}
 		if err != nil {
 			return nil, err
 		}

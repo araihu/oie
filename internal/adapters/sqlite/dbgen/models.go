@@ -253,6 +253,28 @@ type MessageRevision struct {
 	CreatedAt string
 }
 
+type MessageSearchException struct {
+	MessageID string
+}
+
+type MessageSearchIndex struct {
+	Singleton         int64
+	Generation        string
+	ProjectionVersion int64
+	Batch             string
+	Cursor            string
+	Ready             int64
+}
+
+type MessageSearchInvalidate struct {
+	MessageID string
+}
+
+type MessageSearchPending struct {
+	MessageID string
+	Token     string
+}
+
 type MessageSenderIdentity struct {
 	MessageID       string
 	AccountID       string

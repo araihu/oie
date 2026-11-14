@@ -50,14 +50,22 @@ func Words(value string) []string {
 // ApproximatePrefix returns the length in runes of the closest prefix under the
 // search edit limit. Adjacent transpositions count as one edit.
 func ApproximatePrefix(query, word []rune) int {
+	limit := EditLimit(query)
+	if limit == 0 {
+		return 0
+	}
+	return editPrefix(query, word, limit)
+}
+
+// EditLimit returns the typo budget for a normalized query term.
+func EditLimit(query []rune) int {
 	if len(query) < 4 || !slices.ContainsFunc(query, unicode.IsLetter) {
 		return 0
 	}
-	limit := 1
 	if len(query) >= 8 {
-		limit = 2
+		return 2
 	}
-	return editPrefix(query, word, limit)
+	return 1
 }
 
 // editPrefix is a banded optimal-string-alignment distance. Adjacent swapped

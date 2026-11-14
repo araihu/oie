@@ -85,6 +85,10 @@ today. [Prototype candidate rules](../internal/adapters/sqlite/search_prototype_
    Bound the time inside the gate and measure search and writer
    contention. If a batch fails with uncertain index state, disable
    indexed reads before releasing the gate and use the complete SQL path.
+   The first experiment uses a short lock and checks the publication
+   generation and counter before and after reading candidates. This
+   preserves the snapshot rule while concurrent lookups and durable
+   batches can overlap. [Implemented protocol](message-search-bleve-experiment.md#index-and-query-behavior)
 5. **Recover and retire.** If the process stops after Bleve persists a
    batch and before SQLite acknowledges it, replay pending updates
    idempotently when the persisted batch and source generation can be
@@ -156,6 +160,11 @@ and language-specific stemming can change recall and belong to a relevance
 experiment with explicit expected results. [Bleve query types](https://blevesearch.com/docs/Query/) · [Facets](https://blevesearch.com/docs/Result-Faceting/) · [Scoring](https://github.com/blevesearch/bleve/blob/v2.6.1/docs/scoring.md)
 
 ## Evidence for activation
+
+The first phase runs behind `OIE_EXPERIMENTAL_BLEVE_SEARCH=1`. See the
+[engine experiment](message-search-bleve-experiment.md) for the implemented
+publication protocol, activation and recovery behavior, and concurrent-ingest
+measurement.
 
 Measure the actual engine endpoint across global and room queries, common
 and short selective terms, deep pages and histories with edits and cached

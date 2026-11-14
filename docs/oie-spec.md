@@ -1070,6 +1070,8 @@ to guide the engine index, build and update lifecycle, highlight experiment and
 search capability evaluation. Keep the current message semantics as the
 compatibility baseline. The candidate index and its operational tradeoffs are
 measured in the [comparative prototype](message-search-index-benchmark.md).
+The [opt-in engine experiment](message-search-bleve-experiment.md) implements
+the first phase and records the evidence for O08.
 
 ### Retained edit-history browsing increment
 
