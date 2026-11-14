@@ -34,7 +34,7 @@ func infoEntry(v view, kind, label string, symbol icon.Symbol) templ.Component {
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
 		screen := "shared"
-		if kind == "stars" || kind == "participants" {
+		if kind == "stars" || kind == "participants" || kind == "retention" {
 			screen = kind
 		}
 		templ_7745c5c3_Var2 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {

@@ -13,16 +13,17 @@ import (
 )
 
 const (
-	retentionPath    = "/settings/retention"
+	retentionPath    = "/ui/settings/retention"
 	maxRetentionDays = 365000 // Engine API RetentionDays maximum.
 )
 
-type retentionPageView struct {
+type retentionView struct {
 	Conversation *engineapi.Conversation
 	Global       *engineapi.GlobalRetention
 	Local        *engineapi.ConversationRetention
 	Notice       string
 	Saved        bool
+	Loading      bool
 }
 
 func (s *Server) retention(w http.ResponseWriter, r *http.Request) {
@@ -35,14 +36,12 @@ func (s *Server) retention(w http.ResponseWriter, r *http.Request) {
 	v := s.baseView(r)
 	v.CSRF = csrfToken(w, r)
 	ctx := r.Context()
-	data := retentionPageView{Saved: r.URL.Query().Get("saved") == "1"}
+	id := r.URL.Query().Get("chat")
+	data := retentionView{}
 	status := http.StatusOK
 	defer func() {
-		if status == http.StatusSeeOther {
-			return
-		}
 		var body bytes.Buffer
-		if err := retentionDocument(v, data).Render(presentationContext(ctx, v), &body); err != nil {
+		if err := retentionRegion(v, id, data).Render(presentationContext(ctx, v), &body); err != nil {
 			http.Error(w, v.Text.Unavailable, http.StatusServiceUnavailable)
 			return
 		}
@@ -56,7 +55,6 @@ func (s *Server) retention(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v.EngineID = engine.JSON200.Id
-	id := r.URL.Query().Get("chat")
 	if id != "" {
 		if !validOperationKey(id) {
 			status, data.Notice = http.StatusNotFound, v.Text.RetentionUnavailable
@@ -70,8 +68,12 @@ func (s *Server) retention(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		data.Conversation = owner.JSON200
 		v.Selected = owner.JSON200
+		if v.requestKind() != "" {
+			status, data.Notice = http.StatusNotFound, v.Text.RetentionUnavailable
+			return
+		}
+		data.Conversation = owner.JSON200
 		response, err := s.client.GetConversationRetentionWithResponse(ctx, id)
 		if err == nil {
 			data.Local = response.JSON200
@@ -115,6 +117,9 @@ func (s *Server) retention(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		status = response.StatusCode()
+		if response.JSON200 != nil {
+			data.Local = response.JSON200
+		}
 	} else {
 		rooms, roomOK := retentionFormDays(r.PostForm, "room", false)
 		direct, directOK := retentionFormDays(r.PostForm, "direct", false)
@@ -128,11 +133,13 @@ func (s *Server) retention(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		status = response.StatusCode()
+		if response.JSON200 != nil {
+			data.Global = response.JSON200
+		}
 	}
 	switch status {
 	case http.StatusOK:
-		status = http.StatusSeeOther
-		http.Redirect(w, r, v.retentionHref(id, true), status)
+		data.Saved = true
 	case http.StatusConflict:
 		data.Notice = v.Text.RetentionConflict
 		if data.Local != nil {
@@ -164,22 +171,32 @@ func retentionFormDays(values url.Values, prefix string, allowInherit bool) (*in
 	return nil, false
 }
 
-func (v view) retentionHref(id string, saved bool) string {
-	q := url.Values{"lang": {v.Locale}, "theme": {v.Theme}}
+func (v view) retentionHref(id string) string {
+	q := url.Values{"lang": {v.Locale}}
 	if id != "" {
 		q.Set("chat", id)
-	}
-	if saved {
-		q.Set("saved", "1")
 	}
 	return retentionPath + "?" + q.Encode()
 }
 
-func (v view) retentionBack(id string) string {
-	if id != "" {
-		return v.href("chat", id, "lang", v.Locale, "theme", v.Theme)
+func (v view) retentionDrawerHref() string {
+	q := url.Values{"lang": {v.Locale}, "theme": {v.Theme}}
+	if validOperationKey(v.ChatID) {
+		q.Set("chat", v.ChatID)
+		q.Set("open", "details")
+		q.Set("infoView", "retention")
+	} else {
+		q.Set("open", "settings")
+		q.Set("settingsTab", "device")
 	}
-	return v.href("lang", v.Locale, "theme", v.Theme)
+	return "/?" + q.Encode()
+}
+
+func retentionRegionID(id string) string {
+	if id == "" {
+		return "device-retention"
+	}
+	return "conversation-retention"
 }
 
 func retentionMode(days *int) string {

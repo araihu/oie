@@ -40,6 +40,14 @@ case "stars":
 @infoStarredContent(v)
 case "participants":
 @infoRoomParticipants(v)
+case "retention":
+<section class="oie-info-retention" aria-labelledby="conversation-retention-title">
+  @infoBack(v)
+  <h2 id="conversation-retention-title" tabindex="-1" data-info-heading>{v.Text.RetentionTitle}</h2>
+  if !v.Preview && v.requestKind()=="" {
+    @retentionRegion(v,v.Selected.Id,retentionView{Loading:true})
+  }
+</section>
 default:
 <div class="oie-conversation-details">
 <div id="conversation-details-identity" data-version={v.detailsVersion("identity")}>@detailsIdentity(v)</div>
@@ -57,9 +65,7 @@ if v.Selected.Kind=="room" && v.requestKind()=="" && !v.Preview {
 }
 </nav>
 if !v.Preview && v.requestKind()=="" {
-  @link.Link(v.retentionHref(v.Selected.Id,false),link.WithRootClass("oie-info-entry")){
-    @glyph(heroicons.Icon16SolidClock)<span>{v.Text.RetentionTitle}</span>@glyph(heroicons.Icon16SolidChevronRight)
-  }
+@infoEntry(v,"retention",v.Text.RetentionTitle,heroicons.Icon16SolidClock)
 }
 if v.RoomArchive != nil {
   <div class="oie-room-archive-setting">

@@ -575,6 +575,7 @@
   "RetentionInherit": "Usar o padrão ({period})",
   "RetentionInheritDays": "{days} dias",
   "RetentionSave": "Salvar",
+  "RetentionLoading": "Carregando configuração de retenção…",
   "RetentionSaved": "Configuração de retenção salva.",
   "RetentionUnavailable": "Não foi possível carregar ou salvar a configuração de retenção. Tente novamente.",
   "RetentionConflict": "A configuração de retenção mudou. Confira a configuração atual e tente novamente.",

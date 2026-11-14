@@ -4,65 +4,93 @@ import (
 	"strconv"
 
 	"github.com/araihu/goshtoso/components/button"
-	"github.com/araihu/goshtoso/components/head"
-	"github.com/araihu/goshtoso/components/link"
 	selectfield "github.com/araihu/goshtoso/components/select"
 	"github.com/araihu/goshtoso/components/textinput"
 )
 
-templ retentionDocument(v view, p retentionPageView) {
-	<!DOCTYPE html>
-	<html lang={v.Locale} data-mode={v.Theme} class={templ.KV("dark", v.Theme == "dark")}>
-		<head>
-			<meta charset="utf-8"/>
-			<meta name="viewport" content="width=device-width, initial-scale=1"/>
-			<title>{v.Text.RetentionTitle}</title>
-			@head.Dependencies(head.WithLocalRuntime())
-			<link rel="stylesheet" href={templ.URL(versionedStylesheetURL("/ui/app.css", stylesheet))}/>
-			<link rel="stylesheet" href="/ui/message-history.css"/>
-			<script src="/ui/theme.js"></script>
-		</head>
-		<body>
-			<main class="oie-history-document">
-				<header>
-					<h1>{v.Text.RetentionTitle}</h1>
-					@link.Link(v.retentionBack(v.ChatID)){<span>{v.Text.Back}</span>}
-				</header>
-				if p.Notice != "" {
+templ retentionRegion(v view, id string, p retentionView) {
+	{{ region := retentionRegionID(id) }}
+	<div id={region} class="oie-retention" x-data="{failed:false}" x-on:htmx:error="failed = true">
+		if p.Global != nil || p.Local != nil {
+			@retentionForm(v,id,p)
+		} else {
+			<div class="oie-retention-load"
+				if p.Loading {
+					hx-get={v.retentionHref(id)} hx-trigger="intersect once"
+					hx-target={"#"+region} hx-swap="outerHTML show:none"
+				}
+			>
+				if p.Loading {
+					<p role="status" x-show="!failed">{v.Text.RetentionLoading}</p>
+					<p role="alert" x-show="failed" x-cloak>{v.Text.RetentionUnavailable}</p>
+				} else {
 					<p role="alert">{p.Notice}</p>
-				} else if p.Saved {
-					<p role="status">{v.Text.RetentionSaved}</p>
 				}
-				if p.Global != nil || p.Local != nil {
-					@retentionForm(v,p)
-				}
-			</main>
-		</body>
-	</html>
+				@button.Button(button.WithType("button"),button.WithAttrs(retentionRetryAttrs(v,id,p.Loading))){ {v.Text.Retry} }
+			</div>
+		}
+	</div>
 }
 
-templ retentionForm(v view, p retentionPageView) {
-	<form method="post" action={templ.URL(v.retentionHref(v.ChatID,false))} class="grid gap-4">
+func retentionRetryAttrs(v view, id string, loading bool) templ.Attributes {
+	attrs := templ.Attributes{
+		"hx-get": v.retentionHref(id),
+		"hx-target": "#" + retentionRegionID(id),
+		"hx-swap": "outerHTML show:none",
+		"hx-disable": "this",
+	}
+	if loading {
+		attrs["x-show"] = "failed"
+		attrs["x-cloak"] = true
+	}
+	return attrs
+}
+
+templ retentionForm(v view, id string, p retentionView) {
+	{{ region := retentionRegionID(id) }}
+	<form class="oie-retention-form" method="post" action={templ.URL(v.retentionHref(id))}
+		hx-post={v.retentionHref(id)} hx-target={"#"+region} hx-swap="outerHTML show:none" hx-disable="find fieldset" hx-sync="this:drop"
+		x-data="{error:'', sent:false, pending:false}"
+		data-unavailable={v.Text.RetentionUnavailable} data-invalid={v.Text.InvalidForm} data-forbidden={v.Text.CSRFError}
+		x-on:htmx:before:request="error = ''; sent = true; pending = true"
+		x-on:htmx:finally:request="pending = false"
+		x-on:htmx:error="error = $el.dataset.unavailable"
+		x-on:htmx:after:request="const status = $event.detail.ctx.response.status; if (status !== 200 && status !== 409) { $event.preventDefault(); error = status === 403 ? $el.dataset.forbidden : status === 422 ? $el.dataset.invalid : $el.dataset.unavailable }"
+	>
 		<input type="hidden" name="csrf" value={v.CSRF}/>
 		<input type="hidden" name="engineId" value={v.EngineID}/>
-		if p.Local != nil {
-			<input type="hidden" name="revision" value={p.Local.Revision}/>
-			@retentionChoice(v,"override",p.Conversation.Title,p.Local.Days,p.Local.GlobalDays,true)
-		} else {
-			<input type="hidden" name="revision" value={p.Global.Revision}/>
-			@retentionChoice(v,"room",v.Text.RetentionRooms,&p.Global.RoomDays,0,false)
-			@retentionChoice(v,"direct",v.Text.RetentionDirect,&p.Global.DirectDays,0,false)
-		}
-		<p>{v.Text.RetentionUnlimitedHelp}</p>
-		<p>{v.Text.RetentionShorterHelp}</p>
-		<div>@button.Button(button.WithType("submit"),button.WithTone(button.TonePrimary)){ {v.Text.RetentionSave} }</div>
+		<fieldset class="oie-retention-fields">
+			if p.Local != nil {
+				<input type="hidden" name="revision" value={p.Local.Revision}/>
+				@retentionChoice(v,"override",p.Conversation.Title,p.Local.Days,p.Local.GlobalDays,true)
+			} else {
+				<input type="hidden" name="revision" value={p.Global.Revision}/>
+				@retentionChoice(v,"room",v.Text.RetentionRooms,&p.Global.RoomDays,0,false)
+				@retentionChoice(v,"direct",v.Text.RetentionDirect,&p.Global.DirectDays,0,false)
+			}
+		</fieldset>
+		<div class="oie-retention-help">
+			<p>{v.Text.RetentionUnlimitedHelp}</p>
+			<p>{v.Text.RetentionShorterHelp}</p>
+		</div>
+		<div class="oie-retention-actions">
+			@button.Button(button.WithID(region+"-save"),button.WithType("submit"),button.WithTone(button.TonePrimary),button.WithAttrs(templ.Attributes{"x-bind:aria-disabled":"String(pending)"})){ {v.Text.RetentionSave} }
+			<div>
+				if p.Notice != "" {
+					<p role="alert" x-show="!sent">{p.Notice}</p>
+				} else if p.Saved {
+					<p role="status" x-show="!sent">{v.Text.RetentionSaved}</p>
+				}
+				<p role="alert" x-text="error"></p>
+			</div>
+		</div>
 	</form>
 }
 
 templ retentionChoice(v view, prefix string, label string, days *int, inherited int, canInherit bool) {
 	<div class="grid gap-2" x-data={retentionAlpine(days)} x-on:change="if ($event.target.name.endsWith('-mode')) mode = $event.target.value">
 		@selectfield.Select(selectfield.Config{ID:"retention-"+prefix,Name:prefix+"-mode",Label:label,Options:retentionOptions(v,days,inherited,canInherit),Required:true})
-		<div x-show="mode === 'finite'">
+		<div x-cloak x-show="mode === 'finite'">
 			@textinput.TextInput(textinput.Config{
 				ID:"retention-days-"+prefix,Name:prefix+"-days",Label:v.Text.RetentionDays,
 				Type:"number",Value:retentionDayValue(days,inherited),

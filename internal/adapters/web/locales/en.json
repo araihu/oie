@@ -575,6 +575,7 @@
   "RetentionInherit": "Use default ({period})",
   "RetentionInheritDays": "{days} days",
   "RetentionSave": "Save",
+  "RetentionLoading": "Loading retention settings…",
   "RetentionSaved": "Retention settings saved.",
   "RetentionUnavailable": "Could not load or save retention settings. Try again.",
   "RetentionConflict": "Retention settings changed. Review the current settings and try again.",

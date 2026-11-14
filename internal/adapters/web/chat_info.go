@@ -22,7 +22,7 @@ func (v view) infoHref(screen, kind string, pairs ...string) string {
 }
 func (v view) infoBackHref() string {
 	focus := v.InfoType
-	if v.InfoView == "stars" || v.InfoView == "participants" {
+	if v.InfoView == "stars" || v.InfoView == "participants" || v.InfoView == "retention" {
 		focus = v.InfoView
 	}
 	return v.infoHref("", "", "infoQuery", "", "infoFocus", focus)
