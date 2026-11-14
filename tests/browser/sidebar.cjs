@@ -33,6 +33,27 @@ async function assertToggle(page, expanded, label) {
   const control = page.getByRole("button", { name: label, exact: true });
   await control.waitFor();
   assert.equal(await control.getAttribute("aria-expanded"), String(expanded));
+  const colors = await control.evaluate(async button => {
+    const styles = getComputedStyle(button);
+    const transitions = button.getAnimations().filter(animation =>
+      ["background-color", "color"].includes(animation.transitionProperty));
+    await Promise.all(transitions.map(animation => animation.finished));
+    const reference = document.createElement("span");
+    reference.style.backgroundColor = "var(--oie-accent)";
+    reference.style.color = "var(--oie-on-accent)";
+    button.append(reference);
+    const primaryStyles = getComputedStyle(reference);
+    const result = {
+      background: styles.backgroundColor,
+      primary: primaryStyles.backgroundColor,
+      color: styles.color,
+      onPrimary: primaryStyles.color,
+    };
+    reference.remove();
+    return result;
+  });
+  assert.equal(colors.background === colors.primary, expanded, JSON.stringify(colors));
+  assert.equal(colors.color === colors.onPrimary, expanded, JSON.stringify(colors));
   assert.equal(await control.locator("use").getAttribute("href"), menuIcon);
   assert.equal(await control.locator("svg").evaluate(icon => getComputedStyle(icon).transform), "none");
   assert.equal(await page.locator(pane).isVisible(), expanded);
