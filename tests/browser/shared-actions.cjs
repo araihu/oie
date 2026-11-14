@@ -90,6 +90,14 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
   await card(0).hover();
   assert.equal(await opacity(star(0)),'1');
   assert.equal(await opacity(star(1)),'0');
+  await star(0).hover();
+  for(const action of [star(0),star(2)]){
+   const surface=await action.evaluate(node=>{
+    const {backgroundColor,borderTopWidth,boxShadow}=getComputedStyle(node);
+    return {backgroundColor,borderTopWidth,boxShadow};
+   });
+   assert.deepEqual(surface,{backgroundColor:'rgba(0, 0, 0, 0)',borderTopWidth:'0px',boxShadow:'none'});
+  }
   assert.notEqual(await star(0).evaluate(node=>getComputedStyle(node).color),await star(2).evaluate(node=>getComputedStyle(node).color));
   await page.mouse.move(1,1);
   await star(0).focus();
