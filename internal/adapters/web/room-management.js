@@ -10,10 +10,8 @@ window.OieRuntime.register('room-management', life => {
   const openForms = new Set();
   const isPending = form => form.dataset.busy === 'true' || pending.has(form);
   const hasPending = () => [...content.querySelectorAll('form')].some(isPending);
-  let participant = '';
-  let participantScroll = 0;
+  const participantViews = new Map();
   const listQueries = new Map();
-  const participantDetails = () => [...content.querySelectorAll('[data-room-participant-detail]')];
 
   function updateAvatarActions() {
     const remove = content.querySelector('#room-remove-avatar');
@@ -25,20 +23,21 @@ window.OieRuntime.register('room-management', life => {
   avatarChanges.observe(content, {subtree: true, childList: true, attributes: true, attributeFilter: ['data-avatar-src']});
   life.cleanup(() => avatarChanges.disconnect());
 
-  function showParticipant(id, focus = false) {
-    const list = content.querySelector('[data-room-participant-list]');
+  function showParticipant(panel, id, focus = false) {
+    const list = panel.querySelector('[data-room-participant-list]');
     if (!list) return;
-    const details = participantDetails();
+    const details = [...panel.querySelectorAll('[data-room-participant-detail]')];
     const selected = details.find(panel => panel.dataset.roomParticipantDetail === id);
-    const previous = participant;
-    const tabPanel = list.closest('[role=tabpanel]');
-    if (selected && !previous) participantScroll = tabPanel.scrollTop;
-    participant = selected ? id : '';
+    const previous = participantViews.get(panel.id);
+    const viewport = list.querySelector('[data-goshtoso-scroll-viewport]') || panel;
+    if (selected) participantViews.set(panel.id, {id, scrollTop: previous?.scrollTop ?? viewport.scrollTop});
+    else participantViews.delete(panel.id);
     list.hidden = !!selected;
-    for (const panel of details) panel.hidden = panel !== selected;
-    if (previous !== participant) tabPanel.scrollTop = selected ? 0 : participantScroll;
+    for (const detail of details) detail.hidden = detail !== selected;
+    if (selected && !previous) panel.scrollTop = 0;
+    if (!selected && previous) viewport.scrollTop = previous.scrollTop;
     if (focus) {
-      const target = selected?.querySelector('h3') || document.getElementById(previous) || list.querySelector('input[type=search]') ||
+      const target = selected?.querySelector('h3') || document.getElementById(previous?.id) || list.querySelector('input[type=search]') ||
         content.querySelector('[role=tab][aria-selected=true]');
       target?.focus({preventScroll:true});
     }
@@ -216,22 +215,31 @@ window.OieRuntime.register('room-management', life => {
       const focused = document.activeElement;
       const searchSelection = focused?.matches('[data-room-list-search]') ? [focused.selectionStart, focused.selectionEnd] : null;
       const focusedAction = focused?.id || focused?.closest('form')?.dataset.roomActionForm;
-      const focusedParticipant = !!focused?.closest('[data-room-participant-detail]');
+      const focusedProfile = focused?.closest('[data-room-participant-detail]');
       for (const panel of currentTabs.querySelectorAll('[role=tabpanel]')) {
         const incoming = template.content.getElementById(panel.id);
+        const view = participantViews.get(panel.id);
+        const profileHasFocus = !!focusedProfile && panel.contains(focusedProfile);
         const listScroll = panel.querySelector('.oie-room-bans-list [data-goshtoso-scroll-viewport]')?.scrollTop;
         panel.replaceChildren(...incoming.childNodes);
         if (listScroll) panel.querySelector('.oie-room-bans-list [data-goshtoso-scroll-viewport]').scrollTop = listScroll;
+        if (view) {
+          const removed = !document.getElementById(view.id);
+          const activePanel = currentTabs.querySelector('[role=tab][aria-selected=true]')?.getAttribute('aria-controls') === panel.id;
+          showParticipant(panel, view.id, profileHasFocus || removed && activePanel);
+        }
       }
-      showParticipant(participant, focusedParticipant);
-      if (!focusedParticipant && focusedAction && !content.contains(focused)) {
+      if (!focusedProfile && focusedAction && !content.contains(document.activeElement)) {
         const replacement = document.getElementById(focusedAction);
         (replacement || currentTabs.querySelector('[role=tab][aria-selected=true]'))?.focus({preventScroll:true});
         if (searchSelection) replacement?.setSelectionRange(...searchSelection);
       }
     } else {
       content.replaceChildren(template.content);
-      showParticipant(participant);
+      for (const panel of content.querySelectorAll('[role=tabpanel]')) {
+        const view = participantViews.get(panel.id);
+        if (view) showParticipant(panel, view.id);
+      }
     }
     document.dispatchEvent(new CustomEvent('oie:room-management-content', {detail: {root: content}}));
   }
@@ -286,12 +294,12 @@ window.OieRuntime.register('room-management', life => {
   life.on(document, 'click', event => {
     const row = event.target.closest('[data-room-participant-open]');
     if (row && content.contains(row)) {
-      if (!hasPending()) showParticipant(row.dataset.roomParticipantOpen, true);
+      if (!hasPending()) showParticipant(row.closest('[role=tabpanel]'), row.dataset.roomParticipantOpen, true);
       return;
     }
     const back = event.target.closest('[data-room-participant-back]');
     if (back && content.contains(back)) {
-      if (!hasPending()) showParticipant('', true);
+      if (!hasPending()) showParticipant(back.closest('[role=tabpanel]'), '', true);
       return;
     }
     const cancel = event.target.closest('[data-room-action-cancel]');
@@ -346,9 +354,8 @@ window.OieRuntime.register('room-management', life => {
     const nextInvite = trigger.id === 'chat-invite-room';
     if (nextMessage !== message || nextInvite !== invite) {
       affiliation = '';
-      participant = '';
+      participantViews.clear();
       listQueries.clear();
-      participantScroll = 0;
     }
     active = true;
     if (nextMessage !== message || nextInvite !== invite) {
@@ -377,13 +384,13 @@ window.OieRuntime.register('room-management', life => {
     const confirmation = event.target.closest('form[data-room-action-confirmation]:not([hidden])') ||
       event.target.closest('.oie-room-ban-footer')?.querySelector('form:not([hidden])');
     const detail = event.target.closest('[data-room-participant-detail]');
-    if (!confirmation && (!participant || !detail)) return;
+    if (!confirmation && !detail) return;
     event.preventDefault();
     event.stopPropagation();
     if (hasPending()) return;
     const form = confirmation || detail.querySelector('.oie-room-action form:not([hidden])');
     if (form) cancelAction(form);
-    else showParticipant('', true);
+    else showParticipant(detail.closest('[role=tabpanel]'), '', true);
   }, true);
 
   life.on(window, 'drawer:close-request', event => {

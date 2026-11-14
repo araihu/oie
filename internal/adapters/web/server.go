@@ -278,6 +278,7 @@ type copy struct {
 	RoomModerators                                                                                                                                                                                           string
 	RoomVisitors                                                                                                                                                                                             string
 	RoomBackToParticipants                                                                                                                                                                                   string
+	RoomBackToBans                                                                                                                                                                                           string
 	RoomGrantVoice                                                                                                                                                                                           string
 	RoomRevokeVoice                                                                                                                                                                                          string
 	RoomPromoteModerator                                                                                                                                                                                     string

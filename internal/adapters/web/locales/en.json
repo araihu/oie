@@ -488,6 +488,7 @@
   "RoomModerators": "Moderators",
   "RoomVisitors": "Visitors",
   "RoomBackToParticipants": "Back to participants",
+  "RoomBackToBans": "Back to bans",
   "RoomGrantVoice": "Allow speaking",
   "RoomRevokeVoice": "Revoke speaking permission",
   "RoomPromoteModerator": "Make moderator",
