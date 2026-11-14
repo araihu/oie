@@ -11,7 +11,8 @@ window.OieRuntime.register('room-management', life => {
   const openForms = new Set();
   const isPending = form => form.dataset.busy === 'true' || pending.has(form);
   const hasPending = () => [...content.querySelectorAll('form')].some(isPending);
-  let accessList = 'member';
+  let accessList = 'member', participant = '';
+  const participantDetails = () => [...content.querySelectorAll('[data-room-participant-detail]')];
 
   function updateAvatarActions() {
     const remove = content.querySelector('#room-remove-avatar');
@@ -23,12 +24,42 @@ window.OieRuntime.register('room-management', life => {
   avatarChanges.observe(content, {subtree: true, childList: true, attributes: true, attributeFilter: ['data-avatar-src']});
   life.cleanup(() => avatarChanges.disconnect());
 
-  async function load(replace = true, announcement = '') {
+  function showParticipant(id, focus = false) {
+    const list = content.querySelector('[data-room-participant-list]');
+    if (!list) return;
+    const details = participantDetails();
+    const selected = details.find(panel => panel.dataset.roomParticipantDetail === id);
+    const previous = participant;
+    participant = selected ? id : '';
+    list.hidden = !!selected;
+    for (const panel of details) panel.hidden = panel !== selected;
+    if (focus) {
+      const target = selected?.querySelector('h3') || document.getElementById(previous) ||
+        content.querySelector('[role=tab][aria-selected=true]');
+      target?.focus({preventScroll:true});
+    }
+  }
+
+  function refreshParticipantAvatars(fragment) {
+    const avatars = fragment.querySelectorAll('[data-room-participant-avatar]');
+    const cached = new Map([...avatars].map(node => [node.dataset.roomParticipantAvatar, node]));
+    for (const node of content.querySelectorAll('[data-room-participant-avatar]')) {
+      const fresh = cached.get(node.dataset.roomParticipantAvatar);
+      if (fresh && fresh.dataset.avatarImage !== node.dataset.avatarImage) {
+        node.replaceWith(fresh);
+      }
+    }
+  }
+
+  async function load(replace = true, announcement = '', avatarsOnly = false) {
+    if (avatarsOnly && request) return;
     request?.abort();
     const current = new AbortController();
     request = current;
-    status.textContent = root.dataset.loading;
-    root.setAttribute('aria-busy', 'true');
+    if (!avatarsOnly) {
+      status.textContent = root.dataset.loading;
+      root.setAttribute('aria-busy', 'true');
+    }
     const {chat, account, engine, lang} = root.dataset;
     const params = new URLSearchParams({chat, account, engine, lang, message, affiliation, invite});
     try {
@@ -38,6 +69,10 @@ window.OieRuntime.register('room-management', life => {
       if (request !== current || !active || life.signal.aborted) return;
       const template = document.createElement('template');
       template.innerHTML = markup;
+      if (avatarsOnly) {
+        refreshParticipantAvatars(template.content);
+        return;
+      }
       if (replace) {
         for (const form of content.querySelectorAll('form')) {
           if (isPending(form)) {
@@ -99,9 +134,12 @@ window.OieRuntime.register('room-management', life => {
       }
       status.textContent = announcement;
     } catch {
-      if (request === current && active && !life.signal.aborted) status.textContent = root.dataset.unavailable;
+      if (!avatarsOnly && request === current && active && !life.signal.aborted) status.textContent = root.dataset.unavailable;
     } finally {
-      if (request === current) root.removeAttribute('aria-busy');
+      if (request === current) {
+        request = null;
+        root.removeAttribute('aria-busy');
+      }
     }
   }
 
@@ -113,20 +151,21 @@ window.OieRuntime.register('room-management', life => {
       const focused = document.activeElement;
       const focusedList = focused?.dataset.roomAffiliationList;
       const focusedAction = focused?.id || focused?.closest('form')?.dataset.roomActionForm;
-      const focusedMenu = focused?.closest('[data-room-participant]')?.querySelector('[aria-controls]')?.getAttribute('aria-controls');
+      const focusedParticipant = !!focused?.closest('[data-room-participant-detail]');
       for (const panel of currentTabs.querySelectorAll('[role=tabpanel]')) {
         const incoming = template.content.getElementById(panel.id);
         panel.replaceChildren(...incoming.childNodes);
       }
+      showParticipant(participant, focusedParticipant);
       if (focusedList) {
         currentTabs.querySelector(`[data-room-affiliation-list="${CSS.escape(focusedList)}"]`)?.focus({preventScroll:true});
-      } else if (focusedAction && content.contains(focused) === false) {
+      } else if (!focusedParticipant && focusedAction && !content.contains(focused)) {
         const replacement = document.getElementById(focusedAction);
-        const menu = focusedMenu && currentTabs.querySelector(`[aria-controls="${CSS.escape(focusedMenu)}"]`);
-        (replacement || menu || currentTabs.querySelector('[role=tab][aria-selected=true]'))?.focus({preventScroll:true});
+        (replacement || currentTabs.querySelector('[role=tab][aria-selected=true]'))?.focus({preventScroll:true});
       }
     } else {
       content.replaceChildren(template.content);
+      showParticipant(participant);
     }
     document.dispatchEvent(new CustomEvent('oie:room-management-content', {detail: {root: content}}));
   }
@@ -156,7 +195,24 @@ window.OieRuntime.register('room-management', life => {
     else openForms.delete(id);
   }
 
+  let avatarRefresh;
+  life.on(document, 'oie:room-participant-avatar-changed', event => {
+    if (event.detail.accountId !== root.dataset.account || !active || !content.querySelector('[data-room-participant-avatar]')) return;
+    clearTimeout(avatarRefresh);
+    avatarRefresh = life.timeout(() => { if (active) void load(false, '', true); }, 250);
+  });
+
   life.on(document, 'click', event => {
+    const row = event.target.closest('[data-room-participant-open]');
+    if (row && content.contains(row)) {
+      if (!hasPending()) showParticipant(row.dataset.roomParticipantOpen, true);
+      return;
+    }
+    const back = event.target.closest('[data-room-participant-back]');
+    if (back && content.contains(back)) {
+      if (!hasPending()) showParticipant('', true);
+      return;
+    }
     const cancel = event.target.closest('[data-room-action-cancel]');
     if (cancel && content.contains(cancel)) {
       const form = cancel.form;
@@ -165,10 +221,10 @@ window.OieRuntime.register('room-management', life => {
       clearInputs(form);
       remember(form);
       const trigger = document.getElementById(form.dataset.roomActionForm);
-      (trigger?.closest('[role=menu]')?.parentElement.querySelector('[aria-controls]') || trigger)?.focus({preventScroll:true});
+      trigger?.focus({preventScroll:true});
       return;
     }
-    const trigger = event.target.closest('[data-room-action-open],[id^=room-participant-][role=menuitem]');
+    const trigger = event.target.closest('[data-room-action-open]');
     if (trigger) {
       if (hasPending()) return;
       const form = content.querySelector(`[data-room-action-form="${CSS.escape(trigger.id)}"]`);
@@ -176,21 +232,8 @@ window.OieRuntime.register('room-management', life => {
       for (const open of content.querySelectorAll('form[data-room-action-form]:not([hidden])')) {
         if (open.dataset.roomActionForm) open.hidden = true;
       }
-      const menu = trigger.closest('[role=menu]');
-      const menuTrigger = document.getElementById(menu?.id?.replace(/-panel$/, ''))
-        ?.querySelector('[data-popover-trigger] [aria-expanded=true]');
-      menuTrigger?.click();
       form.hidden = false;
-      const control = form.querySelector('input:not([type=hidden]),[type=submit]');
-      const focus = () => {
-        if (!form.isConnected || form.hidden) return;
-        if (menu?.getClientRects().length) {
-          life.raf(focus);
-          return;
-        }
-        control?.focus({preventScroll:true});
-      };
-      life.raf(focus);
+      life.raf(() => form.querySelector('input:not([type=hidden]),[type=submit]')?.focus({preventScroll:true}));
       return;
     }
     const tabButton = event.target.closest('[role=tab]');
@@ -228,7 +271,7 @@ window.OieRuntime.register('room-management', life => {
     };
     const nextMessage = trigger.id.startsWith('moderate-room-message-') ? trigger.id.slice('moderate-room-message-'.length) : '';
     const nextInvite = trigger.id === 'chat-invite-room';
-    if (nextMessage !== message || nextInvite !== invite) affiliation = '';
+    if (nextMessage !== message || nextInvite !== invite) { affiliation = ''; participant = ''; }
     active = true;
     if (nextMessage !== message || nextInvite !== invite) {
       if (hasPending()) {
@@ -245,13 +288,11 @@ window.OieRuntime.register('room-management', life => {
   });
 
   life.on(document, 'keydown', event => {
-    if (!active || event.key !== 'Escape') return;
-    const menu = content.querySelector('[data-room-participant] [data-popover-trigger] [aria-expanded=true]');
-    if (!menu) return;
+    if (!active || event.key !== 'Escape' || !event.target.closest) return;
+    if (!participant || !event.target.closest('[data-room-participant-detail]')) return;
     event.preventDefault();
     event.stopPropagation();
-    menu.click();
-    menu.focus({preventScroll:true});
+    if (!hasPending()) showParticipant('', true);
   }, true);
 
   life.on(window, 'drawer:close-request', event => {

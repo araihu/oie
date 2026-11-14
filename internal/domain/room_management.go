@@ -12,6 +12,8 @@ type RoomManagement struct {
 type RoomManagedOccupant struct {
 	ID, Nickname, Role, Affiliation string
 	Roles, Affiliations             []string
+	AvatarHash                      string
+	Self                            bool
 }
 
 type RoomManagementCommand struct {

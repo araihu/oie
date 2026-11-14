@@ -5470,6 +5470,13 @@ components:
           type: string
           description: Opaque target for this occupant's current presence.
         nickname: {type: string}
+        self:
+          type: boolean
+          description: The joined account's own occupant. No participant actions apply.
+        avatarHash:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+          description: Cached profile image when the room disclosed a verified identity to this account.
         role: {$ref: '#/components/schemas/RoomRole'}
         affiliation: {$ref: '#/components/schemas/RoomAffiliation'}
         roles:

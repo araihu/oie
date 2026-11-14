@@ -69,6 +69,7 @@ type entry struct {
 	details             map[domain.ID]*detailSlot
 	peerPresence        map[string]map[string]peerResource
 	avatarWake          chan struct{}
+	avatarRoom          string // Most recently opened room roster, guarded by mu.
 	avatarMu            sync.Mutex
 	avatarTargets       map[string]string
 	avatarDirty         map[string]string

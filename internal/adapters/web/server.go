@@ -272,7 +272,11 @@ type copy struct {
 	RoomRoleLabel                                                                                                                                                                                            string
 	RoomSaveDetails                                                                                                                                                                                          string
 	RoomDetailsPartial                                                                                                                                                                                       string
-	RoomParticipantActions                                                                                                                                                                                   string
+	RoomOwners                                                                                                                                                                                               string
+	RoomAdministrators                                                                                                                                                                                       string
+	RoomModerators                                                                                                                                                                                           string
+	RoomVisitors                                                                                                                                                                                             string
+	RoomBackToParticipants                                                                                                                                                                                   string
 	RoomGrantVoice                                                                                                                                                                                           string
 	RoomRevokeVoice                                                                                                                                                                                          string
 	RoomPromoteModerator                                                                                                                                                                                     string

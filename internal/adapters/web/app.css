@@ -559,11 +559,24 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-room-management-tabs [role="tabpanel"]:not([x-cloak]){display:grid;gap:14px}
 .oie-room-management-avatar{display:grid;justify-items:center;margin-block:4px}
 .oie-room-participants,.oie-room-addresses{margin:0;padding:0;list-style:none}
-.oie-room-participant,.oie-room-addresses li{padding:8px 12px;border-bottom:1px solid var(--oie-border)}
-.oie-room-participant-row{display:flex;justify-content:space-between;align-items:center;gap:12px}
-.oie-room-participant-row>div:first-child,.oie-room-addresses li{overflow-wrap:anywhere}
-.oie-room-participant-row small{display:block;color:var(--oie-muted)}
-.oie-room-participant form,.oie-room-addresses form{margin-top:8px}
+.oie-room-addresses li{padding:8px 12px;border-bottom:1px solid var(--oie-border);overflow-wrap:anywhere}
+.oie-room-addresses form{margin-top:8px}
+.oie-room-participant-group+.oie-room-participant-group{margin-top:14px}
+.oie-room-participant-group h3{margin:0 0 4px;font-size:.8125rem}
+.oie-room-management .oie-room-participant-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;width:100%;min-height:44px;padding:4px 6px;text-align:start;white-space:normal;border-radius:8px}
+.oie-room-participant-row span{overflow-wrap:anywhere}
+.oie-room-participant-avatar{display:inline-flex;flex:none}
+.oie-room-participant-row:hover,.oie-room-participant-action:hover{background:var(--oie-raised);text-decoration:none}
+.oie-room-participant-row>svg{color:var(--oie-muted)}
+.oie-room-participant-details:not([hidden]){display:grid;gap:14px}
+.oie-room-participant-details>button{justify-self:start}
+.oie-room-participant-profile{display:grid;justify-items:center;gap:6px;text-align:center;overflow-wrap:anywhere}
+.oie-room-participant-profile h3,.oie-room-participant-profile p{margin:0}
+.oie-room-participant-profile p{font-size:.875rem;color:var(--oie-muted)}
+.oie-room-participant-actions{display:grid;border-top:1px solid var(--oie-border);padding-block:8px}
+.oie-room-participant-actions h4{margin:0 0 4px;font-size:.875rem;color:var(--oie-muted)}
+.oie-room-management .oie-room-participant-action{justify-content:start;min-height:38px;white-space:normal;text-align:start}
+.oie-room-participant-actions form{padding:4px 8px 8px}
 .oie-room-avatar-actions,.oie-room-action-buttons{display:flex;flex-wrap:wrap;gap:4px 8px}
 .oie-room-avatar-actions{justify-content:center}
 .oie-room-avatar-actions [hidden],.oie-room-management form[hidden]{display:none}

@@ -1106,7 +1106,14 @@ window.OieRuntime.register('live', life => {
     source = new EventSource('/ui/events?cursor='+encodeURIComponent(cursor || ''));
     source.onopen = () => { if(stopped)return;announce(text('liveReady'),true);scheduleRefresh();retryPending(); };
     source.onerror = () => {if(!stopped)announce(text('liveRetry'));};
-    for (const type of ['message.preview_changed','profile.avatar_changed','account.registered','account.connection_changed','account.history_changed','conversation.created','conversation.updated','message.created']) life.on(source,type,scheduleRefresh);
+    for (const type of ['message.preview_changed','account.registered','account.connection_changed','account.history_changed','conversation.created','conversation.updated','message.created']) life.on(source,type,scheduleRefresh);
+    life.on(source,'profile.avatar_changed',event=>{
+      try {
+        const avatar = JSON.parse(event.data).avatar;
+        if (avatar?.accountId) document.dispatchEvent(new CustomEvent('oie:room-participant-avatar-changed',{detail:avatar}));
+      } catch {}
+      scheduleRefresh();
+    });
     life.on(source,'message.updated',event=>{
       try{
         const message=JSON.parse(event.data).message;

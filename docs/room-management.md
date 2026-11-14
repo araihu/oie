@@ -6,7 +6,10 @@ editable name and multiline topic fields with one **Save changes** button.
 Owners can change the name and can replace or remove the room image when
 the service supports room vCards. Moderators can change the topic and adjust current occupants' roles.
 **More → Invite people** opens the invitation form when the room permits it.
-The room may let other occupants edit the topic or invite people. Use the action menu on a row in **Participants** to moderate that occupant.
+The room may let other occupants edit the topic or invite people. **Participants** groups occupants by room permissions. Select a name to see
+the participant's role, affiliation, and the actions available to your account.
+Photos use the identity disclosed to this account by the room. An unavailable
+photo shows initials.
 Administrators and owners use **Access** to consult and change
 affiliations and **Bans** to consult bans, ban an address or lift a ban.
 A room can omit personal addresses even when it publishes nicknames.
@@ -37,7 +40,7 @@ the existing profile image events.
 
 A management request names an observed room revision. Permissions come from
 self-presence and service discovery. Role changes target a specific observed
-occupant, with a fresh opaque identifier after leaving or changing identity.
+occupant, with a fresh opaque identifier after leaving or changing identity. A role or affiliation change invalidates the management revision.
 Affiliations use bare addresses entered by the user or disclosed to the
 authorized account by the room. The server decides whether each operation
 is allowed. A command reserves its idempotency key before the wire attempt.

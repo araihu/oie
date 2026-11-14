@@ -58,7 +58,13 @@ async function apiHandler(req, res) {
     if (req.method === 'GET') {
       return send(200, {state:'available', revision:managementRevision,
         actions:managementBlocked ? ['invite'] : ['rename','topic','invite','role','affiliation','set_avatar','remove_avatar'],
-        occupants:[{id:'occupant:reader',nickname:'Leitora',role:'participant',affiliation:'none',roles:['none','visitor'],affiliations:['member','outcast']}],
+        occupants:[
+          {id:'occupant:reader',nickname:'Leitora',role:'participant',affiliation:'none',avatarHash,roles:['none','visitor','moderator'],affiliations:['member','outcast']},
+          {id:'occupant:visitor',nickname:'Visitante',role:'visitor',affiliation:'none',roles:[],affiliations:[]},
+          {id:'self',self:true,nickname:'Marina',role:'moderator',affiliation:'owner',roles:[],affiliations:[]},
+          {id:'occupant:admin',nickname:'Helena',role:'moderator',affiliation:'admin',roles:[],affiliations:[]},
+          {id:'occupant:moderator',nickname:'Lucas',role:'moderator',affiliation:'member',roles:[],affiliations:[]},
+        ],
         affiliations:u.searchParams.get('affiliation') === 'outcast' && banned ? ['banido@fixture'] : []});
     }
     let data = '';
@@ -272,7 +278,7 @@ async function waitFor(predicate) {
       assert.equal(await topic.evaluate(input => input.tagName), 'TEXTAREA');
       const detailsTab = management.getByRole('tab', {name:'Detalhes', exact:true});
       const participantsTab = management.getByRole('tab', {name:'Participantes', exact:true});
-      const participant = management.getByRole('button', {name:'Ações de Leitora', exact:true});
+      const participant = management.getByRole('button', {name:'Leitora', exact:true});
       await management.locator('.oie-room-management-avatar [data-avatar-ready=true]').waitFor();
       assert.equal(await detailsTab.getAttribute('aria-selected'), 'true');
       assert.equal(await participant.isVisible(), false);
@@ -282,18 +288,30 @@ async function waitFor(predicate) {
       await participant.waitFor();
       assert.equal(await participantsTab.getAttribute('aria-selected'), 'true');
       assert.equal(await topic.isVisible(), false);
-      await participant.click();
-      const kickItem = management.getByRole('menuitem', {name:'Remover da sala'});
-      await kickItem.waitFor();
+      assert.deepEqual(await management.locator('.oie-room-participant-group h3').allTextContents(),
+        ['Proprietários','Administradores','Moderadores','Participantes','Visitantes']);
+      await management.getByRole('button',{name:'Marina (Você)',exact:true}).waitFor();
+      const photo = participant.locator('img');
+      await photo.waitFor();
+      assert.equal(await photo.getAttribute('src'), '/ui/avatars/'+avatarHash);
+      await participant.focus();
+      await page.keyboard.press('Enter');
+      const profile = management.getByRole('region',{name:'Leitora',exact:true});
+      await profile.getByRole('heading',{name:'Leitora',exact:true}).waitFor();
+      assert.equal(await profile.getByRole('button',{name:'Tornar moderador',exact:true}).isVisible(),true);
+      assert.equal(await profile.getByRole('button',{name:'Tornar membro',exact:true}).isVisible(),true);
+      assert.equal(await participant.isVisible(),false);
       await page.keyboard.press('Escape');
-      await kickItem.waitFor({state:'hidden'});
-      assert.equal(await management.isVisible(), true);
+      await profile.waitFor({state:'hidden'});
+      assert.equal(await participant.evaluate(el => document.activeElement === el),true);
       await participant.click();
-      await kickItem.click();
+      await profile.getByRole('button', {name:'Remover da sala',exact:true}).click();
       const kick = management.locator('form[data-room-action-form$=role-none]');
       await kick.getByRole('textbox',{name:'Motivo (opcional)'}).waitFor();
       await kick.getByRole('button',{name:'Cancelar'}).click();
       await kick.waitFor({state:'hidden'});
+      await profile.getByRole('button',{name:'Voltar para participantes'}).click();
+      await participant.waitFor();
       const accessTab = management.getByRole('tab', {name:'Acesso', exact:true});
       await accessTab.click();
       await management.getByText('Nenhum endereço nesta lista.', {exact:true}).waitFor();

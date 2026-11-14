@@ -37,7 +37,7 @@ type roomManagement struct {
 }
 
 type roomManagementFlags struct {
-	open, membersOnly, changeSubject, allowInvites, moderate, avatar bool
+	open, membersOnly, changeSubject, allowInvites, moderate, avatar, nonAnonymous bool
 }
 
 func managementFlags(info disco.Info) roomManagementFlags {
@@ -52,6 +52,8 @@ func managementFlags(info disco.Info) roomManagementFlags {
 			flags.moderate = true
 		case "vcard-temp":
 			flags.avatar = true
+		case "muc_nonanonymous":
+			flags.nonAnonymous = true
 		}
 	}
 	for _, form := range info.Form {
@@ -83,7 +85,10 @@ func observeRoomManagement(slot *roomSlot, p incomingPresence, self bool) {
 		return
 	}
 	if p.Type == stanza.UnavailablePresence {
-		delete(state.occupants, nick)
+		if _, exists := state.occupants[nick]; exists {
+			delete(state.occupants, nick)
+			state.revision = ""
+		}
 		return
 	}
 	if p.Type != "" {
@@ -96,7 +101,10 @@ func observeRoomManagement(slot *roomSlot, p incomingPresence, self bool) {
 			state.self = roomOccupant{}
 			state.revision = ""
 		}
-		delete(state.occupants, nick)
+		if _, exists := state.occupants[nick]; exists {
+			delete(state.occupants, nick)
+			state.revision = ""
+		}
 		return
 	}
 	occupant := roomOccupant{nickname: nick, role: item.Role, affiliation: item.Affiliation}
@@ -118,14 +126,15 @@ func observeRoomManagement(slot *roomSlot, p incomingPresence, self bool) {
 		state.occupants = map[string]roomOccupant{}
 	}
 	old, found := state.occupants[nick]
-	oldID := old.id
-	old.id = ""
-	if found && old == occupant {
-		occupant.id = oldID
+	if found && old.address == occupant.address {
+		occupant.id = old.id
 	} else {
 		occupant.id = "occupant:" + randomQueryID()
 	}
 	if found || len(state.occupants) < 200 {
+		if old != occupant {
+			state.revision = ""
+		}
 		state.occupants[nick] = occupant
 	}
 }
@@ -155,6 +164,10 @@ func (s roomManagement) actions() []string {
 		out = append(out, "affiliation")
 	}
 	return out
+}
+
+func (s roomManagement) canShowParticipantAvatars() bool {
+	return s.flags.nonAnonymous || s.self.role == "moderator"
 }
 
 func (s roomManagement) canInvite() bool {
@@ -256,6 +269,12 @@ func (m *Manager) RoomManagement(ctx context.Context, a domain.Account, c domain
 		state.revision = randomQueryID()
 	}
 	out.State, out.Revision, out.Actions = "available", state.revision, state.actions()
+	own := state.self
+	out.Occupants = append(out.Occupants, domain.RoomManagedOccupant{
+		ID: "self", Nickname: own.nickname, Role: own.role, Affiliation: own.affiliation,
+		Self: true, Roles: []string{}, Affiliations: []string{},
+	})
+	addresses := map[string]string{"self": a.Address}
 	for _, occupant := range state.occupants {
 		item := domain.RoomManagedOccupant{
 			ID: occupant.id, Nickname: occupant.nickname, Role: occupant.role, Affiliation: occupant.affiliation,
@@ -263,11 +282,33 @@ func (m *Manager) RoomManagement(ctx context.Context, a domain.Account, c domain
 		}
 		if occupant.address != "" && occupant.address != a.Address {
 			item.Affiliations = state.affiliations(occupant)
+			if state.canShowParticipantAvatars() {
+				addresses[item.ID] = occupant.address
+			}
 		}
 		out.Occupants = append(out.Occupants, item)
 	}
+	e.avatarRoom = c.Address
 	e.mu.Unlock()
+	m.wakeAvatars(e)
 	slices.SortFunc(out.Occupants, func(a, b domain.RoomManagedOccupant) int { return strings.Compare(a.Nickname, b.Nickname) })
+	if host, ok := m.host.(application.AvatarHost); ok {
+		for i := range out.Occupants {
+			item := &out.Occupants[i]
+			if address := addresses[item.ID]; address != "" {
+				cached, _ := host.Avatar(ctx, a.ID, address)
+				item.AvatarHash = cached.ImageHash
+			}
+		}
+	}
+	e.mu.RLock()
+	current := activeManagementSlot(e, c) == slot && slot.management.revision == out.Revision
+	e.mu.RUnlock()
+	if !current {
+		out.State, out.Revision = "unavailable", ""
+		out.Actions, out.Occupants = []string{}, []domain.RoomManagedOccupant{}
+		return out, nil
+	}
 	if affiliation != "" {
 		if !slices.Contains(out.Actions, "affiliation") {
 			return out, application.ErrStateConflict

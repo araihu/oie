@@ -24,10 +24,15 @@ func (s *Server) GetRoomManagement(ctx context.Context, r engineapi.GetRoomManag
 		Affiliations: data.Affiliations,
 	}
 	for _, item := range data.Occupants {
-		out.Occupants = append(out.Occupants, engineapi.RoomManagedOccupant{
+		occupant := engineapi.RoomManagedOccupant{
 			Id: item.ID, Nickname: item.Nickname, Role: engineapi.RoomRole(item.Role), Affiliation: engineapi.RoomAffiliation(item.Affiliation),
 			Roles: roomValues[engineapi.RoomRole](item.Roles), Affiliations: roomValues[engineapi.RoomAffiliation](item.Affiliations),
-		})
+			AvatarHash: optionalRoomText(item.AvatarHash),
+		}
+		if item.Self {
+			occupant.Self = &item.Self
+		}
+		out.Occupants = append(out.Occupants, occupant)
 	}
 	return out, nil
 }
