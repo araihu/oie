@@ -75,6 +75,7 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-filter{display:inline-flex;align-items:center;padding:5px 11px;border:1px solid var(--oie-border);border-radius:18px;color:var(--oie-muted);text-decoration:none;font-size:12px;line-height:1.35;white-space:nowrap;font-weight:600}
 .oie-filter:hover{color:var(--oie-text);background:var(--oie-raised);text-decoration:none}
 .oie-filter[aria-current=true]{background:var(--oie-accent-soft);border-color:transparent;color:var(--oie-text)}
+.oie-filter .oie-icon{width:12px;height:12px;margin-inline-end:4px}
 .oie-conversation-scroll{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--oie-border) transparent}
 .oie-conversations{list-style:none;margin:0;padding:0 8px 12px}
 .oie-chat-link{position:relative;display:flex;align-items:center;gap:11px;min-width:0;height:78px;padding:10px 11px;border-radius:9px;color:var(--oie-text);text-decoration:none;font-weight:400}
@@ -97,7 +98,7 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-unread-count{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;font-size:10px;font-weight:700;background:var(--oie-accent);color:var(--oie-on-accent);flex-shrink:0}
 .oie-row-mention-slot{flex:0 0 18px;height:18px}
 .oie-row-mention{display:grid;place-items:center;height:100%;border-radius:50%;font-size:12px;font-weight:700;background:var(--oie-accent-soft);color:var(--oie-accent-text)}
-.oie-pin{color:var(--oie-muted)}.oie-pin .oie-icon{width:12px;height:12px}
+.oie-conversation-favorite{color:var(--oie-muted)}.oie-conversation-favorite .oie-icon{width:12px;height:12px}
 .oie-list-footer{height:48px;min-height:48px;padding:6px 12px;display:flex;align-items:center;gap:7px;border-top:1px solid var(--oie-border);font-size:11px;color:var(--oie-muted)}
 .oie-list-footer>span:nth-child(2){flex:1}.oie-status-dot{height:6px;width:6px;border-radius:50%;background:var(--oie-accent)}.oie-status-error{background:#e76e6e}
 .oie-conversation-pane{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0}

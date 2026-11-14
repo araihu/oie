@@ -332,6 +332,9 @@ templ inboxList(v view) {
 
 templ filterLink(v view, key, label string) {
 	@link.Link(v.filterHref(key), link.WithRootClass("oie-filter"), link.WithAttrs(templ.Attributes{"aria-current": strconv.FormatBool(v.Filter == key), "data-filter": key})) {
+		if key == "favorites" {
+			@glyph(heroicons.Icon16SolidHeart)
+		}
 		{ label }
 	}
 }
@@ -361,8 +364,8 @@ templ conversationRow(v view, c engineapi.Conversation) {
 					if c.UnreadCount>0 {
 						<span class="oie-unread-count" aria-label={ v.Text.Unread + ": " + strconv.Itoa(c.UnreadCount) }>{ strconv.Itoa(c.UnreadCount) }</span>
 					}
-                    if c.Favorite {
-						<span class="oie-pin" title={ v.Text.Favorites }>@glyph(heroicons.Icon16SolidStar)</span>
+					if c.Favorite {
+						<span class="oie-conversation-favorite" role="img" aria-label={ v.Text.Favorites } title={ v.Text.Favorites }>@glyph(heroicons.Icon16SolidHeart)</span>
 					}
 				</div>
 if len(v.Accounts)>1 {
