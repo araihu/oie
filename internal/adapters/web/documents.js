@@ -126,7 +126,8 @@ window.OieRuntime.register('documents', life => {
    const node=document.createElement('img'),source=URL.createObjectURL(preview.blob);let released=false;
    const release=()=>{if(released)return;released=true;URL.revokeObjectURL(source);controller.signal.removeEventListener('abort',release);node.onload=null;node.onerror=null};
    const loaded=new Promise((resolve,reject)=>{const cancel=()=>{release();reject(new DOMException('Aborted','AbortError'))};controller.signal.addEventListener('abort',cancel,{once:true});node.onload=()=>{controller.signal.removeEventListener('abort',cancel);resolve()};node.onerror=()=>{controller.signal.removeEventListener('abort',cancel);reject(Error('preview_image'))}});
-   node.alt='';node.width=Math.ceil(preview.width);node.height=Math.ceil(preview.height);node.style.width='100%';node.style.height='100%';node.dataset.documentPdfPreview='';node.src=source;target.replaceChildren(node);try{await loaded}finally{release()}
+   node.alt='';node.width=Math.ceil(preview.width);node.height=Math.ceil(preview.height);node.dataset.documentPdfPreview='';node.src=source;
+   try{await loaded;if(!controller.signal.aborted&&card.isConnected)target.replaceChildren(node)}finally{release()}
   }
   card.dataset.documentPreviewCache=hit?'hit':'miss';if(stored)card.dataset.documentPreviewStored='true';card.dataset.documentPreviewState='ready';
  }
