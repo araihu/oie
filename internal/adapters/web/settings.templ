@@ -6,6 +6,7 @@ import (
 
 	"github.com/araihu/goshtoso/components/combobox"
 	"github.com/araihu/goshtoso/components/drawer"
+	"github.com/araihu/goshtoso/components/link"
 	"github.com/araihu/goshtoso/components/tabs"
 	"github.com/araihu/goshtoso/components/toggle"
 	"github.com/araihu/goshtoso/expressions"
@@ -36,6 +37,9 @@ templ generalSettings(v view) {
 		@appearanceSettings(v)
 		@languageSettings(v)
 		@timeZoneSettings(v)
+		if !v.Preview && v.EngineID != "" {
+			@link.Link(v.retentionHref("",false)){ {v.Text.RetentionTitle} }
+		}
 		if v.Preview {
 			<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
 		}

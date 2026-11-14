@@ -105,6 +105,15 @@ func (m *Manager) isolatedRoomPage(ctx context.Context, host application.RoomArc
 		if err != nil {
 			return result, err
 		}
+		if retention, ok := m.host.(application.RetentionHost); ok {
+			days, err := retention.RetentionDays(ctx, c.AccountID, c.Address, "room")
+			if err != nil {
+				return result, err
+			}
+			if message.CreatedAt.Before(domain.RetentionCutoff(time.Now(), days)) {
+				continue
+			}
+		}
 		if !seen[message.ID] {
 			seen[message.ID] = true
 			result.Items = append(result.Items, message)

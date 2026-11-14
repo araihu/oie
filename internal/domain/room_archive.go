@@ -23,6 +23,8 @@ type DeferredRoomReactions struct {
 // RoomArchiveProgress describes one contiguous backward recovery. Search
 // hits and isolated timeline context do not change these checkpoints.
 type RoomArchiveProgress struct {
+	RetentionDays                                  *int `json:",omitempty"`
+	OlderCoveredThrough                            time.Time
 	DeferredReactions                              DeferredRoomReactions
 	WindowStart, WindowEnd                         time.Time
 	Boundary, CaughtUpThrough                      time.Time

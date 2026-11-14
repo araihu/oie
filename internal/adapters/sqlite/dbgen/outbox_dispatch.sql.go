@@ -19,7 +19,7 @@ func (q *Queries) MarkOutboxWireStarted(ctx context.Context, messageID string) e
 }
 
 const pendingMessagesByAttachments = `-- name: PendingMessagesByAttachments :many
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms, o.next_attempt_at FROM outbox o JOIN messages m ON o.message_id=m.id
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms, m.submitted_at_ms, o.next_attempt_at FROM outbox o JOIN messages m ON o.message_id=m.id
 WHERE o.state='queued' AND o.next_attempt_at<=?1
 AND (COALESCE(json_array_length(m.payload, '$.Attachments'), 0)>0)=CAST(?2 AS INTEGER)
 AND (o.next_attempt_at,o.message_id) > (?3,?4)
@@ -65,6 +65,7 @@ func (q *Queries) PendingMessagesByAttachments(ctx context.Context, arg PendingM
 			&i.Message.Payload,
 			&i.Message.CreatedAtMs,
 			&i.Message.TimelineAtMs,
+			&i.Message.SubmittedAtMs,
 			&i.NextAttemptAt,
 		); err != nil {
 			return nil, err

@@ -199,7 +199,10 @@ func updateConversation(ctx context.Context, q *dbgen.Queries, c domain.Conversa
 		return nil
 	}
 	if isLatest {
-		c.LastMessage = m.OriginalText
+		if err := hydrateReply(ctx, q, &m); err != nil {
+			return err
+		}
+		c.LastMessage = domain.DisplayBody(m)
 		c.UpdatedAt = visibleAt
 	}
 	if !m.IsOwn && !m.Historical {
@@ -288,6 +291,9 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 		return application.MessageResult{}, err
 	}
 	if receipt != nil {
+		if receipt.Result == "null" {
+			return application.MessageResult{}, application.ErrNotFound
+		}
 		var m domain.Message
 		err = json.Unmarshal([]byte(receipt.Result), &m)
 		if err == nil {
@@ -421,6 +427,27 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if err = q.AcquireWriteLock(ctx); err != nil {
 		return err
 	}
+	if !m.ReceivedAt.IsZero() {
+		days, err := retentionDays(ctx, q, c.AccountID, c.Address, c.Kind)
+		if err != nil {
+			return err
+		}
+		if days != 0 {
+			cutoff := domain.RetentionCutoff(m.ReceivedAt, days)
+			if m.CreatedAt.Before(cutoff) {
+				return nil
+			}
+			if correctionValid(m.Correction) && m.Correction.TargetID != "" {
+				ignored, err := q.IsExpiredCorrectionTarget(ctx, dbgen.IsExpiredCorrectionTargetParams{
+					AccountID: string(c.AccountID), Address: c.Address, Scope: m.Correction.Scope,
+					RemoteID: m.Correction.TargetID, Author: m.Correction.Author, CutoffMs: cutoff.UnixMilli(),
+				})
+				if err != nil || ignored {
+					return err
+				}
+			}
+		}
+	}
 	incomingKind := c.Kind
 	if m.ArchiveID != "" {
 		var existingID string
@@ -458,12 +485,19 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		c, err = decodeConversation(row)
 		if err == nil && check != nil && c.Kind == "direct" && c.Request == "" {
 			_, prior := q.LatestLogicalMessage(ctx, row.ID)
-			if errors.Is(prior, sql.ErrNoRows) {
-				next := c
-				next.Request, next.DirectHistoryCheck = domain.MessageRequest, check
-				err = writeConversationDecision(ctx, q, c, next, requestRevision, at)
-				c = next
-			} else if prior != nil {
+			switch {
+			case errors.Is(prior, sql.ErrNoRows):
+				accepted, lookupErr := q.HasAcceptedDirectHistory(ctx, row.ID)
+				if lookupErr != nil {
+					return lookupErr
+				}
+				if !accepted {
+					next := c
+					next.Request, next.DirectHistoryCheck = domain.MessageRequest, check
+					err = writeConversationDecision(ctx, q, c, next, requestRevision, at)
+					c = next
+				}
+			case prior != nil:
 				err = prior
 			}
 		}
@@ -545,6 +579,12 @@ func updateMessage(ctx context.Context, q *dbgen.Queries, m domain.Message, stat
 			return m, err
 		}
 	}
+	if state == "submitted" && m.TimelineAt != nil {
+		sent := at.UnixMilli()
+		if err := q.SetMessageSubmittedAt(ctx, dbgen.SetMessageSubmittedAtParams{ID: string(m.ID), SubmittedAtMs: &sent}); err != nil {
+			return m, err
+		}
+	}
 	parents := jsonText([]domain.ID{m.RevisionID})
 	m.RevisionID = revision
 	m.SendState = state
@@ -605,6 +645,9 @@ func (s *Store) CancelMessage(ctx context.Context, in application.CancelMutation
 		return application.MessageResult{}, err
 	}
 	if receipt != nil {
+		if receipt.Result == "null" {
+			return application.MessageResult{}, application.ErrNotFound
+		}
 		var m domain.Message
 		err = json.Unmarshal([]byte(receipt.Result), &m)
 		if err == nil {

@@ -486,7 +486,7 @@ func (q *Queries) SharedCatalogProgress(ctx context.Context, arg SharedCatalogPr
 }
 
 const sharedContentCandidates = `-- name: SharedContentCandidates :many
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM shared_catalog_sources AS s CROSS JOIN messages AS m ON m.id=s.message_id
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms, m.submitted_at_ms FROM shared_catalog_sources AS s CROSS JOIN messages AS m ON m.id=s.message_id
 WHERE s.parser_version<?1
 ORDER BY s.parser_version,s.position_ms DESC,s.message_id DESC LIMIT ?2
 `
@@ -516,6 +516,7 @@ func (q *Queries) SharedContentCandidates(ctx context.Context, arg SharedContent
 			&i.Payload,
 			&i.CreatedAtMs,
 			&i.TimelineAtMs,
+			&i.SubmittedAtMs,
 		); err != nil {
 			return nil, err
 		}

@@ -76,6 +76,22 @@ actions:
   - target: $.paths['/api/v1/accounts'].post
     update:
       x-cli-name: register
+  - target: $.paths['/api/v1/engine/retention'].get
+    update:
+      x-cli-group: [engine, retention]
+      x-cli-name: get
+  - target: $.paths['/api/v1/engine/retention'].put
+    update:
+      x-cli-group: [engine, retention]
+      x-cli-name: set
+  - target: $.paths['/api/v1/conversations/{conversationId}/retention'].get
+    update:
+      x-cli-group: [conversations, retention]
+      x-cli-name: get
+  - target: $.paths['/api/v1/conversations/{conversationId}/retention'].put
+    update:
+      x-cli-group: [conversations, retention]
+      x-cli-name: set
   # conversations
   - target: $.paths['/api/v1/conversations/{conversationId}/archive'].get
     update:

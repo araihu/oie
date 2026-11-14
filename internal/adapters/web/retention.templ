@@ -1,0 +1,73 @@
+package web
+
+import (
+	"strconv"
+
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/head"
+	"github.com/araihu/goshtoso/components/link"
+	selectfield "github.com/araihu/goshtoso/components/select"
+	"github.com/araihu/goshtoso/components/textinput"
+)
+
+templ retentionDocument(v view, p retentionPageView) {
+	<!DOCTYPE html>
+	<html lang={v.Locale} data-mode={v.Theme} class={templ.KV("dark", v.Theme == "dark")}>
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{v.Text.RetentionTitle}</title>
+			@head.Dependencies(head.WithLocalRuntime())
+			<link rel="stylesheet" href={templ.URL(versionedStylesheetURL("/ui/app.css", stylesheet))}/>
+			<link rel="stylesheet" href="/ui/message-history.css"/>
+			<script src="/ui/theme.js"></script>
+		</head>
+		<body>
+			<main class="oie-history-document">
+				<header>
+					<h1>{v.Text.RetentionTitle}</h1>
+					@link.Link(v.retentionBack(v.ChatID)){<span>{v.Text.Back}</span>}
+				</header>
+				if p.Notice != "" {
+					<p role="alert">{p.Notice}</p>
+				} else if p.Saved {
+					<p role="status">{v.Text.RetentionSaved}</p>
+				}
+				if p.Global != nil || p.Local != nil {
+					@retentionForm(v,p)
+				}
+			</main>
+		</body>
+	</html>
+}
+
+templ retentionForm(v view, p retentionPageView) {
+	<form method="post" action={templ.URL(v.retentionHref(v.ChatID,false))} class="grid gap-4">
+		<input type="hidden" name="csrf" value={v.CSRF}/>
+		<input type="hidden" name="engineId" value={v.EngineID}/>
+		if p.Local != nil {
+			<input type="hidden" name="revision" value={p.Local.Revision}/>
+			@retentionChoice(v,"override",p.Conversation.Title,p.Local.Days,p.Local.GlobalDays,true)
+		} else {
+			<input type="hidden" name="revision" value={p.Global.Revision}/>
+			@retentionChoice(v,"room",v.Text.RetentionRooms,&p.Global.RoomDays,0,false)
+			@retentionChoice(v,"direct",v.Text.RetentionDirect,&p.Global.DirectDays,0,false)
+		}
+		<p>{v.Text.RetentionUnlimitedHelp}</p>
+		<p>{v.Text.RetentionShorterHelp}</p>
+		<div>@button.Button(button.WithType("submit"),button.WithTone(button.TonePrimary)){ {v.Text.RetentionSave} }</div>
+	</form>
+}
+
+templ retentionChoice(v view, prefix string, label string, days *int, inherited int, canInherit bool) {
+	<div class="grid gap-2" x-data={retentionAlpine(days)} x-on:change="if ($event.target.name.endsWith('-mode')) mode = $event.target.value">
+		@selectfield.Select(selectfield.Config{ID:"retention-"+prefix,Name:prefix+"-mode",Label:label,Options:retentionOptions(v,days,inherited,canInherit),Required:true})
+		<div x-show="mode === 'finite'">
+			@textinput.TextInput(textinput.Config{
+				ID:"retention-days-"+prefix,Name:prefix+"-days",Label:v.Text.RetentionDays,
+				Type:"number",Value:retentionDayValue(days,inherited),
+				InputAttrs:templ.Attributes{"min":"1","max":strconv.Itoa(maxRetentionDays),"step":"1","x-bind:required":"mode === 'finite'"},
+			})
+		</div>
+	</div>
+}

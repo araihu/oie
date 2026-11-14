@@ -98,7 +98,12 @@ func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) erro
 		}
 		target, err := q.GetMessage(ctx, string(targetID))
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil
+			expired, err := q.IsExpiredMessage(ctx, string(targetID))
+			if expired {
+				m.Reply.Excerpt, m.Reply.SenderName = "", ""
+				m.Reply.OriginalExpired = true
+			}
+			return err
 		}
 		if err != nil {
 			return err
@@ -168,7 +173,14 @@ func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) erro
 		candidates[id] = target
 	}
 	if len(candidates) != 1 {
-		return nil
+		expired, err := q.IsExpiredReplyReference(ctx, dbgen.IsExpiredReplyReferenceParams{
+			ConversationID: string(m.ConversationID), RemoteID: ref.Target.ID, Scope: ref.Target.Scope, Author: ref.Target.Author,
+		})
+		if expired {
+			m.Reply.Excerpt = ""
+			m.Reply.OriginalExpired = true
+		}
+		return err
 	}
 	var target domain.Message
 	for _, candidate := range candidates {

@@ -395,11 +395,13 @@ func (s *Server) GetOperation(ctx context.Context, r engineapi.GetOperationReque
 	}
 	if op.Kind == "send_message" && r.Params.IncludeAcceptedMessage != nil && *r.Params.IncludeAcceptedMessage {
 		accepted, err := s.engine.AcceptedSendMessage(ctx, op.ID)
-		if err != nil {
+		if err != nil && !errors.Is(err, application.ErrNotFound) {
 			return nil, err
 		}
-		snapshot := message(accepted)
-		receipt.AcceptedMessage = &snapshot
+		if err == nil {
+			snapshot := message(accepted)
+			receipt.AcceptedMessage = &snapshot
+		}
 	}
 	return receipt, nil
 }

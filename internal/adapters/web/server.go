@@ -374,6 +374,9 @@ type copy struct {
 	EmojiPicker                                                                                                                                                                                              string
 	Composition, EmojiShortcutLanguages, EmojiSuggestions                                                                                                                                                    string
 	SettingsGeneral, SearchLanguages, NoLanguagesFound, EmojiShortcutsOff, EmojiShortcutLanguageCount                                                                                                        string
+	RetentionTitle, RetentionRooms, RetentionDirect, RetentionDays, RetentionFinite, RetentionUnlimited                                                                                                      string
+	RetentionInherit, RetentionInheritDays, RetentionSave, RetentionSaved, RetentionUnavailable, RetentionConflict                                                                                           string
+	RetentionUnlimitedHelp, RetentionShorterHelp                                                                                                                                                             string
 	PresentationTimeZone, SystemTimeZone                                                                                                                                                                     string
 	SearchTimeZones, NoTimeZonesFound                                                                                                                                                                        string
 	EmojiSearch                                                                                                                                                                                              string
@@ -703,6 +706,10 @@ var inboxCacheScript []byte
 var roomArchiveScript []byte
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == retentionPath {
+		s.retention(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/messages/forward" && r.Method == http.MethodGet {
 		s.prepareForward(w, r)
 		return

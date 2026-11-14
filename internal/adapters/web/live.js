@@ -1221,6 +1221,15 @@ window.OieRuntime.register('live', life => {
   if (!mock) {
     const handlers = {
       'message.updated': messageUpdated,
+      'conversation.history_pruned': event => {
+        try {
+          const history = JSON.parse(event.data).historyPruned;
+          if (history?.conversationId === body.dataset.conversationId) {
+            window.OieTimeline?.expire?.(history.messageIds);
+          }
+        } catch {}
+        scheduleRefresh();
+      },
       'profile.avatar_changed': event => {
         try {
           const avatar = JSON.parse(event.data).avatar;

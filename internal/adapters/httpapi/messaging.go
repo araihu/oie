@@ -76,6 +76,9 @@ func message(m domain.Message) engineapi.Message {
 	}
 	if m.Reply != nil {
 		r := m.Reply
+		if r.OriginalExpired {
+			out.OriginalText = r.BodyText
+		}
 		out.Reply = &engineapi.MessageReply{Available: r.Available, Excerpt: r.Excerpt, BodyText: r.BodyText}
 		if r.Available {
 			id, name := string(r.MessageID), r.SenderName
@@ -317,6 +320,13 @@ func event(e application.Event, engineID domain.ID) engineapi.Event {
 	if e.Avatar != nil {
 		v := avatar(*e.Avatar)
 		out.Avatar = &v
+	}
+	if e.HistoryPruned != nil {
+		pruned := engineapi.HistoryPruned{ConversationId: string(e.HistoryPruned.ConversationID), MessageIds: make([]string, 0, len(e.HistoryPruned.MessageIDs))}
+		for _, id := range e.HistoryPruned.MessageIDs {
+			pruned.MessageIds = append(pruned.MessageIds, string(id))
+		}
+		out.HistoryPruned = &pruned
 	}
 	if e.History != nil {
 		v := history(*e.History)

@@ -4,6 +4,10 @@
 
 package dbgen
 
+type AcceptedDirectHistory struct {
+	ConversationID string
+}
+
 type Account struct {
 	ID         string
 	RevisionID string
@@ -104,6 +108,12 @@ type ConversationReadState struct {
 	UpdatedAt      string
 }
 
+type ConversationRetention struct {
+	ConversationID string
+	Days           *int64
+	Revision       int64
+}
+
 type ConversationRevision struct {
 	ID        string
 	EntityID  string
@@ -112,9 +122,37 @@ type ConversationRevision struct {
 	CreatedAt string
 }
 
+type EffectiveRetention struct {
+	ConversationID string
+	AccountID      string
+	Address        string
+	Kind           string
+	GlobalDays     int64
+	Days           int64
+}
+
 type EngineIdentity struct {
 	Singleton int64
 	ID        string
+}
+
+type ExpiredMessageID struct {
+	ID string
+}
+
+type ExpiredMessageReference struct {
+	ConversationID string
+	Scope          string
+	RemoteID       string
+	Author         string
+	AgeMs          int64
+}
+
+type GlobalRetention struct {
+	Singleton  int64
+	RoomsDays  int64
+	DirectDays int64
+	Revision   int64
 }
 
 type HiddenScheduledMessage struct {
@@ -144,6 +182,7 @@ type Message struct {
 	Payload        string
 	CreatedAtMs    int64
 	TimelineAtMs   *int64
+	SubmittedAtMs  *int64
 }
 
 type MessageCanonicalAlias struct {

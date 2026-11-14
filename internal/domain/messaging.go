@@ -60,6 +60,7 @@ type Message struct {
 	ProviderID                                string
 	ArchiveScope, ArchiveID                   string
 	Historical                                bool
+	ReceivedAt                                time.Time          `json:"-"`
 	OutboundReply                             *OutboundReply     `json:",omitempty"`
 	References                                []MessageReference `json:"-"`
 	ReplyReference                            *ReplyReference    `json:"-"`

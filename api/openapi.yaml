@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.32.0
+  version: 0.33.0
   description: >-
     Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
@@ -580,7 +580,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MessageSourceContext'
               example:
-                engine: {id: '019a5df0-0000-7000-8000-000000000003', role: local, apiVersion: '0.32.0', eventCursor: '019a5df0-0000-7000-8000-000000000003:1'}
+                engine: {id: '019a5df0-0000-7000-8000-000000000003', role: local, apiVersion: '0.33.0', eventCursor: '019a5df0-0000-7000-8000-000000000003:1'}
                 conversation: {id: '019a5df0-0000-7000-8000-000000000005', revisionId: '019a5df0-0000-7000-8000-000000000006', accountId: '019a5df0-0000-7000-8000-000000000002', address: 'bob@localhost', kind: direct, title: Bob, lastMessage: Hello, updatedAt: '2026-11-07T12:00:00Z', unreadCount: 0, archived: false, favorite: false}
                 context:
                   targetId: '019a5df0-0000-7000-8000-000000000001'
@@ -1092,8 +1092,57 @@ paths:
               example:
                 id: 019a5df0-0000-7000-8000-000000000003
                 role: local
-                apiVersion: 0.32.0
+                apiVersion: 0.33.0
                 eventCursor: 019a5df0-0000-7000-8000-000000000003:1
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/engine/retention:
+    get:
+      tags: [System]
+      operationId: getGlobalRetention
+      summary: Read engine-wide message retention
+      responses:
+        '200':
+          description: Current engine-wide retention settings
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GlobalRetention'}
+              example: {revision: '0', roomDays: 180, directDays: 0}
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags: [System]
+      operationId: setGlobalRetention
+      summary: Change engine-wide message retention
+      description: Replace the retention settings using the revision from the current snapshot. A stale revision yields a conflict. Expiry runs in the background.
+      requestBody:
+        description: The current revision and the desired room and direct periods.
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SetGlobalRetention'}
+            example: {expectedRevision: '0', roomDays: 180, directDays: 0}
+      responses:
+        '200':
+          description: Updated engine-wide retention settings
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GlobalRetention'}
+              example: {revision: '0', roomDays: 180, directDays: 0}
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          description: Retention request is too large
+        '415':
+          description: Retention request requires application/json
         '503':
           $ref: '#/components/responses/Unavailable'
   /api/v1/engine/reset:
@@ -1490,9 +1539,9 @@ paths:
 
         before streaming. Heartbeat comments are not durable events.
 
-        This engine retains the complete change log. Clients deduplicate by event
+        Expired message content is removed from replay. Clients deduplicate by event ID
 
-        ID and refresh snapshots if a future retention policy expires a cursor.
+        and apply conversation.history_pruned invalidations to retained history and projections.
 
         '
       parameters:
@@ -2104,6 +2153,57 @@ paths:
           $ref: '#/components/responses/Invalid'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/conversations/{conversationId}/retention:
+    parameters:
+    - $ref: '#/components/parameters/ConversationID'
+    get:
+      tags: [Conversations]
+      operationId: getConversationRetention
+      summary: Read conversation message retention
+      responses:
+        '200':
+          description: Current conversation retention settings
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ConversationRetention'}
+              example: {revision: '1', days: 90, effectiveDays: 90, globalDays: 180}
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags: [Conversations]
+      operationId: setConversationRetention
+      summary: Change conversation message retention
+      description: Replace the retention settings using the revision from the current snapshot. A stale revision yields a conflict. Expiry runs in the background.
+      requestBody:
+        description: The current revision and the desired override.
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SetConversationRetention'}
+            example: {expectedRevision: '0', days: 90}
+      responses:
+        '200':
+          description: Updated conversation retention settings
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ConversationRetention'}
+              example: {revision: '1', days: 90, effectiveDays: 90, globalDays: 180}
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          description: Retention request is too large
+        '415':
+          description: Retention request requires application/json
         '503':
           $ref: '#/components/responses/Unavailable'
   /api/v1/conversations/{conversationId}/archive:
@@ -3443,13 +3543,82 @@ components:
           enum:
           - ready
           example: ready
+    RetentionDays:
+      type: integer
+      minimum: 0
+      maximum: 365000
+      description: Age in days. Zero means unlimited.
+      example: 180
+    RetentionRevision:
+      type: string
+      pattern: '^[0-9]+$'
+      description: Compare-and-set token from the most recent retention snapshot.
+      example: '1'
+    GlobalRetention:
+      type: object
+      description: Engine-wide periods for rooms and direct conversations.
+      additionalProperties: false
+      required: [revision, roomDays, directDays]
+      properties:
+        revision:
+          $ref: '#/components/schemas/RetentionRevision'
+        roomDays:
+          $ref: '#/components/schemas/RetentionDays'
+        directDays:
+          $ref: '#/components/schemas/RetentionDays'
+    SetGlobalRetention:
+      type: object
+      description: Desired engine-wide periods, guarded by the observed revision.
+      additionalProperties: false
+      required: [expectedRevision, roomDays, directDays]
+      properties:
+        expectedRevision:
+          $ref: '#/components/schemas/RetentionRevision'
+        roomDays:
+          $ref: '#/components/schemas/RetentionDays'
+        directDays:
+          $ref: '#/components/schemas/RetentionDays'
+    ConversationRetention:
+      type: object
+      description: Stored override and the effective and inherited periods for a conversation.
+      additionalProperties: false
+      required: [revision, days, effectiveDays, globalDays]
+      properties:
+        revision:
+          $ref: '#/components/schemas/RetentionRevision'
+        days:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 365000
+          description: Null inherits the global setting. Zero means unlimited.
+          example: 90
+        effectiveDays:
+          $ref: '#/components/schemas/RetentionDays'
+        globalDays:
+          $ref: '#/components/schemas/RetentionDays'
+    SetConversationRetention:
+      type: object
+      description: Desired conversation override, guarded by the observed revision.
+      additionalProperties: false
+      required: [expectedRevision, days]
+      properties:
+        expectedRevision:
+          $ref: '#/components/schemas/RetentionRevision'
+        days:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 365000
+          description: Set null to inherit, zero for unlimited, or a positive period in days.
+          example: 90
     Engine:
       type: object
       description: Persistent engine identity and event boundary.
       example:
         id: 019a5df0-0000-7000-8000-000000000003
         role: local
-        apiVersion: 0.32.0
+        apiVersion: 0.33.0
         eventCursor: 019a5df0-0000-7000-8000-000000000003:1
       additionalProperties: false
       required:
@@ -3477,6 +3646,7 @@ components:
           - 0.30.1
           - 0.31.0
           - 0.32.0
+          - 0.33.0
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -3795,6 +3965,7 @@ components:
           - conversation.room_session_changed
           - message.created
           - message.updated
+          - conversation.history_pruned
         occurredAt:
           type: string
           format: date-time
@@ -3814,8 +3985,21 @@ components:
           $ref: '#/components/schemas/MessageStar'
         preview:
           $ref: '#/components/schemas/MessagePreview'
+        historyPruned:
+          $ref: '#/components/schemas/HistoryPruned'
         roomSession:
           $ref: '#/components/schemas/RoomSession'
+    HistoryPruned:
+      type: object
+      additionalProperties: false
+      required: [conversationId, messageIds]
+      description: Refresh the conversation and dependent views and remove these IDs from any retained pages. Replayed events can have an empty messageIds array.
+      properties:
+        conversationId:
+          $ref: '#/components/schemas/ID'
+        messageIds:
+          type: array
+          items: {$ref: '#/components/schemas/ID'}
     Problem:
       type: object
       example:

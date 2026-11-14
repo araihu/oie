@@ -70,6 +70,16 @@ func (r archivePageRequest) payload(id string) string {
 
 // The caller holds the archive domain's turn until the page has been processed.
 func (m *Manager) readArchivePage(ctx context.Context, e *entry, s *mx.Session, scope string, request archivePageRequest) (archivePage, error) {
+	if target, ok := ctx.Value(archiveRetentionKey{}).(archiveRetention); ok && target.account == e.account.ID {
+		start := domain.RetentionCutoff(target.now, target.days)
+		if request.Start.Before(start) {
+			request.Start = start
+		}
+		if !request.End.IsZero() && request.End.Before(request.Start) {
+			return archivePage{Query: &archiveQuery{}, Complete: true}, nil
+		}
+	}
+
 	q := &archiveQuery{ID: randomQueryID(), Scope: scope, Start: request.Start, End: request.End}
 	if q.ID == "" {
 		return archivePage{}, errArchive

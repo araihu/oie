@@ -584,3 +584,51 @@ func TestIsolatedRoomArchiveUsesScheduledReleaseAsTimeBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRoomRetentionReopensOnlyNewlyEligibleArchive(t *testing.T) {
+	now := time.Date(2026, 11, 14, 15, 0, 0, 0, time.UTC)
+	oldCutoff := now.AddDate(0, 0, -90)
+	newCutoff := now.AddDate(0, 0, -180)
+	previous := 90
+	m, e, host := archiveFixture(t, func(iq testArchiveIQ, index int) string {
+		if index != 0 || iq.field("start") != newCutoff.Format(time.RFC3339Nano) || iq.field("end") != oldCutoff.Format(time.RFC3339Nano) {
+			t.Errorf("unexpected retention request %d: %s to %s", index, iq.field("start"), iq.field("end"))
+		}
+		return iq.page(true, testArchiveMessage{"older-but-eligible", now.AddDate(0, 0, -100)})
+	})
+	progress := domain.RoomArchiveProgress{
+		WindowStart: now.Add(-48 * time.Hour), WindowEnd: now,
+		Boundary: now.AddDate(0, 0, -80), OlderCoveredThrough: oldCutoff,
+		InitialComplete: true, RecentComplete: true, OlderComplete: true, RetentionDays: &previous,
+	}
+	if !updateArchiveRetention(&progress, 180, now) || progress.OlderComplete || !progress.InitialComplete {
+		t.Fatalf("reopened wrong recovery state: %+v", progress)
+	}
+	ctx := context.WithValue(t.Context(), archiveRetentionKey{}, archiveRetention{account: e.account.ID, days: 180, now: now})
+	if err := m.extendRoomArchive(ctx, host, e, e.session, host.room, &progress); err != nil {
+		t.Fatal(err)
+	}
+	if !progress.OlderComplete || !progress.OlderCoveredThrough.Equal(newCutoff) || len(host.messages) != 1 {
+		t.Fatalf("incorrect retained coverage: %+v", progress)
+	}
+}
+
+func TestRoomRetentionClampsSearchAndSkipsEmptyContext(t *testing.T) {
+	now := time.Date(2026, 11, 14, 15, 0, 0, 0, time.UTC)
+	cutoff := now.AddDate(0, 0, -30)
+	m, e, host := archiveFixture(t, func(iq testArchiveIQ, index int) string {
+		if index != 0 || iq.field("start") != cutoff.Format(time.RFC3339Nano) || iq.field("{urn:xmpp:fulltext:0}fulltext") != "tea" {
+			t.Errorf("search did not enforce retention: %+v", iq)
+		}
+		return iq.page(true, testArchiveMessage{"at-cutoff", cutoff})
+	})
+	ctx := context.WithValue(t.Context(), archiveRetentionKey{}, archiveRetention{account: e.account.ID, days: 30, now: now})
+	empty, err := m.readArchivePage(ctx, e, e.session, host.room.Address, archivePageRequest{Backward: true, End: cutoff.Add(-time.Second)})
+	if err != nil || !empty.Complete {
+		t.Fatalf("empty range: %+v %v", empty, err)
+	}
+	page, err := m.readArchivePage(ctx, e, e.session, host.room.Address, archivePageRequest{Backward: true, Search: "tea"})
+	if err != nil || !page.Complete || len(page.Query.Messages) != 1 {
+		t.Fatalf("inclusive search boundary: %+v %v", page, err)
+	}
+}

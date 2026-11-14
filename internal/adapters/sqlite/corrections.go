@@ -358,7 +358,10 @@ func refreshConversationSummary(ctx context.Context, q *dbgen.Queries, id domain
 		if err = hydrateMessageProjection(ctx, q, &m); err != nil {
 			return err
 		}
-		lastMessage, updatedAt = m.OriginalText, m.TimelineTime()
+		if err := hydrateReply(ctx, q, &m); err != nil {
+			return err
+		}
+		lastMessage, updatedAt = domain.DisplayBody(m), m.TimelineTime()
 	} else if errors.Is(err, sql.ErrNoRows) {
 		opened, err := q.GetConversationOpenedAt(ctx, string(id))
 		if err != nil {

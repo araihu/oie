@@ -77,7 +77,14 @@ func readMessageEditHistory(ctx context.Context, q *dbgen.Queries, requested dom
 			return page, err
 		}
 		content.Sender.PersonalAddress = ""
-		item := domain.MessageEditHistoryItem{RevisionID: domain.ID(source.RevisionID), SourceMessageID: domain.ID(source.SourceID), CreatedAt: at.UTC(), OriginalText: content.OriginalText, Sender: content.Sender, ParentRevisionIDs: []domain.ID{}}
+		if err := hydrateReply(ctx, q, &content); err != nil {
+			return page, err
+		}
+		text := content.OriginalText
+		if content.Reply != nil && content.Reply.OriginalExpired {
+			text = content.Reply.BodyText
+		}
+		item := domain.MessageEditHistoryItem{RevisionID: domain.ID(source.RevisionID), SourceMessageID: domain.ID(source.SourceID), CreatedAt: at.UTC(), OriginalText: text, Sender: content.Sender, ParentRevisionIDs: []domain.ID{}}
 		nodes[item.SourceMessageID] = &historyNode{item: item, source: content}
 	}
 	original := nodes[canonical]

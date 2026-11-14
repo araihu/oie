@@ -56,6 +56,11 @@ if v.Selected.Kind=="room" && v.requestKind()=="" && !v.Preview {
 </template>
 }
 </nav>
+if !v.Preview && v.requestKind()=="" {
+  @link.Link(v.retentionHref(v.Selected.Id,false),link.WithRootClass("oie-info-entry")){
+    @glyph(heroicons.Icon16SolidClock)<span>{v.Text.RetentionTitle}</span>@glyph(heroicons.Icon16SolidChevronRight)
+  }
+}
 if v.RoomArchive != nil {
   <div class="oie-room-archive-setting">
   @tooltip.Tooltip("room-archive-mode-help",v.Text.RoomArchiveMode,tooltip.WithDescription(v.Text.RoomArchiveModeHelp),tooltip.WithTrigger(roomArchiveHelp(v)),tooltip.WithActivation(tooltip.ActivationClick),tooltip.WithPosition(tooltip.PositionBottom),tooltip.WithPortal(true))

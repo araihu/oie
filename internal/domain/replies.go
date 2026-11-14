@@ -19,6 +19,7 @@ type ReplyReference struct {
 type MessageReply struct {
 	MessageID                     ID
 	Available                     bool
+	OriginalExpired               bool
 	SenderName, Excerpt, BodyText string
 }
 
