@@ -455,6 +455,8 @@
  },true);
  document.addEventListener('keydown',event=>{
   if(event.key!=='Escape'||!pendingConversation||pendingConversation.overlay.hidden)return;
+  const picker=event.target.closest('[data-combobox]');
+  if(picker?.querySelector('[role="combobox"][aria-expanded="true"]'))return;
   event.preventDefault();event.stopImmediatePropagation();
   cancelConversationLoading();
  },true);
