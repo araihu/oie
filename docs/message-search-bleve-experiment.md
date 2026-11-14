@@ -118,3 +118,23 @@ during local archive receipt. Room, deep-page, history, and XMPP transport
 latency, startup upgrade latency, disk usage, and ingest during a full
 rebuild require separate measurements. The [comparative prototype](message-search-index-benchmark.md)
 covers FTS5 under its own workload.
+
+## Measurement through the browser server
+
+The browser-server mode measures loopback HTTP through both the engine
+and the BFF. It reads the full HTML response and checks for real highlights.
+Conversation responses must also contain source ranges. The engine uses the
+same SQLite schema in both arms. The control calls the chronological SQL path
+used by the experimental fallback.
+
+```sh
+OIE_BLEVE_BENCH=1 GOMAXPROCS=4 GOWORK=off go test ./internal/adapters/sqlite \
+  -run '^TestExperimentalMessageIndexIngestionBenchmark$' -count=1 -timeout=14m -v \
+  -oie-index-bench-web
+```
+
+The workload adds 52 long messages to 100,000 retained messages in a saved
+room. Four search workers offer 210 requests at four per second while one
+writer offers 20 archive messages per second. Global requests ask for 20
+results and room requests ask for 50. The measured latency includes queueing,
+engine verification, highlight generation and HTML transfer.

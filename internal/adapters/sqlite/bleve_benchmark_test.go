@@ -23,6 +23,7 @@ import (
 
 var indexBenchRows = flag.Int("oie-index-bench-rows", 100000, "retained messages in the experimental index measurement")
 var indexBenchWeb = flag.Bool("oie-index-bench-web", false, "measure HTML and highlight generation using the browser server")
+var indexBenchSearchInterval = flag.Duration("oie-index-bench-search-interval", 0, "override the interval between offered searches")
 
 type chronologicalIndexControl struct{ *Store }
 
@@ -172,9 +173,16 @@ func TestExperimentalMessageIndexIngestionBenchmark(t *testing.T) {
 			// waiting behind earlier requests. The writer uses actual archive
 			// message acceptance and commits all offered messages.
 			queries := 30 * len(scenarios)
-			writes := 2 * queries
-			const queryInterval = 100 * time.Millisecond
+			queryInterval := 100 * time.Millisecond
+			if *indexBenchWeb {
+				queryInterval = 250 * time.Millisecond
+			}
+			if *indexBenchSearchInterval > 0 {
+				queryInterval = *indexBenchSearchInterval
+			}
 			const writeInterval = 50 * time.Millisecond
+			writes := max(1, int(time.Duration(queries)*queryInterval/writeInterval))
+			t.Logf("offered intervals: search=%s archive=%s", queryInterval, writeInterval)
 			type job struct {
 				n  int
 				at time.Time
