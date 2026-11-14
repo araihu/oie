@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "tool": "goshtoso-iconpack",
-  "release": "iconpack-5d8afba78191",
-  "catalogSha256": "5d8afba781910103cc3e42342a9db263bffc58c7137e911e795d8ad7615cbabd",
+  "release": "iconpack-d18e4925d2cd",
+  "catalogSha256": "d18e4925d2cdbedb0a0a0bf678e1c4d9a966d02f335a883bfefc99f1878f208f",
   "sourceKind": "muamba-snapshot",
   "archiveSha256": "",
-  "sourceConfigSha256": "5d8afba781910103cc3e42342a9db263bffc58c7137e911e795d8ad7615cbabd",
-  "sourceLockSha256": "e254c27130072f05becbe43ecebafd6d8af1cf3f9112aa3c6d983f178a72de89",
+  "sourceConfigSha256": "d18e4925d2cdbedb0a0a0bf678e1c4d9a966d02f335a883bfefc99f1878f208f",
+  "sourceLockSha256": "a06d025bf8675171e5b3f171fc95dd95855f12bab4c9b00487053ae70e3aaa6f",
   "sources": [
     {
       "namespace": "custom",
@@ -14,7 +14,7 @@
       "spritePath": "",
       "spriteSha256": "",
       "manifestPath": ".iconpack.yaml",
-      "manifestSha256": "5d8afba781910103cc3e42342a9db263bffc58c7137e911e795d8ad7615cbabd",
+      "manifestSha256": "d18e4925d2cdbedb0a0a0bf678e1c4d9a966d02f335a883bfefc99f1878f208f",
       "provenancePath": "",
       "provenanceSha256": "",
       "licensePath": "heroicons/LICENSE",
@@ -26,7 +26,7 @@
       "spritePath": "",
       "spriteSha256": "",
       "manifestPath": ".iconpack.yaml",
-      "manifestSha256": "5d8afba781910103cc3e42342a9db263bffc58c7137e911e795d8ad7615cbabd",
+      "manifestSha256": "d18e4925d2cdbedb0a0a0bf678e1c4d9a966d02f335a883bfefc99f1878f208f",
       "provenancePath": "",
       "provenanceSha256": "",
       "licensePath": "heroicons-check-badge/LICENSE",
@@ -38,10 +38,22 @@
       "spritePath": "",
       "spriteSha256": "",
       "manifestPath": ".iconpack.yaml",
-      "manifestSha256": "5d8afba781910103cc3e42342a9db263bffc58c7137e911e795d8ad7615cbabd",
+      "manifestSha256": "d18e4925d2cdbedb0a0a0bf678e1c4d9a966d02f335a883bfefc99f1878f208f",
       "provenancePath": "",
       "provenanceSha256": "",
       "licensePath": "heroicons-photo/LICENSE",
+      "licenseSha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    },
+    {
+      "namespace": "custom",
+      "product": "heroicons-room-exit",
+      "spritePath": "",
+      "spriteSha256": "",
+      "manifestPath": ".iconpack.yaml",
+      "manifestSha256": "d18e4925d2cdbedb0a0a0bf678e1c4d9a966d02f335a883bfefc99f1878f208f",
+      "provenancePath": "",
+      "provenanceSha256": "",
+      "licensePath": "heroicons-room-exit/LICENSE",
       "licenseSha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
     },
     {
@@ -50,7 +62,7 @@
       "spritePath": "",
       "spriteSha256": "",
       "manifestPath": ".iconpack.yaml",
-      "manifestSha256": "5d8afba781910103cc3e42342a9db263bffc58c7137e911e795d8ad7615cbabd",
+      "manifestSha256": "d18e4925d2cdbedb0a0a0bf678e1c4d9a966d02f335a883bfefc99f1878f208f",
       "provenancePath": "",
       "provenanceSha256": "",
       "licensePath": "heroicons-room-role/LICENSE",
@@ -62,7 +74,7 @@
       "spritePath": "",
       "spriteSha256": "",
       "manifestPath": ".iconpack.yaml",
-      "manifestSha256": "5d8afba781910103cc3e42342a9db263bffc58c7137e911e795d8ad7615cbabd",
+      "manifestSha256": "d18e4925d2cdbedb0a0a0bf678e1c4d9a966d02f335a883bfefc99f1878f208f",
       "provenancePath": "",
       "provenanceSha256": "",
       "licensePath": "heroicons-room-voice/LICENSE",
@@ -90,6 +102,13 @@
       "license": "MIT",
       "path": "heroicons-photo/16/solid/photo.svg",
       "sha256": "881555a8b9c771588f2eb663d445779e146850c1dce7956f990817b80474f005"
+    },
+    {
+      "canonicalName": "heroicons-room-exit-16-solid-arrow-right-start-on-rectangle",
+      "source": "https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-right-start-on-rectangle.svg:16/solid/arrow-right-start-on-rectangle.svg",
+      "license": "MIT",
+      "path": "heroicons-room-exit/16/solid/arrow-right-start-on-rectangle.svg",
+      "sha256": "f34118d9829d1a92d80c16053232e06f8d5deeabefc947a593e775fe3fc986a6"
     },
     {
       "canonicalName": "heroicons-room-role-16-solid-scale",

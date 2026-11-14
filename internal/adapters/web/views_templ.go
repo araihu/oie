@@ -2596,7 +2596,7 @@ func chatHeader(v view) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				roomItems = append(roomItems, dropdown.Item{ID: "chat-leave-room", Label: v.Text.LeaveRoom, Icon: glyph(heroicons.Icon16SolidArrowTopRightOnSquare), OnClick: "$dispatch('oie:leave-room')", Disabled: !v.canLeaveRoom()})
+				roomItems = append(roomItems, dropdown.Item{ID: "chat-leave-room", Label: v.Text.LeaveRoom, Icon: roomExitIcon(), OnClick: "$dispatch('oie:leave-room')", Disabled: !v.canLeaveRoom()})
 				if v.canJoinRoom() {
 					roomItems = append(roomItems, dropdown.Item{ID: "chat-join-room", Label: v.Text.JoinRoom, OnClick: "$dispatch('oie:join-saved-room')"})
 				}

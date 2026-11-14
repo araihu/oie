@@ -226,12 +226,16 @@ type roomParticipantAction struct {
 	tone                 button.Tone
 }
 
+func roomExitIcon() templ.Component {
+	return appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsRoomExit16SolidArrowRightStartOnRectangle, Decorative: true, RootClass: "oie-icon"})
+}
+
 func roomParticipantActions(text copy, occupant engineapi.RoomManagedOccupant) []roomParticipantAction {
 	roleActions := []roomParticipantAction{
 		{"role", "moderator", text.RoomPromoteModerator, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsRoomRole16SolidScale, Decorative: true, RootClass: "oie-icon"}), button.TonePrimary},
 		{"role", "participant", text.RoomGrantVoice, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsRoomVoice16SolidChatBubbleLeftEllipsis, Decorative: true, RootClass: "oie-icon"}), button.ToneSuccess},
 		{"role", "visitor", text.RoomRevokeVoice, glyph(heroicons.Icon16SolidPause), button.ToneWarning},
-		{"role", "none", text.RoomKick, glyph(heroicons.Icon16SolidArrowTopRightOnSquare), button.ToneDanger},
+		{"role", "none", text.RoomKick, roomExitIcon(), button.ToneDanger},
 	}
 	if occupant.Role == "moderator" {
 		roleActions[1] = roomParticipantAction{"role", "participant", text.RoomDemoteModerator, glyph(heroicons.Icon16SolidArrowDown), button.ToneWarning}
