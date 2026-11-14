@@ -213,13 +213,27 @@ async function assertMobileControlOwnership(page) {
     assert.equal(await page.locator('.oie-sidebar a[href*="section=archived"]').count(),0);
     assert.equal(await archived.locator('use[href$="#heroicons-archive-16-solid-archive-box-arrow-down"]').count(),1);
     assert.equal(await archived.evaluate(node=>getComputedStyle(node).filter),'grayscale(1)');
+    const closeArchive=archived.locator('.oie-archived-close');
+    assert.equal(await closeArchive.count(),0);
     await archived.click();
     await route(async()=>new URL(page.url()).searchParams.get('section')==='archived');
-    assert.equal(await archived.getAttribute('aria-current'),'page');
+    assert.equal(await archived.getAttribute('aria-label'),'Archived, back to chats');
     assert.equal(await archived.evaluate(node=>getComputedStyle(node).filter),'none');
     assert.equal(await inboxFilters.isVisible(),false);
     assert((await page.locator('.oie-sidebar a[aria-current=page]').textContent()).includes('Chats'));
-    await page.goBack();await route(async()=>new URL(page.url()).searchParams.get('section')==='chats');
+    const closeIcon=closeArchive.locator('svg');
+    assert.equal(await closeIcon.locator('use[href$="#hi-16-solid-x-mark"]').count(),1);
+    assert.equal(await closeIcon.getAttribute('aria-hidden'),'true');
+    const rowBox=await archived.boundingBox(),closeBox=await closeIcon.boundingBox();
+    assert(rowBox.x+rowBox.width-closeBox.x-closeBox.width<20,'close icon belongs at the right edge of the archived row');
+    await closeIcon.click();
+    await route(async()=>new URL(page.url()).searchParams.get('section')==='chats');
+    await inboxFilters.waitFor({state:'visible'});
+    assert.equal(await closeArchive.count(),0);
+    await page.goBack();await route(async()=>new URL(page.url()).searchParams.get('section')==='archived');
+    await archived.focus();
+    await page.keyboard.press('Enter');
+    await route(async()=>new URL(page.url()).searchParams.get('section')==='chats');
     await inboxFilters.waitFor({state:'visible'});
     for(const gesture of [{modifiers:['Control']},{button:'middle'}]){const original=page.url(),requests=hx.length,popupEvent=context.waitForEvent('page');await page.locator('.oie-sidebar a').filter({hasText:'Media & links'}).click(gesture);const popup=await popupEvent;await popup.waitForURL(url=>url.searchParams.get('section')==='media',{waitUntil:'domcontentloaded'});assert.equal(new URL(popup.url()).searchParams.get('section'),'media');assert.equal(await popup.locator('#oie-app').count(),1);assert.equal(page.url(),original);assert.equal(hx.length,requests);assert.equal(await page.evaluate(()=>window.documentToken),token);await popup.close();await until(()=>streams.size===1,'modifier popup stream disposed')}
     await page.locator('a[data-conversation-id="'+chatA+'"]').click();await route(async()=>await page.locator('#message-composer').count()===1);findings.push('Sidebar destinations, Archived and Back/Forward use same-document fragments with the active links updated; Control and middle clicks retain native new-tab behavior');
@@ -283,7 +297,20 @@ async function assertMobileControlOwnership(page) {
     const mobileRoute=async section=>{await until(async()=>new URL(mobile.url()).searchParams.get('section')===section&&await mobile.evaluate(()=>window.OieRuntime.generation)>mobileGeneration,'mobile sidebar '+section);await assertMobileControlOwnership(mobile);mobileGeneration=await mobile.evaluate(()=>window.OieRuntime.generation);assert.equal(await mobile.evaluate(()=>window.documentToken),mobileToken);assert.equal(mobileDocuments.length,1);await until(()=>streams.size===1,'one mobile stream')};
     for(const [section,label]of sidebarDestinations){await mobile.locator('[aria-controls=mobile-navigation-panel]:visible').click();await mobile.locator('#mobile-navigation-panel').waitFor({state:'visible'});await mobile.locator('#mobile-navigation-panel a').filter({hasText:label}).click();await mobileRoute(section);await mobile.locator('#mobile-navigation-panel').waitFor({state:'hidden'});assert((await mobile.locator('#mobile-navigation-panel a[aria-current=page]').textContent()).includes(label))}
     await mobile.goBack();await mobileRoute('favorites');await mobile.goForward();await mobileRoute('chats');assert(mobileHX.length>=6);assert.deepEqual(mobileErrors,[]);findings.push('Mobile overlay routes all four destinations, closes after each fragment, updates active state and preserves the document through Back/Forward');assert(await mobile.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await mobile.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await mobile.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);await denied.close();findings.push('Mobile light layout preserves denied-storage session draft and has no horizontal overflow or WCAG A/AA violations');
-    const native=await browser.newContext({javaScriptEnabled:false,viewport:{width:1440,height:1000}}),fallback=await native.newPage();await fallback.goto(base+'/?chat='+chatA+'&lang=en');for(const [section,label]of sidebarDestinations){await fallback.locator('.oie-sidebar a').filter({hasText:label}).click();assert.equal(new URL(fallback.url()).searchParams.get('section'),section);assert.equal(await fallback.locator('#oie-app').count(),1);assert((await fallback.locator('.oie-sidebar a[aria-current=page]').textContent()).includes(label));if(section==='media')assert.equal(await fallback.locator('[data-shared-item]').count(),50)}await native.close();findings.push('Direct native links remain usable when JavaScript is disabled');
+    const native=await browser.newContext({javaScriptEnabled:false,viewport:{width:1440,height:1000}}),fallback=await native.newPage();
+    await fallback.goto(base+'/?chat='+chatA+'&lang=en');
+    for(const [section,label]of sidebarDestinations){
+      await fallback.locator('.oie-sidebar a').filter({hasText:label}).click();
+      assert.equal(new URL(fallback.url()).searchParams.get('section'),section);
+      assert.equal(await fallback.locator('#oie-app').count(),1);
+      assert((await fallback.locator('.oie-sidebar a[aria-current=page]').textContent()).includes(label));
+      if(section==='media')await fallback.locator('#shared-content-results [data-shared-item]').first().waitFor({state:'visible'});
+    }
+    await fallback.locator('.oie-archived-row').click();
+    assert.equal(new URL(fallback.url()).searchParams.get('section'),'archived');
+    await fallback.getByRole('link',{name:'Archived, back to chats'}).click();
+    assert.equal(new URL(fallback.url()).searchParams.get('section'),'chats');
+    await native.close();findings.push('Direct native links, including the archived row, remain usable when JavaScript is disabled');
     const artifact=path.join(__dirname,'artifacts');await fs.mkdir(artifact,{recursive:true});await fs.writeFile(path.join(artifact,'fragment-navigation-report.json'),JSON.stringify({findings,fragmentRequests:hx.length,documentRequests:documents.length,completedFragmentShapes:completedFragments.length,mobileDocumentRequests:mobileDocuments.length,mobileFragmentRequests:mobileHX.length,earlyDocumentRequests:earlyDocuments.length,intents:2,mutations:state.effects,pageErrors:errors},null,2));console.log('PASS: HTMX fragment navigation, scoped drafts, Back/Forward, stale-response/failure recovery, one stream and one effect per intent, mobile accessibility and native fallback');
   } catch(error) {
     if(debuggingPage&&!debuggingPage.isClosed())console.error('Fragment failure evidence',JSON.stringify(await debuggingPage.evaluate(()=>({url:location.href,ready:document.readyState,generation:window.OieRuntime?.generation,account:document.body.dataset.accountId,chat:document.body.dataset.conversationId,status:document.querySelector('[data-navigation-status]')?.textContent,labels:[...document.querySelectorAll('[data-account-switcher]')].map(e=>e.textContent),boosted:document.querySelectorAll('[hx-boost]').length,form:document.querySelector('form.oie-search')?.outerHTML,trace:window.navTrace?.slice(-30),workspace:document.querySelector('#workspace')?.className,paneOpen:document.querySelector('#conversation-pane')?.dataset.openChat,navigationControls:[...document.querySelectorAll('button[aria-label="Open navigation"]')].map(node=>({controls:node.getAttribute('aria-controls'),expanded:node.getAttribute('aria-expanded')}))})).catch(()=>({unavailable:true}))), 'streams',streams.size, 'BFF log',log);

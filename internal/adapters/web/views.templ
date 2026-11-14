@@ -327,10 +327,21 @@ templ inboxList(v view) {
 }
 
 templ archivedRow(v view) {
-	{{ attrs := sidebarNavigationAttrs(); if v.Section == "archived" { attrs["aria-current"] = "page" } }}
-	@link.Link(v.href("section", "archived", "chat", "", "q", "", "filter", "all"), link.WithRootClass("oie-archived-row"), link.WithAttrs(attrs)) {
+	{{
+		attrs := sidebarNavigationAttrs()
+		destination := "archived"
+		if v.Section == "archived" {
+			destination = "chats"
+			attrs["data-active"] = ""
+			attrs["aria-label"] = v.Text.ArchivedBackToChats
+		}
+	}}
+	@link.Link(v.href("section", destination, "chat", "", "q", "", "filter", "all"), link.WithRootClass("oie-archived-row"), link.WithAttrs(attrs)) {
 		@appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsArchive16SolidArchiveBoxArrowDown, Decorative: true, RootClass: "oie-icon"})
-		{ v.Text.Archived }
+		<span>{ v.Text.Archived }</span>
+		if v.Section == "archived" {
+			<span class="oie-archived-close">@glyph(heroicons.Icon16SolidXMark)</span>
+		}
 	}
 }
 

@@ -501,7 +501,7 @@ type copy struct {
 	Unavailable, UnavailableBody, Retry                                                                                                                                  string
 	Skip, Languages, Appearance, System, Light                                                                                                                           string
 	Dark, Next, English, Portuguese, NotFound                                                                                                                            string
-	NotFoundBody, Chats, Favorites, Archived, SharedMedia                                                                                                                string
+	NotFoundBody, Chats, Favorites, Archived, ArchivedBackToChats, SharedMedia                                                                                           string
 	HistorySyncing, HistoryPartial, HistoryUnsupported, HistoryComplete, HistoryCount, RoomReadOnly                                                                      string
 	SwitchAccount, ManageAccounts                                                                                                                                        string
 	BackToAccounts, AdvancedConnection, AccountMissing, AddAccountHelp                                                                                                   string
