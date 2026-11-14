@@ -232,6 +232,7 @@ async function waitFor(predicate) {
     await page.locator('body[data-oie-live-ready=true]').waitFor();
     await page.locator('[data-new-conversation]').click();
     const newMenu = page.locator('#new-conversation-menu').getByRole('menu');
+    await newMenu.waitFor({state:'visible'});
     assert.deepEqual((await newMenu.getByRole('menuitem').allTextContents()).map(label=>label.trim()), ['Direct conversation','Join room','Create room']);
     await newMenu.getByRole('menuitem', {name:'Direct conversation'}).click();
     await page.locator('#new-conversation-form').waitFor();
