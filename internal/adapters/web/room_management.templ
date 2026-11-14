@@ -213,7 +213,8 @@ templ roomBannedDetails(v view, revision, address string) {
 		</header>
 		<div class="oie-room-participant-actions">
 			<h4>{ roomOptionLabel(v.Text, "affiliation") }</h4>
-			{{ action := roomParticipantAction{"affiliation", "none", v.Text.RoomUnban, glyph(heroicons.Icon16SolidArrowUturnLeft), button.ToneSuccess} }}
+			{{ unbanIcon := appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsCheckBadge16SolidCheckBadge, Decorative: true, RootClass: "oie-icon"}) }}
+			{{ action := roomParticipantAction{"affiliation", "none", v.Text.RoomUnban, unbanIcon, button.ToneSuccess} }}
 			@roomParticipantActionControl(v, revision, id, address, action, strings.ReplaceAll(v.Text.RoomUnbanConfirm, "{address}", address))
 		</div>
 	</section>
