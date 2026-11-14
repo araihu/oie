@@ -114,10 +114,25 @@ const messages = [source, message(12, 'Message with a rejected destination')];
         source.revisionId = id(10);
         source.originalText = 'Original message';
         const page = await context.newPage();
+        const legacy = 'forwarding-journals:' + engine;
+        const current = 'oie.' + legacy;
+        const legacyFixtureKey = 'test.forwarding-legacy';
+        await page.addInitScript(({ legacy, current, legacyFixtureKey }) => {
+          const rows = sessionStorage.getItem(legacyFixtureKey);
+          if (rows === null) return;
+          sessionStorage.removeItem(legacyFixtureKey);
+          sessionStorage.removeItem(current);
+          sessionStorage.setItem(legacy, rows);
+        }, { legacy, current, legacyFixtureKey });
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
         await page.goto(base + '/?section=favorites&lang=' + fixture.lang);
         await page.waitForFunction(() => window.OieRuntime?.generation > 0);
+        const seedLegacy = async rows => {
+          await page.evaluate(({ key, rows }) => sessionStorage.setItem(key, JSON.stringify(rows)), { key: legacyFixtureKey, rows });
+          await page.reload();
+          await page.waitForFunction(() => window.OieRuntime?.generation > 0);
+        };
         const dialog = page.locator('#forward-message-dialog');
         const button = dialog.locator('[data-forward-submit]');
         const checkbox = room => dialog.locator(`input[value="${room.id}"]`);
@@ -137,7 +152,12 @@ const messages = [source, message(12, 'Message with a rejected destination')];
           });
         };
         const close = async () => {
+          await dialog.evaluate(element => {
+            element.addEventListener('close', () => { element.dataset.testClosed = 'true'; }, { once: true });
+            delete element.dataset.testClosed;
+          });
           await page.keyboard.press('Escape');
+          await page.waitForFunction(() => document.getElementById('forward-message-dialog').dataset.testClosed === 'true');
           await dialog.waitFor({ state: 'hidden' });
         };
         const waitForRetry = () => dialog.getByRole('button', { name: fixture.retry, exact: true }).waitFor();
@@ -238,21 +258,14 @@ const messages = [source, message(12, 'Message with a rejected destination')];
         assert.notEqual(requests.at(-1).key, reconciledAttempt.key);
         assert.equal(requests.at(-1).expectedRevisionId, id(15));
 
-        const legacy = 'forwarding-journals:' + engine;
-        const current = 'oie.' + legacy;
         const olderKey = id(fixture.width + 1), newerKey = id(fixture.width + 2);
         const previousRevision = id(14);
         const data = { expectedRevisionId: source.revisionId, conversationId: alpha.id };
         accepted.set(newerKey, { data, copy: { ...source, id: id(50 + accepted.size), conversationId: alpha.id, sendState: 'queued' } });
-        await page.evaluate(({ legacy, current, rows }) => {
-          sessionStorage.removeItem(current);
-          sessionStorage.setItem(legacy, JSON.stringify(rows));
-        }, { legacy, current, rows: [
+        await seedLegacy([
           [`${source.id}:${previousRevision}:${alpha.id}`, { key: olderKey, accepted: false, message: 'Unknown' }],
           [`${source.id}:${source.revisionId}:${alpha.id}`, { key: newerKey, accepted: false, message: 'Unknown' }],
-        ] });
-        await page.reload();
-        await page.waitForFunction(() => window.OieRuntime?.generation > 0);
+        ]);
         await open(source);
         assert(await checkbox(alpha).isChecked());
         const beforeLegacyRetry = requests.length;
@@ -274,15 +287,11 @@ const messages = [source, message(12, 'Message with a rejected destination')];
         await dialog.waitFor({ state: 'hidden' });
         assert.deepEqual(requests.slice(beforeLegacyRetry).map(({ key }) => key), [olderKey, newerKey, newerKey]);
 
-        await page.evaluate(({ legacy, current, rows }) => {
-          sessionStorage.removeItem(current);
-          sessionStorage.setItem(legacy, JSON.stringify(rows));
-        }, { legacy, current, rows: [
+        const settledLegacy = [
           [`${source.id}:${previousRevision}:${alpha.id}`, { key: olderKey, accepted: false, message: 'Unknown' }],
           [`${source.id}:${source.revisionId}:${alpha.id}`, { key: newerKey, accepted: true, message: 'Queued' }],
-        ] });
-        await page.reload();
-        await page.waitForFunction(() => window.OieRuntime?.generation > 0);
+        ];
+        await seedLegacy(settledLegacy);
         await open(source);
         await status(alpha).getByText('Queued', { exact: true }).waitFor();
         assert(await checkbox(alpha).isDisabled());
@@ -300,14 +309,7 @@ const messages = [source, message(12, 'Message with a rejected destination')];
         assert(await checkbox(alpha).isEnabled());
         assert.equal(await checkbox(alpha).isChecked(), false);
         await close();
-        await page.evaluate(({ key, rows }) => sessionStorage.setItem(key, JSON.stringify(rows)), {
-          key: legacy, rows: [
-            [`${source.id}:${previousRevision}:${alpha.id}`, { key: olderKey, accepted: false, message: 'Unknown' }],
-            [`${source.id}:${source.revisionId}:${alpha.id}`, { key: newerKey, accepted: true, message: 'Queued' }],
-          ],
-        });
-        await page.reload();
-        await page.waitForFunction(() => window.OieRuntime?.generation > 0);
+        await seedLegacy(settledLegacy);
         await open(source);
         await status(alpha).getByText('Queued', { exact: true }).waitFor();
         assert(await checkbox(alpha).isDisabled());
