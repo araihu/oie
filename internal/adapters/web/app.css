@@ -560,7 +560,7 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-room-management-tabs [role="tabpanel"]{min-width:0;max-height:100%;overflow-y:auto;overscroll-behavior:contain;padding-bottom:8px}
 .oie-room-management [data-room-management-content]>form{border-bottom:1px solid var(--oie-border);padding-bottom:12px}
 .oie-room-management-tabs [role="tabpanel"]:not([x-cloak]){display:grid;gap:14px}
-.oie-room-management-tabs #tabpanelroom-management-tabsbans{height:100%;grid-template-rows:minmax(44px,1fr) auto;gap:0}
+.oie-room-management-tabs #tabpanelroom-management-tabsbans{height:100%;grid-template-rows:auto minmax(44px,1fr) auto;gap:0}
 .oie-room-ban-footer{display:grid;justify-items:stretch;gap:8px;border-top:1px solid var(--oie-border);padding-top:8px}
 .oie-room-ban-footer .oie-room-ban-toggle{justify-self:end;min-height:44px}
 .oie-room-ban-footer .oie-room-action-buttons{justify-content:flex-end}
@@ -572,7 +572,7 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-room-addresses form{padding:10px 12px;margin:0 0 8px;border-radius:var(--radius-radius);background:var(--oie-raised)}
 .oie-room-addresses form p{margin:0;overflow-wrap:anywhere}
 .oie-room-addresses form [data-form-feedback]:empty{display:none}
-.oie-room-participant-search{position:sticky;inset-block-start:0;z-index:1;background:var(--oie-panel);padding-bottom:12px}
+.oie-room-list-search{position:sticky;inset-block-start:0;z-index:1;background:var(--oie-panel);padding-bottom:12px}
 .oie-room-participant-row{scroll-margin-block-start:56px}
 .oie-room-participant-group+.oie-room-participant-group{margin-top:14px}
 .oie-room-participant-group h3{margin:0 0 4px;font-size:.8125rem}

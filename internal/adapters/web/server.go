@@ -301,6 +301,8 @@ type copy struct {
 	RoomAvatarBrowse                                                                                                                                                                                         string
 	RoomAvatarEmpty                                                                                                                                                                                          string
 	RoomNoBans                                                                                                                                                                                               string
+	RoomSearchBans                                                                                                                                                                                           string
+	RoomNoMatchingBans                                                                                                                                                                                       string
 	RoomBannedAddresses                                                                                                                                                                                      string
 	RoomDetailsTab                                                                                                                                                                                           string
 	RoomNoVisibleParticipants                                                                                                                                                                                string

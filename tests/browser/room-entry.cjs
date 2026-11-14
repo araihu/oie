@@ -470,6 +470,17 @@ async function waitFor(predicate) {
     assert.equal(managementCommands.at(-1).action,'set_avatar');
     assert.equal(managementCommands.at(-1).image,avatar.toString('base64'));
     await roomPanel.getByRole('tab',{name:'Banimentos',exact:true}).click();
+    const banSearch = roomPanel.getByRole('searchbox',{name:'Pesquisar banimentos',exact:true});
+    const bansList = roomPanel.locator('.oie-room-bans-list [data-goshtoso-scroll-viewport]');
+    await bansList.getByText('sem-foto@fixture',{exact:true}).waitFor();
+    await banSearch.fill('  SEM-FOTO@  ');
+    assert.deepEqual(await bansList.locator('li:visible').getByText('sem-foto@fixture',{exact:true}).allTextContents(),['sem-foto@fixture']);
+    assert.equal(await bansList.locator('li:visible').count(),1);
+    await banSearch.fill('sem correspondência');
+    await roomPanel.getByText('Nenhum endereço encontrado.',{exact:true}).waitFor();
+    await banSearch.press('Escape');
+    assert.equal(await banSearch.inputValue(),'');
+    await banSearch.fill('banido@');
     const unban = roomPanel.getByRole('button',{name:'Retirar banimento · banido@fixture'});
     await unban.hover();
     assert.equal(await unban.locator('svg').count(),1);
@@ -493,6 +504,9 @@ async function waitFor(predicate) {
     await unban.click();
     await confirmation.getByRole('button',{name:'Retirar banimento',exact:true}).click();
     await unban.waitFor({state:'hidden'});
+    assert.equal(await banSearch.inputValue(),'banido@');
+    await roomPanel.getByText('Nenhum endereço encontrado.',{exact:true}).waitFor();
+    await banSearch.clear();
     assert.equal(await roomPanel.getByText('sem-foto@fixture',{exact:true}).isVisible(),true);
     assert.equal(managementCommands.length,beforeUnban+1);
     assert.equal(managementCommands.at(-1).action,'affiliation');
@@ -501,9 +515,9 @@ async function waitFor(predicate) {
     const banTabs = roomPanel.getByRole('tablist');
     const banToggle = roomPanel.getByRole('button',{name:'Banir por endereço',exact:true});
     const banAddress = roomPanel.getByRole('textbox',{name:'Endereço da pessoa',exact:true});
-    const bansList = roomPanel.locator('.oie-room-bans-list [data-goshtoso-scroll-viewport]');
     assert.equal(await banAddress.isVisible(),false);
     const footerBeforeScroll = await banToggle.boundingBox();
+    const searchBeforeScroll = await banSearch.boundingBox();
     const tabsBeforeScroll = await banTabs.boundingBox();
     const scrollTop = await bansList.evaluate(list => {
       list.scrollTop = 200;
@@ -511,6 +525,7 @@ async function waitFor(predicate) {
     });
     assert.equal(scrollTop,200);
     assert.deepEqual(await banToggle.boundingBox(),footerBeforeScroll);
+    assert.deepEqual(await banSearch.boundingBox(),searchBeforeScroll);
     assert.deepEqual(await banTabs.boundingBox(),tabsBeforeScroll);
     const beforeBan = managementCommands.length;
     await banToggle.click();

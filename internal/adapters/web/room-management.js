@@ -11,7 +11,8 @@ window.OieRuntime.register('room-management', life => {
   const isPending = form => form.dataset.busy === 'true' || pending.has(form);
   const hasPending = () => [...content.querySelectorAll('form')].some(isPending);
   let participant = '';
-  let participantQuery = '', participantScroll = 0;
+  let participantScroll = 0;
+  const listQueries = new Map();
   const participantDetails = () => [...content.querySelectorAll('[data-room-participant-detail]')];
 
   function updateAvatarActions() {
@@ -43,22 +44,21 @@ window.OieRuntime.register('room-management', life => {
     }
   }
 
-  function filterParticipants() {
-    const results = content.querySelector('#room-participant-results');
-    if (!results) return;
+  function filterRoomList(search, scope) {
+    const results = scope.querySelector('#' + search.getAttribute('aria-controls'));
+    const empty = results.querySelector('[data-room-list-no-results]');
+    if (!empty) return;
     const fold = value => value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
-    const query = fold(participantQuery);
+    const query = fold(search.value);
     let found = false;
-    for (const group of results.querySelectorAll('.oie-room-participant-group')) {
-      let groupHasMatch = false;
-      for (const row of group.querySelectorAll('[data-room-participant-name]')) {
-        row.hidden = !fold(row.dataset.roomParticipantName).includes(query);
-        groupHasMatch ||= !row.hidden;
-      }
-      group.hidden = !groupHasMatch;
-      found ||= groupHasMatch;
+    for (const row of results.querySelectorAll('[data-room-list-match]')) {
+      row.hidden = !fold(row.dataset.roomListMatch).includes(query);
+      found ||= !row.hidden;
     }
-    results.querySelector('[data-room-participant-no-results]').hidden = found;
+    for (const group of results.querySelectorAll('.oie-room-participant-group')) {
+      group.hidden = !group.querySelector('[data-room-list-match]:not([hidden])');
+    }
+    empty.hidden = found;
   }
 
   function refreshParticipantAvatars(fragment) {
@@ -93,10 +93,13 @@ window.OieRuntime.register('room-management', life => {
   }
 
   life.on(content, 'input', event => {
-    if (event.target.id === 'room-participant-search') {
-      participantQuery = event.target.value;
-      event.target.closest('[role=tabpanel]').scrollTop = 0;
-      filterParticipants();
+    if (event.target.matches('[data-room-list-search]')) {
+      const search = event.target;
+      listQueries.set(search.id, search.value);
+      const panel = search.closest('[role=tabpanel]');
+      const viewport = panel.querySelector('[data-goshtoso-scroll-viewport]') || panel;
+      viewport.scrollTop = 0;
+      filterRoomList(search, panel);
       return;
     }
     const form = event.target.form;
@@ -199,14 +202,16 @@ window.OieRuntime.register('room-management', life => {
   }
 
   function render(template) {
-    const search = template.content.querySelector('#room-participant-search');
-    if (search) search.value = participantQuery;
+    for (const search of template.content.querySelectorAll('[data-room-list-search]')) {
+      search.value = listQueries.get(search.id) || '';
+      filterRoomList(search, template.content);
+    }
     const currentTabs = content.querySelector('.oie-room-management-tabs');
     const incomingTabs = template.content.querySelector('.oie-room-management-tabs');
     const sameTabs = currentTabs && incomingTabs && currentTabs.dataset.tabsConfig === incomingTabs.dataset.tabsConfig;
     if (sameTabs) {
       const focused = document.activeElement;
-      const searchSelection = focused?.id === 'room-participant-search' ? [focused.selectionStart, focused.selectionEnd] : null;
+      const searchSelection = focused?.matches('[data-room-list-search]') ? [focused.selectionStart, focused.selectionEnd] : null;
       const focusedAction = focused?.id || focused?.closest('form')?.dataset.roomActionForm;
       const focusedParticipant = !!focused?.closest('[data-room-participant-detail]');
       for (const panel of currentTabs.querySelectorAll('[role=tabpanel]')) {
@@ -225,7 +230,6 @@ window.OieRuntime.register('room-management', life => {
       content.replaceChildren(template.content);
       showParticipant(participant);
     }
-    filterParticipants();
     document.dispatchEvent(new CustomEvent('oie:room-management-content', {detail: {root: content}}));
   }
 
@@ -339,7 +343,8 @@ window.OieRuntime.register('room-management', life => {
     const nextInvite = trigger.id === 'chat-invite-room';
     if (nextMessage !== message || nextInvite !== invite) {
       affiliation = '';
-      participant = participantQuery = '';
+      participant = '';
+      listQueries.clear();
       participantScroll = 0;
     }
     active = true;
@@ -359,7 +364,7 @@ window.OieRuntime.register('room-management', life => {
 
   life.on(document, 'keydown', event => {
     if (!active || event.key !== 'Escape' || !event.target.closest) return;
-    if (event.target.id === 'room-participant-search' && participantQuery) {
+    if (event.target.matches('[data-room-list-search]') && event.target.value) {
       event.preventDefault();
       event.stopPropagation();
       event.target.value = '';

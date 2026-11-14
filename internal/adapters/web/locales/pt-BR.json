@@ -511,6 +511,8 @@
   "RoomAvatarBrowse": "Escolher arquivo",
   "RoomAvatarEmpty": "Nenhum arquivo selecionado",
   "RoomNoBans": "Nenhum endereço banido.",
+  "RoomSearchBans": "Pesquisar banimentos",
+  "RoomNoMatchingBans": "Nenhum endereço encontrado.",
   "RoomBannedAddresses": "Endereços banidos",
   "RoomDetailsTab": "Detalhes",
   "RoomNoVisibleParticipants": "Nenhum participante para mostrar.",
