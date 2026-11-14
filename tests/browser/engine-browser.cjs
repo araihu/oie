@@ -112,11 +112,19 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
     const bobContext = await browser.newContext({viewport: {width: 1440, height: 900}, locale: 'en-US', timezoneId: 'America/Sao_Paulo'});
     const alicePage = await aliceContext.newPage();
     const bobPage = await bobContext.newPage();
-    const preferenceConflictURLs=new Map(),consoleLocations=[];
+    const preferenceConflictURLs=new Map(),readConflictURLs=new Map(),consoleLocations=[];
     const searchTransport=[];alicePage.on('response',async response=>{if(response.url().includes('/ui/message-search?'))searchTransport.push({url:response.url(),status:response.status(),body:await response.text().catch(()=>'<response unavailable>')})});
     let expectedLostReply = false;
     for (const page of [alicePage, bobPage]) {
-      page.on('pageerror', error => evidence.consoleErrors.push(error.message));
+      page.on('response', response => {
+        const url = new URL(response.url());
+        const request = response.request();
+        if (response.status() !== 412 || request.method() !== 'POST' || !request.headers()['if-match'] ||
+            url.origin !== base || !/^\/ui\/api\/v1\/conversations\/[^/]+\/read-state$/.test(url.pathname) ||
+            !response.headers()['x-oie-next-operation-key']) return;
+        readConflictURLs.set(url.href, (readConflictURLs.get(url.href) || 0) + 1);
+      });
+      page.on('pageerror', error => {evidence.consoleErrors.push(error.message);consoleLocations.push('');});
       page.on('console', message => {if (message.type() === 'error') {
         if (expectedLostReply && message.text().includes('net::ERR_FAILED')) evidence.expectedTransportFailures.push(message.text());
         else {evidence.consoleErrors.push(message.text());consoleLocations.push(message.location().url||'')}
@@ -540,12 +548,15 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
       expectTransportFailure:value => {expectedLostReply = value;}, prefix});
     evidence.workflows.push('Paste and drop files directly into the draft, wrap previews, remove and retry staged attachments. Explicit send reaches the receiver with caption and file URL.');
     for(let index=evidence.consoleErrors.length-1;index>=0;index--){
-      const url=consoleLocations[index],remaining=preferenceConflictURLs.get(url)||0;
-      if(remaining>0&&evidence.consoleErrors[index]==='Failed to load resource: the server responded with a status of 409 (Conflict)'){
-        preferenceConflictURLs.set(url,remaining-1);
-        evidence.expectedTransportFailures.push('Verified reviewed preference CAS conflict: '+url);
-        evidence.consoleErrors.splice(index,1);consoleLocations.splice(index,1);
-      }
+      const url=consoleLocations[index],message=evidence.consoleErrors[index];
+      const [conflicts,status,label]=message.endsWith('412 (Precondition Failed)')
+        ? [readConflictURLs,'412 (Precondition Failed)','Verified stale latest-read revision']
+        : [preferenceConflictURLs,'409 (Conflict)','Verified reviewed preference CAS conflict'];
+      const remaining=conflicts.get(url)||0;
+      if(remaining===0||message!=='Failed to load resource: the server responded with a status of '+status)continue;
+      conflicts.set(url,remaining-1);
+      evidence.expectedTransportFailures.push(label+': '+url);
+      evidence.consoleErrors.splice(index,1);consoleLocations.splice(index,1);
     }
     assert.deepEqual(evidence.consoleErrors, [],JSON.stringify(consoleLocations));
     await fs.writeFile('artifacts/' + prefix + '-report.json', JSON.stringify(evidence, null, 2));
