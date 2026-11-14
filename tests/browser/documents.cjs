@@ -67,23 +67,26 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   state.pdfCatalog=[sparse,budget,burst];
   await page.reload();
   await card(page,sparse).scrollIntoViewIfNeeded();await until(async()=>await card(page,sparse).getAttribute('data-document-preview-state')==='ready','sparse first-page preview');const sparseRanges=state.reads.filter(read=>read.id===sparse);assert(sparseRanges.length>1&&sparseRanges.every(read=>read.range),'large PDF preview uses only ranges');const sparseTransferred=sparseRanges.reduce((total,read)=>{const range=/bytes=(\d+)-(\d+)/.exec(read.range);return total+Number(range[2])-Number(range[1])+1},0);assert(sparseTransferred<=2*1024*1024&&sparseTransferred<sparseBytes.length/2,'large PDF preview stays within its byte budget');assert.equal(count(sparse),0);await card(page,budget).scrollIntoViewIfNeeded();await until(async()=>await card(page,budget).getAttribute('data-document-preview-state')==='unavailable','PDF byte-budget fallback');const budgetRanges=state.reads.filter(read=>read.id===budget);assert(budgetRanges.length>1&&budgetRanges.every(read=>read.range));const budgetTransferred=budgetRanges.reduce((total,read)=>{const range=/bytes=(\d+)-(\d+)/.exec(read.range);return total+Number(range[2])-Number(range[1])+1},0);assert(budgetTransferred<=2*1024*1024&&budgetTransferred<budgetBytes.length,'PDF thumbnail stops before fetching full original');assert.equal(await card(page,budget).locator('[data-document-placeholder]').count(),1);assert.equal(await card(page,budget).locator('[data-document-open]').count(),1);assert.equal(count(budget),0);await card(page,burst).scrollIntoViewIfNeeded();await until(async()=>await card(page,burst).getAttribute('data-document-preview-state')==='ready','parallel PDF resource references under engine reader limit');assert(state.reads.filter(read=>read.id===burst&&read.range).length>=8,'PDF fixture resolves several separated resource ranges');assert(state.peakReaders<=2&&state.busyReaders===0,'PDF range bursts preserve the two-reader preview concurrency limit');
-  state.pdfCatalog=null;
-  await page.reload();
   // Generated PDF thumbnails survive both fragment navigation and reloads.
+  // Keep the PDF in view while the browser restores scroll on reload. The
+  // larger catalogs above exercise lazy visibility and competing range reads.
+  state.pdfCatalog=[pdf];
+  await page.reload();
   const pdfRanges=()=>state.reads.filter(read=>read.id===pdf&&read.range).length;
-  const pdfReady=async()=>{await card(page,pdf).scrollIntoViewIfNeeded();await until(async()=>await card(page,pdf).getAttribute('data-document-preview-state')==='ready','PDF card ready')};
+  const pdfReady=async(label='PDF card ready')=>{
+   stage=label;
+   await card(page,pdf).scrollIntoViewIfNeeded();
+   await until(async()=>await card(page,pdf).getAttribute('data-document-preview-state')==='ready',label);
+  };
   const cacheEntries=()=>page.evaluate(()=>new Promise((resolve,reject)=>{const request=indexedDB.open('oie.pdf-previews.v1',1);request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,tx=db.transaction('thumbnails','readonly'),get=tx.objectStore('thumbnails').getAll();get.onsuccess=()=>resolve(get.result.map(e=>({key:e.key,bytes:e.bytes,createdAt:e.createdAt,usedAt:e.usedAt})));tx.oncomplete=()=>db.close()}}));
   await pdfReady();await until(async()=>await card(page,pdf).getAttribute('data-document-preview-stored')==='true','persistent PDF thumbnail committed');const cachedRanges=pdfRanges();
   await tab(page,'media');await tab(page,'documents');await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'hit');assert((await page.evaluate(()=>OieCache.stats())).entries>=1);assert.equal(pdfRanges(),cachedRanges,'fragment navigation must reuse the generated PNG without PDF reads');
   await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'hit');assert.equal(pdfRanges(),cachedRanges,'a reload must reuse IndexedDB without PDF range reads');
-  const pdfItem=items.find(item=>item.id===pdf),previousRevision=pdfItem.revisionId;pdfItem.revisionId=id(777);await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>cachedRanges,'a new catalog revision must generate a new thumbnail');pdfItem.revisionId=previousRevision;
-  const beforeAccount=pdfRanges();pdfItem.message.accountId=other;await page.goto(docsURL('en','dark',other));await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>beforeAccount,'a different account must not receive the previous account thumbnail');pdfItem.message.accountId=account;await page.goto(docsURL());await pdfReady();
+  const pdfItem=items.find(item=>item.id===pdf),previousRevision=pdfItem.revisionId;pdfItem.revisionId=id(777);await page.reload();await pdfReady('new catalog revision PDF preview');assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>cachedRanges,'a new catalog revision must generate a new thumbnail');pdfItem.revisionId=previousRevision;
+  const beforeAccount=pdfRanges();pdfItem.message.accountId=other;await page.goto(docsURL('en','dark',other));await pdfReady('other account PDF preview');assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>beforeAccount,'a different account must not receive the previous account thumbnail');pdfItem.message.accountId=account;await page.goto(docsURL());await pdfReady();
   // Persisted corruption must be discarded without making the source unusable.
   await page.evaluate(()=>new Promise(resolve=>{const request=indexedDB.open('oie.pdf-previews.v1',1);request.onsuccess=()=>{const db=request.result,tx=db.transaction('thumbnails','readwrite'),store=tx.objectStore('thumbnails'),get=store.getAll();get.onsuccess=()=>{for(const entry of get.result){entry.value.blob=new Blob(['broken'],{type:'image/png'});store.put(entry)}};tx.oncomplete=()=>{db.close();resolve()}}}));const corruptRanges=pdfRanges();await page.reload();await pdfReady();assert.equal(await card(page,pdf).getAttribute('data-document-preview-cache'),'miss');assert(pdfRanges()>corruptRanges,'corrupt PNG must regenerate from bounded PDF bytes');
   // LRU cleanup applies only to this preview store, with both count and byte caps.
-  // Give eviction its own catalog so unrelated preview jobs do not run against
-  // the oversized fixture during reload.
-  state.pdfCatalog=[pdf];
   await page.evaluate(()=>new Promise((resolve,reject)=>{
    const request=indexedDB.open('oie.pdf-previews.v1',1);
    request.onerror=()=>reject(request.error);
