@@ -65,7 +65,8 @@ async function apiHandler(req, res) {
           {id:'occupant:admin',nickname:'Helena',role:'moderator',affiliation:'admin',roles:[],affiliations:[]},
           {id:'occupant:moderator',nickname:'Lucas',role:'moderator',affiliation:'member',roles:[],affiliations:[]},
         ],
-        affiliations:u.searchParams.get('affiliation') === 'outcast' && banned ? ['banido@fixture'] : []});
+        affiliations:u.searchParams.get('affiliation') === 'outcast'
+          ? (banned ? ['banido@fixture','sem-foto@fixture'] : ['sem-foto@fixture']) : []});
     }
     let data = '';
     for await (const chunk of req) data += chunk;
@@ -99,7 +100,8 @@ async function apiHandler(req, res) {
   if (u.pathname.endsWith('/avatars')) {
     const accountId = u.pathname.split('/')[4];
     return send(200, {items: destination?.accountId === accountId
-      ? [{accountId, address:destination.address, imageHash:roomImage, updatedAt:at}] : []});
+      ? [{accountId, address:destination.address, imageHash:roomImage, updatedAt:at},
+         {accountId, address:'banido@fixture', imageHash:avatarHash, updatedAt:at}] : []});
   }
   if (u.pathname.endsWith('/previews') || u.pathname.endsWith('/message-stars')) return send(200, {items: []});
   if (u.pathname === '/api/v1/conversations') return send(200, {items: [source, destination].filter(c => c && (!u.searchParams.has('accountId') || c.accountId === u.searchParams.get('accountId')))});
@@ -348,6 +350,12 @@ async function waitFor(predicate) {
         ['Detalhes','Participantes','Banimentos']);
       await management.getByRole('tab', {name:'Banimentos',exact:true}).click();
       await management.getByText('banido@fixture',{exact:true}).waitFor();
+      const bans = management.getByRole('tabpanel',{name:'Banimentos',exact:true});
+      const bannedAvatar = bans.locator('[data-avatar-address="banido@fixture"]');
+      await bannedAvatar.locator('[data-avatar-ready=true] img').waitFor();
+      const initials = bans.locator('[data-avatar-address="sem-foto@fixture"] [data-avatar-initials]');
+      await initials.waitFor();
+      assert.equal((await initials.innerText()).trim(),'SF');
       assert.equal(await management.getByRole('button',{name:'Retirar banimento · banido@fixture'}).isVisible(), true);
       await detailsTab.click();
 
@@ -447,7 +455,7 @@ async function waitFor(predicate) {
     await tip.waitFor();
     const beforeUnban = managementCommands.length;
     await unban.click();
-    const confirmation = roomPanel.locator('form[data-room-action-confirmation]');
+    const confirmation = roomPanel.locator('form[data-room-action-confirmation]').filter({hasText:'Retirar o banimento de banido@fixture?'});
     await confirmation.getByText('Retirar o banimento de banido@fixture?',{exact:true}).waitFor();
     const cancelUnban = confirmation.getByRole('button',{name:'Cancelar',exact:true});
     await page.waitForFunction(() => document.activeElement?.matches('[data-room-action-confirmation] [data-room-action-cancel]'));
@@ -463,6 +471,7 @@ async function waitFor(predicate) {
     await unban.click();
     await confirmation.getByRole('button',{name:'Retirar banimento',exact:true}).click();
     await unban.waitFor({state:'hidden'});
+    assert.equal(await roomPanel.getByText('sem-foto@fixture',{exact:true}).isVisible(),true);
     assert.equal(managementCommands.length,beforeUnban+1);
     assert.equal(managementCommands.at(-1).action,'affiliation');
     assert.equal(managementCommands.at(-1).target,'banido@fixture');

@@ -144,7 +144,10 @@ templ roomManagementBans(v view, state engineapi.RoomManagement, bansLoaded bool
 				for _, address := range state.Affiliations {
 					{{ id := "unban-" + newOperationKey() }}
 					<li>
-						<div class="oie-room-banned-address">
+						<div class="oie-room-member-row">
+							<div class="oie-room-participant-avatar" aria-hidden="true">
+								@profileAvatar(v, v.Selected.AccountId, address, avatar.Config{Name: address, Size: avatar.SizeXS})
+							</div>
 							<span>{ address }</span>
 							@tooltip.Tooltip(id+"-tooltip", v.Text.RoomUnban, tooltip.WithTrigger(roomUnbanButton(v, id, address)), tooltip.WithPosition(tooltip.PositionLeft), tooltip.WithPortal(true))
 						</div>
@@ -226,7 +229,7 @@ templ roomParticipantAvatar(occupant engineapi.RoomManagedOccupant, size avatar.
 templ roomParticipantRow(v view, occupant engineapi.RoomManagedOccupant) {
 	{{ id := roomParticipantID(occupant) }}
 	<li>
-		@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-room-participant-row"), button.WithAttrs(templ.Attributes{"id": id, "data-room-participant-open": id, "aria-controls": id + "-details"})) {
+		@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-room-member-row oie-room-participant-row"), button.WithAttrs(templ.Attributes{"id": id, "data-room-participant-open": id, "aria-controls": id + "-details"})) {
 			@roomParticipantAvatar(occupant, avatar.SizeXS)
 			<span>{ roomParticipantName(v.Text, occupant) }</span>
 			@glyph(heroicons.Icon16SolidChevronRight)
