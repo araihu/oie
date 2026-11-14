@@ -61,6 +61,10 @@ func (s *Server) roomManagementFragment(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	management := *result.JSON200
+	if bansLoaded && management.State == "unavailable" {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = roomManagementContent(v, management, messageID, invite, bansLoaded).Render(ctx, w)
 }

@@ -22,6 +22,8 @@ const accounts = [
 ];
 const previews = [], commands = [], managementCommands = [], streams = new Set();
 let managementRevision = 'first-room-revision', managementBlocked = false, roomImage = avatarHash;
+let unavailableBanReads = 0;
+const readerAddress = 'leitora@fixture';
 const bannedAddresses = new Set(['banido@fixture','sem-foto@fixture',
   ...Array.from({length:30}, (_, index) => 'banido-' + index + '@fixture')]);
 let destination, roomState = 'joining', cursor = 0, conflict = false, trustedService = true;
@@ -58,6 +60,10 @@ async function apiHandler(req, res) {
   }
   if (u.pathname.endsWith('/room-management')) {
     if (req.method === 'GET') {
+      if (u.searchParams.get('affiliation') === 'outcast' && unavailableBanReads > 0) {
+        unavailableBanReads--;
+        return send(200, {state:'unavailable',actions:[],occupants:[],affiliations:[]});
+      }
       return send(200, {state:'available', revision:managementRevision,
         actions:managementBlocked ? ['invite'] : ['rename','topic','invite','role','affiliation','set_avatar','remove_avatar'],
         occupants:[
@@ -66,7 +72,7 @@ async function apiHandler(req, res) {
           {id:'self',self:true,nickname:'Marina',role:'moderator',affiliation:'owner',roles:[],affiliations:[]},
           {id:'occupant:admin',nickname:'Helena',role:'moderator',affiliation:'admin',roles:[],affiliations:[]},
           {id:'occupant:moderator',nickname:'Lucas',role:'moderator',affiliation:'member',roles:[],affiliations:[]},
-        ],
+        ].filter(occupant => occupant.id !== 'occupant:reader' || !bannedAddresses.has(readerAddress)),
         affiliations:u.searchParams.get('affiliation') === 'outcast' ? [...bannedAddresses] : []});
     }
     let data = '';
@@ -81,7 +87,9 @@ async function apiHandler(req, res) {
       for (const stream of streams) stream.write('id: ' + engine + ':' + cursor + '\nevent: profile.avatar_changed\ndata: {}\n\n');
     }
     if (command.action === 'affiliation' && command.value === 'none') bannedAddresses.delete(command.target);
-    if (command.action === 'affiliation' && command.value === 'outcast') bannedAddresses.add(command.target);
+    if (command.action === 'affiliation' && command.value === 'outcast') {
+      bannedAddresses.add(command.target === 'occupant:reader' ? readerAddress : command.target);
+    }
     return send(200, {state:'confirmed'});
   }
   if (req.method === 'POST' && u.pathname.endsWith('/rooms')) {
@@ -591,6 +599,26 @@ async function waitFor(predicate) {
     assert.equal(managementCommands.at(-1).value,'outcast');
     assert.equal(managementCommands.at(-1).target,'ainda-fora@fixture');
     assert.equal(managementCommands.length,beforeBan+1);
+
+    const bansTab = roomPanel.getByRole('tab',{name:'Banimentos',exact:true});
+    await roomPanel.getByRole('tab',{name:'Participantes',exact:true}).click();
+    await roomPanel.getByRole('button',{name:'Leitora',exact:true}).click();
+    const reader = roomPanel.getByRole('region',{name:'Leitora',exact:true});
+    await reader.getByRole('button',{name:'Banir da sala',exact:true}).click();
+    unavailableBanReads = 2;
+    await reader.getByRole('button',{name:'Confirmar',exact:true}).click();
+    const reloadError = page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'As ações da sala estão indisponíveis.'});
+    await reloadError.waitFor();
+    assert.equal(unavailableBanReads,0);
+    await reloadError.getByRole('button',{name:'Fechar',exact:true}).click();
+    await reloadError.waitFor({state:'hidden'});
+    assert.equal(managementCommands.at(-1).target,'occupant:reader');
+    assert.equal(managementCommands.at(-1).value,'outcast');
+    await bansTab.click();
+    await roomPanel.getByRole('button',{name:readerAddress,exact:true}).waitFor();
+    await roomPanel.getByRole('tab',{name:'Participantes',exact:true}).click();
+    assert.equal(await roomPanel.locator('#room-participant-results').getByRole('button',{name:'Leitora',exact:true}).count(),0);
+    assert.equal(managementCommands.length,beforeBan+2);
     await page.keyboard.press('Escape');
     await roomPanel.waitFor({state:'hidden'});
 

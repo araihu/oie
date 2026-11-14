@@ -4,6 +4,7 @@ window.OieRuntime.register('room-management', life => {
   const content = root.querySelector('[data-room-management-content]');
   const loadError = root.querySelector('[data-room-management-error]');
   let request, opener, message = '', affiliation = '', invite = false, active = false;
+  let bansFresh = false;
   const pending = new WeakMap();
   const title = document.getElementById("room-managementTitle");
   const drafts = new Map();
@@ -105,11 +106,15 @@ window.OieRuntime.register('room-management', life => {
     if (form?.hasAttribute('data-room-details-form')) syncDetailsSave(form);
   });
 
-  async function load(replace = true, avatarsOnly = false) {
+  async function load(replace = true, avatarsOnly = false, retryBans = false) {
     if (avatarsOnly && request) return;
-    request?.abort();
-    const current = new AbortController();
+    request?.controller.abort();
+    const current = {
+      controller: new AbortController(),
+      replacesBans: affiliation === 'outcast' && replace && !avatarsOnly,
+    };
     request = current;
+    if (current.replacesBans) bansFresh = false;
     if (!avatarsOnly) {
       loadError.hidden = true;
       root.setAttribute('aria-busy', 'true');
@@ -117,10 +122,10 @@ window.OieRuntime.register('room-management', life => {
     const {chat, account, engine, lang} = root.dataset;
     const params = new URLSearchParams({chat, account, engine, lang, message, affiliation, invite});
     try {
-      const response = await life.fetch('/ui/rooms/manage-fragment?' + params, {signal: current.signal});
+      const response = await life.fetch('/ui/rooms/manage-fragment?' + params, {signal: current.controller.signal});
       if (!response.ok) throw new Error();
       const markup = await response.text();
-      if (request !== current || !active || life.signal.aborted) return;
+      if (request !== current || current.controller.signal.aborted || !active || life.signal.aborted) return;
       const template = document.createElement('template');
       template.innerHTML = markup;
       if (avatarsOnly) {
@@ -132,7 +137,10 @@ window.OieRuntime.register('room-management', life => {
           if (isPending(form)) return;
           remember(form);
         }
+        const includesBans = current.replacesBans && !!template.content.querySelector('#room-ban-results') &&
+          !template.content.querySelector('.oie-room-bans-skeleton');
         render(template);
+        bansFresh = includesBans;
         for (const form of content.querySelectorAll('form')) {
           const id = identity(form);
           if (openForms.has(id)) setActionOpen(form, true);
@@ -160,6 +168,7 @@ window.OieRuntime.register('room-management', life => {
       } else {
         const revision = template.content.querySelector('[name=expectedRevision]')?.value;
         if (!revision) {
+          bansFresh = false;
           render(template);
         } else {
           const fresh = new Map([...template.content.querySelectorAll('form')].map(form => [identity(form), form]));
@@ -187,8 +196,8 @@ window.OieRuntime.register('room-management', life => {
         }
       }
     } catch {
-      if (!avatarsOnly && request === current && active && !life.signal.aborted) {
-        if (content.querySelector('.oie-room-bans-skeleton')) affiliation = '';
+      if (!avatarsOnly && request === current && !current.controller.signal.aborted && active && !life.signal.aborted) {
+        if (retryBans && current.replacesBans && !bansFresh && !hasPending()) return load();
         if (content.childElementCount) {
           window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:root.dataset.unavailable}}));
         } else {
@@ -327,10 +336,10 @@ window.OieRuntime.register('room-management', life => {
       return;
     }
     const tabButton = event.target.closest('[role=tab]');
-    if (!content.contains(tabButton) || hasPending()) return;
-    if (tabButton.getAttribute('aria-controls') === 'tabpanelroom-management-tabsbans' && affiliation !== 'outcast') {
+    if (!content.contains(tabButton)) return;
+    if (tabButton.getAttribute('aria-controls') === 'tabpanelroom-management-tabsbans' && !bansFresh && !request?.replacesBans) {
       affiliation = 'outcast';
-      void load();
+      if (!hasPending()) void load();
     }
   });
 
@@ -354,6 +363,7 @@ window.OieRuntime.register('room-management', life => {
     const nextInvite = trigger.id === 'chat-invite-room';
     if (nextMessage !== message || nextInvite !== invite) {
       affiliation = '';
+      bansFresh = false;
       participantViews.clear();
       listQueries.clear();
     }
@@ -396,7 +406,7 @@ window.OieRuntime.register('room-management', life => {
   life.on(window, 'drawer:close-request', event => {
     if (event.detail?.id !== 'room-management') return;
     active = false;
-    request?.abort();
+    request?.controller.abort();
     life.timeout(() => opener?.isConnected && opener.focus({preventScroll: true}), 220);
   });
 
@@ -410,6 +420,10 @@ window.OieRuntime.register('room-management', life => {
     }
     pending.delete(form);
     const action = form.elements.managementAction.value;
+    if (result.ok && action === 'affiliation') {
+      bansFresh = false;
+      request?.controller.abort();
+    }
     if (action === 'update_details') {
       for (const [name, original] of detailsFields) {
         const field = form.elements.namedItem(name);
@@ -433,6 +447,8 @@ window.OieRuntime.register('room-management', life => {
       }
       clearInputs(form);
     }
-    life.timeout(() => { if (active) void load(refreshContent); }, 0);
+    life.timeout(() => {
+      if (active) void load(refreshContent || affiliation === 'outcast' && !bansFresh, false, result.ok && action === 'affiliation');
+    }, 0);
   });
 });

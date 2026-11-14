@@ -331,7 +331,21 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 	if kicked.LastErrorCode != "removed" || kicked.Active {
 		t.Fatalf("kick must revoke rejoin: %+v", kicked)
 	}
-	manage(created.Conversation.ID, "affiliation", "bob@localhost", "outcast", "confirmed")
+	if _, err := engine.OpenRoom(ctx, id(), bob, address, "Reader", "", false); err != nil {
+		t.Fatal(err)
+	}
+	waitRoom(joinedBob.Conversation.ID, "joined")
+	var rejoinedReader string
+	eventually(t, func() bool {
+		info, err := engine.RoomManagement(ctx, created.Conversation.ID, "")
+		for _, occupant := range info.Occupants {
+			if occupant.Nickname == "Reader" && occupant.ID != reader && slices.Contains(occupant.Affiliations, "outcast") {
+				rejoinedReader = occupant.ID
+			}
+		}
+		return err == nil && rejoinedReader != ""
+	})
+	manage(created.Conversation.ID, "affiliation", rejoinedReader, "outcast", "confirmed")
 	bans, err := engine.RoomManagement(ctx, created.Conversation.ID, "outcast")
 	if err != nil || !slices.Contains(bans.Affiliations, "bob@localhost") {
 		t.Fatalf("ban list: %+v %v", bans, err)
