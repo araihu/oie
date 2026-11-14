@@ -7,6 +7,7 @@ import (
  "github.com/araihu/goshtoso/components/link"
  "github.com/araihu/goshtoso/components/modal"
  "github.com/araihu/goshtoso/components/toast"
+ "github.com/araihu/goshtoso/components/tooltip"
  "github.com/araihu/goshtoso/expressions"
  "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
@@ -68,11 +69,19 @@ templ documentContent(v view){
 </div>
 </div>
 <p data-document-status role="status"></p>
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithRootClass("oie-document-retry"),button.WithAttrs(templ.Attributes{"data-document-retry":"","hidden":true})){ {v.Text.DocumentRetry} }
+<div class="oie-document-retry" data-document-retry-region hidden>
+@tooltip.Tooltip("oie-document-retry-tip",v.Text.DocumentRetry,tooltip.WithTrigger(documentRetryButton(v)))
+</div>
 <div class="oie-document-toast" data-document-toast></div>
 <template data-document-error>
 @toast.Toast(toast.Config{Tone:toast.ToneDanger,Message:v.Text.DocumentLoadFailed}).WithExpressions(expressions.Toast{DismissAriaLabel:v.Text.Close})
 </template>
 </div>
 </div>
+}
+
+templ documentRetryButton(v view){
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-document-action"),button.WithAttrs(templ.Attributes{"data-document-retry":"","aria-label":v.Text.DocumentRetry})){
+@glyph(heroicons.Icon16SolidArrowPath)
+}
 }
