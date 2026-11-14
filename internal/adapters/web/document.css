@@ -11,8 +11,9 @@
   background: transparent;
 }
 
-.oie-document-primary:hover { background: var(--oie-raised); }
-.oie-document-primary:focus-visible { outline: 2px solid var(--oie-primary); outline-offset: 3px; }
+.oie-info-shared .oie-document-primary:hover { background: var(--oie-raised); }
+#shared-content-results .oie-document-primary:hover { text-decoration: none; }
+.oie-document-primary:focus-visible { outline: 2px solid var(--oie-accent-text); outline-offset: 3px; }
 .oie-document-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .oie-document-caption { font-weight: 400; white-space: pre-wrap; }
 

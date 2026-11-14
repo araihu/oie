@@ -22,9 +22,15 @@ templ documentCardAction(v view,item engineapi.SharedContentItem){
 {{ attrs:=templ.Attributes{"data-document-open":"","aria-label":v.Text.DocumentOpen+": "+v.sharedTitle(item)} }}
 {{ if caption!="" { attrs["aria-describedby"]=sharedActionID(v,item,"document-caption") } }}
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-document-primary"),button.WithAttrs(attrs)){
-<span class="oie-preview-frame oie-document-thumbnail" data-document-preview aria-hidden="true"><span data-document-placeholder>@glyph(heroicons.Icon16SolidDocumentText)</span></span>
+<span class="oie-preview-frame oie-document-thumbnail" data-document-preview aria-hidden="true">
+if v.SharedInDetails {
+<span data-document-placeholder>@glyph(heroicons.Icon16SolidDocumentText)</span>
+}
+</span>
 <span class="oie-preview-summary">
+if v.SharedInDetails {
 <span class="oie-preview-symbol" aria-hidden="true">@glyph(heroicons.Icon16SolidDocumentText)</span>
+}
 <span class="oie-preview-copy">
 <span class="oie-preview-title oie-document-name">{v.sharedTitle(item)}</span>
 if caption!="" {
