@@ -77,7 +77,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   assert.equal(await page.locator('#conversation-details-description script,#conversation-details-description img').count(),0);
   assert((await page.locator('#conversation-details-description').textContent()).includes('Topic <img'));
   const entry=page.locator('[data-info-entry="participants"]');
-  assert.equal(await entry.evaluate(el=>el.parentElement.previousElementSibling.textContent),'room@fixture');
+  assert.equal(await entry.evaluate(el=>el.previousElementSibling.dataset.infoEntry),'stars');
+  assert.equal(await page.locator('#conversation-details-identity [data-info-entry="participants"]').count(),0);
   assert.equal(state.rosterReads,0);
 
   const roomRead=page.locator('[data-info-room-participants]');
@@ -144,6 +145,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});
   for(const width of [390,1440])for(const theme of ['goshtoso','minimal'])for(const mode of ['light','dark'])for(const locale of ['en','pt-BR']){
    state.mode='known';const p=await browser.newPage({viewport:{width,height:1000},locale,timezoneId:'America/Sao_Paulo',hasTouch:width===390});p.on('pageerror',e=>errors.push(e.message));const q=new URLSearchParams(roomParams);q.set('lang',locale);q.set('theme',mode);await p.goto(base+'/?'+q);const {drawer}=await openFromMenu(p,locale==='en'?'Conversation details':'Detalhes da conversa');await p.waitForTimeout(230);await p.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const box=await drawer.boundingBox();assert(box.x>=-1&&box.x+box.width<=width+1);assert.equal(await p.locator('[data-info-room-participants]').count(),0);
+   assert.equal(await drawer.locator('[data-info-entry="stars"]').textContent(),locale==='en'?'Starred messages':'Mensagens favoritadas');
    await p.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],`${width} ${theme} ${mode} ${locale}`);
    if(theme==='goshtoso')await p.screenshot({path:path.join(artifacts,`conversation-details-${width}-${mode}-${locale}.png`)});
    await p.locator('[data-info-entry="participants"]').click();await p.locator('[data-info-room-participants]').waitFor();

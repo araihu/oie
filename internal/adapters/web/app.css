@@ -647,7 +647,6 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-room-invitation-copy p{font-size:.8125rem;margin:4px 0 0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .oie-room-invitation-action{display:inline-flex;align-items:center;gap:5px;min-block-size:28px}
 
-.oie-info-participant-entry{width:100%;text-align:start}
 .oie-info-room-participants{padding:16px 12px 24px}
 .oie-info-room-participants h2{font-size:19px;line-height:1.3;margin:0 0 12px}
 .oie-info-participant{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:10px;min-height:44px;padding:4px 6px;font-size:.875rem;overflow-wrap:anywhere}

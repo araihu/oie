@@ -43,17 +43,18 @@ case "participants":
 default:
 <div class="oie-conversation-details">
 <div id="conversation-details-identity" data-version={v.detailsVersion("identity")}>@detailsIdentity(v)</div>
-if v.Selected.Kind=="room" && v.requestKind()=="" && !v.Preview {
-<template data-info-participants-loading>
-	@infoParticipantsSkeleton(v)
-</template>
-}
 <nav class="oie-info-rows" aria-label={v.Text.InfoSharedContent}>
 @link.Link(v.messageSearchHref(v.Selected.AccountId,v.Selected.Id),link.WithRootClass("oie-info-entry"),link.WithAttrs(templ.Attributes{"data-open-conversation-search":"","data-search-conversation":v.Selected.Id,"data-search-conversation-title":v.Selected.Title})){@glyph(heroicons.Icon16SolidMagnifyingGlass)<span>{v.Text.SearchMessages}</span>@glyph(heroicons.Icon16SolidChevronRight)}
 @infoEntry(v,"media",v.Text.SharedMediaTab,heroicons.Icon16SolidRectangleGroup)
 @infoEntry(v,"links",v.Text.SharedLinksTab,heroicons.Icon16SolidLink)
 @infoEntry(v,"documents",v.Text.SharedDocsTab,heroicons.Icon16SolidDocumentText)
 @infoEntry(v,"stars",v.Text.InfoStarred,heroicons.Icon16SolidStar)
+if v.Selected.Kind=="room" && v.requestKind()=="" && !v.Preview {
+@infoEntry(v,"participants",v.Text.Participants,heroicons.Icon16SolidUsers)
+<template data-info-participants-loading>
+	@infoParticipantsSkeleton(v)
+</template>
+}
 </nav>
 if v.RoomArchive != nil {
   <div class="oie-room-archive-setting">
@@ -81,11 +82,6 @@ templ detailsIdentity(v view){
 <header class="oie-details-identity oie-info-centered">
 @profileAvatar(v,v.Selected.AccountId,v.Selected.Address,avatar.Config{Name:v.infoTitle(),Size:avatar.SizeXL,RootClass:"oie-info-avatar"})
 <h2>{v.infoTitle()}</h2><p>{v.Selected.Address}</p>
-if v.Selected.Kind=="room" && v.requestKind()=="" && !v.Preview {
-<div class="oie-info-participant-entry">
-@infoEntry(v,"participants",v.Text.Participants,heroicons.Icon16SolidUsers)
-</div>
-}
 if v.Selected.Kind=="room" {
 <p class="oie-info-kind">{v.Text.InfoGroup}
 if d:=v.ConversationInfo;d!=nil&&d.OccupantCount!=nil {
