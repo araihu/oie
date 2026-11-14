@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
-	"github.com/araihu/oie/internal/domain"
 )
 
 func messageTimelineTime(m engineapi.Message) time.Time {
@@ -116,7 +115,7 @@ func (v view) timelinePageHref(direction string) string {
 }
 
 const timelinePageSize = 50
-const sourceContextPageSize = domain.SourceContextPageSize
+const sourceContextPageSize = 16
 
 func timelineInitialParams(v view) *engineapi.ListMessagesParams {
 	limit := timelinePageSize
