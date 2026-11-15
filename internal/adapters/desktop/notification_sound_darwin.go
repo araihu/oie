@@ -7,17 +7,15 @@ package desktop
 #cgo LDFLAGS: -framework AppKit
 #import <AppKit/AppKit.h>
 
-// Accessed only on the main thread. The owner keeps the clip for the app's lifetime.
+// Accessed only on the main thread. Keep the active clip alive during playback.
 static int oiePlayNotificationSound(const void *bytes, NSUInteger length) {
  @autoreleasepool {
   static NSSound *sound;
-  if (!sound) {
-   sound = [[NSSound alloc] initWithData:[NSData dataWithBytes:bytes length:length]];
-  }
-  if ([sound isPlaying]) {
-   [sound stop];
-  }
-  [sound setCurrentTime:0];
+  NSSound *next = [[NSSound alloc] initWithData:[NSData dataWithBytes:bytes length:length]];
+  if (!next) return 0;
+  [sound stop];
+  [sound release];
+  sound = next;
   return [sound play] ? 1 : 0;
  }
 }
@@ -33,12 +31,16 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-func (s *runtimeService) PlayNotificationSound(ctx context.Context) error {
+func (s *runtimeService) PlayNotificationSound(ctx context.Context, wav []byte) error {
+	if wav == nil {
+		wav = web.NotificationSoundWAV()
+	} else if !validNotificationWAV(wav) {
+		return errors.New("invalid notification sound")
+	}
 	return application.InvokeSyncWithError(func() error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		wav := web.NotificationSoundWAV()
 		if C.oiePlayNotificationSound(unsafe.Pointer(unsafe.SliceData(wav)), C.NSUInteger(len(wav))) == 0 {
 			return errors.New("macOS could not play the notification sound")
 		}

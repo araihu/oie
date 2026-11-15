@@ -177,7 +177,7 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 .oie-settings-section h2{margin:8px 0 0;font-weight:650;font-size:14px}
 #appearance-settings h2{margin-block-end:6px}
 .oie-settings-section p,.oie-settings>.oie-settings-note{font-size:13px;line-height:1.6;color:var(--oie-muted)}
-.oie-device-retention{border-top:1px solid var(--oie-border);margin-top:20px;padding-top:10px}
+:is(.oie-device-retention,.oie-notification-settings){border-block-start:1px solid var(--oie-border);margin-block-start:20px;padding-block-start:10px}
 .oie-device-retention h2{display:flex;align-items:center;gap:8px}
 .oie-device-retention h2 .oie-icon{width:16px;height:16px}
 .oie-info-retention{padding:16px 12px 24px}
@@ -761,7 +761,13 @@ html:not(.dark) #favorites-results .oie-bubble { --color-surface-alt: var(--oie-
 .oie-info-participants-loading{position:absolute;inset:0;z-index:2;background:var(--oie-panel);padding-top:72px;pointer-events:none}
 
 .oie-notification-settings{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;margin-block:20px}
-.oie-notification-settings h2{font-size:14px;font-weight:650;margin:0}
-.oie-notification-settings button{justify-self:start}
+.oie-notification-tone{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 8px}
+.oie-notification-tone-label{display:grid;gap:3px;font-size:14px}
+.oie-notification-tone-current{display:flex;align-items:center;gap:4px;min-block-size:34px;min-inline-size:0}
+.oie-notification-tone-current strong{min-inline-size:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.oie-notification-tone-actions{grid-column:1/-1;justify-self:start}
+.oie-notification-tone [hidden]{display:none}
+.oie-notification-tone :is([data-notification-tone-reset],[data-notification-tone-choose]) .oie-icon{width:16px;height:16px}
+.oie-notification-tone [data-notification-preview]{inline-size:44px;block-size:44px;padding:0;justify-content:center}
 .oie-notification-settings p{margin:0}
 .oie-notification-settings [role=status]{min-height:2lh}

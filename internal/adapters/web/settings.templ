@@ -148,10 +148,31 @@ templ deviceSettings(v view) {
 
 
 templ notificationSettings(v view) {
-	<section class="oie-settings-section oie-notification-settings" aria-labelledby="notification-settings-title" data-notification-settings data-denied={v.Text.NotificationDenied} data-unavailable={v.Text.NotificationUnavailable} data-sound-unavailable={v.Text.NotificationSoundUnavailable} data-message-title={v.Text.NotificationNewMessage}>
+	<section class="oie-settings-section oie-notification-settings" aria-labelledby="notification-settings-title" data-notification-settings data-denied={v.Text.NotificationDenied} data-unavailable={v.Text.NotificationUnavailable} data-sound-unavailable={v.Text.NotificationSoundUnavailable} data-unsaved={v.Text.NotificationToneUnsaved} data-invalid-tone={v.Text.NotificationToneInvalid} data-large-tone={v.Text.NotificationToneLarge} data-trimmed-tone={v.Text.NotificationToneTrimmed} data-message-title={v.Text.NotificationNewMessage}>
 		<h2 id="notification-settings-title">{v.Text.NotificationSettings}</h2>
 		@toggle.Toggle(toggle.Config{ID:"notification-banners",Label:v.Text.NotificationBanners,Disabled:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-notification-banners":"","aria-describedby":"notification-status"}})
 		@toggle.Toggle(toggle.Config{ID:"notification-sound",Label:v.Text.NotificationSound,Checked:true,Disabled:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-notification-sound":"","aria-describedby":"notification-status"}})
+		<div class="oie-notification-tone">
+			<div class="oie-notification-tone-label">
+				<span>{v.Text.NotificationTone}</span>
+				<div class="oie-notification-tone-current">
+					<strong data-notification-tone-name>Oiê</strong>
+					@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"data-notification-tone-reset":"","aria-label":v.Text.NotificationToneReset,"title":v.Text.NotificationToneReset,"hidden":true})) {
+						@glyph(heroicons.Icon16SolidXMark)
+					}
+				</div>
+			</div>
+			@button.Button(button.WithType("button"),button.WithSize(button.SizeSmall),button.WithTone(button.ToneAlternate),button.Disabled(),button.WithAttrs(templ.Attributes{"data-notification-preview":"","aria-label":v.Text.NotificationPreview,"title":v.Text.NotificationPreview,"aria-describedby":"notification-status"})) {
+				@glyph(heroicons.Icon16SolidPlay)
+			}
+			<div class="oie-notification-tone-actions">
+				<input type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.opus,.flac" data-notification-tone-file hidden/>
+				@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.Disabled(),button.WithAttrs(templ.Attributes{"data-notification-tone-choose":""})) {
+					@glyph(heroicons.Icon16SolidCloudArrowUp)
+					{v.Text.NotificationToneChoose}
+				}
+			</div>
+		</div>
 		@toggle.Toggle(toggle.Config{ID:"notification-direct",Label:v.Text.NotificationDirectSound,Checked:true,Disabled:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-notification-sound-scope":"direct"}})
 		@selectfield.Select(selectfield.Config{
 			ID:"notification-room-sound",Name:"notification-room-sound",Label:v.Text.NotificationRoomSound,
@@ -164,7 +185,6 @@ templ notificationSettings(v view) {
 		})
 		@toggle.Toggle(toggle.Config{ID:"notification-archived",Label:v.Text.NotificationArchivedSound,Disabled:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-notification-sound-scope":"archived"}})
 		@toggle.Toggle(toggle.Config{ID:"notification-focused",Label:v.Text.NotificationFocusedSound,Disabled:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-notification-sound-scope":"focused"}})
-		@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-notification-preview":"","disabled":true})) { {v.Text.NotificationPreview} }
 		<p id="notification-status" role="status"></p>
 	</section>
 }

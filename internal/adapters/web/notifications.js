@@ -3,6 +3,7 @@
 
   const prefix = 'oie.notifications.';
   const Audio = window.AudioContext || window.webkitAudioContext;
+  const OfflineAudio = window.OfflineAudioContext || window.webkitOfflineAudioContext;
   const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
   const app = () => document.getElementById('oie-app');
   const settings = () => document.querySelector('[data-notification-settings]');
@@ -11,6 +12,10 @@
   const soundKey = prefix + 'sound';
   const roomSoundKey = prefix + 'room-sound';
   const soundScopeKey = scope => prefix + 'sound-' + scope;
+  const defaultSound = {name: 'Oiê'};
+  const toneSampleRate = 24000;
+  const maxToneFrames = toneSampleRate * 2;
+  const maxToneFileSize = 5000000;
   const roomSoundValues = ['attention', 'all', 'off'];
   const pendingContexts = new Map();
   const lastSoundKey = prefix + 'last-sound-at';
@@ -18,7 +23,8 @@
   const muteKey = (engine, chat) => prefix + 'mute.' + engine + '.' + chat;
   const focusKey = prefix + 'focus';
   const tab = Math.random().toString(36).slice(2);
-  let context, soundBuffer, soundLoad, database, worker, pending = false, notice = '';
+  let context, database, worker, pending = false, notice = '';
+  let customSound, toneReady, toneChanges, editingTone = false;
 
   function read(key) {
     try { return localStorage.getItem(key); } catch { return null; }
@@ -26,6 +32,10 @@
 
   function soundEnabled() {
     return read(soundKey) !== '0';
+  }
+
+  function currentSound() {
+    return customSound ?? defaultSound;
   }
 
   function soundScopeEnabled(scope) {
@@ -78,9 +88,12 @@
     if (!database) {
       database = new Promise(resolve => {
         try {
-          const request = indexedDB.open('oie-notifications', 1);
-          request.onupgradeneeded = () => {
-            request.result.createObjectStore('delivered').createIndex('deliveredAt', 'deliveredAt');
+          const request = indexedDB.open('oie-notifications', 2);
+          request.onupgradeneeded = event => {
+            if (event.oldVersion < 1) {
+              request.result.createObjectStore('delivered').createIndex('deliveredAt', 'deliveredAt');
+            }
+            request.result.createObjectStore('tone');
           };
           request.onerror = request.onblocked = () => resolve(null);
           request.onsuccess = () => {
@@ -134,33 +147,105 @@
     });
   }
 
-  async function unlockSound() {
-    if (desktop()?.playSound) return true;
-    try {
-      if (!Audio) return false;
-      context ??= new Audio();
-      const ready = context.state === 'running' ? Promise.resolve() : context.resume();
-      if (!soundBuffer && !soundLoad) {
-        soundLoad = fetch('/ui/notification.wav')
-          .then(response => {
-            if (!response.ok) throw Error('Notification sound unavailable');
-            return response.arrayBuffer();
-          })
-          .then(bytes => context.decodeAudioData(bytes))
-          .then(buffer => { soundBuffer = buffer; })
-          .finally(() => { soundLoad = undefined; });
-      }
-      await Promise.all([ready, soundLoad]);
-      return context.state === 'running' && Boolean(soundBuffer);
-    } catch { return false; }
+  // With no argument read the tone. Null deletes it and restores Oiê.
+  async function toneStorage(value) {
+    const db = await notificationDatabase();
+    if (!db) throw Error('Notification storage unavailable');
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('tone', value === undefined ? 'readonly' : 'readwrite');
+      const store = tx.objectStore('tone');
+      const request = value === undefined ? store.get('custom') :
+        value === null ? store.delete('custom') : store.put(value, 'custom');
+      tx.oncomplete = () => resolve(request.result);
+      tx.onabort = () => reject(tx.error);
+    });
   }
 
-  function playSound() {
+  function refreshTone() {
+    const request = toneStorage().catch(() => null).then(value => {
+      if (toneReady !== request) return;
+      customSound = value;
+      renderSettings();
+      if (soundEnabled() && context?.state === 'running') void unlockSound();
+    });
+    toneReady = request;
+    return request;
+  }
+
+  async function decodeTone(file) {
+    const renderer = new OfflineAudio(1, maxToneFrames, toneSampleRate);
+    const decoded = await renderer.decodeAudioData(await file.arrayBuffer());
+    const frames = Math.min(decoded.length, maxToneFrames);
+    const source = renderer.createBufferSource();
+    source.buffer = decoded;
+    source.connect(renderer.destination);
+    source.start();
+    const samples = (await renderer.startRendering()).getChannelData(0);
+    const wav = new ArrayBuffer(44 + frames * 2);
+    const view = new DataView(wav);
+    new Uint8Array(wav).set([82, 73, 70, 70], 0); // RIFF
+    view.setUint32(4, wav.byteLength - 8, true);
+    new Uint8Array(wav).set([87, 65, 86, 69, 102, 109, 116, 32], 8); // WAVEfmt
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, 1, true); // mono
+    view.setUint32(24, toneSampleRate, true);
+    view.setUint32(28, toneSampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    new Uint8Array(wav).set([100, 97, 116, 97], 36); // data
+    view.setUint32(40, frames * 2, true);
+    const trimmed = decoded.length > frames;
+    for (let i = 0; i < frames; i++) {
+      const fade = trimmed ? Math.min(1, (frames - 1 - i) / 120) : 1;
+      const sample = Math.max(-1, Math.min(1, samples[i] * fade));
+      view.setInt16(44 + i * 2, sample * (sample < 0 ? 32768 : 32767), true);
+    }
+    return {name: file.name, wav, trimmed};
+  }
+
+  async function unlockSound() {
+    if (desktop()?.playSound) {
+      await toneReady;
+      return currentSound();
+    }
+    try {
+      if (!Audio) return;
+      context ??= new Audio();
+      const ready = context.state === 'running' ? Promise.resolve() : context.resume();
+      await Promise.all([ready, toneReady]);
+      const sound = currentSound();
+      if (!sound.load) {
+        const bytes = sound.wav ? Promise.resolve(sound.wav.slice(0)) :
+          fetch('/ui/notification.wav').then(response => {
+            if (!response.ok) throw Error('Notification sound unavailable');
+            return response.arrayBuffer();
+          });
+        sound.load = bytes.then(bytes => context.decodeAudioData(bytes))
+          .then(buffer => { sound.buffer = buffer; })
+          .catch(error => { sound.load = undefined; throw error; });
+      }
+      await sound.load;
+      if (context.state === 'running') return sound;
+    } catch {}
+  }
+
+  function playSound(sound) {
     const nativeSound = desktop()?.playSound;
-    if (nativeSound) return nativeSound();
-    if (context?.state !== 'running' || !soundBuffer) return;
+    if (nativeSound) {
+      if (sound.wav && !sound.nativeWAV) {
+        const bytes = new Uint8Array(sound.wav);
+        let data = '';
+        for (let offset = 0; offset < bytes.length; offset += 8192) {
+          data += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
+        }
+        sound.nativeWAV = btoa(data);
+      }
+      return nativeSound(sound.nativeWAV ?? null);
+    }
+    if (context?.state !== 'running' || !sound.buffer) return;
     const source = context.createBufferSource();
-    source.buffer = soundBuffer;
+    source.buffer = sound.buffer;
     source.connect(context.destination);
     source.onended = () => source.disconnect();
     source.start();
@@ -265,8 +350,12 @@
 
   async function playMessageSound(engine, message, eligible) {
     const receivedAt = Date.now();
+    const loadedTone = toneReady;
+    await loadedTone;
+    const sound = currentSound();
     const withinWindow = () => receivedAt < Number(read(lastSoundKey)) + soundInterval;
-    const ready = () => soundEnabled() && (desktop()?.playSound || soundBuffer && context?.state === 'running');
+    const ready = () => soundEnabled() && loadedTone === toneReady && sound === currentSound() &&
+      (desktop()?.playSound || sound.buffer && context?.state === 'running');
     if (!ready() || withinWindow() || (!soundScopeEnabled('direct') && roomSound() === 'off')) return;
     try {
       const conversation = await notificationContext(engine, message);
@@ -282,9 +371,15 @@
       const claimedAt = await claim(engine, message.id, receivedAt);
       if (claimedAt && ready() && eligible() && permitsSound()) {
         write(lastSoundKey, String(claimedAt));
-        await playSound();
+        await playSound(sound);
       }
     } catch {}
+  }
+
+  function syncSelect(control, value) {
+    if (control.value === value) return;
+    control.value = value;
+    control.dispatchEvent(new Event('input', {bubbles: true}));
   }
 
   function renderSettings() {
@@ -301,12 +396,14 @@
       scope.checked = soundScopeEnabled(scope.dataset.notificationSoundScope);
       scope.disabled = !canSound;
     }
-    const rooms = root.querySelector('[data-notification-room-sound]');
-    const roomMode = roomSound();
-    if (rooms.value !== roomMode) {
-      rooms.value = roomMode;
-      rooms.dispatchEvent(new Event('input', {bubbles: true}));
-    }
+    const toneName = root.querySelector('[data-notification-tone-name]');
+    toneName.textContent = currentSound().name;
+    toneName.title = currentSound().name;
+    root.querySelector('[data-notification-tone-choose]').disabled = editingTone || !OfflineAudio || !canSound;
+    const reset = root.querySelector('[data-notification-tone-reset]');
+    reset.hidden = !customSound;
+    reset.disabled = editingTone;
+    syncSelect(root.querySelector('[data-notification-room-sound]'), roomSound());
     root.querySelector('[data-notification-preview]').disabled = !canSound;
     root.querySelector('[role="status"]').textContent =
       root.dataset[notice] || (!canBanner() ? root.dataset.unavailable :
@@ -337,6 +434,12 @@
       notice = write(soundKey, desired ? '1' : '0') ? '' : 'soundUnavailable';
       if (desired) void unlockSound();
       renderSettings();
+      return;
+    }
+    if (control.matches('[data-notification-tone-file]')) {
+      const file = control.files[0];
+      control.value = '';
+      if (file) void changeTone(file);
       return;
     }
     if (control.matches('[data-notification-room-sound]')) {
@@ -372,6 +475,45 @@
     }
   }
 
+  async function changeTone(file) {
+    if (editingTone) return;
+    editingTone = true;
+    renderSettings();
+    try {
+      if (file === undefined) {
+        const title = settings()?.querySelector('[data-notification-tone-choose]').textContent.trim();
+        const selected = await desktop().chooseTone(title);
+        if (!selected) return;
+        file = selected;
+      }
+      if (file?.size > maxToneFileSize) {
+        notice = 'largeTone';
+        return;
+      }
+      let value = null;
+      if (file) {
+        try {
+          if (!(file instanceof File)) {
+            const data = atob(file.bytes ?? '');
+            const bytes = new Uint8Array(data.length);
+            for (let i = 0; i < bytes.length; i++) bytes[i] = data.charCodeAt(i);
+            file = new File([bytes], file.name);
+          }
+          value = await decodeTone(file);
+        }
+        catch { notice = 'invalidTone'; return; }
+      }
+      await toneStorage(value);
+      await refreshTone();
+      toneChanges?.postMessage('changed');
+      notice = value?.trimmed ? 'trimmedTone' : '';
+    } catch { notice = 'unsaved'; }
+    finally {
+      editingTone = false;
+      renderSettings();
+    }
+  }
+
   function sync() {
     publishFocus();
     renderSettings();
@@ -380,8 +522,10 @@
 
   async function previewSound() {
     try {
-      if (!(await unlockSound())) throw Error('Notification sound unavailable');
-      await playSound();
+      const sound = await unlockSound();
+      if (!sound) throw Error('Notification sound unavailable');
+      if (sound !== currentSound()) return;
+      await playSound(sound);
       notice = '';
     } catch { notice = 'soundUnavailable'; }
     renderSettings();
@@ -391,9 +535,20 @@
   document.addEventListener('click', event => {
     if (event.target.closest('[data-notification-preview]')) {
       void previewSound();
-    } else if (event.isTrusted && soundEnabled()) {
-      void unlockSound();
+      return;
     }
+    const reset = event.target.closest('[data-notification-tone-reset]');
+    if (event.target.closest('[data-notification-tone-choose]')) {
+      if (desktop()?.chooseTone) void changeTone();
+      else settings()?.querySelector('[data-notification-tone-file]').click();
+    } else if (reset) {
+      void changeTone(null).then(() => {
+        if (reset.isConnected && reset.hidden && [reset, document.body].includes(document.activeElement)) {
+          reset.closest('[data-notification-settings]')?.querySelector('[data-notification-tone-choose]').focus();
+        }
+      });
+    }
+    if (event.isTrusted && soundEnabled()) void unlockSound();
   });
   document.addEventListener('keydown', event => {
     if (event.isTrusted && soundEnabled()) void unlockSound();
@@ -420,5 +575,10 @@
   });
   window.OieEvents.target.addEventListener('message.live', onMessage);
   window.OieNotifications = {open};
+  try {
+    toneChanges = new BroadcastChannel('oie-notification-tone');
+    toneChanges.onmessage = refreshTone;
+  } catch {}
+  void refreshTone();
   sync();
 })();

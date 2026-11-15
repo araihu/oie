@@ -10,6 +10,26 @@ const [engine, account, chat, other, revision, room, archivedRoom, own, someoneE
 const replyTo = messageId => ({available: true, messageId, bodyText: "Thanks", excerpt: "Hello"});
 const now = '2026-11-14T18:00:00Z';
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+function fixtureTone(seconds) {
+  const rate = 24000;
+  const samples = rate * seconds;
+  const buffer = Buffer.alloc(44 + samples * 2);
+  buffer.write('RIFF', 0);
+  buffer.writeUInt32LE(buffer.length - 8, 4);
+  buffer.write('WAVEfmt ', 8);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(1, 22);
+  buffer.writeUInt32LE(rate, 24);
+  buffer.writeUInt32LE(rate * 2, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write('data', 36);
+  buffer.writeUInt32LE(samples * 2, 40);
+  for (let i = 0; i < samples; i++) buffer.writeInt16LE(Math.round(12000 * Math.sin(i * Math.PI / 30)), 44 + i * 2);
+  return {name: 'Meu toque.wav', mimeType: 'audio/wav', buffer};
+}
+
 async function until(test, label) {
   for (let i = 0; i < 100; i++) {
     if (await test()) return;
@@ -460,36 +480,115 @@ async function run() {
     push({conversationId: room, mentionsYou: true});
     await expectSound(soundsBeforeRoomMute + 1, 'unmuted room plays eligible messages again');
 
+    const toneProfile = await browser.newContext({viewport: {width: 1440, height: 900}});
+    const tonePage = await toneProfile.newPage();
+    tonePage.on('pageerror', error => errors.push(error.message));
+    await tonePage.addInitScript(() => {
+      window.tonePreviews = [];
+      const start = AudioBufferSourceNode.prototype.start;
+      AudioBufferSourceNode.prototype.start = function (...args) {
+        if (this.context instanceof AudioContext) window.tonePreviews.push(this.buffer);
+        return start.apply(this, args);
+      };
+    });
+    const toneURL = base + '/?lang=pt-BR&chat=' + chat + '&open=settings&settingsTab=device';
+    const tone = tonePage.locator('[data-notification-tone-name]');
+    const toneFile = tonePage.locator('[data-notification-tone-file]');
+    const chooseTone = tonePage.getByRole('button', {name: 'Escolher arquivo', exact: true});
+    const tonePreview = tonePage.getByRole('button', {name: 'Ouvir som', exact: true});
+    const resetTone = tonePage.getByRole('button', {name: 'Voltar ao Oiê', exact: true});
+    const toneStatus = tonePage.locator('#notification-status');
+    await tonePage.route(base + '/old-profile', route => route.fulfill({contentType: 'text/html', body: '<title>Old profile</title>'}));
+    await tonePage.goto(base + '/old-profile');
+    await tonePage.evaluate(() => new Promise(resolve => {
+      const request = indexedDB.open('oie-notifications', 1);
+      request.onupgradeneeded = () => request.result.createObjectStore('delivered').createIndex('deliveredAt', 'deliveredAt');
+      request.onsuccess = () => { request.result.close(); resolve(); };
+      localStorage.setItem('oie.notifications.tone', 'wood');
+    }));
+    await tonePage.goto(toneURL);
+    await until(() => streams.size === 3, 'tone selection live stream');
+    assert.equal(await tone.textContent(), 'Oiê');
+    assert.equal(await resetTone.isVisible(), false);
+    assert.equal(await chooseTone.locator('svg[aria-hidden="true"]').count(), 1);
+    const file = fixtureTone(3);
+    const chooser = tonePage.waitForEvent('filechooser');
+    await chooseTone.press('Enter');
+    await (await chooser).setFiles(file);
+    await until(async () => (await tone.textContent()) === file.name, 'custom tone saved');
+    assert.equal((await resetTone.textContent()).trim(), '');
+    const [filenameBox, resetBox] = await Promise.all([tone.boundingBox(), resetTone.boundingBox()]);
+    assert(resetBox.x >= filenameBox.x + filenameBox.width, 'reset sits to the right of the filename');
+    assert(Math.abs(resetBox.y + resetBox.height / 2 - filenameBox.y - filenameBox.height / 2) <= 1, 'reset is centered on the filename');
+    await until(async () => (await toneStatus.textContent()).includes('os primeiros 2 segundos'), 'trimmed tone feedback');
+    await tonePreview.press('Space');
+    await until(() => tonePage.evaluate(() => window.tonePreviews.length === 1), 'custom tone previewed');
+    const customDuration = await tonePage.evaluate(() => window.tonePreviews[0].duration);
+    assert(Math.abs(customDuration - 2) < 0.001, 'preview uses two seconds after device resampling');
+    push();
+    await until(() => tonePage.evaluate(() => window.tonePreviews.length === 2), 'custom tone played for a new message');
+    assert(await tonePage.evaluate(() => window.tonePreviews[0] === window.tonePreviews[1]));
+    await toneFile.setInputFiles({name: 'Inválido.wav', mimeType: 'audio/wav', buffer: Buffer.from('invalid audio')});
+    await until(async () => (await toneStatus.textContent()).includes('que possa ser reproduzido'), 'unplayable file rejected');
+    assert.equal(await tone.textContent(), file.name);
+    await toneFile.setInputFiles({name: 'Grande.wav', mimeType: 'audio/wav', buffer: Buffer.alloc(5000001)});
+    await until(async () => (await toneStatus.textContent()).includes('até 5 MB'), 'oversized file rejected');
+    assert.equal(await tone.textContent(), file.name);
+    await tonePage.reload();
+    await until(async () => (await tone.textContent()) === file.name, 'custom tone restored after reload');
+    const mirror = await toneProfile.newPage();
+    await mirror.goto(toneURL);
+    const mirrorTone = mirror.locator('[data-notification-tone-name]');
+    await until(async () => (await mirrorTone.textContent()) === file.name, 'custom tone shared in this profile');
+    await resetTone.press('Enter');
+    await until(async () => (await mirrorTone.textContent()) === 'Oiê', 'custom tone removed across views');
+    assert.equal(await tone.textContent(), 'Oiê');
+    await until(() => chooseTone.evaluate(button => document.activeElement === button), 'focus restored to file chooser');
+    await tonePage.reload();
+    assert.equal(await tone.textContent(), 'Oiê');
+    await toneProfile.close();
+
     const nativeProfile = await browser.newContext();
     const nativePage = await nativeProfile.newPage();
     nativePage.on('pageerror', error => errors.push(error.message));
     await nativePage.addInitScript(() => {
       window.AudioContext = window.webkitAudioContext = undefined;
       window.nativeWindowHidden = true;
-      window.nativeSounds = 0;
+      window.nativeSounds = [];
       window.nativeBanners = 0;
       Object.defineProperty(document, 'hidden', {get: () => window.nativeWindowHidden});
       window.OieDesktop = {notifications: {
-        playSound: async () => { window.nativeSounds++; },
+        playSound: async tone => { window.nativeSounds.push(tone); },
         send: async () => { window.nativeBanners++; }
       }};
     });
     await nativePage.goto(base + '/?lang=pt-BR');
     await until(() => streams.size === 3, 'native window live stream');
     push();
-    await until(() => nativePage.evaluate(() => window.nativeSounds === 1), 'hidden native window plays before any interaction');
+    await until(() => nativePage.evaluate(() => window.nativeSounds[0] === null), 'hidden native window plays the default tone before any interaction');
     push();
     await quietWindow();
-    assert.deepEqual(await nativePage.evaluate(() => [window.nativeSounds, window.nativeBanners]), [1, 0],
+    assert.deepEqual(await nativePage.evaluate(() => [window.nativeSounds, window.nativeBanners]), [[null], 0],
       'native sound respects the rolling interval and works with banners off');
     await nativePage.evaluate(() => { window.nativeWindowHidden = false; });
     await settings(nativePage);
+    await nativePage.locator('[data-notification-tone-file]').setInputFiles(file);
+    await until(async () => (await nativePage.locator('[data-notification-tone-name]').textContent()) === file.name, 'native tone saved');
     await nativePage.locator('label:has(#notification-sound)').click();
     push();
     await pause(350);
-    assert.equal(await nativePage.evaluate(() => window.nativeSounds), 1, 'native playback respects the sound preference');
+    assert.equal(await nativePage.evaluate(() => window.nativeSounds.length), 1, 'native playback respects the sound preference');
     await nativePage.locator('[data-notification-preview]').click();
-    await until(() => nativePage.evaluate(() => window.nativeSounds === 2), 'preview plays natively even with alerts muted');
+    await until(() => nativePage.evaluate(() => window.nativeSounds.length === 2), 'the custom tone previews natively even with alerts muted');
+    const encodedTone = await nativePage.evaluate(() => window.nativeSounds[1]);
+    const nativeWav = Buffer.from(encodedTone, 'base64');
+    assert.equal(nativeWav.toString('ascii', 0, 4), 'RIFF');
+    assert.equal(nativeWav.readUInt32LE(24), 24000);
+    assert.equal(nativeWav.length, 96044);
+    await nativePage.locator('label:has(#notification-sound)').click();
+    await nativePage.evaluate(() => { window.nativeWindowHidden = true; });
+    push();
+    await until(() => nativePage.evaluate(wav => window.nativeSounds[2] === wav, encodedTone), 'the hidden native window plays the selected tone');
     await nativeProfile.close();
 
     assert.deepEqual(errors, []);

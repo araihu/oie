@@ -10,8 +10,11 @@
     notifications: Object.freeze({
       request: () => runtime.Call.ByName('github.com/araihu/oie/internal/adapters/desktop.runtimeService.RequestNotifications'),
       send: (...args) => runtime.Call.ByName('github.com/araihu/oie/internal/adapters/desktop.runtimeService.NotifyMessage', ...args),
-      playSound: '__OIE_MAC_SOUND__' ? () => runtime.Call.ByName(
-        'github.com/araihu/oie/internal/adapters/desktop.runtimeService.PlayNotificationSound'
+      chooseTone: '__OIE_FLATPAK__' ? title => runtime.Call.ByName(
+        'github.com/araihu/oie/internal/adapters/desktop.runtimeService.ChooseNotificationTone', title
+      ) : undefined,
+      playSound: '__OIE_MAC_SOUND__' ? wav => runtime.Call.ByName(
+        'github.com/araihu/oie/internal/adapters/desktop.runtimeService.PlayNotificationSound', wav
       ) : undefined
     }),
     saveFile: (address, name) => {

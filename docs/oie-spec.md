@@ -793,8 +793,10 @@ mentions or replies to your messages in rooms. The user can turn direct sound
 off, choose all messages, mentions and replies or silence for rooms, and enable
 sound in archived rooms and in the conversation in focus. A conversation mute
 silences direct chats and rooms on this device. Cooperating windows play at
-most one sound in a two-second window, with no queued playback. Account DND
-and synchronized mutes remain part of the agreed scope.
+most one sound in a two-second window, with no queued playback. The device
+can preview the bundled Oiê tone, import a personal clip for notifications,
+and restore Oiê. Imported audio stays on the device. Account DND and
+synchronized mutes remain part of the agreed scope.
 See [message notifications](notifications.md) for platform behavior.
 
 ## 11. Presentation, PWA, and internationalization

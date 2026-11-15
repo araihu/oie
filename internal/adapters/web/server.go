@@ -638,12 +638,14 @@ type copy struct {
 	About, BackToSettings, License, Attributions, LogoAttribution, EmojiData                                                                                             string
 	ValidationFailed, Edit, Done                                                                                                                                         string
 
-	NotificationSettings, NotificationBanners, NotificationSound, NotificationPreview string
-	NotificationDenied, NotificationUnavailable, NotificationSoundUnavailable         string
-	NotificationNewMessage, NotificationMute                                          string
-	NotificationDirectSound, NotificationRoomSound, NotificationRoomAttention         string
-	NotificationRoomAll, NotificationRoomOff, NotificationArchivedSound               string
-	NotificationFocusedSound                                                          string
+	NotificationSettings, NotificationBanners, NotificationSound, NotificationPreview                string
+	NotificationTone, NotificationToneChoose, NotificationToneReset                                  string
+	NotificationToneUnsaved, NotificationToneInvalid, NotificationToneLarge, NotificationToneTrimmed string
+	NotificationDenied, NotificationUnavailable, NotificationSoundUnavailable                        string
+	NotificationNewMessage, NotificationMute                                                         string
+	NotificationDirectSound, NotificationRoomSound, NotificationRoomAttention                        string
+	NotificationRoomAll, NotificationRoomOff, NotificationArchivedSound                              string
+	NotificationFocusedSound                                                                         string
 }
 
 func loadCatalogs() (map[string]copy, error) {
@@ -721,7 +723,7 @@ var notificationScript []byte
 //go:embed notification.wav
 var notificationSound []byte
 
-// NotificationSoundWAV returns the bundled sound for native desktop playback.
+// NotificationSoundWAV returns the bundled sound for native playback.
 func NotificationSoundWAV() []byte { return bytes.Clone(notificationSound) }
 
 //go:embed notification-worker.js

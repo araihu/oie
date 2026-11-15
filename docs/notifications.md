@@ -6,9 +6,16 @@ Sound starts on for direct messages and for room messages that mention the
 account or reply to one of its own retained messages. Archived rooms and the
 conversation in focus start silent. The controls let the user turn direct sound
 off, choose mentions and replies, all messages or silence for rooms, and enable
-sound in archived rooms or the conversation in focus. Preview sound plays the
-woodblock and muted marimba cue on demand. Browser and Linux WebView autoplay
-policy may require an interaction with the app after opening it.
+sound in archived rooms or the conversation in focus. The built-in Oiê tone
+uses a woodblock and muted marimba. Choose file accepts an audio file the
+device can decode, up to 5 MB. Oiê takes the first two seconds. The play
+button previews the selected tone, even with notification sound off. The X
+beside the custom filename restores the built-in sound.
+
+Custom audio stays on this device. The WebView or browser decodes it and
+saves a short mono PCM WAV in IndexedDB. Cooperating views share the choice
+within their browser profile and app origin. Browser and Linux WebView
+autoplay policy may require an interaction with the app after opening it.
 
 Conversation details offer a mute on this device. Mutes use the engine and
 conversation IDs and apply to direct chats and rooms, including archived
@@ -31,8 +38,8 @@ engine and message. It also stores the last sound time in the same transaction.
 The first eligible message plays immediately once its context is resolved.
 Further arrivals within two seconds are skipped, even with multiple tabs,
 and no sound is scheduled for the end of the window. Independent browser
-profiles and desktop WebViews maintain their own window. Playback uses the
-bundled 300 ms mono PCM WAV.
+profiles and desktop WebViews maintain their own window. The bundled tone is
+a 300 ms mono PCM WAV clip.
 
 ## Platform delivery and checks
 
@@ -42,16 +49,18 @@ bundled 300 ms mono PCM WAV.
   are closed. The new window checks the notification's engine against the
   current engine before loading the conversation. The page-scoped Notifications
   API is a fallback where worker delivery is unavailable.
-- Wails sends silent native banners. On macOS, AppKit plays the WAV both for
+- Wails sends silent native banners. On macOS, AppKit plays the selected WAV for
   previews and for incoming messages, including with the window hidden. On
   Linux, Web Audio plays the same WAV. Closing the desktop window hides it
   while the app remains running.
+  The Flatpak uses a native file chooser to read the selected audio through
+  the Documents portal.
   Linux needs a session notification daemon. macOS needs an authorized, valid
   app bundle. The Linux desktop smoke decodes the WAV in its actual WebView,
   sends a native banner through a private D-Bus notification daemon, and
   verifies that clicking restores the hidden window at the exact message.
   A macOS user verified on rc.20 that the banner restores the hidden window at
-  the exact message. The macOS audio change still needs a listening test.
+  the exact message and confirmed sound playback on rc.21.
 - The standalone manifest lets supported browsers install the app. The open
   PWA uses the same page and notification worker as a browser tab. On Linux,
   Chromium 151 installed Oiê through its UI and opened the exact message in the
