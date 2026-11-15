@@ -55,6 +55,11 @@ launch options. See [hosted access](hosted-auth.md).
 
 Use an embedded engine initially, with no separate daemon required. In a future native window host, closing the window keeps the engine running; explicit quit stops it. In the browser-first alpha, closing a tab does not stop the serving Go process. Closing a hosted UI does not terminate its shared remote engine. Wails is now selected for the first standalone desktop alpha, as described below; this supersedes the earlier browser-only release boundary.
 
+Network engines can expose unauthenticated infrastructure probes on a
+separate private HTTP listener. Readiness checks the engine and its database.
+Liveness checks whether the process responds. See the
+[internal probe contract](../api/probe.openapi.yaml).
+
 Ordinary engine restart/reconnect resumes eligible pending sends automatically. Backup recovery has a separate review rule in section 13.
 
 **OPEN O01:** Exact commands, configuration, role combinations, process supervision, and data-directory layout. **RECOMMENDED R01:** a modular monolith with explicit role configuration.

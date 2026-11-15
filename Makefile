@@ -19,6 +19,7 @@ generate:
 	$(CODEGEN) oapi-codegen --config api/ui-preview.codegen.yaml api/ui-preview.openapi.yaml
 	$(CODEGEN) oapi-codegen --config api/bff.codegen.yaml api/bff.openapi.yaml
 	$(CODEGEN) oapi-codegen --config api/cache.codegen.yaml api/cache.openapi.yaml
+	$(CODEGEN) oapi-codegen --config api/probe.codegen.yaml api/probe.openapi.yaml
 	$(CODEGEN) templ generate
 	$(MAKE) generate-cli
 
@@ -34,6 +35,7 @@ lint:
 	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn api/ui-preview.openapi.yaml
 	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn api/bff.openapi.yaml
 	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn api/cache.openapi.yaml
+	$(VACUUM) lint --ext-refs --no-banner --no-update-check -d --fail-severity warn api/probe.openapi.yaml
 
 lint-go:
 	$(GOLANGCI_LINT) run

@@ -72,6 +72,9 @@ To enable the hosted [Diagnostics viewer](diagnostics.md), set
 `diagnostics.existingSecret` to a Secret in the release namespace that contains
 the access key. The chart reads the `key` entry by default.
 
+With the development chart's hosted mode enabled, the kubelet probes the
+pod directly on port 8081. See [internal probes](hosted-auth.md#configure-internal-probes).
+
 ## Desktop installation on macOS and Linux
 
 Oiê's desktop package includes the Go engine, SQLite store and web interface in

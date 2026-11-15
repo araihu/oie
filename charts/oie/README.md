@@ -49,7 +49,10 @@ hosted:
 The proxy must preserve the public host, overwrite `X-Forwarded-Proto` with
 `https` for HTTPS traffic, and stream server-sent events without buffering.
 Restrict access to the backend HTTP Service to the trusted proxy network.
-The hosted chart uses TCP probes because the engine API requires a key.
+The hosted chart binds the internal HTTP probes on pod port `8081`. Kubernetes
+calls `/readyz` for startup and readiness and `/livez` for liveness. The Service
+and public routes use the application port. Keep the probe port private.
+See the [internal probe OpenAPI contract](../../api/probe.openapi.yaml).
 
 The init container sets the owner on the first start. For key management and
 recovery, run the [host commands](../../docs/hosted-auth.md) in the running

@@ -1,0 +1,54 @@
+openapi: 3.0.3
+info:
+  title: Oiê Internal Probe API
+  version: 0.1.0
+  description: Unauthenticated process and engine checks on the dedicated internal probe listener.
+  contact:
+    name: Arai Hû
+    url: https://github.com/araihu/oie
+servers:
+  - url: http://127.0.0.1:8081
+    description: Example private probe listener
+security: []
+tags:
+  - name: Probes
+    description: Service health checks
+paths:
+  /livez:
+    get:
+      operationId: getLiveness
+      tags: [Probes]
+      summary: Check whether the process is serving requests
+      description: Independent of the engine database and external services.
+      responses:
+        '200':
+          description: The probe listener is responding.
+          content:
+            text/plain:
+              schema: {type: string}
+              example: ok
+        '503':
+          description: The process is stopping.
+          content:
+            text/plain:
+              schema: {type: string}
+              example: Service Unavailable
+  /readyz:
+    get:
+      operationId: getReadiness
+      tags: [Probes]
+      summary: Check whether the engine can serve requests
+      description: Checks the running engine and its database. Does not depend on OIDC or XMPP connectivity.
+      responses:
+        '200':
+          description: The engine is ready.
+          content:
+            text/plain:
+              schema: {type: string}
+              example: ok
+        '503':
+          description: The engine cannot serve requests.
+          content:
+            text/plain:
+              schema: {type: string}
+              example: Service Unavailable

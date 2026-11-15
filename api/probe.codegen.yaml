@@ -1,0 +1,5 @@
+package: probeapi
+generate:
+  std-http-server: true
+  strict-server: true
+output: internal/adapters/probeapi/api.gen.go

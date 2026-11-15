@@ -56,6 +56,7 @@ spec:
           args:
             - --role=hosted
             - --listen=0.0.0.0:8080
+            - --probe-listen=0.0.0.0:8081
             - --data-dir=/data
             - {{ printf "--public-url=%s" (required "Set hosted.publicURL." .Values.hosted.publicURL) | quote }}
             - {{ printf "--trusted-tls-proxies=%s" (required "Set hosted.trustedTLSProxies." .Values.hosted.trustedTLSProxies) | quote }}
@@ -75,6 +76,10 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            {{- if .Values.hosted.enabled }}
+            - name: probes
+              containerPort: 8081
+            {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -82,8 +87,9 @@ spec:
               drop: ["ALL"]
           startupProbe:
             {{- if .Values.hosted.enabled }}
-            tcpSocket:
-              port: http
+            httpGet:
+              path: /readyz
+              port: probes
             {{- else }}
             httpGet:
               path: /api/v1/health
@@ -94,8 +100,9 @@ spec:
             failureThreshold: 60
           readinessProbe:
             {{- if .Values.hosted.enabled }}
-            tcpSocket:
-              port: http
+            httpGet:
+              path: /readyz
+              port: probes
             {{- else }}
             httpGet:
               path: /api/v1/health
@@ -105,8 +112,9 @@ spec:
             timeoutSeconds: 3
           livenessProbe:
             {{- if .Values.hosted.enabled }}
-            tcpSocket:
-              port: http
+            httpGet:
+              path: /livez
+              port: probes
             {{- else }}
             httpGet:
               path: /api/v1/health

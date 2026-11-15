@@ -36,6 +36,7 @@ type Config struct {
 	PrivateAPI                                   bool
 	DataOnly                                     bool
 	Hosted                                       HostedConfig
+	ProbeListen                                  string
 	Diagnostics                                  *diagnostics.Logger
 	DiagnosticsKey                               string
 	engineOnly                                   bool
@@ -49,6 +50,7 @@ type Server struct {
 	cancel       context.CancelFunc
 	server       *http.Server
 	private      *http.Server
+	probe        *http.Server
 	presentation http.Handler
 	done         chan error
 	stopped      chan struct{}
@@ -93,7 +95,7 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 	}
 	var store *sqlite.Store
 	var engine *engineHost
-	var privateListener net.Listener
+	var privateListener, probeListener net.Listener
 	defer func() {
 		if err == nil {
 			return
@@ -103,6 +105,9 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 		if privateListener != nil {
 			_ = privateListener.Close()
 		}
+		if probeListener != nil {
+			_ = probeListener.Close()
+		}
 		if engine != nil {
 			engine.instance.close()
 		}
@@ -110,6 +115,13 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 			err = errors.Join(err, store.Close())
 		}
 	}()
+	if cfg.ProbeListen != "" {
+		probeListener, err = net.Listen("tcp", cfg.ProbeListen)
+		if err != nil {
+			cfg.Diagnostics.Record(diagnostics.ListenFailed, 0, 0)
+			return nil, fmt.Errorf("listen for internal probes: %w", err)
+		}
+	}
 	host := &Server{url: listenerURL(listener), ctx: ctx, cancel: cancel, done: make(chan error, 1), stopped: make(chan struct{})}
 	if cfg.PrivateAPI || (hosted != nil && !cfg.DataOnly) {
 		host.capability = rand.Text()
@@ -201,7 +213,12 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 		host.url = hosted.origin.String()
 		host.server.TLSConfig = hosted.tls
 	}
-	served := make(chan error, 2)
+	served := make(chan error, 3)
+	if probeListener != nil {
+		host.probe = host.httpServer(probeHandler(engine), cfg.Diagnostics)
+		host.probe.Addr = probeListener.Addr().String()
+		go func() { served <- host.probe.Serve(probeListener) }()
+	}
 	if host.private != nil {
 		go func() { served <- host.private.Serve(privateListener) }()
 	}
@@ -256,6 +273,9 @@ func validate(cfg Config) error {
 	}
 	if cfg.Role != "local" && cfg.Role != "hosted" && cfg.Role != "bff" {
 		return errors.New("role must be local, hosted, or bff; sync service is not implemented yet")
+	}
+	if cfg.ProbeListen != "" && (cfg.Role == "bff" || cfg.PrivateAPI) {
+		return errors.New("--probe-listen requires a local or hosted network engine")
 	}
 	if cfg.Role == "hosted" && cfg.PrivateAPI {
 		return errors.New("hosted mode uses its own authenticated API")
@@ -358,10 +378,7 @@ func (s *Server) supervise(served <-chan error, engine *engineHost, diag *diagno
 	}
 	s.beginClose()
 	shutdownCtx, stop := context.WithTimeout(context.Background(), 5*time.Second)
-	shutdownErr := shutdownHTTP(shutdownCtx, s.server)
-	if s.private != nil {
-		shutdownErr = errors.Join(shutdownErr, shutdownHTTP(shutdownCtx, s.private))
-	}
+	shutdownErr := shutdownHTTP(shutdownCtx, s.server, s.private, s.probe)
 	stop()
 	if shutdownErr != nil {
 		result = errors.Join(result, fmt.Errorf("shutdown: %w", shutdownErr))
@@ -384,11 +401,27 @@ func (s *Server) supervise(served <-chan error, engine *engineHost, diag *diagno
 	close(s.stopped)
 }
 
-func shutdownHTTP(ctx context.Context, server *http.Server) error {
-	if err := server.Shutdown(ctx); err != nil {
-		return errors.Join(err, server.Close())
+func shutdownHTTP(ctx context.Context, servers ...*http.Server) error {
+	results := make(chan error, len(servers))
+	for _, server := range servers {
+		if server == nil {
+			results <- nil
+			continue
+		}
+		// Start draining each listener before another can consume the deadline.
+		go func() {
+			err := server.Shutdown(ctx)
+			if err != nil {
+				err = errors.Join(err, server.Close())
+			}
+			results <- err
+		}()
 	}
-	return nil
+	var result error
+	for range servers {
+		result = errors.Join(result, <-results)
+	}
+	return result
 }
 
 // URL is the owned HTTP listener's URL. In PrivateAPI mode it is an internal

@@ -46,6 +46,7 @@ func run() error {
 	flags.StringVar(&hosted.OIDCClientID, "oidc-client-id", "", "hosted OIDC client ID")
 	flags.StringVar(&hosted.OIDCClientSecretFile, "oidc-client-secret-file", "", "file containing the hosted OIDC client secret")
 	listen := flags.String("listen", "127.0.0.1:8080", "HTTP listen address")
+	probeListen := flags.String("probe-listen", "", "private HTTP probe listener address (disabled by default)")
 	role := flags.String("role", "local", "local, hosted, or bff")
 	dataOnly := flags.Bool("data-only", false, "serve the engine API without the web interface")
 	dataDir := flags.String("data-dir", "./data", "engine database and media directory")
@@ -82,7 +83,7 @@ func run() error {
 	server, err := apphost.Start(ctx, apphost.Config{
 		Role: *role, DataOnly: *dataOnly, Listen: *listen, DataDir: *dataDir,
 		EngineURL: *engineURL, DevReload: *devReload, XMPPCAFile: *xmppCA,
-		Hosted: hosted, Diagnostics: logger, DiagnosticsKey: os.Getenv("OIE_DIAGNOSTICS_KEY"),
+		Hosted: hosted, ProbeListen: *probeListen, Diagnostics: logger, DiagnosticsKey: os.Getenv("OIE_DIAGNOSTICS_KEY"),
 	})
 	if err != nil {
 		return err

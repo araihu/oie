@@ -51,6 +51,23 @@ routes require a key, including health, events, and the served API contract.
 session or API key.
 `--data-only` serves the authenticated API without the browser interface.
 
+## Configure internal probes
+
+Set `--probe-listen 127.0.0.1:8081` for a local health checker. For a remote
+load balancer, bind to an address reachable on its private network. Use HTTP
+on that listener and point the checker at `GET /readyz`. The probe listener
+is opt-in for standalone deployments.
+
+| Path | Use |
+| --- | --- |
+| `/readyz` | Startup, readiness, and load balancing. Returns 200 while the engine and database are available or 503 while they are unavailable. |
+| `/livez` | Liveness. Checks whether the process responds independently of the database. |
+
+The probe listener takes no credentials. Keep it off public ingress and
+restrict access to infrastructure that needs it. Kubernetes can reach the
+pod's probe port directly. The hosted engine API, including `/api/v1/health`,
+still requires a bearer key. See the [internal OpenAPI contract](../api/probe.openapi.yaml).
+
 ## Create and revoke API keys
 
 Run these commands as the service user while the engine is running or stopped.
