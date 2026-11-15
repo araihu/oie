@@ -32,9 +32,9 @@ that manage the owner and keys run on the host as the Oiê service user.
      --oidc-client-secret-file /run/secrets/oie/client-secret
    ```
 
-Use an exclusive HTTPS origin for this instance. If the service user cannot
-bind port 443 directly, use a high port and forward TLS to it, or terminate TLS
-at a trusted proxy. In proxy mode, replace the certificate and key flags with
+Use a hostname dedicated to Oiê. Browsers share cookies across HTTPS ports
+on the same hostname. If the service user cannot bind port 443 directly, use a
+high port and forward TLS to it, or terminate TLS at a trusted proxy. In proxy mode, replace the certificate and key flags with
 `--trusted-tls-proxies 127.0.0.1/32` and bind to `127.0.0.1:8080` when the
 proxy shares the host. The proxy must preserve the public `Host` and overwrite
 `X-Forwarded-Proto` with `https` on HTTPS requests. For a separate proxy,
