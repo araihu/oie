@@ -41,6 +41,7 @@ type Message struct {
 	ID, RevisionID, AccountID, ConversationID ID
 	Sender                                    Sender
 	OriginalText                              string
+	WireBodySHA256                            string               `json:",omitempty"`
 	AttachmentWireText                        string               `json:",omitempty"`
 	DispatchStarted                           bool                 `json:",omitempty"`
 	ScheduledAt                               *time.Time           `json:",omitempty"`

@@ -22,7 +22,7 @@ func recordSenderIdentity(ctx context.Context, q *dbgen.Queries, old, in domain.
 	if !validPersonalAddress(address) {
 		return 0, nil
 	}
-	return q.InsertMessageSenderIdentity(ctx, dbgen.InsertMessageSenderIdentityParams{MessageID: string(old.ID), AccountID: string(old.AccountID), ConversationID: string(old.ConversationID), PersonalAddress: address, SourceHash: bodyHash(in.OriginalText)})
+	return q.InsertMessageSenderIdentity(ctx, dbgen.InsertMessageSenderIdentityParams{MessageID: string(old.ID), AccountID: string(old.AccountID), ConversationID: string(old.ConversationID), PersonalAddress: address, SourceHash: in.SourceBodyHash()})
 }
 
 func hydrateSenderIdentity(ctx context.Context, q *dbgen.Queries, m *domain.Message) error {
@@ -40,7 +40,7 @@ func hydrateSenderIdentity(ctx context.Context, q *dbgen.Queries, m *domain.Mess
 		if err = json.Unmarshal([]byte(row.MessagePayload), &source); err != nil {
 			return err
 		}
-		if bodyHash(source.OriginalText) != row.SourceHash || source.AccountID != m.AccountID || source.ConversationID != m.ConversationID || !validPersonalAddress(row.PersonalAddress) {
+		if source.SourceBodyHash() != row.SourceHash || source.AccountID != m.AccountID || source.ConversationID != m.ConversationID || !validPersonalAddress(row.PersonalAddress) {
 			return nil
 		}
 		if address != "" && address != row.PersonalAddress {

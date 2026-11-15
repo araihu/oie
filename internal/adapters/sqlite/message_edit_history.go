@@ -195,12 +195,12 @@ type historyNode struct {
 }
 
 func historyProofValid(proof dbgen.ListMessageHistoryProofsRow, source domain.Message) bool {
-	if proof.ProofPayload == nil || !correctionValid(&domain.MessageCorrection{Scope: proof.Scope, Author: proof.Author, ID: proof.RemoteID, TargetID: proof.TargetID}) || bodyHash(source.OriginalText) != proof.SourceHash {
+	if proof.ProofPayload == nil || !correctionValid(&domain.MessageCorrection{Scope: proof.Scope, Author: proof.Author, ID: proof.RemoteID, TargetID: proof.TargetID}) || source.SourceBodyHash() != proof.SourceHash {
 		return false
 	}
 	var observed domain.Message
 	if json.Unmarshal([]byte(*proof.ProofPayload), &observed) != nil {
 		return false
 	}
-	return observed.ID == source.ID && observed.AccountID == source.AccountID && observed.ConversationID == source.ConversationID && observed.RevisionID == domain.ID(proof.SourceRevisionID) && bodyHash(observed.OriginalText) == proof.SourceHash
+	return observed.ID == source.ID && observed.AccountID == source.AccountID && observed.ConversationID == source.ConversationID && observed.RevisionID == domain.ID(proof.SourceRevisionID) && observed.SourceBodyHash() == proof.SourceHash
 }

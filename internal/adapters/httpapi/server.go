@@ -401,6 +401,9 @@ func (s *Server) GetOperation(ctx context.Context, r engineapi.GetOperationReque
 		if err == nil {
 			snapshot := message(accepted)
 			receipt.AcceptedMessage = &snapshot
+		} else {
+			expired := true
+			receipt.AcceptedMessageExpired = &expired
 		}
 	}
 	return receipt, nil

@@ -27,11 +27,12 @@ type archivePageRequest struct {
 }
 
 type archivePage struct {
-	Query          *archiveQuery
-	First, Last    string
-	Complete       bool
-	Prepend        bool
-	ReactionAnchor domain.ArchiveReactionAnchor
+	Query               *archiveQuery
+	First, Last         string
+	Complete            bool
+	ExcludedByRetention bool
+	Prepend             bool
+	ReactionAnchor      domain.ArchiveReactionAnchor
 }
 
 func (r archivePageRequest) payload(id string) string {
@@ -70,13 +71,16 @@ func (r archivePageRequest) payload(id string) string {
 
 // The caller holds the archive domain's turn until the page has been processed.
 func (m *Manager) readArchivePage(ctx context.Context, e *entry, s *mx.Session, scope string, request archivePageRequest) (archivePage, error) {
+	if err := m.checkArchiveRetention(ctx, e.account.ID); err != nil {
+		return archivePage{}, err
+	}
 	if target, ok := ctx.Value(archiveRetentionKey{}).(archiveRetention); ok && target.account == e.account.ID {
 		start := domain.RetentionCutoff(target.now, target.days)
 		if request.Start.Before(start) {
 			request.Start = start
 		}
 		if !request.End.IsZero() && request.End.Before(request.Start) {
-			return archivePage{Query: &archiveQuery{}, Complete: true}, nil
+			return archivePage{Query: &archiveQuery{}, Complete: true, ExcludedByRetention: true}, nil
 		}
 	}
 
@@ -137,6 +141,9 @@ func (m *Manager) readArchivePage(ctx context.Context, e *entry, s *mx.Session, 
 	if first != q.FirstID || last != q.LastID || (!fin.Complete && (first == "" || last == "")) ||
 		(request.Before != "" && first == request.Before) || (request.After != "" && last == request.After) {
 		return archivePage{}, errArchive
+	}
+	if err := m.checkArchiveRetention(ctx, e.account.ID); err != nil {
+		return archivePage{}, err
 	}
 	return archivePage{Query: q, First: first, Last: last, Complete: fin.Complete, Prepend: request.Prepend, ReactionAnchor: request.ReactionAnchor}, nil
 }

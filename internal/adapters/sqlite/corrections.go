@@ -23,6 +23,44 @@ func init() {
 		text, _ := args[0].(string)
 		return bodyHash(text), nil
 	})
+	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_strip_expired_outbound_quote", 1, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
+		payload, _ := args[0].(string)
+		var m domain.Message
+		if err := json.Unmarshal([]byte(payload), &m); err != nil {
+			return nil, err
+		}
+		plan := m.OutboundReply
+		if plan == nil || plan.Excerpt == "" && plan.Reference == nil {
+			return payload, nil
+		}
+		if m.OriginalText != plan.BodyText {
+			m.WireBodySHA256 = m.SourceBodyHash()
+			if remainder, ok := strings.CutPrefix(m.AttachmentWireText, m.OriginalText); ok {
+				m.AttachmentWireText = plan.BodyText + remainder
+			}
+			m.OriginalText = plan.BodyText
+		}
+		plan.Excerpt, plan.SenderName, plan.Reference, plan.Fallback = "", "", nil, nil
+		data, err := json.Marshal(m)
+		return string(data), err
+	})
+	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_strip_expired_inbound_quote", 2, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
+		payload, _ := args[0].(string)
+		metadata, _ := args[1].(string)
+		var m domain.Message
+		if err := json.Unmarshal([]byte(payload), &m); err != nil {
+			return nil, err
+		}
+		var ref domain.ReplyReference
+		if err := json.Unmarshal([]byte(metadata), &ref); err != nil {
+			return nil, err
+		}
+		if !stripInboundQuote(&m, ref) {
+			return payload, nil
+		}
+		data, err := json.Marshal(m)
+		return string(data), err
+	})
 }
 
 func correctionValid(c *domain.MessageCorrection) bool {
@@ -92,7 +130,7 @@ func recordCorrectionMetadata(ctx context.Context, q *dbgen.Queries, id string, 
 		return nil
 	}
 	c := in.Correction
-	n, err := q.InsertCorrectionFact(ctx, dbgen.InsertCorrectionFactParams{MessageID: id, Scope: c.Scope, Author: c.Author, RemoteID: c.ID, TargetID: c.TargetID, SourceHash: bodyHash(in.OriginalText), SourceRevisionID: string(raw.RevisionID)})
+	n, err := q.InsertCorrectionFact(ctx, dbgen.InsertCorrectionFactParams{MessageID: id, Scope: c.Scope, Author: c.Author, RemoteID: c.ID, TargetID: c.TargetID, SourceHash: in.SourceBodyHash(), SourceRevisionID: string(raw.RevisionID)})
 	if err != nil || n == 0 {
 		return err
 	}
@@ -128,7 +166,7 @@ func reconcileCorrections(ctx context.Context, q *dbgen.Queries, seed domain.Mes
 			if err = json.Unmarshal([]byte(row.MessagePayload), &m); err != nil {
 				return err
 			}
-			if bodyHash(m.OriginalText) != row.SourceHash {
+			if m.SourceBodyHash() != row.SourceHash {
 				ambiguous = true
 			}
 			f := dbgen.MessageCorrectionFact{MessageID: row.MessageID, Scope: row.Scope, Author: row.Author, RemoteID: row.RemoteID, TargetID: row.TargetID, SourceHash: row.SourceHash, SourceRevisionID: row.SourceRevisionID}

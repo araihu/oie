@@ -564,7 +564,7 @@ func retentionChoice(v view, prefix string, label string, days *int, inherited i
 		templ_7745c5c3_Err = textinput.TextInput(textinput.Config{
 			ID: "retention-days-" + prefix, Name: prefix + "-days", Label: v.Text.RetentionDays,
 			Type: "number", Value: retentionDayValue(days, inherited),
-			InputAttrs: templ.Attributes{"min": "1", "max": strconv.Itoa(maxRetentionDays), "step": "1", "x-bind:required": "mode === 'finite'"},
+			InputAttrs: templ.Attributes{"min": "1", "max": strconv.Itoa(maxRetentionDays), "step": "1", "x-bind:required": "mode === 'finite'", "x-bind:disabled": "mode !== 'finite'"},
 		}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err

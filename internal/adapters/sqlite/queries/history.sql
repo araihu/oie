@@ -14,3 +14,11 @@ INSERT INTO history_status(account_id,payload) VALUES(?,?) ON CONFLICT(account_i
 -- name: GetHistoryCounts :one
 SELECT CAST((SELECT COUNT(*) FROM messages AS m WHERE m.account_id=sqlc.arg(owner_id) AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)) AS INTEGER) AS retained_messages,
 CAST((SELECT COUNT(*) FROM conversations AS c WHERE c.account_id=sqlc.arg(owner_id)) AS INTEGER) AS conversations;
+
+-- name: PutGuardedArchiveCheckpoint :execrows
+INSERT INTO archive_checkpoints(account_id,scope,after_id)
+SELECT sqlc.arg(account_id),sqlc.arg(scope),sqlc.arg(after_id)
+WHERE (SELECT g.archive_revision+COALESCE(a.revision,0)
+ FROM global_retention g LEFT JOIN account_archive_retention a ON a.account_id=sqlc.arg(account_id)
+ WHERE g.singleton=1)=sqlc.arg(retention_revision)
+ON CONFLICT(account_id,scope) DO UPDATE SET after_id=excluded.after_id;

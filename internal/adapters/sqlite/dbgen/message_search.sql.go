@@ -108,13 +108,14 @@ WITH initial_revisions AS (
  JOIN initial_revisions first ON first.entity_id=f.message_id
  JOIN message_revisions source ON source.rowid=first.revision_row
  WHERE CAST(?11 AS INTEGER)=1 AND source.id<>roots.matched_revision_id
- AND f.source_hash=oie_source_hash(json_extract(r.payload,'$.OriginalText'))
- AND f.source_hash=oie_source_hash(json_extract(source.payload,'$.OriginalText'))
+ AND f.source_hash=COALESCE(json_extract(r.payload,'$.WireBodySHA256'),oie_source_hash(json_extract(r.payload,'$.OriginalText')))
+ AND f.source_hash=COALESCE(json_extract(source.payload,'$.WireBodySHA256'),oie_source_hash(json_extract(source.payload,'$.OriginalText')))
  GROUP BY roots.id,source.id
 ), bodies AS (
  SELECT variants.id, variants.position_ms, variants.timeline_at_ms, variants.payload, variants.account_label, variants.account_address, variants.conversation_payload, variants.content_payload, variants.source_id, variants.matched_revision_id, variants.matched_at, variants.metadata, variants.is_current, variants.revision_key_at, variants.revision_key_id,CAST(COALESCE(json_extract(content_payload,'$.OutboundReply.BodyText'),
    oie_reply_body(json_extract(content_payload,'$.OriginalText'),r.payload)) AS TEXT) AS body
  FROM variants LEFT JOIN message_replies r ON r.message_id=variants.source_id
+ AND json_extract(content_payload,'$.WireBodySHA256') IS NULL
  AND r.body_hash=oie_source_hash(json_extract(content_payload,'$.OriginalText'))
 ), matched AS (
  SELECT id, position_ms, timeline_at_ms, payload, account_label, account_address, conversation_payload, content_payload, source_id, matched_revision_id, matched_at, metadata, is_current, revision_key_at, revision_key_id, body,CAST(oie_search_match(body,CAST(?12 AS TEXT)) AS INTEGER) AS text_match FROM bodies

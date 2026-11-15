@@ -241,7 +241,7 @@ func checkPendingReplyTarget(ctx context.Context, q *dbgen.Queries, m *domain.Me
 		if err = hydrateMessageProjection(ctx, q, &source); err != nil {
 			return err
 		}
-		if source.AccountID != m.AccountID || source.ConversationID != m.ConversationID || bodyHash(source.OriginalText) != plan.TargetBodyHash {
+		if source.AccountID != m.AccountID || source.ConversationID != m.ConversationID || source.SourceBodyHash() != plan.TargetBodyHash {
 			if plan.Reviewed {
 				return application.ErrReplySourceChanged
 			}
@@ -435,11 +435,14 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		if days != 0 {
 			cutoff := domain.RetentionCutoff(m.ReceivedAt, days)
 			if m.CreatedAt.Before(cutoff) {
-				return nil
+				if err := discardOutdatedMessage(ctx, q, c, m); err != nil {
+					return err
+				}
+				return tx.Commit()
 			}
 			if correctionValid(m.Correction) && m.Correction.TargetID != "" {
 				ignored, err := q.IsExpiredCorrectionTarget(ctx, dbgen.IsExpiredCorrectionTargetParams{
-					AccountID: string(c.AccountID), Address: c.Address, Scope: m.Correction.Scope,
+					AccountID: string(c.AccountID), Address: c.Address, Kind: c.Kind, Scope: m.Correction.Scope,
 					RemoteID: m.Correction.TargetID, Author: m.Correction.Author, CutoffMs: cutoff.UnixMilli(),
 				})
 				if err != nil || ignored {
@@ -535,6 +538,17 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
 			return err
+		}
+	}
+	if m.ReplyReference != nil && referenceValid(m.ReplyReference.Target) {
+		expired, err := unavailableExpiredQuote(ctx, q, m.AccountID, m.ConversationID, m.ReplyReference.Target)
+		if err != nil {
+			return err
+		}
+		if expired && stripInboundQuote(&m, *m.ReplyReference) {
+			ref := *m.ReplyReference
+			ref.Fallback = nil
+			m.ReplyReference = &ref
 		}
 	}
 	if err = insertMessage(ctx, q, m); err != nil {

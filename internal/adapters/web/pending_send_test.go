@@ -1,8 +1,12 @@
 package web
 
 import (
+	"encoding/json"
+	"net/http"
 	"net/url"
 	"testing"
+
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
 func TestSubmissionReceiptLookupNeverCreatesMessage(t *testing.T) {
@@ -52,5 +56,46 @@ func TestSubmissionReceiptLookupNeverCreatesMessage(t *testing.T) {
 	code, _ := livePost(t, client, ui.URL, "/ui/messages/reconcile", "forged", original)
 	if code != 403 || f.effectCount() != 1 {
 		t.Fatal("receipt bypassed CSRF")
+	}
+}
+
+func TestExpiredSendReceiptReconcilesOnlyTheExactIntent(t *testing.T) {
+	key := newOperationKey()
+	fixture := &liveFixture{}
+	ui, client, csrf := liveUI(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/operations/"+key {
+			w.Header().Set("Content-Type", "application/json")
+			expired := true
+			_ = json.NewEncoder(w).Encode(engineapi.Operation{Id: key, ResourceId: testMessage, Kind: "send_message", Status: "succeeded", AcceptedMessageExpired: &expired})
+			return
+		}
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/conversations/"+testChat+"/messages" {
+			if r.Header.Get("X-Oie-Verify-Expired-Send") != "true" || r.Header.Get("Idempotency-Key") != key {
+				t.Error("reconciliation must use the read-only receipt check")
+			}
+			var in engineapi.SendMessage
+			if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+				t.Error(err)
+			}
+			if in.OriginalText == "Same immutable body" {
+				w.WriteHeader(http.StatusNoContent)
+			} else {
+				w.Header().Set("Content-Type", "application/problem+json")
+				w.WriteHeader(http.StatusConflict)
+				_ = json.NewEncoder(w).Encode(engineapi.Problem{Code: "idempotency_conflict", Status: 409})
+			}
+			return
+		}
+		fixture.ServeHTTP(w, r)
+	}))
+	values := url.Values{"operationKey": {key}, "accountId": {testAccount}, "conversationId": {testChat}, "originalText": {"Same immutable body"}}
+	status, result := livePost(t, client, ui.URL, "/ui/messages/reconcile", csrf, values)
+	if status != 200 || !result.Accepted || result.State != "expired" || result.MessageID != testMessage || !validOperationKey(result.NextKey) {
+		t.Fatalf("exact expired receipt: %d %+v", status, result)
+	}
+	values.Set("originalText", "Another body")
+	status, result = livePost(t, client, ui.URL, "/ui/messages/reconcile", csrf, values)
+	if status != 409 || result.Accepted || fixture.effectCount() != 0 {
+		t.Fatalf("mismatched intent: %d %+v", status, result)
 	}
 }

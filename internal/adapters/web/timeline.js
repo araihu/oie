@@ -7,7 +7,7 @@ window.OieRuntime.register('timeline',life=>{
  let disposed=false,busy=false,epoch=0,controller,observer,resizer,anchor,restoring=false,follow=false,failed='',retryDirection='',refreshAgain=false,refreshPage,refreshStartedAt=0,liveAttached=false,older=false,newer=false,retryMode='page',retryTarget='',focusEpoch=0,focusPending=false;
  let exhaustedArchiveEdge='';
  let latestSnapshot=null;
- const hiddenChecks=new Set(),hiddenRevisions=new Map();
+ const hiddenChecks=new Set(),hiddenRevisions=new Map(),expired=new Set();
  function rememberHidden(id,revision){
   hiddenRevisions.set(id,revision);
   if(hiddenRevisions.size>200)hiddenRevisions.delete(hiddenRevisions.keys().next().value);
@@ -68,7 +68,7 @@ window.OieRuntime.register('timeline',life=>{
  }
  function merge(page,{direction='update',authoritative=false,starGeneration=Number(document.body.dataset.starGeneration||0),aliases=[],reset=false,retired=new Set()}={}){
   const old=current(),logical=normalizedRows(old,aliases);for(const plan of aliases){const original=old.find(item=>item.id===plan.previous);if(original&&interactionProtected(original.node)){failed='paused';retryDirection=direction==='older'?'older':'newer';controls();return false}}
-  const entries=page.entries.filter(item=>hiddenRevisions.get(item.id)!==item.node.dataset.messageRevision);
+  const entries=page.entries.filter(item=>!expired.has(item.id)&&hiddenRevisions.get(item.id)!==item.node.dataset.messageRevision);
   const relocated=new Set();
   for(const item of entries){
    const previous=logical.find(value=>value.id===item.id);
@@ -212,10 +212,13 @@ window.OieRuntime.register('timeline',life=>{
  function expire(ids){
   if(disposed||!Array.isArray(ids)||!ids.length)return;
   const retired=new Set(ids.filter(uuid));
+  if(!retired.size)return;
+  for(const id of retired)expired.add(id);
+  while(expired.size>1000)expired.delete(expired.values().next().value);
+  if(busy){epoch++;controller?.abort()}
+  refreshAgain=false;
   const before=current();
   if(!before.some(item=>retired.has(item.id)))return;
-  for(const item of before)if(retired.has(item.id))rememberHidden(item.id,item.node.dataset.messageRevision);
-  if(busy){epoch++;controller?.abort()}
   if(retired.has(document.body.dataset.focusMessage))document.body.dataset.focusMessage='';
   const focused=before.some(item=>retired.has(item.id)&&item.node.contains(document.activeElement));
   merge({entries:[],scope:document},{retired});

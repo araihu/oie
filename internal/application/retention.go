@@ -15,6 +15,7 @@ type RetentionPeer struct {
 }
 
 type RetentionHost interface {
+	ArchiveRetentionRevision(context.Context, domain.ID) (int64, error)
 	RetentionDays(context.Context, domain.ID, string, string) (int, error)
 	DirectRetentionPeers(context.Context, domain.ID) ([]RetentionPeer, error)
 }
@@ -23,8 +24,8 @@ type retentionRepository interface {
 	RetentionHost
 	GlobalRetention(context.Context) (domain.GlobalRetention, error)
 	ConversationRetention(context.Context, domain.ID) (domain.ConversationRetention, error)
-	SetGlobalRetention(context.Context, domain.GlobalRetention) (domain.GlobalRetention, []domain.ID, error)
-	SetConversationRetention(context.Context, domain.ID, string, *int) (domain.ConversationRetention, []domain.ID, error)
+	SetGlobalRetention(context.Context, domain.GlobalRetention, time.Time) (domain.GlobalRetention, []domain.ID, error)
+	SetConversationRetention(context.Context, domain.ID, string, *int, time.Time) (domain.ConversationRetention, []domain.ID, error)
 	PurgeExpiredHistory(context.Context, time.Time, NewID) (int, error)
 }
 
@@ -62,7 +63,7 @@ func (e *Engine) SetGlobalRetention(ctx context.Context, in domain.GlobalRetenti
 	if !ok {
 		return domain.GlobalRetention{}, ErrProtocolUnavailable
 	}
-	value, accounts, err := repo.SetGlobalRetention(ctx, in)
+	value, accounts, err := repo.SetGlobalRetention(ctx, in, e.now().UTC())
 	if err == nil {
 		e.retentionChanged(accounts)
 	}
@@ -77,11 +78,29 @@ func (e *Engine) SetConversationRetention(ctx context.Context, id domain.ID, exp
 	if !ok {
 		return domain.ConversationRetention{}, ErrProtocolUnavailable
 	}
-	value, accounts, err := repo.SetConversationRetention(ctx, id, expected, days)
+	value, accounts, err := repo.SetConversationRetention(ctx, id, expected, days, e.now().UTC())
 	if err == nil {
 		e.retentionChanged(accounts)
 	}
 	return value, err
+}
+
+type archiveRetentionRevisionKey struct{}
+
+func WithArchiveRetentionRevision(ctx context.Context, revision int64) context.Context {
+	return context.WithValue(ctx, archiveRetentionRevisionKey{}, revision)
+}
+
+func ArchiveRetentionRevisionFrom(ctx context.Context) (int64, bool) {
+	revision, ok := ctx.Value(archiveRetentionRevisionKey{}).(int64)
+	return revision, ok
+}
+
+func (e *Engine) ArchiveRetentionRevision(ctx context.Context, account domain.ID) (int64, error) {
+	if repo, ok := e.repo.(retentionRepository); ok {
+		return repo.ArchiveRetentionRevision(ctx, account)
+	}
+	return 0, nil
 }
 
 func (e *Engine) RetentionDays(ctx context.Context, account domain.ID, address, kind string) (int, error) {

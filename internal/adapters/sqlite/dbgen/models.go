@@ -17,6 +17,11 @@ type Account struct {
 	CreatedAt  string
 }
 
+type AccountArchiveRetention struct {
+	AccountID string
+	Revision  int64
+}
+
 type ArchiveAlias struct {
 	AccountID string
 	Scope     string
@@ -122,6 +127,16 @@ type ConversationRevision struct {
 	CreatedAt string
 }
 
+type DiscardedMessageReference struct {
+	AccountID string
+	Address   string
+	Kind      string
+	Scope     string
+	RemoteID  string
+	Author    string
+	AgeMs     int64
+}
+
 type EffectiveRetention struct {
 	ConversationID string
 	AccountID      string
@@ -149,10 +164,11 @@ type ExpiredMessageReference struct {
 }
 
 type GlobalRetention struct {
-	Singleton  int64
-	RoomsDays  int64
-	DirectDays int64
-	Revision   int64
+	Singleton       int64
+	RoomsDays       int64
+	DirectDays      int64
+	Revision        int64
+	ArchiveRevision int64
 }
 
 type HiddenScheduledMessage struct {

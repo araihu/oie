@@ -20,42 +20,41 @@ type archiveRetention struct {
 	now     time.Time
 }
 
-func updateArchiveRetention(progress *domain.RoomArchiveProgress, days int, now time.Time) bool {
-	if progress.RetentionDays != nil && *progress.RetentionDays == days {
-		return false
-	}
-	cutoff := domain.RetentionCutoff(now, days)
-	if progress.RetentionDays != nil {
-		previous := *progress.RetentionDays
-		if previous > 0 && (days == 0 || days > previous) {
-			if progress.OlderComplete && !progress.OlderCoveredThrough.IsZero() {
-				progress.ResumeEnd = progress.OlderCoveredThrough
-				if oldCutoff := domain.RetentionCutoff(now, previous); oldCutoff.After(progress.ResumeEnd) {
-					progress.ResumeEnd = oldCutoff
-				}
-			}
-			progress.OlderComplete = false
+func (m *Manager) beginArchiveRetention(ctx context.Context, account domain.ID) (context.Context, error) {
+	if host, ok := m.host.(application.RetentionHost); ok {
+		revision, err := host.ArchiveRetentionRevision(ctx, account)
+		if err != nil {
+			return ctx, err
 		}
+		ctx = application.WithArchiveRetentionRevision(ctx, revision)
 	}
-	if !cutoff.IsZero() && (!progress.Boundary.IsZero() && progress.Boundary.Before(cutoff) ||
-		progress.OlderComplete && (progress.OlderCoveredThrough.IsZero() || progress.OlderCoveredThrough.Before(cutoff))) {
-		progress.Boundary = cutoff
-		progress.ResumeEnd = cutoff
-		progress.Cursor = ""
-		progress.OlderReactionAnchor = domain.ArchiveReactionAnchor{}
-		if progress.RecentComplete {
-			progress.OlderComplete, progress.InitialComplete = true, true
-			progress.OlderCoveredThrough = cutoff
-		}
+	return ctx, nil
+}
+
+func (m *Manager) checkArchiveRetention(ctx context.Context, account domain.ID) error {
+	expected, guarded := application.ArchiveRetentionRevisionFrom(ctx)
+	host, ok := m.host.(application.RetentionHost)
+	if !guarded || !ok {
+		return nil
 	}
-	progress.RetentionDays = &days
-	return true
+	revision, err := host.ArchiveRetentionRevision(ctx, account)
+	if err != nil {
+		return err
+	}
+	if revision != expected {
+		return application.ErrStateConflict
+	}
+	return nil
 }
 
 func (m *Manager) recoverDirectArchives(ctx context.Context, host application.HistoryHost, e *entry, s *mx.Session) error {
 	retention, ok := m.host.(application.RetentionHost)
 	if !ok {
 		return m.recoverArchive(ctx, host, e, s, e.account.Address)
+	}
+	ctx, err := m.beginArchiveRetention(ctx, e.account.ID)
+	if err != nil {
+		return err
 	}
 	peers, err := retention.DirectRetentionPeers(ctx, e.account.ID)
 	if err != nil {
@@ -70,6 +69,9 @@ func (m *Manager) recoverDirectArchives(ctx context.Context, host application.Hi
 		checkpoint := "retention-peer:" + strconv.Itoa(peer.Days) + ":" + peer.Address
 		scoped := context.WithValue(ctx, archiveRetentionKey{}, archiveRetention{account: e.account.ID, days: peer.Days, now: time.Now().UTC()})
 		err := m.recoverArchiveRange(scoped, host, e, s, e.account.Address, checkpoint, peer.Address, nil)
+		if errors.Is(err, application.ErrStateConflict) {
+			return err
+		}
 		if err != nil {
 			failures = errors.Join(failures, err)
 		} else {

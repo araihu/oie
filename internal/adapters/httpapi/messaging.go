@@ -203,6 +203,12 @@ func (s *Server) SendMessage(ctx context.Context, r engineapi.SendMessageRequest
 	}
 	input := compositionInput(r.Body.OriginalText, r.Body.ReplyToMessageId, r.Body.Mentions, r.Body.AttachmentIds)
 	review := replyReviewInput(r.Body.ExpectedReplyRevisionId, r.Body.ExpectedReplyExcerptSha256)
+	if r.Params.XOieVerifyExpiredSend != nil && *r.Params.XOieVerifyExpiredSend {
+		if err := s.engine.VerifyExpiredSend(ctx, domain.ID(r.Params.IdempotencyKey), domain.ID(r.ConversationId), input, r.Body.ScheduledAt, review); err != nil {
+			return nil, err
+		}
+		return engineapi.SendMessage204Response{}, nil
+	}
 	var expectedKind string
 	if r.Params.XOieExpectedConversationKind != nil {
 		expectedKind = string(*r.Params.XOieExpectedConversationKind)

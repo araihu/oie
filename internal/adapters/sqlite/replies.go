@@ -57,14 +57,14 @@ func recordReplyMetadata(ctx context.Context, q *dbgen.Queries, id string, in do
 		if !referenceValid(r) || r.Scope == "" {
 			continue
 		}
-		n, err := q.InsertMessageReference(ctx, dbgen.InsertMessageReferenceParams{MessageID: id, Scope: r.Scope, RemoteID: r.ID, Author: r.Author, SourceHash: bodyHash(in.OriginalText)})
+		n, err := q.InsertMessageReference(ctx, dbgen.InsertMessageReferenceParams{MessageID: id, Scope: r.Scope, RemoteID: r.ID, Author: r.Author, SourceHash: in.SourceBodyHash()})
 		if err != nil {
 			return err
 		}
 		changed += n
 	}
-	if in.ReplyReference != nil && old.OriginalText == in.OriginalText && referenceValid(in.ReplyReference.Target) && len(in.ReplyReference.Fallback) <= 16 {
-		n, err := q.InsertMessageReply(ctx, dbgen.InsertMessageReplyParams{MessageID: id, BodyHash: bodyHash(in.OriginalText), Payload: jsonText(in.ReplyReference)})
+	if in.ReplyReference != nil && old.SourceBodyHash() == in.SourceBodyHash() && referenceValid(in.ReplyReference.Target) && len(in.ReplyReference.Fallback) <= 16 {
+		n, err := q.InsertMessageReply(ctx, dbgen.InsertMessageReplyParams{MessageID: id, BodyHash: in.SourceBodyHash(), Payload: jsonText(in.ReplyReference)})
 		if err != nil {
 			return err
 		}
@@ -84,6 +84,42 @@ func recordReplyMetadata(ctx context.Context, q *dbgen.Queries, id string, in do
 		_, err = emitCanonicalMessageEvent(ctx, q, "message.updated", old, time.Now().UTC())
 	}
 	return err
+}
+
+func stripInboundQuote(m *domain.Message, ref domain.ReplyReference) bool {
+	if m.WireBodySHA256 != "" || m.OutboundReply != nil {
+		return false
+	}
+	body, _ := domain.ReplyBody(m.OriginalText, ref.Fallback)
+	if body == m.OriginalText {
+		return false
+	}
+	m.WireBodySHA256 = m.SourceBodyHash()
+	m.OriginalText = body
+	return true
+}
+
+func expiredReplyReference(ctx context.Context, q *dbgen.Queries, conversation domain.ID, ref domain.MessageReference) (bool, error) {
+	expired, err := q.IsExpiredReplyReference(ctx, dbgen.IsExpiredReplyReferenceParams{
+		ConversationID: string(conversation), RemoteID: ref.ID, Scope: ref.Scope, Author: ref.Author,
+	})
+	if err != nil || expired {
+		return expired, err
+	}
+	return q.IsDiscardedReplyReference(ctx, dbgen.IsDiscardedReplyReferenceParams{
+		OwnerID: string(conversation), RemoteID: ref.ID, Scope: ref.Scope, Author: ref.Author,
+	})
+}
+
+func unavailableExpiredQuote(ctx context.Context, q *dbgen.Queries, account, conversation domain.ID, ref domain.MessageReference) (bool, error) {
+	expired, err := expiredReplyReference(ctx, q, conversation, ref)
+	if err != nil || !expired {
+		return false, err
+	}
+	retained, err := q.FindReplyTargets(ctx, dbgen.FindReplyTargetsParams{
+		AccountID: string(account), ConversationID: string(conversation), RemoteID: ref.ID, Scope: ref.Scope, Author: ref.Author,
+	})
+	return len(retained) == 0, err
 }
 
 func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) error {
@@ -123,7 +159,7 @@ func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) erro
 	if m.ProjectionSourceID != "" {
 		sourceID = m.ProjectionSourceID
 	}
-	payload, err := q.GetMessageReply(ctx, dbgen.GetMessageReplyParams{MessageID: string(sourceID), BodyHash: bodyHash(m.OriginalText)})
+	payload, err := q.GetMessageReply(ctx, dbgen.GetMessageReplyParams{MessageID: string(sourceID), BodyHash: m.SourceBodyHash()})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
@@ -134,7 +170,10 @@ func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) erro
 	if err = json.Unmarshal([]byte(payload), &ref); err != nil {
 		return err
 	}
-	body, fallback := domain.ReplyBody(m.OriginalText, ref.Fallback)
+	body, fallback := m.OriginalText, ""
+	if m.WireBodySHA256 == "" {
+		body, fallback = domain.ReplyBody(m.OriginalText, ref.Fallback)
+	}
 	m.Reply = &domain.MessageReply{BodyText: body, Excerpt: boundedText(fallback, 512)}
 	rows, err := q.FindReplyTargets(ctx, dbgen.FindReplyTargetsParams{AccountID: string(m.AccountID), ConversationID: string(m.ConversationID), RemoteID: ref.Target.ID, Scope: ref.Target.Scope, Author: ref.Target.Author})
 	if err != nil {
@@ -149,7 +188,7 @@ func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) erro
 		if err = json.Unmarshal([]byte(row.Payload), &raw); err != nil {
 			return err
 		}
-		if bodyHash(raw.OriginalText) != row.SourceHash {
+		if raw.SourceBodyHash() != row.SourceHash {
 			return nil
 		}
 		id, err := resolveMessageAlias(ctx, q, raw.ID)
@@ -173,9 +212,7 @@ func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) erro
 		candidates[id] = target
 	}
 	if len(candidates) != 1 {
-		expired, err := q.IsExpiredReplyReference(ctx, dbgen.IsExpiredReplyReferenceParams{
-			ConversationID: string(m.ConversationID), RemoteID: ref.Target.ID, Scope: ref.Target.Scope, Author: ref.Target.Author,
-		})
+		expired, err := expiredReplyReference(ctx, q, m.ConversationID, ref.Target)
 		if expired {
 			m.Reply.Excerpt = ""
 			m.Reply.OriginalExpired = true
@@ -200,14 +237,18 @@ func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) erro
 	}
 	if target.OutboundReply != nil {
 		excerpt = target.OutboundReply.BodyText
-	} else if payload, err = q.GetMessageReply(ctx, dbgen.GetMessageReplyParams{MessageID: string(metadataID), BodyHash: bodyHash(excerpt)}); err == nil {
-		var nested domain.ReplyReference
-		if err = json.Unmarshal([]byte(payload), &nested); err != nil {
+	} else if target.WireBodySHA256 == "" {
+		payload, err = q.GetMessageReply(ctx, dbgen.GetMessageReplyParams{MessageID: string(metadataID), BodyHash: target.SourceBodyHash()})
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		excerpt, _ = domain.ReplyBody(excerpt, nested.Fallback)
-	} else if !errors.Is(err, sql.ErrNoRows) {
-		return err
+		if err == nil {
+			var nested domain.ReplyReference
+			if err = json.Unmarshal([]byte(payload), &nested); err != nil {
+				return err
+			}
+			excerpt, _ = domain.ReplyBody(excerpt, nested.Fallback)
+		}
 	}
 	m.Reply.Available = true
 	m.Reply.MessageID = target.ID
@@ -309,7 +350,7 @@ func applyMessageReferences(m *domain.Message, rows []dbgen.ListCanonicalMessage
 		if err := json.Unmarshal([]byte(row.MessagePayload), &source); err != nil {
 			return err
 		}
-		if bodyHash(source.OriginalText) != row.SourceHash {
+		if source.SourceBodyHash() != row.SourceHash {
 			continue
 		}
 		ref := domain.MessageReference{Scope: row.Scope, ID: row.RemoteID, Author: row.Author}

@@ -69,6 +69,15 @@ func DisplayBody(m Message) string {
 	return m.OriginalText
 }
 
+// SourceBodyHash retains the identity of a wire body after a quote is removed.
+func (m Message) SourceBodyHash() string {
+	if m.WireBodySHA256 != "" {
+		return m.WireBodySHA256
+	}
+	sum := sha256.Sum256([]byte(m.OriginalText))
+	return hex.EncodeToString(sum[:])
+}
+
 func ReplyExcerpt(text string) string {
 	remaining := 512
 	for i := range text {

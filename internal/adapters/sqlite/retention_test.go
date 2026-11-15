@@ -155,6 +155,15 @@ func TestRetentionRejectsOldIngressAndRedactsSendReceipt(t *testing.T) {
 	if _, err := e.SendMessage(ctx, key, c.ID, message); !errors.Is(err, application.ErrNotFound) {
 		t.Fatalf("retry of expired message: %v", err)
 	}
+	if err := e.VerifyExpiredSend(ctx, key, c.ID, domain.OutgoingComposition{OriginalText: message}, nil, application.ReplyReview{}); err != nil {
+		t.Fatalf("verify exact expired intent: %v", err)
+	}
+	if err := e.VerifyExpiredSend(ctx, key, c.ID, domain.OutgoingComposition{OriginalText: "different intent"}, nil, application.ReplyReview{}); !errors.Is(err, application.ErrIdempotencyConflict) {
+		t.Fatalf("verify mismatched intent: %v", err)
+	}
+	if err := e.VerifyExpiredSend(ctx, migrationID(), c.ID, domain.OutgoingComposition{OriginalText: message}, nil, application.ReplyReview{}); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("verify uncommitted intent: %v", err)
+	}
 	if receipt, err := e.Operation(ctx, key); err != nil || receipt.ResourceID != sent.Message.ID {
 		t.Fatalf("lost idempotency receipt: %+v %v", receipt, err)
 	}

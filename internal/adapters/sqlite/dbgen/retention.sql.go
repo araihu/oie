@@ -9,6 +9,25 @@ import (
 	"context"
 )
 
+const bumpAccountArchiveRetentionRevision = `-- name: BumpAccountArchiveRetentionRevision :exec
+INSERT INTO account_archive_retention(account_id,revision) VALUES(?,1)
+ON CONFLICT(account_id) DO UPDATE SET revision=revision+1
+`
+
+func (q *Queries) BumpAccountArchiveRetentionRevision(ctx context.Context, accountID string) error {
+	_, err := q.db.ExecContext(ctx, bumpAccountArchiveRetentionRevision, accountID)
+	return err
+}
+
+const bumpArchiveRetentionRevision = `-- name: BumpArchiveRetentionRevision :exec
+UPDATE global_retention SET archive_revision=archive_revision+1 WHERE singleton=1
+`
+
+func (q *Queries) BumpArchiveRetentionRevision(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, bumpArchiveRetentionRevision)
+	return err
+}
+
 const clearAllDirectRetentionCheckpoints = `-- name: ClearAllDirectRetentionCheckpoints :exec
 DELETE FROM archive_checkpoints WHERE substr(scope,1,15)='retention-peer:'
 `
@@ -73,6 +92,9 @@ WHERE m.conversation_id=?1
     ) AS members
     WHERE EXISTS(SELECT 1 FROM message_stars s WHERE s.message_id=members.member_id AND s.starred=1)
        OR EXISTS(SELECT 1 FROM outbox o WHERE o.message_id=members.member_id AND o.state IN ('queued','dispatching','unknown'))
+       OR EXISTS(SELECT 1 FROM messages reply JOIN outbox o ON o.message_id=reply.id
+           WHERE o.state='dispatching' AND reply.conversation_id=m.conversation_id
+           AND json_extract(reply.payload,'$.OutboundReply.TargetID')=members.member_id)
        OR EXISTS(SELECT 1 FROM message_edit_commands e WHERE e.message_id=members.member_id AND e.state IN ('queued','dispatching','unknown'))
        OR EXISTS(SELECT 1 FROM message_reaction_commands r WHERE r.message_id=members.member_id AND r.state IN ('queued','dispatching','unknown'))
   )
@@ -160,9 +182,22 @@ func (q *Queries) FindEffectiveRetentionDays(ctx context.Context, arg FindEffect
 	return days, err
 }
 
+const getArchiveRetentionRevision = `-- name: GetArchiveRetentionRevision :one
+SELECT CAST(g.archive_revision+COALESCE(a.revision,0) AS INTEGER) FROM global_retention g
+LEFT JOIN account_archive_retention a ON a.account_id=?1 WHERE g.singleton=1
+`
+
+func (q *Queries) GetArchiveRetentionRevision(ctx context.Context, accountID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getArchiveRetentionRevision, accountID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const getConversationRetention = `-- name: GetConversationRetention :one
-SELECT effective.days AS effective_days,effective.global_days,local.days,COALESCE(local.revision,0) AS revision
-FROM effective_retention effective LEFT JOIN conversation_retention local ON local.conversation_id=effective.conversation_id
+SELECT effective.days AS effective_days,effective.global_days,local.days,CAST(COALESCE(local.revision,0)+g.revision AS INTEGER) AS revision
+FROM effective_retention effective CROSS JOIN global_retention g
+LEFT JOIN conversation_retention local ON local.conversation_id=effective.conversation_id
 WHERE effective.conversation_id=?
 `
 
@@ -213,18 +248,49 @@ func (q *Queries) HasAcceptedDirectHistory(ctx context.Context, conversationID s
 	return exists, err
 }
 
+const isDiscardedReplyReference = `-- name: IsDiscardedReplyReference :one
+SELECT EXISTS(SELECT 1 FROM discarded_message_references d JOIN effective_retention c
+ON c.account_id=d.account_id AND c.address=d.address AND c.kind=d.kind
+WHERE c.conversation_id=?1 AND d.remote_id=?2
+AND (CAST(?3 AS TEXT)='' OR d.scope=CAST(?3 AS TEXT))
+AND (CAST(?4 AS TEXT)='' OR d.author=CAST(?4 AS TEXT)))
+`
+
+type IsDiscardedReplyReferenceParams struct {
+	OwnerID  string
+	RemoteID string
+	Scope    string
+	Author   string
+}
+
+func (q *Queries) IsDiscardedReplyReference(ctx context.Context, arg IsDiscardedReplyReferenceParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, isDiscardedReplyReference,
+		arg.OwnerID,
+		arg.RemoteID,
+		arg.Scope,
+		arg.Author,
+	)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const isExpiredCorrectionTarget = `-- name: IsExpiredCorrectionTarget :one
-SELECT EXISTS (
- SELECT 1 FROM expired_message_references expired
- JOIN conversations c ON c.id=expired.conversation_id
- WHERE c.account_id=?1 AND c.address=?2
- AND expired.scope=?3 AND expired.remote_id=?4
- AND expired.author=?5 AND expired.age_ms<?6
- AND NOT EXISTS (
-  SELECT 1 FROM message_correction_facts fact JOIN messages m ON m.id=fact.message_id
-  WHERE m.conversation_id=c.id AND fact.scope=expired.scope AND fact.remote_id=expired.remote_id AND fact.author=expired.author
+SELECT EXISTS(SELECT 1 WHERE (
+ EXISTS(
+  SELECT 1 FROM expired_message_references e JOIN conversations c ON c.id=e.conversation_id
+  WHERE c.account_id=?1 AND c.address=?2
+  AND e.scope=?3 AND e.remote_id=?4 AND e.author=?5 AND e.age_ms<?6
+ ) OR EXISTS(
+  SELECT 1 FROM discarded_message_references d
+  WHERE d.account_id=?1 AND d.address=?2 AND d.kind=?7
+  AND d.scope=?3 AND d.remote_id=?4 AND d.author=?5 AND d.age_ms<?6
  )
-)
+) AND NOT EXISTS (
+ SELECT 1 FROM message_correction_facts fact JOIN messages m ON m.id=fact.message_id JOIN conversations c ON c.id=m.conversation_id
+ WHERE c.account_id=?1 AND c.address=?2
+ AND fact.scope=?3 AND fact.remote_id=?4 AND fact.author=?5
+))
 `
 
 type IsExpiredCorrectionTargetParams struct {
@@ -234,6 +300,7 @@ type IsExpiredCorrectionTargetParams struct {
 	RemoteID  string
 	Author    string
 	CutoffMs  int64
+	Kind      string
 }
 
 func (q *Queries) IsExpiredCorrectionTarget(ctx context.Context, arg IsExpiredCorrectionTargetParams) (bool, error) {
@@ -244,6 +311,7 @@ func (q *Queries) IsExpiredCorrectionTarget(ctx context.Context, arg IsExpiredCo
 		arg.RemoteID,
 		arg.Author,
 		arg.CutoffMs,
+		arg.Kind,
 	)
 	var exists bool
 	err := row.Scan(&exists)
@@ -353,6 +421,84 @@ func (q *Queries) ListFiniteRetentionConversations(ctx context.Context, conversa
 	return items, nil
 }
 
+const listInboundQuotesInConversation = `-- name: ListInboundQuotesInConversation :many
+SELECT r.message_id,CAST(COALESCE(a.canonical_id,r.message_id) AS TEXT) AS canonical_id,r.body_hash,r.payload
+FROM message_replies r JOIN messages m ON m.id=r.message_id
+LEFT JOIN message_canonical_aliases a ON a.alias_id=r.message_id
+WHERE m.conversation_id=?1
+AND json_array_length(json_extract(r.payload,'$.Fallback'))>0
+`
+
+type ListInboundQuotesInConversationRow struct {
+	MessageID   string
+	CanonicalID string
+	BodyHash    string
+	Payload     string
+}
+
+func (q *Queries) ListInboundQuotesInConversation(ctx context.Context, ownerID string) ([]ListInboundQuotesInConversationRow, error) {
+	rows, err := q.db.QueryContext(ctx, listInboundQuotesInConversation, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInboundQuotesInConversationRow{}
+	for rows.Next() {
+		var i ListInboundQuotesInConversationRow
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.CanonicalID,
+			&i.BodyHash,
+			&i.Payload,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInheritedRoomArchiveProgress = `-- name: ListInheritedRoomArchiveProgress :many
+SELECT a.conversation_id,a.progress FROM room_archives a
+JOIN effective_retention effective ON effective.conversation_id=a.conversation_id
+LEFT JOIN conversation_retention local ON local.conversation_id=a.conversation_id
+WHERE effective.kind='room' AND local.days IS NULL
+`
+
+type ListInheritedRoomArchiveProgressRow struct {
+	ConversationID string
+	Progress       string
+}
+
+func (q *Queries) ListInheritedRoomArchiveProgress(ctx context.Context) ([]ListInheritedRoomArchiveProgressRow, error) {
+	rows, err := q.db.QueryContext(ctx, listInheritedRoomArchiveProgress)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInheritedRoomArchiveProgressRow{}
+	for rows.Next() {
+		var i ListInheritedRoomArchiveProgressRow
+		if err := rows.Scan(&i.ConversationID, &i.Progress); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRetentionAccountScopes = `-- name: ListRetentionAccountScopes :many
 SELECT id FROM accounts ORDER BY id
 `
@@ -418,6 +564,37 @@ func (q *Queries) PutGlobalRetention(ctx context.Context, arg PutGlobalRetention
 	return err
 }
 
+const recordDiscardedMessageReference = `-- name: RecordDiscardedMessageReference :execrows
+INSERT OR IGNORE INTO discarded_message_references(account_id,address,kind,scope,remote_id,author,age_ms)
+VALUES(?,?,?,?,?,?,?)
+`
+
+type RecordDiscardedMessageReferenceParams struct {
+	AccountID string
+	Address   string
+	Kind      string
+	Scope     string
+	RemoteID  string
+	Author    string
+	AgeMs     int64
+}
+
+func (q *Queries) RecordDiscardedMessageReference(ctx context.Context, arg RecordDiscardedMessageReferenceParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, recordDiscardedMessageReference,
+		arg.AccountID,
+		arg.Address,
+		arg.Kind,
+		arg.Scope,
+		arg.RemoteID,
+		arg.Author,
+		arg.AgeMs,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const resetAccountDiscoveryCheckpoints = `-- name: ResetAccountDiscoveryCheckpoints :exec
 DELETE FROM archive_checkpoints WHERE EXISTS (
  SELECT 1 FROM accounts a WHERE a.id=archive_checkpoints.account_id AND a.address=archive_checkpoints.scope
@@ -426,6 +603,29 @@ DELETE FROM archive_checkpoints WHERE EXISTS (
 
 func (q *Queries) ResetAccountDiscoveryCheckpoints(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, resetAccountDiscoveryCheckpoints)
+	return err
+}
+
+const scrubContentHeadInboundQuote = `-- name: ScrubContentHeadInboundQuote :exec
+UPDATE message_content_heads SET payload=oie_strip_expired_inbound_quote(payload,?1)
+WHERE canonical_id=?2 AND source_id=?3
+AND oie_source_hash(json_extract(payload,'$.OriginalText'))=?4
+`
+
+type ScrubContentHeadInboundQuoteParams struct {
+	ReplyMetadata interface{}
+	CanonicalID   string
+	SourceID      string
+	BodyHash      string
+}
+
+func (q *Queries) ScrubContentHeadInboundQuote(ctx context.Context, arg ScrubContentHeadInboundQuoteParams) error {
+	_, err := q.db.ExecContext(ctx, scrubContentHeadInboundQuote,
+		arg.ReplyMetadata,
+		arg.CanonicalID,
+		arg.SourceID,
+		arg.BodyHash,
+	)
 	return err
 }
 
@@ -457,6 +657,142 @@ WHERE entity_id=? AND json_extract(payload,'$.LastMessage')<>''
 
 func (q *Queries) ScrubConversationRevisionPreviews(ctx context.Context, entityID string) error {
 	_, err := q.db.ExecContext(ctx, scrubConversationRevisionPreviews, entityID)
+	return err
+}
+
+const scrubEventInboundQuote = `-- name: ScrubEventInboundQuote :exec
+UPDATE changes SET payload=oie_strip_expired_inbound_quote(payload,?1)
+WHERE kind IN ('message.created','message.updated')
+AND json_extract(payload,'$.ID') IN (CAST(?2 AS TEXT),CAST(?3 AS TEXT))
+AND oie_source_hash(json_extract(payload,'$.OriginalText'))=?4
+`
+
+type ScrubEventInboundQuoteParams struct {
+	ReplyMetadata interface{}
+	SourceID      string
+	CanonicalID   string
+	BodyHash      string
+}
+
+func (q *Queries) ScrubEventInboundQuote(ctx context.Context, arg ScrubEventInboundQuoteParams) error {
+	_, err := q.db.ExecContext(ctx, scrubEventInboundQuote,
+		arg.ReplyMetadata,
+		arg.SourceID,
+		arg.CanonicalID,
+		arg.BodyHash,
+	)
+	return err
+}
+
+const scrubEventOutboundQuotes = `-- name: ScrubEventOutboundQuotes :exec
+UPDATE changes SET payload=oie_strip_expired_outbound_quote(payload)
+WHERE kind IN ('message.created','message.updated')
+AND json_extract(payload,'$.ConversationID')=?1
+AND json_extract(payload,'$.OutboundReply.TargetID') IN (SELECT value FROM json_each(CAST(?2 AS TEXT)))
+`
+
+type ScrubEventOutboundQuotesParams struct {
+	OwnerID    string
+	ExpiredIds string
+}
+
+func (q *Queries) ScrubEventOutboundQuotes(ctx context.Context, arg ScrubEventOutboundQuotesParams) error {
+	_, err := q.db.ExecContext(ctx, scrubEventOutboundQuotes, arg.OwnerID, arg.ExpiredIds)
+	return err
+}
+
+const scrubInboundQuoteMetadata = `-- name: ScrubInboundQuoteMetadata :exec
+UPDATE message_replies SET payload=json_set(payload,'$.Fallback',json('[]'))
+WHERE message_id=?1 AND body_hash=?2
+`
+
+type ScrubInboundQuoteMetadataParams struct {
+	SourceID string
+	BodyHash string
+}
+
+func (q *Queries) ScrubInboundQuoteMetadata(ctx context.Context, arg ScrubInboundQuoteMetadataParams) error {
+	_, err := q.db.ExecContext(ctx, scrubInboundQuoteMetadata, arg.SourceID, arg.BodyHash)
+	return err
+}
+
+const scrubMessageInboundQuote = `-- name: ScrubMessageInboundQuote :exec
+UPDATE messages SET payload=oie_strip_expired_inbound_quote(payload,?1)
+WHERE id=?2 AND oie_source_hash(json_extract(payload,'$.OriginalText'))=?3
+`
+
+type ScrubMessageInboundQuoteParams struct {
+	ReplyMetadata interface{}
+	SourceID      string
+	BodyHash      string
+}
+
+func (q *Queries) ScrubMessageInboundQuote(ctx context.Context, arg ScrubMessageInboundQuoteParams) error {
+	_, err := q.db.ExecContext(ctx, scrubMessageInboundQuote, arg.ReplyMetadata, arg.SourceID, arg.BodyHash)
+	return err
+}
+
+const scrubMessageOutboundQuotes = `-- name: ScrubMessageOutboundQuotes :exec
+UPDATE messages SET payload=oie_strip_expired_outbound_quote(payload)
+WHERE conversation_id=?1
+AND json_extract(payload,'$.OutboundReply.TargetID') IN (SELECT value FROM json_each(CAST(?2 AS TEXT)))
+`
+
+type ScrubMessageOutboundQuotesParams struct {
+	ConversationID string
+	ExpiredIds     string
+}
+
+func (q *Queries) ScrubMessageOutboundQuotes(ctx context.Context, arg ScrubMessageOutboundQuotesParams) error {
+	_, err := q.db.ExecContext(ctx, scrubMessageOutboundQuotes, arg.ConversationID, arg.ExpiredIds)
+	return err
+}
+
+const scrubReceiptOutboundQuotes = `-- name: ScrubReceiptOutboundQuotes :exec
+UPDATE operations SET result=oie_strip_expired_outbound_quote(result)
+WHERE resource_id IN (SELECT id FROM messages WHERE conversation_id=?1)
+AND json_extract(result,'$.OutboundReply.TargetID') IN (SELECT value FROM json_each(CAST(?2 AS TEXT)))
+`
+
+type ScrubReceiptOutboundQuotesParams struct {
+	OwnerID    string
+	ExpiredIds string
+}
+
+func (q *Queries) ScrubReceiptOutboundQuotes(ctx context.Context, arg ScrubReceiptOutboundQuotesParams) error {
+	_, err := q.db.ExecContext(ctx, scrubReceiptOutboundQuotes, arg.OwnerID, arg.ExpiredIds)
+	return err
+}
+
+const scrubRevisionInboundQuote = `-- name: ScrubRevisionInboundQuote :exec
+UPDATE message_revisions SET payload=oie_strip_expired_inbound_quote(payload,?1)
+WHERE entity_id=?2 AND oie_source_hash(json_extract(payload,'$.OriginalText'))=?3
+`
+
+type ScrubRevisionInboundQuoteParams struct {
+	ReplyMetadata interface{}
+	SourceID      string
+	BodyHash      string
+}
+
+func (q *Queries) ScrubRevisionInboundQuote(ctx context.Context, arg ScrubRevisionInboundQuoteParams) error {
+	_, err := q.db.ExecContext(ctx, scrubRevisionInboundQuote, arg.ReplyMetadata, arg.SourceID, arg.BodyHash)
+	return err
+}
+
+const scrubRevisionOutboundQuotes = `-- name: ScrubRevisionOutboundQuotes :exec
+UPDATE message_revisions SET payload=oie_strip_expired_outbound_quote(payload)
+WHERE entity_id IN (SELECT id FROM messages WHERE conversation_id=?1)
+AND json_extract(payload,'$.OutboundReply.TargetID') IN (SELECT value FROM json_each(CAST(?2 AS TEXT)))
+`
+
+type ScrubRevisionOutboundQuotesParams struct {
+	OwnerID    string
+	ExpiredIds string
+}
+
+func (q *Queries) ScrubRevisionOutboundQuotes(ctx context.Context, arg ScrubRevisionOutboundQuotesParams) error {
+	_, err := q.db.ExecContext(ctx, scrubRevisionOutboundQuotes, arg.OwnerID, arg.ExpiredIds)
 	return err
 }
 

@@ -37,3 +37,17 @@ func (s *Store) AcceptedSendMessage(ctx context.Context, operationID domain.ID) 
 	}
 	return accepted, nil
 }
+
+func (s *Store) VerifyExpiredSend(ctx context.Context, key domain.ID, fingerprint string) error {
+	row, err := s.read.GetOperation(ctx, string(key))
+	if err != nil {
+		return notFound(err)
+	}
+	if row.Kind != "send_message" || row.Fingerprint != fingerprint {
+		return application.ErrIdempotencyConflict
+	}
+	if row.Result != "null" {
+		return application.ErrNotFound
+	}
+	return nil
+}

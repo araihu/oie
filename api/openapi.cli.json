@@ -2369,7 +2369,7 @@
         ],
         "operationId": "getOperation",
         "summary": "Reconcile a mutation after an ambiguous response",
-        "description": "A receipt proves the local mutation committed. Send receipts prove durable engine acceptance. Request includeAcceptedMessage to read the immutable send acceptance snapshot, including the original composition and scheduled instant. This route exposes the receipt kinds defined by Operation. An ID without an exposed receipt returns 404. Recover the result of updatePendingMessage or sendScheduledMessageNow by replaying the original request with the same key and input.",
+        "description": "A receipt proves the local mutation committed. Send receipts prove durable engine acceptance. Request includeAcceptedMessage to read the immutable send acceptance snapshot, including the original composition and scheduled instant. A redacted send receipt reports acceptedMessageExpired. This route exposes the receipt kinds defined by Operation. An ID without an exposed receipt returns 404. Recover the result of updatePendingMessage or sendScheduledMessageNow by replaying the original request with the same key and input.",
         "parameters": [
           {
             "name": "operationId",
@@ -2383,7 +2383,7 @@
           {
             "name": "includeAcceptedMessage",
             "in": "query",
-            "description": "Include the original acceptance snapshot for a send_message receipt. Other receipt kinds never include a message.",
+            "description": "Include the acceptance snapshot or its expiry status for a send_message receipt. Other receipt kinds never include a message.",
             "schema": {
               "type": "boolean",
               "default": false
@@ -4103,6 +4103,9 @@
           "503": {
             "$ref": "#/components/responses/Unavailable"
           },
+          "204": {
+            "description": "Exact expired send receipt verified without replaying the write."
+          },
           "200": {
             "description": "Original acceptance replayed",
             "content": {
@@ -4136,6 +4139,14 @@
             "description": "Stable Idempotency-Key reference.",
             "schema": {
               "$ref": "#/components/schemas/ID"
+            }
+          },
+          {
+            "name": "X-Oie-Verify-Expired-Send",
+            "in": "header",
+            "description": "Verify the exact intent of an expired send receipt. With true, this request has no send side effects.",
+            "schema": {
+              "type": "boolean"
             }
           },
           {
@@ -6461,7 +6472,11 @@
                 "$ref": "#/components/schemas/Message"
               }
             ],
-            "description": "Immutable original message acceptance, available only when requested for a send_message receipt. Read the message resource separately for its current state."
+            "description": "Immutable original message acceptance, available only when requested for a retained send_message receipt. Read the message resource separately for its current state."
+          },
+          "acceptedMessageExpired": {
+            "type": "boolean",
+            "description": "The requested send acceptance snapshot expired. The content-free operation receipt still exists."
           }
         }
       },

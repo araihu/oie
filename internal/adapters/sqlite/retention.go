@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strconv"
@@ -16,6 +17,10 @@ import (
 func readGlobalRetention(ctx context.Context, q *dbgen.Queries) (domain.GlobalRetention, error) {
 	value, err := q.GetGlobalRetention(ctx)
 	return domain.GlobalRetention{Revision: strconv.FormatInt(value.Revision, 10), RoomDays: int(value.RoomsDays), DirectDays: int(value.DirectDays)}, err
+}
+
+func (s *Store) ArchiveRetentionRevision(ctx context.Context, account domain.ID) (int64, error) {
+	return s.read.GetArchiveRetentionRevision(ctx, string(account))
 }
 
 func (s *Store) GlobalRetention(ctx context.Context) (domain.GlobalRetention, error) {
@@ -52,6 +57,55 @@ func (s *Store) RetentionDays(ctx context.Context, account domain.ID, address, k
 	return retentionDays(ctx, s.read, account, address, kind)
 }
 
+func recordDiscardedMessageReferences(ctx context.Context, q *dbgen.Queries, c domain.Conversation, m domain.Message) (bool, error) {
+	refs := m.References
+	inserted := false
+	if len(refs) > 8 {
+		refs = refs[:8]
+	}
+	if correctionValid(m.Correction) {
+		refs = append(slices.Clone(refs), domain.MessageReference{Scope: m.Correction.Scope, ID: m.Correction.ID, Author: m.Correction.Author})
+	}
+	for _, ref := range refs {
+		if !referenceValid(ref) || ref.Scope == "" {
+			continue
+		}
+		n, err := q.RecordDiscardedMessageReference(ctx, dbgen.RecordDiscardedMessageReferenceParams{
+			AccountID: string(c.AccountID), Address: c.Address, Kind: c.Kind, Scope: ref.Scope, RemoteID: ref.ID, Author: ref.Author, AgeMs: m.CreatedAt.UnixMilli(),
+		})
+		if err != nil {
+			return false, err
+		}
+		inserted = inserted || n > 0
+	}
+	return inserted, nil
+}
+
+func discardOutdatedMessage(ctx context.Context, q *dbgen.Queries, c domain.Conversation, m domain.Message) error {
+	inserted, err := recordDiscardedMessageReferences(ctx, q, c, m)
+	if err != nil || !inserted {
+		return err
+	}
+	row, err := q.FindConversation(ctx, dbgen.FindConversationParams{AccountID: string(c.AccountID), Address: c.Address})
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	chat, err := decodeConversation(row)
+	if err != nil || chat.Kind != c.Kind {
+		return err
+	}
+	scrubbed, err := scrubInboundQuotes(ctx, q, row.ID)
+	if err != nil || !scrubbed {
+		return err
+	}
+	// A newer client may already have the reply mounted.
+	_, err = change(ctx, q, "conversation.history_pruned", domain.HistoryPruned{ConversationID: chat.ID, MessageIDs: []domain.ID{}}, m.ReceivedAt)
+	return err
+}
+
 func (s *Store) DirectRetentionPeers(ctx context.Context, account domain.ID) ([]application.RetentionPeer, error) {
 	rows, err := s.read.ListDirectRetentionPeers(ctx, string(account))
 	if err != nil {
@@ -64,7 +118,7 @@ func (s *Store) DirectRetentionPeers(ctx context.Context, account domain.ID) ([]
 	return peers, nil
 }
 
-func (s *Store) SetGlobalRetention(ctx context.Context, in domain.GlobalRetention) (domain.GlobalRetention, []domain.ID, error) {
+func (s *Store) SetGlobalRetention(ctx context.Context, in domain.GlobalRetention, now time.Time) (domain.GlobalRetention, []domain.ID, error) {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
 		return in, nil, err
@@ -96,6 +150,20 @@ func (s *Store) SetGlobalRetention(ctx context.Context, in domain.GlobalRetentio
 			return current, nil, err
 		}
 	}
+	if current.RoomDays != in.RoomDays {
+		rooms, err := q.ListInheritedRoomArchiveProgress(ctx)
+		if err != nil {
+			return current, nil, err
+		}
+		for _, room := range rooms {
+			if err := applyRoomRetention(ctx, q, room.ConversationID, room.Progress, current.RoomDays, in.RoomDays, now); err != nil {
+				return current, nil, err
+			}
+		}
+	}
+	if err := q.BumpArchiveRetentionRevision(ctx); err != nil {
+		return current, nil, err
+	}
 	if err := q.PutGlobalRetention(ctx, dbgen.PutGlobalRetentionParams{RoomsDays: int64(in.RoomDays), DirectDays: int64(in.DirectDays)}); err != nil {
 		return current, nil, err
 	}
@@ -106,7 +174,7 @@ func (s *Store) SetGlobalRetention(ctx context.Context, in domain.GlobalRetentio
 	return value, accounts, tx.Commit()
 }
 
-func (s *Store) SetConversationRetention(ctx context.Context, id domain.ID, expected string, days *int) (domain.ConversationRetention, []domain.ID, error) {
+func (s *Store) SetConversationRetention(ctx context.Context, id domain.ID, expected string, days *int, now time.Time) (domain.ConversationRetention, []domain.ID, error) {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
 		return domain.ConversationRetention{}, nil, err
@@ -116,11 +184,14 @@ func (s *Store) SetConversationRetention(ctx context.Context, id domain.ID, expe
 	if err != nil {
 		return current, nil, err
 	}
-	if current.Days == nil && days == nil || current.Days != nil && days != nil && *current.Days == *days {
+	if days != nil && current.Days != nil && *current.Days == *days {
 		return current, nil, nil
 	}
 	if current.Revision != expected {
 		return current, nil, application.ErrStateConflict
+	}
+	if days == nil && current.Days == nil {
+		return current, nil, nil
 	}
 	var raw *int64
 	if days != nil {
@@ -145,7 +216,18 @@ func (s *Store) SetConversationRetention(ctx context.Context, id domain.ID, expe
 		if err != nil {
 			return current, nil, err
 		}
-		if conversation.Kind == "direct" {
+		if err := q.BumpAccountArchiveRetentionRevision(ctx, chat.AccountID); err != nil {
+			return current, nil, err
+		}
+		if conversation.Kind == "room" {
+			archive, err := q.GetRoomArchive(ctx, string(id))
+			if err == nil {
+				err = applyRoomRetention(ctx, q, string(id), archive.Progress, current.EffectiveDays, value.EffectiveDays, now)
+			}
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return current, nil, err
+			}
+		} else {
 			if err := q.ClearPeerRetentionCheckpoints(ctx, dbgen.ClearPeerRetentionCheckpointsParams{
 				AccountID: chat.AccountID, PeerAddress: chat.Address,
 			}); err != nil {
@@ -154,6 +236,21 @@ func (s *Store) SetConversationRetention(ctx context.Context, id domain.ID, expe
 		}
 	}
 	return value, accounts, tx.Commit()
+}
+
+func applyRoomRetention(ctx context.Context, q *dbgen.Queries, id, payload string, previous, days int, now time.Time) error {
+	var progress domain.RoomArchiveProgress
+	if err := json.Unmarshal([]byte(payload), &progress); err != nil {
+		return err
+	}
+	if progress.RetentionDays == nil {
+		progress.RetentionDays = &previous
+	}
+	// Reconcile any saved coverage that predates the current period before
+	// applying the new period. The room may have been offline during expiry.
+	progress.ApplyRetention(previous, now)
+	progress.ApplyRetention(days, now)
+	return q.PutRoomArchiveProgress(ctx, dbgen.PutRoomArchiveProgressParams{ConversationID: id, Progress: jsonText(progress)})
 }
 
 func (s *Store) PurgeExpiredHistory(ctx context.Context, now time.Time, newID application.NewID) (int, error) {
@@ -213,6 +310,21 @@ func (s *Store) purgeConversationBatch(ctx context.Context, id, kind string, now
 	if err := q.DeleteExpiredMessages(ctx, encoded); err != nil {
 		return 0, err
 	}
+	if err := q.ScrubMessageOutboundQuotes(ctx, dbgen.ScrubMessageOutboundQuotesParams{ConversationID: id, ExpiredIds: encoded}); err != nil {
+		return 0, err
+	}
+	if err := q.ScrubRevisionOutboundQuotes(ctx, dbgen.ScrubRevisionOutboundQuotesParams{OwnerID: id, ExpiredIds: encoded}); err != nil {
+		return 0, err
+	}
+	if err := q.ScrubEventOutboundQuotes(ctx, dbgen.ScrubEventOutboundQuotesParams{OwnerID: id, ExpiredIds: encoded}); err != nil {
+		return 0, err
+	}
+	if err := q.ScrubReceiptOutboundQuotes(ctx, dbgen.ScrubReceiptOutboundQuotesParams{OwnerID: id, ExpiredIds: encoded}); err != nil {
+		return 0, err
+	}
+	if _, err := scrubInboundQuotes(ctx, q, id); err != nil {
+		return 0, err
+	}
 	if err := q.ScrubConversationEventPreviews(ctx, id); err != nil {
 		return 0, err
 	}
@@ -236,6 +348,48 @@ func (s *Store) purgeConversationBatch(ctx context.Context, id, kind string, now
 		return 0, err
 	}
 	return len(ids), nil
+}
+
+func scrubInboundQuotes(ctx context.Context, q *dbgen.Queries, id string) (bool, error) {
+	quotes, err := q.ListInboundQuotesInConversation(ctx, id)
+	if err != nil || len(quotes) == 0 {
+		return false, err
+	}
+	conversation, err := q.GetConversation(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	scrubbed := false
+	for _, quote := range quotes {
+		var ref domain.ReplyReference
+		if err := json.Unmarshal([]byte(quote.Payload), &ref); err != nil {
+			return false, err
+		}
+		expired, err := unavailableExpiredQuote(ctx, q, domain.ID(conversation.AccountID), domain.ID(id), ref.Target)
+		if err != nil {
+			return false, err
+		}
+		if !expired {
+			continue
+		}
+		if err := q.ScrubMessageInboundQuote(ctx, dbgen.ScrubMessageInboundQuoteParams{SourceID: quote.MessageID, ReplyMetadata: quote.Payload, BodyHash: quote.BodyHash}); err != nil {
+			return false, err
+		}
+		if err := q.ScrubRevisionInboundQuote(ctx, dbgen.ScrubRevisionInboundQuoteParams{SourceID: quote.MessageID, ReplyMetadata: quote.Payload, BodyHash: quote.BodyHash}); err != nil {
+			return false, err
+		}
+		if err := q.ScrubEventInboundQuote(ctx, dbgen.ScrubEventInboundQuoteParams{SourceID: quote.MessageID, CanonicalID: quote.CanonicalID, ReplyMetadata: quote.Payload, BodyHash: quote.BodyHash}); err != nil {
+			return false, err
+		}
+		if err := q.ScrubContentHeadInboundQuote(ctx, dbgen.ScrubContentHeadInboundQuoteParams{SourceID: quote.MessageID, CanonicalID: quote.CanonicalID, ReplyMetadata: quote.Payload, BodyHash: quote.BodyHash}); err != nil {
+			return false, err
+		}
+		if err := q.ScrubInboundQuoteMetadata(ctx, dbgen.ScrubInboundQuoteMetadataParams{SourceID: quote.MessageID, BodyHash: quote.BodyHash}); err != nil {
+			return false, err
+		}
+		scrubbed = true
+	}
+	return scrubbed, nil
 }
 
 func repairExpiredConversation(ctx context.Context, q *dbgen.Queries, id, kind string, now time.Time, newID application.NewID) error {

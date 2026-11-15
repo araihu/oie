@@ -26,8 +26,9 @@ func (s *Store) PreviewSources(ctx context.Context, conversation domain.ID, ids 
 			return nil, application.ErrInvalid
 		}
 		var body struct {
-			OriginalText  string
-			OutboundReply *domain.OutboundReply
+			OriginalText   string
+			WireBodySHA256 string
+			OutboundReply  *domain.OutboundReply
 		}
 		if err := json.Unmarshal([]byte(row.MessagePayload), &body); err != nil {
 			return nil, err
@@ -36,7 +37,7 @@ func (s *Store) PreviewSources(ctx context.Context, conversation domain.ID, ids 
 		switch {
 		case body.OutboundReply != nil:
 			text = body.OutboundReply.BodyText
-		case row.ReplyPayload != nil:
+		case row.ReplyPayload != nil && body.WireBodySHA256 == "":
 			var ref domain.ReplyReference
 			if err := json.Unmarshal([]byte(*row.ReplyPayload), &ref); err != nil {
 				return nil, err

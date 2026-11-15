@@ -47,10 +47,10 @@ func TestRetentionAPISettingsAndInheritance(t *testing.T) {
 			t.Fatalf("conversation policy: %+v %v", rule, err)
 		}
 	}
-	check(call("GET", path, "", http.StatusOK), "0", nil, 90)
+	check(call("GET", path, "", http.StatusOK), "1", nil, 90)
 	zero := 0
-	check(call("PUT", path, `{"expectedRevision":"0","days":0}`, http.StatusOK), "1", &zero, 0)
-	check(call("PUT", path, `{"expectedRevision":"1","days":null}`, http.StatusOK), "2", nil, 90)
-	call("PUT", path, `{"expectedRevision":"2"}`, http.StatusBadRequest)
+	check(call("PUT", path, `{"expectedRevision":"1","days":0}`, http.StatusOK), "2", &zero, 0)
+	check(call("PUT", path, `{"expectedRevision":"2","days":null}`, http.StatusOK), "3", nil, 90)
+	call("PUT", path, `{"expectedRevision":"3"}`, http.StatusBadRequest)
 	call("GET", "/api/v1/conversations/"+string(id())+"/retention", "", http.StatusNotFound)
 }

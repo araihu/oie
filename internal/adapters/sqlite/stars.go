@@ -66,6 +66,9 @@ func (s *Store) SetMessageStar(ctx context.Context, in application.StarMutation)
 		return application.StarResult{}, err
 	}
 	if receipt != nil {
+		if receipt.Result == "null" {
+			return application.StarResult{}, application.ErrNotFound
+		}
 		var state domain.MessageStar
 		err = json.Unmarshal([]byte(receipt.Result), &state)
 		return application.StarResult{Star: state, Replayed: true}, err

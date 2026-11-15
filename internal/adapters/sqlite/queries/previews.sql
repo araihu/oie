@@ -9,7 +9,7 @@ LEFT JOIN message_canonical_aliases AS a ON a.alias_id=requested.value
 LEFT JOIN messages AS m ON m.id=COALESCE(a.canonical_id,requested.value)
 LEFT JOIN message_content_heads AS h ON h.canonical_id=m.id
 LEFT JOIN message_replies AS r ON r.message_id=COALESCE(h.source_id,m.id)
- AND r.body_hash=oie_source_hash(json_extract(COALESCE(h.payload,m.payload),'$.OriginalText'))
+ AND r.body_hash=COALESCE(json_extract(COALESCE(h.payload,m.payload),'$.WireBodySHA256'),oie_source_hash(json_extract(COALESCE(h.payload,m.payload),'$.OriginalText')))
 ORDER BY CAST(requested.key AS INTEGER);
 
 -- name: GetMessagePreview :one

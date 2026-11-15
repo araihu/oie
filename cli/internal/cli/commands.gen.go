@@ -372,6 +372,9 @@ func build26(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("header", "Idempotency-Key", &params.IdempotencyKey); err != nil {
 		return nil, err
 	}
+	if err := input.Decode("header", "X-Oie-Verify-Expired-Send", &params.XOieVerifyExpiredSend); err != nil {
+		return nil, err
+	}
 	if err := input.Decode("header", "X-Oie-Expected-Conversation-Kind", &params.XOieExpectedConversationKind); err != nil {
 		return nil, err
 	}

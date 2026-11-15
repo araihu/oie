@@ -11,6 +11,8 @@ import (
 type Querier interface {
 	AcquireWriteLock(ctx context.Context) error
 	ArchivedReactionNeighbors(ctx context.Context, arg ArchivedReactionNeighborsParams) (ArchivedReactionNeighborsRow, error)
+	BumpAccountArchiveRetentionRevision(ctx context.Context, accountID string) error
+	BumpArchiveRetentionRevision(ctx context.Context) error
 	CanPromoteRoomPlaceholder(ctx context.Context, roomID string) (*bool, error)
 	ClearAllDirectRetentionCheckpoints(ctx context.Context) error
 	ClearCanonicalAliases(ctx context.Context, ids string) error
@@ -47,6 +49,7 @@ type Querier interface {
 	GetActiveMessageReaction(ctx context.Context, messageID string) (MessageReactionCommand, error)
 	GetArchiveAlias(ctx context.Context, arg GetArchiveAliasParams) (string, error)
 	GetArchiveCheckpoint(ctx context.Context, arg GetArchiveCheckpointParams) (string, error)
+	GetArchiveRetentionRevision(ctx context.Context, accountID string) (int64, error)
 	GetContactSource(ctx context.Context, accountID string) (ContactSource, error)
 	GetContentHead(ctx context.Context, canonicalID string) (MessageContentHead, error)
 	GetConversation(ctx context.Context, id string) (Conversation, error)
@@ -116,6 +119,7 @@ type Querier interface {
 	InterruptedMessages(ctx context.Context) ([]Message, error)
 	InterruptedPreviewJobs(ctx context.Context, limit int64) ([]MessagePreview, error)
 	InvalidateSharedContent(ctx context.Context, messageID string) error
+	IsDiscardedReplyReference(ctx context.Context, arg IsDiscardedReplyReferenceParams) (bool, error)
 	IsExpiredCorrectionTarget(ctx context.Context, arg IsExpiredCorrectionTargetParams) (bool, error)
 	IsExpiredMessage(ctx context.Context, id string) (bool, error)
 	IsExpiredReplyReference(ctx context.Context, arg IsExpiredReplyReferenceParams) (bool, error)
@@ -135,6 +139,8 @@ type Querier interface {
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]ListConversationsRow, error)
 	ListDirectRetentionPeers(ctx context.Context, accountID string) ([]ListDirectRetentionPeersRow, error)
 	ListFiniteRetentionConversations(ctx context.Context, conversationID string) ([]ListFiniteRetentionConversationsRow, error)
+	ListInboundQuotesInConversation(ctx context.Context, ownerID string) ([]ListInboundQuotesInConversationRow, error)
+	ListInheritedRoomArchiveProgress(ctx context.Context) ([]ListInheritedRoomArchiveProgressRow, error)
 	ListMessageHistoryProofs(ctx context.Context, arg ListMessageHistoryProofsParams) ([]ListMessageHistoryProofsRow, error)
 	ListMessageHistorySources(ctx context.Context, arg ListMessageHistorySourcesParams) ([]ListMessageHistorySourcesRow, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
@@ -171,6 +177,8 @@ type Querier interface {
 	PutConversationReadHead(ctx context.Context, arg PutConversationReadHeadParams) error
 	PutConversationRetention(ctx context.Context, arg PutConversationRetentionParams) error
 	PutGlobalRetention(ctx context.Context, arg PutGlobalRetentionParams) error
+	PutGuardedArchiveCheckpoint(ctx context.Context, arg PutGuardedArchiveCheckpointParams) (int64, error)
+	PutGuardedRoomArchiveProgress(ctx context.Context, arg PutGuardedRoomArchiveProgressParams) (int64, error)
 	PutHistoryStatus(ctx context.Context, arg PutHistoryStatusParams) error
 	PutMessageStar(ctx context.Context, arg PutMessageStarParams) error
 	PutRoomArchiveMode(ctx context.Context, arg PutRoomArchiveModeParams) error
@@ -183,6 +191,7 @@ type Querier interface {
 	ReactionObservationsForTargets(ctx context.Context, arg ReactionObservationsForTargetsParams) ([]ReactionObservationsForTargetsRow, error)
 	ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error
 	ReconcileReactionObservation(ctx context.Context, arg ReconcileReactionObservationParams) error
+	RecordDiscardedMessageReference(ctx context.Context, arg RecordDiscardedMessageReferenceParams) (int64, error)
 	RecordOriginalTransmission(ctx context.Context, id string) error
 	RemoveModeratedSharedContent(ctx context.Context, messageID string) error
 	RemoveRoomBannedNickname(ctx context.Context, arg RemoveRoomBannedNicknameParams) error
@@ -190,9 +199,18 @@ type Querier interface {
 	ResetAllRoomReactionPrivacy(ctx context.Context) error
 	ResetRoomReactionPrivacy(ctx context.Context, accountID string) error
 	ResolveMessageAlias(ctx context.Context, aliasID string) (string, error)
+	ScrubContentHeadInboundQuote(ctx context.Context, arg ScrubContentHeadInboundQuoteParams) error
 	ScrubConversationEventPreviews(ctx context.Context, payload string) error
 	ScrubConversationReceiptPreviews(ctx context.Context, resourceID string) error
 	ScrubConversationRevisionPreviews(ctx context.Context, entityID string) error
+	ScrubEventInboundQuote(ctx context.Context, arg ScrubEventInboundQuoteParams) error
+	ScrubEventOutboundQuotes(ctx context.Context, arg ScrubEventOutboundQuotesParams) error
+	ScrubInboundQuoteMetadata(ctx context.Context, arg ScrubInboundQuoteMetadataParams) error
+	ScrubMessageInboundQuote(ctx context.Context, arg ScrubMessageInboundQuoteParams) error
+	ScrubMessageOutboundQuotes(ctx context.Context, arg ScrubMessageOutboundQuotesParams) error
+	ScrubReceiptOutboundQuotes(ctx context.Context, arg ScrubReceiptOutboundQuotesParams) error
+	ScrubRevisionInboundQuote(ctx context.Context, arg ScrubRevisionInboundQuoteParams) error
+	ScrubRevisionOutboundQuotes(ctx context.Context, arg ScrubRevisionOutboundQuotesParams) error
 	SearchContacts(ctx context.Context, arg SearchContactsParams) ([]SearchContactsRow, error)
 	SearchMessagePreviews(ctx context.Context, arg SearchMessagePreviewsParams) ([]SearchMessagePreviewsRow, error)
 	SearchMessages(ctx context.Context, arg SearchMessagesParams) ([]SearchMessagesRow, error)

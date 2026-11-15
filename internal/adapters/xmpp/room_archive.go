@@ -109,6 +109,10 @@ func (m *Manager) roomArchiveTurn(waitCtx, sessionCtx context.Context, host appl
 	if err := sessionCtx.Err(); err != nil {
 		return domain.RoomArchiveResult{}, err
 	}
+	sessionCtx, err = m.beginArchiveRetention(sessionCtx, c.AccountID)
+	if err != nil {
+		return domain.RoomArchiveResult{}, err
+	}
 	a, err := host.RoomArchive(sessionCtx, c.ID)
 	if err != nil {
 		return domain.RoomArchiveResult{}, err
@@ -120,7 +124,7 @@ func (m *Manager) roomArchiveTurn(waitCtx, sessionCtx context.Context, host appl
 		}
 		now := time.Now().UTC()
 		sessionCtx = context.WithValue(sessionCtx, archiveRetentionKey{}, archiveRetention{account: c.AccountID, days: days, now: now})
-		if updateArchiveRetention(&a.RoomArchiveProgress, days, now) {
+		if a.ApplyRetention(days, now) {
 			if err := host.StoreRoomArchiveProgress(sessionCtx, c.ID, a.RoomArchiveProgress); err != nil {
 				return domain.RoomArchiveResult{}, err
 			}
@@ -278,11 +282,16 @@ func (m *Manager) recoverDeferredRoomReactions(ctx context.Context, host applica
 			return false, errArchive
 		}
 	}
-	if err != nil || page.Query.OwnReactionActor == "" {
+	if err != nil {
 		return false, err
 	}
-	if err := m.ingestRoomReactionPage(ctx, page); err != nil {
-		return false, err
+	if !page.ExcludedByRetention {
+		if page.Query.OwnReactionActor == "" {
+			return false, nil
+		}
+		if err := m.ingestRoomReactionPage(ctx, page); err != nil {
+			return false, err
+		}
 	}
 	if page.Complete {
 		*r = domain.DeferredRoomReactions{}
@@ -292,7 +301,7 @@ func (m *Manager) recoverDeferredRoomReactions(ctx context.Context, host applica
 	if err := host.StoreRoomArchiveProgress(ctx, c.ID, *p); err != nil {
 		return false, err
 	}
-	if page.Complete {
+	if page.Complete && !page.ExcludedByRetention {
 		markRoomReactionReplay(e, s, c.Address, slot, page.Query.OwnReactionActor)
 	}
 	return true, nil

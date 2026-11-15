@@ -35,13 +35,14 @@ WITH initial_revisions AS (
  JOIN initial_revisions first ON first.entity_id=f.message_id
  JOIN message_revisions source ON source.rowid=first.revision_row
  WHERE CAST(sqlc.arg(include_history) AS INTEGER)=1 AND source.id<>roots.matched_revision_id
- AND f.source_hash=oie_source_hash(json_extract(r.payload,'$.OriginalText'))
- AND f.source_hash=oie_source_hash(json_extract(source.payload,'$.OriginalText'))
+ AND f.source_hash=COALESCE(json_extract(r.payload,'$.WireBodySHA256'),oie_source_hash(json_extract(r.payload,'$.OriginalText')))
+ AND f.source_hash=COALESCE(json_extract(source.payload,'$.WireBodySHA256'),oie_source_hash(json_extract(source.payload,'$.OriginalText')))
  GROUP BY roots.id,source.id
 ), bodies AS (
  SELECT variants.*,CAST(COALESCE(json_extract(content_payload,'$.OutboundReply.BodyText'),
    oie_reply_body(json_extract(content_payload,'$.OriginalText'),r.payload)) AS TEXT) AS body
  FROM variants LEFT JOIN message_replies r ON r.message_id=variants.source_id
+ AND json_extract(content_payload,'$.WireBodySHA256') IS NULL
  AND r.body_hash=oie_source_hash(json_extract(content_payload,'$.OriginalText'))
 ), matched AS (
  SELECT *,CAST(oie_search_match(body,CAST(sqlc.arg(search) AS TEXT)) AS INTEGER) AS text_match FROM bodies
