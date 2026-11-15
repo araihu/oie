@@ -6,7 +6,8 @@ const {once} = require('node:events');
 const {chromium} = require('playwright');
 
 const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
-const [engine, account, chat, other, revision] = [1, 2, 3, 4, 5].map(id);
+const [engine, account, chat, other, revision, room, archivedRoom, own, someoneElse, foreign] = [1, 2, 3, 4, 5, 6, 7, 8, 10, 11].map(id);
+const replyTo = messageId => ({available: true, messageId, bodyText: "Thanks", excerpt: "Hello"});
 const now = '2026-11-14T18:00:00Z';
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(test, label) {
@@ -21,11 +22,16 @@ async function run() {
   const streams = new Set();
   const events = [];
   let seq = 0;
-  const chats = [chat, other].map((id, index) => ({
-    id, revisionId: revision, accountId: account, kind: index ? 'room' : 'direct',
-    address: index ? 'team@rooms.example' : 'bob@example', title: index ? 'Team' : 'Bob',
-    updatedAt: now, unreadCount: 1, archived: Boolean(index), favorite: false
-  }));
+  const chats = [[chat, 'direct', false], [other, 'direct', false], [room, 'room', false], [archivedRoom, 'room', true]]
+    .map(([id, kind, archived], index) => ({
+      id, revisionId: revision, accountId: account, kind, archived, address: 'chat' + index + '@example',
+      title: 'Conversation ' + index, updatedAt: now, unreadCount: 1, favorite: false
+    }));
+  const retained = new Map([
+    [own, {conversationId: room, isOwn: true}],
+    [someoneElse, {conversationId: room, isOwn: false}],
+    [foreign, {conversationId: other, isOwn: true}]
+  ]);
   const profile = {id: account, revisionId: revision, protocol: 'xmpp', address: 'alice@example', createdAt: now};
 
   function push(overrides = {}, type = 'message.created', repeat) {
@@ -49,6 +55,10 @@ async function run() {
     if (route === '/api/v1/accounts/' + account) return send(profile);
     if (route.endsWith('/connection')) return send({accountId: account, state: 'connected', updatedAt: now});
     if (route === '/api/v1/conversations') return send({items: chats.filter(c => c.archived === (url.searchParams.get('archived') === 'true'))});
+    const originalID = route.split('/').at(-1);
+    if (route.startsWith('/api/v1/messages/') && retained.has(originalID)) {
+      return send({id: originalID, accountId: account, revisionId: revision, originalText: 'Hello', ...retained.get(originalID)});
+    }
     const selected = chats.find(c => route === '/api/v1/conversations/' + c.id);
     if (selected) return send(selected);
     if (/\/(messages|avatars|previews|message-stars)$/.test(route)) return send({items: []});
@@ -111,6 +121,25 @@ async function run() {
     });
     const first = await profile.newPage();
     const second = await profile.newPage();
+    // The first tab uses Chromium's playback path. Use offline decoding and a
+    // playback probe in the second tab to exercise competing window claims.
+    await second.addInitScript(() => {
+      window.AudioContext = class {
+        state = 'running';
+        destination = {};
+
+        decodeAudioData(bytes) {
+          return new OfflineAudioContext(1, 14400, 48000).decodeAudioData(bytes);
+        }
+
+        createBufferSource() {
+          return {
+            connect() {},
+            start() { window.playedSounds.push(this.buffer); }
+          };
+        }
+      };
+    });
     const soundRequests = [];
     first.on('request', request => {
       if (new URL(request.url()).pathname === '/ui/notification.wav') soundRequests.push(request);
@@ -130,13 +159,16 @@ async function run() {
       await page.getByRole('tab', {name: page === first ? 'This device' : 'Este dispositivo'}).click();
       await page.locator('[data-notification-banners]').waitFor({state: 'visible'});
     };
+    assert.equal(soundRequests.length, 0, 'the initial page should not load the sound');
+    const previewResponse = first.waitForResponse(response => new URL(response.url()).pathname === '/ui/notification.wav');
     await settings(first);
+    assert.equal((await previewResponse).headers()['content-type'], 'audio/wav');
     const banners = first.locator('[data-notification-banners]');
     const sound = first.locator('[data-notification-sound]');
     const preview = first.locator('[data-notification-preview]');
     assert.equal(await first.evaluate(() => window.prompts), 0);
     assert.equal(await banners.isChecked(), false);
-    assert.equal(await sound.isChecked(), false);
+    assert.equal(await sound.isChecked(), true);
     await first.locator('label:has(#notification-banners)').scrollIntoViewIfNeeded();
     const geometry = async () => first.evaluate(() => {
       const rects = ['#message-timeline', '#send-message-form', 'label:has(#notification-banners)', '[data-notification-preview]']
@@ -167,17 +199,15 @@ async function run() {
     await first.locator('label:has(#notification-banners)').click();
     await first.evaluate(() => window.answerPermission('granted'));
     await until(() => banners.isChecked(), 'enabled banners');
-    assert.equal(soundRequests.length, 0, 'opening settings should not load the sound');
-    const previewResponse = first.waitForResponse(response => new URL(response.url()).pathname === '/ui/notification.wav');
     await preview.click();
-    assert.equal((await previewResponse).headers()['content-type'], 'audio/wav');
     await until(() => first.evaluate(() => window.playedSounds.length === 1), 'bundled preview sound');
     const duration = await first.evaluate(() => window.playedSounds[0].duration);
     assert(Math.abs(duration - 0.3) < 0.045, 'preview should play the 300 ms sound');
-    assert.equal(await sound.isChecked(), false);
-    await first.locator('label:has(#notification-sound)').click();
     assert.equal(await sound.isChecked(), true);
-    await second.evaluate(() => { Notification.permission = 'granted'; });
+    assert.equal(await first.locator('#notification-direct').isChecked(), true);
+    assert.equal(await first.locator('#notification-archived').isChecked(), false);
+    assert.equal(await first.locator('#notification-focused').isChecked(), false);
+    assert.equal(await first.locator('[data-notification-room-sound]').inputValue(), 'attention');
     const closeSettings = page => page.locator('#settings-body').evaluate(node =>
       node.dispatchEvent(new CustomEvent('drawer:close', {detail: {id: 'settings'}, bubbles: true})));
     await closeSettings(first);
@@ -193,7 +223,7 @@ async function run() {
     assert.equal(await total('alerts'), 0);
     assert.equal(await total('playedSounds'), 1);
     const {message, entry} = push();
-    await until(async () => (await total('alerts')) === 1, 'alert for archived chat');
+    await until(async () => (await total('alerts')) === 1 && (await total('playedSounds')) === 2, 'direct message alert and sound');
     assert(await first.evaluate(() => window.playedSounds[0] === window.playedSounds[1]), 'preview and live alert should reuse the same decoded audio');
     assert.equal(soundRequests.length, 1, 'the sound should load only once');
     push({}, 'message.created', entry);
@@ -213,6 +243,73 @@ async function run() {
     assert.equal(alert.title, 'New message · Oiê');
     assert.equal(alert.options.body, 'Bob');
     assert.equal(alert.options.silent, true);
+    await second.evaluate(() => { Notification.permission = 'granted'; });
+
+    // Real controls, two unlocked tabs, and no delayed playback after a burst.
+    await second.bringToFront();
+    await settings(second);
+    const secondBeforePreview = await second.evaluate(() => window.playedSounds.length);
+    await second.locator('[data-notification-preview]').click();
+    await until(() => second.evaluate(count => window.playedSounds.length === count + 1, secondBeforePreview), 'second tab unlocked');
+    const quietWindow = () => pause(2100);
+    const expectSound = async (count, label) => {
+      await until(async () => (await total('playedSounds')) === count, label);
+    };
+    const expectSilent = async (count, label) => {
+      await pause(350);
+      assert.equal(await total('playedSounds'), count, label);
+    };
+    await quietWindow();
+    push({conversationId: room});
+    push({conversationId: room, reply: replyTo(someoneElse)});
+    push({conversationId: room, reply: replyTo(foreign)});
+    push({conversationId: archivedRoom, mentionsYou: true});
+    await expectSilent(3, 'ordinary room messages, unowned or foreign replies, archived mentions');
+    push({conversationId: room, mentionsYou: true});
+    await expectSound(4, 'a room mention sounds by default');
+    push();
+    push({conversationId: room, reply: replyTo(own)});
+    await quietWindow();
+    assert.equal(await total('playedSounds'), 4, 'the burst neither overlaps nor plays when its window ends');
+    push({conversationId: room, reply: replyTo(own)});
+    await expectSound(5, 'a verified reply to your own room message sounds');
+    await quietWindow();
+
+    const pick = async label => {
+      await second.getByRole('combobox', {name: 'Som nas salas'}).click();
+      await second.getByRole('option', {name: label, exact: true}).click();
+    };
+    await pick('Todas as mensagens');
+    push({conversationId: room});
+    await expectSound(6, 'all-room option plays ordinary messages');
+    await quietWindow();
+    push({conversationId: archivedRoom, mentionsYou: true});
+    await expectSilent(6, 'all-room option still honors archive preference');
+    await second.locator('label:has(#notification-archived)').click();
+    push({conversationId: archivedRoom});
+    await expectSound(7, 'archived room sound can be enabled');
+    await quietWindow();
+
+    await pick('Desativado');
+    await second.locator('label:has(#notification-direct)').click();
+    push({conversationId: room, mentionsYou: true});
+    push();
+    await expectSilent(7, 'room and direct sounds can each be turned off');
+    await second.locator('label:has(#notification-direct)').click();
+    await second.locator('label:has(#notification-focused)').click();
+    await first.bringToFront();
+    await first.evaluate(() => { window.testFocus = true; window.dispatchEvent(new Event('focus')); });
+    push({conversationId: chat});
+    await expectSound(8, 'the focused conversation can play sound when requested');
+    await quietWindow();
+    await second.locator('label:has(#notification-sound)').click();
+    push();
+    await expectSilent(8, 'master sound preference applies in both tabs');
+    await second.locator('label:has(#notification-sound)').click();
+    await pick('Menções e respostas a você');
+    await second.locator('label:has(#notification-archived)').click();
+    await second.locator('label:has(#notification-focused)').click();
+    await closeSettings(second);
 
     await first.evaluate(() => window.alerts[0].onclick());
     await first.waitForURL(url => url.searchParams.get('message') === message.id);
@@ -232,9 +329,11 @@ async function run() {
       await second.locator('[data-notification-settings]').screenshot({path: process.env.OIE_NOTIFICATION_SCREENSHOT});
     }
     assert.equal(await second.locator('[data-notification-sound]').isChecked(), true);
+    const soundsBeforeMute = await total('playedSounds');
     push();
     await pause(500);
     assert.equal(await total('alerts'), previousAlerts, 'mute applied in both tabs');
+    assert.equal(await total('playedSounds'), soundsBeforeMute, 'a muted direct conversation stays silent');
     await first.locator('label:has(#notification-mute)').click();
     assert.equal(await mute.isChecked(), false);
     push();
@@ -267,8 +366,23 @@ async function run() {
     assert.deepEqual(workerBanner.options.data, {engine, account, conversation: other, message: next.id});
     await until(async () => (await total('alerts')) === previousAlerts + 2, 'independent browser profiles');
     await mobile.close();
+
+    await first.goto(base + '/?lang=en&chat=' + room + '&open=details');
+    await until(() => streams.size === 2, 'room settings stream');
+    await first.locator('label:has(#notification-mute)').click();
+    assert.equal(await first.locator('[data-notification-mute]').isChecked(), true);
+    await quietWindow();
+    const soundsBeforeRoomMute = await total('playedSounds');
+    const alertsBeforeRoomMute = await total('alerts');
+    push({conversationId: room, mentionsYou: true});
+    await expectSilent(soundsBeforeRoomMute, 'a muted room stays silent even for mentions');
+    assert.equal(await total('alerts'), alertsBeforeRoomMute);
+    await first.locator('label:has(#notification-mute)').click();
+    push({conversationId: room, mentionsYou: true});
+    await expectSound(soundsBeforeRoomMute + 1, 'unmuted room plays eligible messages again');
+
     assert.deepEqual(errors, []);
-    console.log('PASS: notification permission, bundled audio, live delivery, focus, mute, replay, tabs and worker fallback');
+    console.log('PASS: notification sound defaults, room replies, archives, per-device preferences, two-second window, mute, replay and worker fallback');
   } finally {
     await browser?.close();
     app.kill();

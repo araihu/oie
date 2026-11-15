@@ -499,6 +499,27 @@ paths:
         '404': {description: Resource unavailable}
         '409': {description: Engine or account changed}
         '503': {description: Engine unavailable}
+  /ui/notification-context:
+    get:
+      operationId: getBrowserNotificationContext
+      tags: [Conversations]
+      summary: Read conversation and reply information for a notification sound
+      parameters:
+      - {in: query, name: engineId, required: true, description: Selected engine identity., schema: {type: string, format: uuid}, example: 019a5df0-0000-7000-8000-000000000001}
+      - {in: query, name: accountId, required: true, description: Account that received the message., schema: {type: string, format: uuid}, example: 019a5df0-0000-7000-8000-000000000002}
+      - {in: query, name: conversationId, required: true, description: Conversation that received the message., schema: {type: string, format: uuid}, example: 019a5df0-0000-7000-8000-000000000003}
+      - {in: query, name: replyTo, description: Resolved original message from the incoming reply., schema: {type: string, format: uuid}, example: 019a5df0-0000-7000-8000-000000000004}
+      responses:
+        '200':
+          description: Current uncached context for sound eligibility.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotificationContext'}
+              example: {kind: room, archived: false, replyToYou: true}
+        '400': {description: Invalid scope.}
+        '404': {description: Conversation unavailable.}
+        '409': {description: Engine or account changed.}
+        '503': {description: Engine unavailable.}
   /ui/message-reactions:
     get:
       operationId: getBrowserMessageReactions
@@ -1006,6 +1027,25 @@ paths:
           description: Rendering capacity is occupied
 components:
   schemas:
+    NotificationContext:
+      description: Current conversation and reply ownership used to decide whether an incoming message can play a sound.
+      type: object
+      required: [kind, archived, replyToYou]
+      example: {kind: room, archived: false, replyToYou: true}
+      properties:
+        kind:
+          description: Type of the receiving conversation.
+          type: string
+          enum: [direct, room]
+          example: room
+        archived:
+          description: Whether the conversation is currently archived.
+          type: boolean
+          example: true
+        replyToYou:
+          description: Whether the retained original belongs to the receiving account in this conversation. False for unavailable originals.
+          type: boolean
+          example: true
     BrowserForward:
       type: object
       description: Browser forwarding confirmation for one destination.

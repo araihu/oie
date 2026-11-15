@@ -753,9 +753,9 @@ Show contact presence and manual per-account Available, Away, and Do Not Disturb
 
 Alpha supports browser notifications while the app is open and permission/platform behavior allows. Web Push and closed-app notification delivery are backlogged.
 
-Suppress notifications and sounds for the conversation visible in the active, focused window. Other conversations follow conversation mute, per-device override, account DND, notification permission, and device sound preferences.
+Suppress banners for the conversation visible in the active, focused window. Sound is silent there by default, with a device preference to enable it. Other conversations follow conversation mute, per-device override, account DND, notification permission, and device sound preferences.
 
-Archived conversations remain archived on new arrivals; unread counts update and mute settings independently govern notifications. Archiving does not leave a room, delete history, or automatically mute it.
+Archived conversations remain archived on new arrivals and their unread counts update. Archived rooms are silent by default. The device sound setting can enable sound in archived rooms under the selected room policy. Archiving preserves the room membership and history.
 
 Coordinate cooperating tabs/windows, including installed PWA windows, within the same browser profile and app origin: at most one notification and one notification sound per eligible message. Do not assume this coordinates independent browser profiles or origins.
 
@@ -763,12 +763,15 @@ Separate devices notify independently even if another device is active. Activity
 
 **RECOMMENDED R12:** notify on new incoming messages rather than replaying historical backfill, and treat old stream replays as recovery, not a fresh notification batch. Request browser permission through an intentional user action. Time-limited mute choices are proposed in section 14.
 
-**IMPLEMENTED:** message banners and the notification sound are independent, off
-by default, and configured under This device. Conversation details offer a mute
-for this browser profile or desktop WebView. The device mute applies to direct
-chats and rooms, including archived chats. Account DND and synchronized mutes
-remain part of the agreed scope. See [message notifications](notifications.md)
-for eligibility, replay handling and platform behavior.
+**IMPLEMENTED:** message banners and the notification sound have independent
+controls under This device. Sound defaults on for direct messages and for
+mentions or replies to your messages in rooms. The user can turn direct sound
+off, choose all messages, mentions and replies or silence for rooms, and enable
+sound in archived rooms and in the conversation in focus. A conversation mute
+silences direct chats and rooms on this device. Cooperating windows play at
+most one sound in a two-second window, with no queued playback. Account DND
+and synchronized mutes remain part of the agreed scope.
+See [message notifications](notifications.md) for platform behavior.
 
 ## 11. Presentation, PWA, and internationalization
 
@@ -1132,7 +1135,7 @@ These scenarios validate **AGREED** behavior; proposed mechanisms such as a part
 | Forwarding | Destination account/capabilities govern the new outgoing message. Source attribution is opt-in. Media is obtained/uploaded with progress/errors; unavailable files do not silently become forwarded source links. |
 | Rooms | Discover/join/create/invite and name/topic changes follow support/permissions. Reconnect rejoins active rooms except explicit leave/revoked access. Leaving preserves saved history. |
 | Read and presence | Automatic reads require the active, focused conversation. At the latest end, earlier unread messages clear too. Explicit Mark as read sends enabled/supported receipts; unread reminders do not reverse them. Account DND suppresses alerts while reception/counts continue. |
-| Notifications | Focused active chat is silent. Cooperating same-profile tabs/PWA windows issue at most one alert/sound. Independent devices notify under their own effective policies. Backlogged Web Push is not required. |
+| Notifications | Focused active chat is silent by default. Cooperating same-profile tabs/PWA windows issue at most one banner per message and one sound every two seconds without queueing. Independent devices notify under their own effective policies. Backlogged Web Push is not required. |
 | Presentation | Desktop/mobile layouts, send-key preferences, first-unread opening, Jump to latest, and follow-bottom behavior work without losing drafts/scroll on ordinary updates. |
 | PWA storage | Recently viewed history respects the configured device limit; protected cached conversations report insufficient space. Drafts and pending sends are not ordinary eviction candidates. Media-file retention is independent. |
 | i18n and theme | en/pt-BR, device language/override/fallback, complete labels, and system/light/dark work for full pages, fragments, notifications, and offline views without changing another device's locale. |

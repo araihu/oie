@@ -638,6 +638,9 @@ type copy struct {
 	NotificationSettings, NotificationBanners, NotificationSound, NotificationPreview string
 	NotificationDenied, NotificationUnavailable, NotificationSoundUnavailable         string
 	NotificationNewMessage, NotificationMute                                          string
+	NotificationDirectSound, NotificationRoomSound, NotificationRoomAttention         string
+	NotificationRoomAll, NotificationRoomOff, NotificationArchivedSound               string
+	NotificationFocusedSound                                                          string
 }
 
 func loadCatalogs() (map[string]copy, error) {
@@ -730,6 +733,10 @@ var roomArchiveScript []byte
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/ui/engine-mode" {
 		s.setEngineMode(w, r)
+		return
+	}
+	if r.URL.Path == "/ui/notification-context" {
+		s.notificationContext(w, r)
 		return
 	}
 	if r.URL.Path == retentionPath {

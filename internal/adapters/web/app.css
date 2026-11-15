@@ -736,4 +736,5 @@ html:not(.dark) #favorites-results .oie-bubble { --color-surface-alt: var(--oie-
 .oie-notification-settings{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;margin-block:20px}
 .oie-notification-settings h2{font-size:14px;font-weight:650;margin:0}
 .oie-notification-settings button{justify-self:start}
-.oie-notification-settings [role=status]{min-height:2lh;margin:0}
+.oie-notification-settings p{margin:0}
+.oie-notification-settings [role=status]{min-height:2lh}

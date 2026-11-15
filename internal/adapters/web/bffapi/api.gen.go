@@ -66,6 +66,24 @@ func (e ConversationPreferenceIntentLang) Valid() bool {
 	}
 }
 
+// Defines values for NotificationContextKind.
+const (
+	Direct NotificationContextKind = "direct"
+	Room   NotificationContextKind = "room"
+)
+
+// Valid indicates whether the value is a known member of the NotificationContextKind enum.
+func (e NotificationContextKind) Valid() bool {
+	switch e {
+	case Direct:
+		return true
+	case Room:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PendingSubmissionLang.
 const (
 	PendingSubmissionLangEn   PendingSubmissionLang = "en"
@@ -679,6 +697,31 @@ type MarkdownSource struct {
 	Source string `json:"source"`
 }
 
+// NotificationContext Current conversation and reply ownership used to decide whether an incoming message can play a sound.
+//
+// Example: {"archived":false,"kind":"room","replyToYou":true}
+type NotificationContext struct {
+	// Archived Whether the conversation is currently archived.
+	//
+	// Example: true
+	Archived bool `json:"archived"`
+
+	// Kind Type of the receiving conversation.
+	//
+	// Example: room
+	Kind NotificationContextKind `json:"kind"`
+
+	// ReplyToYou Whether the retained original belongs to the receiving account in this conversation. False for unavailable originals.
+	//
+	// Example: true
+	ReplyToYou bool `json:"replyToYou"`
+}
+
+// NotificationContextKind Type of the receiving conversation.
+//
+// Example: room
+type NotificationContextKind string
+
 // PendingSubmission Immutable device submission used only for receipt lookup.
 //
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","csrf":"browser-csrf-token","engineId":"019a5df0-0000-7000-8000-000000000001","operationKey":"019a5df0-0000-7000-8000-000000000006","originalText":"Hello"}
@@ -1107,6 +1150,21 @@ type PrepareBrowserForwardParams struct {
 
 	// EngineId Engine owning the source message.
 	EngineId externalRef0.ID `form:"engineId" json:"engineId"`
+}
+
+// GetBrowserNotificationContextParams defines parameters for GetBrowserNotificationContext.
+type GetBrowserNotificationContextParams struct {
+	// EngineId Selected engine identity.
+	EngineId openapi_types.UUID `form:"engineId" json:"engineId"`
+
+	// AccountId Account that received the message.
+	AccountId openapi_types.UUID `form:"accountId" json:"accountId"`
+
+	// ConversationId Conversation that received the message.
+	ConversationId openapi_types.UUID `form:"conversationId" json:"conversationId"`
+
+	// ReplyTo Resolved original message from the incoming reply.
+	ReplyTo *openapi_types.UUID `form:"replyTo,omitempty" json:"replyTo,omitempty"`
 }
 
 // RefreshWorkspaceParams defines parameters for RefreshWorkspace.

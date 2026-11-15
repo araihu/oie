@@ -9,6 +9,12 @@
   const desktop = () => window.OieDesktop?.notifications;
   const bannerKey = prefix + 'banners';
   const soundKey = prefix + 'sound';
+  const roomSoundKey = prefix + 'room-sound';
+  const soundScopeKey = scope => prefix + 'sound-' + scope;
+  const roomSoundValues = ['attention', 'all', 'off'];
+  const pendingContexts = new Map();
+  const lastSoundKey = prefix + 'last-sound-at';
+  const soundInterval = 2000;
   const muteKey = (engine, chat) => prefix + 'mute.' + engine + '.' + chat;
   const focusKey = prefix + 'focus';
   const tab = Math.random().toString(36).slice(2);
@@ -16,6 +22,19 @@
 
   function read(key) {
     try { return localStorage.getItem(key); } catch { return null; }
+  }
+
+  function soundEnabled() {
+    return read(soundKey) !== '0';
+  }
+
+  function soundScopeEnabled(scope) {
+    return (read(soundScopeKey(scope)) ?? (scope === 'direct' ? '1' : '0')) === '1';
+  }
+
+  function roomSound() {
+    const value = read(roomSoundKey);
+    return roomSoundValues.includes(value) ? value : 'attention';
   }
 
   function write(key, value) {
@@ -55,7 +74,7 @@
     return current?.engine === engine && current.conversation === conversation && current.expires > Date.now();
   }
 
-  function claim(engine, message) {
+  function notificationDatabase() {
     if (!database) {
       database = new Promise(resolve => {
         try {
@@ -81,16 +100,38 @@
         } catch { resolve(null); }
       });
     }
-    return database.then(db => new Promise(resolve => {
-      if (!db) return resolve(false);
+    return database;
+  }
+
+  async function claim(engine, message, receivedAt = null) {
+    const db = await notificationDatabase();
+    if (!db) return false;
+    return new Promise(resolve => {
       try {
         const tx = db.transaction('delivered', 'readwrite');
-        const add = tx.objectStore('delivered').add({deliveredAt: Date.now()}, [engine, message]);
-        tx.oncomplete = () => resolve(true);
+        const store = tx.objectStore('delivered');
+        let claimedAt = 0;
+        tx.oncomplete = () => resolve(claimedAt);
         tx.onabort = () => resolve(false);
-        add.onerror = () => resolve(false);
+        if (receivedAt === null) {
+          const now = Date.now();
+          store.add({deliveredAt: now}, [engine, message]).onsuccess = () => { claimedAt = now; };
+          return;
+        }
+        const last = store.get(lastSoundKey);
+        last.onsuccess = () => {
+          const now = Date.now();
+          // A single transaction protects the cooldown and message identity
+          // across tabs. A candidate inside the window is dropped in place.
+          if (now - receivedAt >= soundInterval ||
+              receivedAt < (last.result?.deliveredAt ?? 0) + soundInterval) return;
+          store.add({deliveredAt: now}, [engine, message, 'sound']).onsuccess = () => {
+            store.put({deliveredAt: now}, lastSoundKey);
+            claimedAt = now;
+          };
+        };
       } catch { resolve(false); }
-    }));
+    });
   }
 
   async function unlockSound() {
@@ -182,25 +223,62 @@
     return read(bannerKey) === '1' && Boolean(desktop() || window.Notification?.permission === 'granted');
   }
 
-  async function onMessage({detail: {engine, event}}) {
+  function onMessage({detail: {engine, event}}) {
     let message;
     try { message = JSON.parse(event.data).message; } catch { return; }
     if (!message || message.sendState !== 'received' || message.isOwn || message.historical ||
         ![message.id, message.accountId, message.conversationId].every(uuid)) return;
 
     const conversation = message.conversationId;
-    const eligible = () => app()?.dataset.engineId === engine && !window.OieEvents.replaced &&
-      read(muteKey(engine, conversation)) !== '1' && !viewing(engine, conversation);
+    const canNotify = () => app()?.dataset.engineId === engine && !window.OieEvents.replaced &&
+      read(muteKey(engine, conversation)) !== '1';
+    const canShowBanner = () => canNotify() && wantsBanner() && !viewing(engine, conversation);
+    const canPlaySound = () => canNotify() && (soundScopeEnabled('focused') || !viewing(engine, conversation));
 
-    const wantsSound = () => soundBuffer && context?.state === 'running' && read(soundKey) === '1';
-    if (!eligible() || (!wantsBanner() && !wantsSound())) return;
-    // Give a window with unlocked sound the first chance to claim the message.
-    if (read(soundKey) === '1' && !wantsSound()) {
-      await new Promise(resolve => setTimeout(resolve, 300));
+    if (canShowBanner()) {
+      void claim(engine, message.id).then(claimed => {
+        if (claimed && canShowBanner()) return showBanner(engine, message);
+      }).catch(() => {});
     }
-    if (!eligible() || !(await claim(engine, message.id)) || !eligible()) return;
-    if (wantsSound()) playSound();
-    if (wantsBanner()) await showBanner(engine, message).catch(() => {});
+    if (canPlaySound()) void playMessageSound(engine, message, canPlaySound);
+  }
+
+  function notificationContext(engine, message) {
+    const params = new URLSearchParams({engineId: engine, accountId: message.accountId, conversationId: message.conversationId});
+    if (message.reply?.available === true && uuid(message.reply.messageId)) {
+      params.set('replyTo', message.reply.messageId);
+    }
+    const key = params.toString();
+    if (!pendingContexts.has(key)) {
+      pendingContexts.set(key, fetch('/ui/notification-context?' + key)
+        .then(response => response.ok ? response.json() : null)
+        .finally(() => pendingContexts.delete(key)));
+    }
+    return pendingContexts.get(key);
+  }
+
+  async function playMessageSound(engine, message, eligible) {
+    const receivedAt = Date.now();
+    const withinWindow = () => receivedAt < Number(read(lastSoundKey)) + soundInterval;
+    const ready = () => soundEnabled() && soundBuffer && context?.state === 'running';
+    if (!ready() || withinWindow() || (!soundScopeEnabled('direct') && roomSound() === 'off')) return;
+    try {
+      const conversation = await notificationContext(engine, message);
+      if (!conversation || !ready() || !eligible() || withinWindow()) return;
+      const permitsSound = () => {
+        if (conversation.kind === 'direct') return soundScopeEnabled('direct');
+        if (conversation.kind !== 'room' || (conversation.archived && !soundScopeEnabled('archived'))) return false;
+        const roomMode = roomSound();
+        return roomMode === 'all' || (roomMode === 'attention' &&
+          (message.mentionsYou === true || conversation.replyToYou === true));
+      };
+      if (!permitsSound()) return;
+      const claimedAt = await claim(engine, message.id, receivedAt);
+      if (claimedAt && ready() && eligible() && permitsSound()) {
+        write(lastSoundKey, String(claimedAt));
+        playSound();
+      }
+    } catch {}
   }
 
   function renderSettings() {
@@ -210,8 +288,18 @@
     const sound = root.querySelector('[data-notification-sound]');
     banners.checked = wantsBanner();
     banners.disabled = pending || !canBanner();
-    sound.checked = read(soundKey) === '1';
+    sound.checked = soundEnabled();
     sound.disabled = !Audio;
+    for (const scope of root.querySelectorAll('[data-notification-sound-scope]')) {
+      scope.checked = soundScopeEnabled(scope.dataset.notificationSoundScope);
+      scope.disabled = !Audio;
+    }
+    const rooms = root.querySelector('[data-notification-room-sound]');
+    const roomMode = roomSound();
+    if (rooms.value !== roomMode) {
+      rooms.value = roomMode;
+      rooms.dispatchEvent(new Event('input', {bubbles: true}));
+    }
     root.querySelector('[data-notification-preview]').disabled = !Audio;
     root.querySelector('[role="status"]').textContent =
       root.dataset[notice] || (!canBanner() ? root.dataset.unavailable :
@@ -239,8 +327,19 @@
       return;
     }
     if (control.matches('[data-notification-sound]')) {
-      notice = write(soundKey, desired ? '1' : null) ? '' : 'soundUnavailable';
+      notice = write(soundKey, desired ? '1' : '0') ? '' : 'soundUnavailable';
       if (desired) void unlockSound();
+      renderSettings();
+      return;
+    }
+    if (control.matches('[data-notification-room-sound]')) {
+      if (!roomSoundValues.includes(control.value)) return;
+      notice = write(roomSoundKey, control.value) ? '' : 'soundUnavailable';
+      renderSettings();
+      return;
+    }
+    if (control.matches('[data-notification-sound-scope]')) {
+      notice = write(soundScopeKey(control.dataset.notificationSoundScope), desired ? '1' : '0') ? '' : 'soundUnavailable';
       renderSettings();
       return;
     }
@@ -280,12 +379,12 @@
         else notice = 'soundUnavailable';
         renderSettings();
       });
-    } else if (event.isTrusted && read(soundKey) === '1') {
+    } else if (event.isTrusted && soundEnabled()) {
       void unlockSound();
     }
   });
   document.addEventListener('keydown', event => {
-    if (event.isTrusted && read(soundKey) === '1') void unlockSound();
+    if (event.isTrusted && soundEnabled()) void unlockSound();
   });
   for (const name of ['oie:route-ready', 'oie:info-content', 'visibilitychange']) {
     document.addEventListener(name, sync);
