@@ -1,11 +1,11 @@
 # Oiê Helm chart
 
-See [Run on Kubernetes with Helm](https://github.com/araihu/oie/blob/helm-v0.2.1/docs/installation.md#run-on-kubernetes-with-helm)
+See [Run on Kubernetes with Helm](https://github.com/araihu/oie/blob/helm-v0.2.2/docs/installation.md#run-on-kubernetes-with-helm)
 for installation and access via `kubectl port-forward`.
 
-Chart releases use their own version. Chart `0.2.1` defaults to the Oiê image
+Chart releases use their own version. Chart `0.2.2` defaults to the Oiê image
 `v0.0.1-rc.21`. Download the packaged chart and its checksum from
-[Helm chart 0.2.1](https://github.com/araihu/oie/releases/tag/helm-v0.2.1).
+[Helm chart 0.2.2](https://github.com/araihu/oie/releases/tag/helm-v0.2.2).
 
 | Setting | Default | Use |
 | --- | --- | --- |
@@ -81,13 +81,14 @@ The timeout applies to all paths on the route. With `httpRoute.timeouts`
 omitted or empty, the controller uses its default timeout behavior.
 You can also set `httpRoute.timeouts.backendRequest` to control the timeout
 of an individual request from the Gateway to Oiê. Use Gateway API duration
-strings such as `"30s"` and a controller that supports the fields you set.
+strings such as `"30s"`, Gateway API CRDs from v1.2.0 or later, and a
+controller that supports the fields you set.
 See [HTTPRoute timeouts](https://gateway-api.sigs.k8s.io/reference/api-types/httproute/#timeouts-optional).
 
 ## Publishing a chart version
 
 Publish the application image first. Set `appVersion` in `Chart.yaml` to
 the published image tag and increment `version` for the chart release. Push
-a tag of the form `helm-v0.2.1` matching `version`. The Helm release
+a tag of the form `helm-v<version>` matching `version`. The Helm release
 workflow checks that the default image exists for Linux amd64 and arm64,
 then publishes the chart archive and its checksum as GitHub release assets.
