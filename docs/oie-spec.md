@@ -41,6 +41,14 @@ Ship one Go executable supporting native engine, presentation/BFF, and optional 
 
 Each device/UI selects **one engine at a time**, supporting multiple accounts within that engine. The alpha UI does not simultaneously aggregate multiple independent engines. An engine's replicated history can still contain data obtained from other synced engines.
 
+Desktop **Settings → General → Engine** selects **Local** by
+default or **Remote** with an HTTP(S) base address. Save the selection per
+desktop profile. Check the remote engine before changing the active selection.
+Local mode runs the embedded engine and resumes its SQLite/media profile.
+Remote mode runs the desktop client against the configured engine, with the
+embedded engine stopped. Remote engine authentication via OAuth/OIDC is tracked
+in B18.
+
 Use an embedded engine initially, with no separate daemon required. In a future native window host, closing the window keeps the engine running; explicit quit stops it. In the browser-first alpha, closing a tab does not stop the serving Go process. Closing a hosted UI does not terminate its shared remote engine. Wails is now selected for the first standalone desktop alpha, as described below; this supersedes the earlier browser-only release boundary.
 
 Ordinary engine restart/reconnect resumes eligible pending sends automatically. Backup recovery has a separate review rule in section 13.
@@ -1022,7 +1030,7 @@ included in v0.0.1-rc.1. IDs remain stable and do not imply order.
 | **B15** | Web Push and notifications while the app is closed. |
 | **B16** | XMPP end-to-end encryption, including keys/trust, encrypted history, and the hosted-engine endpoint model. |
 | **B17** | Multi-user hosted instances with isolated accounts/history/schedules/outbox. |
-| **B18** | Built-in Oiê application authentication. No external authentication provider is selected in its place. |
+| **B18** | Built-in Oiê application authentication, including OAuth 2.0 / OpenID Connect (OIDC) for remote engines and their desktop clients. Provider selection and token lifecycle are open. |
 | **B19** | Sticker selection, packs and sending. |
 | **B20** | GIF search, selection and sending. Existing ordinary media behavior does not imply a GIF discovery service. |
 | **B21** | Returning to Conversations from another navigation section restores the previously selected conversation in the same engine/account context, if it still exists and is accessible. |

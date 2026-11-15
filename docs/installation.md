@@ -518,7 +518,7 @@ still offer FFmpeg for their server-generated thumbnails.
 The profile contains the engine's database, credentials and retained media.
 It stays separate from the executable. `--data-dir /absolute/path/to/profile`
 selects another profile. Do not copy a running database to move a profile;
-quit first. For an existing hosted engine, see `--engine-url` in
+quit first. For an existing hosted engine, see **Settings → General → Engine** in
 [desktop runtime options](desktop.md#runtime-options); this is not device sync.
 
 Updates are manual. Quit the app, choose a published version and run the saved

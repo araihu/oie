@@ -23,3 +23,45 @@ window.OieRuntime.register('actions', life => {
   if(item&&!item.disabled)item.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
  },true);
 });
+
+(() => {
+  'use strict';
+
+  document.addEventListener('submit', async event => {
+    const form = event.target;
+    if (form.id !== 'engine-mode-form') return;
+    event.preventDefault();
+    if (form.getAttribute('aria-busy') === 'true') return;
+
+    const address = form.elements.url;
+    const modes = [...form.querySelectorAll('input[name=mode]')];
+    const button = form.querySelector('button[type=submit]');
+    const status = form.querySelector('[data-engine-connecting]');
+    const body = new URLSearchParams(new FormData(form));
+    form.setAttribute('aria-busy', 'true');
+    button.setAttribute('aria-disabled', 'true');
+    address.readOnly = true;
+    for (const mode of modes) mode.disabled = true;
+    status.textContent = status.dataset.engineConnecting;
+    let message = form.dataset.failed;
+    try {
+      const response = await fetch(form.action, {
+        method: 'POST', body, headers: {Accept: 'application/json'},
+      });
+      if (response.status === 204) {
+        window.OieEvents?.stop();
+        location.replace('/');
+        return;
+      }
+      const error = await response.text();
+      if (error && response.headers.get('Content-Type')?.startsWith('text/plain')) message = error.trim();
+    } catch {}
+    if (!form.isConnected) return;
+    button.removeAttribute('aria-disabled');
+    address.readOnly = false;
+    for (const mode of modes) mode.disabled = false;
+    form.removeAttribute('aria-busy');
+    status.textContent = '';
+    window.dispatchEvent(new CustomEvent('notify', {detail: {kind: 'toast', tone: 'danger', message}}));
+  });
+})();

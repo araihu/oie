@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie browser presentation API
-  version: 0.5.0
+  version: 0.6.0
   description: Browser-only presentation operations. Engine data and protocol operations remain in the engine API.
   contact:
     name: Arai Hû
@@ -73,6 +73,55 @@ paths:
           description: The requested page or conversation is unavailable.
         '503':
           description: The requested presentation data is unavailable.
+  /ui/engine-mode:
+    post:
+      tags: [Settings]
+      operationId: setDesktopEngineMode
+      summary: Select the engine for the desktop profile
+      description: Available in the native desktop application. A remote endpoint is checked before changing the engine for the profile.
+      requestBody:
+        description: Selected mode and the tokens rendered in the desktop settings form.
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            example:
+              mode: remote
+              url: http://127.0.0.1:18084
+              selection: UF76TLHJVRHO4HS4UBAEORQLAI
+              csrf: ohR8kA1WBvkfL2EluINHTC0hKgDTM2zwJQwbjUEzrvI
+            schema:
+              type: object
+              required: [mode, selection, csrf]
+              properties:
+                mode:
+                  type: string
+                  enum: [local, remote]
+                  example: remote
+                url:
+                  type: string
+                  format: uri
+                  description: Required in remote mode. Accepts HTTP or HTTPS base URLs.
+                  maxLength: 2048
+                  example: http://127.0.0.1:18084
+                selection:
+                  type: string
+                  description: Current selection token from the settings form.
+                  example: UF76TLHJVRHO4HS4UBAEORQLAI
+                  minLength: 1
+                csrf:
+                  type: string
+                  description: CSRF token from the settings form.
+                  example: ohR8kA1WBvkfL2EluINHTC0hKgDTM2zwJQwbjUEzrvI
+                  minLength: 1
+      responses:
+        '204': {description: The selected engine is active.}
+        '303': {description: The selected engine is active. Redirects a native form submission to the workspace.}
+        '400': {description: Invalid settings or engine address.}
+        '403': {description: CSRF verification failed.}
+        '404': {description: Engine selection is unavailable on this host.}
+        '409': {description: The engine selection has changed.}
+        '500': {description: The preference could not be saved.}
+        '503': {description: The selected engine is unavailable.}
   /ui/refresh:
     get:
       tags: [Conversations]

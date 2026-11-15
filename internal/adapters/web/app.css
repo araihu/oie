@@ -170,6 +170,10 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 #settings-language [data-language-flag]::before{content:attr(data-language-flag) / "";margin-inline-end:.5em}
 #settings-language:has([data-value="en"][aria-selected="true"]) [data-combobox-trigger-label-outer]::before{content:"🇺🇸" / "";margin-inline-end:.5em}
 #settings-language:has([data-value="pt-BR"][aria-selected="true"]) [data-combobox-trigger-label-outer]::before{content:"🇧🇷" / "";margin-inline-end:.5em}
+.oie-engine-mode:not(:has(#engine-mode-remote:checked)) [data-engine-address]{display:none}
+.oie-engine-mode-submit{display:inline-grid}
+.oie-engine-mode-submit>span{grid-area:1/1}
+.oie-engine-mode:not([aria-busy=true]) [data-engine-save-pending],.oie-engine-mode[aria-busy=true] [data-engine-save-label]{visibility:hidden}
 .oie-settings-section h2{margin:8px 0 0;font-weight:650;font-size:14px}
 .oie-settings-section p,.oie-settings>.oie-settings-note{font-size:13px;line-height:1.6;color:var(--oie-muted)}
 .oie-settings-links{display:flex;gap:15px;flex-wrap:wrap}.oie-settings-note{border-top:1px solid var(--oie-border);padding-top:16px}

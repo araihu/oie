@@ -34,6 +34,7 @@ type Config struct {
 	DevReload                                    bool
 	PrivateAPI                                   bool
 	DataOnly                                     bool
+	engineOnly                                   bool
 }
 
 // Server owns one engine, optional protocol sessions, the BFF, and their shared
@@ -119,22 +120,16 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 		})
 		engineURL = host.url
 		if cfg.PrivateAPI {
-			options = append(options, web.WithEngineRequestEditor(func(_ context.Context, r *http.Request) error {
-				r.Header.Set(capabilityHeader, host.capability)
-				return nil
-			}))
+			options = append(options, web.WithEngineRequestEditor(host.editEngineRequest))
 		}
 	}
 	host.presentation = host.track(http.NotFoundHandler())
-	if !cfg.DataOnly {
+	if !cfg.DataOnly && !cfg.engineOnly {
 		ui, err := web.New(engineURL, options...)
 		if err != nil {
 			return nil, err
 		}
-		presentation := http.NewServeMux()
-		presentation.Handle("GET /assets/", assets.Handler())
-		presentation.HandleFunc("/api/", http.NotFound)
-		presentation.Handle("/", ui)
+		presentation := presentationHandler(ui)
 		host.presentation = host.track(presentation)
 		apiMux.Handle("/", presentation)
 	}
@@ -147,6 +142,19 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 	go func() { served <- host.server.Serve(listener) }()
 	go host.supervise(served, engine)
 	return host, nil
+}
+
+func presentationHandler(ui http.Handler) http.Handler {
+	presentation := http.NewServeMux()
+	presentation.Handle("GET /assets/", assets.Handler())
+	presentation.HandleFunc("/api/", http.NotFound)
+	presentation.Handle("/", ui)
+	return presentation
+}
+
+func (s *Server) editEngineRequest(_ context.Context, r *http.Request) error {
+	r.Header.Set(capabilityHeader, s.capability)
+	return nil
 }
 
 func defaults(cfg Config) Config {

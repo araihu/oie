@@ -263,6 +263,19 @@ def native(*args, **kwargs):
         app.close()
 
 
+def select_engine(app, mode, identity, address=""):
+    app.wait(lambda: app.js("return !!window.OieRuntime?.generation;"), "settings runtime")
+    app.js("window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'settings'}}));return true;")
+    app.wait(lambda: app.js("return !!document.querySelector('#engine-mode-form')?.offsetWidth;"), "engine settings")
+    app.js("""const form = document.querySelector('#engine-mode-form');
+        form.querySelector('#engine-mode-' + %s).click();
+        form.elements.url.value = %s;
+        form.requestSubmit(form.querySelector('button[type=submit]'));
+        return true;""" % (json.dumps(mode), json.dumps(address)))
+    app.wait(lambda: app.js("return document.querySelector('#oie-app')?.dataset.engineId;") == identity,
+             "switched to " + mode + " engine")
+
+
 def linux_dialog_diagnostics(stage, app, target):
     """Capture only this test's private Xvfb, including native GTK windows."""
     if os.environ.get("OIE_DESKTOP_PRIVATE_DISPLAY") != "1":
@@ -352,6 +365,36 @@ def main():
     try:
         with tempfile.TemporaryDirectory(prefix="oie-desktop-smoke-") as temporary:
             root = Path(temporary)
+            # Verify the actual embedded engine, fresh and never connected to XMPP.
+            local_profile = root / "embedded-profile"
+            with native(local_profile, "embedded-first") as app:
+                engine_id = app.js("return document.querySelector('#oie-app').dataset.engineId;")
+                require(engine_id and engine_id != ENGINE, "embedded engine was not started")
+                app.navigate("open=accounts&accountPage=add")
+                app.wait(lambda: app.js("return !!document.querySelector('#register-account-form');"), "register form")
+                result = app.js("const f=document.querySelector('#register-account-form'),values=new URLSearchParams(new FormData(f));values.set('address','offline@example.test');values.set('label','Native offline fixture');const r=await fetch(f.action,{method:'POST',body:values,headers:{Accept:'application/json'}});return {status:r.status,body:await r.json()};")
+                require(result["status"] == 200 and result["body"]["ok"], "embedded account registration: " + str(result))
+                app.tool("window_control", {"window": "oie-main", "action": "close"})
+                app.wait(lambda: not app.tool("app_info")["windows"][0]["visible"], "embedded window hides")
+                require(app.js("const r=await fetch('/');return (await r.text()).includes('Native offline fixture');"), "hidden embedded engine stopped serving")
+                app.tool("window_control", {"window": "oie-main", "action": "show"})
+                select_engine(app, "remote", ENGINE, engine)
+                app.quit()
+            with native(local_profile, "engine-mode-restart") as app:
+                require(app.js("return document.querySelector('#oie-app').dataset.engineId;") == ENGINE,
+                        "saved remote selection was ignored on restart without a flag")
+                require(app.js("return document.querySelector('#engine-mode-remote').checked;"),
+                        "saved remote selection was not shown in Settings")
+                select_engine(app, "local", engine_id)
+                require(app.js("return document.body.textContent.includes('Native offline fixture');"),
+                        "switching back lost the local account")
+                app.quit()
+                findings.append("desktop Settings switches engines in place, remembers Remote after Quit and restores the existing Local profile")
+            with native(local_profile, "embedded-restart") as app:
+                require(app.js("return document.querySelector('#oie-app').dataset.engineId;") == engine_id, "embedded engine identity changed after restart")
+                require(app.js("return document.body.textContent.includes('Native offline fixture');"), "embedded SQLite account did not survive Quit")
+                app.quit()
+                findings.append("embedded engine keeps serving while hidden; explicit Quit closes cleanly and SQLite identity/account survive restart")
             profile = root / "remote-profile"
             with native(profile, "remote-first", engine) as app:
                 origin = app.js("return {href:location.href,origin:location.origin,url:new URL('/ui/events',location.origin).href};")
@@ -389,8 +432,17 @@ def main():
                     linux_save_dialog(app, root / "saved-native-fixture.txt")
                     linux_save_dialog(app, root / "cancelled-native-fixture.txt", cancel=True)
                     findings.append("actual GTK Save chooser writes exact original bytes; Cancel creates no file")
-                    app.wait(lambda: app.js("""return document.body.hasAttribute('data-oie-live-ready') &&
-                        document.querySelector('[data-attach-menu]')?.disabled === false;"""), "live attachment composer")
+                    try:
+                        app.wait(lambda: app.js("""return document.body.hasAttribute('data-oie-live-ready') &&
+                            document.querySelector('[data-attach-menu]')?.disabled === false;"""), "live attachment composer")
+                    except AssertionError:
+                        state = app.js("""const form = document.querySelector('#send-message-form');
+                            const attach = form?.querySelector('[data-attach-menu]');
+                            return {ready: document.body.hasAttribute('data-oie-live-ready'),
+                                disabled: attach?.disabled, allowed: form?.dataset.attachmentAllowed,
+                                schedule: !!document.querySelector('[data-schedule-dialog]'),
+                                runtime: window.OieRuntime?.generation, query: location.search};""")
+                        raise AssertionError("live attachment composer: " + str(state))
                     draft_attachment = {
                         "id": STAGED, "fileName": STAGED_NAME, "size": len(STAGED_BYTES),
                         "sha256": hashlib.sha256(STAGED_BYTES).hexdigest(), "mediaType": "text/plain",
@@ -435,25 +487,6 @@ def main():
                 app.js("localStorage.removeItem('oie.native.smoke');return true;")
                 app.quit()
                 findings.append("exact device language/theme, WebView storage and draft survive Quit; a fresh CSRF token sends the restored draft and the old token is rejected")
-            # Verify the actual embedded engine, fresh and never connected to XMPP.
-            local_profile = root / "embedded-profile"
-            with native(local_profile, "embedded-first") as app:
-                engine_id = app.js("return document.querySelector('#oie-app').dataset.engineId;")
-                require(engine_id and engine_id != ENGINE, "embedded engine was not started")
-                app.navigate("open=accounts&accountPage=add")
-                app.wait(lambda: app.js("return !!document.querySelector('#register-account-form');"), "register form")
-                result = app.js("const f=document.querySelector('#register-account-form'),values=new URLSearchParams(new FormData(f));values.set('address','offline@example.test');values.set('label','Native offline fixture');const r=await fetch(f.action,{method:'POST',body:values,headers:{Accept:'application/json'}});return {status:r.status,body:await r.json()};")
-                require(result["status"] == 200 and result["body"]["ok"], "embedded account registration: " + str(result))
-                app.tool("window_control", {"window": "oie-main", "action": "close"})
-                app.wait(lambda: not app.tool("app_info")["windows"][0]["visible"], "embedded window hides")
-                require(app.js("const r=await fetch('/');return (await r.text()).includes('Native offline fixture');"), "hidden embedded engine stopped serving")
-                app.tool("window_control", {"window": "oie-main", "action": "show"})
-                app.quit()
-            with native(local_profile, "embedded-restart") as app:
-                require(app.js("return document.querySelector('#oie-app').dataset.engineId;") == engine_id, "embedded engine identity changed after restart")
-                require(app.js("return document.body.textContent.includes('Native offline fixture');"), "embedded SQLite account did not survive Quit")
-                app.quit()
-                findings.append("embedded engine keeps serving while hidden; explicit Quit closes cleanly and SQLite identity/account survive restart")
         report.write_text(json.dumps({"platform": sys.platform, "status": "passed", "checks": findings}, indent=2) + "\n")
         for finding in findings:
             print("PASS:", finding, flush=True)

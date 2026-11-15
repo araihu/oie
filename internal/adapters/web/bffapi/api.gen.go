@@ -171,6 +171,24 @@ func (e RenderWorkspaceParamsXOieFragment) Valid() bool {
 	}
 }
 
+// Defines values for SetDesktopEngineModeFormdataBodyMode.
+const (
+	Local  SetDesktopEngineModeFormdataBodyMode = "local"
+	Remote SetDesktopEngineModeFormdataBodyMode = "remote"
+)
+
+// Valid indicates whether the value is a known member of the SetDesktopEngineModeFormdataBodyMode enum.
+func (e SetDesktopEngineModeFormdataBodyMode) Valid() bool {
+	switch e {
+	case Local:
+		return true
+	case Remote:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ResetBrowserEngineDataFormdataBodyConfirmation.
 const (
 	Delete ResetBrowserEngineDataFormdataBodyConfirmation = "delete"
@@ -892,6 +910,30 @@ type GetBrowserVideoThumbnailParams struct {
 	XOieEngineID *openapi_types.UUID `json:"X-Oie-Engine-ID,omitempty"`
 }
 
+// SetDesktopEngineModeFormdataBody defines parameters for SetDesktopEngineMode.
+type SetDesktopEngineModeFormdataBody struct {
+	// Csrf CSRF token from the settings form.
+	//
+	// Example: ohR8kA1WBvkfL2EluINHTC0hKgDTM2zwJQwbjUEzrvI
+	Csrf string `form:"csrf" json:"csrf"`
+
+	// Mode Example: remote
+	Mode SetDesktopEngineModeFormdataBodyMode `form:"mode" json:"mode"`
+
+	// Selection Current selection token from the settings form.
+	//
+	// Example: UF76TLHJVRHO4HS4UBAEORQLAI
+	Selection string `form:"selection" json:"selection"`
+
+	// Url Required in remote mode. Accepts HTTP or HTTPS base URLs.
+	//
+	// Example: http://127.0.0.1:18084
+	Url *string `form:"url,omitempty" json:"url,omitempty"`
+}
+
+// SetDesktopEngineModeFormdataBodyMode defines parameters for SetDesktopEngineMode.
+type SetDesktopEngineModeFormdataBodyMode string
+
 // ResetBrowserEngineDataFormdataBody defines parameters for ResetBrowserEngineData.
 type ResetBrowserEngineDataFormdataBody struct {
 	// Confirmation Example: delete
@@ -1142,6 +1184,9 @@ type UpdateBrowserConversationPreferencesFormdataRequestBody = ConversationPrefe
 
 // RenderDocumentMarkdownJSONRequestBody defines body for RenderDocumentMarkdown for application/json ContentType.
 type RenderDocumentMarkdownJSONRequestBody = MarkdownSource
+
+// SetDesktopEngineModeFormdataRequestBody defines body for SetDesktopEngineMode for application/x-www-form-urlencoded ContentType.
+type SetDesktopEngineModeFormdataRequestBody SetDesktopEngineModeFormdataBody
 
 // ResetBrowserEngineDataFormdataRequestBody defines body for ResetBrowserEngineData for application/x-www-form-urlencoded ContentType.
 type ResetBrowserEngineDataFormdataRequestBody ResetBrowserEngineDataFormdataBody

@@ -36,6 +36,9 @@ templ generalSettings(v view) {
 		@appearanceSettings(v)
 		@languageSettings(v)
 		@timeZoneSettings(v)
+		if v.EngineMode != nil {
+			@engineModeSettings(v)
+		}
 		if v.Preview {
 			<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
 		}

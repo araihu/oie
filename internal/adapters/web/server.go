@@ -72,11 +72,11 @@ type Server struct {
 	archiveClient *engineapi.ClientWithResponses
 	streamClient  *engineapi.Client
 	catalogs      map[string]copy
+	engineMode    *engineMode
 }
 
 func New(engineURL string, options ...Option) (*Server, error) {
-	u, err := url.Parse(engineURL)
-	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+	if !validEngineURL(engineURL) {
 		return nil, &url.Error{Op: "configure engine", URL: "", Err: errInvalidURL{}}
 	}
 	catalogs, err := loadCatalogs()
@@ -153,6 +153,7 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	EngineMode     *engineMode
 	StarredContent starredContent
 	PreviewScope   string
 
@@ -233,6 +234,9 @@ type view struct {
 }
 
 type copy struct {
+	EngineMode, EngineModeLocal, EngineModeRemote, EngineModeAddress, EngineModeSave, EngineModeConnecting string
+	EngineModeInvalid, EngineModeUnavailable, EngineModeSaveFailed, EngineModeChanged                      string
+
 	Forward, ForwardTitle, ForwardChooseRooms, ForwardSearchRooms, ForwardNoRooms, ForwardNoRoomsFound, ForwardLoading, ForwardSending string
 	ForwardAccepted, ForwardComplete, ForwardFailed, ForwardUnconfirmed, ForwardChanged                                                string
 
@@ -704,6 +708,10 @@ var inboxCacheScript []byte
 var roomArchiveScript []byte
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/ui/engine-mode" {
+		s.setEngineMode(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/messages/forward" && r.Method == http.MethodGet {
 		s.prepareForward(w, r)
 		return
@@ -928,6 +936,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) baseView(r *http.Request) view {
 	v := view{DevBuildID: s.devBuildID, Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system"), Avatars: map[avatarIdentity]string{}, Connections: map[string]connectionView{}, Histories: map[string]engineapi.HistoryStatus{}, Values: map[string]string{}, MessagePreviews: map[string][]engineapi.MessagePreview{}}
 	v.Text = s.catalogs[v.Locale]
+	v.EngineMode = s.engineMode
 	v.configureWorkspace(r)
 	v.Values["address"] = r.URL.Query().Get("newChatAddress")
 	v.Values["inviteRoom"] = roomFormAddress(r.URL.Query().Get("room"))

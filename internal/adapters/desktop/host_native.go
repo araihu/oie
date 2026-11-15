@@ -7,6 +7,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -32,35 +33,59 @@ var nativeJS string
 type runtimeService struct {
 	config   Config
 	outer    context.Context
-	server   atomic.Pointer[apphost.Server]
+	server   atomic.Pointer[apphost.Desktop]
 	app      *application.App
 	cookies  *nativeCookies
 	labels   labels
 	dialogMu sync.Mutex
 }
 
+// An explicit launch argument overrides the saved desktop preference.
+func desktopEngineURL(config Config) (string, error) {
+	if config.EngineURL != "" {
+		return config.EngineURL, nil
+	}
+	path := engineModePath(config.DataDir)
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+		return "", fmt.Errorf("desktop engine preference must be a private regular file: %s", path)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	var address string
+	if err := json.Unmarshal(data, &address); err != nil {
+		return "", fmt.Errorf("read desktop engine preference: %w", err)
+	}
+	return address, nil
+}
+
+func engineModePath(dataDir string) string {
+	return filepath.Join(dataDir, "webview", "engine.json")
+}
+
 func (s *runtimeService) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	if err := s.outer.Err(); err != nil {
 		return err
 	}
-	role := "local"
-	if s.config.EngineURL != "" {
-		role = "bff"
+	engineURL, err := desktopEngineURL(s.config)
+	if err != nil {
+		return err
 	}
-	server, err := apphost.Start(ctx, apphost.Config{Role: role, Listen: "127.0.0.1:0", DataDir: s.config.DataDir, EngineURL: s.config.EngineURL, XMPPCAFile: s.config.XMPPCAFile, PrivateAPI: true})
+	server, err := apphost.StartDesktop(ctx, s.config.DataDir, s.config.XMPPCAFile, engineURL, func(url string) error {
+		return writePrivateJSON(engineModePath(s.config.DataDir), url)
+	})
 	if err != nil {
 		return err
 	}
 	s.server.Store(server)
-	go func() {
-		err := <-server.Done()
-		if ctx.Err() == nil {
-			if err != nil && !errors.Is(err, context.Canceled) {
-				slog.Error("oie desktop runtime stopped", "error", err)
-			}
-			s.app.Quit()
-		}
-	}()
 	go func() {
 		select {
 		case <-s.outer.Done():
@@ -93,7 +118,7 @@ func (s *runtimeService) SaveFile(ctx context.Context, address, filename string)
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
-	return nativeSaveAction(ctx, s.cookies.handler(server.Handler()), address, filename, func(name string) (string, error) {
+	return nativeSaveAction(ctx, s.cookies.handler(server), address, filename, func(name string) (string, error) {
 		dialog := s.app.Dialog.SaveFile()
 		dialog.SetOptions(&application.SaveFileDialogOptions{Title: s.labels.SaveFile, Filename: name, CanCreateDirectories: true, AllowOtherFileTypes: true, Window: s.app.Window.Current()})
 		return dialog.PromptForSingleSelection()
@@ -106,7 +131,7 @@ func (s *runtimeService) serve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusServiceUnavailable)
 		return
 	}
-	server.Handler().ServeHTTP(w, r)
+	server.ServeHTTP(w, r)
 }
 
 // Run keeps one embedded runtime alive when its window is hidden. Explicit Quit

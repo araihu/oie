@@ -77,7 +77,7 @@ func (s *runtimeService) AttachFiles(ctx context.Context, engineID, conversation
 	}
 
 	result := attachmentSelection{Files: make([]engineapi.StagedAttachment, 0, len(paths))}
-	handler := s.cookies.handler(server.Handler())
+	handler := s.cookies.handler(server)
 	for _, path := range paths {
 		file, err := stageNativeAttachment(ctx, handler, path, engineID, conversationID, csrf)
 		if err != nil {

@@ -91,9 +91,32 @@ bin/oie-desktop --engine-url http://127.0.0.1:18084
 bin/oie-desktop --lang pt-BR
 ```
 
-`--engine-url` uses that engine through the same BFF HTTP contract and does not
-open a local engine database. It does not implement device sync. The desktop
-host does not inherit the live browser preview's data directory.
+`--engine-url` overrides the saved engine for that launch. The desktop host
+uses its own data directory.
+
+### Select the engine
+
+Open **Settings → General → Engine**. **Local** is the default and runs the
+engine on this device. To use an existing engine, choose **Remote**, enter its
+HTTP(S) base address and select **Save**. Oiê checks the engine and opens its
+conversations if it responds. The selection persists for this desktop profile.
+If the remote address stops responding, open the same settings to update it
+or return to **Local**.
+
+Remote mode leaves your local accounts and history on this device. The hosted
+engine owns its accounts and history and keeps running when you switch back or
+quit Oiê. Each engine keeps its own drafts on the desktop. The remote API
+currently has open access, so keep it on a trusted private network or use a
+private tunnel. [OAuth/OIDC support is in B18.](oie-spec.md#16-backlog-and-later-runtime-options)
+
+For an engine listening on its server's loopback port, forward the port over
+SSH.
+
+```sh
+ssh -N -L 127.0.0.1:18084:127.0.0.1:8080 usuario@servidor
+```
+
+While the tunnel is open, use `http://127.0.0.1:18084` as the engine address.
 
 ## Data and lifecycle
 
@@ -101,7 +124,7 @@ The default data directory is `~/Library/Application Support/Oiê` on macOS.
 On Linux it is `$XDG_DATA_HOME/oie` when that variable is absolute, otherwise
 `~/.local/share/oie`. Moving or replacing the executable leaves this data intact.
 
-Closing the window hides it. The engine stays alive. The tray menu, macOS dock
+Closing the window hides it. In Local mode the engine stays alive. The tray menu, macOS dock
 reopen and another invocation for the same profile show the existing window.
 Quit from the menu or `Cmd/Ctrl+Q` stops the engine and closes SQLite. A second
 invocation for the same canonical data directory does not start another engine.
