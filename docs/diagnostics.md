@@ -1,8 +1,9 @@
 # Diagnostics
 
 Open **Settings → Diagnostics**, select a time range, and use **Refresh** to
-read the latest records. **Copy** and **Download** export the exact snapshot
-on screen. Download saves a single `oie-diagnostics.jsonl` file.
+read the latest records. Select **Copy** to copy the records on screen or open
+the menu next to **Copy** and select **Download** to save them as
+`oie-diagnostics.jsonl`.
 The view shows up to 500 records. Use the stored files for a longer export.
 The browser fetches the viewer script and records when the drawer opens.
 

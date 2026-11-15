@@ -72,8 +72,12 @@ async function run(browser, mode) {
     await settings.getByRole('button', { name: pt ? 'Diagnóstico' : 'Diagnostics', exact: true }).click();
     const viewer = page.getByRole('dialog', { name: pt ? 'Diagnóstico' : 'Diagnostics', exact: true });
     const records = viewer.locator('[data-diagnostics-records]');
-    const copy = viewer.getByRole('button', { name: pt ? 'Copiar' : 'Copy', exact: true });
-    const download = viewer.getByRole('button', { name: pt ? 'Baixar' : 'Download', exact: true });
+    const menuLabel = pt ? 'Mais opções' : 'More options';
+    const actions = viewer.getByRole('group', { name: menuLabel, exact: true });
+    const copy = actions.getByRole('button', { name: pt ? 'Copiar' : 'Copy', exact: true });
+    const more = actions.getByRole('button', { name: menuLabel, exact: true });
+    const download = viewer.getByRole('menuitem', { name: pt ? 'Baixar' : 'Download', exact: true });
+    const refresh = viewer.getByRole('button', { name: pt ? 'Atualizar' : 'Refresh', exact: true });
     await viewer.waitFor();
     if (!pt) {
       const input = viewer.getByLabel('Diagnostics access key', { exact: true });
@@ -85,6 +89,7 @@ async function run(browser, mode) {
       ]);
       assert.equal(await records.textContent(), '');
       assert.equal(await copy.isDisabled(), true);
+      assert.equal(await more.isDisabled(), true);
       await input.fill(key);
       await input.press('Enter');
     }
@@ -97,13 +102,24 @@ async function run(browser, mode) {
     assert(await records.evaluate(node => node.scrollHeight > node.clientHeight));
     assert(snapshot.length <= 256000);
     assert(snapshot.endsWith('\n'));
+    for (const action of [refresh, copy, more]) assert.equal(await action.locator('svg[aria-hidden="true"]').count(), 1);
     await copy.click();
     assert.equal(await page.evaluate(() => navigator.clipboard.readText()), snapshot);
+    assert.equal(await download.isVisible(), false);
+    await more.press('Enter');
+    await download.waitFor();
+    assert.equal(await download.locator('svg[aria-hidden="true"]').count(), 1);
+    await page.waitForFunction(() => document.activeElement.id === 'diagnostics-download');
     const downloaded = page.waitForEvent('download');
-    await download.click();
+    await download.press('Enter');
     const file = await downloaded;
     assert.equal(file.suggestedFilename(), 'oie-diagnostics.jsonl');
     assert.equal(await fs.readFile(await file.path(), 'utf8'), snapshot);
+    await download.waitFor({ state: 'hidden' });
+    await page.waitForFunction(() => {
+      const trigger = document.querySelector('#diagnostics-export-menu button');
+      return document.activeElement === trigger && trigger.getAttribute('aria-expanded') === 'false';
+    });
 
     if (pt) {
       console.log(`local first open to usable log ${firstReady} ms, ${Buffer.byteLength(snapshot)} bytes`);
@@ -136,7 +152,7 @@ async function run(browser, mode) {
       await waiting;
       await page.evaluate(async () => {
         const records = document.querySelector('[data-diagnostics-records]');
-        const copy = document.querySelector('[data-diagnostics-copy]');
+        const copy = document.querySelector('#diagnostics-copy');
         const start = [records.getBoundingClientRect(), copy.getBoundingClientRect()];
         for (let i = 0; i < 5; i++) {
           await new Promise(resolve => requestAnimationFrame(resolve));
@@ -148,12 +164,14 @@ async function run(browser, mode) {
       assert.deepEqual(await records.boundingBox(), firstRect);
       assert.deepEqual(await copy.boundingBox(), copyRect);
       assert(await copy.isDisabled());
+      assert(await more.isDisabled());
       await selectRange('Últimos 7 dias');
       await viewer.getByText('Não foi possível carregar o registro.', { exact: true }).waitFor();
       release();
       assert.equal(await records.textContent(), '');
+      assert(await more.isDisabled());
       await page.unroute('**' + logPath + '?*', intercept);
-      await viewer.getByRole('button', { name: 'Atualizar', exact: true }).click();
+      await refresh.click();
       await page.waitForFunction(() => document.querySelector('[data-diagnostics-records]').textContent.includes('"event":"ready"'));
       assert.equal(await viewer.locator('[data-diagnostics-hours]').inputValue(), '168');
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));

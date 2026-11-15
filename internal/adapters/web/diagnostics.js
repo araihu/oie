@@ -11,7 +11,9 @@ export function open() {
   const find = name => panel.querySelector('[data-diagnostics-' + name + ']');
   const status = find('status'), records = find('records'), hours = find('hours');
   const source = find('source'), access = find('access'), keyInput = access.querySelector('input');
-  const refresh = find('refresh'), copy = find('copy'), download = find('download');
+  const refresh = find('refresh'), exportControls = find('export');
+  const copy = exportControls.querySelector('#diagnostics-copy');
+  const download = exportControls.querySelector('#diagnostics-download');
   let request, key = '', snapshot = '';
   active = { panel, close: () => {
     controls.abort();
@@ -25,7 +27,7 @@ export function open() {
     snapshot = text;
     records.textContent = text;
     records.scrollTop = 0;
-    copy.disabled = download.disabled = !text;
+    exportControls.disabled = !text;
   }
 
   async function load() {

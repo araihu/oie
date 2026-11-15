@@ -354,7 +354,11 @@ def linux_save_dialog(app, target, cancel=False, draft=False, diagnostics=None):
     if cancel:
         app.js("window.__nativeSaveResult='pending';window.OieDesktop.saveFile(%s,'native-fixture.txt').then(value=>window.__nativeSaveResult=value).catch(error=>window.__nativeSaveResult=String(error));return true;" % json.dumps(source))
     elif diagnostics is not None:
-        app.js("document.querySelector('[data-diagnostics-download]').click();return true;")
+        app.js("document.querySelector('#diagnostics-export-menu button').click();return true;")
+        app.wait(lambda: app.js("""const item = document.querySelector('#diagnostics-download');
+            return !!item.offsetWidth && getComputedStyle(item).visibility === 'visible';"""),
+            "diagnostics download menu")
+        app.js("document.querySelector('#diagnostics-download').click();return true;")
     elif draft:
         app.js("document.querySelector('[data-file-download]:not([hidden])').click();return true;")
     else:
@@ -428,7 +432,7 @@ def main():
                 snapshot = app.js("return document.querySelector('[data-diagnostics-records]').textContent;")
                 require("offline@example.test" not in snapshot and "Native offline fixture" not in snapshot,
                         "diagnostics contained account data")
-                app.js("document.querySelector('[data-diagnostics-copy]').click();return true;")
+                app.js("document.querySelector('#diagnostics-copy').click();return true;")
                 app.wait(lambda: app.js("""const runtime=await import('/wails/runtime.js');return await runtime.Clipboard.Text();""") == snapshot,
                          "diagnostics native clipboard")
                 if sys.platform == "linux":

@@ -2,7 +2,10 @@ package web
 
 import (
 	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/dropdown"
+	"github.com/araihu/goshtoso/components/icon/heroicons"
 	selectfield "github.com/araihu/goshtoso/components/select"
+	"github.com/araihu/goshtoso/components/splitbutton"
 	"github.com/araihu/goshtoso/components/textinput"
 )
 
@@ -31,9 +34,24 @@ templ diagnosticsSettings(v view) {
 				})
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
-				@button.Button(button.WithType("button"), button.WithAttrs(templ.Attributes{"data-diagnostics-refresh": ""})) { { v.Text.DiagnosticsRefresh } }
-				@button.Button(button.WithType("button"), button.WithAttrs(templ.Attributes{"data-diagnostics-copy": "", "disabled": true})) { { v.Text.DiagnosticsCopy } }
-				@button.Button(button.WithType("button"), button.WithAttrs(templ.Attributes{"data-diagnostics-download": "", "disabled": true})) { { v.Text.DiagnosticsDownload } }
+				@button.Button(button.WithType("button"), button.WithTone(button.ToneAlternate), button.WithAttrs(templ.Attributes{"data-diagnostics-refresh": ""})) {
+					@glyph(heroicons.Icon16SolidArrowPath)
+					<span>{ v.Text.DiagnosticsRefresh }</span>
+				}
+				<fieldset class="min-w-0" data-diagnostics-export disabled>
+					@splitbutton.SplitButton(splitbutton.Config{
+						ID: "diagnostics-export",
+						Primary: splitbutton.Action{
+							ID: "diagnostics-copy", Label: v.Text.DiagnosticsCopy,
+							Icon: glyph(heroicons.Icon16SolidDocumentDuplicate),
+						},
+						MenuLabel: v.Text.More, MenuAlign: dropdown.AlignEnd,
+						Sections: []dropdown.Section{{Items: []dropdown.Item{{
+							ID: "diagnostics-download", Label: v.Text.DiagnosticsDownload,
+							Icon: glyph(heroicons.Icon16SolidArrowDownTray), OnClick: "closeAndFocus()",
+						}}}},
+					})
+				</fieldset>
 			</div>
 			<p role="status" class="oie-diagnostics-status" data-diagnostics-status></p>
 			<div class="oie-diagnostics-content">
@@ -43,7 +61,10 @@ templ diagnosticsSettings(v view) {
 						ID: "diagnostics-key", Label: v.Text.DiagnosticsKey, Type: textinput.TypePassword,
 						MaxLength: 512, Autocomplete: "off",
 					})
-					@button.Button(button.WithType("submit")) { { v.Text.DiagnosticsUnlock } }
+					@button.Button(button.WithType("submit")) {
+						@glyph(heroicons.Icon16SolidLockClosed)
+						<span>{ v.Text.DiagnosticsUnlock }</span>
+					}
 				</form>
 			</div>
 		</section>
