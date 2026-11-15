@@ -102,7 +102,7 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
     await page.evaluate(() => navigator.clipboard.writeText('text '));
     await composer.focus();
     await composer.evaluate(node => node.setSelectionRange(0, 0));
-    await page.keyboard.press('Control+v');
+    await page.keyboard.press('ControlOrMeta+v');
     await until(async () => await composer.inputValue() === 'text ' + original, 'ordinary paste inserts text');
     await composer.fill(original);
     await composer.evaluate(node => node.setSelectionRange(2, 5));
