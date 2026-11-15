@@ -109,6 +109,9 @@ func TestStoreRejectsExpiredKeysAndPersistsOnlyVerifier(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := store.RevokeKey(t.Context(), key); err == nil || strings.Contains(err.Error(), key) {
+		t.Fatal("revocation accepted a secret as its ID or echoed it in an error")
+	}
 	if err := store.update(t.Context(), false, func(s *state) error {
 		if stored := s.Keys[0].Verifier; stored == key || stored != verifier(key) {
 			t.Error("key was not stored as a verifier")

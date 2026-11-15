@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -233,7 +232,7 @@ func (s Store) RevokeKey(ctx context.Context, id string) error {
 	return s.update(ctx, false, func(current *state) error {
 		index := slices.IndexFunc(current.Keys, func(key apiKey) bool { return key.ID == id })
 		if index < 0 {
-			return fmt.Errorf("API key %q does not exist", id)
+			return errors.New("API key ID not found")
 		}
 		current.Keys = slices.Delete(current.Keys, index, index+1)
 		return nil
