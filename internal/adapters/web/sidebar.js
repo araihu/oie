@@ -46,7 +46,7 @@
     const {min, max, share} = range;
     const maxWidth = () => Math.max(min, Math.min(max, Math.floor(window.innerWidth * share)));
     const visibleWidth = () => Math.min(maxWidth(), Math.max(min, Math.round(preferredWidth)));
-    const narrow = matchMedia("(max-width: 720px)");
+    const narrow = matchMedia("(max-width: 720px), (pointer: coarse) and (max-width: 1024px) and (max-height: 600px)");
     let drag;
 
     function updateRange() {

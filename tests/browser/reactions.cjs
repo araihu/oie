@@ -231,6 +231,13 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   source.isOwn=false;
   const touch=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true}),phone=await touch.newPage();phone.on('pageerror',e=>errors.push(e.message));await phone.goto(route('pt-BR','light'));await until(async()=>await phone.evaluate(()=>document.body.dataset.oieLiveReady==='true'),'touch runtime');const text=phone.locator('[data-message-bubble="'+message+'"] [data-rendered-message]').first(),phoneDialog=phone.locator('#oie-reaction-quick'),trigger=phone.locator('[data-message-menu-trigger="'+message+'"]');await text.waitFor();await phone.locator('#message-composer').fill('Rascunho móvel');const noWrites=state.effects;await text.tap();await text.tap();await phoneDialog.waitFor({state:'visible'});assert.equal(state.effects,noWrites,'double tap only prepares a reaction');
   const phoneCatalog=phone.locator('#oie-reaction-picker-panel');
+  const touchKeepsPickerFocus=await phoneDialog.locator('[data-reaction-quick-emoji]:visible').first().evaluate(button=>{
+   const touch=new PointerEvent('pointerdown',{pointerType:'touch',bubbles:true,cancelable:true});
+   button.dispatchEvent(touch);
+   document.getElementById('main-content').focus({preventScroll:true});
+   return !button.closest('#oie-reaction-quick').hidden;
+  });
+  assert(touchKeepsPickerFocus,'WebKit must keep the picker open until the touch click');
   await phoneDialog.locator('[data-reaction-more]').tap();
   await phoneCatalog.waitFor({state:'visible'});
   await phone.keyboard.press('Escape');await phoneCatalog.waitFor({state:'hidden'});

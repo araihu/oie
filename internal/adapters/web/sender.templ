@@ -15,7 +15,7 @@ templ senderAvatar(v view,m messageView){
 
 templ senderDrawer(v view){
 if v.Selected!=nil {
-@drawer.Drawer(drawer.Config{ID:"sender",Title:v.Text.SenderInfo}){
+@workspaceDrawer(drawer.Config{ID:"sender",Title:v.Text.SenderInfo}){
 <div id="sender-content" data-sender-loading={v.Text.SenderInfoLoading} data-sender-error={v.Text.SenderInfoUnavailable} aria-live="polite">@senderContent(v)</div>
 }
 }

@@ -76,6 +76,32 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const a11y=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(a11y.violations.map(v=>v.id),[]);
    results.push({width,mode,locale,accounts:35,axe:0});const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});if(width===818&&mode==='dark'&&locale==='pt-BR')await page.screenshot({path:path.join(artifacts,'account-drawer-overflow.png')});await page.close();
   }
+  const phoneContext=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:2,locale:'pt-BR',reducedMotion:'reduce'});
+  const phone=await phoneContext.newPage();
+  await phone.goto(base+'/?open=accounts&accountPage=add&lang=pt-BR');
+  const addDrawer=phone.getByRole('dialog',{name:'Contas',exact:true});
+  const close=addDrawer.getByRole('button',{name:'Fechar',exact:true});
+  const field=addDrawer.locator('#register-address');
+  await close.waitFor();
+  assert.equal(await field.evaluate(el=>getComputedStyle(el).fontSize),'16px');
+  await phone.evaluate(()=>{
+   document.documentElement.style.setProperty('--oie-safe-top','47px');
+   document.documentElement.style.setProperty('--oie-safe-right','14px');
+   document.documentElement.style.setProperty('--oie-safe-bottom','34px');
+  });
+  const safe=await addDrawer.boundingBox();
+  assert(safe.y>=47&&safe.x+safe.width<=376&&safe.y+safe.height<=810);
+  const viewport=await phoneContext.newCDPSession(phone);
+  await viewport.send('Emulation.setPageScaleFactor',{pageScaleFactor:1.5});
+  await phone.waitForFunction(()=>visualViewport.scale===1.5);
+  await until(()=>close.evaluate(button=>{
+   const box=button.getBoundingClientRect(),vv=visualViewport;
+   return box.width>=44&&box.height>=44&&box.left>=vv.offsetLeft&&box.top>=vv.offsetTop&&
+    box.right<=vv.offsetLeft+vv.width-13&&box.bottom<=vv.offsetTop+vv.height-33;
+  }),'zoomed drawer close stays in the visual viewport');
+  await close.tap();
+  await addDrawer.waitFor({state:'hidden'});
+  await phoneContext.close();
   state.count=3;
   state.changed=false;
   const accountId=id(100);

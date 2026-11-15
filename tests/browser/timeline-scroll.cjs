@@ -143,6 +143,13 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
   assert.equal(app.documents(),1);
   const target=messageAt(1500),source=page.locator(`[data-message-id="${live.id}"] [data-reply-target]`);await source.click();await until(async()=>new URL(page.url()).searchParams.get('message')===target.id&&await rows(page).count()===50,'reply opens bounded context');bounds=await snapshot(page);assert.equal(bounds.min,1476);assert.equal(bounds.max,1525);assert(await page.locator(`[data-message-id="${target.id}"]`).evaluate(row=>document.activeElement===row));const contextPosition=await anchor(page);state.imageReady=true;emit('message.preview_changed');await until(async()=>await page.locator(`[data-message-id="${messageAt(imageIndex).id}"] img.oie-preview-thumbnail`).evaluate(image=>image.complete&&image.naturalWidth===1),'late retained image height');await until(async()=>Math.abs((await page.locator(`[data-message-id="${contextPosition.id}"]`).boundingBox()).y-contextPosition.y)<3,'media height preserves context anchor');assert.equal(await page.locator('#message-composer').inputValue(),draft);await pageOnce(page,'older');await pageOnce(page,'newer');assert.equal(new URL(page.url()).searchParams.get('message'),target.id);assert(await page.locator('[data-jump-latest]').isVisible());await page.locator('[data-jump-latest]').click();await until(async()=>!new URL(page.url()).searchParams.has('message')&&await rows(page).count()===50&&await rows(page).last().getAttribute('data-message-id')===live.id,'Jump to latest bounded reset');assert.equal(await page.locator('#message-composer').inputValue(),draft);assert.equal(app.documents(),1);findings.push('Historical SSE refresh stays within retained window, applies canonical correction/star/reply metadata, and does not splice a disconnected latest batch; natural historical Jump to latest fetches the current tail; reply context pages both directions and late image layout preserves position; Jump to latest resets to50 rows');await context.close();
   app=await open({}, {width:390,locale:'pt-BR',touch:true});({page,context}=app);
+  const mobileComposer=page.locator('#message-composer');
+  const beforeGrowth=await timeline(page).boundingBox();
+  await mobileComposer.fill('One\nTwo\nThree\nFour\nFive\nSix');
+  await until(async()=>Math.abs((await timeline(page).boundingBox()).height-beforeGrowth.height)>40&&
+   await timeline(page).evaluate(root=>root.scrollHeight-root.scrollTop-root.clientHeight<=1),
+   'growing mobile composer keeps the latest message in view');
+  await mobileComposer.clear();
   for(let n=0;n<4;n++)await pageOnce(page,'older');
   const mobileJump=page.getByRole('button',{name:'Ir para as mais recentes',exact:true});
   await mobileJump.waitFor();
