@@ -850,9 +850,8 @@
  document.addEventListener('htmx:before:history:restore',event=>{event.preventDefault();go(event.detail.path,{history:true});});
  function addressSearch(url,push=false){remember();history[push?'pushState':'replaceState'](history.state,'',url.pathname+url.search+url.hash);currentURL=location.href;syncFilterLinks();}
  window.OieNavigation={go,pinConversation,addressSearch,showError};
- runtime.register('settings-comboboxes',life=>{
+ runtime.register('drawer-pickers',life=>{
   const language=document.getElementById('settings-language');
-  const settings=document.getElementById('settings-body');
   life.on(language,'combobox:change',({detail})=>{
    if(detail.id!==language.id)return;
    const value=detail.values[0],current=document.documentElement.lang;
@@ -865,14 +864,21 @@
    url.searchParams.set('settingsFocus','language');
    go(url);
   });
-  let dismissingPicker=false;
-  life.on(settings,'keydown',event=>{
-   if(event.key!=='Escape'||!event.target.closest('[data-combobox]')?.querySelector('[role=combobox][aria-expanded=true]'))return;
-   dismissingPicker=true;
-   life.timeout(()=>{dismissingPicker=false;},0);
+  let dismissingDrawer;
+  life.on(document,'keydown',event=>{
+   if(event.key!=='Escape')return;
+   const body=event.target.closest('#settings-body,#details-body');
+   const picker=event.target.closest('[data-combobox],[data-select-config]');
+   const trigger=picker?.querySelector('[role=combobox][aria-expanded=true]');
+   if(!body||!trigger)return;
+   dismissingDrawer=body.id.replace(/-body$/,'');
+   life.timeout(()=>{
+    dismissingDrawer=undefined;
+    if(picker.hasAttribute('data-select-config'))trigger.focus({preventScroll:true});
+   },0);
   });
   life.on(document,'drawer:close-request',event=>{
-   if(dismissingPicker&&event.detail?.id==='settings')event.preventDefault();
+   if(dismissingDrawer&&event.detail?.id===dismissingDrawer)event.preventDefault();
   });
  });
  document.addEventListener('oie:navigation-upgrade',()=>upgrade(app()));

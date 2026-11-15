@@ -138,6 +138,11 @@ func migrateDatabase(ctx context.Context, db *sql.DB, dir string) error {
 			return err
 		}
 	}
+	if (version == 30 || version == 31) && legacy == version {
+		if err := adoptRetentionPreview(ctx, db, version); err != nil {
+			return err
+		}
+	}
 	if err := runner.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return err
 	}
@@ -159,6 +164,43 @@ func lastMigrationVersion(scripts source.Driver) (int, error) {
 		}
 		version = next
 	}
+}
+
+// The retention preview used migrations 30 and 31 before the search index
+// claimed version 30. Add the index and advance the journal atomically.
+func adoptRetentionPreview(ctx context.Context, db *sql.DB, version int) error {
+	var preview, hasRecovery bool
+	if err := db.QueryRowContext(ctx, `SELECT
+		EXISTS(SELECT 1 FROM sqlite_schema WHERE type='table' AND name='global_retention')
+		AND NOT EXISTS(SELECT 1 FROM sqlite_schema WHERE type='table' AND name='message_search_index'),
+		EXISTS(SELECT 1 FROM pragma_table_info('global_retention') WHERE name='archive_revision')`).Scan(&preview, &hasRecovery); err != nil {
+		return err
+	}
+	if !preview {
+		return nil
+	}
+	if hasRecovery != (version == 31) {
+		return errors.New("unrecognized retention preview schema")
+	}
+	migration, err := migrations.ReadFile("migrations/000030_message_search_index.up.sql")
+	if err != nil {
+		return err
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, string(migration)); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version=%d", version+1)); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE schema_migrations SET version=?", version+1); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // The Bleve preview used version 28 before main assigned it to moderation.

@@ -326,6 +326,9 @@ func (s *Store) Events(ctx context.Context, after int64, limit int) ([]applicati
 		case "conversation.created", "conversation.updated":
 			e.Conversation = &domain.Conversation{}
 			target = e.Conversation
+		case "conversation.history_pruned":
+			e.HistoryPruned = &domain.HistoryPruned{}
+			target = e.HistoryPruned
 		case "message.created", "message.updated":
 			e.Message = &domain.Message{}
 			target = e.Message

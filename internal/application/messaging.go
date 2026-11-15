@@ -319,15 +319,25 @@ func (e *Engine) SendCompositionForKind(ctx context.Context, key, conversationID
 	if !validID(key) || !validID(conversationID) || (expectedKind != "" && expectedKind != "direct" && expectedKind != "room") {
 		return MessageResult{}, ErrInvalid
 	}
-	if err := validateComposition(in); err != nil {
-		return MessageResult{}, err
-	}
-	at, err := normalizeScheduledAt(at)
+	requestFingerprint, at, err := sendIntentFingerprint(conversationID, in, at, review)
 	if err != nil {
 		return MessageResult{}, err
 	}
+	return e.sendComposition(ctx, key, conversationID, in, at, review, compositionAcceptance{
+		expectedKind: expectedKind, fingerprint: requestFingerprint,
+	})
+}
+
+func sendIntentFingerprint(conversationID domain.ID, in domain.OutgoingComposition, at *time.Time, review ReplyReview) (string, *time.Time, error) {
+	if err := validateComposition(in); err != nil {
+		return "", nil, err
+	}
+	at, err := normalizeScheduledAt(at)
+	if err != nil {
+		return "", nil, err
+	}
 	if !review.valid() || (review.RevisionID != "" && (in.ReplyTo == "" || at == nil)) {
-		return MessageResult{}, ErrInvalid
+		return "", nil, ErrInvalid
 	}
 	parts := []string{string(conversationID), in.OriginalText}
 	if in.ReplyTo != "" {
@@ -342,9 +352,7 @@ func (e *Engine) SendCompositionForKind(ctx context.Context, key, conversationID
 			ReplyReview
 		}{conversationID, in, at, review})
 	}
-	return e.sendComposition(ctx, key, conversationID, in, at, review, compositionAcceptance{
-		expectedKind: expectedKind, fingerprint: requestFingerprint,
-	})
+	return requestFingerprint, at, nil
 }
 
 type compositionAcceptance struct {
@@ -519,7 +527,11 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 		if lookupErr != nil && !errors.Is(lookupErr, ErrNotFound) {
 			return lookupErr
 		}
-		if lookupErr == nil && existing.IsOwn && existing.AccountID == a.ID && (existing.OriginalText == in.OriginalText || (existing.AttachmentWireText != "" && existing.AttachmentWireText == in.OriginalText)) {
+		matchesBody := existing.OriginalText == in.OriginalText || existing.AttachmentWireText != "" && existing.AttachmentWireText == in.OriginalText
+		if existing.WireBodySHA256 != "" {
+			matchesBody = matchesBody || existing.WireBodySHA256 == (domain.Message{OriginalText: in.OriginalText}).SourceBodyHash()
+		}
+		if lookupErr == nil && existing.IsOwn && existing.AccountID == a.ID && matchesBody {
 			chat, err := r.Conversation(ctx, existing.ConversationID)
 			if err != nil {
 				return err
@@ -582,7 +594,7 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 			return ErrInvalid
 		}
 	}
-	m := domain.Message{ID: ids[3], RevisionID: ids[4], AccountID: a.ID, Sender: domain.Sender{DisplayName: address, PersonalAddress: in.SenderAddress}, OriginalText: in.OriginalText, CreatedAt: created, IsOwn: in.IsOwn, SendState: "received", ProviderID: in.ProviderID, ArchiveScope: in.ArchiveScope, ArchiveID: in.ArchiveID, Historical: in.Historical, MediaThumbnails: normalizeMediaThumbnails(in.OriginalText, in.MediaThumbnails), References: in.References, ReplyReference: in.Reply, Correction: in.Correction}
+	m := domain.Message{ID: ids[3], RevisionID: ids[4], AccountID: a.ID, Sender: domain.Sender{DisplayName: address, PersonalAddress: in.SenderAddress}, OriginalText: in.OriginalText, CreatedAt: created, ReceivedAt: now, IsOwn: in.IsOwn, SendState: "received", ProviderID: in.ProviderID, ArchiveScope: in.ArchiveScope, ArchiveID: in.ArchiveID, Historical: in.Historical, MediaThumbnails: normalizeMediaThumbnails(in.OriginalText, in.MediaThumbnails), References: in.References, ReplyReference: in.Reply, Correction: in.Correction}
 	m.MentionsYou = incomingRoomMention(in)
 	if in.Kind == "room" && !in.IsOwn {
 		m.ObservedRoomNickname = in.OwnRoomNickname

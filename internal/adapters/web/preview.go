@@ -43,7 +43,7 @@ func (v *view) configureWorkspace(r *http.Request) {
 		}
 	}
 	v.InfoView = q.Get("infoView")
-	if v.InfoView != "shared" && v.InfoView != "stars" && v.InfoView != "participants" {
+	if v.InfoView != "shared" && v.InfoView != "stars" && v.InfoView != "participants" && v.InfoView != "retention" {
 		v.InfoView = ""
 	}
 	v.InfoType = q.Get("infoType")
@@ -56,6 +56,9 @@ func (v *view) configureWorkspace(r *http.Request) {
 		v.InfoQuery = string([]rune(v.InfoQuery)[:200])
 	}
 	v.InfoFocus = q.Get("infoFocus")
+	if q.Get("open") == "settings" && q.Get("settingsTab") == "device" {
+		v.SettingsTab = "device"
+	}
 	v.SharedType = q.Get("contentType")
 	switch v.SharedType {
 	case "links", "documents":

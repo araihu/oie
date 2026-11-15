@@ -38,7 +38,7 @@ func reactionTarget(ctx context.Context, q *dbgen.Queries, account, conversation
 		if err != nil {
 			return "", err
 		}
-		if row.SourceHash != bodyHash(m.OriginalText) {
+		if row.SourceHash != m.SourceBodyHash() {
 			continue
 		}
 		id, err := resolveMessageAlias(ctx, q, domain.ID(row.ID))

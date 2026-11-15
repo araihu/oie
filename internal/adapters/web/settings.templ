@@ -19,6 +19,7 @@ templ settings(v view) {
 		<div class="oie-settings oie-settings-scroll">
 			@tabs.Tabs(tabs.Config{
 				ID: "settings-tabs",
+				DefaultTab: v.SettingsTab,
 				Tabs: []tabs.Tab{
 					{ID: "general", Label: v.Text.SettingsGeneral, Content: generalSettings(v)},
 					{ID: "composition", Label: v.Text.Composition, Content: compositionSettings(v)},
@@ -135,4 +136,10 @@ templ deviceSettings(v view) {
 		@toggle.Toggle(toggle.Config{ID:"auto-video-thumbnails",Label:v.Text.AutoVideoThumbnails,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-auto-video-thumbnails":"","aria-describedby":"auto-video-thumbnails-help"}})
 		<p id="auto-video-thumbnails-help">{ v.Text.AutoVideoThumbnailsHelp }</p>
 	</div>
+	if !v.Preview && v.EngineID != "" {
+		<section class="oie-settings-section oie-device-retention" aria-labelledby="device-retention-title">
+			<h2 id="device-retention-title">@retentionIcon()<span>{v.Text.RetentionTitle}</span></h2>
+			@retentionRegion(v,"",retentionView{Loading:true})
+		</section>
+	}
 }

@@ -477,7 +477,11 @@ func (m *Manager) recoverHistory(ctx context.Context, e *entry, s *mx.Session) {
 	_ = host.HistoryChanged(ctx, status)
 }
 func (m *Manager) recoverArchive(ctx context.Context, host application.HistoryHost, e *entry, s *mx.Session, scope string) error {
-	after, err := host.HistoryCheckpoint(ctx, e.account.ID, scope)
+	return m.recoverArchiveRange(ctx, host, e, s, scope, scope, "", nil)
+}
+
+func (m *Manager) recoverArchiveRange(ctx context.Context, host application.HistoryHost, e *entry, s *mx.Session, scope, checkpoint, peer string, known map[string]bool) error {
+	after, err := host.HistoryCheckpoint(ctx, e.account.ID, checkpoint)
 	if err != nil {
 		return err
 	}
@@ -489,19 +493,22 @@ func (m *Manager) recoverArchive(ctx context.Context, host application.HistoryHo
 		if err != nil {
 			return err
 		}
-		page, err := m.readArchivePage(ctx, e, s, scope, archivePageRequest{After: after, ReactionAnchor: reactionAnchor})
+		page, err := m.readArchivePage(ctx, e, s, scope, archivePageRequest{After: after, With: peer, ReactionAnchor: reactionAnchor})
 		release()
 		if errors.Is(err, errArchiveCursor) && after != "" && !reset {
 			after = ""
 			reactionAnchor = domain.ArchiveReactionAnchor{}
 			reset = true
-			if err = host.CommitHistoryCheckpoint(ctx, e.account.ID, scope, ""); err != nil {
+			if err = host.CommitHistoryCheckpoint(ctx, e.account.ID, checkpoint, ""); err != nil {
 				return err
 			}
 			continue
 		}
 		if err != nil {
 			return err
+		}
+		if len(known) != 0 {
+			filterKnownDirectPeers(&page, known)
 		}
 		if err = m.ingestArchivePage(ctx, page); err != nil {
 			return err
@@ -512,7 +519,7 @@ func (m *Manager) recoverArchive(ctx context.Context, host application.HistoryHo
 				return errArchive
 			}
 			seen[last] = true
-			if err = host.CommitHistoryCheckpoint(ctx, e.account.ID, scope, last); err != nil {
+			if err = host.CommitHistoryCheckpoint(ctx, e.account.ID, checkpoint, last); err != nil {
 				return err
 			}
 			after, reactionAnchor = last, page.nextReactionAnchor(false)

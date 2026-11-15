@@ -54,6 +54,6 @@ AND NOT EXISTS (
  SELECT 1 FROM message_references tainted INDEXED BY message_references_lookup CROSS JOIN messages observed ON observed.id=tainted.message_id
  WHERE observed.account_id=m.account_id AND observed.conversation_id=m.conversation_id
  AND tainted.scope=r.scope AND tainted.remote_id=r.remote_id
- AND tainted.source_hash<>oie_source_hash(json_extract(observed.payload,'$.OriginalText'))
+ AND tainted.source_hash<>COALESCE(json_extract(observed.payload,'$.WireBodySHA256'),oie_source_hash(json_extract(observed.payload,'$.OriginalText')))
 )
 ORDER BY (a.alias_id IS NOT NULL),r.scope,r.remote_id,r.author LIMIT 64;

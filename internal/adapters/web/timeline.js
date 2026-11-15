@@ -7,7 +7,7 @@ window.OieRuntime.register('timeline',life=>{
  let disposed=false,busy=false,epoch=0,controller,observer,resizer,anchor,restoring=false,follow=false,failed='',retryDirection='',refreshAgain=false,refreshPage,refreshStartedAt=0,liveAttached=false,older=false,newer=false,retryMode='page',retryTarget='',focusEpoch=0,focusPending=false;
  let exhaustedArchiveEdge='';
  let latestSnapshot=null;
- const hiddenChecks=new Set(),hiddenRevisions=new Map();
+ const hiddenChecks=new Set(),hiddenRevisions=new Map(),expired=new Set();
  function rememberHidden(id,revision){
   hiddenRevisions.set(id,revision);
   if(hiddenRevisions.size>200)hiddenRevisions.delete(hiddenRevisions.keys().next().value);
@@ -68,7 +68,7 @@ window.OieRuntime.register('timeline',life=>{
  }
  function merge(page,{direction='update',authoritative=false,starGeneration=Number(document.body.dataset.starGeneration||0),aliases=[],reset=false,retired=new Set()}={}){
   const old=current(),logical=normalizedRows(old,aliases);for(const plan of aliases){const original=old.find(item=>item.id===plan.previous);if(original&&interactionProtected(original.node)){failed='paused';retryDirection=direction==='older'?'older':'newer';controls();return false}}
-  const entries=page.entries.filter(item=>hiddenRevisions.get(item.id)!==item.node.dataset.messageRevision);
+  const entries=page.entries.filter(item=>!expired.has(item.id)&&hiddenRevisions.get(item.id)!==item.node.dataset.messageRevision);
   const relocated=new Set();
   for(const item of entries){
    const previous=logical.find(value=>value.id===item.id);
@@ -209,6 +209,23 @@ window.OieRuntime.register('timeline',life=>{
    document.dispatchEvent(new Event('oie:refresh-request'));
   }catch{}finally{hiddenChecks.delete(id)}
  }
+ function expire(ids){
+  if(disposed||!Array.isArray(ids)||!ids.length)return;
+  const retired=new Set(ids.filter(uuid));
+  if(!retired.size)return;
+  for(const id of retired)expired.add(id);
+  while(expired.size>1000)expired.delete(expired.values().next().value);
+  if(busy){epoch++;controller?.abort()}
+  refreshAgain=false;
+  const before=current();
+  if(!before.some(item=>retired.has(item.id)))return;
+  if(retired.has(document.body.dataset.focusMessage))document.body.dataset.focusMessage='';
+  const focused=before.some(item=>retired.has(item.id)&&item.node.contains(document.activeElement));
+  merge({entries:[],scope:document},{retired});
+  if(!current().length)liveAttached=true;
+  if(focused)root.focus({preventScroll:true});
+  controls();
+ }
  function refresh(page,startedAt=performance.now()){
   if(disposed)return;let snapshot;try{snapshot=parse(page.querySelector('#live-timeline')||page)}catch{return}if(!snapshot)return;snapshot.startedAt=startedAt;refreshPage=page;refreshStartedAt=startedAt;if(busy){refreshAgain=true;return}
   rememberLatest(snapshot);
@@ -244,7 +261,7 @@ window.OieRuntime.register('timeline',life=>{
   if(generation!==focusEpoch||disposed)return false;
   focusPending=false;controls();observe();retryRefresh();return found;
  }
- const api={refresh,focus,cancelFocus,atBottom,scrollLatest,hideScheduled,latestReadTarget,get hasNewer(){return newer},get liveAttached(){return liveAttached},get size(){return rows().length}};window.OieTimeline=api;
+ const api={refresh,focus,cancelFocus,atBottom,scrollLatest,hideScheduled,expire,latestReadTarget,get hasNewer(){return newer},get liveAttached(){return liveAttached},get size(){return rows().length}};window.OieTimeline=api;
  if(typeof IntersectionObserver==='function')observer=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){const direction=entry.target.dataset.timelineEdge;if(direction==='older'&&older||direction==='newer'&&newer){request('page',direction);break}}},{root,rootMargin:'70px 0px'});
  if(typeof ResizeObserver==='function')resizer=new ResizeObserver(()=>correct());
  life.on(document,'click',event=>{const button=event.target.closest('[data-timeline-load]');if(button&&root.contains(button)&&!event.defaultPrevented&&event.button===0&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey){event.preventDefault();event.stopPropagation();request(failed?retryMode:'page',button.dataset.timelineLoad,true,failed?retryTarget:'')}},true);

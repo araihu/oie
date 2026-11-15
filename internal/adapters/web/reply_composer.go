@@ -149,6 +149,9 @@ func (s *Server) sendReceipt(ctx context.Context, key string) (*engineapi.Messag
 	}
 	accepted := receipt.JSON200.AcceptedMessage
 	if accepted == nil {
+		if receipt.JSON200.AcceptedMessageExpired != nil && *receipt.JSON200.AcceptedMessageExpired {
+			return &engineapi.Message{Id: receipt.JSON200.ResourceId}, "expired"
+		}
 		return nil, "legacy"
 	}
 	if accepted.Id != receipt.JSON200.ResourceId || !accepted.IsOwn || accepted.SendState != "queued" {

@@ -77,6 +77,7 @@ WITH initial_revisions AS (
 ), roots AS (
  SELECT m.id,CAST(COALESCE(m.timeline_at_ms,m.created_at_ms) AS INTEGER) AS position_ms,m.timeline_at_ms,m.payload,a.label AS account_label,a.address AS account_address,c.payload AS conversation_payload,
  CAST(COALESCE(h.payload,m.payload) AS TEXT) AS content_payload,
+ COALESCE(h.source_id,m.id) AS source_id,
  CAST(COALESCE(head_source.id,first_source.id) AS TEXT) AS matched_revision_id,
  CAST(COALESCE(head_source.created_at,first_source.created_at) AS TEXT) AS matched_at,
  CAST(COALESCE((SELECT group_concat(sc.url||' '||sc.file_name||' '||COALESCE(json_extract(p.payload,'$.Title'),'')||' '||COALESCE(json_extract(p.payload,'$.Description'),''),' ') FROM shared_content sc JOIN shared_content_state state ON state.message_id=sc.message_id AND state.parser_version>=?7 LEFT JOIN message_previews p ON p.message_id=sc.message_id AND p.url=sc.url WHERE sc.message_id=m.id),'') AS TEXT) AS metadata
@@ -98,20 +99,26 @@ WITH initial_revisions AS (
  AND (CAST(?9 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?9 AS TEXT))))
  AND (CAST(?10 AS TEXT)='' OR m.conversation_id=CAST(?10 AS TEXT))
 ), variants AS (
- SELECT roots.id, roots.position_ms, roots.timeline_at_ms, roots.payload, roots.account_label, roots.account_address, roots.conversation_payload, roots.content_payload, roots.matched_revision_id, roots.matched_at, roots.metadata,CAST(json_extract(content_payload,'$.OriginalText') AS TEXT) AS body,1 AS is_current,'' AS revision_key_at,'' AS revision_key_id FROM roots
+ SELECT roots.id, roots.position_ms, roots.timeline_at_ms, roots.payload, roots.account_label, roots.account_address, roots.conversation_payload, roots.content_payload, roots.source_id, roots.matched_revision_id, roots.matched_at, roots.metadata,1 AS is_current,'' AS revision_key_at,'' AS revision_key_id FROM roots
  UNION ALL
- SELECT roots.id,roots.position_ms,roots.timeline_at_ms,roots.payload,roots.account_label,roots.account_address,roots.conversation_payload,source.payload,source.id,source.created_at,'',CAST(json_extract(source.payload,'$.OriginalText') AS TEXT),0,source.created_at,source.id
+ SELECT roots.id,roots.position_ms,roots.timeline_at_ms,roots.payload,roots.account_label,roots.account_address,roots.conversation_payload,source.payload,f.message_id,source.id,source.created_at,'',0,source.created_at,source.id
  FROM roots JOIN message_content_heads h ON h.canonical_id=roots.id
  JOIN message_correction_facts f ON f.message_id=roots.id OR f.message_id IN (SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=roots.id)
  JOIN message_revisions r ON r.id=f.source_revision_id
  JOIN initial_revisions first ON first.entity_id=f.message_id
  JOIN message_revisions source ON source.rowid=first.revision_row
  WHERE CAST(?11 AS INTEGER)=1 AND source.id<>roots.matched_revision_id
- AND f.source_hash=oie_source_hash(json_extract(r.payload,'$.OriginalText'))
- AND f.source_hash=oie_source_hash(json_extract(source.payload,'$.OriginalText'))
+ AND f.source_hash=COALESCE(json_extract(r.payload,'$.WireBodySHA256'),oie_source_hash(json_extract(r.payload,'$.OriginalText')))
+ AND f.source_hash=COALESCE(json_extract(source.payload,'$.WireBodySHA256'),oie_source_hash(json_extract(source.payload,'$.OriginalText')))
  GROUP BY roots.id,source.id
+), bodies AS (
+ SELECT variants.id, variants.position_ms, variants.timeline_at_ms, variants.payload, variants.account_label, variants.account_address, variants.conversation_payload, variants.content_payload, variants.source_id, variants.matched_revision_id, variants.matched_at, variants.metadata, variants.is_current, variants.revision_key_at, variants.revision_key_id,CAST(COALESCE(json_extract(content_payload,'$.OutboundReply.BodyText'),
+   oie_reply_body(json_extract(content_payload,'$.OriginalText'),r.payload)) AS TEXT) AS body
+ FROM variants LEFT JOIN message_replies r ON r.message_id=variants.source_id
+ AND json_extract(content_payload,'$.WireBodySHA256') IS NULL
+ AND r.body_hash=oie_source_hash(json_extract(content_payload,'$.OriginalText'))
 ), matched AS (
- SELECT id, position_ms, timeline_at_ms, payload, account_label, account_address, conversation_payload, content_payload, matched_revision_id, matched_at, metadata, body, is_current, revision_key_at, revision_key_id,CAST(oie_search_match(body,CAST(?12 AS TEXT)) AS INTEGER) AS text_match FROM variants
+ SELECT id, position_ms, timeline_at_ms, payload, account_label, account_address, conversation_payload, content_payload, source_id, matched_revision_id, matched_at, metadata, is_current, revision_key_at, revision_key_id, body,CAST(oie_search_match(body,CAST(?12 AS TEXT)) AS INTEGER) AS text_match FROM bodies
  WHERE oie_search_match(body||' '||metadata,CAST(?12 AS TEXT))=1
 )
 SELECT id,position_ms,timeline_at_ms,payload,account_label,account_address,conversation_payload,matched_revision_id,matched_at,body,metadata,is_current,revision_key_at,revision_key_id,text_match FROM matched

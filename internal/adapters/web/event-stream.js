@@ -5,10 +5,10 @@
   const eventTypes = [
     'message.preview_changed', 'profile.avatar_changed', 'account.registered',
     'account.connection_changed', 'account.history_changed', 'conversation.created',
-    'conversation.updated', 'message.created', 'message.updated',
+    'conversation.updated', 'conversation.history_pruned', 'message.created', 'message.updated',
     'conversation.room_session_changed', 'message.star_changed'
   ];
-  const inboxEvents = new Set(['account.registered', 'conversation.created', 'conversation.updated', 'message.created', 'message.updated']);
+  const inboxEvents = new Set(['account.registered', 'conversation.created', 'conversation.updated', 'conversation.history_pruned', 'message.created', 'message.updated']);
   let source, engine = '', cursor = '', connected = false, replaced = false;
 
   function emit(type, event) {

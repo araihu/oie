@@ -2,8 +2,6 @@ package application
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -26,8 +24,7 @@ func boundedReplyText(text string, n int) string {
 	return text
 }
 func outboundReply(a domain.Account, c domain.Conversation, target domain.Message, text string, protocols Protocols) *domain.OutboundReply {
-	sum := sha256.Sum256([]byte(target.OriginalText))
-	plan := &domain.OutboundReply{TargetRevisionID: target.RevisionID, TargetBodyHash: hex.EncodeToString(sum[:]), TargetID: target.ID, SenderName: boundedReplyText(target.Sender.DisplayName, 300), Excerpt: domain.ReplyExcerpt(domain.DisplayBody(target)), BodyText: text}
+	plan := &domain.OutboundReply{TargetRevisionID: target.RevisionID, TargetBodyHash: target.SourceBodyHash(), TargetID: target.ID, SenderName: boundedReplyText(target.Sender.DisplayName, 300), Excerpt: domain.ReplyExcerpt(domain.DisplayBody(target)), BodyText: text}
 	if provider, ok := protocols.(OutgoingReplyProvider); ok {
 		if ref, ok := provider.SelectReplyReference(a, c, target); ok {
 			plan.Reference = &ref
@@ -57,6 +54,10 @@ func quotedReplyBody(plan *domain.OutboundReply) string {
 func outgoingMessage(m domain.Message, c domain.Conversation) Outgoing {
 	out := Outgoing{ID: m.ID, Address: c.Address, OriginalText: m.OriginalText, Kind: c.Kind}
 	out.Mentions = slices.Clone(m.Mentions)
+	if m.Reply != nil && m.Reply.OriginalExpired {
+		out.OriginalText = m.Reply.BodyText
+		return out
+	}
 	if m.OutboundReply != nil {
 		offset := utf8.RuneCountInString(m.OriginalText) - utf8.RuneCountInString(m.OutboundReply.BodyText)
 		for i := range out.Mentions {

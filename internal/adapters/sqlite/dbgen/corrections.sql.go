@@ -176,7 +176,7 @@ func (q *Queries) InsertCorrectionFact(ctx context.Context, arg InsertCorrection
 }
 
 const latestLogicalMessage = `-- name: LatestLogicalMessage :one
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages m WHERE m.conversation_id=?
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms, m.submitted_at_ms FROM messages m WHERE m.conversation_id=?
 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT 1
@@ -196,6 +196,7 @@ func (q *Queries) LatestLogicalMessage(ctx context.Context, conversationID strin
 		&i.Payload,
 		&i.CreatedAtMs,
 		&i.TimelineAtMs,
+		&i.SubmittedAtMs,
 	)
 	return i, err
 }
@@ -217,7 +218,7 @@ AND NOT EXISTS (
  SELECT 1 FROM message_references tainted INDEXED BY message_references_lookup CROSS JOIN messages observed ON observed.id=tainted.message_id
  WHERE observed.account_id=m.account_id AND observed.conversation_id=m.conversation_id
  AND tainted.scope=r.scope AND tainted.remote_id=r.remote_id
- AND tainted.source_hash<>oie_source_hash(json_extract(observed.payload,'$.OriginalText'))
+ AND tainted.source_hash<>COALESCE(json_extract(observed.payload,'$.WireBodySHA256'),oie_source_hash(json_extract(observed.payload,'$.OriginalText')))
 )
 ORDER BY (a.alias_id IS NOT NULL),r.scope,r.remote_id,r.author LIMIT 64
 `

@@ -810,7 +810,7 @@ type ReplySource struct {
 //
 // Example: {"accepted":true,"message":"Message saved by the engine.","messageId":"019a5df0-0000-7000-8000-000000000004","nextKey":"019a5df0-0000-7000-8000-000000000007","ok":true,"state":"queued"}
 type SubmissionReceipt struct {
-	// Accepted A matching persisted operation and message exist.
+	// Accepted A matching persisted send receipt exists. Its message can have expired.
 	//
 	// Example: true
 	Accepted bool `json:"accepted"`
@@ -820,7 +820,7 @@ type SubmissionReceipt struct {
 	// Example: Message saved by the engine.
 	Message string `json:"message"`
 
-	// MessageId Canonical accepted message to replace the local bubble.
+	// MessageId Canonical accepted message ID, including when the message has expired.
 	//
 	// Example: 019a5df0-0000-7000-8000-000000000004
 	MessageId openapi_types.UUID `json:"messageId"`
@@ -835,7 +835,7 @@ type SubmissionReceipt struct {
 	// Example: true
 	Ok bool `json:"ok"`
 
-	// State Engine transport evidence, independent of acceptance.
+	// State Engine transport evidence, independent of acceptance. Expired indicates the message has been removed.
 	//
 	// Example: queued
 	State string `json:"state"`

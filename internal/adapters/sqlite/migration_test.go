@@ -4,14 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	"github.com/golang-migrate/migrate/v4"
@@ -134,13 +137,13 @@ func TestRoomModerationPreviewMigratesIntoSharedCatalog(t *testing.T) {
 func TestMessageSearchIndexMigratesFromRoomBanNicknames(t *testing.T) {
 	ctx := t.Context()
 	store, _, chat := outboxFixture(t)
-	migrateFixtureToVersion(t, store, 29)
 	at := time.Now().UTC()
 	room := domain.Conversation{
 		ID: migrationID(), RevisionID: migrationID(), AccountID: chat.AccountID, PeerID: migrationID(),
 		Kind: "room", Address: "search@rooms.localhost", Title: "Search room", UpdatedAt: at,
 	}
 	message := replySeed(t, store, room, "Arquivo de antes da atualização", at, nil, nil)
+	migrateFixtureToVersion(t, store, 29)
 	const address = "removed@localhost"
 	const nickname = "Former member"
 	if _, err := store.db.ExecContext(ctx, "INSERT INTO room_ban_nicknames VALUES(?, ?, ?)", room.ID, address, nickname); err != nil {
@@ -162,6 +165,95 @@ func TestMessageSearchIndexMigratesFromRoomBanNicknames(t *testing.T) {
 	waitIndexReady(t, upgraded, "")
 	assertIndexedCandidate(t, upgraded, "arqiuvo", message.ID)
 	checkIndexParity(t, upgraded, domain.MessageSearchQuery{Search: "arqiuvo", Limit: 10})
+}
+
+func TestRetentionMigratesFromSearchIndexAndPrunesSearch(t *testing.T) {
+	ctx := t.Context()
+	store, _, chat := outboxFixture(t)
+	now := time.Now().UTC()
+	nonce := "cobalturquoise"
+	old := replySeed(t, store, chat, nonce, now.AddDate(0, 0, -10), nil, nil)
+	replySeed(t, store, chat, "Recent retained message", now, nil, nil)
+	migrateFixtureToVersion(t, store, 30)
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	upgraded, err := Open(ctx, store.dir, migrationID(), WithMessageSearchIndex())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = upgraded.Close() }()
+	before := waitIndexReady(t, upgraded, "")
+	assertIndexedCandidate(t, upgraded, nonce, old.ID)
+	policy, err := upgraded.ConversationRetention(ctx, chat.ID)
+	if err != nil || policy.EffectiveDays != 0 {
+		t.Fatalf("default direct retention after upgrade: %+v, %v", policy, err)
+	}
+	days := 7
+	if _, _, err := upgraded.SetConversationRetention(ctx, chat.ID, policy.Revision, &days, now); err != nil {
+		t.Fatal(err)
+	}
+	pruned, err := upgraded.PurgeExpiredHistory(ctx, now, func() (domain.ID, error) { return migrationID(), nil })
+	if err != nil || pruned != 1 {
+		t.Fatalf("expiry after upgrade: %d, %v", pruned, err)
+	}
+	query := domain.MessageSearchQuery{Search: nonce, Limit: 10, ScopeHash: strings.Repeat("a", 64)}
+	if page, err := upgraded.SearchMessages(ctx, query); err != nil || len(page.Items) != 0 {
+		t.Fatalf("search returned expired content: %+v, %v", page, err)
+	}
+	waitIndex(t, upgraded, func(state dbgen.MessageSearchIndex) bool {
+		pending, err := upgraded.read.ListMessageSearchPending(ctx, 1)
+		return err == nil && state.Batch != before.Batch && len(pending) == 0
+	})
+	checkIndexParity(t, upgraded, query)
+}
+
+func TestRetentionPreviewMigrationKeepsPolicies(t *testing.T) {
+	for _, version := range []int{30, 31} {
+		t.Run(strconv.Itoa(version), func(t *testing.T) {
+			ctx := t.Context()
+			store, engine, chat := outboxFixture(t)
+			value, err := engine.SetGlobalRetention(ctx, domain.GlobalRetention{Revision: "0", RoomDays: 90, DirectDays: 10})
+			if err != nil {
+				t.Fatal(err)
+			}
+			days := 45
+			policy, err := engine.SetConversationRetention(ctx, chat.ID, value.Revision, &days)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if version == 30 {
+				migrateFixtureToVersion(t, store, 31)
+			}
+			down, err := migrations.ReadFile("migrations/000030_message_search_index.down.sql")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := store.db.ExecContext(ctx, string(down)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := store.db.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version=%d; UPDATE schema_migrations SET version=%d", version, version)); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.Close(); err != nil {
+				t.Fatal(err)
+			}
+
+			upgraded, err := Open(ctx, store.dir, migrationID(), WithMessageSearchIndex())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = upgraded.Close() }()
+			waitIndexReady(t, upgraded, "")
+			if got, err := upgraded.GlobalRetention(ctx); err != nil || got != value {
+				t.Fatalf("global policy changed: %+v, %v", got, err)
+			}
+			if got, err := upgraded.ConversationRetention(ctx, chat.ID); err != nil || got.EffectiveDays != days || got.Revision != policy.Revision {
+				t.Fatalf("conversation policy changed: %+v, %v", got, err)
+			}
+		})
+	}
 }
 
 func TestMessageSearchPreviewMigratesWithoutDiscardingMessages(t *testing.T) {
@@ -217,7 +309,7 @@ func TestSchedulingPreviewMigratesWithoutDiscardingData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"000030_message_search_index", "000029_room_ban_nicknames", "000028_room_message_moderation", "000027_shared_catalog_projection", "000026_room_invitation_credentials", "000025_room_creation", "000024_reaction_target_lookups", "000023_dispatch_wire_stage", "000022_scheduled_timeline", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
+	for _, name := range []string{"000032_retention_recovery", "000031_retention", "000030_message_search_index", "000029_room_ban_nicknames", "000028_room_message_moderation", "000027_shared_catalog_projection", "000026_room_invitation_credentials", "000025_room_creation", "000024_reaction_target_lookups", "000023_dispatch_wire_stage", "000022_scheduled_timeline", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
 		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
 		if err != nil {
 			t.Fatal(err)

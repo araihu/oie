@@ -12,7 +12,10 @@ import (
 )
 
 func mentionWithStoredReply(ctx context.Context, q *dbgen.Queries, source domain.ID, m domain.Message) (bool, error) {
-	payload, err := q.GetMessageReply(ctx, dbgen.GetMessageReplyParams{MessageID: string(source), BodyHash: bodyHash(m.OriginalText)})
+	if m.WireBodySHA256 != "" {
+		return domain.RoomNicknameMention(m.ObservedRoomNickname, m.OriginalText, nil), nil
+	}
+	payload, err := q.GetMessageReply(ctx, dbgen.GetMessageReplyParams{MessageID: string(source), BodyHash: m.SourceBodyHash()})
 	var ref domain.ReplyReference
 	switch {
 	case errors.Is(err, sql.ErrNoRows):

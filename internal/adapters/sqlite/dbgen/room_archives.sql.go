@@ -85,6 +85,29 @@ func (q *Queries) ListRoomArchiveConversations(ctx context.Context, accountID st
 	return items, nil
 }
 
+const putGuardedRoomArchiveProgress = `-- name: PutGuardedRoomArchiveProgress :execrows
+INSERT INTO room_archives(conversation_id,progress)
+SELECT ?1,?2
+WHERE (SELECT g.archive_revision+COALESCE(a.revision,0)
+ FROM conversations c CROSS JOIN global_retention g LEFT JOIN account_archive_retention a ON a.account_id=c.account_id
+ WHERE c.id=?1 AND g.singleton=1)=?3
+ON CONFLICT(conversation_id) DO UPDATE SET progress=excluded.progress
+`
+
+type PutGuardedRoomArchiveProgressParams struct {
+	ConversationID    string
+	Progress          string
+	RetentionRevision int64
+}
+
+func (q *Queries) PutGuardedRoomArchiveProgress(ctx context.Context, arg PutGuardedRoomArchiveProgressParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, putGuardedRoomArchiveProgress, arg.ConversationID, arg.Progress, arg.RetentionRevision)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const putRoomArchiveMode = `-- name: PutRoomArchiveMode :exec
 INSERT INTO room_archives(conversation_id,mode) VALUES(?,?)
 ON CONFLICT(conversation_id) DO UPDATE SET mode=excluded.mode

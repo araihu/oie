@@ -91,6 +91,13 @@ func (m *Manager) hasPriorDirectHistory(ctx context.Context, e *entry, session *
 		return false
 	}
 	defer release()
+	if retention, ok := m.host.(application.RetentionHost); ok {
+		days, err := retention.RetentionDays(ctx, chat.AccountID, chat.Address, "direct")
+		if err != nil {
+			return false
+		}
+		ctx = context.WithValue(ctx, archiveRetentionKey{}, archiveRetention{account: chat.AccountID, days: days, now: time.Now().UTC()})
+	}
 	request := archivePageRequest{With: chat.Address, Backward: true, Before: check.ArchiveID, Limit: 12}
 	page, err := m.readArchivePage(ctx, e, session, e.account.Address, request)
 	if errors.Is(err, errArchiveCursor) && request.Before != "" {

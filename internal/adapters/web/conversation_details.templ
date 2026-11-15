@@ -40,22 +40,33 @@ case "stars":
 @infoStarredContent(v)
 case "participants":
 @infoRoomParticipants(v)
+case "retention":
+<section class="oie-info-retention" aria-labelledby="conversation-retention-title">
+  @infoBack(v)
+  <h2 id="conversation-retention-title" tabindex="-1" data-info-heading>{v.Text.RetentionTitle}</h2>
+  if !v.Preview && v.requestKind()=="" {
+    @retentionRegion(v,v.Selected.Id,retentionView{Loading:true})
+  }
+</section>
 default:
 <div class="oie-conversation-details">
 <div id="conversation-details-identity" data-version={v.detailsVersion("identity")}>@detailsIdentity(v)</div>
 <nav class="oie-info-rows" aria-label={v.Text.InfoSharedContent}>
 @link.Link(v.messageSearchHref(v.Selected.AccountId,v.Selected.Id),link.WithRootClass("oie-info-entry"),link.WithAttrs(templ.Attributes{"data-open-conversation-search":"","data-search-conversation":v.Selected.Id,"data-search-conversation-title":v.Selected.Title})){@glyph(heroicons.Icon16SolidMagnifyingGlass)<span>{v.Text.SearchMessages}</span>@glyph(heroicons.Icon16SolidChevronRight)}
-@infoEntry(v,"media",v.Text.SharedMediaTab,heroicons.Icon16SolidRectangleGroup)
-@infoEntry(v,"links",v.Text.SharedLinksTab,heroicons.Icon16SolidLink)
-@infoEntry(v,"documents",v.Text.SharedDocsTab,heroicons.Icon16SolidDocumentText)
-@infoEntry(v,"stars",v.Text.InfoStarred,heroicons.Icon16SolidStar)
+@infoEntry(v,"media",v.Text.SharedMediaTab,glyph(heroicons.Icon16SolidRectangleGroup))
+@infoEntry(v,"links",v.Text.SharedLinksTab,glyph(heroicons.Icon16SolidLink))
+@infoEntry(v,"documents",v.Text.SharedDocsTab,glyph(heroicons.Icon16SolidDocumentText))
+@infoEntry(v,"stars",v.Text.InfoStarred,glyph(heroicons.Icon16SolidStar))
 if v.Selected.Kind=="room" && v.requestKind()=="" && !v.Preview {
-@infoEntry(v,"participants",v.Text.Participants,heroicons.Icon16SolidUsers)
+@infoEntry(v,"participants",v.Text.Participants,glyph(heroicons.Icon16SolidUsers))
 <template data-info-participants-loading>
 	@infoParticipantsSkeleton(v)
 </template>
 }
 </nav>
+if !v.Preview && v.requestKind()=="" {
+@infoEntry(v,"retention",v.Text.RetentionTitle,retentionIcon())
+}
 if v.RoomArchive != nil {
   <div class="oie-room-archive-setting">
   @tooltip.Tooltip("room-archive-mode-help",v.Text.RoomArchiveMode,tooltip.WithDescription(v.Text.RoomArchiveModeHelp),tooltip.WithTrigger(roomArchiveHelp(v)),tooltip.WithActivation(tooltip.ActivationClick),tooltip.WithPosition(tooltip.PositionBottom),tooltip.WithPortal(true))

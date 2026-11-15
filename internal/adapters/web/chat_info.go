@@ -17,12 +17,12 @@ func (v view) infoTitle() string {
 	return ""
 }
 func (v view) infoHref(screen, kind string, pairs ...string) string {
-	base := []string{"open", "details", "infoView", screen, "infoType", kind, "infoCursor", "", "infoQuery", v.InfoQuery, "lang", v.Locale, "theme", v.Theme}
+	base := []string{"chat", v.ChatID, "open", "details", "infoView", screen, "infoType", kind, "infoCursor", "", "infoQuery", v.InfoQuery, "lang", v.Locale, "theme", v.Theme}
 	return v.href(append(base, pairs...)...)
 }
 func (v view) infoBackHref() string {
 	focus := v.InfoType
-	if v.InfoView == "stars" || v.InfoView == "participants" {
+	if v.InfoView == "stars" || v.InfoView == "participants" || v.InfoView == "retention" {
 		focus = v.InfoView
 	}
 	return v.infoHref("", "", "infoQuery", "", "infoFocus", focus)
