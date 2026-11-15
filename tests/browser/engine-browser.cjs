@@ -525,7 +525,10 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
     await until(async()=>await alicePage.locator('[data-conversation-search]').getAttribute('data-search-selected')===searchSource.id,'independent per-chat search focuses the real retained source');
     assert.equal(await alicePage.locator('#conversation-search').inputValue(),archivedIncoming,'per-chat query preserves the global result query');
     assert.equal(await alicePage.locator('[data-message-search-hit][data-search-message="'+searchSource.id+'"]').count(),1);
-    assert((await alicePage.locator('[data-message-id="'+searchSource.id+'"] mark[data-conversation-search-highlight]:visible').count())>0,'per-chat search highlights current real message text');
+    const highlighted = await alicePage.locator('#message-timeline [data-message-id="'+searchSource.id+'"]').evaluate(row =>
+      Array.from(CSS.highlights.get('oie-room-search') || []).some(range =>
+        row.contains(range.commonAncestorContainer) && range.toString().trim().length > 0));
+    assert(highlighted, 'per-chat search highlights current real message text');
     assert.equal(await alicePage.locator('#message-composer').inputValue(),searchDraft);
 
     for(const [index,conversation] of [aliceConversation,bobConversation].entries())assert.deepEqual(await api('/api/v1/conversations/'+conversation.id+'/messages?limit=100'),searchMessagesBefore[index],'search and source navigation do not mutate retained messages');
