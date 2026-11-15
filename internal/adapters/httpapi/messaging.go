@@ -295,6 +295,10 @@ func (s *Server) CancelMessage(ctx context.Context, r engineapi.CancelMessageReq
 }
 func event(e application.Event, engineID domain.ID) engineapi.Event {
 	out := engineapi.Event{Id: cursor(engineID, e.Sequence), Type: engineapi.EventType(e.Type), OccurredAt: e.OccurredAt}
+	if e.RemovedAccountID != "" {
+		id := string(e.RemovedAccountID)
+		out.RemovedAccountId = &id
+	}
 	if e.Account != nil {
 		v := account(*e.Account)
 		out.Account = &v

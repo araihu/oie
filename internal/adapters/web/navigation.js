@@ -402,7 +402,7 @@
    return;
   }
   if(new URL(previousURL).searchParams.get('open')!=='accounts'||!panel?.getClientRects().length)window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'accounts'}}));
-  const focus=query.get('accountPage')==='capabilities'?'[data-account-capabilities-title]':query.get('accountFocus')==='capabilities'?'[data-account-capabilities]':'[data-account-back],[data-account-add]';
+  const focus=query.get('accountPage')==='capabilities'?'[data-account-capabilities-title]':query.get('accountFocus')==='capabilities'?'[data-account-capabilities]':query.get('accountPage')==='remove'?'[data-account-remove-title],[data-account-back]':query.get('accountFocus')==='remove'?'[data-account-remove]':'[data-account-back],[data-account-add]';
   const saved=positions.get(location.href);
   if(body)body.scrollTop=saved?.['accounts-body']||0;
   const detail=document.getElementById('account-detail-scroll');

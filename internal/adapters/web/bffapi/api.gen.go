@@ -189,6 +189,21 @@ func (e RenderWorkspaceParamsXOieFragment) Valid() bool {
 	}
 }
 
+// Defines values for RemoveBrowserAccountFormdataBodyConfirmation.
+const (
+	Remove RemoveBrowserAccountFormdataBodyConfirmation = "remove"
+)
+
+// Valid indicates whether the value is a known member of the RemoveBrowserAccountFormdataBodyConfirmation enum.
+func (e RemoveBrowserAccountFormdataBodyConfirmation) Valid() bool {
+	switch e {
+	case Remove:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SetDesktopEngineModeFormdataBodyMode.
 const (
 	Local  SetDesktopEngineModeFormdataBodyMode = "local"
@@ -961,6 +976,28 @@ type UpdateBrowserAccountAvatarMultipartBody struct {
 	ReturnTo *string `json:"returnTo,omitempty"`
 }
 
+// RemoveBrowserAccountFormdataBody defines parameters for RemoveBrowserAccount.
+type RemoveBrowserAccountFormdataBody struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	AccountId externalRef0.ID `form:"accountId" json:"accountId"`
+
+	// Confirmation Example: remove
+	Confirmation RemoveBrowserAccountFormdataBodyConfirmation `form:"confirmation" json:"confirmation"`
+
+	// Csrf Example: example-browser-token
+	Csrf string `form:"csrf" json:"csrf"`
+
+	// EngineId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	EngineId externalRef0.ID `form:"engineId" json:"engineId"`
+}
+
+// RemoveBrowserAccountFormdataBodyConfirmation defines parameters for RemoveBrowserAccount.
+type RemoveBrowserAccountFormdataBodyConfirmation string
+
 // GetBrowserReadStateParams defines parameters for GetBrowserReadState.
 type GetBrowserReadStateParams struct {
 	// XOieEngineID Selected engine identity.
@@ -1277,6 +1314,9 @@ type GetBrowserSharedMediaParamsPreview string
 
 // UpdateBrowserAccountAvatarMultipartRequestBody defines body for UpdateBrowserAccountAvatar for multipart/form-data ContentType.
 type UpdateBrowserAccountAvatarMultipartRequestBody UpdateBrowserAccountAvatarMultipartBody
+
+// RemoveBrowserAccountFormdataRequestBody defines body for RemoveBrowserAccount for application/x-www-form-urlencoded ContentType.
+type RemoveBrowserAccountFormdataRequestBody RemoveBrowserAccountFormdataBody
 
 // MarkBrowserMessagesReadJSONRequestBody defines body for MarkBrowserMessagesRead for application/json ContentType.
 type MarkBrowserMessagesReadJSONRequestBody = externalRef0.MarkMessagesRead

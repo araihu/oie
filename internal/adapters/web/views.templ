@@ -582,6 +582,17 @@ case "add":
 }
 case "capabilities":
 @accountCapabilities(v)
+case "remove":
+if a:=v.account(v.managedAccountID());a.Address!="" && !v.Preview && !v.Unavailable {
+@accountRemoval(v,a)
+}else if v.Unavailable {
+@accountBack(v)
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.Unavailable,Description:v.Text.UnavailableBody})
+@link.Link(v.removeAccountHref(v.managedAccountID())){ {v.Text.Retry} }
+}else{
+@accountBack(v)
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.AccountMissing})
+}
 case "detail":
 @accountBack(v)
 if a:=v.account(v.managedAccountID());a.Address!="" {
@@ -644,6 +655,9 @@ if problem:=v.connectionError(a.Id);problem!="" {
 </div>
 @accountConnectionControls(v,a.Id)
 @link.Link(v.capabilitiesHref(a.Id),link.WithRootClass("oie-capabilities-link"),link.WithAttrs(templ.Attributes{"data-account-capabilities":a.Id})){<span><strong>{v.Text.Capabilities}</strong><small>{v.Text.CapabilitiesIntro}</small></span>@glyph(heroicons.Icon16SolidChevronRight)}
+if !v.Unavailable && !v.Preview {
+@link.Link(v.removeAccountHref(a.Id),link.WithRootClass("oie-remove-account-link"),link.WithAttrs(templ.Attributes{"data-account-remove":""})){ {v.Text.RemoveAccount} }
+}
 </div>
 <footer class="oie-account-detail-footer">@disconnectAction(v,a.Id)</footer>
 </section>

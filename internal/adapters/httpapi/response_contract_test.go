@@ -43,6 +43,13 @@ func responseContractError(req *http.Request, res *http.Response, data []byte) e
 	if err != nil {
 		return nil
 	}
+	// A collection request can match a parameterized sibling in the
+	// legacy router with an empty parameter. It has no operation schema.
+	for _, value := range params {
+		if value == "" {
+			return nil
+		}
+	}
 	if !strings.Contains(res.Header.Get("Content-Type"), "json") {
 		return nil
 	}
@@ -104,6 +111,7 @@ func TestHTTPBoundaryProblemsAndAllow(t *testing.T) {
 	}{
 		{"DELETE", "/api/v1/health", "", "", "GET", 405},
 		{"TRACE", "/api/v1/accounts", "", "", "GET, POST", 405},
+		{"DELETE", "/api/v1/accounts", "", "", "GET, POST", 405},
 		{"PUT", "/api/v1/accounts/" + string(id()) + "/connection", "text/plain", `{"password":"secret"}`, "", 415},
 		{"POST", "/api/v1/accounts", "application/json", `{"protocol":"xmpp","address":"alice@localhost","label":"` + strings.Repeat("x", 1<<20) + `"}`, "", 413},
 	} {

@@ -215,6 +215,9 @@ func operation(ctx context.Context, q *dbgen.Queries, op application.Operation, 
 	if existing.Fingerprint != hash || existing.Kind != op.Kind {
 		return nil, application.ErrIdempotencyConflict
 	}
+	if existing.Result == "null" {
+		return nil, application.ErrNotFound
+	}
 	return &existing, nil
 }
 func change(ctx context.Context, q *dbgen.Queries, kind string, value any, at time.Time) (int64, error) {
@@ -302,6 +305,8 @@ func (s *Store) Events(ctx context.Context, after int64, limit int) ([]applicati
 		}
 		var target any
 		switch row.Kind {
+		case "account.removed":
+			target = &e.RemovedAccountID
 		case "account.registered":
 			e.Account = &domain.Account{}
 			target = e.Account

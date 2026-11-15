@@ -307,6 +307,34 @@ paths:
         '403': {description: Browser token missing or invalid.}
         '409': {description: Engine identity changed.}
         '503': {description: Preview service unavailable.}
+  /ui/accounts/remove:
+    post:
+      operationId: removeBrowserAccount
+      tags: [Accounts]
+      summary: Confirm removing one account from Oiê
+      description: Requires the current browser token and engine identity. Native forms redirect to the account list on success; JSON callers receive the destination in the mutation result.
+      requestBody:
+        description: Account removal confirmation.
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            example: {engineId: 019a5df0-0000-7000-8000-000000000003, accountId: 019a5df0-0000-7000-8000-000000000001, confirmation: remove, csrf: example-browser-token}
+            schema:
+              type: object
+              required: [engineId, accountId, confirmation, csrf]
+              properties:
+                engineId: {$ref: './openapi.yaml#/components/schemas/ID'}
+                accountId: {$ref: './openapi.yaml#/components/schemas/ID'}
+                confirmation: {type: string, enum: [remove], example: remove}
+                csrf: {type: string, example: example-browser-token}
+      responses:
+        '200': {description: Account removed; JSON mutation result with the account list destination.}
+        '303': {description: Account removed; redirect to the account list.}
+        '400': {description: Malformed form.}
+        '403': {description: Browser token missing or invalid.}
+        '409': {description: Engine identity changed.}
+        '422': {description: Account identity or confirmation is invalid.}
+        '503': {description: Account could not be removed.}
   /ui/engine/reset:
     post:
       operationId: resetBrowserEngineData

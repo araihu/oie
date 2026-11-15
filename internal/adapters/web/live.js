@@ -1028,6 +1028,7 @@ window.OieRuntime.register('live', life => {
     if (form.dataset.busy === 'true' || stopped) return;
     const sending = form.dataset.oieAction === 'send';
     const accountAvatar = form.dataset.oieAction === 'account-avatar';
+    const removingAccount = form.dataset.oieAction === 'remove-account';
     const scheduleDrawer = form.dataset.oieAction === 'schedule-row' && form.closest('[data-conversation-schedules]');
     if(sending&&(editSession||editPreparing)){if(editSession&&!editSession.submitted)void submitEdit(false);return;}
     if (sending) {
@@ -1102,11 +1103,17 @@ window.OieRuntime.register('live', life => {
     const buttons = [...form.querySelectorAll('input:not([type=hidden]),textarea,select,button')];
     const disabled = buttons.map(button => button.disabled);
     form.dataset.busy = 'true'; form.setAttribute('aria-busy','true');
+    const removeButton = removingAccount ? form.querySelector('button[type=submit]') : null;
+    const cancelRemove = removingAccount ? form.querySelector('[data-remove-cancel]') : null;
     if (accountAvatar) photoSave?.setAttribute('aria-disabled','true');
+    else if (removeButton) {
+      removeButton.setAttribute('aria-disabled','true');
+      if (cancelRemove) cancelRemove.inert = true;
+    }
     else buttons.forEach(button => button.disabled = true);
     syncRoomLeave();
     for (const secret of form.querySelectorAll('input[type="password"]')) secret.value = '';
-    feedback(form,sending?'':text('saving'));
+    feedback(form,sending?'':removingAccount?form.dataset.removing:text('saving'));
     pendingRequests++;
     const controller = new AbortController(); const timeout = life.timeout(() => controller.abort(),15000);
     try {
@@ -1135,6 +1142,9 @@ window.OieRuntime.register('live', life => {
           if (['media_too_large','reply_source_changed'].includes(result.code)) errorToast(message);
           else feedback(form, message, true);
           if (result.code === 'reply_source_changed') void refreshRejectedQuote();
+        } else if (removingAccount) {
+          feedback(form, '');
+          errorToast(result.message || form.dataset.removeFailed);
         } else {
           feedback(form, result.message || text('pending'), true);
         }
@@ -1149,6 +1159,13 @@ window.OieRuntime.register('live', life => {
         }
         if(!sending)scheduleRefresh();
       } else {
+        if (removingAccount && result.redirect) {
+          inbox.invalidate();
+          if (result.message) window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'success',message:result.message}}));
+          if (window.OieNavigation) window.OieNavigation.go(result.redirect);
+          else location.replace(result.redirect);
+          return;
+        }
         if (roomEntry) saveRoomEntry(form, null);
         if(roomCommand){
           keepRoomOperation(null);
@@ -1186,13 +1203,20 @@ window.OieRuntime.register('live', life => {
       if (roomManagement) {
         document.dispatchEvent(new CustomEvent('oie:room-management-result', {detail: {form, result: {ok:false}}}));
       }
-      feedback(form,sending ? text('pending') : text('liveRetry'),true);
+      if (removingAccount) {
+        feedback(form, '');
+        errorToast(form.dataset.removeFailed);
+      } else feedback(form,sending ? text('pending') : text('liveRetry'),true);
       if (sending) input.focus({preventScroll:true});
     } finally {
       clearTimeout(timeout);
       if(!life.signal.aborted||form.isConnected){
         form.dataset.busy='false';form.removeAttribute('aria-busy');
         if (accountAvatar) photoSave?.removeAttribute('aria-disabled');
+        else if (removeButton) {
+          removeButton.removeAttribute('aria-disabled');
+          if (cancelRemove) cancelRemove.inert = false;
+        }
         else buttons.forEach((button,index)=>button.disabled=disabled[index]);
         if(life.signal.aborted)feedback(form,text('liveRetry'),true);
       }
@@ -1242,8 +1266,34 @@ window.OieRuntime.register('live', life => {
     try{document.dispatchEvent(new CustomEvent('oie:star-event',{detail:JSON.parse(event.data).star}));}catch{}
     scheduleRefresh();
   }
+  function accountRemoved(event) {
+    let id;
+    try { id = JSON.parse(event.data).removedAccountId; } catch {}
+    if (!canonicalID(id) || document.querySelector('#remove-account-form[aria-busy="true"]')) {
+      scheduleRefresh();
+      return;
+    }
+    const url = new URL(location.href), q = url.searchParams;
+    const filterRemoved = q.get('account') === id;
+    const chatRemoved = body.dataset.accountId === id;
+    const managedRemoved = q.get('managedAccount') === id && q.get('open') === 'accounts';
+    if (!filterRemoved && !chatRemoved && !managedRemoved) {
+      scheduleRefresh();
+      return;
+    }
+    if (filterRemoved) q.delete('account');
+    if (chatRemoved || filterRemoved) {
+      for (const key of ['chat','message','infoView','infoType','infoCursor','infoQuery','chatSearch','chatQuery','chatIncludeHistory','chatSearchRevision','contentConversation','contentCursor','favoritesCursor','scheduleCursor']) q.delete(key);
+      if (['sender','details'].includes(q.get('open'))) q.delete('open');
+      q.set('inbox','1');
+    }
+    if (managedRemoved) for (const key of ['managedAccount','accountPage','accountFocus']) q.delete(key);
+    if (window.OieNavigation) window.OieNavigation.go(url,{workspace:chatRemoved||filterRemoved?'oie-app':undefined});
+    else location.replace(url.href);
+  }
   if (!mock) {
     const handlers = {
+      'account.removed': accountRemoved,
       'message.updated': messageUpdated,
       'conversation.history_pruned': event => {
         try {
@@ -1299,7 +1349,8 @@ window.OieRuntime.register('live', life => {
       if(open==='accounts')life.timeout(()=>{
         const query=new URLSearchParams(location.search);
         const target=query.get('accountPage')==='capabilities'?document.querySelector('[data-account-capabilities-title]'):query.get('accountFocus')==='capabilities'?document.querySelector('[data-account-capabilities]'):null;
-        target?.focus({preventScroll:true});
+        const removalTarget=query.get('accountPage')==='remove'?document.querySelector('[data-account-remove-title]'):query.get('accountFocus')==='remove'?document.querySelector('[data-account-remove]'):null;
+        (target||removalTarget)?.focus({preventScroll:true});
       },230);
     };
     if (window.Alpine) life.timeout(show,0); else life.on(document,'alpine:initialized',show,{once:true});

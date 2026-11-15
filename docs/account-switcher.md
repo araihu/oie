@@ -108,3 +108,31 @@ History recovery and its progress display are a subsequent increment; see
 The account-list page keeps Add account at the bottom of the drawer. Its list scrolls independently above the action, including during live updates. Account detail, add and capabilities pages retain their own scrolling layout.
 
 `tests/browser/account-drawer.cjs` verifies three and 35 fixture accounts across 390, 818 and 1440 px, light/dark, English/pt-BR. It checks wheel scrolling, last-row clearance, stable footer position, live scroll/focus preservation, keyboard access to Add account and accessibility. Native `make check` passes. The bounded Dagger check attempt timed out after 45 seconds with exit 124; full Dagger completion remains unverified.
+
+## Remove an account from Oiê
+
+The account detail offers a quiet **Remove account** link. A separate
+confirmation screen in the same drawer identifies the account by label and
+address, explains what is removed, and offers **Cancel** and **Remove account**.
+This composes the existing Goshtoso Drawer, Link, Form and Button in the app's
+compact detail layout. Confirmation uses the existing account workspace fragment
+and submit lifecycle with native link and form fallback. It uses the already
+loaded metadata; it requires no new search, history, or account list request.
+
+Removal affects the selected engine (including other clients of a hosted
+engine). It stops the connection, removes saved credentials, and removes the
+account's conversations, messages and pending sends. It does not issue a
+provider deletion or recall messages already sent. Cached binary files,
+device drafts and existing backups are outside this operation. Re-adding the
+same provider address creates a new account UUID and can recover provider
+history under the current retention policy.
+
+| State | Action | Result and focus | Removal effects |
+| --- | --- | --- | ---: |
+| Account detail | Open removal | Confirmation for that account; focus heading | 0 |
+| Confirmation | Cancel | Same account detail; focus removal link | 0 |
+| Confirming | Submit while request is pending | Stable drawer; disabled submit, announced progress | At most 1 |
+| Missing confirmation, bad CSRF, or changed engine | Forged or stale submit | Refuse without removing an account | 0 |
+| Engine unavailable | Submit | Show failure toast and keep confirmation available | No confirmed effect |
+| Present account | Confirm | Return to accounts; clear selection if it belonged to the removed account | 1 |
+| Account already absent | Repeat confirmation | Same account list destination; no second removal event | Still 1 |

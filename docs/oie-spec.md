@@ -215,6 +215,12 @@ full names are optional and are not verified legal identities.
 
 Use a profile control at the bottom of the navigation for account switching, following the supplied X account-switcher reference. Its popover lists account names/addresses, marks the active account, shows available unread counts, and offers adding an existing account and managing connections. Account connection status appears on the avatar with a localized tooltip and accessible label, and updates without closing the switcher. Retain an All accounts inbox option. Switching the inbox account does not disconnect other protocol sessions, transfer drafts, or change pending-send ownership. Oiê uses Disconnect for an XMPP session; built-in application login/logout remains backlogged. Account management starts with a compact account list and opens only one account’s connection details at a time. The account detail avatar also carries connection status, replacing a separate status panel. Connected or connecting accounts offer Disconnect without the connection form; disconnected accounts and failed connections offer the connection form. Live refreshes update these actions while preserving unfinished connection fields when the state stays the same. Adding an existing account is a separate screen; server/port overrides live under advanced connection settings. In the account-list drawer, Add account remains at the bottom while the account list scrolls independently above it. On the account detail screen, Disconnect stays in the footer while the details scroll.
 
+Account details also allow removing an account after confirmation. Removal
+forgets saved credentials and deletes the account's conversations, retained
+history, and pending sends from the selected Oiê engine. Other accounts and the
+remote XMPP account are unaffected. Adding the same XMPP address again creates
+a fresh Oiê account. See [account management](account-switcher.md#remove-an-account-from-oiê).
+
 The account details let a connected XMPP account change its profile photo. The form
 accepts one PNG, JPEG, or GIF up to 512 KiB and keeps the selected file available
 after a failed submission. The published image is a static PNG with a maximum

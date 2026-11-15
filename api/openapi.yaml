@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.33.0
+  version: 0.34.0
   description: >-
     Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
@@ -586,7 +586,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MessageSourceContext'
               example:
-                engine: {id: '019a5df0-0000-7000-8000-000000000003', role: local, apiVersion: '0.33.0', eventCursor: '019a5df0-0000-7000-8000-000000000003:1'}
+                engine: {id: '019a5df0-0000-7000-8000-000000000003', role: local, apiVersion: '0.34.0', eventCursor: '019a5df0-0000-7000-8000-000000000003:1'}
                 conversation: {id: '019a5df0-0000-7000-8000-000000000005', revisionId: '019a5df0-0000-7000-8000-000000000006', accountId: '019a5df0-0000-7000-8000-000000000002', address: 'bob@localhost', kind: direct, title: Bob, lastMessage: Hello, updatedAt: '2026-11-07T12:00:00Z', unreadCount: 0, archived: false, favorite: false}
                 context:
                   targetId: '019a5df0-0000-7000-8000-000000000001'
@@ -1098,7 +1098,7 @@ paths:
               example:
                 id: 019a5df0-0000-7000-8000-000000000003
                 role: local
-                apiVersion: 0.33.0
+                apiVersion: 0.34.0
                 eventCursor: 019a5df0-0000-7000-8000-000000000003:1
         '503':
           $ref: '#/components/responses/Unavailable'
@@ -1237,7 +1237,7 @@ paths:
 
         and account.registered event. Repeating a key with the same normalized input
 
-        returns the original result. Reusing it with different input conflicts.
+        returns the original result unless the account was removed. Reusing it with different input conflicts.
 
         No credentials are accepted, and no protocol session is opened.
 
@@ -1317,6 +1317,8 @@ paths:
                 createdAt: '2026-11-07T12:00:00Z'
         '400':
           $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
         '503':
@@ -1349,6 +1351,18 @@ paths:
           $ref: '#/components/responses/Invalid'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      operationId: removeAccount
+      tags: [Accounts]
+      summary: Remove an account from Oiê
+      description: Disconnects this account, forgets its saved credentials, and removes its conversations, retained history and pending sends from this engine. The provider account and its server history are unaffected. Repeating the request for the same UUID is safe.
+      responses:
+        '204':
+          description: The account is absent from this engine.
+        '400':
+          $ref: '#/components/responses/Invalid'
         '503':
           $ref: '#/components/responses/Unavailable'
   /api/v1/accounts/{accountId}/avatar:
@@ -3688,6 +3702,7 @@ components:
           - 0.31.0
           - 0.32.0
           - 0.33.0
+          - 0.34.0
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -3999,6 +4014,7 @@ components:
           type: string
           enum:
           - account.registered
+          - account.removed
           - account.connection_changed
           - account.history_changed
           - profile.avatar_changed
@@ -4029,6 +4045,8 @@ components:
           $ref: '#/components/schemas/MessageStar'
         preview:
           $ref: '#/components/schemas/MessagePreview'
+        removedAccountId:
+          $ref: '#/components/schemas/ID'
         historyPruned:
           $ref: '#/components/schemas/HistoryPruned'
         roomSession:

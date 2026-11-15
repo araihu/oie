@@ -67,6 +67,9 @@ actions:
   - target: $.paths['/api/v1/accounts/{accountId}/connection'].delete
     update:
       x-cli-name: disconnect
+  - target: $.paths['/api/v1/accounts/{accountId}'].delete
+    update:
+      x-cli-name: remove
   - target: $.paths['/api/v1/accounts/{accountId}'].get
     update:
       x-cli-name: get

@@ -208,6 +208,7 @@ type Querier interface {
 	ReconcileReactionObservation(ctx context.Context, arg ReconcileReactionObservationParams) error
 	RecordDiscardedMessageReference(ctx context.Context, arg RecordDiscardedMessageReferenceParams) (int64, error)
 	RecordOriginalTransmission(ctx context.Context, id string) error
+	RemoveAccount(ctx context.Context, id string) (int64, error)
 	RemoveMessageSearchException(ctx context.Context, messageID string) error
 	RemoveModeratedSharedContent(ctx context.Context, messageID string) error
 	RemoveRoomBannedNickname(ctx context.Context, arg RemoveRoomBannedNicknameParams) error

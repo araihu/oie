@@ -20,3 +20,6 @@ SELECT r.payload FROM accounts a JOIN revisions r ON a.revision_id=r.id WHERE a.
 INSERT INTO changes(payload,occurred_at,kind) VALUES(?,?,?) RETURNING sequence;
 -- name: ListChanges :many
 SELECT * FROM changes WHERE sequence>? ORDER BY sequence LIMIT ?;
+
+-- name: RemoveAccount :execrows
+DELETE FROM accounts WHERE id=?;

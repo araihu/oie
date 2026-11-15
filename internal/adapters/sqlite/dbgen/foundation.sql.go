@@ -207,6 +207,18 @@ func (q *Queries) ListChanges(ctx context.Context, arg ListChangesParams) ([]Cha
 	return items, nil
 }
 
+const removeAccount = `-- name: RemoveAccount :execrows
+DELETE FROM accounts WHERE id=?
+`
+
+func (q *Queries) RemoveAccount(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, removeAccount, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const setOperationResult = `-- name: SetOperationResult :exec
 UPDATE operations SET resource_id=?,result=? WHERE id=?
 `

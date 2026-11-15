@@ -61,6 +61,8 @@ type Event struct {
 	Star          *domain.MessageStar
 	Type          string
 	OccurredAt    time.Time
+
+	RemovedAccountID domain.ID
 }
 
 type Snapshot struct {
@@ -99,6 +101,8 @@ type Engine struct {
 	retentionWork     chan struct{}
 	eventMu           sync.Mutex
 	eventWake         chan struct{}
+
+	accountConnectionMu sync.Mutex
 }
 
 func New(repo Repository, role string, ids NewID, now func() time.Time) (*Engine, error) {

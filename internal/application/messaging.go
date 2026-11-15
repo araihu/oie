@@ -203,6 +203,8 @@ func (e *Engine) Connection(ctx context.Context, id domain.ID) (domain.Connectio
 	return e.protocols.Connection(ctx, a)
 }
 func (e *Engine) ConfigureConnection(ctx context.Context, id domain.ID, in ConnectionInput) (domain.Connection, error) {
+	e.accountConnectionMu.Lock()
+	defer e.accountConnectionMu.Unlock()
 	a, err := e.Account(ctx, id)
 	if err != nil {
 		return domain.Connection{}, err
@@ -216,6 +218,8 @@ func (e *Engine) ConfigureConnection(ctx context.Context, id domain.ID, in Conne
 	return e.protocols.Configure(ctx, a, in)
 }
 func (e *Engine) Disconnect(ctx context.Context, id domain.ID) (domain.Connection, error) {
+	e.accountConnectionMu.Lock()
+	defer e.accountConnectionMu.Unlock()
 	a, err := e.Account(ctx, id)
 	if err != nil {
 		return domain.Connection{}, err

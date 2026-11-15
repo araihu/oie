@@ -58,20 +58,31 @@ func NewResettable(engine *application.Engine, reset func(domain.ID) error) (htt
 			WriteProblem(w, r, application.ErrInvalid)
 		},
 	})
+	methodNotAllowed := func(w http.ResponseWriter, r *http.Request) {
+		var allowed []string
+		for _, method := range []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE"} {
+			// The legacy matcher can treat an absent segment as an empty
+			// ID. Prefer the exact collection path when it is defined.
+			if item := schema.Paths.Value(r.URL.Path); item != nil {
+				if item.GetOperation(method) != nil {
+					allowed = append(allowed, method)
+				}
+				continue
+			}
+			candidate := r.Clone(r.Context())
+			candidate.Method = method
+			if _, _, routeErr := router.FindRoute(candidate); routeErr == nil {
+				allowed = append(allowed, method)
+			}
+		}
+		sort.Strings(allowed)
+		w.Header().Set("Allow", strings.Join(allowed, ", "))
+		writeProblem(w, r, http.StatusMethodNotAllowed, "invalid_request")
+	}
 	validated := middleware.OapiRequestValidatorWithOptions(schema, &middleware.Options{
 		ErrorHandlerWithOpts: func(_ context.Context, err error, w http.ResponseWriter, r *http.Request, opts middleware.ErrorHandlerOpts) {
 			if errors.Is(err, routers.ErrMethodNotAllowed) {
-				var allowed []string
-				for _, method := range []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE"} {
-					candidate := r.Clone(r.Context())
-					candidate.Method = method
-					if _, _, routeErr := router.FindRoute(candidate); routeErr == nil {
-						allowed = append(allowed, method)
-					}
-				}
-				sort.Strings(allowed)
-				w.Header().Set("Allow", strings.Join(allowed, ", "))
-				writeProblem(w, r, http.StatusMethodNotAllowed, "invalid_request")
+				methodNotAllowed(w, r)
 				return
 			}
 			if opts.StatusCode == http.StatusNotFound {
@@ -92,6 +103,10 @@ func NewResettable(engine *application.Engine, reset func(domain.ID) error) (htt
 		if r.Method == http.MethodHead && strings.HasPrefix(r.URL.Path, "/api/v1/shared-content/") && strings.HasSuffix(r.URL.Path, "/content") {
 			w.Header().Set("Allow", http.MethodGet)
 			writeProblem(w, r, http.StatusMethodNotAllowed, "invalid_request")
+			return
+		}
+		if item := schema.Paths.Value(r.URL.Path); item != nil && item.GetOperation(r.Method) == nil {
+			methodNotAllowed(w, r)
 			return
 		}
 		route, _, routeErr := router.FindRoute(r)
@@ -342,6 +357,13 @@ func (s *Server) RegisterAccount(ctx context.Context, r engineapi.RegisterAccoun
 	location := "/api/v1/accounts/" + string(result.Account.ID)
 	return engineapi.RegisterAccount201JSONResponse{Body: account(result.Account),
 		Headers: engineapi.RegisterAccount201ResponseHeaders{Location: &location, IdempotencyReplayed: &result.Replayed}}, nil
+}
+
+func (s *Server) RemoveAccount(ctx context.Context, r engineapi.RemoveAccountRequestObject) (engineapi.RemoveAccountResponseObject, error) {
+	if err := s.engine.RemoveAccount(ctx, domain.ID(r.AccountId)); err != nil {
+		return nil, err
+	}
+	return engineapi.RemoveAccount204Response{}, nil
 }
 
 func (s *Server) GetAccount(ctx context.Context, r engineapi.GetAccountRequestObject) (engineapi.GetAccountResponseObject, error) {

@@ -282,6 +282,30 @@ func (m *Manager) Disconnect(ctx context.Context, a domain.Account) (domain.Conn
 	defer e.mu.RUnlock()
 	return e.state, nil
 }
+
+// ForgetConnection detaches the transport and deletes the saved configuration,
+// unlike Disconnect, which keeps credentials for later use.
+func (m *Manager) ForgetConnection(ctx context.Context, a domain.Account) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := os.Remove(filepath.Join(m.dir, string(a.ID)+".json")); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if old := m.entries[a.ID]; old != nil {
+		old.stop()
+		delete(m.entries, a.ID)
+	}
+	dir, err := os.Open(m.dir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = dir.Close() }()
+	return dir.Sync()
+}
+
 func (m *Manager) Connection(_ context.Context, a domain.Account) (domain.Connection, error) {
 	m.mu.RLock()
 	e := m.entries[a.ID]
